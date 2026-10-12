@@ -1,7 +1,8 @@
 # Weft architecture
 
 Status: initial draft, 2026-10-12. This document records proposed decisions and
-acceptance boundaries. None of the services described here are implemented.
+acceptance boundaries. The local Angular/ASP.NET Core shell is implemented;
+remaining feature boundaries below are proposed.
 
 ## Product purpose
 
@@ -24,12 +25,13 @@ arbitrary connector execution are later work.
 | Decision | Reason and consequence |
 | --- | --- |
 | Independent repository | Weft can integrate multiple engines and release independently of Ferrule. |
-| One Rust application with explicit modules | Keep initial deployment and transactions simple; extract services only when operational needs justify it. |
-| React/TypeScript browser frontend | Use searchable tables, accessible forms, and ordinary document navigation; graph rendering is an expandable detail view. |
-| Rust HTTP service, initially Axum | Reuse Ferrule's Rust APIs behind an adapter without subprocess CLI parsing. |
+| C#/.NET 10 modular application with explicit assemblies | Keep initial deployment and transactions simple; extract services only when operational needs justify it. |
+| Angular/TypeScript browser frontend | Use searchable tables, accessible forms, and ordinary document navigation; graph rendering is an expandable detail view. |
+| ASP.NET Core HTTP service | Follow the Wareboxes-style modular API/worker structure; mapping-engine details remain inside adapters. |
 | PostgreSQL plus private object storage | Store relational ownership and history separately from native mappings and execution payloads. |
 | Server-managed OIDC login sessions | Keep identity-provider tokens and client credentials on the server; later providers can implement the same identity boundary. |
 | AI conversation orchestration owned by Weft | Model providers translate requests and streams; permissions, context, tools, and history remain application concerns. |
+| Wolverine with PostgreSQL durability | Durable internal job delivery and transactional inbox/outbox; Weft retains business run history, permissions, and idempotency. |
 | Mapping execution outside the HTTP process | A bounded worker process permits actual cancellation and resource isolation for submitted mappings. |
 | Optional capabilities | Viewing, previewing, editing, compiling, and deploying need separate admission checks. |
 
@@ -72,22 +74,29 @@ changing the contracts of the others.
 
 ## Proposed source ownership
 
-These paths are planned; they will be created by the appropriate implementation
-PR rather than populated with placeholder applications now.
+These paths define source ownership. The shell implements the web application,
+API endpoint module, and server host; other modules are created by their focused
+implementation PRs.
 
 | Path | Owns | Must not own |
 | --- | --- | --- |
 | `apps/web/` | Catalog, viewer, chat window, preview forms, generated API client | Ferrule semantics, provider credentials, authorization decisions |
-| `crates/domain/` | IDs, revisions, memberships, runs, conversations, capabilities | Framework types and third-party engine/provider types |
-| `crates/api/` | HTTP, OIDC session boundary, policy enforcement, persistence orchestration, chat event streams | Mapping execution and model-specific wire formats |
-| `crates/mapping-backends/` | Mapping adapter contract and Ferrule implementation | User sessions, deployment credentials, universal mapping execution |
-| `crates/ai/` | Conversation orchestration, provider contract, read tools, context budgets | Bypassing API permissions or executing arbitrary model-supplied code |
-| `crates/worker/` | Bounded mapping inspection, validation, preview, cancellation | Public authentication and unrestricted host I/O |
-| `crates/deployment/` | Later build/deploy contract and target adapters | Reimplementing a mapping engine |
+| `dotnet/src/Weft.Domain/` | IDs, revisions, memberships, runs, conversations, capabilities | Framework types and third-party engine/provider types |
+| `dotnet/src/Weft.Api/` | HTTP, OIDC session boundary, policy enforcement, persistence orchestration, chat event streams | Mapping execution and model-specific wire formats |
+| `dotnet/src/Weft.MappingBackends/` | Mapping adapter contract and Ferrule implementation | User sessions, deployment credentials, universal mapping execution |
+| `dotnet/src/Weft.Ai/` | Conversation orchestration, provider contract, read tools, context budgets | Bypassing API permissions or executing arbitrary model-supplied code |
+| `dotnet/apps/Weft.Worker/` | Bounded mapping inspection, validation, preview, cancellation | Public authentication and unrestricted host I/O |
+| `dotnet/src/Weft.Deployment/` | Later build/deploy contract and target adapters | Reimplementing a mapping engine |
 | `deploy/azure/` | Later reproducible Azure infrastructure | Cloud types in domain contracts |
 
 Keep Ferrule dependency declarations confined to its adapter and worker wiring.
 Weft's public API and database schema must not expose Ferrule's Rust types.
+`dotnet/src/Weft.Contracts/` owns public wire models;
+`dotnet/src/Weft.Application/` owns commands and policies, and
+`dotnet/src/Weft.Persistence.Postgres/` owns scoped transactions and migrations.
+`dotnet/apps/Weft.Server/` is the executable host. A later
+`engines/ferrule-host/` process may use Ferrule's Rust libraries behind a versioned
+request/result protocol; it is an engine adapter, not the application backend.
 
 ## Domain and persistence
 
@@ -127,7 +136,7 @@ rebuilt without changing a revision's artifact bytes.
 ## HTTP and browser boundary
 
 Use versioned `/api/v1` routes and publish an OpenAPI contract once the service
-exists. Generate browser types from that contract rather than copying Rust
+exists. Generate browser types from that contract rather than copying C#
 models by hand. Resource IDs and backend node locators use strings in the public
 API to avoid JavaScript integer precision loss.
 
@@ -223,6 +232,30 @@ payloads, credentials, or complete model responses by default. Interactive
 preview results expire after a configurable short period; persistent test
 fixtures are explicit objects with independent retention and access rules.
 
+## Durable internal jobs
+
+Use Wolverine when preview work becomes asynchronous. Typed internal commands
+such as `InspectRevision`, `RunPreview`, `RunRegressionCase`, `BuildArtifact`,
+and `DeployRevision` carry scoped identifiers and artifact references, not raw
+payloads or model credentials. A worker reloads the owning run/revision and
+validates its authority before executing a command.
+
+Commit accepted job state and its outgoing command in one PostgreSQL transaction.
+Configure durable endpoints explicitly. Weft's run/deployment records remain the
+source of user-visible status and immutable attempt evidence; Wolverine envelopes
+are delivery infrastructure. Handler retries and duplicate delivery must use the
+same business operation identity and must not duplicate published outputs or
+external deployment effects. Qualify process failure, replay, and cancellation
+against an isolated database before claiming durability.
+
+Keep chat's live response stream and ordinary reads in ASP.NET Core. Do not retry
+paid model turns through a generic background-message policy. Longer AI actions
+can use typed jobs later, with their own cancellation and idempotency rules.
+Messaging-store tenant scope and operational connections need explicit checks;
+Wolverine persistence does not itself establish project authorization. Its
+PostgreSQL durability agents require a direct or session-pooled connection for
+session advisory locks, independently of application connection pooling.
+
 ## Hosting and mapping deployment
 
 Local development uses a static frontend, one API process, an isolated worker,
@@ -243,7 +276,7 @@ target adapter. Rollback selects a previously qualified immutable artifact.
 Retries of transformations with external side effects require an explicit
 idempotency contract rather than blind replay.
 
-Azure Functions custom handlers are another candidate for Rust HTTP or event
+Azure Functions isolated .NET workers are another candidate for HTTP or event
 workloads. Cloud selection is a deployment decision, not part of the mapping
 model. Generated mappings are supported only when their backend accepts the
 exact graph and physical format; interpreter support does not imply generator
@@ -263,9 +296,10 @@ support. No Azure resources are created by this planning increment.
 
 - [Mapping backend contract](mapping-backends.md) and [AI chat contract](ai-chat.md).
 - [Focused delivery sequence](../ROADMAP.md).
-- [React](https://react.dev/learn), [Vite](https://vite.dev/guide/), and [Axum](https://docs.rs/axum/latest/axum/).
+- [Angular](https://angular.dev/overview) and [ASP.NET Core APIs](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/apis?view=aspnetcore-10.0).
+- [Wolverine PostgreSQL durability](https://wolverinefx.net/guide/durability/postgresql).
 - [Entra authorization-code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow).
 - [Application RBAC](https://learn.microsoft.com/en-us/entra/identity-platform/howto-implement-rbac-for-apps).
 - [Container Apps scaling](https://learn.microsoft.com/en-us/azure/container-apps/scale-app).
 - [Container Apps managed identities](https://learn.microsoft.com/en-us/azure/container-apps/managed-identity).
-- [Azure Functions custom handlers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-custom-handlers).
+- [Azure Functions isolated .NET worker](https://learn.microsoft.com/en-us/azure/azure-functions/dotnet-isolated-process-guide).

@@ -1,0 +1,24 @@
+{
+  "name": "weft",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "packageManager": "npm@12.1.0",
+  "engines": {
+    "node": "22.23.3",
+    "npm": "12.1.0"
+  },
+  "scripts": {
+    "dev": "npm --workspace @weft/web run dev",
+    "build": "npm --workspace @weft/web run build",
+    "check": "npm run format:check && npm --workspace @weft/web run check",
+    "format": "prettier --write \"apps/web/**/*.{ts,html,css,json}\" package.json global.json",
+    "test:browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e",
+    "format:check": "prettier --check \"apps/web/**/*.{ts,html,css,json}\" package.json global.json"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}

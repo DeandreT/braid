@@ -9,9 +9,11 @@ Weft owns discovery, ownership, revisions, presentation, authorization, and
 operation orchestration. A mapping backend owns native artifact decoding,
 validation, precise transformation semantics, and runtime diagnostics.
 
-Implement the initial adapter as ordinary Rust modules. A versioned worker
-request/result envelope leaves room for remote engines later; dynamic plugins
-and independent engine services are not required for the first release.
+Implement the application adapter in C# with a versioned worker request/result
+envelope. Ferrule inspection and interpreter execution can use a restricted
+engine host built from its Rust libraries; the ASP.NET Core application owns
+process admission, cancellation, and result normalization. Generated .NET
+mappings are an optional runtime with a separate capability gate.
 
 | Operation | Result | Admission |
 | --- | --- | --- |
@@ -104,7 +106,7 @@ Initial dependency candidate:
 the upstream `main` revision inspected on 2026-10-12. This is a candidate for the
 first implementation spike, not a qualified runtime release.
 
-Pin every Ferrule Git dependency to the same full commit and commit Cargo.lock
+In the engine host, pin every Ferrule Git dependency to the same full commit and commit Cargo.lock
 when adding the workspace. Alias generic upstream package names (`mapping`,
 `engine`, `cli`) as Ferrule-specific dependencies inside the adapter. Never use
 an unpinned branch or local sibling path in CI/release manifests. Record the
@@ -120,8 +122,9 @@ Use these public boundaries at the inspected revision:
   from host-owned documents, with returned in-memory artifacts.
 - `cli::PayloadRunOptions`: target selection, typed parameters, and tracing.
 
-The CLI crate's public host API is reusable despite its package name. Weft should
-call it as a library and keep its broad dependencies behind the adapter. If a
+The CLI crate's public host API is reusable despite its package name. The restricted
+engine host should call it as a library and communicate bounded structured
+results to the C# adapter; never parse CLI diagnostic text as the public protocol. If a
 smaller reusable host crate becomes necessary, propose that focused change in
 Ferrule instead of copying or forking its format/execution implementation.
 
@@ -133,6 +136,20 @@ Start preview with self-authored JSON-to-JSON fixtures. Add XML/CSV and other
 formats only through explicit capability and qualification increments. Stateful
 SQLite and update-existing XLSX remain outside the initial preview contract.
 Inherited design-time HTTP paths do not authorize worker network access.
+
+Bound every native document before decoding, including legacy unmarked project
+files. Ferrule's logical path acceptance is broader than Weft's storage policy;
+the host validates traversal-free input identities and remaps output identities
+before publication. Enforce deadline/memory/CPU limits around the process because
+parsing, builtin evaluation, and serialization cannot all be cooperatively
+cancelled through the payload API. Treat runtime dependency enumeration as one
+inspection input rather than a complete host-resource permission inventory.
+
+If reproducible replay or diagnostic normalization needs an additional public
+Ferrule API, open a focused upstream issue and PR, qualify that increment, and
+pin its resulting commit in the dependent Weft PR. Injectable execution time and
+logical mapping identity are candidate gaps; source inspection alone does not
+establish that either change is required for an admitted workload.
 
 Generation, `.mfd` interoperability, and browser WASM execution are optional
 backend capabilities with separate acceptance gates. Do not infer any of them

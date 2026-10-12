@@ -15,10 +15,14 @@ AGENTS.md
 # Local runtime data and verification artifacts.
 /data/
 /artifacts/
-/playwright-report/
-/test-results/
+**/playwright-report/
+**/test-results/
 *.log
 
 # Operating system metadata.
 .DS_Store
 Thumbs.db
+
+**/.angular/
+**/bin/
+**/obj/

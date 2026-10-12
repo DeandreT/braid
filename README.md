@@ -2,7 +2,7 @@
 
 **Understand, test, and deploy your data mappings.**
 
-Weft is a planned web application for exploring, reviewing, testing, and
+Weft is a web application in development for exploring, reviewing, testing, and
 operating data mappings. Ferrule will be its first mapping backend; the
 application will support other engines through explicit adapters.
 
@@ -23,14 +23,18 @@ endpoint are distinct workflows.
 
 ## Status and planning
 
-Architecture draft; application implementation has not started. The repository
-currently contains documentation, with no runnable application.
+The local web/API foundation is implemented. It provides a workspace shell and
+a live service connection check. Mapping, authentication, AI chat, and deployment
+features follow the focused delivery sequence below.
+
+See [Local development](docs/development.md) to run and verify the application.
 
 - [Architecture](docs/architecture.md): boundaries, storage, identity, and hosting.
 - [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 
-Proposed stack: React and TypeScript frontend, Rust HTTP service, PostgreSQL
-metadata, and private object storage. These choices are planning defaults;
-package versions and executable manifests will be pinned in implementation PRs.
+Stack: Angular frontend, C#/.NET 10 modular backend, PostgreSQL metadata,
+and private object storage. Wolverine will handle durable internal jobs when
+preview execution is introduced. Model providers remain behind an independent
+chat adapter; Ferrule remains behind a typed mapping-engine boundary.

@@ -1,0 +1,294 @@
+:root {
+  font-family: "DM Sans", system-ui, sans-serif;
+  color: #213b34;
+  background: #f6f8f5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  font: inherit;
+}
+a {
+  color: inherit;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #287a60;
+  outline-offset: 5px;
+}
+.app-shell {
+  width: min(1120px, calc(100% - 64px));
+  margin: 0 auto;
+}
+.skip-link {
+  position: fixed;
+  left: 24px;
+  top: -80px;
+  padding: 12px 20px;
+  background: #fff;
+  z-index: 2;
+}
+.skip-link:focus {
+  top: 20px;
+}
+.app-header {
+  height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e0e7de;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  text-decoration: none;
+  font:
+    800 34px "Manrope",
+    system-ui,
+    sans-serif;
+  letter-spacing: -2px;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  height: 38px;
+  width: 38px;
+  background: #174d3f;
+  color: #e3f3d8;
+  border-radius: 12px;
+  font-size: 29px;
+  font-weight: 600;
+  letter-spacing: -4px;
+  padding-right: 4px;
+}
+.brand-period {
+  color: #5e987a;
+}
+.environment-label {
+  color: #69786f;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  border: 1px solid #dce4da;
+  border-radius: 20px;
+  padding: 7px 13px;
+}
+.welcome {
+  padding: 68px 0 40px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: #578168;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin: 0 0 22px;
+}
+h1 {
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: clamp(36px, 5.2vw, 58px);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -2.6px;
+  margin: 0;
+}
+h1 span {
+  color: #638072;
+}
+.introduction {
+  max-width: 570px;
+  font-size: 17px;
+  color: #718075;
+  line-height: 1.7;
+  margin: 22px 0 0;
+}
+.connection-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border: 1px solid #dbe5d7;
+  border-radius: 18px;
+  padding: 25px 28px;
+  background: #fff;
+  box-shadow: 0 3px 15px #29382c04;
+}
+.connection-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #edf4e7;
+  flex-shrink: 0;
+}
+.connection-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #598954;
+  box-shadow: 0 0 0 5px #dcebd3;
+}
+.checking .connection-dot {
+  background: #a1a885;
+}
+.unavailable .connection-icon {
+  background: #faf1e6;
+}
+.unavailable .connection-dot {
+  background: #ba833d;
+  box-shadow: 0 0 0 5px #f4e2c8;
+}
+.connection-copy {
+  flex: 1;
+}
+.connection-copy h2 {
+  font-size: 11px;
+  color: #879185;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+.connection-copy p[role="status"] {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+.connection-detail {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #808b80;
+  margin: 6px 0 0;
+}
+.secondary-button {
+  border: 1px solid #d9e2d5;
+  border-radius: 9px;
+  background: #f8faf6;
+  color: #45614c;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.secondary-button:hover {
+  background: #eaf1e5;
+}
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.feature-section {
+  padding: 44px 0 68px;
+}
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  gap: 16px;
+}
+.section-heading h2 {
+  font:
+    600 15px "Manrope",
+    system-ui,
+    sans-serif;
+  margin: 0;
+}
+.section-heading > span {
+  color: #8a9388;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.feature-card {
+  border: 1px solid #e1e7dc;
+  border-radius: 14px;
+  padding: 24px;
+  background: #f0f4ec;
+}
+.feature-number {
+  color: #88a17f;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.feature-card h3 {
+  font:
+    600 17px "Manrope",
+    system-ui,
+    sans-serif;
+  letter-spacing: -0.3px;
+  margin: 22px 0 10px;
+}
+.feature-card p {
+  margin: 0;
+  color: #7c8776;
+  font-size: 13px;
+  line-height: 1.75;
+}
+footer {
+  padding: 24px 0 35px;
+  border-top: 1px solid #e0e7de;
+  color: #8c9489;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 11px;
+}
+@media (max-width: 700px) {
+  .app-shell {
+    width: calc(100% - 36px);
+  }
+  .app-header {
+    height: 88px;
+  }
+  .welcome {
+    padding: 44px 0 28px;
+  }
+  h1 {
+    letter-spacing: -1.5px;
+  }
+  .introduction {
+    font-size: 15px;
+  }
+  .connection-card {
+    flex-wrap: wrap;
+    padding: 20px;
+    gap: 14px;
+  }
+  .connection-copy {
+    flex-basis: calc(100% - 64px);
+  }
+  .secondary-button {
+    margin-left: 62px;
+  }
+  .feature-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .feature-card {
+    padding: 20px;
+  }
+  .feature-card h3 {
+    margin-top: 14px;
+  }
+  .section-heading {
+    align-items: start;
+  }
+  footer {
+    line-height: 1.5;
+  }
+}
