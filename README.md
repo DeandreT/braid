@@ -9,7 +9,28 @@ application will support other engines through explicit adapters.
 An integrated AI chat window will help users understand mappings through a
 model-independent backend and permission-controlled mapping tools.
 
-## Status
+## Planned first release
 
-Repository foundation only. Application implementation has not started.
-The initial architecture and delivery plan are being prepared for review.
+- A mapping catalog with immutable revisions and project ownership.
+- A searchable source-to-rule-to-target view with expandable details and lineage.
+- An AI chat window that explains the selected mapping and links answers to rules.
+- Bounded sample previews through the selected mapping backend.
+- Microsoft Entra sign-in and project-scoped application permissions.
+
+Other mapping engines, identity providers, and AI model providers will integrate
+through separate adapters. Web hosting and publishing a mapping as a runnable
+endpoint are distinct workflows.
+
+## Status and planning
+
+Architecture draft; application implementation has not started. The repository
+currently contains documentation, with no runnable application.
+
+- [Architecture](docs/architecture.md): boundaries, storage, identity, and hosting.
+- [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
+- [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
+- [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
+
+Proposed stack: React and TypeScript frontend, Rust HTTP service, PostgreSQL
+metadata, and private object storage. These choices are planning defaults;
+package versions and executable manifests will be pinned in implementation PRs.
