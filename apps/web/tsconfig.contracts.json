@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [],
+    "skipLibCheck": false
+  },
+  "files": ["src/api/contracts.compile.ts"],
+  "include": []
+}

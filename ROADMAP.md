@@ -1,12 +1,13 @@
 # Weft delivery plan
 
-Status: architecture foundation merged. P0's local web/API shell is implemented;
-local qualification and CI results are recorded in its implementing PR. Remaining
-application increments below are planned.
+Status: architecture and P0's local web/API shell are merged. P1's mapping
+contracts are implemented; qualification is recorded in its implementing PR.
+Remaining application increments below are planned.
 
 The architecture review is tracked in [#1](https://github.com/DeandreT/weft/issues/1).
 The first application increment, P0, is tracked in
 [#2](https://github.com/DeandreT/weft/issues/2).
+P1's mapping contracts are tracked in [#5](https://github.com/DeandreT/weft/issues/5).
 
 ## Delivery rules
 

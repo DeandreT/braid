@@ -26,11 +26,16 @@ jobs:
           global-json-file: global.json
       - run: npm install --global npm@12.1.0
       - run: npm ci
+      - run: npm ci --prefix tools/contracts-generator
       - run: npm run check
       - run: npm run build
       - run: dotnet restore dotnet/Weft.slnx --locked-mode
       - run: dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore
       - run: dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+      - name: Verify generated mapping contracts
+        run: |
+          npm run contracts:check
+          git diff --exit-code -- contracts/weft-v1.json apps/web/src/api/generated.ts
       - run: dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
       - name: Install isolated browser dependencies
         run: npx playwright install --with-deps chromium

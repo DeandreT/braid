@@ -82,7 +82,7 @@ and documented, with structured fallback details for the viewer.
 
 Backend output order and canonical field traversal determine projection ordering
 so repeated inspection is reproducible. A cache key includes native artifact
-digest, adapter version, and projection schema version. Different inspection
+digest and revision scope, backend revision/build, adapter build, and projection schema version. Different inspection
 versions cannot silently share a cached explanation.
 
 ## Preview envelope

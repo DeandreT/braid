@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ng serve --host 127.0.0.1 --port 5173 --proxy-config proxy.conf.json",
     "check": "ng build --configuration development",
+    "check:contracts": "tsc -p tsconfig.contracts.json",
     "build": "ng build",
     "test:e2e": "playwright test"
   },

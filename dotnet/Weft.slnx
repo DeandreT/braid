@@ -4,6 +4,8 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Weft.Api/Weft.Api.csproj" />
+    <Project Path="src/Weft.Contracts/Weft.Contracts.csproj" />
+    <Project Path="src/Weft.Domain/Weft.Domain.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Weft.Tests/Weft.Tests.csproj" />

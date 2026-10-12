@@ -27,10 +27,15 @@ The local web/API foundation is implemented. It provides a workspace shell and
 a live service connection check. Mapping, authentication, AI chat, and deployment
 features follow the focused delivery sequence below.
 
+Versioned mapping contracts and development-only synthetic projections provide
+the shared foundation for the upcoming viewer. Angular types are generated from
+the C# API schema.
+
 See [Local development](docs/development.md) to run and verify the application.
 
 - [Architecture](docs/architecture.md): boundaries, storage, identity, and hosting.
 - [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
+- [Projection v1](docs/projection-contract.md): public read model and fixture behavior.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 

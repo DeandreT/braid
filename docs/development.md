@@ -1,7 +1,8 @@
 # Local development
 
 The initial Angular/ASP.NET Core shell is local-only. It supplies a real API
-health endpoint and a browser workspace. Mapping, authentication, chat, and
+health endpoint, a browser workspace, and development fixture projections with
+generated API contracts. Ferrule inspection, authentication, chat, and
 Wolverine-backed execution follow separate increments.
 
 ## Prerequisites
@@ -14,9 +15,11 @@ From the repository root:
 
 ```sh
 npm ci
+npm ci --prefix tools/contracts-generator
 npm run build
 dotnet restore dotnet/Weft.slnx --locked-mode
 dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+npm run contracts:check
 ```
 
 Start the server in one terminal:
@@ -31,6 +34,28 @@ another terminal and open http://127.0.0.1:5173; Angular forwards `/api` request
 to the local service. `WEFT_DEV_LISTEN_ADDR` changes the API's loopback address.
 The unauthenticated shell rejects public interfaces.
 
+To inspect the self-authored fixture contract, start with
+`DOTNET_ENVIRONMENT=Development` and request
+`/api/v1/fixtures/projections/rich` or `/openapi/v1.json`. Fixtures return 404 in
+other environments. See [Projection v1](projection-contract.md) for their scope.
+
+## Updating API contracts
+
+Edit the C# contract or typed endpoint, then build the server and regenerate:
+
+```sh
+dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+npm run contracts:generate
+npm run contracts:check
+```
+
+Commit both `contracts/weft-v1.json` and `apps/web/src/api/generated.ts`. The
+server build exports OpenAPI 3.1 using the same JSON settings as HTTP responses.
+The check regenerates Angular types in memory, compares them without rewriting,
+and compiles narrowing/precision examples with Angular's TypeScript version.
+The generator has its own locked dependency tree: its supported TypeScript 5
+compiler cannot replace Angular's pinned TypeScript 6 compiler.
+
 ## Verification
 
 ```sh
@@ -39,6 +64,8 @@ npm run build
 dotnet restore dotnet/Weft.slnx --locked-mode
 dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore
 dotnet build dotnet/Weft.slnx --configuration Release --no-restore
+npm run contracts:check
+git diff --exit-code -- contracts/weft-v1.json apps/web/src/api/generated.ts
 dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
 npm run test:browser
 ```

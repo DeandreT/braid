@@ -1,0 +1,1537 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Weft API",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "GetHealth",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fixtures/projections/{fixtureId}": {
+      "get": {
+        "tags": [
+          "Projection fixtures"
+        ],
+        "summary": "Read a deterministic synthetic mapping projection (development only).",
+        "operationId": "GetProjectionFixture",
+        "parameters": [
+          {
+            "name": "fixtureId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectionDocumentV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ArtifactDigest": {
+        "required": [
+          "algorithm",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendIdentity": {
+        "required": [
+          "id",
+          "revision",
+          "buildId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "buildId": {
+            "type": "string"
+          }
+        }
+      },
+      "BoundaryRole": {
+        "enum": [
+          "primaryInput",
+          "namedInput",
+          "primaryOutput",
+          "namedOutput"
+        ]
+      },
+      "BoundaryShape": {
+        "enum": [
+          "unknown",
+          "scalar",
+          "object",
+          "rows",
+          "documentSet"
+        ]
+      },
+      "CapabilityCondition": {
+        "required": [
+          "code",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "CapabilityStatus": {
+        "enum": [
+          "supported",
+          "unsupported",
+          "conditional",
+          "notQualified"
+        ]
+      },
+      "CardinalityKind": {
+        "enum": [
+          "unknown",
+          "exactlyOne",
+          "zeroOrOne",
+          "zeroOrMore",
+          "oneOrMore",
+          "bounded"
+        ]
+      },
+      "ControlKind": {
+        "enum": [
+          "unknown",
+          "iteration",
+          "filter",
+          "join",
+          "grouping",
+          "sorting",
+          "window",
+          "failure",
+          "ordering",
+          "dynamicBoundary",
+          "construction"
+        ]
+      },
+      "CoverageGap": {
+        "required": [
+          "code",
+          "message",
+          "nativeLocator"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "nativeLocator": {
+            "$ref": "#/components/schemas/NativeLocator"
+          },
+          "projectionLocator": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectionNodeReference"
+              }
+            ]
+          }
+        }
+      },
+      "CoverageStatus": {
+        "enum": [
+          "complete",
+          "partial",
+          "unavailable"
+        ]
+      },
+      "DependencyRole": {
+        "enum": [
+          "value",
+          "condition",
+          "default"
+        ],
+        "default": "value"
+      },
+      "DetailNode": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/DetailNodeGroupDetail"
+          },
+          {
+            "$ref": "#/components/schemas/DetailNodeExpressionDetail"
+          },
+          {
+            "$ref": "#/components/schemas/DetailNodeLiteralDetail"
+          },
+          {
+            "$ref": "#/components/schemas/DetailNodeReferenceDetail"
+          },
+          {
+            "$ref": "#/components/schemas/DetailNodeUnsupportedDetail"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "group": "#/components/schemas/DetailNodeGroupDetail",
+            "expression": "#/components/schemas/DetailNodeExpressionDetail",
+            "literal": "#/components/schemas/DetailNodeLiteralDetail",
+            "reference": "#/components/schemas/DetailNodeReferenceDetail",
+            "unsupported": "#/components/schemas/DetailNodeUnsupportedDetail"
+          }
+        }
+      },
+      "DetailNodeExpressionDetail": {
+        "required": [
+          "operation",
+          "arguments",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "expression"
+            ],
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetailNode"
+            }
+          }
+        }
+      },
+      "DetailNodeGroupDetail": {
+        "required": [
+          "label",
+          "children",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "group"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetailNode"
+            }
+          }
+        }
+      },
+      "DetailNodeLiteralDetail": {
+        "required": [
+          "value",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "literal"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/LiteralValue"
+          }
+        }
+      },
+      "DetailNodeReferenceDetail": {
+        "required": [
+          "reference",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "reference"
+            ],
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/ProjectionNodeReference"
+          }
+        }
+      },
+      "DetailNodeUnsupportedDetail": {
+        "required": [
+          "construct",
+          "description",
+          "nativeLocator",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "unsupported"
+            ],
+            "type": "string"
+          },
+          "construct": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "nativeLocator": {
+            "$ref": "#/components/schemas/NativeLocator"
+          }
+        }
+      },
+      "DiagnosticSeverity": {
+        "enum": [
+          "information",
+          "warning",
+          "error"
+        ]
+      },
+      "ExactNumberFlavor": {
+        "enum": [
+          "integer",
+          "decimal",
+          "binaryFloat"
+        ]
+      },
+      "FieldCardinality": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CardinalityKind"
+          },
+          "minimum": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "maximum": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "FieldDataType": {
+        "required": [
+          "kind",
+          "scalarTypes"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/FieldDataTypeKind"
+          },
+          "scalarTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScalarDataType"
+            }
+          },
+          "nativeName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "FieldDataTypeKind": {
+        "enum": [
+          "unknown",
+          "scalar",
+          "scalarUnion",
+          "object",
+          "array"
+        ]
+      },
+      "FieldNullability": {
+        "enum": [
+          "unknown",
+          "nonNullable",
+          "nullable"
+        ]
+      },
+      "FieldRequirement": {
+        "enum": [
+          "unknown",
+          "optional",
+          "required"
+        ]
+      },
+      "HealthResponseV1": {
+        "required": [
+          "status",
+          "service",
+          "version",
+          "apiVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "apiVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "LiteralValue": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/LiteralValueStringLiteralValue"
+          },
+          {
+            "$ref": "#/components/schemas/LiteralValueBooleanLiteralValue"
+          },
+          {
+            "$ref": "#/components/schemas/LiteralValueExactNumberLiteralValue"
+          },
+          {
+            "$ref": "#/components/schemas/LiteralValueNullLiteralValue"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "string": "#/components/schemas/LiteralValueStringLiteralValue",
+            "boolean": "#/components/schemas/LiteralValueBooleanLiteralValue",
+            "exactNumber": "#/components/schemas/LiteralValueExactNumberLiteralValue",
+            "null": "#/components/schemas/LiteralValueNullLiteralValue"
+          }
+        }
+      },
+      "LiteralValueBooleanLiteralValue": {
+        "required": [
+          "value",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "boolean"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LiteralValueExactNumberLiteralValue": {
+        "required": [
+          "flavor",
+          "value",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "exactNumber"
+            ],
+            "type": "string"
+          },
+          "flavor": {
+            "$ref": "#/components/schemas/ExactNumberFlavor"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "LiteralValueNullLiteralValue": {
+        "required": [
+          "nullKind",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "null"
+            ],
+            "type": "string"
+          },
+          "nullKind": {
+            "$ref": "#/components/schemas/NullLiteralKind"
+          }
+        }
+      },
+      "LiteralValueStringLiteralValue": {
+        "required": [
+          "value",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "string"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "MappingOperation": {
+        "enum": [
+          "inspect",
+          "project",
+          "validate",
+          "preview",
+          "build"
+        ]
+      },
+      "NativeLocator": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/NativeLocatorDocumentNativeLocator"
+          },
+          {
+            "$ref": "#/components/schemas/NativeLocatorJsonPointerNativeLocator"
+          },
+          {
+            "$ref": "#/components/schemas/NativeLocatorGraphNodeNativeLocator"
+          },
+          {
+            "$ref": "#/components/schemas/NativeLocatorTextSpanNativeLocator"
+          },
+          {
+            "$ref": "#/components/schemas/NativeLocatorOpaqueNativeLocator"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "document": "#/components/schemas/NativeLocatorDocumentNativeLocator",
+            "jsonPointer": "#/components/schemas/NativeLocatorJsonPointerNativeLocator",
+            "graphNode": "#/components/schemas/NativeLocatorGraphNodeNativeLocator",
+            "textSpan": "#/components/schemas/NativeLocatorTextSpanNativeLocator",
+            "opaque": "#/components/schemas/NativeLocatorOpaqueNativeLocator"
+          }
+        }
+      },
+      "NativeLocatorDocumentNativeLocator": {
+        "required": [
+          "documentId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "document"
+            ],
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeLocatorGraphNodeNativeLocator": {
+        "required": [
+          "nodeId",
+          "documentId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "graphNode"
+            ],
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "functionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "documentId": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeLocatorJsonPointerNativeLocator": {
+        "required": [
+          "pointer",
+          "documentId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "jsonPointer"
+            ],
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeLocatorOpaqueNativeLocator": {
+        "required": [
+          "scheme",
+          "value",
+          "documentId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "opaque"
+            ],
+            "type": "string"
+          },
+          "scheme": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeLocatorTextSpanNativeLocator": {
+        "required": [
+          "startOffset",
+          "length",
+          "documentId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "textSpan"
+            ],
+            "type": "string"
+          },
+          "startOffset": {
+            "type": "string"
+          },
+          "length": {
+            "type": "string"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/TextSpanUnit"
+          },
+          "documentId": {
+            "type": "string"
+          }
+        }
+      },
+      "NullLiteralKind": {
+        "enum": [
+          "absent",
+          "explicitNull",
+          "xmlNil"
+        ]
+      },
+      "OperationCapability": {
+        "required": [
+          "operation",
+          "status",
+          "profile",
+          "boundaryIds",
+          "conditions"
+        ],
+        "type": "object",
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/MappingOperation"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CapabilityStatus"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "boundaryIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityCondition"
+            }
+          }
+        }
+      },
+      "PathSegment": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/PathSegmentFieldPathSegment"
+          },
+          {
+            "$ref": "#/components/schemas/PathSegmentAttributePathSegment"
+          },
+          {
+            "$ref": "#/components/schemas/PathSegmentIndexPathSegment"
+          },
+          {
+            "$ref": "#/components/schemas/PathSegmentAnyItemPathSegment"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "field": "#/components/schemas/PathSegmentFieldPathSegment",
+            "attribute": "#/components/schemas/PathSegmentAttributePathSegment",
+            "index": "#/components/schemas/PathSegmentIndexPathSegment",
+            "anyItem": "#/components/schemas/PathSegmentAnyItemPathSegment"
+          }
+        }
+      },
+      "PathSegmentAnyItemPathSegment": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "anyItem"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "PathSegmentAttributePathSegment": {
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "attribute"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespaceUri": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "PathSegmentFieldPathSegment": {
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "field"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespaceUri": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "PathSegmentIndexPathSegment": {
+        "required": [
+          "index",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "index"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        }
+      },
+      "ProjectionBoundary": {
+        "required": [
+          "id",
+          "name",
+          "role",
+          "format",
+          "shape",
+          "rootFieldId",
+          "nativeLocator"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/BoundaryRole"
+          },
+          "format": {
+            "type": "string"
+          },
+          "shape": {
+            "$ref": "#/components/schemas/BoundaryShape"
+          },
+          "rootFieldId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nativeLocator": {
+            "$ref": "#/components/schemas/NativeLocator"
+          }
+        }
+      },
+      "ProjectionControl": {
+        "required": [
+          "id",
+          "kind",
+          "summary",
+          "appliesTo",
+          "dependencies",
+          "details",
+          "nativeLocator"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ControlKind"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "appliesTo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectionNodeReference"
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuleDependency"
+            }
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetailNode"
+            }
+          },
+          "nativeLocator": {
+            "$ref": "#/components/schemas/NativeLocator"
+          }
+        }
+      },
+      "ProjectionCoverage": {
+        "required": [
+          "status",
+          "gaps"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/CoverageStatus"
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoverageGap"
+            }
+          }
+        }
+      },
+      "ProjectionDiagnostic": {
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/DiagnosticSeverity"
+          },
+          "message": {
+            "type": "string"
+          },
+          "nativeLocator": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeLocator"
+              }
+            ]
+          },
+          "projectionLocator": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectionNodeReference"
+              }
+            ]
+          }
+        }
+      },
+      "ProjectionDocumentV1": {
+        "required": [
+          "provenance",
+          "coverage",
+          "boundaries",
+          "fields",
+          "parameters",
+          "rules",
+          "controls",
+          "relationships",
+          "diagnostics",
+          "capabilities",
+          "schemaVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "provenance": {
+            "$ref": "#/components/schemas/ProjectionProvenance"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/ProjectionCoverage"
+          },
+          "boundaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectionBoundary"
+            }
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectionField"
+            }
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectionParameter"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectionRule"
+            }
+          },
+          "controls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectionControl"
+            }
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectionRelationship"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectionDiagnostic"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationCapability"
+            }
+          },
+          "schemaVersion": {
+            "enum": [
+              "weft.mapping-projection.v1"
+            ],
+            "type": "string",
+            "readOnly": true
+          }
+        }
+      },
+      "ProjectionField": {
+        "required": [
+          "id",
+          "boundaryId",
+          "path",
+          "name",
+          "dataType",
+          "cardinality",
+          "requirement",
+          "nullability",
+          "nativeLocator"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "boundaryId": {
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PathSegment"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "dataType": {
+            "$ref": "#/components/schemas/FieldDataType"
+          },
+          "cardinality": {
+            "$ref": "#/components/schemas/FieldCardinality"
+          },
+          "requirement": {
+            "$ref": "#/components/schemas/FieldRequirement"
+          },
+          "nullability": {
+            "$ref": "#/components/schemas/FieldNullability"
+          },
+          "nativeLocator": {
+            "$ref": "#/components/schemas/NativeLocator"
+          }
+        }
+      },
+      "ProjectionNodeReference": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ProjectionNodeReferenceBoundaryNodeReference"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectionNodeReferenceFieldNodeReference"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectionNodeReferenceParameterNodeReference"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectionNodeReferenceRuleNodeReference"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectionNodeReferenceControlNodeReference"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "boundary": "#/components/schemas/ProjectionNodeReferenceBoundaryNodeReference",
+            "field": "#/components/schemas/ProjectionNodeReferenceFieldNodeReference",
+            "parameter": "#/components/schemas/ProjectionNodeReferenceParameterNodeReference",
+            "rule": "#/components/schemas/ProjectionNodeReferenceRuleNodeReference",
+            "control": "#/components/schemas/ProjectionNodeReferenceControlNodeReference"
+          }
+        }
+      },
+      "ProjectionNodeReferenceBoundaryNodeReference": {
+        "required": [
+          "boundaryId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "boundary"
+            ],
+            "type": "string"
+          },
+          "boundaryId": {
+            "type": "string"
+          }
+        }
+      },
+      "ProjectionNodeReferenceControlNodeReference": {
+        "required": [
+          "controlId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "control"
+            ],
+            "type": "string"
+          },
+          "controlId": {
+            "type": "string"
+          }
+        }
+      },
+      "ProjectionNodeReferenceFieldNodeReference": {
+        "required": [
+          "fieldId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "field"
+            ],
+            "type": "string"
+          },
+          "fieldId": {
+            "type": "string"
+          }
+        }
+      },
+      "ProjectionNodeReferenceParameterNodeReference": {
+        "required": [
+          "parameterId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "parameter"
+            ],
+            "type": "string"
+          },
+          "parameterId": {
+            "type": "string"
+          }
+        }
+      },
+      "ProjectionNodeReferenceRuleNodeReference": {
+        "required": [
+          "ruleId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "rule"
+            ],
+            "type": "string"
+          },
+          "ruleId": {
+            "type": "string"
+          }
+        }
+      },
+      "ProjectionParameter": {
+        "required": [
+          "id",
+          "name",
+          "dataType",
+          "requirement",
+          "defaultValue",
+          "nativeLocator"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "dataType": {
+            "$ref": "#/components/schemas/FieldDataType"
+          },
+          "requirement": {
+            "$ref": "#/components/schemas/FieldRequirement"
+          },
+          "defaultValue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LiteralValue"
+              }
+            ]
+          },
+          "nativeLocator": {
+            "$ref": "#/components/schemas/NativeLocator"
+          }
+        }
+      },
+      "ProjectionProvenance": {
+        "required": [
+          "revision",
+          "nativeArtifactDigest",
+          "backend",
+          "adapterVersion",
+          "projectionVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "revision": {
+            "$ref": "#/components/schemas/ScopedRevisionId"
+          },
+          "nativeArtifactDigest": {
+            "$ref": "#/components/schemas/ArtifactDigest"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/BackendIdentity"
+          },
+          "adapterVersion": {
+            "type": "string"
+          },
+          "projectionVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "ProjectionRelationship": {
+        "required": [
+          "id",
+          "kind",
+          "from",
+          "to"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RelationshipKind"
+          },
+          "from": {
+            "$ref": "#/components/schemas/ProjectionNodeReference"
+          },
+          "to": {
+            "$ref": "#/components/schemas/ProjectionNodeReference"
+          }
+        }
+      },
+      "ProjectionRule": {
+        "required": [
+          "id",
+          "outputFieldId",
+          "summary",
+          "dependencies",
+          "details",
+          "nativeLocator"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "outputFieldId": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuleDependency"
+            }
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DetailNode"
+            }
+          },
+          "nativeLocator": {
+            "$ref": "#/components/schemas/NativeLocator"
+          }
+        }
+      },
+      "RelationshipKind": {
+        "enum": [
+          "readsFrom",
+          "writesTo",
+          "governedBy",
+          "dependsOn",
+          "produces",
+          "boundaryMember"
+        ]
+      },
+      "RuleDependency": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/RuleDependencyFieldDependency"
+          },
+          {
+            "$ref": "#/components/schemas/RuleDependencyParameterDependency"
+          },
+          {
+            "$ref": "#/components/schemas/RuleDependencyConstantDependency"
+          },
+          {
+            "$ref": "#/components/schemas/RuleDependencyNodeDependency"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "field": "#/components/schemas/RuleDependencyFieldDependency",
+            "parameter": "#/components/schemas/RuleDependencyParameterDependency",
+            "constant": "#/components/schemas/RuleDependencyConstantDependency",
+            "node": "#/components/schemas/RuleDependencyNodeDependency"
+          }
+        }
+      },
+      "RuleDependencyConstantDependency": {
+        "required": [
+          "value",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "constant"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/LiteralValue"
+          },
+          "role": {
+            "$ref": "#/components/schemas/DependencyRole"
+          }
+        }
+      },
+      "RuleDependencyFieldDependency": {
+        "required": [
+          "fieldId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "field"
+            ],
+            "type": "string"
+          },
+          "fieldId": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/DependencyRole"
+          }
+        }
+      },
+      "RuleDependencyNodeDependency": {
+        "required": [
+          "node",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "node"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "$ref": "#/components/schemas/ProjectionNodeReference"
+          },
+          "role": {
+            "$ref": "#/components/schemas/DependencyRole"
+          }
+        }
+      },
+      "RuleDependencyParameterDependency": {
+        "required": [
+          "parameterId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "parameter"
+            ],
+            "type": "string"
+          },
+          "parameterId": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/DependencyRole"
+          }
+        }
+      },
+      "ScalarDataType": {
+        "enum": [
+          "string",
+          "integer",
+          "decimal",
+          "binaryFloat",
+          "boolean"
+        ]
+      },
+      "ScopedRevisionId": {
+        "required": [
+          "organizationId",
+          "projectId",
+          "mappingId",
+          "revisionId"
+        ],
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "mappingId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          }
+        }
+      },
+      "TextSpanUnit": {
+        "enum": [
+          "utf8Bytes",
+          "utf16CodeUnits",
+          "unicodeScalars"
+        ],
+        "default": "utf8Bytes"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Projection fixtures"
+    }
+  ]
+}
