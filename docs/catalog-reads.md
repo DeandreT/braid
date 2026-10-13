@@ -1,7 +1,8 @@
 # Persistent catalog reads
 
-Status: P3d1 implementation on `feat/catalog-read-api`, tracked in
-[#28](https://github.com/DeandreT/weft/issues/28). Qualification is pending.
+Status: P3d1 implementation in [draft PR #33](https://github.com/DeandreT/weft/pull/33),
+tracked in [#28](https://github.com/DeandreT/weft/issues/28). Local verification passed
+1,151 tests without failures or skips. Independent qualification is pending.
 The accepted sequence is in [Catalog API plan](catalog-api-plan.md).
 
 The API reads saved projects, mapping metadata and immutable revision history.
@@ -126,8 +127,10 @@ sessions and secure cookie/key lifecycle remain P4.
 `weft_catalog_reader` receives seven full-table SELECT grants: the five ownership
 tables, mappings and mapping revisions. Its reservation access is column-only SELECT
 on organization ID, project ID, operation ID and display filename. It cannot read
-attempts, evidence, private references, worker profiles or lease data, or write
-catalog/ownership facts. Existing runtime and ingestion profiles remain unchanged.
+attempts, evidence, reservation worker profiles or lease data, or write
+catalog/ownership facts. Full revision-table grants include stored native object IDs;
+the catalog queries and public DTOs omit those IDs and do not expose private object
+I/O. Existing runtime and ingestion profiles remain unchanged.
 
 The dedicated pool leases short read-only, bounded, organization-scoped transactions.
 It checks exact effective rights and trusted permanent source tables, ancestry,
