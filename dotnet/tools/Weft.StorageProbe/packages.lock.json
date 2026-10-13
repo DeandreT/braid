@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "weft.application": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Domain": "[1.0.0, )"
+        }
+      },
+      "weft.domain": {
+        "type": "Project"
+      },
+      "weft.storage.filesystem": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Application": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

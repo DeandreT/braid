@@ -15,6 +15,8 @@
     <ProjectReference Include="../../src/Weft.Contracts/Weft.Contracts.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
     <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+    <ProjectReference Include="../../tools/Weft.StorageProbe/Weft.StorageProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
@@ -24,4 +26,10 @@
     <None Include="../../src/Weft.Api/NativeExamples/Artifacts/*.json"
           Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="CopyStorageProbe" AfterTargets="Build">
+    <ItemGroup>
+      <StorageProbeFiles Include="../../tools/Weft.StorageProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(StorageProbeFiles)" DestinationFiles="@(StorageProbeFiles->'$(OutDir)StorageProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

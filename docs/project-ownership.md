@@ -3,8 +3,9 @@
 P3a adds PostgreSQL ownership and scoped application reads. It does not expose
 catalog HTTP routes or supply a browser identity. The existing Development
 mapping examples continue through their separate fixed-example routes.
-Implementation is under qualification in
-[#13](https://github.com/DeandreT/weft/issues/13).
+P3a is qualified and merged in
+[PR #21](https://github.com/DeandreT/weft/pull/21), with local and independent
+clean-container evidence for 23 actual PostgreSQL cases and the full C# suite.
 
 ## Ownership and application reads
 

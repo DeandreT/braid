@@ -2,13 +2,16 @@
 
 Status: architecture, P0's local web/API shell, P1's mapping contracts, and
 P2a/P2b's restricted Ferrule inspection/validation/projection backend and
-P2c's Angular viewer are qualified and merged.
+P2c's Angular viewer and P3a's PostgreSQL ownership are qualified and merged.
 Local and independent clean-container evidence is recorded in
 [PR #6](https://github.com/DeandreT/weft/pull/6) and
 [PR #10](https://github.com/DeandreT/weft/pull/10) and
 [PR #11](https://github.com/DeandreT/weft/pull/11) and
-[PR #12](https://github.com/DeandreT/weft/pull/12).
-Remaining application increments below are planned.
+[PR #12](https://github.com/DeandreT/weft/pull/12) and
+[PR #21](https://github.com/DeandreT/weft/pull/21).
+P3b private storage is implemented, with qualification evidence tracked in
+[#14](https://github.com/DeandreT/weft/issues/14). Subsequent application
+increments below are planned.
 
 The architecture review is tracked in [#1](https://github.com/DeandreT/weft/issues/1).
 The first application increment, P0, is tracked in

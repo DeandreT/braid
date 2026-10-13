@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "weft.application": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Domain": "[1.0.0, )"
+        }
+      },
+      "weft.domain": {
+        "type": "Project"
+      }
+    }
+  }
+}

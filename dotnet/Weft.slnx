@@ -9,11 +9,13 @@
     <Project Path="src/Weft.Domain/Weft.Domain.csproj" />
     <Project Path="src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
     <Project Path="src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
+    <Project Path="src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Weft.Tests/Weft.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Weft.DatabaseTool/Weft.DatabaseTool.csproj" />
+    <Project Path="tools/Weft.StorageProbe/Weft.StorageProbe.csproj" />
   </Folder>
 </Solution>
