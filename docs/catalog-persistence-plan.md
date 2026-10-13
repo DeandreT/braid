@@ -2,9 +2,9 @@
 
 Status: accepted implementation sequence. P2c is qualified and merged in
 [PR #12](https://github.com/DeandreT/weft/pull/12). P3a is qualified and merged in
-[PR #21](https://github.com/DeandreT/weft/pull/21). P3b storage is implemented,
-with qualification evidence tracked in
-[#14](https://github.com/DeandreT/weft/issues/14); later P3 increments have not
+[PR #21](https://github.com/DeandreT/weft/pull/21). P3b storage is qualified and
+merged in [PR #22](https://github.com/DeandreT/weft/pull/22). P3c follows the
+two-part [ingestion plan](catalog-ingestion-plan.md); implementation has not
 started. Each increment has its
 own focused issue, feature branch and PR, and must be qualified and merged
 before dependent implementation starts.
@@ -34,14 +34,17 @@ Primary references:
 | --- | --- | --- | --- |
 | [P3a](https://github.com/DeandreT/weft/issues/13) | Project ownership schema, application access/read contracts, scoped Npgsql transactions, checked SQL migrations and disposable PostgreSQL setup | Qualified and merged [P2c](https://github.com/DeandreT/weft/issues/9) / [PR](https://github.com/DeandreT/weft/pull/12) | Actual PostgreSQL scope, grant, role, migration, pool-reset and restart checks |
 | [P3b](https://github.com/DeandreT/weft/issues/14) | Private storage contract and real local adapter; generated keys, create-only writes, bounded verified reads | Qualified and merged P3a | Exact-byte, isolation, overwrite, failure and restart checks against actual local storage |
-| [P3c](https://github.com/DeandreT/weft/issues/15) | Mapping metadata and immutable revision ingestion; durable reservations/receipts, idempotency, committed sequence and head concurrency | Qualified and merged P3b; qualified P2 native adapters | Actual PostgreSQL/storage/worker checks including retries, concurrent uploads and process failure between stages |
-| [P3d](https://github.com/DeandreT/weft/issues/16) | Scoped catalog/revision HTTP API, raw-byte upload, generated contracts and explicit loopback-only Development identity wiring | Qualified and merged P3c | Actual API/database/storage checks; no trusted client identity; hosted configuration rejects development identity |
+| [P3c1](https://github.com/DeandreT/weft/issues/23) | Scoped mapping/revision/reservation metadata, restricted ingestion role/pool, typed DAL and atomic publication | Qualified and merged P3b | Actual PostgreSQL grants, migrations, ancestry, immutable facts, receipts, leases and head concurrency; explicitly synthetic admission evidence |
+| [P3c2](https://github.com/DeandreT/weft/issues/24) | Exact native upload/admission and recovery using the scoped metadata foundation | Qualified and merged P3c1; qualified P2 native adapters | Actual PostgreSQL/storage/worker checks including retries, concurrent uploads and process failure between stages |
+| [P3d](https://github.com/DeandreT/weft/issues/16) | Scoped catalog/revision HTTP API, raw-byte upload, generated contracts and explicit loopback-only Development identity wiring | Qualified and merged both P3c increments | Actual API/database/storage checks; no trusted client identity; hosted configuration rejects development identity |
 | [P3e](https://github.com/DeandreT/weft/issues/17) | Persisted projection/validation attempts and cache, revision-specific reports and provenance-safe viewer links | Qualified and merged P3d; qualified P2c public report contracts | Actual native worker, cache version/scope, concurrency, report budget and restart checks |
 | [P3f](https://github.com/DeandreT/weft/issues/18) | Bounded orphan and replaceable-derived-object cleanup; retention policy, leases and interrupted-deletion recovery | Qualified and merged P3e | Actual PostgreSQL/storage cleanup races; referenced revisions and active reservations remain intact |
 | [P3g](https://github.com/DeandreT/weft/issues/19) | Angular catalog, upload and revision history integrated with immutable viewer routes | Qualified and merged P3f and P2c | Browser workflows on an alternate display against actual API/PostgreSQL/storage and qualified native worker |
 
 P4 starts after the P3 chain. It supplies verified Entra identities and browser
 sessions to the existing ownership boundary. P3 does not qualify hosted login.
+Parent [P3c #15](https://github.com/DeandreT/weft/issues/15) is complete only
+after both focused ingestion increments are qualified and merged.
 
 ## Smallest P3a
 
