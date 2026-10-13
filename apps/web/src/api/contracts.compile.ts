@@ -338,3 +338,52 @@ export function nativeExampleResponse(
 // @ts-expect-error Native example 404 responses do not contain a projection/report body.
 export const nativeExampleMissingBody: NativeExampleGet["responses"][404]["content"] =
   { "application/json": nativeFunctionOwner };
+
+type CatalogProject = components["schemas"]["CatalogProjectV1"];
+type CatalogMapping = components["schemas"]["CatalogMappingV1"];
+type CatalogRevision = components["schemas"]["CatalogRevisionV1"];
+type CatalogMetadata = components["schemas"]["CatalogMappingMetadataV1"];
+type CatalogRevisionGet =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}"]["get"];
+
+export const catalogVersion: CatalogProject["version"] = "9007199254740993";
+export const catalogHeadSequence: CatalogMapping["head"]["sequence"] =
+  "9223372036854775807";
+export const catalogRevisionSequence: CatalogRevision["sequence"] =
+  "9007199254740993";
+
+// @ts-expect-error Catalog versions retain precision as decimal strings.
+export const numericCatalogVersion: CatalogProject["version"] = 9007199254740993;
+// @ts-expect-error Revision sequences retain precision as decimal strings.
+export const numericCatalogSequence: CatalogRevision["sequence"] = 9007199254740993;
+// @ts-expect-error Metadata-only responses do not contain the changing revision head.
+export const metadataHead: CatalogMetadata["head"] = null;
+// @ts-expect-error Catalog errors contain a closed code, without raw provider text.
+export const catalogProviderError: components["schemas"]["CatalogErrorV1"]["message"] =
+  "provider detail";
+
+export function describeCatalogAdmission(
+  admission: CatalogRevision["admission"],
+): string {
+  switch (admission) {
+    case "valid":
+      return "Admitted valid revision";
+    case "decodedInvalid":
+      return "Admitted revision with validation findings";
+    default:
+      return assertNever(admission);
+  }
+}
+
+export const catalogRevisionParameters = {
+  organizationId: "11111111-1111-1111-1111-111111111111",
+  projectId: "00000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  mappingId: "33333333-3333-3333-3333-333333333333",
+  revisionId: "44444444-4444-4444-4444-444444444444",
+} satisfies CatalogRevisionGet["parameters"]["path"];
+
+export function catalogRevisionResponse(
+  revision: CatalogRevision,
+): CatalogRevisionGet["responses"][200]["content"] {
+  return { "application/json": revision };
+}

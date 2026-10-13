@@ -137,6 +137,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
+          "Weft.Application": "[1.0.0, )",
           "Weft.Contracts": "[1.0.0, )",
           "Weft.Domain": "[1.0.0, )",
           "Weft.MappingBackends": "[1.0.0, )"
@@ -173,7 +174,9 @@
       "weft.server": {
         "type": "Project",
         "dependencies": {
-          "Weft.Api": "[1.0.0, )"
+          "Weft.Api": "[1.0.0, )",
+          "Weft.Application": "[1.0.0, )",
+          "Weft.Persistence.Postgres": "[1.0.0, )"
         }
       },
       "weft.storage.filesystem": {

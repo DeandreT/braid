@@ -36,6 +36,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string migratorPassword = Guid.NewGuid().ToString("N");
     private readonly string runtimePassword = Guid.NewGuid().ToString("N");
     private readonly string ingestionPassword = Guid.NewGuid().ToString("N");
+    private readonly string catalogPassword = Guid.NewGuid().ToString("N");
     private readonly ConcurrentDictionary<string, byte> caseDatabases = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim caseRemoval = new(1, 1);
     private readonly string? client = Environment.GetEnvironmentVariable("WEFT_TEST_CLIENT_CONTAINER");
@@ -113,6 +114,8 @@ public sealed class PostgresFixture : IAsyncLifetime
                   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
                 CREATE ROLE weft_ingest LOGIN PASSWORD '{ingestionPassword}'
                   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                CREATE ROLE weft_catalog_reader LOGIN PASSWORD '{catalogPassword}'
+                  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
                 """, bootstrap);
             await roles.ExecuteNonQueryAsync();
         }
@@ -135,10 +138,11 @@ public sealed class PostgresFixture : IAsyncLifetime
         PostgresCase? test = null;
         try
         {
-            await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO weft_runtime, weft_ingest", bootstrap))
+            await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO weft_runtime, weft_ingest, weft_catalog_reader", bootstrap))
                 await grants.ExecuteNonQueryAsync();
             test = new PostgresCase(this, database, ConnectionString(database, "weft_migrator", migratorPassword),
-                ConnectionString(database, "weft_runtime", runtimePassword), ConnectionString(database, "weft_ingest", ingestionPassword));
+                ConnectionString(database, "weft_runtime", runtimePassword), ConnectionString(database, "weft_ingest", ingestionPassword),
+                ConnectionString(database, "weft_catalog_reader", catalogPassword));
             await using var ownerConnection = await test.Owner.OpenConnectionAsync();
             await using var publicSchema = new NpgsqlCommand("REVOKE ALL ON SCHEMA public FROM PUBLIC", ownerConnection);
             await publicSchema.ExecuteNonQueryAsync();
@@ -350,7 +354,8 @@ public sealed class PostgresFixture : IAsyncLifetime
         var safe = error.Replace(bootstrapPassword, "[redacted]", StringComparison.Ordinal)
             .Replace(migratorPassword, "[redacted]", StringComparison.Ordinal)
             .Replace(runtimePassword, "[redacted]", StringComparison.Ordinal)
-            .Replace(ingestionPassword, "[redacted]", StringComparison.Ordinal).Trim();
+            .Replace(ingestionPassword, "[redacted]", StringComparison.Ordinal)
+            .Replace(catalogPassword, "[redacted]", StringComparison.Ordinal).Trim();
         return safe.Length == 0 ? string.Empty : $" Docker reported: {safe[..Math.Min(safe.Length, 2000)]}";
     }
 
@@ -405,16 +410,18 @@ public sealed class PostgresCase : IAsyncDisposable
     public string MigrationConnectionString { get; }
     public string RuntimeConnectionString { get; }
     public string IngestionConnectionString { get; }
+    public string CatalogConnectionString { get; }
     public NpgsqlDataSource Owner { get; }
 
     internal PostgresCase(PostgresFixture fixture, string name, string migrationConnectionString, string runtimeConnectionString,
-        string ingestionConnectionString)
+        string ingestionConnectionString, string catalogConnectionString)
     {
         this.fixture = fixture;
         Name = name;
         MigrationConnectionString = migrationConnectionString;
         RuntimeConnectionString = runtimeConnectionString;
         IngestionConnectionString = ingestionConnectionString;
+        CatalogConnectionString = catalogConnectionString;
         Owner = NpgsqlDataSource.Create(migrationConnectionString);
     }
 

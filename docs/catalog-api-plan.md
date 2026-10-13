@@ -108,7 +108,8 @@ hosted/non-Development use rejects that provider. Disabled catalog stays closed.
 
 Each catalog request requires the actual loopback peer and exact configured Host.
 Forwarded/proxy headers cannot become local identity. The initial browser profile
-is one IP-literal loopback origin including exact port, serving SPA/API together;
+is one canonical IP-literal loopback origin with an exact effective port, serving
+SPA/API together. Browser serialization omits default HTTP port 80;
 cross-origin CORS remains disabled. Binding Kestrel to loopback alone does not
 validate Host, so this policy checks Host explicitly.
 [Microsoft host filtering guidance](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel/host-filtering?view=aspnetcore-10.0)

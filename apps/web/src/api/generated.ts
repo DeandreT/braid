@@ -3,6 +3,23 @@
  * Refresh with: npm run contracts:generate
  */
 export interface paths {
+  "/api/v1/catalog/context": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the explicitly configured development catalog context and request token. */
+    get: operations["GetCatalogContext"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/examples/mappings": {
     parameters: {
       query?: never;
@@ -70,6 +87,125 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read a bounded page of currently visible projects. */
+    get: operations["GetCatalogProjects"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read project metadata and current supported actions. */
+    get: operations["GetCatalogProject"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read a bounded page of mappings and committed heads. */
+    get: operations["GetCatalogMappings"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read mapping metadata and its current committed head. */
+    get: operations["GetCatalogMapping"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/metadata": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the exact mapping metadata representation. */
+    get: operations["GetCatalogMappingMetadata"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read immutable revision history in descending committed sequence. */
+    get: operations["GetCatalogRevisions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one scoped immutable revision's catalog metadata. */
+    get: operations["GetCatalogRevision"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -103,6 +239,134 @@ export interface components {
       | "zeroOrMore"
       | "oneOrMore"
       | "bounded";
+    CatalogAccessV1: {
+      actions: components["schemas"]["CatalogActionsV1"];
+      role: components["schemas"]["CatalogRoleV1"];
+    };
+    CatalogActionsV1: {
+      chat: boolean;
+      createMappings: boolean;
+      createProjects: boolean;
+      editMetadata: boolean;
+      manageMembership: boolean;
+      preview: boolean;
+      readReports: boolean;
+      uploadRevisions: boolean;
+      view: boolean;
+    };
+    /** @enum {unknown} */
+    CatalogAdmissionV1: "valid" | "decodedInvalid";
+    CatalogContextV1: {
+      actorPrincipalId: string;
+      allowedOrganizationId: string;
+      features: components["schemas"]["CatalogFeaturesV1"];
+      mode: string;
+      organizationName: string;
+      requestToken: string;
+    };
+    /** @enum {unknown} */
+    CatalogErrorCodeV1:
+      | "unavailable"
+      | "invalidRequest"
+      | "notFound"
+      | "identityRejected"
+      | "persistenceFailure"
+      | "internalFailure";
+    CatalogErrorV1: {
+      code: components["schemas"]["CatalogErrorCodeV1"];
+    };
+    CatalogFeaturesV1: {
+      chat: boolean;
+      createMappings: boolean;
+      createProjects: boolean;
+      editMetadata: boolean;
+      manageMembership: boolean;
+      preview: boolean;
+      readCatalog: boolean;
+      readReports: boolean;
+      uploadRevisions: boolean;
+    };
+    CatalogHeadV1: {
+      admission: components["schemas"]["CatalogAdmissionV1"];
+      scope: components["schemas"]["CatalogRevisionScopeV1"];
+      sequence: string;
+    };
+    CatalogMappingMetadataV1: {
+      description: string;
+      name: string;
+      scope: components["schemas"]["CatalogMappingScopeV1"];
+      version: string;
+    };
+    CatalogMappingPageV1: {
+      mappings: components["schemas"]["CatalogMappingV1"][];
+      nextCursor?: null | string;
+    };
+    CatalogMappingScopeV1: {
+      mappingId: string;
+      organizationId: string;
+      projectId: string;
+    };
+    CatalogMappingV1: {
+      access: components["schemas"]["CatalogAccessV1"];
+      backendId: string;
+      /** Format: date-time */
+      createdAtUtc: string;
+      creatorPrincipalId: string;
+      description: string;
+      head: components["schemas"]["CatalogHeadV1"];
+      name: string;
+      ownerPrincipalId: string;
+      scope: components["schemas"]["CatalogMappingScopeV1"];
+      /** Format: date-time */
+      updatedAtUtc: string;
+      version: string;
+    };
+    CatalogProjectPageV1: {
+      nextCursor?: null | string;
+      projects: components["schemas"]["CatalogProjectV1"][];
+    };
+    CatalogProjectScopeV1: {
+      organizationId: string;
+      projectId: string;
+    };
+    CatalogProjectV1: {
+      access: components["schemas"]["CatalogAccessV1"];
+      /** Format: date-time */
+      createdAtUtc: string;
+      creatorPrincipalId: string;
+      description: string;
+      name: string;
+      scope: components["schemas"]["CatalogProjectScopeV1"];
+      /** Format: date-time */
+      updatedAtUtc: string;
+      version: string;
+    };
+    CatalogRevisionPageV1: {
+      nextCursor?: null | string;
+      revisions: components["schemas"]["CatalogRevisionV1"][];
+    };
+    CatalogRevisionScopeV1: {
+      mappingId: string;
+      organizationId: string;
+      projectId: string;
+      revisionId: string;
+    };
+    CatalogRevisionV1: {
+      admission: components["schemas"]["CatalogAdmissionV1"];
+      backendId: string;
+      /** Format: date-time */
+      committedAtUtc: string;
+      creatorPrincipalId: string;
+      logicalDocument: string;
+      /** Format: int32 */
+      nativeByteCount: number;
+      nativeDigest: components["schemas"]["ArtifactDigest"];
+      originalFilename: string;
+      scope: components["schemas"]["CatalogRevisionScopeV1"];
+      sequence: string;
+    };
+    /** @enum {unknown} */
+    CatalogRoleV1: "viewer" | "runner" | "publisher" | "administrator";
     /** @enum {unknown} */
     ControlKind:
       | "unknown"
@@ -647,6 +911,62 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  GetCatalogContext: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogContextV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
   GetNativeExamples: {
     parameters: {
       query?: never;
@@ -748,6 +1068,432 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HealthResponseV1"];
+        };
+      };
+    };
+  };
+  GetCatalogProjects: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: string;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogProjectPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogProjectV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogMappings: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: string;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogMappingPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogMapping: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogMappingV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogMappingMetadata: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogMappingMetadataV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogRevisions: {
+    parameters: {
+      query?: {
+        cursor?: string;
+        limit?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogRevision: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
     };

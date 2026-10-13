@@ -65,7 +65,7 @@ Unknown or changed history and an unversioned owned schema are refused. Add a
 new migration to evolve installed data; do not edit an applied script.
 
 For a new local database, copy `deploy/local/.env.example` to
-`deploy/local/.env` and replace all four passwords. The compose project owns
+`deploy/local/.env` and replace all five passwords. The compose project owns
 its own volume and exposes PostgreSQL only on `127.0.0.1:54329`:
 
 ```sh
@@ -77,20 +77,23 @@ logins, transfers database ownership, and restricts public privileges.
 The ingestion increment also provisions its separate restricted `weft_ingest`
 login. Existing ownership-only databases require that login before upgrading;
 see [ingestion metadata](ingestion-metadata.md).
+Catalog reads also provision the dedicated `weft_catalog_reader`; existing databases
+require that login before migration 0003. See [Catalog reads](catalog-reads.md).
 Initialization reads passwords from the environment inside `psql`; they are
 absent from command arguments. Initialization does not run again on an existing
 volume. Updating the environment alone does not rotate an existing role password.
 
 Set `WEFT_MIGRATION_CONNECTION_STRING` to the migration login's connection
-string for that database, then run the migration-only tool:
+string for that database, then run the migration command:
 
 ```sh
 dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool -- migrate
 ```
 
-The tool does not create principals, grant project membership, or enable server
-identity. Use controlled owner setup for explicit membership records. P3d adds
-catalog configuration after storage and immutable ingestion are qualified.
+The migration command does not create principals or memberships. The separate
+explicit `provision-development-identity` owner command supplies local catalog
+admission and optional grants on existing projects; neither command enables server
+identity. Its configuration and refusal rules are in the catalog-read documentation.
 Stop this compose project with `down` to retain its volume; adding `--volumes`
 removes that project's data and is an explicit development reset.
 

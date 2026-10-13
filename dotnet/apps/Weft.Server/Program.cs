@@ -1,4 +1,5 @@
 using Weft.Api;
+using Weft.Api.Catalog;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.Server;
@@ -12,6 +13,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 builder.WebHost.ConfigureKestrel(server => DevelopmentListenAddress.ConfigureKestrel(server, address));
 builder.Services.AddWeftApi();
+CatalogHostConfiguration.Configure(builder, address);
 if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE") is { Length: > 0 } workerImage)
 {
     builder.Services.AddSingleton<IInspectionWorkerRunner>(new DockerInspectionWorkerRunner(
@@ -27,6 +29,7 @@ app.UseStaticFiles();
 app.MapWeftHealth();
 app.MapWeftProjectionFixtures();
 app.MapWeftNativeExamples();
+app.MapWeftCatalog();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();

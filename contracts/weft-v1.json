@@ -119,6 +119,694 @@
           }
         }
       }
+    },
+    "/api/v1/catalog/context": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read the explicitly configured development catalog context and request token.",
+        "operationId": "GetCatalogContext",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogContextV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read a bounded page of currently visible projects.",
+        "operationId": "GetCatalogProjects",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogProjectPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read project metadata and current supported actions.",
+        "operationId": "GetCatalogProject",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogProjectV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read a bounded page of mappings and committed heads.",
+        "operationId": "GetCatalogMappings",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogMappingPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read mapping metadata and its current committed head.",
+        "operationId": "GetCatalogMapping",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogMappingV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/metadata": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read the exact mapping metadata representation.",
+        "operationId": "GetCatalogMappingMetadata",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogMappingMetadataV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read immutable revision history in descending committed sequence.",
+        "operationId": "GetCatalogRevisions",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read one scoped immutable revision's catalog metadata.",
+        "operationId": "GetCatalogRevision",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -205,6 +893,475 @@
           "zeroOrMore",
           "oneOrMore",
           "bounded"
+        ]
+      },
+      "CatalogAccessV1": {
+        "required": [
+          "role",
+          "actions"
+        ],
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/CatalogRoleV1"
+          },
+          "actions": {
+            "$ref": "#/components/schemas/CatalogActionsV1"
+          }
+        }
+      },
+      "CatalogActionsV1": {
+        "required": [
+          "view",
+          "createProjects",
+          "createMappings",
+          "editMetadata",
+          "uploadRevisions",
+          "readReports",
+          "chat",
+          "preview",
+          "manageMembership"
+        ],
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "boolean"
+          },
+          "createProjects": {
+            "type": "boolean"
+          },
+          "createMappings": {
+            "type": "boolean"
+          },
+          "editMetadata": {
+            "type": "boolean"
+          },
+          "uploadRevisions": {
+            "type": "boolean"
+          },
+          "readReports": {
+            "type": "boolean"
+          },
+          "chat": {
+            "type": "boolean"
+          },
+          "preview": {
+            "type": "boolean"
+          },
+          "manageMembership": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CatalogAdmissionV1": {
+        "enum": [
+          "valid",
+          "decodedInvalid"
+        ]
+      },
+      "CatalogContextV1": {
+        "required": [
+          "mode",
+          "actorPrincipalId",
+          "allowedOrganizationId",
+          "organizationName",
+          "features",
+          "requestToken"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "actorPrincipalId": {
+            "type": "string"
+          },
+          "allowedOrganizationId": {
+            "type": "string"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "features": {
+            "$ref": "#/components/schemas/CatalogFeaturesV1"
+          },
+          "requestToken": {
+            "type": "string"
+          }
+        }
+      },
+      "CatalogErrorCodeV1": {
+        "enum": [
+          "unavailable",
+          "invalidRequest",
+          "notFound",
+          "identityRejected",
+          "persistenceFailure",
+          "internalFailure"
+        ]
+      },
+      "CatalogErrorV1": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/CatalogErrorCodeV1"
+          }
+        }
+      },
+      "CatalogFeaturesV1": {
+        "required": [
+          "readCatalog",
+          "createProjects",
+          "createMappings",
+          "editMetadata",
+          "uploadRevisions",
+          "readReports",
+          "chat",
+          "preview",
+          "manageMembership"
+        ],
+        "type": "object",
+        "properties": {
+          "readCatalog": {
+            "type": "boolean"
+          },
+          "createProjects": {
+            "type": "boolean"
+          },
+          "createMappings": {
+            "type": "boolean"
+          },
+          "editMetadata": {
+            "type": "boolean"
+          },
+          "uploadRevisions": {
+            "type": "boolean"
+          },
+          "readReports": {
+            "type": "boolean"
+          },
+          "chat": {
+            "type": "boolean"
+          },
+          "preview": {
+            "type": "boolean"
+          },
+          "manageMembership": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CatalogHeadV1": {
+        "required": [
+          "scope",
+          "sequence",
+          "admission"
+        ],
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "sequence": {
+            "type": "string"
+          },
+          "admission": {
+            "$ref": "#/components/schemas/CatalogAdmissionV1"
+          }
+        }
+      },
+      "CatalogMappingMetadataV1": {
+        "required": [
+          "scope",
+          "name",
+          "description",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/CatalogMappingScopeV1"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "CatalogMappingPageV1": {
+        "required": [
+          "mappings"
+        ],
+        "type": "object",
+        "properties": {
+          "mappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogMappingV1"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CatalogMappingScopeV1": {
+        "required": [
+          "organizationId",
+          "projectId",
+          "mappingId"
+        ],
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "mappingId": {
+            "type": "string"
+          }
+        }
+      },
+      "CatalogMappingV1": {
+        "required": [
+          "scope",
+          "name",
+          "description",
+          "backendId",
+          "creatorPrincipalId",
+          "ownerPrincipalId",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "version",
+          "head",
+          "access"
+        ],
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/CatalogMappingScopeV1"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "backendId": {
+            "type": "string"
+          },
+          "creatorPrincipalId": {
+            "type": "string"
+          },
+          "ownerPrincipalId": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string"
+          },
+          "head": {
+            "$ref": "#/components/schemas/CatalogHeadV1"
+          },
+          "access": {
+            "$ref": "#/components/schemas/CatalogAccessV1"
+          }
+        }
+      },
+      "CatalogProjectPageV1": {
+        "required": [
+          "projects"
+        ],
+        "type": "object",
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogProjectV1"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CatalogProjectScopeV1": {
+        "required": [
+          "organizationId",
+          "projectId"
+        ],
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          }
+        }
+      },
+      "CatalogProjectV1": {
+        "required": [
+          "scope",
+          "name",
+          "description",
+          "creatorPrincipalId",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "version",
+          "access"
+        ],
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/CatalogProjectScopeV1"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "creatorPrincipalId": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string"
+          },
+          "access": {
+            "$ref": "#/components/schemas/CatalogAccessV1"
+          }
+        }
+      },
+      "CatalogRevisionPageV1": {
+        "required": [
+          "revisions"
+        ],
+        "type": "object",
+        "properties": {
+          "revisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogRevisionV1"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CatalogRevisionScopeV1": {
+        "required": [
+          "organizationId",
+          "projectId",
+          "mappingId",
+          "revisionId"
+        ],
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "mappingId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          }
+        }
+      },
+      "CatalogRevisionV1": {
+        "required": [
+          "scope",
+          "sequence",
+          "admission",
+          "creatorPrincipalId",
+          "committedAtUtc",
+          "originalFilename",
+          "logicalDocument",
+          "nativeDigest",
+          "nativeByteCount",
+          "backendId"
+        ],
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "sequence": {
+            "type": "string"
+          },
+          "admission": {
+            "$ref": "#/components/schemas/CatalogAdmissionV1"
+          },
+          "creatorPrincipalId": {
+            "type": "string"
+          },
+          "committedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "originalFilename": {
+            "type": "string"
+          },
+          "logicalDocument": {
+            "type": "string"
+          },
+          "nativeDigest": {
+            "$ref": "#/components/schemas/ArtifactDigest"
+          },
+          "nativeByteCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "backendId": {
+            "type": "string"
+          }
+        }
+      },
+      "CatalogRoleV1": {
+        "enum": [
+          "viewer",
+          "runner",
+          "publisher",
+          "administrator"
         ]
       },
       "ControlKind": {
@@ -2300,6 +3457,9 @@
     },
     {
       "name": "Native examples"
+    },
+    {
+      "name": "Catalog"
     }
   ]
 }

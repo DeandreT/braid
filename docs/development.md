@@ -1,14 +1,15 @@
 # Local development
 
 The PostgreSQL ownership library and its separate local setup are described in
-[Project ownership](project-ownership.md). Catalog HTTP routes and a server
-identity adapter follow the qualified storage/ingestion increments.
+[Project ownership](project-ownership.md). Explicit local identity, persistent
+catalog reads and owner provisioning are described in [Catalog reads](catalog-reads.md);
+that increment's qualification status is recorded there.
 
 The Angular/ASP.NET Core workspace is local-only. It supplies a live API health
 check and a read-only mapping viewer over development native examples, with
 generated API contracts. A separate Ferrule adapter supplies native inspection,
-validation, and projection. Catalog persistence, authentication, chat, and
-Wolverine-backed execution follow separate increments.
+validation, and projection. Catalog uploads/browser integration, hosted
+authentication, chat and Wolverine-backed execution follow separate increments.
 
 ## Prerequisites
 
