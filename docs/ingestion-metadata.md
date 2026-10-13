@@ -61,6 +61,8 @@ New Compose databases provision three separate logins: migrator, reader and
 ingestion. Copy the updated `.env.example` and set four private passwords.
 Bootstrap reads passwords inside `psql`; arguments contain no password. The
 owner-only migration tool preserves `0001` and its exact checksum.
+Compose readiness checks the final TCP listener, so its temporary initialization
+server cannot satisfy `up --wait` before role provisioning finishes.
 
 For an existing ownership-only database, add the ingestion password to the
 private environment file, supply it to the service, then explicitly provision
