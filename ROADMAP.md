@@ -11,7 +11,8 @@ Local and independent clean-container evidence is recorded in
 [PR #12](https://github.com/DeandreT/weft/pull/12) and
 [PR #21](https://github.com/DeandreT/weft/pull/21) and
 [PR #22](https://github.com/DeandreT/weft/pull/22).
-Subsequent application increments below are planned.
+P3c1 metadata implementation and qualification are tracked in
+[#23](https://github.com/DeandreT/weft/issues/23). The remaining sequence follows below.
 
 The architecture review is tracked in [#1](https://github.com/DeandreT/weft/issues/1).
 The first application increment, P0, is tracked in

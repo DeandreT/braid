@@ -34,6 +34,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string bootstrapPassword = Guid.NewGuid().ToString("N");
     private readonly string migratorPassword = Guid.NewGuid().ToString("N");
     private readonly string runtimePassword = Guid.NewGuid().ToString("N");
+    private readonly string ingestionPassword = Guid.NewGuid().ToString("N");
     private readonly string? client = Environment.GetEnvironmentVariable("WEFT_TEST_CLIENT_CONTAINER");
     private readonly string docker = Environment.GetEnvironmentVariable("WEFT_DOCKER_EXECUTABLE") ?? "docker";
     private string Host => client is null ? "127.0.0.1" : Container;
@@ -107,6 +108,8 @@ public sealed class PostgresFixture : IAsyncLifetime
                   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
                 CREATE ROLE weft_runtime LOGIN PASSWORD '{runtimePassword}'
                   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                CREATE ROLE weft_ingest LOGIN PASSWORD '{ingestionPassword}'
+                  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
                 """, bootstrap);
             await roles.ExecuteNonQueryAsync();
         }
@@ -124,10 +127,10 @@ public sealed class PostgresFixture : IAsyncLifetime
         await using var bootstrap = await OpenBootstrapAsync();
         await using (var create = new NpgsqlCommand($"CREATE DATABASE {database} OWNER weft_migrator", bootstrap))
             await create.ExecuteNonQueryAsync();
-        await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO weft_runtime", bootstrap))
+        await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO weft_runtime, weft_ingest", bootstrap))
             await grants.ExecuteNonQueryAsync();
         var test = new PostgresCase(this, database, ConnectionString(database, "weft_migrator", migratorPassword),
-            ConnectionString(database, "weft_runtime", runtimePassword));
+            ConnectionString(database, "weft_runtime", runtimePassword), ConnectionString(database, "weft_ingest", ingestionPassword));
         try
         {
             await using var ownerConnection = await test.Owner.OpenConnectionAsync();
@@ -288,7 +291,8 @@ public sealed class PostgresFixture : IAsyncLifetime
     {
         var safe = error.Replace(bootstrapPassword, "[redacted]", StringComparison.Ordinal)
             .Replace(migratorPassword, "[redacted]", StringComparison.Ordinal)
-            .Replace(runtimePassword, "[redacted]", StringComparison.Ordinal).Trim();
+            .Replace(runtimePassword, "[redacted]", StringComparison.Ordinal)
+            .Replace(ingestionPassword, "[redacted]", StringComparison.Ordinal).Trim();
         return safe.Length == 0 ? string.Empty : $" Docker reported: {safe[..Math.Min(safe.Length, 2000)]}";
     }
 
@@ -340,14 +344,17 @@ public sealed class PostgresCase : IAsyncDisposable
     public string Name { get; }
     public string MigrationConnectionString { get; }
     public string RuntimeConnectionString { get; }
+    public string IngestionConnectionString { get; }
     public NpgsqlDataSource Owner { get; }
 
-    internal PostgresCase(PostgresFixture fixture, string name, string migrationConnectionString, string runtimeConnectionString)
+    internal PostgresCase(PostgresFixture fixture, string name, string migrationConnectionString, string runtimeConnectionString,
+        string ingestionConnectionString)
     {
         this.fixture = fixture;
         Name = name;
         MigrationConnectionString = migrationConnectionString;
         RuntimeConnectionString = runtimeConnectionString;
+        IngestionConnectionString = ingestionConnectionString;
         Owner = NpgsqlDataSource.Create(migrationConnectionString);
     }
 

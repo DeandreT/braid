@@ -75,6 +75,9 @@ public sealed class PostgresDatabase : IAsyncDisposable
                                            'projects', 'project_memberships')
             )
             SELECT current_user = session_user
+              AND current_setting('session_replication_role') = 'origin'
+              AND current_setting('row_security') = 'on'
+              AND NOT pg_catalog.has_schema_privilege('public', 'weft', 'USAGE,CREATE')
               AND (SELECT count(*) = 5 FROM read_tables)
               AND NOT EXISTS (
                   SELECT 1 FROM read_tables
@@ -88,7 +91,8 @@ public sealed class PostgresDatabase : IAsyncDisposable
                      OR role.rolname IN ('weft_migrator', 'pg_read_all_data', 'pg_write_all_data',
                                          'pg_read_server_files', 'pg_write_server_files',
                                          'pg_execute_server_program', 'pg_signal_backend', 'pg_maintain')
-                     OR pg_catalog.has_database_privilege(role.oid, current_database(), 'CREATE')
+                     OR pg_catalog.has_database_privilege(role.oid, current_database(), 'CREATE,CONNECT WITH GRANT OPTION,TEMPORARY WITH GRANT OPTION')
+                     OR pg_catalog.has_parameter_privilege(role.oid, 'session_replication_role', 'SET,ALTER SYSTEM')
               )
               AND NOT EXISTS (
                   SELECT 1 FROM pg_catalog.pg_namespace namespace
@@ -96,7 +100,8 @@ public sealed class PostgresDatabase : IAsyncDisposable
                   WHERE namespace.nspname NOT LIKE 'pg_temp_%'
                     AND namespace.nspname NOT LIKE 'pg_toast_temp_%'
                     AND (namespace.nspowner = role.oid
-                         OR pg_catalog.has_schema_privilege(role.oid, namespace.oid, 'CREATE'))
+                         OR pg_catalog.has_schema_privilege(role.oid, namespace.oid, 'CREATE')
+                         OR (namespace.nspname = 'weft' AND pg_catalog.has_schema_privilege(role.oid, namespace.oid, 'USAGE WITH GRANT OPTION')))
               )
               AND NOT EXISTS (
                   SELECT 1 FROM pg_catalog.pg_class relation
@@ -106,10 +111,32 @@ public sealed class PostgresDatabase : IAsyncDisposable
                     AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
                     AND (relation.relowner = role.oid
                          OR pg_catalog.has_table_privilege(role.oid, relation.oid,
-                             'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                             'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,SELECT WITH GRANT OPTION')
+                         OR pg_catalog.has_any_column_privilege(role.oid, relation.oid,
+                             'INSERT,UPDATE,REFERENCES,SELECT WITH GRANT OPTION')
                          OR (relation.relname NOT IN ('organizations', 'principals',
                                                       'organization_memberships', 'projects', 'project_memberships')
-                             AND pg_catalog.has_table_privilege(role.oid, relation.oid, 'SELECT')))
+                             AND pg_catalog.has_any_column_privilege(role.oid, relation.oid, 'SELECT')))
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM pg_catalog.pg_class relation
+                  JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+                  WHERE namespace.nspname = 'weft' AND relation.relkind IN ('r','p','v','m','f')
+                    AND (pg_catalog.has_table_privilege('public', relation.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                         OR pg_catalog.has_any_column_privilege('public', relation.oid, 'SELECT,INSERT,UPDATE,REFERENCES'))
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM pg_catalog.pg_proc function
+                  JOIN pg_catalog.pg_namespace namespace ON namespace.oid = function.pronamespace
+                  WHERE namespace.nspname = 'weft'
+                    AND (pg_catalog.has_function_privilege('public', function.oid, 'EXECUTE')
+                         OR EXISTS (SELECT 1 FROM reachable_roles role WHERE pg_catalog.has_function_privilege(role.oid, function.oid, 'EXECUTE')))
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM pg_catalog.pg_default_acl defaults
+                  CROSS JOIN LATERAL pg_catalog.aclexplode(defaults.defaclacl) grant_entry
+                  WHERE defaults.defaclnamespace IN (0, (SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = 'weft'))
+                    AND (grant_entry.grantee = 0 OR grant_entry.grantee IN (SELECT oid FROM reachable_roles))
               )
             """, connection, transaction);
         if (await command.ExecuteScalarAsync(cancellationToken) is not true)

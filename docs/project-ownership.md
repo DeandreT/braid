@@ -65,7 +65,7 @@ Unknown or changed history and an unversioned owned schema are refused. Add a
 new migration to evolve installed data; do not edit an applied script.
 
 For a new local database, copy `deploy/local/.env.example` to
-`deploy/local/.env` and replace all three passwords. The compose project owns
+`deploy/local/.env` and replace all four passwords. The compose project owns
 its own volume and exposes PostgreSQL only on `127.0.0.1:54329`:
 
 ```sh
@@ -74,6 +74,9 @@ docker compose --env-file deploy/local/.env -f deploy/local/postgres.compose.yml
 
 Its first initialization creates separate `weft_migrator` and `weft_runtime`
 logins, transfers database ownership, and restricts public privileges.
+The ingestion increment also provisions its separate restricted `weft_ingest`
+login. Existing ownership-only databases require that login before upgrading;
+see [ingestion metadata](ingestion-metadata.md).
 Initialization reads passwords from the environment inside `psql`; they are
 absent from command arguments. Initialization does not run again on an existing
 volume. Updating the environment alone does not rotate an existing role password.
