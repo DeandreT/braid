@@ -2,14 +2,18 @@
 
 The initial Angular/ASP.NET Core shell is local-only. It supplies a real API
 health endpoint, a browser workspace, and development fixture projections with
-generated API contracts. Ferrule inspection, authentication, chat, and
-Wolverine-backed execution follow separate increments.
+generated API contracts. A separate Ferrule adapter implements native inspection
+and validation; its projection and viewer follow the delivery plan. Authentication,
+chat, and Wolverine-backed execution follow separate increments.
 
 ## Prerequisites
 
 - .NET SDK 10.0.112, pinned in the root `global.json`.
 - Node 22.23.3 and npm 12.1.0, pinned in `.node-version` and `package.json`.
 - For Linux browser tests: Xvfb and Chromium, or Playwright's installed Chromium.
+- For Ferrule worker checks: Rust nightly `2026-07-21` with rustfmt/clippy,
+  Linux Docker with cgroup v2, and BuildKit. See [Ferrule worker](ferrule-worker.md)
+  for the image build and live-test configuration.
 
 From the repository root:
 

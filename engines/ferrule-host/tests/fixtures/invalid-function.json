@@ -1,0 +1,48 @@
+{
+  "source": {
+    "name": "Source",
+    "kind": { "kind": "group", "children": [] }
+  },
+  "target": {
+    "name": "Target",
+    "kind": {
+      "kind": "group",
+      "children": [
+        { "name": "functionValue", "kind": { "kind": "scalar", "ty": "string" } }
+      ]
+    }
+  },
+  "user_functions": {
+    "18446744073709551615": {
+      "library": "",
+      "name": "fixtureInvalidFunction",
+      "parameters": [],
+      "output_name": "value",
+      "output_type": "string",
+      "body": {
+        "nodes": {
+          "7": {
+            "kind": "call",
+            "function": "fixture_missing_builtin",
+            "args": [999]
+          }
+        }
+      },
+      "output": 7
+    }
+  },
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "user_function_call",
+        "function": 18446744073709551615,
+        "args": []
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "bindings": [ { "target_field": "functionValue", "node": 1 } ],
+    "children": []
+  }
+}

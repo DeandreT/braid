@@ -1,7 +1,8 @@
 # Weft delivery plan
 
-Status: architecture and P0's local web/API shell are merged. P1's mapping
-contracts are implemented; qualification is recorded in its implementing PR.
+Status: architecture, P0's local web/API shell, and P1's mapping contracts are
+qualified and merged. P1's local and clean-container evidence is recorded in
+[PR #6](https://github.com/DeandreT/weft/pull/6).
 Remaining application increments below are planned.
 
 The architecture review is tracked in [#1](https://github.com/DeandreT/weft/issues/1).
@@ -26,7 +27,9 @@ evidence. The documentation PR does not itself qualify an application feature.
 | --- | --- | --- | --- | --- |
 | P0 | Buildable ASP.NET Core/API and Angular shell; `dotnet/apps/Weft.Server`, `dotnet/src/Weft.Api`, `apps/web`, CI | Architecture review | Clean checkout builds; API health and browser shell work; Package metadata and lockfiles are consistent | Engine integration, production hosting |
 | P1 | Versioned domain/API contracts and synthetic mapping projection; `dotnet/src/Weft.Domain`, `dotnet/src/Weft.Contracts`, API schema | P0 | Generated browser types; deterministic fixture projection; no Ferrule/vendor types in public contracts | Universal execution language |
-| P2 | Ferrule inspection/validation adapter and field viewer; `dotnet/src/Weft.MappingBackends`, `engines/ferrule-host`, viewer | P1 | Exact pinned codec; self-authored fixtures; lineage/controls/named outputs and partial coverage visible; inspection isolated and bounded | Preview, `.mfd`, editing |
+| P2a / [#7](https://github.com/DeandreT/weft/issues/7) | Bounded Ferrule codec/inspection/validation worker and C# client; `engines/ferrule-host`, `Weft.MappingBackends` | P1 | Pinned native codec/validator; exact framed bytes; typed owners; real isolation, timeout and cancellation checks | Projection, viewer, uploads, preview |
+| P2b / [#8](https://github.com/DeandreT/weft/issues/8) | Native projection walker and adapter qualification | P2a | Deterministic fields/rules/controls/named boundaries; resolvable locators; independent expected examples and explicit gaps | Viewer, evaluation, editing |
+| P2c / [#9](https://github.com/DeandreT/weft/issues/9) | Angular mapping viewer and development native examples | P2b | Search/detail/lineage/validation navigation, controls and coverage visible; keyboard and responsive browser checks | Catalog, auth, chat, preview |
 | P3 | Catalog, ownership, immutable revision persistence; API repositories/migrations | P2 | Upload preserves artifact bytes; project-scoped queries; revisions survive restart; projection cache invalidation and blob cleanup work | Multi-organization onboarding, deployment |
 | P4 | Entra session login and application permissions; identity/policy modules | P3 | Tenant/issuer/session validation; role and project access checks; CSRF and logout; separate payload grant; hosted config rejects development identity | Other providers, Azure directory administration |
 | P5 | Model-provider contract, configuration, orchestration, bounded streaming; `dotnet/src/Weft.Ai` | P1, P4 | Two protocol fixture adapters; one configured provider integration; authenticated stream, cancellation, usage/limit/error handling; server-side secrets | Mapping action tools, unqualified provider capabilities |

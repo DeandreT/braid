@@ -126,6 +126,13 @@
       "weft.domain": {
         "type": "Project"
       },
+      "weft.mappingbackends": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Contracts": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
+      },
       "weft.server": {
         "type": "Project",
         "dependencies": {

@@ -1,0 +1,14 @@
+.git
+**/.git
+AGENTS.md
+**/AGENTS.md
+target
+**/target
+.env
+.env.*
+**/.env
+**/.env.*
+.cargo/credentials
+.cargo/credentials.toml
+**/.cargo/credentials
+**/.cargo/credentials.toml

@@ -16,6 +16,10 @@ jobs:
   verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      CARGO_BUILD_JOBS: 2
+      CARGO_INCREMENTAL: 0
+      CARGO_TARGET_DIR: target/ferrule-host
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -29,6 +33,19 @@ jobs:
       - run: npm ci --prefix tools/contracts-generator
       - run: npm run check
       - run: npm run build
+      - name: Install pinned worker toolchain
+        run: rustup toolchain install nightly-2026-07-21 --profile minimal --component rustfmt --component clippy
+      - name: Verify the native worker
+        run: |
+          cargo +nightly-2026-07-21 fmt --manifest-path engines/ferrule-host/Cargo.toml --check
+          cargo +nightly-2026-07-21 clippy --manifest-path engines/ferrule-host/Cargo.toml --all-targets --locked -- -D warnings
+          cargo +nightly-2026-07-21 test --manifest-path engines/ferrule-host/Cargo.toml --locked
+      - name: Build the restricted worker image
+        run: |
+          docker build --build-arg "WEFT_REVISION=$GITHUB_SHA" --iidfile "$RUNNER_TEMP/weft-worker-image-id" engines/ferrule-host
+          weft_image_id="$(cat "$RUNNER_TEMP/weft-worker-image-id")"
+          [[ "$weft_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'WEFT_FERRULE_WORKER_IMAGE=%s\n' "$weft_image_id" >> "$GITHUB_ENV"
       - run: dotnet restore dotnet/Weft.slnx --locked-mode
       - run: dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore
       - run: dotnet build dotnet/Weft.slnx --configuration Release --no-restore

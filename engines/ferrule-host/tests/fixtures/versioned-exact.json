@@ -1,0 +1,82 @@
+{
+  "__ferrule_file": {
+    "kind": "project",
+    "version": 2,
+    "float_bits": {
+      "/graph/nodes/2/value": "3ff0000000000000",
+      "/graph/nodes/3/value": "8000000000000000"
+    }
+  },
+  "document": {
+    "source": {
+      "name": "Source",
+      "kind": {
+        "kind": "group",
+        "children": []
+      }
+    },
+    "target": {
+      "name": "Target",
+      "kind": {
+        "kind": "group",
+        "children": [
+          {
+            "name": "exactInteger",
+            "kind": {
+              "kind": "scalar",
+              "ty": "int"
+            }
+          },
+          {
+            "name": "integralFloat",
+            "kind": {
+              "kind": "scalar",
+              "ty": "float"
+            }
+          },
+          {
+            "name": "negativeZero",
+            "kind": {
+              "kind": "scalar",
+              "ty": "float"
+            }
+          }
+        ]
+      }
+    },
+    "graph": {
+      "nodes": {
+        "1": {
+          "kind": "const",
+          "value": 9007199254740993
+        },
+        "2": {
+          "kind": "const",
+          "value": 1.0
+        },
+        "3": {
+          "kind": "const",
+          "value": -0.0
+        }
+      }
+    },
+    "root": {
+      "target_field": "",
+      "bindings": [
+        {
+          "target_field": "exactInteger",
+          "node": 1
+        },
+        {
+          "target_field": "integralFloat",
+          "node": 2
+        },
+        {
+          "target_field": "negativeZero",
+          "node": 3
+        }
+      ],
+      "children": []
+    }
+  }
+}

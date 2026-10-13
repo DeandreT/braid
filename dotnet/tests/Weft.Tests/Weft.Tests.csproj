@@ -12,7 +12,12 @@
     <ProjectReference Include="../../src/Weft.Api/Weft.Api.csproj" />
     <ProjectReference Include="../../src/Weft.Domain/Weft.Domain.csproj" />
     <ProjectReference Include="../../src/Weft.Contracts/Weft.Contracts.csproj" />
+    <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../../engines/ferrule-host/tests/fixtures/*.json"
+          Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

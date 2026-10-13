@@ -1,0 +1,18 @@
+[package]
+name = "weft-ferrule-host"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "0495822e102bba3f97d9bffd3c665adfb6138bec" }
+ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "0495822e102bba3f97d9bffd3c665adfb6138bec" }
+ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "0495822e102bba3f97d9bffd3c665adfb6138bec" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }
+sha2 = "=0.10.9"
+
+[profile.release]
+overflow-checks = true

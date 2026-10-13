@@ -31,11 +31,16 @@ Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the upcoming viewer. Angular types are generated from
 the C# API schema.
 
+The Ferrule adapter can inspect and validate native artifacts through a bounded,
+isolated worker. The native projection builder and Angular mapping viewer follow
+separate increments; the worker is not yet wired to an upload or public API.
+
 See [Local development](docs/development.md) to run and verify the application.
 
 - [Architecture](docs/architecture.md): boundaries, storage, identity, and hosting.
 - [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
 - [Projection v1](docs/projection-contract.md): public read model and fixture behavior.
+- [Ferrule worker](docs/ferrule-worker.md): native authority, transport, isolation, and qualification.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 
