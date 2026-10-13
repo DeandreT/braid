@@ -23,12 +23,14 @@ export default defineConfig({
         DOTNET_ENVIRONMENT: "Development",
       },
       reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 15000 },
       timeout: 120000,
     },
     {
       command: "npm run dev -- --port 5174 --proxy-config proxy.e2e.conf.json",
       url: "http://127.0.0.1:5174",
       reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 15000 },
     },
   ],
 });

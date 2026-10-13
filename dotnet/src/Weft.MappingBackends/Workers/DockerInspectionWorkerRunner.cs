@@ -68,8 +68,8 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
     [SupportedOSPlatform("linux")]
     private async Task<WorkerProcessResult> RunAdmittedAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(options.WallTimeout);
+        using var wallDeadline = new CancellationTokenSource(options.WallTimeout);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, wallDeadline.Token);
         var containerName = $"weft-inspect-{Guid.NewGuid():N}";
         string? configDirectory = null;
         var cleanupRequired = false;
@@ -93,14 +93,17 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
                 }
                 else if (image.ExitCode == 0 && DockerSandboxMetadata.IsSafeImage(image.Output, options.ImageId))
                 {
+                    deadline.Token.ThrowIfCancellationRequested();
                     // The daemon may create the named container even when the CLI loses its response.
+                    // Settle this side effect within the original wall budget even if the caller leaves.
                     cleanupRequired = true;
-                    var create = await CommandAsync(configDirectory, CreateArguments(containerName), ReadOnlyMemory<byte>.Empty, ControlOutputLimit, deadline.Token).ConfigureAwait(false);
+                    var create = await CommandAsync(configDirectory, CreateArguments(containerName), ReadOnlyMemory<byte>.Empty, ControlOutputLimit, wallDeadline.Token).ConfigureAwait(false);
                     cleanupRequired = create.Started;
                     result = Failed(create.Failure == WorkerProcessFailure.None ? WorkerProcessFailure.WorkerFailed : create.Failure);
-                    if (create.Failure == WorkerProcessFailure.None && create.ExitCode == 0 && IsContainerId(create.Output))
+                    createConfirmed = create.Failure == WorkerProcessFailure.None && create.ExitCode == 0 && IsContainerId(create.Output);
+                    deadline.Token.ThrowIfCancellationRequested();
+                    if (createConfirmed)
                     {
-                        createConfirmed = true;
                         var inspect = await CommandAsync(configDirectory, ["container", "inspect", "--format", "{{json .}}", containerName], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, deadline.Token).ConfigureAwait(false);
                         result = Failed(inspect.Failure == WorkerProcessFailure.None ? WorkerProcessFailure.SandboxUnavailable : inspect.Failure);
                         if (inspect.Failure == WorkerProcessFailure.None && inspect.ExitCode == 0
@@ -131,10 +134,13 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
             {
                 using var cleanupDeadline = new CancellationTokenSource(DockerInspectionWorkerOptions.CleanupTimeout);
                 var cleanup = await CommandAsync(configDirectory, ["container", "rm", "--force", "--volumes", containerName], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, cleanupDeadline.Token).ConfigureAwait(false);
-                // An uncertain create followed by "absent" may still be an in-flight daemon request.
-                var absent = createConfirmed && cleanup.Failure == WorkerProcessFailure.None
-                    && IsMissingContainer(cleanup.Error, containerName);
-                if (cleanup.Failure != WorkerProcessFailure.None || (cleanup.ExitCode != 0 && !absent))
+                // Forced removal silently succeeds on absence in Docker 29. A missing
+                // uncertain create can still be an in-flight daemon request, so require
+                // its exact removal acknowledgement before releasing admission.
+                var removed = cleanup.ExitCode == 0 && IsRemovedContainer(cleanup.Output, containerName);
+                var absent = createConfirmed && cleanup.Output.Length == 0
+                    && ((cleanup.ExitCode == 0 && cleanup.Error.Length == 0) || IsMissingContainer(cleanup.Error, containerName));
+                if (cleanup.Failure != WorkerProcessFailure.None || (!removed && !absent))
                 {
                     Interlocked.Exchange(ref unavailable, 1);
                     result = Failed(WorkerProcessFailure.CleanupFailed);
@@ -342,6 +348,9 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
 
     private static bool IsMissingContainer(byte[] bytes, string containerName) =>
         string.Equals(StrictUtf8.GetString(bytes).Trim(), $"Error response from daemon: No such container: {containerName}", StringComparison.Ordinal);
+
+    private static bool IsRemovedContainer(byte[] bytes, string containerName) =>
+        string.Equals(StrictUtf8.GetString(bytes).TrimEnd('\n', '\r'), containerName, StringComparison.Ordinal);
 
     private static WorkerProcessResult Failed(WorkerProcessFailure failure) => new([], failure);
     private sealed class OutputLimitException : Exception { }

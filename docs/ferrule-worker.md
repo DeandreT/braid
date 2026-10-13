@@ -86,10 +86,20 @@ mounts or ports, one CPU, 256 MiB memory without swap, 16 PIDs, and fixed CPU/fi
 descriptor limits. Application credentials and user Docker configuration are
 excluded. Known Docker default environment values are admitted explicitly.
 
-Creation, attachment, and removal are separate operations. Cancellation or
-timeout stops the CLI and independently removes its named daemon-owned container.
-Cleanup has its own bound. Unconfirmed cleanup blocks further admission on that
-runner instance; callers must retain a singleton runner for this policy to hold.
+Creation, attachment, and removal are separate operations. A caller cancellation
+before creation starts no container. Once creation begins, the runner waits for
+that side effect within the original ten-second wall budget, then rechecks
+cancellation before inspection, worker startup or native input. Running-worker
+cancellation and wall expiry stop the CLI; exact owned removal has a separate
+two-second bound. Forced removal can silently succeed on absence, so an
+unconfirmed create requires acknowledgement of the exact removed name. A quiet
+absence is accepted only after creation was confirmed. Unconfirmed cleanup blocks
+further admission on that singleton runner; an unresponsive daemon or abrupt host
+kill does not produce a fabricated cleanup guarantee.
+
+Browser qualification gives its API and frontend processes bounded SIGTERM
+shutdown and audits every owned worker ID after teardown. The tests retain page
+closure with pending requests so ordinary cancellation remains exercised.
 This local Docker runner can later be replaced by a separately qualified hosted
 worker transport behind the same backend contract.
 

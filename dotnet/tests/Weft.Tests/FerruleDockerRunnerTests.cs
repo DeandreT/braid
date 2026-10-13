@@ -337,6 +337,81 @@ public sealed class FerruleDockerRunnerTests
     }
 
     [Fact]
+    public async Task CallerCancellationWaitsForCreatingCliToSettleBeforeCleanupAndNextAdmission()
+    {
+        var creation = FakeProcess.GatedCreation();
+        var launcher = new FakeLauncher { Create = creation };
+        var runner = Runner(launcher);
+        using var cancellation = new CancellationTokenSource();
+        var first = runner.RunAsync("canceled-native-request"u8.ToArray(), cancellation.Token);
+        await creation.ExitWaitStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        var create = launcher.Commands.Single(command => Operation(command) == "create");
+        var ownedName = create.ArgumentList[7];
+        var commandCount = launcher.Commands.Count;
+
+        cancellation.Cancel();
+        var queuedRequest = "next-native-request"u8.ToArray();
+        var queued = runner.RunAsync(queuedRequest, CancellationToken.None);
+
+        try
+        {
+            // The captured create token makes this check independent of continuation scheduling.
+            Assert.True(creation.FirstExitWaitToken.CanBeCanceled);
+            Assert.False(creation.FirstExitWaitToken.IsCancellationRequested);
+            Assert.False(creation.Killed);
+            Assert.False(creation.Disposed);
+            Assert.False(first.IsCompleted);
+            Assert.False(queued.IsCompleted);
+            Assert.Equal(commandCount, launcher.Commands.Count);
+            Assert.DoesNotContain(launcher.Commands, command => Operation(command) is "inspect" or "start" or "rm");
+            Assert.Empty(creation.Input.ToArray());
+            Assert.Empty(launcher.Worker.Input.ToArray());
+        }
+        finally
+        {
+            // Already-running create owns this process reference; later admissions get a fresh CLI.
+            launcher.Create = null;
+            creation.Settle();
+            await Task.WhenAll(first, queued).WaitAsync(TimeSpan.FromSeconds(1));
+        }
+        var canceled = await first.WaitAsync(TimeSpan.FromSeconds(1));
+        var next = await queued.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Equal(WorkerProcessFailure.Canceled, canceled.Failure);
+        Assert.Empty(canceled.Output);
+        Assert.False(creation.Killed);
+        Assert.True(creation.Disposed);
+        Assert.Equal(WorkerProcessFailure.None, next.Failure);
+        Assert.Equal(queuedRequest, launcher.Worker.Input.ToArray());
+        Assert.Equal(["info", "image", "create", "rm", "info", "image", "create", "inspect", "start", "rm"],
+            launcher.Commands.Select(Operation));
+        Assert.Equal(ownedName, launcher.Commands[3].ArgumentList.Last());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("another-container\n")]
+    [InlineData(ContainerId + "\n")]
+    public async Task UncertainCreateRequiresExactOwnedNameAcknowledgmentEvenWhenRemovalExitsZero(string removalOutput)
+    {
+        var creation = FakeProcess.Hanging();
+        var launcher = new FakeLauncher { Create = creation, Remove = TextProcess(removalOutput) };
+        var runner = Runner(launcher, TimeSpan.FromMilliseconds(100));
+
+        var result = await runner.RunAsync(ReadOnlyMemory<byte>.Empty, CancellationToken.None);
+
+        Assert.Equal(WorkerProcessFailure.CleanupFailed, result.Failure);
+        Assert.True(creation.Killed);
+        Assert.Empty(result.Output);
+        Assert.DoesNotContain(launcher.Commands, command => Operation(command) is "inspect" or "start");
+        Assert.Equal("rm", Operation(launcher.Commands.Last()));
+        var commandCount = launcher.Commands.Count;
+        Assert.Equal(WorkerProcessFailure.SandboxUnavailable,
+            (await runner.RunAsync(ReadOnlyMemory<byte>.Empty, CancellationToken.None)).Failure);
+        Assert.Equal(commandCount, launcher.Commands.Count);
+    }
+
+    [Fact]
     public async Task InterruptedCreateAndUnconfirmedAbsencePermanentlyBlockAdmission()
     {
         var launcher = new FakeLauncher { Create = FakeProcess.Hanging(), RemovalReportsMissing = true };
@@ -354,6 +429,17 @@ public sealed class FerruleDockerRunnerTests
         var launcher = new FakeLauncher { RemovalReportsMissing = true };
 
         Assert.Equal(WorkerProcessFailure.None, (await Runner(launcher).RunAsync(ReadOnlyMemory<byte>.Empty, CancellationToken.None)).Failure);
+    }
+
+    [Fact]
+    public async Task ConfirmedCreateAndQuietSuccessfulRemovalAreSafeForIdempotentCleanup()
+    {
+        var launcher = new FakeLauncher { Remove = new FakeProcess([]) };
+
+        Assert.Equal(WorkerProcessFailure.None,
+            (await Runner(launcher).RunAsync(ReadOnlyMemory<byte>.Empty, CancellationToken.None)).Failure);
+        Assert.Contains(launcher.Commands, command => Operation(command) == "start");
+        Assert.Equal("rm", Operation(launcher.Commands.Last()));
     }
 
     [Fact]
@@ -513,7 +599,7 @@ public sealed class FerruleDockerRunnerTests
                 case "rm":
                     return RemovalReportsMissing
                         ? new FakeProcess([], exitCode: 1) { Error = new MemoryStream(Encoding.UTF8.GetBytes($"Error response from daemon: No such container: {startInfo.ArgumentList.Last()}\n")) }
-                        : Remove ?? new FakeProcess([]);
+                        : Remove ?? TextProcess(startInfo.ArgumentList.Last() + "\n");
                 default: throw new InvalidOperationException("Unexpected Docker operation.");
             }
         }
@@ -527,6 +613,9 @@ public sealed class FerruleDockerRunnerTests
         public Stream Output { get; set; } = new MemoryStream(output);
         public Stream Error { get; set; } = new MemoryStream();
         public bool Killed { get; private set; }
+        public bool Disposed { get; private set; }
+        public TaskCompletionSource ExitWaitStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationToken FirstExitWaitToken { get; private set; }
         public bool FailKill { get; set; }
         public bool FailReap { get; set; }
         public bool InputClosed { get; private set; }
@@ -549,8 +638,23 @@ public sealed class FerruleDockerRunnerTests
             }
         }
 
+        private FakeProcess(byte[] output, bool waitForRelease) : this(output)
+        {
+            hanging = waitForRelease;
+        }
+
         public static FakeProcess Hanging(bool blockInput = false) => new(blockInput);
-        public Task WaitForExitAsync(CancellationToken cancellationToken) => hanging ? exited.Task : Task.CompletedTask;
+        public static FakeProcess GatedCreation() => new(Encoding.UTF8.GetBytes(ContainerId + "\n"), waitForRelease: true);
+        public Task WaitForExitAsync(CancellationToken cancellationToken)
+        {
+            if (!ExitWaitStarted.Task.IsCompleted)
+            {
+                FirstExitWaitToken = cancellationToken;
+                ExitWaitStarted.TrySetResult();
+            }
+            return hanging ? exited.Task : Task.CompletedTask;
+        }
+        public void Settle() => exited.TrySetResult();
 
         public void CloseStandardInput()
         {
@@ -577,6 +681,7 @@ public sealed class FerruleDockerRunnerTests
 
         public void Dispose()
         {
+            Disposed = true;
             CloseStandardInput();
             Output.Dispose();
             Error.Dispose();
