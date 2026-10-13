@@ -29,7 +29,7 @@ Catalog persistence, authentication, AI chat, and deployment follow the focused
 delivery sequence below.
 
 Versioned mapping contracts and development-only synthetic projections provide
-the shared foundation for the upcoming viewer. Angular types are generated from
+the shared foundation for the viewer. Angular types are generated from
 the C# API schema.
 
 The Ferrule adapter can inspect, validate, and project native artifacts through a
@@ -46,6 +46,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Mapping viewer](docs/mapping-viewer.md): navigation, exact values, coverage, and validation.
 - [Ferrule worker](docs/ferrule-worker.md): native authority, transport, isolation, and qualification.
 - [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
+- [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 

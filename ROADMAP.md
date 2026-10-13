@@ -1,12 +1,13 @@
 # Weft delivery plan
 
 Status: architecture, P0's local web/API shell, P1's mapping contracts, and
-P2a/P2b's restricted Ferrule inspection/validation/projection backend are
-qualified and merged.
+P2a/P2b's restricted Ferrule inspection/validation/projection backend and
+P2c's Angular viewer are qualified and merged.
 Local and independent clean-container evidence is recorded in
 [PR #6](https://github.com/DeandreT/weft/pull/6) and
 [PR #10](https://github.com/DeandreT/weft/pull/10) and
-[PR #11](https://github.com/DeandreT/weft/pull/11).
+[PR #11](https://github.com/DeandreT/weft/pull/11) and
+[PR #12](https://github.com/DeandreT/weft/pull/12).
 Remaining application increments below are planned.
 
 The architecture review is tracked in [#1](https://github.com/DeandreT/weft/issues/1).
@@ -34,12 +35,23 @@ evidence. The documentation PR does not itself qualify an application feature.
 | P2a / [#7](https://github.com/DeandreT/weft/issues/7) | Bounded Ferrule codec/inspection/validation worker and C# client; `engines/ferrule-host`, `Weft.MappingBackends` | P1 | Pinned native codec/validator; exact framed bytes; typed owners; real isolation, timeout and cancellation checks | Projection, viewer, uploads, preview |
 | P2b / [#8](https://github.com/DeandreT/weft/issues/8) | Native projection walker and adapter qualification | P2a | Deterministic fields/rules/controls/named boundaries; resolvable locators; independent expected examples and explicit gaps | Viewer, evaluation, editing |
 | P2c / [#9](https://github.com/DeandreT/weft/issues/9) | Angular mapping viewer and development native examples | P2b | Search/detail/lineage/validation navigation, controls and coverage visible; keyboard and responsive browser checks | Catalog, auth, chat, preview |
-| P3 | Catalog, ownership, immutable revision persistence; API repositories/migrations | P2 | Upload preserves artifact bytes; project-scoped queries; revisions survive restart; projection cache invalidation and blob cleanup work | Multi-organization onboarding, deployment |
-| P4 | Entra session login and application permissions; identity/policy modules | P3 | Tenant/issuer/session validation; role and project access checks; CSRF and logout; separate payload grant; hosted config rejects development identity | Other providers, Azure directory administration |
+| P3a / [#13](https://github.com/DeandreT/weft/issues/13) | Project ownership, application access/read contracts and scoped PostgreSQL migrations | P2c | Actual PostgreSQL roles, scope, revocation, migration concurrency, pool reuse and restart checks | Mapping/revision persistence, API, identity |
+| P3b / [#14](https://github.com/DeandreT/weft/issues/14) | Private storage contract and local adapter | P3a | Create-only publication, exact bounded reads, scoped generated references and restart | Ingestion, Azure transport |
+| P3c / [#15](https://github.com/DeandreT/weft/issues/15) | Mapping metadata and immutable revision ingestion | P3b, P2 native adapters | Durable reservation/idempotency; exact bytes; committed revision/head order; crash recovery | HTTP/Angular catalog, cache |
+| P3d / [#16](https://github.com/DeandreT/weft/issues/16) | Scoped catalog/revision HTTP API and generated contracts | P3c | Actual API/database/storage; raw-byte upload; concurrency; explicit loopback Development identity | Entra, Angular catalog |
+| P3e / [#17](https://github.com/DeandreT/weft/issues/17) | Persisted projection/validation derivations and report API | P3d, P2c contracts | Complete version/scope cache keys; guarded publication; native evidence and status preservation | Cleanup execution, viewer changes |
+| P3f / [#18](https://github.com/DeandreT/weft/issues/18) | Reservation-aware orphan and derived-object maintenance | P3e | Bounded leases; publication/deletion races; crash recovery; referenced native revisions retained | Native-history purge, messaging |
+| P3g / [#19](https://github.com/DeandreT/weft/issues/19) | Angular catalog, upload and immutable revision history | P3f, P2c viewer | Actual persistent API/browser flows; reopen old revision after restart; keyboard/mobile checks | Authentication, chat, preview |
+| P4 | Entra session login and application permissions; identity/policy modules | P3g | Tenant/issuer/session validation; role and project access checks; CSRF and logout; separate payload grant; hosted config rejects development identity | Other providers, Azure directory administration |
 | P5 | Model-provider contract, configuration, orchestration, bounded streaming; `dotnet/src/Weft.Ai` | P1, P4 | Two protocol fixture adapters; one configured provider integration; authenticated stream, cancellation, usage/limit/error handling; server-side secrets | Mapping action tools, unqualified provider capabilities |
 | P6 | Mapping-grounded chat window and authorized read tools; `apps/web`, AI tool registry | P2, P3, P5 | Revision-pinned answers/citations; lineage and validation tools; same interface for qualified hosted/local profiles; no mutation or payload tools | Autonomous execution/editing, vector database |
 | P7 | Bounded JSON sample preview, Wolverine durability, and worker lifecycle; `dotnet/apps/Weft.Worker`, preview UI/API | P2, P3, P4 | Outputs match upstream host API; parameters/target preflight; worker timeout/cancellation; durable job replay with idempotent output publication; input/output limits; no external writes or inherited network access | Stateful connectors, generated deployment |
 | P8 | First Azure-hosted application environment; `deploy/azure`, runtime packaging | P4, P6, P7 | Reproducible deployment; private storage and workload identities; end-to-end viewer/chat/preview; instance restart/scale recovery | Publishing customer mappings as separate functions |
+
+P3 uses the ordered ownership/storage/ingestion/API/cache/maintenance/browser
+sequence in [the catalog persistence plan](docs/catalog-persistence-plan.md).
+Each part is independently implemented and qualified; P3 planning does not
+qualify persistence or login.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
@@ -91,5 +103,6 @@ the independent local contracts and viewer work.
 ## Planning references
 
 - [Architecture](docs/architecture.md)
+- [Catalog persistence plan](docs/catalog-persistence-plan.md)
 - [Mapping backend contract](docs/mapping-backends.md)
 - [AI chat architecture](docs/ai-chat.md)
