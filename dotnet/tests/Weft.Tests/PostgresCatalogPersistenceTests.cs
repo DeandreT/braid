@@ -111,7 +111,8 @@ public sealed class PostgresCatalogPersistenceTests(PostgresFixture fixture)
         }
         // Release only this case's pools. The owned persistent volume and exact
         // cluster container survive stop/start; saved endpoints remain unchanged.
-        await test.DisposeAsync();
+        await test.IngestionDatabase.DisposeAsync();
+        await test.Case.CloseOwnerPoolAsync();
         await fixture.RestartAsync();
         await using var restarted = new PostgresCatalogDatabase(connectionString);
         var reopened = new PostgresCatalogReader(restarted);
