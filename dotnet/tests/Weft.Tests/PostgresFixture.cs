@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
@@ -35,6 +36,8 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string migratorPassword = Guid.NewGuid().ToString("N");
     private readonly string runtimePassword = Guid.NewGuid().ToString("N");
     private readonly string ingestionPassword = Guid.NewGuid().ToString("N");
+    private readonly ConcurrentDictionary<string, byte> caseDatabases = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim caseRemoval = new(1, 1);
     private readonly string? client = Environment.GetEnvironmentVariable("WEFT_TEST_CLIENT_CONTAINER");
     private readonly string docker = Environment.GetEnvironmentVariable("WEFT_DOCKER_EXECUTABLE") ?? "docker";
     private string Host => client is null ? "127.0.0.1" : Container;
@@ -127,12 +130,15 @@ public sealed class PostgresFixture : IAsyncLifetime
         await using var bootstrap = await OpenBootstrapAsync();
         await using (var create = new NpgsqlCommand($"CREATE DATABASE {database} OWNER weft_migrator", bootstrap))
             await create.ExecuteNonQueryAsync();
-        await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO weft_runtime, weft_ingest", bootstrap))
-            await grants.ExecuteNonQueryAsync();
-        var test = new PostgresCase(this, database, ConnectionString(database, "weft_migrator", migratorPassword),
-            ConnectionString(database, "weft_runtime", runtimePassword), ConnectionString(database, "weft_ingest", ingestionPassword));
+        if (!caseDatabases.TryAdd(database, 0))
+            throw new InvalidOperationException("The newly created PostgreSQL case database was already registered.");
+        PostgresCase? test = null;
         try
         {
+            await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO weft_runtime, weft_ingest", bootstrap))
+                await grants.ExecuteNonQueryAsync();
+            test = new PostgresCase(this, database, ConnectionString(database, "weft_migrator", migratorPassword),
+                ConnectionString(database, "weft_runtime", runtimePassword), ConnectionString(database, "weft_ingest", ingestionPassword));
             await using var ownerConnection = await test.Owner.OpenConnectionAsync();
             await using var publicSchema = new NpgsqlCommand("REVOKE ALL ON SCHEMA public FROM PUBLIC", ownerConnection);
             await publicSchema.ExecuteNonQueryAsync();
@@ -140,7 +146,59 @@ public sealed class PostgresFixture : IAsyncLifetime
                 await test.MigrateAsync();
             return test;
         }
-        catch { await test.DisposeAsync(); throw; }
+        catch (Exception initialization)
+        {
+            try
+            {
+                if (test is null)
+                    await DropCaseDatabaseAsync(database);
+                else
+                    await test.DisposeAsync();
+            }
+            catch (Exception cleanup)
+            {
+                throw new AggregateException("Owned PostgreSQL case setup and cleanup failed.", initialization, cleanup);
+            }
+            throw;
+        }
+    }
+
+    internal async Task DropCaseDatabaseAsync(string name)
+    {
+        if (!IsGeneratedCaseName(name) || !caseDatabases.ContainsKey(name))
+            throw new InvalidOperationException("Refusing removal of a PostgreSQL database not registered by this fixture.");
+        await caseRemoval.WaitAsync();
+        try
+        {
+            if (!caseDatabases.ContainsKey(name))
+                throw new InvalidOperationException("Refusing removal of a PostgreSQL database not registered by this fixture.");
+            await using var bootstrap = await OpenBootstrapAsync();
+            await using var drop = new NpgsqlCommand($"DROP DATABASE \"{name}\"", bootstrap);
+            await drop.ExecuteNonQueryAsync();
+            caseDatabases.TryRemove(name, out _);
+        }
+        finally { caseRemoval.Release(); }
+    }
+
+    internal async Task<bool> DatabaseExistsAsync(string name)
+    {
+        await using var bootstrap = await OpenBootstrapAsync();
+        await using var exists = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_database WHERE datname = $1)", bootstrap);
+        exists.Parameters.Add(new NpgsqlParameter { Value = name });
+        return (bool)(await exists.ExecuteScalarAsync() ?? throw new InvalidOperationException("Expected database existence result."));
+    }
+
+    private static bool IsGeneratedCaseName(string name)
+    {
+        const string prefix = "weft_case_";
+        if (name is null || name.Length != prefix.Length + 32 || !name.StartsWith(prefix, StringComparison.Ordinal))
+            return false;
+        foreach (var character in name.AsSpan(prefix.Length))
+        {
+            if (character is not (>= '0' and <= '9' or >= 'a' and <= 'f'))
+                return false;
+        }
+        return true;
     }
 
     public async Task RestartAsync()
@@ -340,6 +398,8 @@ public sealed class PostgresFixture : IAsyncLifetime
 public sealed class PostgresCase : IAsyncDisposable
 {
     private readonly PostgresFixture fixture;
+    private readonly SemaphoreSlim lifetime = new(1, 1);
+    private bool ownerPoolClosed;
     private bool disposed;
     public string Name { get; }
     public string MigrationConnectionString { get; }
@@ -382,11 +442,32 @@ public sealed class PostgresCase : IAsyncDisposable
         return (T)(await command.ExecuteScalarAsync() ?? throw new InvalidOperationException("Expected fixture scalar."));
     }
 
+    internal async ValueTask CloseOwnerPoolAsync()
+    {
+        await lifetime.WaitAsync();
+        try { await CloseOwnerPoolCoreAsync(); }
+        finally { lifetime.Release(); }
+    }
+
+    private async ValueTask CloseOwnerPoolCoreAsync()
+    {
+        if (ownerPoolClosed)
+            return;
+        await Owner.DisposeAsync();
+        ownerPoolClosed = true;
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if (disposed)
-            return;
-        disposed = true;
-        await Owner.DisposeAsync();
+        await lifetime.WaitAsync();
+        try
+        {
+            if (disposed)
+                return;
+            await CloseOwnerPoolCoreAsync();
+            await fixture.DropCaseDatabaseAsync(Name);
+            disposed = true;
+        }
+        finally { lifetime.Release(); }
     }
 }

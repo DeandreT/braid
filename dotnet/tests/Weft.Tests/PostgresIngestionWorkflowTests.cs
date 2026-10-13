@@ -411,7 +411,7 @@ public sealed class PostgresIngestionWorkflowTests(PostgresFixture fixture)
         var original = await test.CommitCreateAsync();
         var connectionString = test.Case.IngestionConnectionString;
         await test.Database.DisposeAsync();
-        await test.Case.DisposeAsync();
+        await test.Case.CloseOwnerPoolAsync();
         await fixture.RestartAsync();
         await using var fresh = new PostgresIngestionDatabase(connectionString);
         var store = new PostgresRevisionIngestionStore(fresh);

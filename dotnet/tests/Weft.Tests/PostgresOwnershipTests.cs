@@ -179,7 +179,7 @@ public sealed class PostgresOwnershipTests(PostgresFixture fixture)
             before = Assert.IsType<ProjectSummary>(await new PostgresProjectReader(database).GetVisibleProjectAsync(actor, scope));
         await using (var fresh = new PostgresDatabase(test.RuntimeConnectionString))
             Assert.Equal(before, await new PostgresProjectReader(fresh).GetVisibleProjectAsync(actor, scope));
-        await test.DisposeAsync();
+        await test.CloseOwnerPoolAsync();
         await fixture.RestartAsync();
         await using var restarted = new PostgresDatabase(test.RuntimeConnectionString);
         var reader = new PostgresProjectReader(restarted);
