@@ -18,11 +18,64 @@ public sealed class CatalogHostConfigurationTests
         var builder = Builder();
         CatalogHostConfiguration.Configure(builder, new IPEndPoint(IPAddress.Loopback, 4100), _ => null);
         Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(ICatalogReader) ||
-            descriptor.ServiceType == typeof(PostgresCatalogDatabase));
+            descriptor.ServiceType == typeof(PostgresCatalogDatabase) ||
+            descriptor.ServiceType == typeof(IMappingMetadataWriter) ||
+            descriptor.ServiceType == typeof(PostgresMappingMetadataDatabase));
         var options = Assert.IsType<CatalogApiOptions>(Assert.Single(builder.Services,
             descriptor => descriptor.ServiceType == typeof(CatalogApiOptions)).ImplementationInstance);
         Assert.False(options.Enabled);
         Assert.Null(options.PrincipalId);
+        var edits = Assert.IsType<CatalogMetadataEditOptions>(Assert.Single(builder.Services,
+            descriptor => descriptor.ServiceType == typeof(CatalogMetadataEditOptions)).ImplementationInstance);
+        Assert.False(edits.Enabled);
+    }
+
+    [Fact]
+    public void ReadOnlyHostIgnoresUnusedEditorConfigurationAndRegistersNoWriter()
+    {
+        var configuration = EnabledConfiguration();
+        configuration["WEFT_POSTGRES_METADATA_CONNECTION_STRING"] = "unused-invalid-editor-configuration";
+        var builder = Builder();
+        Configure(builder, configuration);
+        Assert.Contains(builder.Services, descriptor => descriptor.ServiceType == typeof(ICatalogReader));
+        Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(IMappingMetadataWriter) ||
+            descriptor.ServiceType == typeof(PostgresMappingMetadataDatabase));
+    }
+
+    [Fact]
+    public void EnabledEditsRequireDedicatedCredentialsAndCannotFallBackToReaderConfiguration()
+    {
+        var configuration = EnabledConfiguration();
+        configuration["WEFT_METADATA_EDITS_ENABLED"] = "true";
+        Assert.Throws<InvalidOperationException>(() => Configure(Builder(), configuration));
+    }
+
+    [Fact]
+    public void EditsCannotEnableAnOtherwiseClosedCatalog()
+    {
+        var configuration = new Dictionary<string, string>
+        {
+            ["WEFT_METADATA_EDITS_ENABLED"] = "true",
+            ["WEFT_POSTGRES_METADATA_CONNECTION_STRING"] = "unused-editor-configuration"
+        };
+        Assert.Throws<InvalidOperationException>(() => Configure(Builder(), configuration));
+    }
+
+    [Fact]
+    public void EnabledHostRegistersSeparateLazyReaderAndEditorPools()
+    {
+        var configuration = EnabledConfiguration();
+        configuration["WEFT_METADATA_EDITS_ENABLED"] = "true";
+        configuration["WEFT_POSTGRES_METADATA_CONNECTION_STRING"] =
+            "Host=127.0.0.1;Database=weft;Username=weft_catalog_editor;Password=synthetic-never-connected";
+        var builder = Builder();
+        Configure(builder, configuration);
+        Assert.NotNull(Assert.Single(builder.Services, descriptor =>
+            descriptor.ServiceType == typeof(PostgresCatalogDatabase)).ImplementationFactory);
+        Assert.NotNull(Assert.Single(builder.Services, descriptor =>
+            descriptor.ServiceType == typeof(PostgresMappingMetadataDatabase)).ImplementationFactory);
+        Assert.NotNull(Assert.Single(builder.Services, descriptor =>
+            descriptor.ServiceType == typeof(IMappingMetadataWriter)).ImplementationFactory);
     }
 
     [Theory]
@@ -54,6 +107,7 @@ public sealed class CatalogHostConfigurationTests
     [InlineData("WEFT_CATALOG_ENABLED", "1")]
     [InlineData("WEFT_CATALOG_ENABLED", "")]
     [InlineData("WEFT_DEV_IDENTITY_ENABLED", "yes")]
+    [InlineData("WEFT_METADATA_EDITS_ENABLED", "yes")]
     [InlineData("WEFT_DEV_PRINCIPAL_ID", "00000000-0000-0000-0000-000000000000")]
     [InlineData("WEFT_DEV_PRINCIPAL_ID", "33333333333333333333333333333333")]
     [InlineData("WEFT_DEV_ORGANIZATION_ID", "not-an-id")]

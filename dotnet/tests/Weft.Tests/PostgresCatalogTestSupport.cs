@@ -15,8 +15,9 @@ internal sealed class PostgresCatalogTestSupport : IAsyncDisposable
     internal PostgresCatalogReader Reader { get; }
     internal PostgresIngestionDatabase IngestionDatabase { get; }
     internal PostgresRevisionIngestionStore Store { get; }
+    private readonly bool historicalSeed;
 
-    private PostgresCatalogTestSupport(PostgresCase test, PostgresSeedData seed)
+    private PostgresCatalogTestSupport(PostgresCase test, PostgresSeedData seed, bool historicalSeed)
     {
         Case = test;
         Seed = seed;
@@ -26,6 +27,7 @@ internal sealed class PostgresCatalogTestSupport : IAsyncDisposable
         Reader = new(Database);
         IngestionDatabase = new(test.IngestionConnectionString);
         Store = new(IngestionDatabase);
+        this.historicalSeed = historicalSeed;
     }
 
     internal static async Task<PostgresCatalogTestSupport> CreateAsync(PostgresFixture fixture, bool installCatalog = true)
@@ -43,7 +45,7 @@ internal sealed class PostgresCatalogTestSupport : IAsyncDisposable
             }
             var seed = await PostgresSeedData.CreateAsync(test);
             await test.ExecuteAsync("UPDATE weft.project_memberships SET role='publisher',version=version+1 WHERE principal_id=$1", seed.Alice);
-            return new(test, seed);
+            return new(test, seed, historicalSeed: !installCatalog);
         }
         catch { await test.DisposeAsync(); throw; }
     }
@@ -52,12 +54,17 @@ internal sealed class PostgresCatalogTestSupport : IAsyncDisposable
         string description = "Synthetic C1 admission evidence only", bool valid = true, string? filename = null,
         ProjectScope? project = null, ActorContext? actor = null)
     {
+        if (historicalSeed)
+            return await HistoricalIngestionSeed.CommitCreateAsync(Case, actor ?? Actor, project ?? Project,
+                name, description, valid, filename);
         var intent = PostgresIngestionTestSupport.CreateIntent(name, description, filename);
         return await CommitAsync(actor ?? Actor, project ?? Project, intent, valid);
     }
 
     internal Task<IngestionReceipt> CommitAppendAsync(IngestionReceipt mapping, bool valid = true, string? filename = null)
     {
+        if (historicalSeed)
+            return HistoricalIngestionSeed.CommitAppendAsync(Case, mapping, valid, filename);
         var facts = mapping.Facts;
         var body = PostgresIngestionTestSupport.SyntheticBody;
         var intent = IngestionIntent.ForAppend(Target(mapping), facts.BackendProfile.BackendId, filename,

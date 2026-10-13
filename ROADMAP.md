@@ -3,7 +3,7 @@
 Status: architecture, P0's local web/API shell, P1's mapping contracts, and
 P2a/P2b's restricted Ferrule inspection/validation/projection backend and
 P2c's Angular viewer, P3a's PostgreSQL ownership, P3b's private storage and
-P3c1/P3c2's scoped native revision ingestion are
+P3c1/P3c2's scoped native revision ingestion and P3d1's scoped catalog reads are
 qualified and merged.
 Local and independent clean-container evidence is recorded in
 [PR #6](https://github.com/DeandreT/weft/pull/6) and
@@ -13,7 +13,8 @@ Local and independent clean-container evidence is recorded in
 [PR #21](https://github.com/DeandreT/weft/pull/21) and
 [PR #22](https://github.com/DeandreT/weft/pull/22) and
 [PR #26](https://github.com/DeandreT/weft/pull/26) and
-[PR #27](https://github.com/DeandreT/weft/pull/27).
+[PR #27](https://github.com/DeandreT/weft/pull/27) and
+[PR #33](https://github.com/DeandreT/weft/pull/33).
 P3d follows the focused [catalog API plan](docs/catalog-api-plan.md).
 The remaining sequence follows below.
 

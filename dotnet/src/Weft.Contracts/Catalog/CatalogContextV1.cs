@@ -17,7 +17,12 @@ public enum CatalogErrorCodeV1
     NotFound = 3,
     IdentityRejected = 4,
     PersistenceFailure = 5,
-    InternalFailure = 6
+    InternalFailure = 6,
+    PreconditionRequired = 7,
+    PreconditionFailed = 8,
+    UnsupportedMediaType = 9,
+    BodyLimit = 10,
+    VersionExhausted = 11
 }
 
 public sealed record CatalogFeaturesV1

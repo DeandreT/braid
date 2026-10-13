@@ -11,8 +11,10 @@ public static class CatalogPublicMapper
 {
     public static CatalogFeaturesV1 Features { get; } = new(true, false, false, false, false, false, false, false, false);
 
-    public static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string requestToken) =>
-        new("development", Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name, Features, requestToken);
+    public static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string requestToken,
+        bool metadataEditsEnabled = false) =>
+        new("development", Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name,
+            metadataEditsEnabled ? new(true, false, false, true, false, false, false, false, false) : Features, requestToken);
 
     public static CatalogProjectV1 Project(CatalogProject project)
     {
@@ -22,13 +24,15 @@ public static class CatalogPublicMapper
             Decimal(summary.Version), Access(project.Access));
     }
 
-    public static CatalogMappingV1 Mapping(CatalogMapping mapping) => Mapping(mapping.Summary, mapping.Access);
+    public static CatalogMappingV1 Mapping(CatalogMapping mapping, bool metadataEditsEnabled = false) =>
+        Mapping(mapping.Summary, mapping.Access, metadataEditsEnabled);
 
-    public static CatalogMappingV1 Mapping(CatalogMappingSummary summary, ProjectAccess access) =>
+    public static CatalogMappingV1 Mapping(CatalogMappingSummary summary, ProjectAccess access,
+        bool metadataEditsEnabled = false) =>
         new(MappingScope(summary.Scope), summary.Name, summary.Description, summary.BackendId,
             Id(summary.Creator.Value), Id(summary.Owner.Value), summary.CreatedAtUtc, summary.UpdatedAtUtc,
             Decimal(summary.Version), new CatalogHeadV1(RevisionScope(summary.Head.Scope),
-                Decimal(summary.Head.Sequence), Admission(summary.Head.Admission)), Access(access));
+                Decimal(summary.Head.Sequence), Admission(summary.Head.Admission)), Access(access, metadataEditsEnabled));
 
     public static CatalogMappingMetadataV1 Metadata(CatalogMappingMetadata metadata) =>
         new(MappingScope(metadata.Scope), metadata.Name, metadata.Description, Decimal(metadata.Version));
@@ -43,8 +47,8 @@ public static class CatalogPublicMapper
     public static CatalogProjectPageV1 Projects(CatalogProjectPage page) =>
         new(page.Projects.Select(Project), page.NextCursor is { } cursor ? CatalogCursorCodec.Encode(cursor) : null);
 
-    public static CatalogMappingPageV1 Mappings(CatalogMappingPage page) =>
-        new(page.Mappings.Select(mapping => Mapping(mapping, page.Access)),
+    public static CatalogMappingPageV1 Mappings(CatalogMappingPage page, bool metadataEditsEnabled = false) =>
+        new(page.Mappings.Select(mapping => Mapping(mapping, page.Access, metadataEditsEnabled)),
             page.NextCursor is { } cursor ? CatalogCursorCodec.Encode(cursor) : null);
 
     public static CatalogRevisionPageV1 Revisions(CatalogRevisionPage page) =>
@@ -56,14 +60,15 @@ public static class CatalogPublicMapper
     public static CatalogRevisionScopeV1 RevisionScope(RevisionScope scope) =>
         new(Id(scope.OrganizationId), Id(scope.ProjectId), Id(scope.MappingId), Id(scope.RevisionId));
 
-    private static CatalogAccessV1 Access(ProjectAccess access) => new(access.Role switch
+    private static CatalogAccessV1 Access(ProjectAccess access, bool metadataEditsEnabled = false) => new(access.Role switch
     {
         ProjectRole.Viewer => CatalogRoleV1.Viewer,
         ProjectRole.Runner => CatalogRoleV1.Runner,
         ProjectRole.Publisher => CatalogRoleV1.Publisher,
         ProjectRole.Administrator => CatalogRoleV1.Administrator,
         _ => throw new InvalidOperationException("The catalog role is unknown.")
-    }, new CatalogActionsV1(access.Can(ProjectAction.ReadMetadata), false, false, false, false, false, false, false, false));
+    }, new CatalogActionsV1(access.Can(ProjectAction.ReadMetadata), false, false,
+        metadataEditsEnabled && access.Can(ProjectAction.EditMetadata), false, false, false, false, false));
 
     private static CatalogAdmissionV1 Admission(IngestionAdmissionClassification admission) => admission switch
     {

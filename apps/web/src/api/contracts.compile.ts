@@ -387,3 +387,42 @@ export function catalogRevisionResponse(
 ): CatalogRevisionGet["responses"][200]["content"] {
   return { "application/json": revision };
 }
+
+type MetadataEdit = components["schemas"]["CatalogMappingMetadataEditV1"];
+type MetadataRoute =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/metadata"];
+type MetadataPatch = MetadataRoute["patch"];
+type MetadataGet = MetadataRoute["get"];
+type MetadataPatchBody = NonNullable<MetadataPatch["requestBody"]>["content"];
+
+export const metadataEdit = {
+  name: "A readable mapping name",
+  description: "Preserve this description exactly.",
+} satisfies MetadataEdit;
+
+export const metadataPatchDocument = {
+  "application/vnd.weft.mapping-metadata-edit.v1+json": metadataEdit,
+} satisfies MetadataPatchBody;
+
+// @ts-expect-error Metadata edits require a description, including an explicitly empty one.
+export const incompleteMetadataEdit: MetadataEdit = { name: "Mapping" };
+// @ts-expect-error The metadata edit document cannot change the revision head.
+export const metadataEditHead: MetadataEdit["head"] = null;
+export const genericMetadataPatch: MetadataPatchBody = {
+  // @ts-expect-error The metadata PATCH document has its own versioned media type.
+  "application/json": metadataEdit,
+};
+// @ts-expect-error Conditional GET 304 responses have no representation body.
+export const metadataNotModifiedBody: MetadataGet["responses"][304]["content"] =
+  {
+    "application/json": metadataEdit,
+  };
+
+export function metadataUpdatedResponse(
+  metadata: CatalogMetadata,
+): MetadataPatch["responses"][200]["content"] {
+  return { "application/json": metadata };
+}
+
+export const metadataPreconditionError: components["schemas"]["CatalogErrorV1"]["code"] =
+  "preconditionFailed";

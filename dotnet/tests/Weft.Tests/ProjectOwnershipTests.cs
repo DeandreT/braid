@@ -25,12 +25,12 @@ public sealed class ProjectOwnershipTests
     }
 
     [Theory]
-    [InlineData(ProjectRole.Viewer, true, false, false, false)]
-    [InlineData(ProjectRole.Runner, true, true, false, false)]
-    [InlineData(ProjectRole.Publisher, true, true, true, false)]
-    [InlineData(ProjectRole.Administrator, true, true, true, true)]
+    [InlineData(ProjectRole.Viewer, true, false, false, false, false)]
+    [InlineData(ProjectRole.Runner, true, true, false, false, false)]
+    [InlineData(ProjectRole.Publisher, true, true, true, false, true)]
+    [InlineData(ProjectRole.Administrator, true, true, true, true, true)]
     public void ObservedRolesMatchTheArchitecturePermissionMatrix(ProjectRole role,
-        bool canRead, bool canPreview, bool canUpload, bool canManage)
+        bool canRead, bool canPreview, bool canUpload, bool canManage, bool canEditMetadata)
     {
         var access = new ProjectAccess(Scope, Principal, role);
 
@@ -38,6 +38,7 @@ public sealed class ProjectOwnershipTests
         Assert.Equal(canPreview, access.Can(ProjectAction.SubmitPreview));
         Assert.Equal(canUpload, access.Can(ProjectAction.UploadRevision));
         Assert.Equal(canManage, access.Can(ProjectAction.ManageMembership));
+        Assert.Equal(canEditMetadata, access.Can(ProjectAction.EditMetadata));
     }
 
     [Theory]
@@ -45,16 +46,37 @@ public sealed class ProjectOwnershipTests
     [InlineData(0)]
     [InlineData(5)]
     [InlineData(int.MaxValue)]
-    public void UnknownRolesAndActionsFailClosed(int unknown)
+    public void UnknownRolesFailClosed(int unknown)
     {
         foreach (var action in Enum.GetValues<ProjectAction>())
             Assert.False(ProjectPermissions.Can((ProjectRole)unknown, action));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ProjectAccess(Scope, Principal, (ProjectRole)unknown));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(6)]
+    [InlineData(999)]
+    [InlineData(int.MaxValue)]
+    public void UnknownActionsFailClosed(int unknown)
+    {
         foreach (var role in Enum.GetValues<ProjectRole>())
         {
             Assert.False(ProjectPermissions.Can(role, (ProjectAction)unknown));
             Assert.False(new ProjectAccess(Scope, Principal, role).Can((ProjectAction)unknown));
         }
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ProjectAccess(Scope, Principal, (ProjectRole)unknown));
+    }
+
+    [Fact]
+    public void MetadataEditingPreservesExistingPermissionIdentifiers()
+    {
+        Assert.Equal(1, (int)ProjectAction.ReadMetadata);
+        Assert.Equal(2, (int)ProjectAction.SubmitPreview);
+        Assert.Equal(3, (int)ProjectAction.UploadRevision);
+        Assert.Equal(4, (int)ProjectAction.ManageMembership);
+        Assert.Equal(5, (int)ProjectAction.EditMetadata);
+        Assert.Equal(new[] { 1, 2, 3, 4 }, Enum.GetValues<ProjectRole>().Select(role => (int)role));
     }
 
     [Fact]

@@ -60,7 +60,10 @@ public sealed class CatalogHttpReadTests(PostgresFixture fixture)
             Assert.Equal(new[] { "description", "name", "scope", "version" },
                 metadata.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
             Assert.Equal("1", metadata.GetProperty("version").GetString());
-            Assert.Null(metadataResponse.Headers.ETag); // Conditional metadata is the next increment.
+            var metadataTag = Assert.IsType<System.Net.Http.Headers.EntityTagHeaderValue>(metadataResponse.Headers.ETag);
+            Assert.False(metadataTag.IsWeak);
+            var scope = first.Facts.FutureRevision;
+            Assert.Equal($"\"metadata-v1:{scope.OrganizationId:D}:{scope.ProjectId:D}:{scope.MappingId:D}:1\"", metadataTag.Tag);
 
             using var historyResponse = await api.Client.GetAsync($"{CatalogHttpTestSupport.MappingPath(first.Facts.FutureRevision)}/revisions");
             var history = await CatalogHttpTestSupport.JsonAsync(historyResponse);

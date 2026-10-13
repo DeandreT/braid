@@ -56,7 +56,8 @@ internal static class IngestionSchemaContract
             var function = Regex.Match(sql, @"CREATE FUNCTION weft\.guard_" + Regex.Escape(name) + @"_transition\(\).*? AS \$guard\$(?<body>.*?)\$guard\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant);
             if (columns.Count == 0 || constraints.Count == 0 || !function.Success)
                 throw new InvalidOperationException("The accepted ingestion schema contract is incomplete.");
-            tables.Add(name, new Table(name, columns.ToArray(), constraints.ToArray(), function.Groups["body"].Value));
+            tables.Add(name, new Table(name, columns.ToArray(), constraints.ToArray(),
+                name == "mappings" ? MappingMetadataSchemaContract.MappingTransitionBody : function.Groups["body"].Value));
         }
         if (tables.Count != 4)
             throw new InvalidOperationException("The accepted ingestion schema requires exactly four workflow tables.");

@@ -39,6 +39,7 @@ internal static class CatalogSchemaContract
     {
         RequireMigration("0001_project_ownership", "0a6c95e1357d9fba7736dd5870895a11443b0e924989163675f00ba2e858f9d1");
         RequireMigration("0002_catalog_ingestion", "d61a8bc2d56b6a39607414cf0f14c58db511594369ac124fd270a08f77455ae5");
+        RequireMigration("0004_mapping_metadata", MappingMetadataSchemaContract.MigrationChecksum);
         var tables = new Dictionary<string, Table>(StringComparer.Ordinal)
         {
             ["organizations"] = new("organizations",
@@ -71,7 +72,8 @@ internal static class CatalogSchemaContract
         foreach (var name in new[] { "mappings", "mapping_revisions", "revision_ingestions" })
         {
             var source = IngestionSchemaContract.Tables[name];
-            tables.Add(name, new Table(name, source.Columns, source.Constraints, source.FunctionBody));
+            tables.Add(name, new Table(name, source.Columns, source.Constraints,
+                name == "mappings" ? MappingMetadataSchemaContract.MappingTransitionBody : source.FunctionBody));
         }
         return tables;
     }

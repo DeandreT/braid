@@ -62,13 +62,21 @@ public sealed record CatalogApiOptions
 public static partial class CatalogEndpoints
 {
     public static IServiceCollection AddWeftCatalog(this IServiceCollection services,
-        CatalogApiOptions options, IHostEnvironment environment)
+        CatalogApiOptions options, IHostEnvironment environment) =>
+        AddWeftCatalog(services, options, environment, new CatalogMetadataEditOptions());
+
+    public static IServiceCollection AddWeftCatalog(this IServiceCollection services,
+        CatalogApiOptions options, IHostEnvironment environment, CatalogMetadataEditOptions metadataEditOptions)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(metadataEditOptions);
         options.Validate(environment);
+        if (metadataEditOptions.Enabled && !options.Enabled)
+            throw new InvalidOperationException("Metadata edits require an enabled catalog.");
         services.AddSingleton(options);
+        services.AddSingleton(metadataEditOptions);
         services.AddAntiforgery(antiforgery =>
         {
             antiforgery.HeaderName = CatalogRequestBoundary.RequestTokenHeader;

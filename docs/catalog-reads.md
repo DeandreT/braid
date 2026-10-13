@@ -1,8 +1,13 @@
 # Persistent catalog reads
 
-Status: P3d1 implementation in [draft PR #33](https://github.com/DeandreT/weft/pull/33),
-tracked in [#28](https://github.com/DeandreT/weft/issues/28). Local verification passed
-1,151 tests without failures or skips. Independent qualification is pending.
+Status: P3d1 is qualified and merged in [PR #33](https://github.com/DeandreT/weft/pull/33)
+at `e5915598d608b4df4b19c113d53a8bbda326cf9f`, closing
+[#28](https://github.com/DeandreT/weft/issues/28). Local and independent fresh-build
+runs each passed 1,162 tests with no skips; the independent run included 138 actual
+PostgreSQL cases, fresh/0002-upgrade owner CLI and published API checks, and 22
+browser cases. All 105 workers created by that run were automatically removed.
+The PR records the frozen evidence and its limits. P3d2 metadata editing is under
+verification and is not qualified by these read-only checks.
 The accepted sequence is in [Catalog API plan](catalog-api-plan.md).
 
 The API reads saved projects, mapping metadata and immutable revision history.
@@ -48,10 +53,47 @@ foreign and inaccessible project resources share the same 404 response. Database
 or schema failures return a closed failure category and never an invented empty
 catalog. No caller actor, role, proxy header or digest establishes access.
 
-Only catalog viewing is available in this increment. Creation, metadata maintenance,
-uploads, reports, chat, preview and membership actions remain explicitly unavailable,
-including for Publishers and Administrators. Later mutation endpoints recheck fresh
-authority rather than trusting these advisory flags.
+Viewing remains the default capability. Explicitly enabled metadata editing is
+available on mappings to current Publishers and Administrators. Creation, uploads,
+reports, chat, preview and membership actions remain unavailable. Project metadata
+editing is unavailable because this increment edits mappings only. Submitted edits
+recheck fresh authority rather than trusting advisory action flags.
+
+## Conditional mapping metadata
+
+`GET M/metadata` returns scope, name, description and metadata version, with a
+quoted strong ETag bound to that complete scope and version. Head changes and
+different admitted readers do not change this representation or its tag. After
+fresh read authority, optional `If-Match` uses strong comparison and returns 412
+on failure; then `If-None-Match` uses weak comparison and can return 304 with no
+body. Combined conditions are bounded to 4096 characters and each header to 16
+tags. Ordinary mapping responses do not carry this metadata-only ETag.
+
+When editing is enabled, `PATCH M/metadata` requires the custom media type
+`application/vnd.weft.mapping-metadata-edit.v1+json`, a cookie-bound request token,
+the canonical browser Origin and one strong metadata `If-Match` tag. Its document
+contains exactly the case-sensitive string properties `name` and `description`;
+both are required. This is a complete metadata replacement edit. Name is trimmed
+and limited to 200 Unicode scalars; description is preserved and limited to 4000.
+Strict UTF-8, no BOM, no NUL, and a 65,536-byte body limit apply. Duplicate,
+unknown, missing, null or non-string properties are rejected. Content-Encoding
+permits identity only; Content-Type permits only an optional UTF-8 charset.
+
+The handler checks feature enablement, transport/token admission, scope, fresh
+edit authority, content policy and preconditions before reading the body. It then
+checks authority and version again in one short atomic write. A disabled route
+returns 404 before resolving a reader or writer. Missing/denied/foreign resources
+share 404; missing If-Match returns 428; malformed/list/wildcard or empty header
+returns 400. A syntactically valid quoted empty opaque tag (`""`), weak tag or
+nonmatching tag returns 412. An unsupported media type returns 415 and a body
+above the limit returns 413. Errors expose neither metadata nor its current tag.
+
+Success returns 200, the exact resulting metadata and its ETag. A matching
+unchanged replacement preserves version and time; a stale unchanged replacement
+still fails. Actual changes increment the metadata version once and preserve the
+committed head. A changed mapping at the maximum version returns 409; an unchanged
+replacement remains possible. Metadata transactions never span body reading.
+Authorized enabled metadata replies advertise the custom type through Accept-Patch.
 
 ## Explicit local setup
 
@@ -61,12 +103,20 @@ configuration rejects an explicitly enabled local provider even when catalog
 routes are disabled. All routes remain in the generated OpenAPI contract when
 disabled, and requests cannot resolve a reader pool or create an anonymous actor.
 
-Provision the separate `weft_catalog_reader` login before applying migration 0003.
+Provision the separate `weft_catalog_reader` login before applying migration 0003
+and `weft_catalog_editor` before migration 0004.
 New local Compose installations require `WEFT_LOCAL_CATALOG_PASSWORD` along with
 the existing separate passwords. For an existing installation, deliberately run
 `deploy/local/postgres-add-catalog-reader.sh` with the local database administrator
 and its environment before running the owner migration command. That script creates
 only the new login and CONNECT grant; it does not replace existing credentials.
+Likewise, existing installations deliberately run
+`deploy/local/postgres-add-metadata-editor.sh` with
+`WEFT_LOCAL_METADATA_PASSWORD` before applying 0004. New local Compose installs
+require that distinct password too. These one-shot role creation scripts refuse
+an existing login rather than silently changing credentials or grants. Stop old
+hosts, provision, migrate and start the new host; strict old binaries are not
+admitted against the changed mapping guard.
 
 ```sh
 dotnet run --project dotnet/tools/Weft.DatabaseTool -- migrate
@@ -108,6 +158,12 @@ separate Angular development server is not an admitted catalog origin. Boolean
 enablement accepts explicit `true`/`false`, and malformed identity configuration
 fails rather than becoming a default account.
 
+Metadata edits default to disabled. Enable them explicitly with
+`WEFT_METADATA_EDITS_ENABLED=true` and the separate restricted editor connection
+string in `WEFT_POSTGRES_METADATA_CONNECTION_STRING`. Catalog enablement is also
+required. Read-only hosts need no editor credentials or writer pool; credentials
+never fall back to catalog, ingestion or owner profiles.
+
 ## Request and database boundaries
 
 Actual loopback peer, HTTP scheme and exact configured Host are checked on each
@@ -120,8 +176,8 @@ is omitted from diagnostic record text.
 The reusable unsafe-request boundary requires one exact canonical Origin and one
 `X-XSRF-TOKEN`, validates the cookie/request-token pair bound to configured organization
 and principal, then permits a handler to proceed. A required header prevents form-body
-fallback. No production mutations are introduced here; test-only mutations qualify
-this boundary, and d2 through d4 additionally qualify each real mutation. Hosted
+fallback. Metadata PATCH uses this boundary before media or body handling;
+d3 and d4 will qualify their additional real mutations separately. Hosted
 sessions and secure cookie/key lifecycle remain P4.
 
 `weft_catalog_reader` receives seven full-table SELECT grants: the five ownership
@@ -139,6 +195,13 @@ refuses privileged/inherited/delegation/PUBLIC/default grants and unaccepted sch
 changes. Pool scope is transaction-local and checked/reset on reuse. These checks
 are admission observations, not a promise to freeze membership or grant changes
 until commit.
+
+The dedicated editor receives full SELECT on the five ownership tables and
+mappings, plus UPDATE on mapping name, description, metadata version and
+updated-at only. It cannot advance heads or write revisions, reservations,
+memberships, grants or DDL. Its short scoped transaction checks exact effective
+rights and the current guard, then locks the admitted mapping and checks the
+expected version. Concurrent metadata edits and head appends preserve both facts.
 
 Qualification must distinguish synthetic contracts/setup from actual PostgreSQL and
 Kestrel transport. Entra, native upload HTTP, preview, hosting and the eventual

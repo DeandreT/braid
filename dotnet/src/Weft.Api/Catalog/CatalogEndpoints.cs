@@ -27,8 +27,8 @@ public static partial class CatalogEndpoints
             "GetCatalogMappings", "Read a bounded page of mappings and committed heads.");
         Describe<CatalogMappingV1>(endpoints.MapGet(mapping, GetMapping),
             "GetCatalogMapping", "Read mapping metadata and its current committed head.");
-        Describe<CatalogMappingMetadataV1>(endpoints.MapGet(mapping + "/metadata", GetMetadata),
-            "GetCatalogMappingMetadata", "Read the exact mapping metadata representation.");
+        DescribeMetadataRead(endpoints.MapGet(mapping + "/metadata", GetMetadata));
+        DescribeMetadataEdit(endpoints.MapPatch(mapping + "/metadata", PatchMetadata));
         Describe<CatalogRevisionPageV1>(endpoints.MapGet(mapping + "/revisions", GetRevisions),
             "GetCatalogRevisions", "Read immutable revision history in descending committed sequence.");
         Describe<CatalogRevisionV1>(endpoints.MapGet(mapping + "/revisions/{revisionId}", GetRevision),
@@ -44,7 +44,8 @@ public static partial class CatalogEndpoints
             .Produces<CatalogErrorV1>(StatusCodes.Status404NotFound)
             .Produces<CatalogErrorV1>(StatusCodes.Status500InternalServerError);
 
-    private static Task<IResult> GetContext(HttpContext context, CatalogRequestBoundary boundary) =>
+    private static Task<IResult> GetContext(HttpContext context, CatalogRequestBoundary boundary,
+        CatalogMetadataEditOptions metadataEditOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -53,7 +54,7 @@ public static partial class CatalogEndpoints
             {
                 RequireOrganization(organization, admission);
                 var token = boundary.IssueRequestToken(context, admission.Actor!);
-                return Results.Ok(CatalogPublicMapper.Context(organization, token));
+                return Results.Ok(CatalogPublicMapper.Context(organization, token, metadataEditOptions.Enabled));
             });
         });
 
@@ -93,7 +94,8 @@ public static partial class CatalogEndpoints
         });
 
     private static Task<IResult> GetMappings(string organizationId, string projectId,
-        HttpContext context, CatalogRequestBoundary boundary, string? limit = null, string? cursor = null) =>
+        HttpContext context, CatalogRequestBoundary boundary, CatalogMetadataEditOptions metadataEditOptions,
+        string? limit = null, string? cursor = null) =>
         WithAdmission(context, boundary, async admission =>
         {
             var scope = Project(organizationId, projectId);
@@ -105,12 +107,12 @@ public static partial class CatalogEndpoints
                 page.Limit, continuation, context.RequestAborted), mappings =>
             {
                 RequireAccess(mappings.Access, admission.Actor!, scope);
-                return Results.Ok(CatalogPublicMapper.Mappings(mappings));
+                return Results.Ok(CatalogPublicMapper.Mappings(mappings, metadataEditOptions.Enabled));
             });
         });
 
     private static Task<IResult> GetMapping(string organizationId, string projectId, string mappingId,
-        HttpContext context, CatalogRequestBoundary boundary) =>
+        HttpContext context, CatalogRequestBoundary boundary, CatalogMetadataEditOptions metadataEditOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -121,12 +123,12 @@ public static partial class CatalogEndpoints
             {
                 RequireScope(mapping.Summary.Scope == scope);
                 RequireAccess(mapping.Access, admission.Actor!, Project(scope));
-                return Results.Ok(CatalogPublicMapper.Mapping(mapping));
+                return Results.Ok(CatalogPublicMapper.Mapping(mapping, metadataEditOptions.Enabled));
             });
         });
 
     private static Task<IResult> GetMetadata(string organizationId, string projectId, string mappingId,
-        HttpContext context, CatalogRequestBoundary boundary) =>
+        HttpContext context, CatalogRequestBoundary boundary, CatalogMetadataEditOptions metadataEditOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -136,6 +138,15 @@ public static partial class CatalogEndpoints
             return await Read(context, reader => reader.GetMappingMetadataAsync(admission.Actor!, scope, context.RequestAborted), metadata =>
             {
                 RequireScope(metadata.Scope == scope);
+                var tag = CatalogMetadataConditions.ETag(metadata);
+                var status = CatalogMetadataConditions.EvaluateGet(context.Request.Headers, tag);
+                if (status == StatusCodes.Status412PreconditionFailed)
+                    return Error(CatalogErrorCodeV1.PreconditionFailed, status);
+                context.Response.Headers.ETag = tag;
+                if (metadataEditOptions.Enabled)
+                    context.Response.Headers["Accept-Patch"] = CatalogMetadataEditParser.MediaType;
+                if (status == StatusCodes.Status304NotModified)
+                    return Results.StatusCode(status);
                 return Results.Ok(CatalogPublicMapper.Metadata(metadata));
             });
         });
@@ -176,18 +187,24 @@ public static partial class CatalogEndpoints
         });
 
     private static async Task<IResult> WithAdmission(HttpContext context, CatalogRequestBoundary boundary,
-        Func<CatalogRequestAdmission, Task<IResult>> action)
+        Func<CatalogRequestAdmission, Task<IResult>> action, bool unsafeRequest = false)
     {
         context.Response.Headers.CacheControl = "no-store";
         try
         {
-            var admission = await boundary.AuthenticateAsync(context, unsafeRequest: false, context.RequestAborted);
+            var admission = await boundary.AuthenticateAsync(context, unsafeRequest, context.RequestAborted);
             if (!admission.IsAdmitted)
                 return Error(admission.Error!.Value, admission.StatusCode);
             return await action(admission);
         }
+        catch (CatalogMetadataRequestException exception)
+        {
+            context.Response.Headers.Remove("ETag");
+            return Error(exception.Code, exception.StatusCode);
+        }
         catch (CatalogInvalidRequestException)
         {
+            context.Response.Headers.Remove("ETag");
             return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
@@ -197,6 +214,7 @@ public static partial class CatalogEndpoints
         }
         catch (Exception)
         {
+            context.Response.Headers.Remove("ETag");
             return Error(CatalogErrorCodeV1.InternalFailure, StatusCodes.Status500InternalServerError);
         }
     }

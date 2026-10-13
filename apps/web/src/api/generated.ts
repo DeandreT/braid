@@ -169,7 +169,11 @@ export interface paths {
     delete?: never;
     options?: never;
     head?: never;
-    patch?: never;
+    /**
+     * Atomically replace mapping name and description using one strong metadata If-Match validator.
+     * @description The edit document contains exactly the case-sensitive string properties name and description. Both are required. The strict UTF-8 body is limited to 65536 bytes with no BOM; unknown or duplicate properties are rejected. Name is trimmed, nonblank and limited to 200 Unicode scalars after trimming; description is preserved and limited to 4000 Unicode scalars. Neither field permits NUL or invalid Unicode. Media type parameters permit only an optional UTF-8 charset; Content-Encoding permits only identity.
+     */
+    patch: operations["EditCatalogMappingMetadata"];
     trace?: never;
   };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions": {
@@ -271,7 +275,12 @@ export interface components {
       | "notFound"
       | "identityRejected"
       | "persistenceFailure"
-      | "internalFailure";
+      | "internalFailure"
+      | "preconditionRequired"
+      | "preconditionFailed"
+      | "unsupportedMediaType"
+      | "bodyLimit"
+      | "versionExhausted";
     CatalogErrorV1: {
       code: components["schemas"]["CatalogErrorCodeV1"];
     };
@@ -290,6 +299,10 @@ export interface components {
       admission: components["schemas"]["CatalogAdmissionV1"];
       scope: components["schemas"]["CatalogRevisionScopeV1"];
       sequence: string;
+    };
+    CatalogMappingMetadataEditV1: {
+      description: string;
+      name: string;
     };
     CatalogMappingMetadataV1: {
       description: string;
@@ -1317,7 +1330,12 @@ export interface operations {
   GetCatalogMappingMetadata: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /** @description Optional entity-tag list or wildcard, using strong comparison. Combined conditional headers are limited to 4096 characters and each to 16 tags. */
+        "If-Match"?: string;
+        /** @description Optional entity-tag list or wildcard, using weak comparison after If-Match. Matching returns 304 with no body. */
+        "If-None-Match"?: string;
+      };
       path: {
         mappingId: string;
         organizationId: string;
@@ -1330,6 +1348,101 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          /** @description Supported edit document media type, present only for an enabled edit capability on an admitted resource. */
+          "Accept-Patch"?: string;
+          /** @description Quoted strong metadata-v1 validator bound to the complete mapping scope and positive version. */
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogMappingMetadataV1"];
+        };
+      };
+      /** @description Not Modified */
+      304: {
+        headers: {
+          /** @description Supported edit document media type, present only for an enabled edit capability on an admitted resource. */
+          "Accept-Patch"?: string;
+          /** @description Quoted strong metadata-v1 validator bound to the complete mapping scope and positive version. */
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  EditCatalogMappingMetadata: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Exactly one concrete strong metadata entity-tag, at most 256 characters with surrounding OWS. Lists, wildcard and additional If-None-Match are unsupported. */
+        "If-Match": string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/vnd.weft.mapping-metadata-edit.v1+json": components["schemas"]["CatalogMappingMetadataEditV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Supported edit document media type, present only for an enabled edit capability on an admitted resource. */
+          "Accept-Patch"?: string;
+          /** @description Quoted strong metadata-v1 validator bound to the complete mapping scope and positive version. */
+          ETag?: string;
           [name: string]: unknown;
         };
         content: {
@@ -1356,6 +1469,53 @@ export interface operations {
       };
       /** @description Not Found */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Supported edit document media type, present only for an enabled edit capability on an admitted resource. */
+          "Accept-Patch"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
         headers: {
           [name: string]: unknown;
         };

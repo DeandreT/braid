@@ -60,7 +60,11 @@ public sealed class CatalogHttpConfigurationTests
             var responseSchema = operation.GetProperty("responses").GetProperty("200").GetProperty("content")
                 .GetProperty("application/json").GetProperty("schema");
             Assert.Equal("#/components/schemas/" + schemaName, responseSchema.GetProperty("$ref").GetString());
-            Assert.DoesNotContain(paths.GetProperty(route).EnumerateObject(), property => property.Name is "put" or "post" or "delete" or "patch");
+            Assert.DoesNotContain(paths.GetProperty(route).EnumerateObject(), property =>
+                property.Name is "put" or "post" or "delete" ||
+                (property.Name == "patch" && route != mappingRoute + "/metadata"));
+            if (route == mappingRoute + "/metadata")
+                Assert.True(paths.GetProperty(route).TryGetProperty("patch", out _));
         }
         Assert.False(paths.TryGetProperty(CatalogHttpTestSupport.UnsafePath, out _));
         var schemas = document.GetProperty("components").GetProperty("schemas");

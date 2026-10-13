@@ -46,7 +46,8 @@ public enum ProjectAction
     ReadMetadata = 1,
     SubmitPreview = 2,
     UploadRevision = 3,
-    ManageMembership = 4
+    ManageMembership = 4,
+    EditMetadata = 5
 }
 
 public static class ProjectPermissions
@@ -56,9 +57,9 @@ public static class ProjectPermissions
         ProjectRole.Viewer => action is ProjectAction.ReadMetadata,
         ProjectRole.Runner => action is ProjectAction.ReadMetadata or ProjectAction.SubmitPreview,
         ProjectRole.Publisher => action is ProjectAction.ReadMetadata or ProjectAction.SubmitPreview or
-            ProjectAction.UploadRevision,
+            ProjectAction.UploadRevision or ProjectAction.EditMetadata,
         ProjectRole.Administrator => action is ProjectAction.ReadMetadata or ProjectAction.SubmitPreview or
-            ProjectAction.UploadRevision or ProjectAction.ManageMembership,
+            ProjectAction.UploadRevision or ProjectAction.ManageMembership or ProjectAction.EditMetadata,
         _ => false
     };
 }

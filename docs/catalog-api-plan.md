@@ -35,7 +35,7 @@ retains full ancestry and checks the server's allowed organization.
 | GET `M/metadata` | d1: exact metadata representation; strong ETag added with d2 |
 | GET `M/revisions` | d1: immutable history in descending committed sequence |
 | GET `M/revisions/{revisionId}` | d1: exact scoped immutable revision metadata |
-| PUT `M/metadata` | d2: name/description replacement with concrete If-Match |
+| PATCH `M/metadata` | d2: versioned name/description edit document with concrete If-Match |
 | POST `P/mappings` | d3: raw native body creates mapping plus first admitted revision |
 | POST `M/revisions` | d3: raw native body append, AnyHead or EqualHead |
 | GET `P/revision-ingestions/{operationId}` | d3: original actor's safe durable receipt |
@@ -146,12 +146,32 @@ Unicode-scalar/UTF-8 bounds. Metadata/head races must preserve both operations.
 
 `M/metadata` contains only scope, name, description and metadata version; it excludes
 head-driven timestamps and actor-varying actions. Its quoted strong ETag is
-`metadata-v1:<org>:<project>:<mapping>:<decimalVersion>`. PUT requires one concrete
+`metadata-v1:<org>:<project>:<mapping>:<decimalVersion>`. PATCH requires one concrete
 If-Match: absent 428, malformed/list/wildcard 400, weak/nonmatching 412 after fresh
 resource authority, denied/missing 404. Success returns 200 and the current ETag.
+An empty header is malformed; a quoted empty opaque tag (`""`) is syntactically
+valid and nonmatching, so it returns 412.
 Ordinary GET mapping has no metadata-only strong ETag. EqualHead remains an exact
 revision condition rather than a metadata version.
 [HTTP If-Match semantics](https://httpwg.org/specs/rfc9110.html#field.if-match)
+
+The edit document uses `application/vnd.weft.mapping-metadata-edit.v1+json` and
+requires exactly two unique string properties, `name` and `description`. The
+server trims the name and preserves the description; the resulting metadata
+representation receives its current strong ETag. This accepted PATCH refinement
+is recorded in [#29](https://github.com/DeandreT/weft/issues/29#issuecomment-6151039087).
+Edits are independently default-off through `WEFT_METADATA_EDITS_ENABLED`; enabled
+edits require the dedicated `WEFT_POSTGRES_METADATA_CONNECTION_STRING`. Read-only
+configurations need no writer credentials or pool. A coordinated stop/migrate/start
+upgrade provisions the editor role and installs migration 0004; old strict binaries
+are not admitted against a changed trigger definition.
+
+Metadata GET first checks current read authority, then evaluates bounded If-Match
+and If-None-Match conditions. A strong If-Match failure returns 412; a weak matching
+If-None-Match returns 304 without a body. Edit request bodies are manually read
+under a 65,536-byte limit only after the request boundary, scope, current edit
+authority, content policy and preconditions pass. No metadata transaction spans
+body reading. Errors expose neither current metadata nor its ETag.
 
 ## Raw uploads and recovery HTTP
 

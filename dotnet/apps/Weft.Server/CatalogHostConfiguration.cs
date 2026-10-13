@@ -20,7 +20,8 @@ public static class CatalogHostConfiguration
             Flag("WEFT_CATALOG_ENABLED"), Flag("WEFT_DEV_IDENTITY_ENABLED"),
             Id("WEFT_DEV_PRINCIPAL_ID"), Id("WEFT_DEV_ORGANIZATION_ID"),
             readEnvironment("WEFT_DEV_BROWSER_ORIGIN"));
-        builder.Services.AddWeftCatalog(options, builder.Environment);
+        var metadataOptions = new CatalogMetadataEditOptions(Flag("WEFT_METADATA_EDITS_ENABLED"));
+        builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions);
         if (!options.Enabled)
             return;
 
@@ -34,6 +35,15 @@ public static class CatalogHostConfiguration
         builder.Services.AddSingleton(_ => new PostgresCatalogDatabase(connectionString));
         builder.Services.AddSingleton<ICatalogReader>(services =>
             new PostgresCatalogReader(services.GetRequiredService<PostgresCatalogDatabase>()));
+        if (metadataOptions.Enabled)
+        {
+            var metadataConnectionString = readEnvironment("WEFT_POSTGRES_METADATA_CONNECTION_STRING");
+            if (string.IsNullOrWhiteSpace(metadataConnectionString))
+                throw new InvalidOperationException("Enabled metadata edits require their dedicated editor connection configuration.");
+            builder.Services.AddSingleton(_ => new PostgresMappingMetadataDatabase(metadataConnectionString));
+            builder.Services.AddSingleton<IMappingMetadataWriter>(services =>
+                new PostgresMappingMetadataWriter(services.GetRequiredService<PostgresMappingMetadataDatabase>()));
+        }
 
         bool Flag(string variable) => readEnvironment(variable) switch
         {

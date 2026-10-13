@@ -12,6 +12,7 @@ services:
       WEFT_LOCAL_RUNTIME_PASSWORD: ${WEFT_LOCAL_RUNTIME_PASSWORD:?Set a separate runtime password}
       WEFT_LOCAL_INGEST_PASSWORD: ${WEFT_LOCAL_INGEST_PASSWORD:?Set a separate ingestion password}
       WEFT_LOCAL_CATALOG_PASSWORD: ${WEFT_LOCAL_CATALOG_PASSWORD:?Set a separate catalog reader password}
+      WEFT_LOCAL_METADATA_PASSWORD: ${WEFT_LOCAL_METADATA_PASSWORD:?Set a separate mapping metadata editor password}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:
