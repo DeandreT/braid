@@ -1,0 +1,20 @@
+{
+  "source":{"name":"Source","kind":{"kind":"group","children":[
+    {"name":"numbers","repeating":true,"kind":{"kind":"scalar","ty":"int"}}
+  ]}},
+  "target":{"name":"Target","kind":{"kind":"group","children":[
+    {"name":"outer","repeating":true,"kind":{"kind":"group","children":[
+      {"name":"inner","repeating":true,"kind":{"kind":"scalar","ty":"int"}}
+    ]}}
+  ]}},
+  "graph":{"nodes":{
+    "1":{"kind":"source_field","path":[]},
+    "2":{"kind":"const","value":1}
+  }},
+  "root":{"target_field":"","bindings":[],"children":[{
+    "target_field":"outer","sequence":{"kind":"generate","to":2,"item":1},
+    "bindings":[],"children":[{
+      "target_field":"inner","source":["numbers"],"construction":{"scalar":{"value":1}},"bindings":[],"children":[]
+    }]
+  }]}
+}

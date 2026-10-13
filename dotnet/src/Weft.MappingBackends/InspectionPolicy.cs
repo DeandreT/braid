@@ -12,5 +12,6 @@ public static class InspectionPolicy
     public const int MaximumResponseItems = 4 * MaximumItems;
     public const int MaximumTextBytes = 2048;
     public const int MaximumJsonDepth = 64;
+    public const int MaximumProjectionDetailDepth = 16;
     public const string DocumentId = "entry.native.json";
 }

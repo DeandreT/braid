@@ -2,8 +2,8 @@
 
 The initial Angular/ASP.NET Core shell is local-only. It supplies a real API
 health endpoint, a browser workspace, and development fixture projections with
-generated API contracts. A separate Ferrule adapter implements native inspection
-and validation; its projection and viewer follow the delivery plan. Authentication,
+generated API contracts. A separate Ferrule adapter implements native inspection,
+validation, and projection; its Angular viewer follows the delivery plan. Authentication,
 chat, and Wolverine-backed execution follow separate increments.
 
 ## Prerequisites

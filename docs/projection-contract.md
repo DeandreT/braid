@@ -51,8 +51,10 @@ are display data and are not an executable intermediate language.
 
 `complete`, `partial`, and `unavailable` describe explanation coverage. A partial
 view must preserve located gaps and diagnostics. An unavailable view must not
-offer an apparently complete graph. Size limits must produce an explicit gap;
-they must not silently discard controls or lineage.
+offer an apparently complete graph. A backend may return a located gap for an
+unsupported construct. Exhausting its admission budget returns an explicit
+resource-limit operation failure without a projection; it must not publish a
+truncated graph or silently discard controls or lineage.
 
 Operation capabilities are independent of coverage. A fully explained mapping
 does not prove that preview, validation, or code generation is supported. Each

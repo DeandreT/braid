@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 pub mod decode;
 pub mod framing;
 pub mod inspect;
+pub mod projection;
 pub mod protocol;
 pub mod validation;
 
@@ -61,11 +62,14 @@ pub fn process_request(header: &RequestHeader, native: &[u8]) -> Response {
             "The requested host protocol version is not supported.",
         );
     }
-    if !matches!(header.operation.as_str(), "inspect" | "validate") {
+    if !matches!(
+        header.operation.as_str(),
+        "inspect" | "validate" | "project"
+    ) {
         return Response::failure(
             Some(header),
             "unsupportedOperation",
-            "This host admits inspection and validation only.",
+            "This host admits inspection, validation, and projection only.",
         );
     }
     if !valid_context(header) {
@@ -136,6 +140,17 @@ pub fn process_request(header: &RequestHeader, native: &[u8]) -> Response {
     };
     if header.operation == "inspect" {
         return Response::success(header, WorkerResult::Inspect(inspection));
+    }
+    if header.operation == "project" {
+        return match projection::project(
+            &decoded.project,
+            &header.document_id,
+            &decoded.document_prefix,
+            &header.limits,
+        ) {
+            Ok(projection) => Response::success(header, WorkerResult::Project(projection)),
+            Err(message) => Response::failure(Some(header), "inspectionLimitExceeded", message),
+        };
     }
     match validation::validate(
         &decoded.project,

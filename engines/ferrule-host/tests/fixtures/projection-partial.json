@@ -1,0 +1,134 @@
+{
+  "source": {
+    "name": "Source",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "code",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "items",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "code",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        },
+        {
+          "name": "open",
+          "kind": {
+            "kind": "group",
+            "children": [],
+            "dynamic": {
+              "name": "field",
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "target": {
+    "name": "Target",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "outerCode",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "dynamicValue",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "rows",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "code",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        }
+      ]
+    }
+  },
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "source_field",
+        "path": [
+          "code"
+        ]
+      },
+      "2": {
+        "kind": "const",
+        "value": "runtimeKey"
+      },
+      "3": {
+        "kind": "dynamic_source_field",
+        "object": [
+          "open"
+        ],
+        "key": 2
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "bindings": [
+      {
+        "target_field": "outerCode",
+        "node": 1
+      },
+      {
+        "target_field": "dynamicValue",
+        "node": 3
+      }
+    ],
+    "children": [
+      {
+        "target_field": "rows",
+        "bindings": [
+          {
+            "target_field": "code",
+            "node": 1
+          }
+        ],
+        "children": [],
+        "source": [
+          "items"
+        ]
+      }
+    ]
+  }
+}

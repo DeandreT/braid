@@ -1,8 +1,10 @@
 # Weft delivery plan
 
-Status: architecture, P0's local web/API shell, and P1's mapping contracts are
-qualified and merged. P1's local and clean-container evidence is recorded in
-[PR #6](https://github.com/DeandreT/weft/pull/6).
+Status: architecture, P0's local web/API shell, P1's mapping contracts, and P2a's
+restricted Ferrule inspection/validation worker are qualified and merged.
+Local and independent clean-container evidence is recorded in
+[PR #6](https://github.com/DeandreT/weft/pull/6) and
+[PR #10](https://github.com/DeandreT/weft/pull/10).
 Remaining application increments below are planned.
 
 The architecture review is tracked in [#1](https://github.com/DeandreT/weft/issues/1).

@@ -225,11 +225,11 @@ pub fn inspect(
     })
 }
 
-fn capabilities(outputs: Vec<String>) -> Vec<OperationCapability> {
+pub(crate) fn capabilities(outputs: Vec<String>) -> Vec<OperationCapability> {
     [
         ("inspect", "supported", "ferrule.native-json.inspect.v1"),
         ("validate", "supported", "ferrule.native-json.validate.v1"),
-        ("project", "notQualified", "ferrule.projection.v1"),
+        ("project", "supported", "ferrule.projection.v1"),
         ("preview", "notQualified", "ferrule.interpreter.v1"),
         ("build", "notQualified", "ferrule.generated.v1"),
     ]
@@ -243,7 +243,13 @@ fn capabilities(outputs: Vec<String>) -> Vec<OperationCapability> {
         } else {
             Vec::new()
         },
-        conditions: vec![if status == "supported" {
+        conditions: vec![if operation == "project" {
+            CapabilityCondition {
+                code: "boundedReadOnlyProjection".into(),
+                description: "Bounded read-only view; coverage may be partial or unavailable."
+                    .into(),
+            }
+        } else if status == "supported" {
             CapabilityCondition {
                 code: "readOnlyInspection".into(),
                 description: "Metadata only; resource access and execution are unavailable.".into(),

@@ -10,11 +10,11 @@ using Weft.MappingBackends.Workers;
 
 namespace Weft.MappingBackends;
 
-public sealed class FerruleInspectionBackend(IInspectionWorkerRunner runner) : IMappingInspectionBackend
+public sealed partial class FerruleInspectionBackend(IInspectionWorkerRunner runner) : IMappingInspectionBackend, IMappingProjectionBackend
 {
     public const string ProtocolVersion = "weft.ferrule-host.v1";
     public const string EngineRevision = "0495822e102bba3f97d9bffd3c665adfb6138bec";
-    public const string AdapterBuild = "weft.ferrule-adapter.v1";
+    public const string AdapterBuild = "weft.ferrule-adapter.v2";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
     private readonly IInspectionWorkerRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
@@ -94,6 +94,10 @@ public sealed class FerruleInspectionBackend(IInspectionWorkerRunner runner) : I
             }
             return new Invocation(response, MappingOperationStatus.Succeeded, true, null);
         }
+        catch (ProjectionLimitException)
+        {
+            return LocalFailure(MappingOperationStatus.ResourceLimit);
+        }
         catch (Exception error) when (error is JsonException or DecoderFallbackException or EncoderFallbackException or ProtocolException or NotSupportedException)
         {
             return LocalFailure(MappingOperationStatus.ProtocolFailure);
@@ -118,9 +122,12 @@ public sealed class FerruleInspectionBackend(IInspectionWorkerRunner runner) : I
     {
         Require(output is not null && output.Length >= 4);
         var length = BinaryPrimitives.ReadUInt32BigEndian(output);
+        var isProjection = request.Operation == "project";
+        if (isProjection && length > InspectionPolicy.MaximumResponseBytes)
+            throw new ProjectionLimitException();
         Require(length is > 0 and <= InspectionPolicy.MaximumResponseBytes);
         Require(output.Length == 4L + length);
-        PreflightJson(output.AsSpan(4));
+        PreflightJson(output.AsSpan(4), isProjection);
         var json = StrictUtf8.GetString(output, 4, (int)length);
         var response = JsonSerializer.Deserialize<HostResponse>(json, JsonOptions) ?? throw new ProtocolException();
         Require(response.ProtocolVersion == ProtocolVersion && response.RequestId == request.RequestId && response.Operation == request.Operation);
@@ -138,27 +145,38 @@ public sealed class FerruleInspectionBackend(IInspectionWorkerRunner runner) : I
             ValidateInspection(inspection);
         else if (request.Operation == "validate" && response.Result is HostValidationResult validation)
             ValidateValidation(validation);
+        else if (isProjection && response.Result is HostProjectionResult projection)
+            ValidateProjection(projection);
         else
             throw new ProtocolException();
         return response;
     }
 
-    private static void PreflightJson(ReadOnlySpan<byte> json)
+    private static void PreflightJson(ReadOnlySpan<byte> json, bool isProjection)
     {
-        var reader = new Utf8JsonReader(json, new JsonReaderOptions { MaxDepth = InspectionPolicy.MaximumJsonDepth });
+        var reader = new Utf8JsonReader(json, new JsonReaderOptions { MaxDepth = isProjection ? int.MaxValue : InspectionPolicy.MaximumJsonDepth });
         var containers = new Stack<HashSet<string>?>();
         var arrayItems = 0;
         while (reader.Read())
         {
             if (reader.TokenType is not (JsonTokenType.EndObject or JsonTokenType.EndArray or JsonTokenType.PropertyName)
                 && containers.Count > 0 && containers.Peek() is null)
-                Require(++arrayItems <= InspectionPolicy.MaximumResponseItems);
+            {
+                arrayItems++;
+                if (isProjection && arrayItems > InspectionPolicy.MaximumResponseItems)
+                    throw new ProjectionLimitException();
+                Require(arrayItems <= InspectionPolicy.MaximumResponseItems);
+            }
             switch (reader.TokenType)
             {
                 case JsonTokenType.StartObject:
+                    if (isProjection && containers.Count >= InspectionPolicy.MaximumJsonDepth)
+                        throw new ProjectionLimitException();
                     containers.Push(new HashSet<string>(StringComparer.Ordinal));
                     break;
                 case JsonTokenType.StartArray:
+                    if (isProjection && containers.Count >= InspectionPolicy.MaximumJsonDepth)
+                        throw new ProjectionLimitException();
                     containers.Push(null);
                     break;
                 case JsonTokenType.EndObject or JsonTokenType.EndArray:
@@ -210,7 +228,7 @@ public sealed class FerruleInspectionBackend(IInspectionWorkerRunner runner) : I
         foreach (var capability in result.Capabilities)
         {
             Require(capability is not null && Enum.IsDefined(capability.Operation) && operations.Add(capability.Operation));
-            Require(capability.Status == (capability.Operation is MappingOperation.Inspect or MappingOperation.Validate ? CapabilityStatus.Supported : CapabilityStatus.NotQualified));
+            Require(capability.Status == (capability.Operation is MappingOperation.Inspect or MappingOperation.Validate or MappingOperation.Project ? CapabilityStatus.Supported : CapabilityStatus.NotQualified));
             Text(capability.Profile, false); List(capability.BoundaryIds); List(capability.Conditions);
             var outputIds = result.Boundaries.Where(boundary => Role(boundary.Role) is BoundaryRole.PrimaryOutput or BoundaryRole.NamedOutput).Select(boundary => boundary.Id);
             Require(capability.BoundaryIds.SequenceEqual(capability.Operation is MappingOperation.Preview or MappingOperation.Build ? outputIds : [], StringComparer.Ordinal));
@@ -220,6 +238,8 @@ public sealed class FerruleInspectionBackend(IInspectionWorkerRunner runner) : I
                 Require(condition is not null);
                 Text(condition.Code, false); Text(condition.Description, false);
             }
+            if (capability.Operation == MappingOperation.Project)
+                Require(capability.Profile == "ferrule.projection.v1" && capability.Conditions.Any(condition => condition.Code == "boundedReadOnlyProjection"));
         }
     }
 
@@ -414,6 +434,7 @@ public sealed class FerruleInspectionBackend(IInspectionWorkerRunner runner) : I
     private static JsonSerializerOptions CreateOptions()
     {
         var options = ProjectionJson.CreateOptions();
+        options.PropertyNameCaseInsensitive = false;
         options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
         options.MaxDepth = InspectionPolicy.MaximumJsonDepth;
         return options;

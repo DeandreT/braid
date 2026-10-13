@@ -1,0 +1,433 @@
+{
+  "source": {
+    "name": "Orders",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "orders",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "orderId",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "region",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "amount",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "float"
+                }
+              },
+              {
+                "name": "enabled",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "bool"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        }
+      ]
+    }
+  },
+  "target": {
+    "name": "Output",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "rows",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "orderId",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "amount",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "float"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        },
+        {
+          "name": "joined",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "orderId",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "label",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        },
+        {
+          "name": "total",
+          "kind": {
+            "kind": "scalar",
+            "ty": "float"
+          }
+        }
+      ]
+    }
+  },
+  "extra_sources": [
+    {
+      "name": "catalog",
+      "path": "do-not-read-catalog.json",
+      "schema": {
+        "name": "Catalog",
+        "kind": {
+          "kind": "group",
+          "children": [
+            {
+              "name": "orderId",
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            },
+            {
+              "name": "region",
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            },
+            {
+              "name": "label",
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            }
+          ]
+        },
+        "repeating": true
+      }
+    }
+  ],
+  "extra_targets": [
+    {
+      "name": "audit",
+      "schema": {
+        "name": "Audit",
+        "kind": {
+          "kind": "group",
+          "children": [
+            {
+              "name": "rowCount",
+              "kind": {
+                "kind": "scalar",
+                "ty": "int"
+              }
+            }
+          ]
+        }
+      },
+      "root": {
+        "target_field": "",
+        "bindings": [
+          {
+            "target_field": "rowCount",
+            "node": 15
+          }
+        ],
+        "children": []
+      }
+    },
+    {
+      "name": "summary",
+      "schema": {
+        "name": "Summary",
+        "kind": {
+          "kind": "group",
+          "children": [
+            {
+              "name": "status",
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            }
+          ]
+        }
+      },
+      "root": {
+        "target_field": "",
+        "bindings": [
+          {
+            "target_field": "status",
+            "node": 16
+          }
+        ],
+        "children": []
+      }
+    }
+  ],
+  "failure_rules": [
+    {
+      "iteration": {
+        "kind": "source",
+        "collection": [
+          "orders"
+        ]
+      },
+      "selection": {
+        "kind": "when_false",
+        "predicate": 3
+      },
+      "message": 9
+    },
+    {
+      "iteration": {
+        "kind": "source",
+        "collection": [
+          "orders"
+        ]
+      },
+      "selection": {
+        "kind": "all"
+      },
+      "message": 17
+    }
+  ],
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "source_field",
+        "path": [
+          "orderId"
+        ],
+        "frame": [
+          "orders"
+        ]
+      },
+      "2": {
+        "kind": "source_field",
+        "path": [
+          "amount"
+        ],
+        "frame": [
+          "orders"
+        ]
+      },
+      "3": {
+        "kind": "source_field",
+        "path": [
+          "enabled"
+        ],
+        "frame": [
+          "orders"
+        ]
+      },
+      "4": {
+        "kind": "source_field",
+        "path": [
+          "region"
+        ],
+        "frame": [
+          "orders"
+        ]
+      },
+      "5": {
+        "kind": "const",
+        "value": 2
+      },
+      "6": {
+        "kind": "const",
+        "value": 1
+      },
+      "9": {
+        "kind": "const",
+        "value": "Disabled order"
+      },
+      "10": {
+        "kind": "join_field",
+        "join": 7,
+        "collection": [
+          "orders"
+        ],
+        "path": [
+          "orderId"
+        ]
+      },
+      "11": {
+        "kind": "join_field",
+        "join": 7,
+        "collection": [
+          "catalog"
+        ],
+        "path": [
+          "label"
+        ]
+      },
+      "14": {
+        "kind": "aggregate",
+        "function": "sum",
+        "collection": [
+          "orders"
+        ],
+        "value": [
+          "amount"
+        ]
+      },
+      "15": {
+        "kind": "aggregate",
+        "function": "count",
+        "collection": [
+          "orders"
+        ],
+        "value": []
+      },
+      "16": {
+        "kind": "const",
+        "value": "ok"
+      },
+      "17": {
+        "kind": "const",
+        "value": "All orders checked"
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "bindings": [
+      {
+        "target_field": "total",
+        "node": 14
+      }
+    ],
+    "children": [
+      {
+        "target_field": "rows",
+        "bindings": [
+          {
+            "target_field": "orderId",
+            "node": 1
+          },
+          {
+            "target_field": "amount",
+            "node": 2
+          }
+        ],
+        "children": [],
+        "source": [
+          "orders"
+        ],
+        "filter": 3,
+        "group_by": 4,
+        "sort_by": 2,
+        "sort_descending": true,
+        "sort_then_by": [
+          {
+            "node": 1,
+            "descending": false
+          }
+        ],
+        "sort_filter_order": "filter_then_sort",
+        "windows": [
+          {
+            "kind": "skip_first",
+            "count": 6
+          },
+          {
+            "kind": "first",
+            "count": 5
+          }
+        ]
+      },
+      {
+        "target_field": "joined",
+        "bindings": [
+          {
+            "target_field": "orderId",
+            "node": 10
+          },
+          {
+            "target_field": "label",
+            "node": 11
+          }
+        ],
+        "children": [],
+        "join": {
+          "id": 7,
+          "plan": {
+            "first": {
+              "collection": [
+                "orders"
+              ]
+            },
+            "second": {
+              "source": {
+                "collection": [
+                  "catalog"
+                ]
+              },
+              "conditions": {
+                "first": {
+                  "left_collection": [
+                    "orders"
+                  ],
+                  "left_path": [
+                    "orderId"
+                  ],
+                  "right_path": [
+                    "orderId"
+                  ]
+                },
+                "rest": [
+                  {
+                    "left_collection": [
+                      "orders"
+                    ],
+                    "left_path": [
+                      "region"
+                    ],
+                    "right_path": [
+                      "region"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

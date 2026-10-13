@@ -12,7 +12,19 @@ internal sealed record HostFailure(string Code, string Message, bool MessageTrun
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(HostInspectionResult), "inspect")]
 [JsonDerivedType(typeof(HostValidationResult), "validate")]
+[JsonDerivedType(typeof(HostProjectionResult), "project")]
 internal abstract record HostResult;
+
+internal sealed record HostProjectionResult(
+    ProjectionCoverage Coverage,
+    IReadOnlyList<ProjectionBoundary> Boundaries,
+    IReadOnlyList<ProjectionField> Fields,
+    IReadOnlyList<ProjectionParameter> Parameters,
+    IReadOnlyList<ProjectionRule> Rules,
+    IReadOnlyList<ProjectionControl> Controls,
+    IReadOnlyList<ProjectionRelationship> Relationships,
+    IReadOnlyList<ProjectionDiagnostic> Diagnostics,
+    IReadOnlyList<OperationCapability> Capabilities) : HostResult;
 
 internal sealed record HostInspectionResult(
     IReadOnlyList<HostBoundary> Boundaries,

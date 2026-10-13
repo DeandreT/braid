@@ -1,7 +1,11 @@
 # Mapping backend contract
 
-Status: proposed v1 boundary. Ferrule is the first implementation; this document
-does not introduce a new executable mapping language.
+The v1 read-model contract is implemented in
+[PR #6](https://github.com/DeandreT/weft/pull/6). Ferrule's restricted native
+inspection/validation adapter is qualified in
+[PR #10](https://github.com/DeandreT/weft/pull/10). Native projection follows in
+[#8](https://github.com/DeandreT/weft/issues/8); preview and build remain separate
+capability gates. This contract does not introduce an executable mapping language.
 
 ## Responsibilities
 
@@ -101,10 +105,11 @@ external side effects in v1.
 
 ## Ferrule integration
 
-Initial dependency candidate:
+The inspection/validation worker pins:
 [`0495822e102bba3f97d9bffd3c665adfb6138bec`](https://github.com/DeandreT/ferrule/commit/0495822e102bba3f97d9bffd3c665adfb6138bec),
-the upstream `main` revision inspected on 2026-10-12. This is a candidate for the
-first implementation spike, not a qualified runtime release.
+the upstream `main` revision inspected on 2026-10-12. Native codec, validation,
+and local Linux/amd64 process isolation are qualified at that pin. Interpreter
+preview and generated deployment runtimes are not qualified by those checks.
 
 In the engine host, pin every Ferrule Git dependency to the same full commit and commit Cargo.lock
 when adding the workspace. Alias generic upstream package names (`mapping`,

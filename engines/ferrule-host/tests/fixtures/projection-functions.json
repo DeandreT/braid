@@ -1,0 +1,128 @@
+{
+  "source": {
+    "name": "Source",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "code",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        }
+      ]
+    }
+  },
+  "target": {
+    "name": "Target",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "formatted",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "other",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        }
+      ]
+    }
+  },
+  "user_functions": {
+    "18446744073709551615": {
+      "library": "fixture",
+      "name": "prefixCode",
+      "parameters": [
+        {
+          "id": 18446744073709551614,
+          "name": "prefix",
+          "ty": "string"
+        },
+        {
+          "id": 5,
+          "name": "code",
+          "ty": "string"
+        }
+      ],
+      "output_name": "value",
+      "output_type": "string",
+      "body": {
+        "nodes": {
+          "1": {
+            "kind": "function_parameter",
+            "parameter": 18446744073709551614
+          },
+          "2": {
+            "kind": "function_parameter",
+            "parameter": 5
+          },
+          "3": {
+            "kind": "call",
+            "function": "concat",
+            "args": [
+              1,
+              2
+            ]
+          }
+        }
+      },
+      "output": 3
+    }
+  },
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "source_field",
+        "path": [
+          "code"
+        ]
+      },
+      "2": {
+        "kind": "const",
+        "value": ">"
+      },
+      "3": {
+        "kind": "user_function_call",
+        "function": 18446744073709551615,
+        "args": [
+          2,
+          1
+        ]
+      },
+      "4": {
+        "kind": "const",
+        "value": "!"
+      },
+      "5": {
+        "kind": "user_function_call",
+        "function": 18446744073709551615,
+        "args": [
+          4,
+          1
+        ]
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "bindings": [
+      {
+        "target_field": "formatted",
+        "node": 3
+      },
+      {
+        "target_field": "other",
+        "node": 5
+      }
+    ],
+    "children": []
+  }
+}

@@ -1,0 +1,304 @@
+{
+  "__ferrule_file": {
+    "kind": "project",
+    "version": 2,
+    "float_bits": {
+      "/graph/nodes/10/value": "3ff0000000000000",
+      "/graph/nodes/11/value": "8000000000000000"
+    }
+  },
+  "document": {
+    "source": {
+      "name": "Source",
+      "kind": {
+        "kind": "group",
+        "children": [
+          {
+            "name": "code",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            }
+          },
+          {
+            "name": "a.b",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            }
+          },
+          {
+            "name": "nested",
+            "kind": {
+              "kind": "group",
+              "children": [
+                {
+                  "name": "b",
+                  "kind": {
+                    "kind": "scalar",
+                    "ty": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "enabled",
+            "kind": {
+              "kind": "scalar",
+              "ty": "bool"
+            }
+          }
+        ]
+      }
+    },
+    "target": {
+      "name": "Target",
+      "kind": {
+        "kind": "group",
+        "children": [
+          {
+            "name": "direct",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            }
+          },
+          {
+            "name": "dotted",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            }
+          },
+          {
+            "name": "nestedOutput",
+            "kind": {
+              "kind": "group",
+              "children": [
+                {
+                  "name": "b",
+                  "kind": {
+                    "kind": "scalar",
+                    "ty": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "conditional",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            }
+          },
+          {
+            "name": "parameter",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            }
+          },
+          {
+            "name": "valueMap",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            }
+          },
+          {
+            "name": "exactInteger",
+            "kind": {
+              "kind": "scalar",
+              "ty": "int"
+            }
+          },
+          {
+            "name": "integralFloat",
+            "kind": {
+              "kind": "scalar",
+              "ty": "float"
+            }
+          },
+          {
+            "name": "negativeZero",
+            "kind": {
+              "kind": "scalar",
+              "ty": "float"
+            }
+          },
+          {
+            "name": "absent",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            },
+            "nullable": true
+          },
+          {
+            "name": "explicitNull",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            },
+            "nullable": true
+          },
+          {
+            "name": "xmlNil",
+            "kind": {
+              "kind": "scalar",
+              "ty": "string"
+            },
+            "nillable": true
+          }
+        ]
+      }
+    },
+    "graph": {
+      "nodes": {
+        "1": {
+          "kind": "source_field",
+          "path": [
+            "code"
+          ]
+        },
+        "2": {
+          "kind": "source_field",
+          "path": [
+            "a.b"
+          ]
+        },
+        "3": {
+          "kind": "source_field",
+          "path": [
+            "nested",
+            "b"
+          ]
+        },
+        "4": {
+          "kind": "source_field",
+          "path": [
+            "enabled"
+          ]
+        },
+        "5": {
+          "kind": "const",
+          "value": "fallback"
+        },
+        "6": {
+          "kind": "if",
+          "condition": 4,
+          "then": 1,
+          "else": 5
+        },
+        "7": {
+          "kind": "runtime_parameter_default",
+          "name": "fallbackCode",
+          "ty": "string",
+          "default": 5
+        },
+        "8": {
+          "kind": "value_map",
+          "input": 1,
+          "table": [
+            [
+              "x",
+              "X"
+            ]
+          ],
+          "default": "missing"
+        },
+        "9": {
+          "kind": "const",
+          "value": 9007199254740993
+        },
+        "10": {
+          "kind": "const",
+          "value": 1.0
+        },
+        "11": {
+          "kind": "const",
+          "value": -0.0
+        },
+        "12": {
+          "kind": "const",
+          "value": null
+        },
+        "13": {
+          "kind": "const",
+          "value": {
+            "$json_null": true
+          }
+        },
+        "14": {
+          "kind": "const",
+          "value": {
+            "$xml_nil": true
+          }
+        }
+      }
+    },
+    "root": {
+      "target_field": "",
+      "bindings": [
+        {
+          "target_field": "direct",
+          "node": 1
+        },
+        {
+          "target_field": "dotted",
+          "node": 2
+        },
+        {
+          "target_field": "conditional",
+          "node": 6
+        },
+        {
+          "target_field": "parameter",
+          "node": 7
+        },
+        {
+          "target_field": "valueMap",
+          "node": 8
+        },
+        {
+          "target_field": "exactInteger",
+          "node": 9
+        },
+        {
+          "target_field": "integralFloat",
+          "node": 10
+        },
+        {
+          "target_field": "negativeZero",
+          "node": 11
+        },
+        {
+          "target_field": "absent",
+          "node": 12
+        },
+        {
+          "target_field": "explicitNull",
+          "node": 13
+        },
+        {
+          "target_field": "xmlNil",
+          "node": 14
+        }
+      ],
+      "children": [
+        {
+          "target_field": "nestedOutput",
+          "bindings": [
+            {
+              "target_field": "b",
+              "node": 3
+            }
+          ],
+          "children": []
+        }
+      ]
+    }
+  }
+}

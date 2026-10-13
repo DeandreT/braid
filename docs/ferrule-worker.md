@@ -1,13 +1,16 @@
 # Ferrule inspection worker
 
-The C# application uses `IMappingInspectionBackend` to inspect and validate
-immutable native artifacts. The first adapter, `FerruleInspectionBackend`, talks
+The C# application uses `IMappingInspectionBackend` to inspect and validate and
+`IMappingProjectionBackend` to explain immutable native artifacts. The first
+adapter, `FerruleInspectionBackend`, talks
 to a restricted Rust worker. It keeps Ferrule types and native JSON decoding
 inside that worker; application results contain Weft-owned data and evidence.
 
-This increment implements inspection and validation. The native projection
-walker is tracked in [#8](https://github.com/DeandreT/weft/issues/8), followed by
-the Angular viewer in [#9](https://github.com/DeandreT/weft/issues/9).
+Inspection and validation were qualified in
+[PR #10](https://github.com/DeandreT/weft/pull/10). Native projection is tracked in
+[#8](https://github.com/DeandreT/weft/issues/8), followed by the Angular viewer in
+[#9](https://github.com/DeandreT/weft/issues/9). See
+[Ferrule projection](ferrule-projection.md) for explanation semantics.
 
 ## Native authority and results
 
@@ -47,7 +50,7 @@ identity. Display-name and diagnostic text truncation is explicit.
 3. EOF; additional frames or trailing bytes are refused.
 4. One four-byte length-prefixed UTF-8 JSON response, then process exit.
 
-The header contains protocol version, request ID, `inspect` or `validate`,
+The header contains protocol version, request ID, `inspect`, `validate`, or `project`,
 organization/project/mapping/revision IDs, native digest, a logical document ID,
 and service-selected limits. The response echoes that context and pinned engine
 revision, with exactly one typed result or failure. Transport metadata grants no
@@ -112,7 +115,9 @@ automatically. Without the image setting, live Docker tests are explicitly
 skipped and do not qualify isolation. Unit process transcripts qualify lifecycle
 logic; real Docker tests independently check native transport, typed validation
 owners, resource isolation, cancellation, timeout, abrupt worker death, cleanup,
-and subsequent admission. The termination tests deliberately withhold stdin EOF
+and subsequent admission. Projection integration cases also check the admitted
+public explanation and native locators against retained artifact bytes. The
+termination tests deliberately withhold stdin EOF
 so a real worker remains alive while those conditions are exercised.
 
 Fixtures are self-authored. Native correctness is compared with direct pinned

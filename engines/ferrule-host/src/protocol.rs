@@ -116,6 +116,7 @@ impl Response {
 pub enum WorkerResult {
     Inspect(InspectResult),
     Validate(ValidationResult),
+    Project(crate::projection::ProjectionPayload),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

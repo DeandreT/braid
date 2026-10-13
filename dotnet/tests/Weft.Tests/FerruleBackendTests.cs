@@ -124,9 +124,9 @@ public sealed class FerruleBackendTests
         Assert.Equal(new[] { MappingOperation.Inspect, MappingOperation.Validate, MappingOperation.Project, MappingOperation.Preview, MappingOperation.Build }, inspection.Capabilities.Select(capability => capability.Operation));
         Assert.All(inspection.Capabilities, capability =>
         {
-            var supported = capability.Operation is MappingOperation.Inspect or MappingOperation.Validate;
+            var supported = capability.Operation is MappingOperation.Inspect or MappingOperation.Validate or MappingOperation.Project;
             Assert.Equal(supported ? CapabilityStatus.Supported : CapabilityStatus.NotQualified, capability.Status);
-            Assert.Equal(supported ? "readOnlyInspection" : "operationNotImplemented", Assert.Single(capability.Conditions).Code);
+            Assert.Equal(capability.Operation == MappingOperation.Project ? "boundedReadOnlyProjection" : supported ? "readOnlyInspection" : "operationNotImplemented", Assert.Single(capability.Conditions).Code);
             Assert.Equal(capability.Operation is MappingOperation.Preview or MappingOperation.Build ? new[] { "primary-output", "named-output:0" } : [], capability.BoundaryIds);
         });
         Assert.False(inspection.Truncated);
@@ -194,6 +194,35 @@ public sealed class FerruleBackendTests
             return Task.FromResult(new WorkerProcessResult(Frame(Encoding.UTF8.GetBytes(json)), WorkerProcessFailure.None));
         });
         AssertLocalFailure(await new FerruleInspectionBackend(runner).InspectAsync(Artifact()), MappingOperationStatus.ProtocolFailure);
+    }
+
+    [Theory]
+    [InlineData(false, "nativeDigest", "NativeDigest")]
+    [InlineData(true, "nativeDigest", "NativeDigest")]
+    [InlineData(false, "result.capabilities.0.status", "Status")]
+    [InlineData(true, "result.isValid", "IsValid")]
+    public async Task WorkerPropertyCaseAliasesAreRejectedForInspectionAndValidation(bool validate, string path, string alias)
+    {
+        var runner = new RecordingRunner((request, _) =>
+        {
+            var response = JsonNode.Parse(Response(RequestHeader(request.Span)).ToJsonString(),
+                new JsonNodeOptions { PropertyNameCaseInsensitive = false })!.AsObject();
+            var separator = path.LastIndexOf('.');
+            var owner = separator < 0 ? response : At(response, path[..separator]).AsObject();
+            var property = path[(separator + 1)..];
+            owner[alias] = At(response, path).DeepClone();
+            Assert.Equal(2, owner.Count(entry => entry.Key == property || entry.Key == alias));
+            var json = response.ToJsonString();
+            Assert.Contains("\"" + property + "\":", json, StringComparison.Ordinal);
+            Assert.Contains("\"" + alias + "\":", json, StringComparison.Ordinal);
+            return Task.FromResult(new WorkerProcessResult(Frame(Encoding.UTF8.GetBytes(json)), WorkerProcessFailure.None));
+        });
+        var backend = new FerruleInspectionBackend(runner);
+
+        if (validate)
+            AssertLocalFailure(await backend.ValidateAsync(Artifact()), MappingOperationStatus.ProtocolFailure);
+        else
+            AssertLocalFailure(await backend.InspectAsync(Artifact()), MappingOperationStatus.ProtocolFailure);
     }
 
     [Fact]
@@ -356,6 +385,8 @@ public sealed class FerruleBackendTests
     [InlineData("numericOperation")]
     [InlineData("numericStatus")]
     [InlineData("unsupportedInspection")]
+    [InlineData("unqualifiedProjection")]
+    [InlineData("unboundedProjection")]
     [InlineData("qualifiedPreview")]
     [InlineData("emptyConditions")]
     [InlineData("blankProfile")]
@@ -793,6 +824,8 @@ public sealed class FerruleBackendTests
             case "numericOperation": Set(response, "result.capabilities.0.operation", 0); break;
             case "numericStatus": Set(response, "result.capabilities.0.status", 0); break;
             case "unsupportedInspection": Set(response, "result.capabilities.0.status", "unsupported"); break;
+            case "unqualifiedProjection": Set(response, "result.capabilities.2.status", "notQualified"); break;
+            case "unboundedProjection": Set(response, "result.capabilities.2.conditions.0.code", "unrestricted"); break;
             case "qualifiedPreview": Set(response, "result.capabilities.3.status", "supported"); break;
             case "emptyConditions": Set(response, "result.capabilities.0.conditions", new JsonArray()); break;
             case "blankProfile": Set(response, "result.capabilities.0.profile", " "); break;
@@ -917,7 +950,7 @@ public sealed class FerruleBackendTests
         ["capabilities"] = new JsonArray(
             Capability("inspect", "supported", "ferrule.native-json.inspect.v1"),
             Capability("validate", "supported", "ferrule.native-json.validate.v1"),
-            Capability("project", "notQualified", "ferrule.projection.v1"),
+            Capability("project", "supported", "ferrule.projection.v1"),
             Capability("preview", "notQualified", "ferrule.interpreter.v1", true),
             Capability("build", "notQualified", "ferrule.generated.v1", true)),
         ["truncated"] = false
@@ -944,8 +977,10 @@ public sealed class FerruleBackendTests
         ["boundaryIds"] = outputScope ? new JsonArray("primary-output", "named-output:0") : new JsonArray(),
         ["conditions"] = new JsonArray(new JsonObject
         {
-            ["code"] = status == "supported" ? "readOnlyInspection" : "operationNotImplemented",
-            ["description"] = status == "supported"
+            ["code"] = operation == "project" ? "boundedReadOnlyProjection" : status == "supported" ? "readOnlyInspection" : "operationNotImplemented",
+            ["description"] = operation == "project"
+                ? "Bounded read-only view; coverage may be partial or unavailable."
+                : status == "supported"
                 ? "Metadata and validation only; resource resolution and mapping execution are unavailable."
                 : "This worker does not implement this operation."
         })
