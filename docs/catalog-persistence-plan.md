@@ -4,9 +4,10 @@ Status: accepted implementation sequence. P2c is qualified and merged in
 [PR #12](https://github.com/DeandreT/weft/pull/12). P3a is qualified and merged in
 [PR #21](https://github.com/DeandreT/weft/pull/21). P3b storage is qualified and
 merged in [PR #22](https://github.com/DeandreT/weft/pull/22). P3c follows the
-two-part [ingestion plan](catalog-ingestion-plan.md). P3c1 metadata is implemented;
-its qualification is tracked in [#23](https://github.com/DeandreT/weft/issues/23).
-P3c2's storage/native workflow follows that qualified foundation. Each increment has its
+two-part [ingestion plan](catalog-ingestion-plan.md). P3c1 metadata is qualified and
+merged in [PR #26](https://github.com/DeandreT/weft/pull/26). P3c2's storage/native
+workflow is implemented on that qualified foundation, with complete local and
+independent qualification pending. Each increment has its
 own focused issue, feature branch and PR, and must be qualified and merged
 before dependent implementation starts.
 

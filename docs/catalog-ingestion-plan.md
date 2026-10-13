@@ -1,6 +1,10 @@
 # P3c: immutable native revision ingestion
 
-Status: accepted plan; P3c implementation and qualification have not started.
+Status: accepted plan. P3c1 metadata is qualified and merged in
+[PR #26](https://github.com/DeandreT/weft/pull/26); P3c2 source implementation is
+available, with complete actual storage/native workflow qualification pending.
+The implemented service boundary and recovery flow are described in
+[Native revision ingestion](native-revision-ingestion.md).
 P3b is qualified and merged in [PR #22](https://github.com/DeandreT/weft/pull/22) at `3da725b6b723eb5203c3d955e1aaef109a379eb9`.
 This plan refines [parent #15](https://github.com/DeandreT/weft/issues/15) without changing the later P3 sequence.
 

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <ProjectReference Include="../Weft.Application/Weft.Application.csproj" />
     <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
     <ProjectReference Include="../Weft.Contracts/Weft.Contracts.csproj" />
   </ItemGroup>

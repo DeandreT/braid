@@ -17,6 +17,7 @@
     <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
     <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
     <ProjectReference Include="../../tools/Weft.StorageProbe/Weft.StorageProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.IngestionProbe/Weft.IngestionProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
@@ -31,5 +32,11 @@
       <StorageProbeFiles Include="../../tools/Weft.StorageProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(StorageProbeFiles)" DestinationFiles="@(StorageProbeFiles->'$(OutDir)StorageProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyIngestionProbe" AfterTargets="Build">
+    <ItemGroup>
+      <IngestionProbeFiles Include="../../tools/Weft.IngestionProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(IngestionProbeFiles)" DestinationFiles="@(IngestionProbeFiles->'$(OutDir)IngestionProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 </Project>

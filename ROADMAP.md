@@ -2,7 +2,8 @@
 
 Status: architecture, P0's local web/API shell, P1's mapping contracts, and
 P2a/P2b's restricted Ferrule inspection/validation/projection backend and
-P2c's Angular viewer, P3a's PostgreSQL ownership and P3b's private storage are
+P2c's Angular viewer, P3a's PostgreSQL ownership, P3b's private storage and
+P3c1's scoped ingestion metadata are
 qualified and merged.
 Local and independent clean-container evidence is recorded in
 [PR #6](https://github.com/DeandreT/weft/pull/6) and
@@ -10,9 +11,10 @@ Local and independent clean-container evidence is recorded in
 [PR #11](https://github.com/DeandreT/weft/pull/11) and
 [PR #12](https://github.com/DeandreT/weft/pull/12) and
 [PR #21](https://github.com/DeandreT/weft/pull/21) and
-[PR #22](https://github.com/DeandreT/weft/pull/22).
-P3c1 metadata implementation and qualification are tracked in
-[#23](https://github.com/DeandreT/weft/issues/23). The remaining sequence follows below.
+[PR #22](https://github.com/DeandreT/weft/pull/22) and
+[PR #26](https://github.com/DeandreT/weft/pull/26).
+P3c2 native ingestion is tracked in [#24](https://github.com/DeandreT/weft/issues/24).
+The remaining sequence follows below.
 
 The architecture review is tracked in [#1](https://github.com/DeandreT/weft/issues/1).
 The first application increment, P0, is tracked in
