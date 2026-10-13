@@ -1,8 +1,8 @@
 # P3: persistent mapping catalog and ownership
 
 Status: accepted implementation sequence. P2c is qualified and merged in
-[PR #12](https://github.com/DeandreT/weft/pull/12). P3 implementation and
-qualification have not started. Each increment has its
+[PR #12](https://github.com/DeandreT/weft/pull/12). P3a implementation is under
+qualification; later P3 increments have not started. Each increment has its
 own focused issue, feature branch and PR, and must be qualified and merged
 before dependent implementation starts.
 

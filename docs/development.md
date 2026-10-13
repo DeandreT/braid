@@ -1,5 +1,9 @@
 # Local development
 
+The PostgreSQL ownership library and its separate local setup are described in
+[Project ownership](project-ownership.md). Catalog HTTP routes and a server
+identity adapter follow the qualified storage/ingestion increments.
+
 The Angular/ASP.NET Core workspace is local-only. It supplies a live API health
 check and a read-only mapping viewer over development native examples, with
 generated API contracts. A separate Ferrule adapter supplies native inspection,

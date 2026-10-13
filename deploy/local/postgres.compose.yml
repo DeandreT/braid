@@ -1,0 +1,25 @@
+name: weft-ownership-dev
+
+services:
+  postgres:
+    image: docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: weft
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${WEFT_LOCAL_POSTGRES_ADMIN_PASSWORD:?Set a local database admin password}
+      WEFT_LOCAL_MIGRATOR_PASSWORD: ${WEFT_LOCAL_MIGRATOR_PASSWORD:?Set a separate migration password}
+      WEFT_LOCAL_RUNTIME_PASSWORD: ${WEFT_LOCAL_RUNTIME_PASSWORD:?Set a separate runtime password}
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/01-weft-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d weft"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  postgres-data:

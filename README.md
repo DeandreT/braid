@@ -47,6 +47,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Ferrule worker](docs/ferrule-worker.md): native authority, transport, isolation, and qualification.
 - [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
 - [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.
+- [Project ownership](docs/project-ownership.md): scoped PostgreSQL reads, migrations, and local setup under qualification.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 

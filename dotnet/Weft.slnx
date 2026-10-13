@@ -4,11 +4,16 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Weft.Api/Weft.Api.csproj" />
+    <Project Path="src/Weft.Application/Weft.Application.csproj" />
     <Project Path="src/Weft.Contracts/Weft.Contracts.csproj" />
     <Project Path="src/Weft.Domain/Weft.Domain.csproj" />
     <Project Path="src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
+    <Project Path="src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Weft.Tests/Weft.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Weft.DatabaseTool/Weft.DatabaseTool.csproj" />
   </Folder>
 </Solution>

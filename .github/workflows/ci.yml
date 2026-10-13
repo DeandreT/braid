@@ -20,6 +20,7 @@ jobs:
       CARGO_BUILD_JOBS: 2
       CARGO_INCREMENTAL: 0
       CARGO_TARGET_DIR: target/ferrule-host
+      WEFT_POSTGRES_IMAGE: docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -46,6 +47,8 @@ jobs:
           weft_image_id="$(cat "$RUNNER_TEMP/weft-worker-image-id")"
           [[ "$weft_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
           printf 'WEFT_FERRULE_WORKER_IMAGE=%s\n' "$weft_image_id" >> "$GITHUB_ENV"
+      - name: Pull the pinned ownership database
+        run: docker pull "$WEFT_POSTGRES_IMAGE"
       - run: dotnet restore dotnet/Weft.slnx --locked-mode
       - run: dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore
       - run: dotnet build dotnet/Weft.slnx --configuration Release --no-restore

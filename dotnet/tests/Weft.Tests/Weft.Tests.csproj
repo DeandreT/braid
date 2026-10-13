@@ -10,9 +10,11 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <ProjectReference Include="../../src/Weft.Api/Weft.Api.csproj" />
+    <ProjectReference Include="../../src/Weft.Application/Weft.Application.csproj" />
     <ProjectReference Include="../../src/Weft.Domain/Weft.Domain.csproj" />
     <ProjectReference Include="../../src/Weft.Contracts/Weft.Contracts.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
