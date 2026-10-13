@@ -6,8 +6,9 @@ Status: accepted implementation sequence. P2c is qualified and merged in
 merged in [PR #22](https://github.com/DeandreT/weft/pull/22). P3c follows the
 two-part [ingestion plan](catalog-ingestion-plan.md). P3c1 metadata is qualified and
 merged in [PR #26](https://github.com/DeandreT/weft/pull/26). P3c2's storage/native
-workflow is implemented on that qualified foundation, with complete local and
-independent qualification pending. Each increment has its
+workflow is qualified and merged in [PR #27](https://github.com/DeandreT/weft/pull/27).
+P3d follows the four focused increments in the [catalog API plan](catalog-api-plan.md).
+Each increment has its
 own focused issue, feature branch and PR, and must be qualified and merged
 before dependent implementation starts.
 
@@ -124,8 +125,11 @@ implemented or qualified.
 
 For every increment I will record separate implementation and qualification
 state and link its exact PR/head and local plus independent clean-container
-evidence. GitHub Actions remains unavailable because of account billing;
-I will not describe remote CI as passed.
+evidence. GitHub Actions was initially blocked by account billing; the user chose
+local and clean-container verification. Remote CI subsequently passed for
+[PR #27](https://github.com/DeandreT/weft/pull/27). I will check and report each
+increment's actual remote result without changing billing or replacing the
+independent evidence.
 
 I will use actual disposable PostgreSQL/private storage for persistence and
 recovery gates. Native integration uses the qualified restricted worker.

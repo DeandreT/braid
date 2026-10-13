@@ -1,8 +1,8 @@
 # P3c: immutable native revision ingestion
 
-Status: accepted plan. P3c1 metadata is qualified and merged in
-[PR #26](https://github.com/DeandreT/weft/pull/26); P3c2 source implementation is
-available, with complete actual storage/native workflow qualification pending.
+Status: P3c1 metadata and P3c2 native workflow are qualified and merged in
+[PR #26](https://github.com/DeandreT/weft/pull/26) and
+[PR #27](https://github.com/DeandreT/weft/pull/27).
 The implemented service boundary and recovery flow are described in
 [Native revision ingestion](native-revision-ingestion.md).
 P3b is qualified and merged in [PR #22](https://github.com/DeandreT/weft/pull/22) at `3da725b6b723eb5203c3d955e1aaef109a379eb9`.
@@ -19,7 +19,10 @@ This plan refines [parent #15](https://github.com/DeandreT/weft/issues/15) witho
 Each increment has its own issue, feature branch and independently buildable PR.
 P3c1 is a trusted server metadata DAL: it does not accept evidence from an HTTP client, perform storage/native I/O or claim native ingestion qualification.
 P3c2 must prove the exact object exists and verifies before linking it; neither increment changes HTTP, Angular, P2 protocols or P3b's store contract.
-Implementation and qualification state remain separate; local and independent exact-source evidence is required, with no claim that billing-blocked remote CI passed.
+Implementation and qualification state remain separate; local and independent
+exact-source evidence is required. Remote CI was initially billing-blocked and
+later passed for PR #27; only each increment's observed result is recorded as
+additional evidence.
 
 ## Application boundary and admission defaults
 

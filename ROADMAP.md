@@ -3,7 +3,7 @@
 Status: architecture, P0's local web/API shell, P1's mapping contracts, and
 P2a/P2b's restricted Ferrule inspection/validation/projection backend and
 P2c's Angular viewer, P3a's PostgreSQL ownership, P3b's private storage and
-P3c1's scoped ingestion metadata are
+P3c1/P3c2's scoped native revision ingestion are
 qualified and merged.
 Local and independent clean-container evidence is recorded in
 [PR #6](https://github.com/DeandreT/weft/pull/6) and
@@ -12,8 +12,9 @@ Local and independent clean-container evidence is recorded in
 [PR #12](https://github.com/DeandreT/weft/pull/12) and
 [PR #21](https://github.com/DeandreT/weft/pull/21) and
 [PR #22](https://github.com/DeandreT/weft/pull/22) and
-[PR #26](https://github.com/DeandreT/weft/pull/26).
-P3c2 native ingestion is tracked in [#24](https://github.com/DeandreT/weft/issues/24).
+[PR #26](https://github.com/DeandreT/weft/pull/26) and
+[PR #27](https://github.com/DeandreT/weft/pull/27).
+P3d follows the focused [catalog API plan](docs/catalog-api-plan.md).
 The remaining sequence follows below.
 
 The architecture review is tracked in [#1](https://github.com/DeandreT/weft/issues/1).
@@ -45,7 +46,10 @@ evidence. The documentation PR does not itself qualify an application feature.
 | P3b / [#14](https://github.com/DeandreT/weft/issues/14) | Private storage contract and local adapter | P3a | Create-only publication, exact bounded reads, scoped generated references and restart | Ingestion, Azure transport |
 | P3c1 / [#23](https://github.com/DeandreT/weft/issues/23) | Scoped ingestion metadata, restricted writer pool and atomic publication | P3b | Actual PostgreSQL grants, ancestry, receipts, immutable facts, leases and committed order; synthetic admission evidence | Storage/native workflow, HTTP/Angular |
 | P3c2 / [#24](https://github.com/DeandreT/weft/issues/24) | Exact native revision ingestion and process recovery | P3c1, P2 native adapters | Actual PostgreSQL/storage/worker; exact bytes; admission; idempotency, revocation and crash recovery | HTTP/Angular catalog, cache |
-| P3d / [#16](https://github.com/DeandreT/weft/issues/16) | Scoped catalog/revision HTTP API and generated contracts | Both P3c increments | Actual API/database/storage; raw-byte upload; concurrency; explicit loopback Development identity | Entra, Angular catalog |
+| P3d1 / [#28](https://github.com/DeandreT/weft/issues/28) | Scoped catalog/history reads, generated contracts and explicit Development identity/request boundary | Both P3c increments | Actual API/database; ancestry, narrow reader grants, bounded pagination, closed local identity and contract precision | Metadata writes, upload HTTP, Entra, Angular catalog |
+| P3d2 / [#29](https://github.com/DeandreT/weft/issues/29) | Conditional mapping metadata writer/API and strong metadata ETag | P3d1 | Actual narrow grants/transition guard; conditional edits, rename/append races and mutation protection | Native replacement, raw upload HTTP |
+| P3d3 / [#30](https://github.com/DeandreT/weft/issues/30) | Raw native upload, safe own receipt and explicit resume HTTP API | P3d2, C2 | Actual API/database/storage/worker; bounded exact bytes, conflicts, cancellation, API restart and mutation protection | Background jobs, native download, Angular catalog |
+| P3d4 / [#31](https://github.com/DeandreT/weft/issues/31) | Explicit-capability project creation and initial administrator membership | P3d3 | Atomic scoped creation and durable same-key replay; no implied access to other projects | Organization/member administration |
 | P3e / [#17](https://github.com/DeandreT/weft/issues/17) | Persisted projection/validation derivations and report API | P3d, P2c contracts | Complete version/scope cache keys; guarded publication; native evidence and status preservation | Cleanup execution, viewer changes |
 | P3f / [#18](https://github.com/DeandreT/weft/issues/18) | Reservation-aware orphan and derived-object maintenance | P3e | Bounded leases; publication/deletion races; crash recovery; referenced native revisions retained | Native-history purge, messaging |
 | P3g / [#19](https://github.com/DeandreT/weft/issues/19) | Angular catalog, upload and immutable revision history | P3f, P2c viewer | Actual persistent API/browser flows; reopen old revision after restart; keyboard/mobile checks | Authentication, chat, preview |
@@ -62,6 +66,10 @@ P3c's two focused PRs and accepted defaults are defined in
 [#15](https://github.com/DeandreT/weft/issues/15) completes only after both.
 Each part is independently implemented and qualified; P3 planning does not
 qualify persistence or login.
+
+P3d's parent [#16](https://github.com/DeandreT/weft/issues/16) completes only after
+all four API increments qualify and merge. The exact route, identity, cursor,
+metadata/head concurrency and mutation contract is in the catalog API plan.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
