@@ -9,12 +9,13 @@ design-time resources. The C# adapter checks the result before returning it.
 
 The frontend consumes the same provider-independent contract as synthetic or
 future engine adapters. No Ferrule JSON parser, native graph type, or engine
-execution code belongs in Angular. There is currently no native upload endpoint;
-the development viewer and catalog follow in separate increments.
+execution code belongs in Angular. Development native examples now feed the
+[mapping viewer](mapping-viewer.md). Native uploads and persistence follow with
+the catalog increment.
 
-## Planned frontend presentation
+## Frontend presentation
 
-The next Angular increment will start with an output selector and searchable output-field rows:
+The Angular viewer starts with an output selector and searchable output-field rows:
 source fields or parameters, transformation summary, and target field. A row can
 expand to show expression details, constants, conditions, defaults, and governing
 controls. Multiple rules for one output field retain their binding order.
@@ -22,7 +23,7 @@ controls. Multiple rules for one output field retain their binding order.
 Lineage uses admitted field/rule/control relationships. Boundary lists expose
 primary and named inputs and outputs. Details cover iteration, filtering, joins,
 grouping, sorting, windows, ordering, failures, and function definitions/calls.
-Coverage warnings will remain visible. Ambiguous source reads can retain
+Coverage warnings remain visible. Ambiguous source reads can retain
 conservative candidate dependencies accompanied by an explanation gap; the
 viewer must display their uncertainty. Ambiguous aggregate/lookup ownership
 retains possible references in details without field-dependency edges.

@@ -3,6 +3,40 @@
  * Refresh with: npm run contracts:generate
  */
 export interface paths {
+  "/api/v1/examples/mappings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List immutable self-authored native examples (development only). */
+    get: operations["GetNativeExamples"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/examples/mappings/{exampleId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read separate native projection and validation reports (development only). */
+    get: operations["GetNativeExample"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/fixtures/projections/{fixtureId}": {
     parameters: {
       query?: never;
@@ -186,6 +220,85 @@ export interface components {
     };
     /** @enum {unknown} */
     MappingOperation: "inspect" | "project" | "validate" | "preview" | "build";
+    NativeDiagnosticOwnerV1:
+      | components["schemas"]["NativeDiagnosticOwnerV1GraphNodeNativeOwnerV1"]
+      | components["schemas"]["NativeDiagnosticOwnerV1UserFunctionNativeOwnerV1"]
+      | components["schemas"]["NativeDiagnosticOwnerV1EndpointNativeOwnerV1"]
+      | components["schemas"]["NativeDiagnosticOwnerV1SchemaNodeNativeOwnerV1"]
+      | components["schemas"]["NativeDiagnosticOwnerV1ScopeNativeOwnerV1"]
+      | components["schemas"]["NativeDiagnosticOwnerV1FailureRuleNativeOwnerV1"];
+    NativeDiagnosticOwnerV1EndpointNativeOwnerV1: {
+      endpoint: components["schemas"]["NativeEndpointV1"];
+      /** @enum {string} */
+      kind: "endpoint";
+    };
+    NativeDiagnosticOwnerV1FailureRuleNativeOwnerV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "failureRule";
+    };
+    NativeDiagnosticOwnerV1GraphNodeNativeOwnerV1: {
+      functionId: null | string;
+      /** @enum {string} */
+      kind: "graphNode";
+      nodeId: string;
+    };
+    NativeDiagnosticOwnerV1SchemaNodeNativeOwnerV1: {
+      endpoint: components["schemas"]["NativeEndpointV1"];
+      /** @enum {string} */
+      kind: "schemaNode";
+      path: components["schemas"]["SchemaNativeOwnerStepV1"][];
+    };
+    NativeDiagnosticOwnerV1ScopeNativeOwnerV1: {
+      /** @enum {string} */
+      kind: "scope";
+      path: components["schemas"]["ScopeNativeOwnerStepV1"][];
+      target: components["schemas"]["NativeEndpointV1"];
+    };
+    NativeDiagnosticOwnerV1UserFunctionNativeOwnerV1: {
+      functionId: string;
+      /** @enum {string} */
+      kind: "userFunction";
+    };
+    NativeEndpointV1:
+      | components["schemas"]["NativeEndpointV1SourceNativeEndpointV1"]
+      | components["schemas"]["NativeEndpointV1TargetNativeEndpointV1"]
+      | components["schemas"]["NativeEndpointV1NamedSourceNativeEndpointV1"]
+      | components["schemas"]["NativeEndpointV1NamedTargetNativeEndpointV1"];
+    NativeEndpointV1NamedSourceNativeEndpointV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "namedSource";
+      name: string;
+    };
+    NativeEndpointV1NamedTargetNativeEndpointV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "namedTarget";
+      name: string;
+    };
+    NativeEndpointV1SourceNativeEndpointV1: {
+      /** @enum {string} */
+      kind: "source";
+    };
+    NativeEndpointV1TargetNativeEndpointV1: {
+      /** @enum {string} */
+      kind: "target";
+    };
+    NativeExampleDescriptorV1: {
+      /** Format: int32 */
+      byteCount: number;
+      digest: components["schemas"]["ArtifactDigest"];
+      id: string;
+      revision: components["schemas"]["ScopedRevisionId"];
+      source: string;
+      title: string;
+    };
+    NativeExampleResultV1: {
+      example: components["schemas"]["NativeExampleDescriptorV1"];
+      projection: components["schemas"]["ProjectionReportV1"];
+      validation: components["schemas"]["ValidationReportV1"];
+    };
     NativeLocator:
       | components["schemas"]["NativeLocatorDocumentNativeLocator"]
       | components["schemas"]["NativeLocatorJsonPointerNativeLocator"]
@@ -234,6 +347,32 @@ export interface components {
       profile: string;
       status: components["schemas"]["CapabilityStatus"];
     };
+    OperationDiagnosticV1: {
+      code: string;
+      message: string;
+      messageTruncated: boolean;
+      nativeLocator?: null | components["schemas"]["NativeLocator"];
+      severity: components["schemas"]["DiagnosticSeverity"];
+    };
+    OperationProvenanceV1: {
+      adapterVersion: string;
+      backend: components["schemas"]["BackendIdentity"];
+      confirmed: boolean;
+      nativeArtifactDigest: components["schemas"]["ArtifactDigest"];
+      revision: components["schemas"]["ScopedRevisionId"];
+    };
+    /** @enum {unknown} */
+    OperationStatusV1:
+      | "succeeded"
+      | "invalidMapping"
+      | "unsupportedArtifact"
+      | "resourceLimit"
+      | "protocolFailure"
+      | "backendUnavailable"
+      | "backendFailure"
+      | "timedOut"
+      | "canceled"
+      | "isolationFailure";
     PathSegment:
       | components["schemas"]["PathSegmentFieldPathSegment"]
       | components["schemas"]["PathSegmentAttributePathSegment"]
@@ -367,6 +506,12 @@ export interface components {
       kind: components["schemas"]["RelationshipKind"];
       to: components["schemas"]["ProjectionNodeReference"];
     };
+    ProjectionReportV1: {
+      diagnostics: components["schemas"]["OperationDiagnosticV1"][];
+      document: null | components["schemas"]["ProjectionDocumentV1"];
+      provenance: null | components["schemas"]["OperationProvenanceV1"];
+      status: components["schemas"]["OperationStatusV1"];
+    };
     ProjectionRule: {
       dependencies: components["schemas"]["RuleDependency"][];
       details: components["schemas"]["DetailNode"][];
@@ -415,17 +560,84 @@ export interface components {
     /** @enum {unknown} */
     ScalarDataType:
       "string" | "integer" | "decimal" | "binaryFloat" | "boolean";
+    SchemaNativeOwnerStepV1:
+      | components["schemas"]["SchemaNativeOwnerStepV1ChildSchemaNativeOwnerStepV1"]
+      | components["schemas"]["SchemaNativeOwnerStepV1DynamicFieldSchemaNativeOwnerStepV1"]
+      | components["schemas"]["SchemaNativeOwnerStepV1ContainsSchemaNativeOwnerStepV1"]
+      | components["schemas"]["SchemaNativeOwnerStepV1DependentSchemaNativeOwnerStepV1"];
+    SchemaNativeOwnerStepV1ChildSchemaNativeOwnerStepV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "child";
+    };
+    SchemaNativeOwnerStepV1ContainsSchemaNativeOwnerStepV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "contains";
+    };
+    SchemaNativeOwnerStepV1DependentSchemaNativeOwnerStepV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "dependentSchema";
+    };
+    SchemaNativeOwnerStepV1DynamicFieldSchemaNativeOwnerStepV1: {
+      /** @enum {string} */
+      kind: "dynamicField";
+    };
     ScopedRevisionId: {
       mappingId: string;
       organizationId: string;
       projectId: string;
       revisionId: string;
     };
+    ScopeNativeOwnerStepV1:
+      | components["schemas"]["ScopeNativeOwnerStepV1ChildScopeNativeOwnerStepV1"]
+      | components["schemas"]["ScopeNativeOwnerStepV1DynamicChildScopeNativeOwnerStepV1"]
+      | components["schemas"]["ScopeNativeOwnerStepV1SegmentScopeNativeOwnerStepV1"];
+    ScopeNativeOwnerStepV1ChildScopeNativeOwnerStepV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "child";
+    };
+    ScopeNativeOwnerStepV1DynamicChildScopeNativeOwnerStepV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "dynamicChild";
+    };
+    ScopeNativeOwnerStepV1SegmentScopeNativeOwnerStepV1: {
+      index: string;
+      /** @enum {string} */
+      kind: "segment";
+    };
     /**
      * @default utf8Bytes
      * @enum {unknown}
      */
     TextSpanUnit: "utf8Bytes" | "utf16CodeUnits" | "unicodeScalars";
+    ValidationDiagnosticV1: {
+      code: string;
+      location?: null | string;
+      /** @default false */
+      locationTruncated: boolean;
+      message: string;
+      messageTruncated: boolean;
+      nativeLocator?: null | components["schemas"]["NativeLocator"];
+      owner?: null | components["schemas"]["NativeDiagnosticOwnerV1"];
+      projectionLocator?:
+        null | components["schemas"]["ProjectionNodeReference"];
+      severity: components["schemas"]["DiagnosticSeverity"];
+    };
+    ValidationReportV1: {
+      diagnostics: components["schemas"]["ValidationDiagnosticV1"][];
+      /** Format: int32 */
+      emittedIssueCount: number;
+      isValid: null | boolean;
+      provenance: null | components["schemas"]["OperationProvenanceV1"];
+      status: components["schemas"]["OperationStatusV1"];
+      /** Format: int32 */
+      totalIssueCount: number;
+      truncated: boolean;
+    };
   };
   responses: never;
   parameters: never;
@@ -435,6 +647,62 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  GetNativeExamples: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NativeExampleDescriptorV1"][];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  GetNativeExample: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        exampleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NativeExampleResultV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
   GetProjectionFixture: {
     parameters: {
       query?: never;

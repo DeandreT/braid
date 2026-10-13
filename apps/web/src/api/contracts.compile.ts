@@ -231,3 +231,110 @@ export function fixtureDocument(
       return assertNever(result);
   }
 }
+
+type NativeOwner = components["schemas"]["NativeDiagnosticOwnerV1"];
+type NativeEndpoint = components["schemas"]["NativeEndpointV1"];
+type SchemaOwnerStep = components["schemas"]["SchemaNativeOwnerStepV1"];
+type ScopeOwnerStep = components["schemas"]["ScopeNativeOwnerStepV1"];
+type ValidationReport = components["schemas"]["ValidationReportV1"];
+type NativeExampleGet = paths["/api/v1/examples/mappings/{exampleId}"]["get"];
+type NativeExampleResult = components["schemas"]["NativeExampleResultV1"];
+
+export function nativeOwnerId(owner: NativeOwner): string {
+  switch (owner.kind) {
+    case "graphNode":
+      return owner.functionId ?? owner.nodeId;
+    case "userFunction":
+      return owner.functionId;
+    case "endpoint":
+      return nativeEndpointId(owner.endpoint);
+    case "schemaNode":
+      return (
+        nativeEndpointId(owner.endpoint) +
+        owner.path.map(schemaStepId).join("/")
+      );
+    case "scope":
+      return (
+        nativeEndpointId(owner.target) + owner.path.map(scopeStepId).join("/")
+      );
+    case "failureRule":
+      return owner.index;
+    default:
+      return assertNever(owner);
+  }
+}
+
+function nativeEndpointId(endpoint: NativeEndpoint): string {
+  switch (endpoint.kind) {
+    case "source":
+    case "target":
+      return endpoint.kind;
+    case "namedSource":
+    case "namedTarget":
+      return endpoint.index;
+    default:
+      return assertNever(endpoint);
+  }
+}
+
+function schemaStepId(step: SchemaOwnerStep): string {
+  switch (step.kind) {
+    case "child":
+    case "contains":
+    case "dependentSchema":
+      return step.index;
+    case "dynamicField":
+      return step.kind;
+    default:
+      return assertNever(step);
+  }
+}
+
+function scopeStepId(step: ScopeOwnerStep): string {
+  switch (step.kind) {
+    case "child":
+    case "dynamicChild":
+    case "segment":
+      return step.index;
+    default:
+      return assertNever(step);
+  }
+}
+
+export const nativeFunctionOwner = {
+  kind: "graphNode",
+  nodeId: "7",
+  functionId: "18446744073709551615",
+} satisfies NativeOwner;
+
+// @ts-expect-error Native function owner identities must remain exact strings.
+export const numericNativeOwnerFunction: Extract<
+  NativeOwner,
+  { kind: "graphNode" }
+>["functionId"] = 18446744073709551615;
+// @ts-expect-error Native schema indices must remain exact strings.
+export const numericSchemaIndex: Extract<
+  SchemaOwnerStep,
+  { kind: "child" }
+>["index"] = 9007199254740993;
+// @ts-expect-error Native scope indices must remain exact strings.
+export const numericScopeIndex: Extract<
+  ScopeOwnerStep,
+  { kind: "segment" }
+>["index"] = 9007199254740993;
+// @ts-expect-error No validator result must be represented by null, never a string status.
+export const invalidValidity: ValidationReport["isValid"] = "unavailable";
+
+export const nativeExampleParameters = {
+  exampleId: "basic",
+} satisfies NativeExampleGet["parameters"]["path"];
+
+export function nativeExampleResponse(
+  document: NativeExampleResult,
+): NativeExampleGet["responses"][200]["content"] {
+  return { "application/json": document };
+}
+
+// @ts-expect-error Native example 404 responses do not contain a projection/report body.
+export const nativeExampleMissingBody: NativeExampleGet["responses"][404]["content"] =
+  { "application/json": nativeFunctionOwner };

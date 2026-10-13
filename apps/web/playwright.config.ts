@@ -18,7 +18,10 @@ export default defineConfig({
       command:
         "dotnet run --no-build --configuration Release --project ../../dotnet/apps/Weft.Server",
       url: "http://127.0.0.1:4101/api/v1/health",
-      env: { WEFT_DEV_LISTEN_ADDR: "127.0.0.1:4101" },
+      env: {
+        WEFT_DEV_LISTEN_ADDR: "127.0.0.1:4101",
+        DOTNET_ENVIRONMENT: "Development",
+      },
       reuseExistingServer: false,
       timeout: 120000,
     },

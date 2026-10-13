@@ -4,5 +4,12 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <ProjectReference Include="../Weft.Contracts/Weft.Contracts.csproj" />
     <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
+    <ProjectReference Include="../Weft.MappingBackends/Weft.MappingBackends.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../../engines/ferrule-host/tests/fixtures/*.json"
+                      LogicalName="Weft.Api.NativeExamples.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="NativeExamples/Artifacts/*.json"
+                      LogicalName="Weft.Api.NativeExamples.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

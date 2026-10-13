@@ -1,0 +1,483 @@
+<section
+  class="coverage-card"
+  [class.incomplete]="document().coverage.status !== 'complete'"
+  aria-labelledby="coverage-title"
+>
+  <h2 id="coverage-title">{{ coverageTitle() }}</h2>
+  @switch (document().coverage.status) {
+    @case ("complete") {
+      <p>Fields and rules are explained in this view.</p>
+    }
+    @case ("partial") {
+      <p>
+        Some behavior cannot be explained fully. Source reads may include
+        possible locations. These gaps apply to the whole mapping, including
+        rows hidden by a filter.
+      </p>
+    }
+    @case ("unavailable") {
+      <p>
+        This mapping has no usable explanation. Native validation and evidence
+        can still be available independently.
+      </p>
+    }
+  }
+  @if (document().coverage.gaps.length > 0) {
+    <details class="coverage-gaps" open>
+      <summary>
+        Explanation gaps ({{ document().coverage.gaps.length }})
+      </summary>
+      <ul>
+        @for (gap of document().coverage.gaps; track $index) {
+          <li>
+            <p>{{ gap.message }}</p>
+            @if (gap.projectionLocator; as location) {
+              <button
+                type="button"
+                class="text-button"
+                (click)="navigate(location)"
+              >
+                Show affected {{ location.kind }}
+              </button>
+            } @else {
+              <span class="muted"
+                >Location is available in native evidence.</span
+              >
+            }
+            <weft-native-evidence [locator]="gap.nativeLocator" />
+          </li>
+        }
+      </ul>
+    </details>
+  }
+</section>
+
+<section class="boundaries-card" aria-labelledby="boundaries-title">
+  <h2 id="boundaries-title">Inputs and outputs</h2>
+  <div class="boundary-columns">
+    <div>
+      <h3>Inputs</h3>
+      @for (boundary of view().inputs; track boundary.id) {
+        <button
+          type="button"
+          class="boundary-button"
+          (click)="navigate(boundaryRef(boundary.id))"
+        >
+          <strong>{{ boundary.name }}</strong
+          ><span
+            >{{
+              boundary.role === "primaryInput" ? "Primary input" : "Named input"
+            }}
+            · {{ format(boundary.format) }} · {{ boundary.shape }}</span
+          >
+        </button>
+      } @empty {
+        <p class="muted">No input boundaries are explained.</p>
+      }
+    </div>
+    <div>
+      <h3>Outputs</h3>
+      @for (boundary of view().outputs; track boundary.id) {
+        <button
+          type="button"
+          class="boundary-button"
+          (click)="navigate(boundaryRef(boundary.id))"
+        >
+          <strong>{{ boundary.name }}</strong
+          ><span
+            >{{
+              boundary.role === "primaryOutput"
+                ? "Primary output"
+                : "Named output"
+            }}
+            · {{ format(boundary.format) }} · {{ boundary.shape }}</span
+          >
+        </button>
+      } @empty {
+        <p class="muted">No output boundaries are explained.</p>
+      }
+    </div>
+  </div>
+</section>
+
+@if (
+  document().coverage.status !== "unavailable" && view().outputs.length > 0
+) {
+  <section class="mapping-card" aria-labelledby="mapping-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Follow a value</p>
+        <h2 id="mapping-title">Source → rule → target</h2>
+      </div>
+      <span>{{ rows().length }} of {{ outputRows() }} rows</span>
+    </div>
+    <div class="mapping-toolbar">
+      <div class="form-field">
+        <label for="mapping-output">Output</label
+        ><select
+          id="mapping-output"
+          [value]="outputId()"
+          (change)="selectOutput($any($event.target).value)"
+        >
+          @for (boundary of view().outputs; track boundary.id) {
+            <option [value]="boundary.id">
+              {{ boundary.name
+              }}{{ boundary.role === "namedOutput" ? " (named output)" : "" }}
+            </option>
+          }
+        </select>
+      </div>
+      <div class="form-field search-field">
+        <label for="mapping-search">Find a field or rule</label
+        ><input
+          id="mapping-search"
+          type="search"
+          [value]="search()"
+          (input)="setSearch($any($event.target).value)"
+          placeholder="Search sources, targets, or explanations"
+        />
+      </div>
+    </div>
+    <p class="path-legend">
+      Each bracket names one field; [*] means each item. Attribute fields begin
+      with @.
+    </p>
+    <div class="mapping-column-headings" aria-hidden="true">
+      <span>Source</span><span>Rule</span><span>Target</span>
+    </div>
+    <div class="mapping-rows">
+      @for (row of visibleRows(); track row.key) {
+        <article
+          class="mapping-row"
+          [attr.aria-label]="'Mapping to ' + path(row.field.path)"
+        >
+          <div class="mapping-cell source-cell">
+            <span class="mobile-cell-label">Source</span>
+            @if (row.rule; as rule) {
+              @for (dependency of rule.dependencies; track $index) {
+                <div class="dependency">
+                  <span class="dependency-role">{{
+                    dependency.role ?? "value"
+                  }}</span>
+                  @if (dependencyRef(dependency); as location) {
+                    <button
+                      type="button"
+                      class="text-button"
+                      (click)="navigate(location)"
+                    >
+                      {{ view().label(location) }}
+                    </button>
+                  } @else {
+                    <code>{{ constant(dependency) }}</code>
+                  }
+                </div>
+              } @empty {
+                <p class="muted">
+                  {{
+                    row.incomplete
+                      ? "Inputs not fully explained"
+                      : "No source fields"
+                  }}
+                </p>
+              }
+            } @else {
+              <p class="muted">Inputs not explained</p>
+            }
+          </div>
+          <div class="mapping-cell rule-cell">
+            <span class="mobile-cell-label">Rule</span>
+            @if (row.rule; as rule) {
+              <button
+                type="button"
+                class="rule-button"
+                (click)="navigate(ruleRef(rule.id))"
+              >
+                {{ rule.summary }}
+              </button>
+              @if (row.incomplete) {
+                <span class="incomplete-label"
+                  >Explanation incomplete · reads may be possible</span
+                >
+              }
+              <details
+                class="row-explanation"
+                [open]="expandedRows().has(row.key)"
+                (toggle)="toggleRow(row.key, $event)"
+              >
+                <summary>Expand rule explanation</summary>
+                @if (expandedRows().has(row.key)) {
+                  <weft-mapping-details
+                    [details]="rule.details"
+                    [view]="view()"
+                    (navigate)="navigate($event)"
+                  />
+                  @for (control of row.controls; track control.id) {
+                    <button
+                      type="button"
+                      class="lineage-link"
+                      (click)="navigate(controlRef(control.id))"
+                    >
+                      {{ control.kind }}: {{ control.summary }}
+                    </button>
+                  }
+                  <weft-native-evidence [locator]="rule.nativeLocator" />
+                }
+              </details>
+            } @else {
+              <p class="muted">No producing rule is shown.</p>
+            }
+          </div>
+          <div class="mapping-cell target-cell">
+            <span class="mobile-cell-label">Target</span
+            ><button
+              type="button"
+              class="text-button target-button"
+              (click)="navigate(fieldRef(row.field.id))"
+            >
+              <code>{{ path(row.field.path) }}</code>
+            </button>
+          </div>
+        </article>
+      } @empty {
+        <div class="empty-state">
+          <h3>
+            {{
+              search()
+                ? "No matching rows"
+                : "No rows are explained for this output"
+            }}
+          </h3>
+          <p>
+            {{
+              search()
+                ? "Try another field name or clear the search. Coverage gaps and controls remain visible below."
+                : "Inspect this output boundary and review the coverage gaps."
+            }}
+          </p>
+          @if (search()) {
+            <button
+              type="button"
+              class="secondary-button"
+              (click)="setSearch('')"
+            >
+              Clear search
+            </button>
+          }
+        </div>
+      }
+    </div>
+    @if (rows().length > pageSize) {
+      <nav class="mapping-pagination" aria-label="Mapping row pages">
+        <span
+          >Rows {{ pageIndex() * pageSize + 1 }}–{{
+            pageIndex() * pageSize + visibleRows().length
+          }}
+          of {{ rows().length }}</span
+        >
+        <div>
+          <button
+            type="button"
+            class="secondary-button"
+            [disabled]="pageIndex() === 0"
+            (click)="changePage(pageIndex() - 1)"
+          >
+            Previous rows
+          </button>
+          <button
+            type="button"
+            class="secondary-button"
+            [disabled]="pageIndex() + 1 >= pageCount()"
+            (click)="changePage(pageIndex() + 1)"
+          >
+            Next rows
+          </button>
+        </div>
+      </nav>
+    }
+  </section>
+}
+
+@if (selected(); as location) {
+  <section
+    #entityPanel
+    class="entity-panel"
+    tabindex="-1"
+    aria-label="Mapping details"
+  >
+    <weft-mapping-entity
+      [reference]="location"
+      [view]="view()"
+      (navigate)="navigate($event)"
+      (close)="closeDetails()"
+    />
+  </section>
+}
+
+@if (document().controls.length > 0 || document().parameters.length > 0) {
+  <section class="controls-card" aria-labelledby="controls-title">
+    <h2 id="controls-title">Controls and parameters</h2>
+    <p class="muted">
+      These apply to the mapping even when a search hides their rows.
+    </p>
+    @for (control of document().controls; track control.id) {
+      <button
+        type="button"
+        class="lineage-link"
+        (click)="navigate(controlRef(control.id))"
+      >
+        <span class="control-kind">{{ control.kind }}</span>
+        {{ control.summary }}
+      </button>
+    }
+    @for (parameter of document().parameters; track parameter.id) {
+      <button
+        type="button"
+        class="lineage-link"
+        (click)="navigate(parameterRef(parameter.id))"
+      >
+        Parameter: {{ parameter.name }}
+      </button>
+    }
+  </section>
+}
+
+@if (validation(); as report) {
+  @if (report.diagnostics.length > 0) {
+    <section
+      class="diagnostics-card"
+      aria-labelledby="validation-locations-title"
+    >
+      <h2 id="validation-locations-title">Validation locations</h2>
+      <ul class="diagnostics-list">
+        @for (diagnostic of report.diagnostics; track $index) {
+          <li>
+            <span class="diagnostic-severity">{{ diagnostic.severity }}</span>
+            <p>
+              {{ diagnostic.message
+              }}{{ diagnostic.messageTruncated ? " (message shortened)" : "" }}
+            </p>
+            @if (diagnostic.projectionLocator; as location) {
+              <button
+                type="button"
+                class="text-button"
+                (click)="navigate(location)"
+              >
+                Show validation {{ location.kind }}
+              </button>
+            } @else {
+              <span class="muted"
+                >No unique location in this view. Review native evidence.</span
+              >
+            }
+            <weft-native-evidence
+              [locator]="diagnostic.nativeLocator"
+              [owner]="diagnostic.owner"
+            />
+            @if (diagnostic.location) {
+              <details class="native-evidence">
+                <summary>Validator location</summary>
+                <p>
+                  {{ diagnostic.location
+                  }}{{
+                    diagnostic.locationTruncated ? " (location shortened)" : ""
+                  }}
+                </p>
+              </details>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+}
+
+@if (document().diagnostics.length > 0) {
+  <section
+    class="diagnostics-card"
+    aria-labelledby="projection-diagnostics-title"
+  >
+    <h2 id="projection-diagnostics-title">Explanation notices</h2>
+    <ul class="diagnostics-list">
+      @for (diagnostic of document().diagnostics; track $index) {
+        <li>
+          <span class="diagnostic-severity">{{ diagnostic.severity }}</span>
+          <p>{{ diagnostic.message }}</p>
+          @if (diagnostic.projectionLocator; as location) {
+            <button
+              type="button"
+              class="text-button"
+              (click)="navigate(location)"
+            >
+              Show notice {{ location.kind }}
+            </button>
+          }
+          <weft-native-evidence [locator]="diagnostic.nativeLocator" />
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+<section class="capabilities-card" aria-labelledby="capabilities-title">
+  <details>
+    <summary id="capabilities-title">Available mapping operations</summary>
+    <p class="muted">
+      Each operation is checked independently from explanation coverage.
+    </p>
+    <ul>
+      @for (capability of document().capabilities; track $index) {
+        <li>
+          <strong>{{ capability.operation }}</strong
+          >: {{ capabilityStatus(capability.status) }}
+          @for (condition of capability.conditions; track $index) {
+            <p>{{ condition.description }}</p>
+          }
+        </li>
+      }
+    </ul>
+  </details>
+</section>
+
+<section class="provenance-card">
+  <details>
+    <summary>Revision and backend evidence</summary>
+    <dl class="field-metadata">
+      <div>
+        <dt>Revision</dt>
+        <dd>
+          <code>{{ document().provenance.revision.revisionId }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>Native digest</dt>
+        <dd>
+          <code>{{ document().provenance.nativeArtifactDigest.value }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>Backend</dt>
+        <dd>{{ document().provenance.backend.id }}</dd>
+      </div>
+      <div>
+        <dt>Engine revision</dt>
+        <dd>
+          <code>{{ document().provenance.backend.revision }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>Backend build</dt>
+        <dd>
+          <code>{{ document().provenance.backend.buildId }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>Adapter</dt>
+        <dd>{{ document().provenance.adapterVersion }}</dd>
+      </div>
+      <div>
+        <dt>Explanation version</dt>
+        <dd>{{ document().provenance.projectionVersion }}</dd>
+      </div>
+    </dl>
+  </details>
+</section>

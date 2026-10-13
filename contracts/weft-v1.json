@@ -58,6 +58,67 @@
           }
         }
       }
+    },
+    "/api/v1/examples/mappings": {
+      "get": {
+        "tags": [
+          "Native examples"
+        ],
+        "summary": "List immutable self-authored native examples (development only).",
+        "operationId": "GetNativeExamples",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NativeExampleDescriptorV1"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/examples/mappings/{exampleId}": {
+      "get": {
+        "tags": [
+          "Native examples"
+        ],
+        "summary": "Read separate native projection and validation reports (development only).",
+        "operationId": "GetNativeExample",
+        "parameters": [
+          {
+            "name": "exampleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeExampleResultV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -562,6 +623,314 @@
           "build"
         ]
       },
+      "NativeDiagnosticOwnerV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/NativeDiagnosticOwnerV1GraphNodeNativeOwnerV1"
+          },
+          {
+            "$ref": "#/components/schemas/NativeDiagnosticOwnerV1UserFunctionNativeOwnerV1"
+          },
+          {
+            "$ref": "#/components/schemas/NativeDiagnosticOwnerV1EndpointNativeOwnerV1"
+          },
+          {
+            "$ref": "#/components/schemas/NativeDiagnosticOwnerV1SchemaNodeNativeOwnerV1"
+          },
+          {
+            "$ref": "#/components/schemas/NativeDiagnosticOwnerV1ScopeNativeOwnerV1"
+          },
+          {
+            "$ref": "#/components/schemas/NativeDiagnosticOwnerV1FailureRuleNativeOwnerV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "graphNode": "#/components/schemas/NativeDiagnosticOwnerV1GraphNodeNativeOwnerV1",
+            "userFunction": "#/components/schemas/NativeDiagnosticOwnerV1UserFunctionNativeOwnerV1",
+            "endpoint": "#/components/schemas/NativeDiagnosticOwnerV1EndpointNativeOwnerV1",
+            "schemaNode": "#/components/schemas/NativeDiagnosticOwnerV1SchemaNodeNativeOwnerV1",
+            "scope": "#/components/schemas/NativeDiagnosticOwnerV1ScopeNativeOwnerV1",
+            "failureRule": "#/components/schemas/NativeDiagnosticOwnerV1FailureRuleNativeOwnerV1"
+          }
+        }
+      },
+      "NativeDiagnosticOwnerV1EndpointNativeOwnerV1": {
+        "required": [
+          "endpoint",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "endpoint"
+            ],
+            "type": "string"
+          },
+          "endpoint": {
+            "$ref": "#/components/schemas/NativeEndpointV1"
+          }
+        }
+      },
+      "NativeDiagnosticOwnerV1FailureRuleNativeOwnerV1": {
+        "required": [
+          "index",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "failureRule"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeDiagnosticOwnerV1GraphNodeNativeOwnerV1": {
+        "required": [
+          "functionId",
+          "nodeId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "graphNode"
+            ],
+            "type": "string"
+          },
+          "functionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeId": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeDiagnosticOwnerV1SchemaNodeNativeOwnerV1": {
+        "required": [
+          "endpoint",
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "schemaNode"
+            ],
+            "type": "string"
+          },
+          "endpoint": {
+            "$ref": "#/components/schemas/NativeEndpointV1"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchemaNativeOwnerStepV1"
+            }
+          }
+        }
+      },
+      "NativeDiagnosticOwnerV1ScopeNativeOwnerV1": {
+        "required": [
+          "target",
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "scope"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/NativeEndpointV1"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScopeNativeOwnerStepV1"
+            }
+          }
+        }
+      },
+      "NativeDiagnosticOwnerV1UserFunctionNativeOwnerV1": {
+        "required": [
+          "functionId",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "userFunction"
+            ],
+            "type": "string"
+          },
+          "functionId": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeEndpointV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/NativeEndpointV1SourceNativeEndpointV1"
+          },
+          {
+            "$ref": "#/components/schemas/NativeEndpointV1TargetNativeEndpointV1"
+          },
+          {
+            "$ref": "#/components/schemas/NativeEndpointV1NamedSourceNativeEndpointV1"
+          },
+          {
+            "$ref": "#/components/schemas/NativeEndpointV1NamedTargetNativeEndpointV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "source": "#/components/schemas/NativeEndpointV1SourceNativeEndpointV1",
+            "target": "#/components/schemas/NativeEndpointV1TargetNativeEndpointV1",
+            "namedSource": "#/components/schemas/NativeEndpointV1NamedSourceNativeEndpointV1",
+            "namedTarget": "#/components/schemas/NativeEndpointV1NamedTargetNativeEndpointV1"
+          }
+        }
+      },
+      "NativeEndpointV1NamedSourceNativeEndpointV1": {
+        "required": [
+          "index",
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "namedSource"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeEndpointV1NamedTargetNativeEndpointV1": {
+        "required": [
+          "index",
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "namedTarget"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "NativeEndpointV1SourceNativeEndpointV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "source"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "NativeEndpointV1TargetNativeEndpointV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "target"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "NativeExampleDescriptorV1": {
+        "required": [
+          "id",
+          "title",
+          "source",
+          "revision",
+          "digest",
+          "byteCount"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/ScopedRevisionId"
+          },
+          "digest": {
+            "$ref": "#/components/schemas/ArtifactDigest"
+          },
+          "byteCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "NativeExampleResultV1": {
+        "required": [
+          "example",
+          "projection",
+          "validation"
+        ],
+        "type": "object",
+        "properties": {
+          "example": {
+            "$ref": "#/components/schemas/NativeExampleDescriptorV1"
+          },
+          "projection": {
+            "$ref": "#/components/schemas/ProjectionReportV1"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReportV1"
+          }
+        }
+      },
       "NativeLocator": {
         "required": [
           "kind"
@@ -752,6 +1121,80 @@
             }
           }
         }
+      },
+      "OperationDiagnosticV1": {
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "messageTruncated"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/DiagnosticSeverity"
+          },
+          "message": {
+            "type": "string"
+          },
+          "messageTruncated": {
+            "type": "boolean"
+          },
+          "nativeLocator": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeLocator"
+              }
+            ]
+          }
+        }
+      },
+      "OperationProvenanceV1": {
+        "required": [
+          "revision",
+          "nativeArtifactDigest",
+          "backend",
+          "adapterVersion",
+          "confirmed"
+        ],
+        "type": "object",
+        "properties": {
+          "revision": {
+            "$ref": "#/components/schemas/ScopedRevisionId"
+          },
+          "nativeArtifactDigest": {
+            "$ref": "#/components/schemas/ArtifactDigest"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/BackendIdentity"
+          },
+          "adapterVersion": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OperationStatusV1": {
+        "enum": [
+          "succeeded",
+          "invalidMapping",
+          "unsupportedArtifact",
+          "resourceLimit",
+          "protocolFailure",
+          "backendUnavailable",
+          "backendFailure",
+          "timedOut",
+          "canceled",
+          "isolationFailure"
+        ]
       },
       "PathSegment": {
         "required": [
@@ -1328,6 +1771,46 @@
           }
         }
       },
+      "ProjectionReportV1": {
+        "required": [
+          "status",
+          "provenance",
+          "document",
+          "diagnostics"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/OperationStatusV1"
+          },
+          "provenance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OperationProvenanceV1"
+              }
+            ]
+          },
+          "document": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectionDocumentV1"
+              }
+            ]
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationDiagnosticV1"
+            }
+          }
+        }
+      },
       "ProjectionRule": {
         "required": [
           "id",
@@ -1493,6 +1976,99 @@
           "boolean"
         ]
       },
+      "SchemaNativeOwnerStepV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SchemaNativeOwnerStepV1ChildSchemaNativeOwnerStepV1"
+          },
+          {
+            "$ref": "#/components/schemas/SchemaNativeOwnerStepV1DynamicFieldSchemaNativeOwnerStepV1"
+          },
+          {
+            "$ref": "#/components/schemas/SchemaNativeOwnerStepV1ContainsSchemaNativeOwnerStepV1"
+          },
+          {
+            "$ref": "#/components/schemas/SchemaNativeOwnerStepV1DependentSchemaNativeOwnerStepV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "child": "#/components/schemas/SchemaNativeOwnerStepV1ChildSchemaNativeOwnerStepV1",
+            "dynamicField": "#/components/schemas/SchemaNativeOwnerStepV1DynamicFieldSchemaNativeOwnerStepV1",
+            "contains": "#/components/schemas/SchemaNativeOwnerStepV1ContainsSchemaNativeOwnerStepV1",
+            "dependentSchema": "#/components/schemas/SchemaNativeOwnerStepV1DependentSchemaNativeOwnerStepV1"
+          }
+        }
+      },
+      "SchemaNativeOwnerStepV1ChildSchemaNativeOwnerStepV1": {
+        "required": [
+          "index",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "child"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        }
+      },
+      "SchemaNativeOwnerStepV1ContainsSchemaNativeOwnerStepV1": {
+        "required": [
+          "index",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "contains"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        }
+      },
+      "SchemaNativeOwnerStepV1DependentSchemaNativeOwnerStepV1": {
+        "required": [
+          "index",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "dependentSchema"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        }
+      },
+      "SchemaNativeOwnerStepV1DynamicFieldSchemaNativeOwnerStepV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "dynamicField"
+            ],
+            "type": "string"
+          }
+        }
+      },
       "ScopedRevisionId": {
         "required": [
           "organizationId",
@@ -1516,6 +2092,82 @@
           }
         }
       },
+      "ScopeNativeOwnerStepV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ScopeNativeOwnerStepV1ChildScopeNativeOwnerStepV1"
+          },
+          {
+            "$ref": "#/components/schemas/ScopeNativeOwnerStepV1DynamicChildScopeNativeOwnerStepV1"
+          },
+          {
+            "$ref": "#/components/schemas/ScopeNativeOwnerStepV1SegmentScopeNativeOwnerStepV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "child": "#/components/schemas/ScopeNativeOwnerStepV1ChildScopeNativeOwnerStepV1",
+            "dynamicChild": "#/components/schemas/ScopeNativeOwnerStepV1DynamicChildScopeNativeOwnerStepV1",
+            "segment": "#/components/schemas/ScopeNativeOwnerStepV1SegmentScopeNativeOwnerStepV1"
+          }
+        }
+      },
+      "ScopeNativeOwnerStepV1ChildScopeNativeOwnerStepV1": {
+        "required": [
+          "index",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "child"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        }
+      },
+      "ScopeNativeOwnerStepV1DynamicChildScopeNativeOwnerStepV1": {
+        "required": [
+          "index",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "dynamicChild"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        }
+      },
+      "ScopeNativeOwnerStepV1SegmentScopeNativeOwnerStepV1": {
+        "required": [
+          "index",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "segment"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        }
+      },
       "TextSpanUnit": {
         "enum": [
           "utf8Bytes",
@@ -1523,6 +2175,119 @@
           "unicodeScalars"
         ],
         "default": "utf8Bytes"
+      },
+      "ValidationDiagnosticV1": {
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "messageTruncated"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/DiagnosticSeverity"
+          },
+          "message": {
+            "type": "string"
+          },
+          "messageTruncated": {
+            "type": "boolean"
+          },
+          "nativeLocator": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeLocator"
+              }
+            ]
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeDiagnosticOwnerV1"
+              }
+            ]
+          },
+          "location": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "locationTruncated": {
+            "type": "boolean",
+            "default": false
+          },
+          "projectionLocator": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectionNodeReference"
+              }
+            ]
+          }
+        }
+      },
+      "ValidationReportV1": {
+        "required": [
+          "status",
+          "provenance",
+          "isValid",
+          "totalIssueCount",
+          "emittedIssueCount",
+          "truncated",
+          "diagnostics"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/OperationStatusV1"
+          },
+          "provenance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OperationProvenanceV1"
+              }
+            ]
+          },
+          "isValid": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "totalIssueCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "emittedIssueCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationDiagnosticV1"
+            }
+          }
+        }
       }
     }
   },
@@ -1532,6 +2297,9 @@
     },
     {
       "name": "Projection fixtures"
+    },
+    {
+      "name": "Native examples"
     }
   ]
 }

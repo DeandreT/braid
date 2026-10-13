@@ -26,7 +26,8 @@
         "dependencies": {
           "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
           "Weft.Contracts": "[1.0.0, )",
-          "Weft.Domain": "[1.0.0, )"
+          "Weft.Domain": "[1.0.0, )",
+          "Weft.MappingBackends": "[1.0.0, )"
         }
       },
       "weft.contracts": {
@@ -34,6 +35,13 @@
       },
       "weft.domain": {
         "type": "Project"
+      },
+      "weft.mappingbackends": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Contracts": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
       }
     }
   }

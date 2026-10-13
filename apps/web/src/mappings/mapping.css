@@ -1,0 +1,606 @@
+weft-mapping-workspace,
+weft-mapping-projection,
+weft-mapping-entity,
+weft-mapping-details,
+weft-native-evidence {
+  display: block;
+  min-width: 0;
+}
+.mapping-introduction {
+  padding: 22px 0 14px;
+}
+.mapping-introduction h1 {
+  font-size: clamp(28px, 3.5vw, 38px);
+  letter-spacing: -1.3px;
+}
+.mapping-introduction .eyebrow {
+  margin-bottom: 8px;
+}
+.mapping-introduction .introduction {
+  max-width: 780px;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #586c60;
+}
+main > .connection-card {
+  margin-top: 12px;
+  padding: 9px 14px;
+  gap: 12px;
+}
+.connection-card .connection-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+.connection-card .connection-copy {
+  min-width: 0;
+  flex-basis: auto;
+}
+.connection-card .connection-copy p[role="status"] {
+  font-size: 14px;
+}
+.connection-card .secondary-button {
+  margin-left: 0;
+}
+.example-selector,
+.mapping-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 20px;
+}
+.example-selector {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.example-selector .form-field {
+  flex: 1;
+  max-width: 540px;
+}
+.example-label {
+  padding-bottom: 11px;
+  color: #64786b;
+  font-size: 12px;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+}
+.form-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+select,
+input {
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 9px;
+  color: #213b34;
+  background: white;
+  border: 1px solid #b9cdbd;
+  border-radius: 8px;
+}
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+.entity-panel:focus-visible {
+  outline: 3px solid #287a60;
+  outline-offset: 3px;
+}
+.example-description {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding-bottom: 10px;
+}
+.example-description h2 {
+  margin: 0;
+  font:
+    600 20px "Manrope",
+    system-ui,
+    sans-serif;
+}
+.example-description p {
+  font-size: 13px;
+  margin: 0;
+  color: #586c60;
+}
+.coverage-card,
+.validation-summary,
+.boundaries-card,
+.mapping-card,
+.controls-card,
+.diagnostics-card,
+.entity-panel,
+.capabilities-card,
+.provenance-card,
+.empty-state {
+  margin: 0 0 14px;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #d8e3d6;
+  border-radius: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.coverage-card {
+  background: #eef5ea;
+  border-color: #bad0b1;
+}
+.coverage-card.incomplete {
+  background: #fff7e9;
+  border-color: #dfc28c;
+}
+.coverage-card,
+.validation-summary,
+.boundaries-card {
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+.validation-summary,
+.coverage-card:not(.incomplete) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.coverage-card h2,
+.validation-summary h2,
+.boundaries-card h2,
+.mapping-card h2,
+.controls-card h2,
+.diagnostics-card h2,
+.empty-state h2 {
+  margin: 0 0 10px;
+  font:
+    600 18px "Manrope",
+    system-ui,
+    sans-serif;
+  letter-spacing: -0.3px;
+}
+.coverage-card > p,
+.validation-summary p,
+.empty-state p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.validation-summary h2,
+.coverage-card:not(.incomplete) h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.boundaries-card h2 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.coverage-gaps {
+  margin-top: 16px;
+}
+summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+details > summary {
+  overflow-wrap: anywhere;
+}
+.coverage-gaps ul,
+.diagnostics-list,
+.capabilities-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+}
+.coverage-gaps li,
+.diagnostics-list li {
+  padding: 14px 0;
+  border-top: 1px solid #d9dfcf;
+}
+.coverage-gaps li p,
+.diagnostics-list p,
+.capabilities-card p {
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0 0 8px;
+}
+.boundary-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.boundary-columns h3 {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #657969;
+  margin: 0 0 6px;
+}
+.boundary-button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  text-align: left;
+  background: #f5f8f2;
+  border: 1px solid #dde6d7;
+  border-radius: 8px;
+  color: #213b34;
+  padding: 8px 10px;
+  width: 100%;
+  margin-bottom: 4px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.boundary-button strong,
+.boundary-button span {
+  display: block;
+}
+.boundary-button span {
+  font-size: 10px;
+  margin-top: 0;
+  color: #576e5c;
+}
+.mapping-card {
+  padding: 16px 0 0;
+  overflow: hidden;
+}
+.mapping-card .section-heading,
+.mapping-toolbar {
+  padding: 0 18px;
+}
+.mapping-card .section-heading {
+  margin-bottom: 12px;
+}
+.mapping-card .eyebrow {
+  margin-bottom: 6px;
+}
+.mapping-card .section-heading h2 {
+  font-size: 20px;
+}
+.mapping-card .section-heading > span {
+  color: #586c60;
+  font-size: 12px;
+}
+.mapping-toolbar {
+  padding-bottom: 14px;
+}
+.mapping-toolbar .form-field {
+  flex: 1;
+}
+.mapping-toolbar .search-field {
+  flex: 2;
+}
+.mapping-column-headings,
+.mapping-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+}
+.path-legend {
+  padding: 0 18px 10px;
+  margin: 0;
+  font-size: 10px;
+  color: #607064;
+  line-height: 1.7;
+}
+.mapping-column-headings {
+  background: #edf3e8;
+  padding: 10px 18px;
+  color: #587060;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 10px;
+  font-weight: 700;
+}
+.mapping-row {
+  padding: 0 18px;
+  border-top: 1px solid #e1e8db;
+}
+.mapping-cell {
+  padding: 14px 12px 14px 0;
+  min-width: 0;
+}
+.mapping-cell:last-child {
+  padding-right: 0;
+}
+.mobile-cell-label {
+  display: none;
+}
+.text-button,
+.rule-button,
+.lineage-link {
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: #205e49;
+  border: 0;
+  background: transparent;
+  padding: 3px 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: #9dbba9;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.text-button:hover,
+.rule-button:hover,
+.lineage-link:hover {
+  color: #143d2f;
+  text-decoration-color: #143d2f;
+}
+.rule-button {
+  font-weight: 600;
+}
+.lineage-link {
+  display: block;
+  margin: 6px 0;
+}
+.dependency {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 3px;
+  margin: 0 0 10px;
+}
+.dependency-role,
+.literal-kind,
+.literal-bits,
+.diagnostic-severity,
+.control-kind {
+  font-size: 10px;
+  color: #5b6e5f;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.literal-kind,
+.literal-bits {
+  display: block;
+  margin: 6px 0;
+}
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.incomplete-label {
+  display: block;
+  color: #875c23;
+  font-size: 11px;
+  margin: 6px 0;
+}
+.row-explanation {
+  margin-top: 12px;
+}
+.row-explanation > summary {
+  font-size: 11px;
+}
+.mapping-details {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  min-width: 0;
+}
+.mapping-details li {
+  padding: 5px 0;
+  min-width: 0;
+}
+.mapping-details details {
+  padding: 0;
+  min-width: 0;
+}
+.mapping-details summary {
+  font-size: 12px;
+  color: #43604d;
+}
+.native-evidence {
+  margin: 10px 0 0;
+}
+.native-evidence summary {
+  font-size: 11px;
+  font-weight: 500;
+  color: #607064;
+}
+.native-evidence p {
+  font:
+    11px/1.7 "SFMono-Regular",
+    Consolas,
+    monospace;
+  margin: 8px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.explanation-gap,
+.uncertainty-note {
+  padding: 12px;
+  background: #fff5e5;
+  border: 1px solid #e4c796;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.explanation-gap p {
+  margin: 6px 0;
+}
+.entity-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.entity-heading > div {
+  min-width: 0;
+}
+.entity-heading .eyebrow {
+  margin: 0 0 8px;
+}
+.entity-heading h3 {
+  font:
+    600 19px/1.5 "Manrope",
+    system-ui,
+    sans-serif;
+  margin: 0;
+}
+.entity-panel h4 {
+  margin: 20px 0 10px;
+  font-size: 13px;
+}
+.field-metadata {
+  display: grid;
+  gap: 12px;
+  font-size: 13px;
+  margin: 18px 0;
+}
+.field-metadata > div {
+  display: grid;
+  grid-template-columns: 135px minmax(0, 1fr);
+  gap: 16px;
+}
+.field-metadata dt {
+  font-size: 11px;
+  color: #617467;
+}
+.field-metadata dd {
+  margin: 0;
+  min-width: 0;
+}
+.muted {
+  font-size: 12px;
+  color: #607064;
+  line-height: 1.7;
+}
+.loading-state {
+  padding: 30px 0;
+  color: #58715d;
+  font-size: 14px;
+}
+.empty-state .secondary-button {
+  margin-top: 16px;
+}
+.mapping-rows .empty-state {
+  border: 0;
+  margin: 0;
+}
+.capabilities-card li {
+  font-size: 13px;
+  padding: 8px 0;
+}
+.capabilities-card strong {
+  text-transform: capitalize;
+}
+.mapping-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px;
+  background: #f5f8f1;
+  border-top: 1px solid #e1e8db;
+  font-size: 12px;
+}
+.mapping-pagination > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mapping-pagination .secondary-button {
+  margin-left: 0;
+}
+@media (min-width: 1000px) {
+  .mapping-introduction {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 18px 0 14px;
+  }
+  .mapping-introduction .eyebrow {
+    display: none;
+  }
+  .mapping-introduction h1 {
+    flex: 0 0 auto;
+    font-size: 32px;
+  }
+  .mapping-introduction .introduction {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+}
+@media (max-width: 700px) {
+  .mapping-introduction {
+    padding: 22px 0 14px;
+  }
+  .mapping-introduction h1 {
+    letter-spacing: -1px;
+  }
+  .example-selector,
+  .mapping-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .example-label {
+    padding: 0;
+  }
+  .boundary-columns {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .mapping-column-headings {
+    display: none;
+  }
+  .mapping-row {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  .mapping-cell,
+  .mapping-cell:last-child {
+    padding: 8px 0;
+  }
+  .mobile-cell-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 9px;
+    color: #657a69;
+  }
+  .coverage-card,
+  .validation-summary,
+  .boundaries-card,
+  .controls-card,
+  .diagnostics-card,
+  .entity-panel,
+  .capabilities-card,
+  .provenance-card,
+  .empty-state {
+    padding: 18px;
+  }
+  .entity-heading {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .entity-heading .secondary-button,
+  .empty-state .secondary-button {
+    margin-left: 0;
+  }
+  .field-metadata > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .mapping-card .section-heading,
+  .mapping-toolbar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

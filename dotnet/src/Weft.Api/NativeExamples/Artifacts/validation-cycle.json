@@ -1,0 +1,22 @@
+{
+  "source": {
+    "name": "Source",
+    "kind": {"kind": "group", "children": [
+      {"name": "code", "kind": {"kind": "scalar", "ty": "string"}}
+    ]}
+  },
+  "target": {
+    "name": "Target",
+    "kind": {"kind": "group", "children": [
+      {"name": "code", "kind": {"kind": "scalar", "ty": "string"}}
+    ]}
+  },
+  "graph": {"nodes": {
+    "1": {"kind": "call", "function": "concat", "args": [1]}
+  }},
+  "root": {
+    "target_field": "",
+    "bindings": [{"target_field": "code", "node": 1}],
+    "children": []
+  }
+}

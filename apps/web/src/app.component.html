@@ -8,16 +8,6 @@
     <span class="environment-label">Development workspace</span>
   </header>
   <main id="main-content">
-    <section class="welcome" aria-labelledby="welcome-title">
-      <p class="eyebrow">A clear view of your data</p>
-      <h1 id="welcome-title">
-        Every mapping.<br /><span>One shared understanding.</span>
-      </h1>
-      <p class="introduction">
-        A workspace for the people who build data mappings—and the people who
-        need to understand them.
-      </p>
-    </section>
     <section
       [class]="'connection-card ' + health().kind"
       aria-labelledby="connection-title"
@@ -28,13 +18,11 @@
       <div class="connection-copy">
         <h2 id="connection-title">Your workspace</h2>
         <p role="status">{{ status() }}</p>
-        <p class="connection-detail">
-          {{
-            health().kind === "unavailable"
-              ? "Check that your workspace service is running, then try again."
-              : "The foundation is ready. Mapping tools will appear here as they become available."
-          }}
-        </p>
+        @if (health().kind === "unavailable") {
+          <p class="connection-detail">
+            Check that your workspace service is running, then try again.
+          </p>
+        }
       </div>
       <button
         type="button"
@@ -45,21 +33,7 @@
         Check connection
       </button>
     </section>
-    <section class="feature-section" aria-labelledby="features-title">
-      <div class="section-heading">
-        <h2 id="features-title">A place for the whole mapping lifecycle</h2>
-        <span>Coming next</span>
-      </div>
-      <div class="feature-grid">
-        @for (feature of features; track feature.number) {
-          <article class="feature-card">
-            <span class="feature-number">{{ feature.number }}</span>
-            <h3>{{ feature.title }}</h3>
-            <p>{{ feature.description }}</p>
-          </article>
-        }
-      </div>
-    </section>
+    <weft-mapping-workspace />
   </main>
   <footer>
     <span>Built around your mappings.</span

@@ -19,5 +19,7 @@
   <ItemGroup>
     <None Include="../../../engines/ferrule-host/tests/fixtures/*.json"
           Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Weft.Api/NativeExamples/Artifacts/*.json"
+          Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

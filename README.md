@@ -23,9 +23,10 @@ endpoint are distinct workflows.
 
 ## Status and planning
 
-The local web/API foundation is implemented. It provides a workspace shell and
-a live service connection check. Mapping, authentication, AI chat, and deployment
-features follow the focused delivery sequence below.
+The local web/API foundation and read-only mapping viewer are implemented. The
+workspace displays native development examples through the Ferrule adapter.
+Catalog persistence, authentication, AI chat, and deployment follow the focused
+delivery sequence below.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the upcoming viewer. Angular types are generated from
@@ -33,14 +34,16 @@ the C# API schema.
 
 The Ferrule adapter can inspect, validate, and project native artifacts through a
 bounded, isolated worker. Its revision-specific projection contains fields,
-rules, controls, lineage, and located coverage gaps. The Angular mapping viewer
-is the next increment; the worker is not yet wired to an upload or public API.
+rules, controls, lineage, and located coverage gaps. Development example routes
+provide separate projection and validation reports; uploads follow with the
+catalog increment.
 
 See [Local development](docs/development.md) to run and verify the application.
 
 - [Architecture](docs/architecture.md): boundaries, storage, identity, and hosting.
 - [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
 - [Projection v1](docs/projection-contract.md): public read model and fixture behavior.
+- [Mapping viewer](docs/mapping-viewer.md): navigation, exact values, coverage, and validation.
 - [Ferrule worker](docs/ferrule-worker.md): native authority, transport, isolation, and qualification.
 - [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.

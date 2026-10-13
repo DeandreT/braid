@@ -1,10 +1,10 @@
 # Local development
 
-The initial Angular/ASP.NET Core shell is local-only. It supplies a real API
-health endpoint, a browser workspace, and development fixture projections with
-generated API contracts. A separate Ferrule adapter implements native inspection,
-validation, and projection; its Angular viewer follows the delivery plan. Authentication,
-chat, and Wolverine-backed execution follow separate increments.
+The Angular/ASP.NET Core workspace is local-only. It supplies a live API health
+check and a read-only mapping viewer over development native examples, with
+generated API contracts. A separate Ferrule adapter supplies native inspection,
+validation, and projection. Catalog persistence, authentication, chat, and
+Wolverine-backed execution follow separate increments.
 
 ## Prerequisites
 
@@ -37,6 +37,23 @@ Angular assets with its build. For frontend development, run `npm run dev` in
 another terminal and open http://127.0.0.1:5173; Angular forwards `/api` requests
 to the local service. `WEFT_DEV_LISTEN_ADDR` changes the API's loopback address.
 The unauthenticated shell rejects public interfaces.
+
+To browse real Ferrule examples, build the restricted worker image as described
+in [Ferrule worker](ferrule-worker.md). Set `WEFT_FERRULE_WORKER_IMAGE` to its
+immutable `sha256:...` image ID and start the server with
+`DOTNET_ENVIRONMENT=Development`. The same singleton worker runner serves
+projection and validation requests; its local Linux/Docker requirements apply.
+The example list remains available without a configured worker and reports that
+the explanation and validation are unavailable. The browser does not substitute
+synthetic data for a failed native operation.
+
+Development routes are `GET /api/v1/examples/mappings` and
+`GET /api/v1/examples/mappings/{exampleId}`. The fixed manifest includes `basic`,
+`exact`, `conditions`, `controls`, `functions`, `partial`, `invalid`, `generated`,
+and `ambiguous`. Each response keeps the immutable example identity, separate
+operation reports, nullable validation result, and native evidence. Unknown IDs
+and non-development requests return empty 404s. See
+[Mapping viewer](mapping-viewer.md) for navigation and explanation coverage.
 
 To inspect the self-authored fixture contract, start with
 `DOTNET_ENVIRONMENT=Development` and request
@@ -85,6 +102,10 @@ WEFT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:browser
 ```
 
 Otherwise run `npx playwright install chromium` before browser verification.
+The harness runs the API in Development. Supply the configured immutable worker
+image for actual native viewer flows; missing configuration does not qualify
+those flows. Display-only fixtures are explicitly labelled synthetic and exercise
+generic contract states independently of native backend qualification.
 NuGet and npm lockfiles are committed. Domain/application assemblies will stay
 independent of ASP.NET Core and provider SDK types, following the Wareboxes-style
 modular layout. Wolverine will enter with the first durable job workflow.
