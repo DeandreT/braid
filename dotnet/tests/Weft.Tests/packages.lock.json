@@ -146,6 +146,7 @@
       "weft.application": {
         "type": "Project",
         "dependencies": {
+          "Weft.Contracts": "[1.0.0, )",
           "Weft.Domain": "[1.0.0, )"
         }
       },

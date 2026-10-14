@@ -43,9 +43,12 @@ all field, parameter, rule, control, and boundary references must resolve within
 the same projection.
 
 Integer and decimal literals are exact lexical strings. Binary floating-point
-literals carry hexadecimal IEEE-754 bits, preserving negative zero and payload
-bits. Absence, explicit null, and XML nil are distinct. These explanation trees
-are display data and are not an executable intermediate language.
+literals carry exactly 16 lowercase hexadecimal characters representing an
+IEEE-754 binary64 bit pattern. Every bit is preserved, including negative zero,
+infinities and NaN payloads; other floating-point widths require a new variant or
+schema version with corresponding browser support. Absence, explicit null, and
+XML nil are distinct. These explanation trees are display data and are not an
+executable intermediate language.
 
 ## Coverage and capability
 

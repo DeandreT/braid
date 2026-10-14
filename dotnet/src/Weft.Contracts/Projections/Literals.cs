@@ -22,7 +22,8 @@ public enum ExactNumberFlavor
 
 /// <summary>
 /// Integer and decimal values use exact lexical text. Binary floats use their
-/// hexadecimal IEEE-754 bit pattern, retaining negative zero and payload bits.
+/// IEEE-754 binary64 bit pattern as exactly 16 lowercase hexadecimal characters,
+/// retaining every bit, including negative zero, infinities and NaN payloads.
 /// </summary>
 public sealed record ExactNumberLiteralValue(ExactNumberFlavor Flavor, string Value) : LiteralValue;
 

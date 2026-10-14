@@ -82,10 +82,27 @@ all five focused increments qualified and merged. The exact route, identity,
 cursor, metadata/head concurrency and mutation contract is in the catalog API plan.
 
 P3e's parent [#17](https://github.com/DeandreT/weft/issues/17) completes after
-the three dependent report increments qualify and merge. P3e1 is implemented and
-has passed local contract, PostgreSQL, and role-bootstrap checks; independent
-clean-container qualification is pending. Its metadata checks do not qualify
-native report derivation or the report API.
+the three dependent report increments qualify and merge. P3e1 is qualified and
+merged in [#52](https://github.com/DeandreT/weft/pull/52). Its fresh-container
+suite passed 1,635 cases, and the genuine upgrade from the previous five-migration
+schema passed. The original full-run audit failed on one Unicode test display
+label; a separately retained exact-row audit reconciled that display difference
+without rerunning tests or changing their results. Its metadata checks use
+synthetic completion facts and do not qualify native report derivation or the
+report API.
+
+P3e2 follows three independently qualified PRs in order:
+
+1. [#53](https://github.com/DeandreT/weft/issues/53): owned report contracts,
+   neutral validation, strict stored codec, and bounded response serialization.
+2. [#54](https://github.com/DeandreT/weft/issues/54): trusted Ferrule report
+   adapter, effective invocation limits, and verified validation links.
+3. [#55](https://github.com/DeandreT/weft/issues/55): actual private-object and
+   metadata orchestration, native derivation, recovery, and explicit repair.
+
+Each successor starts after its dependencies qualify and merge. The
+[stored report contract](docs/revision-report-codec.md) describes the pure first
+increment; the workflow and persisted-report HTTP API retain their separate gates.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
