@@ -1,20 +1,25 @@
 using System.Globalization;
 using System.Numerics;
 using Weft.Contracts.Projections;
+using Weft.Domain;
 using Weft.MappingBackends.Ferrule;
 
 namespace Weft.MappingBackends;
 
 public sealed partial class FerruleInspectionBackend
 {
-    private static void ValidateProjection(HostProjectionResult projection)
+    private static void ValidateProjection(HostProjectionResult projection) =>
+        ValidateProjection(projection, DefaultReportLimits, CancellationToken.None, reportOnly: false);
+
+    private static void ValidateProjection(HostProjectionResult projection, RevisionReportPolicy limits,
+        CancellationToken cancellationToken, bool reportOnly = true)
     {
-        var budget = new ProjectionBudget();
+        var budget = new ProjectionBudget(limits, cancellationToken, reportOnly);
         budget.Array(projection.Boundaries); budget.Array(projection.Fields); budget.Array(projection.Parameters);
         budget.Array(projection.Rules); budget.Array(projection.Controls); budget.Array(projection.Relationships);
-        budget.Array(projection.Diagnostics, InspectionPolicy.MaximumDiagnostics); budget.Array(projection.Capabilities);
+        budget.Array(projection.Diagnostics, limits.DiagnosticLimit); budget.Array(projection.Capabilities);
         Require(projection.Coverage is not null && Enum.IsDefined(projection.Coverage.Status));
-        budget.Array(projection.Coverage.Gaps, InspectionPolicy.MaximumDiagnostics);
+        budget.Array(projection.Coverage.Gaps, limits.DiagnosticLimit);
         Require(projection.Coverage.Status == CoverageStatus.Complete ? projection.Coverage.Gaps.Count == 0 : projection.Coverage.Gaps.Count > 0);
         if (projection.Coverage.Status == CoverageStatus.Unavailable)
             Require(projection.Boundaries.Count + projection.Fields.Count + projection.Parameters.Count + projection.Rules.Count
@@ -26,7 +31,7 @@ public sealed partial class FerruleInspectionBackend
         var unsupported = new List<(NativeLocator Locator, ProjectionNodeReference Owner)>();
         void Add(string id, ProjectionNodeReference reference, NativeLocator locator)
         {
-            ProjectionText(id, false); ProjectionLocator(locator);
+            budget.Text(id, false); budget.Locator(locator);
             Require(nodes.TryAdd(id, reference));
             Origin(locator, reference);
         }
@@ -39,7 +44,7 @@ public sealed partial class FerruleInspectionBackend
         void Reference(ProjectionNodeReference reference)
         {
             var id = ProjectionReferenceId(reference);
-            ProjectionText(id, false);
+            budget.Text(id, false);
             Require(nodes.TryGetValue(id, out var existing) && existing == reference);
         }
         void LinkedOrigin(NativeLocator? native, ProjectionNodeReference reference)
@@ -53,6 +58,7 @@ public sealed partial class FerruleInspectionBackend
             budget.Array(dependencies);
             foreach (var dependency in dependencies)
             {
+                budget.Check();
                 Require(dependency is not null && Enum.IsDefined(dependency.Role));
                 switch (dependency)
                 {
@@ -71,7 +77,7 @@ public sealed partial class FerruleInspectionBackend
                         expected.Add((RelationshipKind.DependsOn, from, node.Node));
                         break;
                     case ConstantDependency constant:
-                        ProjectionLiteral(constant.Value);
+                        budget.Literal(constant.Value);
                         break;
                     default: throw new ProtocolException();
                 }
@@ -80,28 +86,29 @@ public sealed partial class FerruleInspectionBackend
         void Details(ProjectionNodeReference owner, IReadOnlyList<DetailNode> details, int depth = 0)
         {
             budget.Array(details);
-            if (details.Count > 0 && depth > InspectionPolicy.MaximumProjectionDetailDepth)
+            if (details.Count > 0 && depth > limits.DetailDepthLimit)
                 throw new ProjectionLimitException();
             foreach (var detail in details)
             {
+                budget.Check();
                 switch (detail)
                 {
                     case GroupDetail group:
-                        ProjectionText(group.Label);
+                        budget.Text(group.Label);
                         Details(owner, group.Children, depth + 1);
                         break;
                     case ExpressionDetail expression:
-                        ProjectionText(expression.Operation, false);
+                        budget.Text(expression.Operation, false);
                         Details(owner, expression.Arguments, depth + 1);
                         break;
                     case LiteralDetail literal:
-                        ProjectionLiteral(literal.Value);
+                        budget.Literal(literal.Value);
                         break;
                     case ReferenceDetail reference:
                         Reference(reference.Reference);
                         break;
                     case UnsupportedDetail gap:
-                        ProjectionText(gap.Construct, false); ProjectionText(gap.Description, false); ProjectionLocator(gap.NativeLocator);
+                        budget.Text(gap.Construct, false); budget.Text(gap.Description, false); budget.Locator(gap.NativeLocator);
                         unsupported.Add((gap.NativeLocator, owner));
                         Origin(gap.NativeLocator, owner);
                         break;
@@ -114,10 +121,11 @@ public sealed partial class FerruleInspectionBackend
         var previousRole = -1;
         foreach (var boundary in projection.Boundaries)
         {
+            budget.Check();
             Require(boundary is not null && Enum.IsDefined(boundary.Role) && Enum.IsDefined(boundary.Shape));
             Add(boundary.Id, new BoundaryNodeReference(boundary.Id), boundary.NativeLocator);
             boundaries.Add(boundary.Id, boundary);
-            ProjectionText(boundary.Name); ProjectionText(boundary.Format, false);
+            budget.Text(boundary.Name); budget.Text(boundary.Format, false);
             var rank = boundary.Role switch { BoundaryRole.PrimaryInput => 0, BoundaryRole.NamedInput => 1, BoundaryRole.PrimaryOutput => 2, BoundaryRole.NamedOutput => 3, _ => -1 };
             Require(rank >= previousRole);
             previousRole = rank;
@@ -130,37 +138,42 @@ public sealed partial class FerruleInspectionBackend
         var fields = new Dictionary<string, ProjectionField>(StringComparer.Ordinal);
         foreach (var field in projection.Fields)
         {
+            budget.Check();
             Require(field is not null && Enum.IsDefined(field.Requirement) && Enum.IsDefined(field.Nullability));
             var reference = new FieldNodeReference(field.Id);
             Add(field.Id, reference, field.NativeLocator);
             fields.Add(field.Id, field);
-            ProjectionText(field.BoundaryId, false);
+            budget.Text(field.BoundaryId, false);
             Require(boundaries.ContainsKey(field.BoundaryId));
-            ProjectionText(field.Name); ProjectionPath(field.Path, budget); ProjectionType(field.DataType, budget); ProjectionCardinality(field.Cardinality);
+            budget.Text(field.Name); ProjectionPath(field.Path, budget); ProjectionType(field.DataType, budget); budget.Cardinality(field.Cardinality);
             expected.Add((RelationshipKind.BoundaryMember, reference, new BoundaryNodeReference(field.BoundaryId)));
         }
         foreach (var boundary in projection.Boundaries)
         {
+            budget.Check();
             if (boundary.RootFieldId is { } root)
             {
-                ProjectionText(root, false);
+                budget.Text(root, false);
                 Require(fields.TryGetValue(root, out var field) && field.BoundaryId == boundary.Id && field.Path.Count == 0);
             }
         }
         foreach (var parameter in projection.Parameters)
         {
+            budget.Check();
             Require(parameter is not null && Enum.IsDefined(parameter.Requirement));
             Add(parameter.Id, new ParameterNodeReference(parameter.Id), parameter.NativeLocator);
-            ProjectionText(parameter.Name); ProjectionType(parameter.DataType, budget);
-            if (parameter.DefaultValue is not null) ProjectionLiteral(parameter.DefaultValue);
+            budget.Text(parameter.Name); ProjectionType(parameter.DataType, budget);
+            if (parameter.DefaultValue is not null) budget.Literal(parameter.DefaultValue);
         }
         foreach (var rule in projection.Rules)
         {
+            budget.Check();
             Require(rule is not null);
             Add(rule.Id, new RuleNodeReference(rule.Id), rule.NativeLocator);
         }
         foreach (var control in projection.Controls)
         {
+            budget.Check();
             Require(control is not null && Enum.IsDefined(control.Kind));
             var reference = new ControlNodeReference(control.Id);
             Add(control.Id, reference, control.NativeLocator);
@@ -168,9 +181,10 @@ public sealed partial class FerruleInspectionBackend
         }
         foreach (var rule in projection.Rules)
         {
+            budget.Check();
             var reference = new RuleNodeReference(rule.Id);
-            ProjectionText(rule.Summary, false);
-            ProjectionText(rule.OutputFieldId, false);
+            budget.Text(rule.Summary, false);
+            budget.Text(rule.OutputFieldId, false);
             Require(fields.TryGetValue(rule.OutputFieldId, out var output)
                 && boundaries[output.BoundaryId].Role is BoundaryRole.PrimaryOutput or BoundaryRole.NamedOutput);
             expected.Add((RelationshipKind.WritesTo, reference, new FieldNodeReference(rule.OutputFieldId)));
@@ -179,11 +193,13 @@ public sealed partial class FerruleInspectionBackend
         }
         foreach (var control in projection.Controls)
         {
+            budget.Check();
             var reference = new ControlNodeReference(control.Id);
-            ProjectionText(control.Summary, false);
+            budget.Text(control.Summary, false);
             budget.Array(control.AppliesTo);
             foreach (var target in control.AppliesTo)
             {
+                budget.Check();
                 Reference(target);
                 expected.Add((RelationshipKind.GovernedBy, target, reference));
             }
@@ -194,8 +210,9 @@ public sealed partial class FerruleInspectionBackend
         var actual = new HashSet<(RelationshipKind Kind, ProjectionNodeReference From, ProjectionNodeReference To)>();
         foreach (var relationship in projection.Relationships)
         {
+            budget.Check();
             Require(relationship is not null && Enum.IsDefined(relationship.Kind));
-            ProjectionText(relationship.Id, false);
+            budget.Text(relationship.Id, false);
             Require(!nodes.ContainsKey(relationship.Id) && relationshipIds.Add(relationship.Id));
             Reference(relationship.From); Reference(relationship.To);
             Require(actual.Add((relationship.Kind, relationship.From, relationship.To)));
@@ -203,8 +220,9 @@ public sealed partial class FerruleInspectionBackend
         Require(expected.SetEquals(actual));
         foreach (var gap in projection.Coverage.Gaps)
         {
+            budget.Check();
             Require(gap is not null);
-            ProjectionText(gap.Code, false); ProjectionText(gap.Message, false); ProjectionLocator(gap.NativeLocator);
+            budget.Text(gap.Code, false); budget.Text(gap.Message, false); budget.Locator(gap.NativeLocator);
             if (gap.ProjectionLocator is not null) LinkedOrigin(gap.NativeLocator, gap.ProjectionLocator);
         }
         if (unsupported.Count > 0)
@@ -216,9 +234,10 @@ public sealed partial class FerruleInspectionBackend
         }
         foreach (var diagnostic in projection.Diagnostics)
         {
+            budget.Check();
             Require(diagnostic is not null && Enum.IsDefined(diagnostic.Severity));
-            ProjectionText(diagnostic.Code, false); ProjectionText(diagnostic.Message, false);
-            if (diagnostic.NativeLocator is not null) ProjectionLocator(diagnostic.NativeLocator);
+            budget.Text(diagnostic.Code, false); budget.Text(diagnostic.Message, false);
+            if (diagnostic.NativeLocator is not null) budget.Locator(diagnostic.NativeLocator);
             if (diagnostic.ProjectionLocator is not null)
                 LinkedOrigin(diagnostic.NativeLocator, diagnostic.ProjectionLocator);
         }
@@ -227,22 +246,25 @@ public sealed partial class FerruleInspectionBackend
 
     private static void ProjectionCapabilities(IReadOnlyList<OperationCapability> capabilities, IReadOnlyList<ProjectionBoundary> boundaries, ProjectionBudget budget)
     {
+        budget.Check();
         Require(capabilities.Count == Enum.GetValues<MappingOperation>().Length);
         var seen = new HashSet<MappingOperation>();
         var outputs = boundaries.Where(boundary => boundary.Role is BoundaryRole.PrimaryOutput or BoundaryRole.NamedOutput).Select(boundary => boundary.Id).ToArray();
         foreach (var capability in capabilities)
         {
+            budget.Check();
             Require(capability is not null && Enum.IsDefined(capability.Operation) && seen.Add(capability.Operation));
             Require(capability.Status == (capability.Operation is MappingOperation.Inspect or MappingOperation.Validate or MappingOperation.Project
                 ? CapabilityStatus.Supported : CapabilityStatus.NotQualified));
-            ProjectionText(capability.Profile, false); budget.Array(capability.BoundaryIds); budget.Array(capability.Conditions);
-            foreach (var id in capability.BoundaryIds) ProjectionText(id, false);
+            budget.Text(capability.Profile, false); budget.Array(capability.BoundaryIds); budget.Array(capability.Conditions);
+            foreach (var id in capability.BoundaryIds) budget.Text(id, false);
             Require(capability.BoundaryIds.SequenceEqual(capability.Operation is MappingOperation.Preview or MappingOperation.Build ? outputs : [], StringComparer.Ordinal));
             Require(capability.Conditions.Count > 0);
             foreach (var condition in capability.Conditions)
             {
+                budget.Check();
                 Require(condition is not null);
-                ProjectionText(condition.Code, false); ProjectionText(condition.Description, false);
+                budget.Text(condition.Code, false); budget.Text(condition.Description, false);
             }
             if (capability.Operation == MappingOperation.Project)
                 Require(capability.Profile == "ferrule.projection.v1" && capability.Conditions.Any(condition => condition.Code == "boundedReadOnlyProjection"));
@@ -251,14 +273,16 @@ public sealed partial class FerruleInspectionBackend
 
     private static void ProjectionPath(IReadOnlyList<PathSegment> path, ProjectionBudget budget)
     {
+        budget.Check();
         budget.Array(path);
         foreach (var segment in path)
         {
+            budget.Check();
             switch (segment)
             {
-                case FieldPathSegment field: ProjectionText(field.Name); if (field.NamespaceUri is not null) ProjectionText(field.NamespaceUri); break;
-                case AttributePathSegment attribute: ProjectionText(attribute.Name); if (attribute.NamespaceUri is not null) ProjectionText(attribute.NamespaceUri); break;
-                case IndexPathSegment index: ProjectionUnsignedInteger(index.Index); break;
+                case FieldPathSegment field: budget.Text(field.Name); if (field.NamespaceUri is not null) budget.Text(field.NamespaceUri); break;
+                case AttributePathSegment attribute: budget.Text(attribute.Name); if (attribute.NamespaceUri is not null) budget.Text(attribute.NamespaceUri); break;
+                case IndexPathSegment index: budget.Unsigned(index.Index); break;
                 case AnyItemPathSegment: break;
                 default: throw new ProtocolException();
             }
@@ -267,6 +291,7 @@ public sealed partial class FerruleInspectionBackend
 
     private static void ProjectionType(FieldDataType type, ProjectionBudget budget)
     {
+        budget.Check();
         Require(type is not null && Enum.IsDefined(type.Kind));
         budget.Array(type.ScalarTypes);
         Require(type.ScalarTypes.All(Enum.IsDefined) && type.ScalarTypes.Distinct().Count() == type.ScalarTypes.Count);
@@ -277,14 +302,15 @@ public sealed partial class FerruleInspectionBackend
             FieldDataTypeKind.Array => true,
             _ => type.ScalarTypes.Count == 0
         });
-        if (type.NativeName is not null) ProjectionText(type.NativeName);
+        if (type.NativeName is not null) budget.Text(type.NativeName);
     }
 
-    private static void ProjectionCardinality(FieldCardinality cardinality)
+    private static void ProjectionCardinality(FieldCardinality cardinality, ProjectionBudget budget)
     {
+        budget.Check();
         Require(cardinality is not null && Enum.IsDefined(cardinality.Kind));
-        BigInteger? minimum = cardinality.Minimum is null ? null : ProjectionUnsignedInteger(cardinality.Minimum);
-        BigInteger? maximum = cardinality.Maximum is null ? null : ProjectionUnsignedInteger(cardinality.Maximum);
+        BigInteger? minimum = cardinality.Minimum is null ? null : budget.Unsigned(cardinality.Minimum);
+        BigInteger? maximum = cardinality.Maximum is null ? null : budget.Unsigned(cardinality.Maximum);
         Require(cardinality.Kind switch
         {
             CardinalityKind.Unknown => minimum is null && maximum is null,
@@ -298,16 +324,17 @@ public sealed partial class FerruleInspectionBackend
         });
     }
 
-    private static void ProjectionLiteral(LiteralValue literal)
+    private static void ProjectionLiteral(LiteralValue literal, ProjectionBudget budget)
     {
+        budget.Check();
         switch (literal)
         {
-            case StringLiteralValue text: ProjectionText(text.Value); break;
+            case StringLiteralValue text: budget.Text(text.Value); break;
             case BooleanLiteralValue: break;
             case NullLiteralValue nil: Require(Enum.IsDefined(nil.NullKind)); break;
             case ExactNumberLiteralValue number:
                 Require(Enum.IsDefined(number.Flavor));
-                ProjectionText(number.Value, false);
+                budget.Text(number.Value, false);
                 if (number.Flavor == ExactNumberFlavor.BinaryFloat)
                 {
                     Require(number.Value.Length == 16 && number.Value.All(character => char.IsAsciiDigit(character) || character is >= 'a' and <= 'f'));
@@ -315,27 +342,36 @@ public sealed partial class FerruleInspectionBackend
                         && (bits & 0x7ff0000000000000UL) != 0x7ff0000000000000UL);
                 }
                 else
-                    Require(ProjectionNumberLexeme(number.Value, number.Flavor == ExactNumberFlavor.Integer));
+                    Require(ProjectionNumberLexeme(number.Value, number.Flavor == ExactNumberFlavor.Integer, budget));
                 break;
             default: throw new ProtocolException();
         }
     }
 
-    private static bool ProjectionNumberLexeme(string value, bool integerOnly)
+    private static bool ProjectionNumberLexeme(string value, bool integerOnly, ProjectionBudget budget)
     {
+        budget.Check();
         var index = value[0] == '-' ? 1 : 0;
         if (index == value.Length) return false;
         if (value[index] == '0') index++;
         else
         {
             if (value[index] is < '1' or > '9') return false;
-            while (index < value.Length && char.IsAsciiDigit(value[index])) index++;
+            while (index < value.Length && char.IsAsciiDigit(value[index]))
+            {
+                budget.Check();
+                index++;
+            }
         }
         if (integerOnly) return index == value.Length;
         if (index < value.Length && value[index] == '.')
         {
             var start = ++index;
-            while (index < value.Length && char.IsAsciiDigit(value[index])) index++;
+            while (index < value.Length && char.IsAsciiDigit(value[index]))
+            {
+                budget.Check();
+                index++;
+            }
             if (start == index) return false;
         }
         if (index < value.Length && value[index] is 'e' or 'E')
@@ -343,47 +379,56 @@ public sealed partial class FerruleInspectionBackend
             index++;
             if (index < value.Length && value[index] is '+' or '-') index++;
             var start = index;
-            while (index < value.Length && char.IsAsciiDigit(value[index])) index++;
+            while (index < value.Length && char.IsAsciiDigit(value[index]))
+            {
+                budget.Check();
+                index++;
+            }
             if (start == index) return false;
         }
         return index == value.Length;
     }
 
-    private static BigInteger ProjectionUnsignedInteger(string value)
+    private static BigInteger ProjectionUnsignedInteger(string value, ProjectionBudget budget)
     {
-        ProjectionText(value, false);
+        budget.Check();
+        budget.Text(value, false);
         Require(value.Length > 0 && (value == "0" || value[0] != '0') && value.All(char.IsAsciiDigit));
         Require(BigInteger.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var integer));
         return integer;
     }
 
-    private static void ProjectionLocator(NativeLocator locator)
+    private static void ProjectionLocator(NativeLocator locator, ProjectionBudget budget)
     {
+        budget.Check();
         Require(locator is not null);
-        ProjectionText(locator.DocumentId, false);
+        budget.Text(locator.DocumentId, false);
         Require(locator.DocumentId == InspectionPolicy.DocumentId);
         switch (locator)
         {
             case DocumentNativeLocator: break;
             case GraphNodeNativeLocator graph:
-                ProjectionUnsignedInteger(graph.NodeId);
+                budget.Unsigned(graph.NodeId);
                 Require(uint.TryParse(graph.NodeId, NumberStyles.None, CultureInfo.InvariantCulture, out _));
                 if (graph.FunctionId is not null)
                 {
-                    ProjectionUnsignedInteger(graph.FunctionId);
+                    budget.Unsigned(graph.FunctionId);
                     Require(ulong.TryParse(graph.FunctionId, NumberStyles.None, CultureInfo.InvariantCulture, out _));
                 }
                 break;
             case JsonPointerNativeLocator pointer:
-                ProjectionText(pointer.Pointer);
+                budget.Text(pointer.Pointer);
                 Require(pointer.Pointer.Length == 0 || pointer.Pointer[0] == '/');
                 for (var index = 0; index < pointer.Pointer.Length; index++)
+                {
+                    budget.Check();
                     if (pointer.Pointer[index] == '~') Require(++index < pointer.Pointer.Length && pointer.Pointer[index] is '0' or '1');
+                }
                 break;
             case TextSpanNativeLocator span:
-                ProjectionUnsignedInteger(span.StartOffset); ProjectionUnsignedInteger(span.Length); Require(Enum.IsDefined(span.Unit));
+                budget.Unsigned(span.StartOffset); budget.Unsigned(span.Length); Require(Enum.IsDefined(span.Unit));
                 break;
-            case OpaqueNativeLocator opaque: ProjectionText(opaque.Scheme, false); ProjectionText(opaque.Value); break;
+            case OpaqueNativeLocator opaque: budget.Text(opaque.Scheme, false); budget.Text(opaque.Value); break;
             default: throw new ProtocolException();
         }
     }
@@ -397,26 +442,6 @@ public sealed partial class FerruleInspectionBackend
         ControlNodeReference control => control.ControlId,
         _ => throw new ProtocolException()
     };
-
-    private static void ProjectionText(string value, bool allowEmpty = true)
-    {
-        Require(value is not null && (allowEmpty || !string.IsNullOrWhiteSpace(value)));
-        if (StrictUtf8.GetByteCount(value) > InspectionPolicy.MaximumTextBytes)
-            throw new ProjectionLimitException();
-    }
-
-    private sealed class ProjectionBudget
-    {
-        private int items;
-
-        public void Array<T>(IReadOnlyList<T> values, int maximum = InspectionPolicy.MaximumItems)
-        {
-            Require(values is not null);
-            if (values.Count > maximum || values.Count > InspectionPolicy.MaximumItems - items)
-                throw new ProjectionLimitException();
-            items += values.Count;
-        }
-    }
 
     private sealed class ProjectionLimitException : Exception { }
 }

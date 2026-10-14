@@ -104,6 +104,17 @@ Each successor starts after its dependencies qualify and merge. The
 [stored report contract](docs/revision-report-codec.md) describes the pure first
 increment; the workflow and persisted-report HTTP API retain their separate gates.
 
+P3e2a is qualified and merged in [#56](https://github.com/DeandreT/weft/pull/56).
+Its fresh-container C# suite passed 1,881 cases with no failures or skips;
+actual worker and PostgreSQL checks passed, and published command-line tools
+retained their runtime dependency closure. Browser and Rust evidence was inherited
+for unchanged source. The first qualification build exposed a package-hash audit
+error; its failed evidence remains retained separately from the corrected fresh
+qualification. This increment qualifies owned contracts and the codec, rather
+than report publication. P3e2b's trusted adapter is tracked under
+[#54](https://github.com/DeandreT/weft/issues/54); its boundaries are described in
+the [trusted Ferrule report adapter](docs/ferrule-revision-reports.md).
+
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
 feature. Bound concurrent builds. Check disk space before substantial Ferrule engine-host
