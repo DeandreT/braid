@@ -11,6 +11,7 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
     private const string CatalogChecksum = "0ed73cc9d597390366b661beb24f3bdfeddf1dbd9d49812ae575c2c42283fff3";
     private const string MetadataChecksum = "7335f18b8c5686b9e3ba3a2b9719d52e51fb22f5c07071e201bb7a239a48b113";
     private static string ProjectCreationChecksum => ProjectCreationTestSupport.MigrationChecksum;
+    private static string RevisionDerivationChecksum => RevisionDerivationSchemaContract.MigrationChecksum;
     [PostgresFact]
     public async Task EmptyInstallationAndRepeatedMigrationPreserveOriginalFactsAndJournal()
     {
@@ -19,8 +20,8 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         var applied = await test.ScalarAsync<DateTime>("SELECT applied_at FROM weft.schema_migrations WHERE version=1");
         var checksum = await test.ScalarAsync<string>("SELECT checksum FROM weft.schema_migrations WHERE version=1");
         Assert.Equal(OwnershipChecksum, checksum);
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
-        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationChecksum }, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationChecksum, RevisionDerivationChecksum }, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
         await test.MigrateAsync();
         await test.MigrateAsync();
         Assert.Equal(applied, await test.ScalarAsync<DateTime>("SELECT applied_at FROM weft.schema_migrations WHERE version=1"));
@@ -39,8 +40,8 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
             await using var runner = new MigrationRunner(test.MigrationConnectionString);
             await runner.MigrateAsync();
         }));
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
-        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationChecksum }, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationChecksum, RevisionDerivationChecksum }, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
         await PostgresSeedData.CreateAsync(test);
         Assert.Equal(3L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.projects"));
     }
@@ -64,19 +65,19 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         await using var test = await fixture.CreateCaseAsync();
         await test.ExecuteAsync("INSERT INTO weft.schema_migrations(version,checksum) VALUES (99,$1)", new string('a', 64));
         await Assert.ThrowsAsync<InvalidOperationException>(test.MigrateAsync);
-        Assert.Equal(6L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+        Assert.Equal(7L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
     }
 
     [PostgresFact]
     public async Task HoleInOtherwiseKnownMigrationHistoryIsRefused()
     {
         await using var test = await fixture.CreateCaseAsync(migrate: false);
-        MigrationScript[] scripts = [.. MigrationRunner.EmbeddedMigrations, new(6, "CREATE TABLE weft.future_probe(id integer PRIMARY KEY);")];
+        MigrationScript[] scripts = [.. MigrationRunner.EmbeddedMigrations, new(7, "CREATE TABLE weft.future_probe(id integer PRIMARY KEY);")];
         await using var runner = new MigrationRunner(test.MigrationConnectionString, scripts);
         await runner.MigrateAsync();
         await test.ExecuteAsync("DELETE FROM weft.schema_migrations WHERE version=1");
         await Assert.ThrowsAsync<InvalidOperationException>(() => runner.MigrateAsync());
-        Assert.Equal(new[] { 2, 3, 4, 5, 6 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { 2, 3, 4, 5, 6, 7 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
     }
 
     [PostgresFact]
@@ -94,14 +95,14 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
     {
         await using var test = await fixture.CreateCaseAsync(migrate: false);
         await using (var broken = new MigrationRunner(test.MigrationConnectionString,
-            [.. MigrationRunner.EmbeddedMigrations, new MigrationScript(6, "CREATE TABLE weft.failed_probe(id integer PRIMARY KEY); INSERT INTO weft.failed_probe VALUES (7); SELECT 1/0;")]))
+            [.. MigrationRunner.EmbeddedMigrations, new MigrationScript(7, "CREATE TABLE weft.failed_probe(id integer PRIMARY KEY); INSERT INTO weft.failed_probe VALUES (7); SELECT 1/0;")]))
         {
             var error = await Assert.ThrowsAsync<PostgresException>(() => broken.MigrateAsync());
             Assert.Equal(PostgresErrorCodes.DivisionByZero, error.SqlState);
         }
         Assert.Equal(0L, await test.ScalarAsync<long>("SELECT count(*) FROM information_schema.schemata WHERE schema_name='weft'"));
         await test.MigrateAsync();
-        Assert.Equal(5L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+        Assert.Equal(6L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
     }
 
     [PostgresFact]
@@ -114,7 +115,7 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         await Assert.ThrowsAsync<InvalidOperationException>(() => ingestion.MigrateAsync());
         await using var creator = new MigrationRunner(test.ProjectCreationConnectionString);
         await Assert.ThrowsAsync<InvalidOperationException>(() => creator.MigrateAsync());
-        Assert.Equal(5L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+        Assert.Equal(6L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
     }
 
     [PostgresFact]
@@ -131,8 +132,8 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
             await using var runner = new MigrationRunner(test.MigrationConnectionString);
             await runner.MigrateAsync();
         }));
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
-        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationChecksum }, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationChecksum, RevisionDerivationChecksum }, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(OwnershipChecksum, await test.ScalarAsync<string>("SELECT checksum FROM weft.schema_migrations WHERE version=1"));
         Assert.Equal("Project A", await test.ScalarAsync<string>("SELECT name FROM weft.projects WHERE organization_id=$1 AND id=$2", seed.OrganizationA, seed.ProjectA));
         Assert.Equal("viewer", await test.ScalarAsync<string>("SELECT role FROM weft.project_memberships WHERE organization_id=$1 AND project_id=$2 AND principal_id=$3", seed.OrganizationA, seed.ProjectA, seed.Alice));
@@ -148,7 +149,7 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         var seed = await PostgresSeedData.CreateAsync(test);
         var applied = await test.ScalarAsync<DateTime>("SELECT applied_at FROM weft.schema_migrations WHERE version=1");
         await using (var broken = new MigrationRunner(test.MigrationConnectionString,
-            [.. MigrationRunner.EmbeddedMigrations, new MigrationScript(6, "CREATE TABLE weft.failed_upgrade_probe(id integer); SELECT 1/0;")]))
+            [.. MigrationRunner.EmbeddedMigrations, new MigrationScript(7, "CREATE TABLE weft.failed_upgrade_probe(id integer); SELECT 1/0;")]))
         {
             var failure = await Assert.ThrowsAsync<PostgresException>(() => broken.MigrateAsync());
             Assert.Equal(PostgresErrorCodes.DivisionByZero, failure.SqlState);
@@ -159,8 +160,8 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         Assert.Equal(0L, await test.ScalarAsync<long>("SELECT count(*) FROM information_schema.tables WHERE table_schema='weft' AND table_name IN ('mappings','mapping_revisions','revision_ingestions','revision_ingestion_attempts','failed_upgrade_probe')"));
         Assert.Equal("Project A", await test.ScalarAsync<string>("SELECT name FROM weft.projects WHERE organization_id=$1 AND id=$2", seed.OrganizationA, seed.ProjectA));
         await test.MigrateAsync();
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
-        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationChecksum }, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationChecksum, RevisionDerivationChecksum }, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal("Project A", await test.ScalarAsync<string>("SELECT name FROM weft.projects WHERE organization_id=$1 AND id=$2", seed.OrganizationA, seed.ProjectA));
     }
 }

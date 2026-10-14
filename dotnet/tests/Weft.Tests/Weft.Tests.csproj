@@ -20,6 +20,7 @@
     <ProjectReference Include="../../tools/Weft.StorageTool/Weft.StorageTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.DatabaseTool/Weft.DatabaseTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.IngestionProbe/Weft.IngestionProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
@@ -46,6 +47,12 @@
       <StorageToolFiles Include="../../tools/Weft.StorageTool/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(StorageToolFiles)" DestinationFiles="@(StorageToolFiles->'$(OutDir)StorageTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyRevisionReportMetadataProbe" AfterTargets="Build">
+    <ItemGroup>
+      <RevisionReportMetadataProbeFiles Include="../../tools/Weft.RevisionReportMetadataProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RevisionReportMetadataProbeFiles)" DestinationFiles="@(RevisionReportMetadataProbeFiles->'$(OutDir)RevisionReportMetadataProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopyDatabaseTool" AfterTargets="Build">
     <ItemGroup>

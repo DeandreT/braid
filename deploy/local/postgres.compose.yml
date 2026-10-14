@@ -14,6 +14,8 @@ services:
       WEFT_LOCAL_CATALOG_PASSWORD: ${WEFT_LOCAL_CATALOG_PASSWORD:?Set a separate catalog reader password}
       WEFT_LOCAL_METADATA_PASSWORD: ${WEFT_LOCAL_METADATA_PASSWORD:?Set a separate mapping metadata editor password}
       WEFT_LOCAL_CREATOR_PASSWORD: ${WEFT_LOCAL_CREATOR_PASSWORD:?Set a separate project creator password}
+      WEFT_LOCAL_REPORT_PASSWORD: ${WEFT_LOCAL_REPORT_PASSWORD:?Set a separate report reader password}
+      WEFT_LOCAL_DERIVATION_PASSWORD: ${WEFT_LOCAL_DERIVATION_PASSWORD:?Set a separate report derivation password}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:

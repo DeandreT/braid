@@ -83,6 +83,10 @@ Project creation also provisions the dedicated `weft_project_creator`; existing
 databases require that login before migration 0005. Its separate explicit
 organization capability and upgrade procedure are in
 [Project creation](project-creation.md).
+Revision report metadata provisions `weft_report_reader` and `weft_deriver`;
+existing databases require both CONNECT-only logins before migration 0006. See
+[Revision report metadata](revision-report-metadata.md) for the explicit upgrade
+step and separate passwords.
 Initialization reads passwords from the environment inside `psql`; they are
 absent from command arguments. Initialization does not run again on an existing
 volume. Updating the environment alone does not rotate an existing role password.

@@ -9,6 +9,8 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv catalog_password WEFT_LOCAL_CATALOG_PASSWORD
 \getenv metadata_password WEFT_LOCAL_METADATA_PASSWORD
 \getenv creator_password WEFT_LOCAL_CREATOR_PASSWORD
+\getenv report_password WEFT_LOCAL_REPORT_PASSWORD
+\getenv derivation_password WEFT_LOCAL_DERIVATION_PASSWORD
 CREATE ROLE weft_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
   PASSWORD :'migrator_password';
 CREATE ROLE weft_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
@@ -21,8 +23,12 @@ CREATE ROLE weft_catalog_editor LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHE
   PASSWORD :'metadata_password';
 CREATE ROLE weft_project_creator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'creator_password';
+CREATE ROLE weft_report_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'report_password';
+CREATE ROLE weft_deriver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'derivation_password';
 ALTER DATABASE weft OWNER TO weft_migrator;
 REVOKE ALL ON DATABASE weft FROM PUBLIC;
-GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator;
+GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SQL

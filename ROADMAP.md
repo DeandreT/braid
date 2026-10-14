@@ -5,8 +5,8 @@ P2a/P2b's restricted Ferrule inspection/validation/projection backend and
 P2c's Angular viewer, P3a's PostgreSQL ownership, P3b's private storage and
 P3c1/P3c2's scoped native revision ingestion, P3d1's scoped catalog reads,
 P3d2's conditional metadata edits, P3d3's raw native upload/recovery, and
-P3d4a's explicit-capability atomic project creation persistence are qualified
-and merged.
+P3d4a's explicit-capability atomic project creation persistence and P3d4b's
+project creation HTTP routes are qualified and merged.
 Local and independent clean-container evidence is recorded in
 [PR #6](https://github.com/DeandreT/weft/pull/6) and
 [PR #10](https://github.com/DeandreT/weft/pull/10) and
@@ -19,7 +19,8 @@ Local and independent clean-container evidence is recorded in
 [PR #33](https://github.com/DeandreT/weft/pull/33) and
 [PR #38](https://github.com/DeandreT/weft/pull/38) and
 [PR #40](https://github.com/DeandreT/weft/pull/40) and
-[PR #45](https://github.com/DeandreT/weft/pull/45).
+[PR #45](https://github.com/DeandreT/weft/pull/45) and
+[PR #48](https://github.com/DeandreT/weft/pull/48).
 P3d follows the focused [catalog API plan](docs/catalog-api-plan.md).
 The remaining sequence follows below.
 
@@ -57,7 +58,9 @@ evidence. The documentation PR does not itself qualify an application feature.
 | P3d3 / [#30](https://github.com/DeandreT/weft/issues/30) | Raw native upload, safe own receipt and explicit resume HTTP API | P3d2, C2 | Actual API/database/storage/worker; bounded exact bytes, conflicts, cancellation, API restart and mutation protection | Background jobs, native download, Angular catalog |
 | P3d4a / [#39](https://github.com/DeandreT/weft/issues/39) | Explicit creation capability, restricted atomic creator persistence and immutable initial administrator receipt | P3d3 | Actual restricted login, atomic scoped creation, same-key contention/replay, authority locks and no regrant after revocation | HTTP, host composition, organization/member administration |
 | P3d4b / [#31](https://github.com/DeandreT/weft/issues/31) | Project creation HTTP routes, fresh organization actions and host composition | P3d4a | Actual create -> catalog read -> native upload; durable replay and mutation protection | Organization/member administration |
-| P3e / [#17](https://github.com/DeandreT/weft/issues/17) | Persisted projection/validation derivations and report API | P3d, P2c contracts | Complete version/scope cache keys; guarded publication; native evidence and status preservation | Cleanup execution, viewer changes |
+| P3e1 / [#49](https://github.com/DeandreT/weft/issues/49) | Complete report keys, policy, scoped metadata ports, PostgreSQL 0006 and dedicated report roles | Qualified P3d, P2c contracts | Actual narrow grants, native-source binding, leases, fresh authority after waits, immutable results, repair and restart; explicitly synthetic completion facts | Codec, native/storage workflow, HTTP, viewer changes |
+| P3e2 / [#50](https://github.com/DeandreT/weft/issues/50) | Verified stored report codec and native derivation workflow | Qualified P3e1 | Actual store/worker/database; cache hits, complete keys, strict integrity and provenance, cancellation, recovery and repair | HTTP, cleanup, viewer changes |
+| P3e3 / [#51](https://github.com/DeandreT/weft/issues/51) | Scoped persisted-report API, explicit host composition and generated contracts | Qualified P3e2 | Actual current/retained HTTP reports, bounded responses, no-work reads, request admission and restart | Cleanup execution, viewer changes |
 | P3f / [#18](https://github.com/DeandreT/weft/issues/18) | Reservation-aware orphan and derived-object maintenance | P3e | Bounded leases; publication/deletion races; crash recovery; referenced native revisions retained | Native-history purge, messaging |
 | P3g / [#19](https://github.com/DeandreT/weft/issues/19) | Angular catalog, upload and immutable revision history | P3f, P2c viewer | Actual persistent API/browser flows; reopen old revision after restart; keyboard/mobile checks | Authentication, chat, preview |
 | P4 | Entra session login and application permissions; identity/policy modules | P3g | Tenant/issuer/session validation; role and project access checks; CSRF and logout; separate payload grant; hosted config rejects development identity | Other providers, Azure directory administration |
@@ -74,9 +77,15 @@ P3c's two focused PRs and accepted defaults are defined in
 Each part is independently implemented and qualified; P3 planning does not
 qualify persistence or login.
 
-P3d's parent [#16](https://github.com/DeandreT/weft/issues/16) completes only after
-all five focused increments qualify and merge. The exact route, identity, cursor,
-metadata/head concurrency and mutation contract is in the catalog API plan.
+P3d's parent [#16](https://github.com/DeandreT/weft/issues/16) is complete after
+all five focused increments qualified and merged. The exact route, identity,
+cursor, metadata/head concurrency and mutation contract is in the catalog API plan.
+
+P3e's parent [#17](https://github.com/DeandreT/weft/issues/17) completes after
+the three dependent report increments qualify and merge. P3e1 is implemented and
+has passed local contract, PostgreSQL, and role-bootstrap checks; independent
+clean-container qualification is pending. Its metadata checks do not qualify
+native report derivation or the report API.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's

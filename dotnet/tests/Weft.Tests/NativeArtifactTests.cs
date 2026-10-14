@@ -86,24 +86,24 @@ public sealed class NativeArtifactTests
     public void CacheIdentityIsDeterministicAndIncludesEveryProvenanceComponent()
     {
         var artifact = NativeArtifact.Admit(Scope, "abc"u8, 3);
-        var original = new ProjectionCacheKey(artifact.Scope, artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1");
-        var repeated = new ProjectionCacheKey(Scope, Sha256Digest.FromBytes("abc"u8), "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1");
+        var original = CacheKey(artifact.Scope, artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1");
+        var repeated = CacheKey(Scope, Sha256Digest.FromBytes("abc"u8), "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1");
         Assert.Equal(original, repeated);
         Assert.Contains(repeated, new HashSet<ProjectionCacheKey> { original });
 
         var changedId = Guid.Parse("55555555-5555-5555-5555-555555555555");
         ProjectionCacheKey[] changes =
         [
-            new(Scope, Sha256Digest.FromBytes("abd"u8), "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1"),
-            new(Scope, artifact.Digest, "another.backend", "engine-1", "engine-build-1", "build-1", "1"),
-            new(Scope, artifact.Digest, "weft.synthetic", "engine-2", "engine-build-1", "build-1", "1"),
-            new(Scope, artifact.Digest, "weft.synthetic", "engine-1", "engine-build-2", "build-1", "1"),
-            new(Scope, artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-2", "1"),
-            new(Scope, artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "2"),
-            new(new RevisionScope(changedId, Scope.ProjectId, Scope.MappingId, Scope.RevisionId), artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1"),
-            new(new RevisionScope(Scope.OrganizationId, changedId, Scope.MappingId, Scope.RevisionId), artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1"),
-            new(new RevisionScope(Scope.OrganizationId, Scope.ProjectId, changedId, Scope.RevisionId), artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1"),
-            new(new RevisionScope(Scope.OrganizationId, Scope.ProjectId, Scope.MappingId, changedId), artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1")
+            CacheKey(Scope, Sha256Digest.FromBytes("abd"u8), "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1"),
+            CacheKey(Scope, artifact.Digest, "another.backend", "engine-1", "engine-build-1", "build-1", "1"),
+            CacheKey(Scope, artifact.Digest, "weft.synthetic", "engine-2", "engine-build-1", "build-1", "1"),
+            CacheKey(Scope, artifact.Digest, "weft.synthetic", "engine-1", "engine-build-2", "build-1", "1"),
+            CacheKey(Scope, artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-2", "1"),
+            CacheKey(Scope, artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "2"),
+            CacheKey(new RevisionScope(changedId, Scope.ProjectId, Scope.MappingId, Scope.RevisionId), artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1"),
+            CacheKey(new RevisionScope(Scope.OrganizationId, changedId, Scope.MappingId, Scope.RevisionId), artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1"),
+            CacheKey(new RevisionScope(Scope.OrganizationId, Scope.ProjectId, changedId, Scope.RevisionId), artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1"),
+            CacheKey(new RevisionScope(Scope.OrganizationId, Scope.ProjectId, Scope.MappingId, changedId), artifact.Digest, "weft.synthetic", "engine-1", "engine-build-1", "build-1", "1")
         ];
 
         Assert.All(changes, changed => Assert.NotEqual(original, changed));
@@ -116,5 +116,14 @@ public sealed class NativeArtifactTests
     [InlineData("weft.synthetic", "engine-1", "engine-build-1", " ", "1")]
     [InlineData("weft.synthetic", "engine-1", "engine-build-1", "build-1", "")]
     public void CacheIdentityRejectsMissingProvenance(string backendId, string backendRevision, string backendBuild, string adapterBuild, string schemaVersion) =>
-        Assert.Throws<ArgumentException>(() => new ProjectionCacheKey(Scope, Sha256Digest.FromBytes("abc"u8), backendId, backendRevision, backendBuild, adapterBuild, schemaVersion));
+        Assert.Throws<ArgumentException>(() => CacheKey(Scope, Sha256Digest.FromBytes("abc"u8), backendId, backendRevision, backendBuild, adapterBuild, schemaVersion));
+
+    private static ProjectionCacheKey CacheKey(RevisionScope scope, Sha256Digest digest, string backendId,
+        string backendRevision, string backendBuild, string adapterBuild, string schemaVersion) =>
+        new(new RevisionReportSource(scope,
+                new PrivateObjectReference(PrivateObjectId.Restore(scope,
+                    Guid.Parse("66666666-6666-6666-6666-666666666666"), PrivateObjectClass.NativeArtifact), digest, 3),
+                "entry.native.json", "weft.dependencies.empty.v1", backendId),
+            new RevisionReportBackendProfile(backendId, backendRevision, backendBuild, adapterBuild),
+            schemaVersion, "weft.synthetic-projection.v1", "weft.synthetic-codec.v1", new RevisionReportPolicy());
 }

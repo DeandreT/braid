@@ -190,46 +190,56 @@ public sealed class PostgresProjectCreationMigrationTests(PostgresFixture fixtur
 
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
-        Assert.Equal(HistoricalChecksums.Append(ProjectCreationTestSupport.MigrationChecksum),
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(HistoricalChecksums.Append(ProjectCreationTestSupport.MigrationChecksum).Append(RevisionDerivationSchemaContract.MigrationChecksum),
             await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
     }
 
-    private static Task<string> JournalAsync(PostgresCase test, int maximumVersion = 5) => test.ScalarAsync<string>(
+    private static Task<string> JournalAsync(PostgresCase test, int maximumVersion = 6) => test.ScalarAsync<string>(
         "SELECT jsonb_agg(to_jsonb(journal) ORDER BY version)::text FROM weft.schema_migrations journal WHERE version<=$1", maximumVersion);
 
     private static Task<string> OldStructureAsync(PostgresCase test) => test.ScalarAsync<string>("""
         SELECT jsonb_build_object(
           'relations',(SELECT jsonb_agg(jsonb_build_object('name',relation.relname,'owner',pg_get_userbyid(relation.relowner),
-            'rls',relation.relrowsecurity,'force',relation.relforcerowsecurity,'acl',relation.relacl::text) ORDER BY relation.relname)
+            'rls',relation.relrowsecurity,'force',relation.relforcerowsecurity,'acl',
+            (SELECT jsonb_agg(jsonb_build_object('grantor',pg_get_userbyid(acl.grantor),'grantee',acl.grantee,
+              'privilege',acl.privilege_type,'grantable',acl.is_grantable)
+              ORDER BY acl.grantor,acl.grantee,acl.privilege_type,acl.is_grantable)
+              FROM pg_catalog.aclexplode(relation.relacl) acl
+              WHERE NOT (relation.relname IN ('organizations','principals','organization_memberships','projects',
+                'project_memberships','mappings','mapping_revisions') AND acl.privilege_type='SELECT'
+                AND NOT acl.is_grantable AND acl.grantor=relation.relowner
+                AND acl.grantee IN (SELECT oid FROM pg_catalog.pg_roles WHERE rolname IN ('weft_report_reader','weft_deriver')))))
+            ORDER BY relation.relname)
             FROM pg_catalog.pg_class relation JOIN pg_catalog.pg_namespace schema ON schema.oid=relation.relnamespace
             WHERE schema.nspname='weft' AND relation.relname IN ('organizations','principals','organization_memberships','projects',
               'project_memberships','mappings','revision_ingestions','revision_ingestion_attempts','mapping_revisions','schema_migrations')),
           'columns',(SELECT jsonb_agg(to_jsonb(column_row) ORDER BY table_name,ordinal_position)
             FROM information_schema.columns column_row WHERE table_schema='weft' AND table_name NOT IN
-              ('project_creations','organization_project_creation_capabilities')),
+              ('project_creations','organization_project_creation_capabilities','revision_derivations','revision_derivation_attempts')),
           'constraints',(SELECT jsonb_agg(jsonb_build_object('table',relation.relname,'name',constraint_row.conname,
             'definition',pg_get_constraintdef(constraint_row.oid),'validated',constraint_row.convalidated,
             'deferred',constraint_row.condeferrable,'initiallyDeferred',constraint_row.condeferred) ORDER BY relation.relname,constraint_row.conname)
             FROM pg_catalog.pg_constraint constraint_row JOIN pg_catalog.pg_class relation ON relation.oid=constraint_row.conrelid
             JOIN pg_catalog.pg_namespace schema ON schema.oid=relation.relnamespace WHERE schema.nspname='weft'
-              AND relation.relname NOT IN ('project_creations','organization_project_creation_capabilities')),
+              AND relation.relname NOT IN ('project_creations','organization_project_creation_capabilities','revision_derivations','revision_derivation_attempts')),
           'policies',(SELECT jsonb_agg(jsonb_build_object('table',relation.relname,'name',policy.polname,'command',policy.polcmd,
             'permissive',policy.polpermissive,'roles',policy.polroles::text,'using',pg_get_expr(policy.polqual,policy.polrelid),
             'check',pg_get_expr(policy.polwithcheck,policy.polrelid)) ORDER BY relation.relname,policy.polname)
             FROM pg_catalog.pg_policy policy JOIN pg_catalog.pg_class relation ON relation.oid=policy.polrelid
             JOIN pg_catalog.pg_namespace schema ON schema.oid=relation.relnamespace WHERE schema.nspname='weft'
-              AND relation.relname NOT IN ('project_creations','organization_project_creation_capabilities')),
+              AND relation.relname NOT IN ('project_creations','organization_project_creation_capabilities','revision_derivations','revision_derivation_attempts')),
           'userTriggers',(SELECT jsonb_agg(jsonb_build_object('table',relation.relname,'name',trigger.tgname,
             'definition',pg_get_triggerdef(trigger.oid),'enabled',trigger.tgenabled) ORDER BY relation.relname,trigger.tgname)
             FROM pg_catalog.pg_trigger trigger JOIN pg_catalog.pg_class relation ON relation.oid=trigger.tgrelid
             JOIN pg_catalog.pg_namespace schema ON schema.oid=relation.relnamespace WHERE schema.nspname='weft' AND NOT trigger.tgisinternal
-              AND relation.relname NOT IN ('project_creations','organization_project_creation_capabilities')),
+              AND relation.relname NOT IN ('project_creations','organization_project_creation_capabilities','revision_derivations','revision_derivation_attempts')),
           'oldFunctions',(SELECT jsonb_agg(jsonb_build_object('name',routine.proname,'definition',pg_get_functiondef(routine.oid),
             'acl',routine.proacl::text) ORDER BY routine.proname) FROM pg_catalog.pg_proc routine
             JOIN pg_catalog.pg_namespace schema ON schema.oid=routine.pronamespace WHERE schema.nspname='weft'
               AND routine.proname NOT IN ('get_project_creation_admission_v1','create_project_v1',
-                'assert_project_creation_contract_v1','project_creation_fingerprint_v1','guard_project_creations_transition')),
+                'assert_project_creation_contract_v1','project_creation_fingerprint_v1','guard_project_creations_transition',
+                'guard_revision_derivations_transition','guard_revision_derivation_attempts_transition')),
           'oldRoleSchemaRights',(SELECT jsonb_agg(jsonb_build_object('role',role,
             'usage',has_schema_privilege(role,'weft','USAGE'),'create',has_schema_privilege(role,'weft','CREATE')) ORDER BY role)
             FROM unnest(ARRAY['weft_runtime','weft_ingest','weft_catalog_reader','weft_catalog_editor']) role))::text

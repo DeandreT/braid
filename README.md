@@ -25,10 +25,10 @@ endpoint are distinct workflows.
 
 The local web/API foundation and read-only mapping viewer are implemented. The
 workspace displays native development examples through the Ferrule adapter.
-Catalog persistence, scoped reads, metadata edits, native uploads, and atomic
-project creation persistence are qualified. Project creation HTTP, saved-revision
-viewer integration, authentication, AI chat, and deployment follow the focused
-delivery sequence below.
+Catalog persistence, scoped reads, metadata edits, native uploads, and project
+creation through the API are qualified and merged. Stored revision reports,
+saved-revision viewer integration, authentication, AI chat, and deployment follow
+the focused delivery sequence below.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
@@ -54,6 +54,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
 - [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
 - [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.
+- [Revision report metadata](docs/revision-report-metadata.md): complete report identity, restricted roles, claims, retained attempts, and repair.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 
