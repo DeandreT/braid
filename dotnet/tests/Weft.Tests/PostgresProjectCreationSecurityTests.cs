@@ -46,7 +46,9 @@ public sealed class PostgresProjectCreationSecurityTests(PostgresFixture fixture
               AND NOT EXISTS (
                 SELECT 1 FROM pg_class sequence JOIN pg_namespace namespace ON namespace.oid=sequence.relnamespace
                 WHERE namespace.nspname='weft' AND sequence.relkind='S'
-                  AND has_sequence_privilege(current_user,sequence.oid,'USAGE,SELECT,UPDATE'))
+                  AND CASE WHEN sequence.relkind='S' THEN
+                    has_sequence_privilege(current_user,sequence.oid,'USAGE,SELECT,UPDATE')
+                  ELSE false END)
             """))
             Assert.Equal(true, await relations.ExecuteScalarAsync());
         await using (var functions = direct.CreateCommand("""

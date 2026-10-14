@@ -17,9 +17,9 @@ internal sealed class ProjectCreationTestSupport : IAsyncDisposable
     internal PostgresProjectCreationDatabase Database { get; }
     internal PostgresProjectCreator Creator { get; }
     internal static ProjectCreationMetadata DefaultMetadata { get; } = new("Created project", "Exact description");
-    // Frozen from the completed trusted migration after root's PostgreSQL 16
-    // canonical inspection; no live database definition supplies this expectation.
-    internal const string MigrationChecksum = "ef319d83ef4d22d596ce685416d02b0422d7a56cb07b94e65a3b1629f461df39";
+    // Pinned from trusted migration bytes; no live database definition supplies
+    // this expectation.
+    internal const string MigrationChecksum = "2ae8603df7c7ecd56e587ae65d32e1225b8569702e98ff24e5d0fc1694fae5c1";
 
     private ProjectCreationTestSupport(PostgresCase test, PostgresSeedData seed)
     {

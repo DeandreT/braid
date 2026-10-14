@@ -88,9 +88,11 @@ internal static class ProjectCreationRoleGuard
           AND NOT EXISTS (
               SELECT 1 FROM pg_catalog.pg_class sequence JOIN pg_catalog.pg_namespace namespace ON namespace.oid = sequence.relnamespace
               WHERE namespace.nspname = 'weft' AND sequence.relkind = 'S'
-                AND (pg_catalog.has_sequence_privilege('public', sequence.oid, 'USAGE,SELECT,UPDATE')
+                AND CASE WHEN sequence.relkind = 'S' THEN
+                    (pg_catalog.has_sequence_privilege('public', sequence.oid, 'USAGE,SELECT,UPDATE')
                      OR EXISTS (SELECT 1 FROM reachable_roles role
                                 WHERE pg_catalog.has_sequence_privilege(role.oid, sequence.oid, 'USAGE,SELECT,UPDATE')))
+                    ELSE false END
           )
           AND (SELECT count(*) FROM installed_functions WHERE oid IS NOT NULL) = 5
           AND (SELECT count(*) FROM installed_functions
