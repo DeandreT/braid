@@ -155,7 +155,27 @@ internal static class Program
     {
         using var gateTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         gateTimeout.CancelAfter(TimeSpan.FromSeconds(120));
-        await File.WriteAllTextAsync(Path.Combine(gateDirectory, "ready"), "ready", gateTimeout.Token);
+        var readyPath = Path.Combine(gateDirectory, "ready");
+        var stagingPath = Path.Combine(gateDirectory, ".ready-" + Guid.NewGuid().ToString("N") + ".tmp");
+        var stagingOwned = false;
+        try
+        {
+            await using (var staging = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                bufferSize: 4096, useAsync: true))
+            {
+                stagingOwned = true;
+                await staging.WriteAsync("ready"u8.ToArray(), gateTimeout.Token);
+            }
+            gateTimeout.Token.ThrowIfCancellationRequested();
+            // The consumer sees only the completed marker in its uniquely owned gate.
+            File.Move(stagingPath, readyPath, overwrite: false);
+            stagingOwned = false;
+        }
+        finally
+        {
+            if (stagingOwned)
+                File.Delete(stagingPath);
+        }
         var releasePath = Path.Combine(gateDirectory, "release");
         while (!File.Exists(releasePath))
             await Task.Delay(TimeSpan.FromMilliseconds(20), gateTimeout.Token);
