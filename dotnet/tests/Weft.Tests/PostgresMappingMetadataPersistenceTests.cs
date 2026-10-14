@@ -12,7 +12,8 @@ public sealed class PostgresMappingMetadataPersistenceTests(PostgresFixture fixt
         "0a6c95e1357d9fba7736dd5870895a11443b0e924989163675f00ba2e858f9d1",
         "d61a8bc2d56b6a39607414cf0f14c58db511594369ac124fd270a08f77455ae5",
         "0ed73cc9d597390366b661beb24f3bdfeddf1dbd9d49812ae575c2c42283fff3",
-        "7335f18b8c5686b9e3ba3a2b9719d52e51fb22f5c07071e201bb7a239a48b113"
+        "7335f18b8c5686b9e3ba3a2b9719d52e51fb22f5c07071e201bb7a239a48b113",
+        ProjectCreationTestSupport.MigrationChecksum
     ];
 
     [PostgresFact]
@@ -87,7 +88,7 @@ public sealed class PostgresMappingMetadataPersistenceTests(PostgresFixture fixt
 
     private static async Task AssertHistoryAsync(PostgresCase test)
     {
-        Assert.Equal(new[] { 1, 2, 3, 4 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(AcceptedChecksums, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
     }
 }

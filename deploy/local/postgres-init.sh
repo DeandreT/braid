@@ -8,6 +8,7 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv ingest_password WEFT_LOCAL_INGEST_PASSWORD
 \getenv catalog_password WEFT_LOCAL_CATALOG_PASSWORD
 \getenv metadata_password WEFT_LOCAL_METADATA_PASSWORD
+\getenv creator_password WEFT_LOCAL_CREATOR_PASSWORD
 CREATE ROLE weft_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
   PASSWORD :'migrator_password';
 CREATE ROLE weft_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
@@ -18,8 +19,10 @@ CREATE ROLE weft_catalog_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHE
   PASSWORD :'catalog_password';
 CREATE ROLE weft_catalog_editor LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'metadata_password';
+CREATE ROLE weft_project_creator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'creator_password';
 ALTER DATABASE weft OWNER TO weft_migrator;
 REVOKE ALL ON DATABASE weft FROM PUBLIC;
-GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor;
+GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SQL

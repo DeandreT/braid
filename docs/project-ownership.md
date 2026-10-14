@@ -65,7 +65,7 @@ Unknown or changed history and an unversioned owned schema are refused. Add a
 new migration to evolve installed data; do not edit an applied script.
 
 For a new local database, copy `deploy/local/.env.example` to
-`deploy/local/.env` and replace all five passwords. The compose project owns
+`deploy/local/.env` and replace all passwords. The compose project owns
 its own volume and exposes PostgreSQL only on `127.0.0.1:54329`:
 
 ```sh
@@ -79,6 +79,10 @@ login. Existing ownership-only databases require that login before upgrading;
 see [ingestion metadata](ingestion-metadata.md).
 Catalog reads also provision the dedicated `weft_catalog_reader`; existing databases
 require that login before migration 0003. See [Catalog reads](catalog-reads.md).
+Project creation also provisions the dedicated `weft_project_creator`; existing
+databases require that login before migration 0005. Its separate explicit
+organization capability and upgrade procedure are in
+[Project creation](project-creation.md).
 Initialization reads passwords from the environment inside `psql`; they are
 absent from command arguments. Initialization does not run again on an existing
 volume. Updating the environment alone does not rotate an existing role password.

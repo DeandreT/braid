@@ -8,9 +8,10 @@ increments are qualified and merged. P3e report/cache work then follows.
 
 P3d1 and P3d2 are qualified and merged in
 [PR #33](https://github.com/DeandreT/weft/pull/33) and
-[PR #38](https://github.com/DeandreT/weft/pull/38). P3d3 adds raw upload
-and original-actor recovery; its independent qualification is separate from the
-completed metadata checks.
+[PR #38](https://github.com/DeandreT/weft/pull/38). P3d3's raw upload and
+original-actor recovery are qualified and merged in
+[PR #40](https://github.com/DeandreT/weft/pull/40). Project creation follows in
+the separate [persistence prerequisite](project-creation.md) and HTTP increment.
 
 | Increment | Cohesive scope | Dependency |
 | --- | --- | --- |

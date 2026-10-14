@@ -2,9 +2,11 @@ using Npgsql;
 using Weft.Domain;
 using Weft.Persistence.Postgres;
 
-if (args.Length != 1 || args[0] is not ("migrate" or "provision-development-identity"))
+var existingCommand = args.Length == 1 && args[0] is "migrate" or "provision-development-identity";
+var capabilityCommand = args.Length == 4 && args[0] == "set-project-creation-capability" && args[3] is "true" or "false";
+if (!existingCommand && !capabilityCommand)
 {
-    Console.Error.WriteLine("Usage: Weft.DatabaseTool migrate | provision-development-identity");
+    Console.Error.WriteLine("Usage: Weft.DatabaseTool migrate | provision-development-identity | set-project-creation-capability ORG PRINCIPAL true|false");
     return 2;
 }
 
@@ -22,6 +24,14 @@ try
         await using var migrations = new MigrationRunner(connectionString);
         await migrations.MigrateAsync();
         Console.WriteLine("The Weft database migrations are current.");
+    }
+    else if (capabilityCommand)
+    {
+        var organization = RequiredArgumentId(args[1]);
+        var principal = new PrincipalId(RequiredArgumentId(args[2]));
+        await using var provisioning = new OrganizationProjectCreationCapabilityProvisioner(connectionString);
+        await provisioning.SetAsync(organization, principal, args[3] == "true");
+        Console.WriteLine(args[3] == "true" ? "Project creation capability granted." : "Project creation capability revoked.");
     }
     else
     {
@@ -63,7 +73,9 @@ catch (InvalidOperationException error)
 }
 catch (ArgumentException)
 {
-    Console.Error.WriteLine("The owner-tool configuration is invalid; local provisioning requires explicit nonempty IDs, organization name and paired project/role options.");
+    Console.Error.WriteLine(capabilityCommand
+        ? "Project creation capability configuration requires canonical nonempty organization and principal IDs and an explicit true|false value."
+        : "The owner-tool configuration is invalid; local provisioning requires explicit nonempty IDs, organization name and paired project/role options.");
     return 2;
 }
 
@@ -72,5 +84,12 @@ static Guid RequiredId(string variable)
     var value = Environment.GetEnvironmentVariable(variable);
     if (!Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty || value != id.ToString("D"))
         throw new ArgumentException("Set the explicit canonical local identity identifiers.");
+    return id;
+}
+
+static Guid RequiredArgumentId(string value)
+{
+    if (!Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty || value != id.ToString("D"))
+        throw new ArgumentException("Owner capability identifiers must be canonical and nonempty.");
     return id;
 }

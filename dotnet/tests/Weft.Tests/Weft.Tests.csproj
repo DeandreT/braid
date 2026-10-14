@@ -18,6 +18,7 @@
     <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
     <ProjectReference Include="../../tools/Weft.StorageProbe/Weft.StorageProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.StorageTool/Weft.StorageTool.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.DatabaseTool/Weft.DatabaseTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.IngestionProbe/Weft.IngestionProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
@@ -45,5 +46,11 @@
       <StorageToolFiles Include="../../tools/Weft.StorageTool/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(StorageToolFiles)" DestinationFiles="@(StorageToolFiles->'$(OutDir)StorageTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyDatabaseTool" AfterTargets="Build">
+    <ItemGroup>
+      <DatabaseToolFiles Include="../../tools/Weft.DatabaseTool/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DatabaseToolFiles)" DestinationFiles="@(DatabaseToolFiles->'$(OutDir)DatabaseTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 </Project>
