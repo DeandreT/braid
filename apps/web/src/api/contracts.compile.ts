@@ -616,3 +616,72 @@ export const projectCreationConflict: components["schemas"]["CatalogErrorV1"]["c
   "idempotencyConflict";
 export const projectCreationAdmissionBusy: components["schemas"]["CatalogErrorV1"]["code"] =
   "projectCreationAdmissionBusy";
+
+type CatalogProjectionReport =
+  components["schemas"]["CatalogProjectionReportV1"];
+type CatalogValidationReport =
+  components["schemas"]["CatalogValidationReportV1"];
+type CatalogReportResult =
+  components["schemas"]["CatalogRevisionReportResultV1"];
+type CatalogReportAttempt =
+  components["schemas"]["CatalogRevisionReportAttemptV1"];
+type CatalogProjectionGet =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/projection"]["get"];
+type CatalogValidationGet =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/validation"]["get"];
+type CatalogProjectionEnsure =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/projection/ensure"]["post"];
+
+export const catalogReportGeneration: CatalogReportResult["generation"] =
+  "9223372036854775807";
+export const nullableCatalogReport: CatalogProjectionReport["report"] = null;
+export const nullableCatalogResult: CatalogProjectionReport["result"] = null;
+export const nullableCatalogAttempt: CatalogProjectionReport["currentAttempt"] =
+  null;
+export const nullableCatalogStatus: CatalogProjectionReport["status"] = null;
+export const nullableCatalogFailure: CatalogProjectionReport["failure"] = null;
+export const nullableAttemptFinished: CatalogReportAttempt["finishedAtUtc"] =
+  null;
+export const nullableValidationProjection: CatalogValidationReport["projectionDerivationId"] =
+  null;
+
+// @ts-expect-error Report generations preserve Int64 precision as decimal strings.
+export const numericReportGeneration: CatalogReportResult["generation"] = 9007199254740993;
+// @ts-expect-error The stored report wrapper has an exact versioned schema.
+export const wrongReportSchema: CatalogProjectionReport["schemaVersion"] =
+  "weft.catalog-revision-report.v2";
+// @ts-expect-error Projection and validation wrappers keep their own operation literal.
+export const wrongReportOperation: CatalogProjectionReport["operation"] =
+  "validation";
+// @ts-expect-error Lifecycle and backend operation status are distinct.
+export const backendStatusAsReportState: CatalogProjectionReport["state"] =
+  "invalidMapping";
+// @ts-expect-error Read refusals use a closed category rather than provider exception text.
+export const arbitraryReportReadFailure: CatalogProjectionReport["readOutcome"] =
+  "provider detail";
+// @ts-expect-error Private object references are absent from the public wrapper.
+export const privateReportObject: CatalogProjectionReport["derivedObject"] =
+  null;
+// @ts-expect-error Private claim ownership is absent from public attempts.
+export const privateReportClaim: CatalogReportAttempt["serverInstanceId"] =
+  "instance";
+// @ts-expect-error Ensure accepts no JSON or other request-body envelope.
+export const jsonReportEnsure: CatalogProjectionEnsure["requestBody"] = {
+  content: { "application/json": {} },
+};
+
+export function catalogProjectionReportResponse(
+  report: CatalogProjectionReport,
+): CatalogProjectionGet["responses"][200]["content"] {
+  return { "application/json": report };
+}
+
+export function catalogPendingReportResponse(
+  report: CatalogProjectionReport,
+): CatalogProjectionEnsure["responses"][202]["content"] {
+  return { "application/json": report };
+}
+
+export const linkedValidationQuery = {
+  projectionDerivationId: "44444444-4444-4444-4444-444444444444",
+} satisfies NonNullable<CatalogValidationGet["parameters"]["query"]>;

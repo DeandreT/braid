@@ -34,6 +34,7 @@ public static partial class CatalogEndpoints
             "GetCatalogRevisions", "Read immutable revision history in descending committed sequence.");
         Describe<CatalogRevisionV1>(endpoints.MapGet(mapping + "/revisions/{revisionId}", GetRevision),
             "GetCatalogRevision", "Read one scoped immutable revision's catalog metadata.");
+        MapRevisionReports(endpoints, mapping + "/revisions/{revisionId}");
         DescribeRevisionUpload(endpoints.MapPost(project + "/mappings", CreateCatalogMapping), create: true);
         DescribeRevisionUpload(endpoints.MapPost(mapping + "/revisions", AppendCatalogRevision), create: false);
         DescribeIngestionReceipt(endpoints.MapGet(project + "/revision-ingestions/{operationId}", GetCatalogIngestionReceipt));
@@ -51,7 +52,7 @@ public static partial class CatalogEndpoints
 
     private static Task<IResult> GetContext(HttpContext context, CatalogRequestBoundary boundary,
         CatalogMetadataEditOptions metadataEditOptions, CatalogRevisionIngestionOptions ingestionOptions,
-        CatalogProjectCreationOptions creationOptions) =>
+        CatalogProjectCreationOptions creationOptions, CatalogRevisionReportOptions revisionReportOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -70,11 +71,13 @@ public static partial class CatalogEndpoints
             }
             var token = boundary.IssueRequestToken(context, admission.Actor!);
             return Results.Ok(CatalogPublicMapper.Context(organization, token, metadataEditOptions.Enabled,
-                ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects));
+                ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
+                revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled));
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,
         CatalogRequestBoundary boundary, CatalogRevisionIngestionOptions ingestionOptions,
+        CatalogRevisionReportOptions revisionReportOptions,
         string? limit = null, string? cursor = null) =>
         WithAdmission(context, boundary, async admission =>
         {
@@ -89,12 +92,14 @@ public static partial class CatalogEndpoints
                 RequireOrganization(projects.Admission, admission);
                 foreach (var item in projects.Projects)
                     RequireAccess(item.Access, admission.Actor!, item.Summary.Scope);
-                return Results.Ok(CatalogPublicMapper.Projects(projects, ingestionOptions.Enabled));
+                return Results.Ok(CatalogPublicMapper.Projects(projects, ingestionOptions.Enabled,
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled));
             });
         });
 
     private static Task<IResult> GetProject(string organizationId, string projectId,
-        HttpContext context, CatalogRequestBoundary boundary, CatalogRevisionIngestionOptions ingestionOptions) =>
+        HttpContext context, CatalogRequestBoundary boundary, CatalogRevisionIngestionOptions ingestionOptions,
+        CatalogRevisionReportOptions revisionReportOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -105,13 +110,14 @@ public static partial class CatalogEndpoints
             {
                 RequireScope(project.Summary.Scope == scope);
                 RequireAccess(project.Access, admission.Actor!, scope);
-                return Results.Ok(CatalogPublicMapper.Project(project, ingestionOptions.Enabled));
+                return Results.Ok(CatalogPublicMapper.Project(project, ingestionOptions.Enabled,
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled));
             });
         });
 
     private static Task<IResult> GetMappings(string organizationId, string projectId,
         HttpContext context, CatalogRequestBoundary boundary, CatalogMetadataEditOptions metadataEditOptions,
-        CatalogRevisionIngestionOptions ingestionOptions,
+        CatalogRevisionIngestionOptions ingestionOptions, CatalogRevisionReportOptions revisionReportOptions,
         string? limit = null, string? cursor = null) =>
         WithAdmission(context, boundary, async admission =>
         {
@@ -124,13 +130,14 @@ public static partial class CatalogEndpoints
                 page.Limit, continuation, context.RequestAborted), mappings =>
             {
                 RequireAccess(mappings.Access, admission.Actor!, scope);
-                return Results.Ok(CatalogPublicMapper.Mappings(mappings, metadataEditOptions.Enabled, ingestionOptions.Enabled));
+                return Results.Ok(CatalogPublicMapper.Mappings(mappings, metadataEditOptions.Enabled, ingestionOptions.Enabled,
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled));
             });
         });
 
     private static Task<IResult> GetMapping(string organizationId, string projectId, string mappingId,
         HttpContext context, CatalogRequestBoundary boundary, CatalogMetadataEditOptions metadataEditOptions,
-        CatalogRevisionIngestionOptions ingestionOptions) =>
+        CatalogRevisionIngestionOptions ingestionOptions, CatalogRevisionReportOptions revisionReportOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -141,7 +148,8 @@ public static partial class CatalogEndpoints
             {
                 RequireScope(mapping.Summary.Scope == scope);
                 RequireAccess(mapping.Access, admission.Actor!, Project(scope));
-                return Results.Ok(CatalogPublicMapper.Mapping(mapping, metadataEditOptions.Enabled, ingestionOptions.Enabled));
+                return Results.Ok(CatalogPublicMapper.Mapping(mapping, metadataEditOptions.Enabled, ingestionOptions.Enabled,
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled));
             });
         });
 
@@ -224,6 +232,16 @@ public static partial class CatalogEndpoints
         {
             context.Response.Headers.Remove("ETag");
             return Error(CatalogErrorCodeV1.PersistenceFailure, StatusCodes.Status500InternalServerError);
+        }
+        catch (CatalogRevisionReportUnavailableException)
+        {
+            context.Response.Headers.Remove("ETag");
+            return Error(CatalogErrorCodeV1.RevisionReportUnavailable, StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (CatalogRevisionReportRequestException exception)
+        {
+            context.Response.Headers.Remove("ETag");
+            return Error(exception.Code, exception.StatusCode);
         }
         catch (CatalogProjectCreationRequestException exception)
         {

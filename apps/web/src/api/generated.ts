@@ -222,6 +222,126 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/projection": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the current selected projection report for one immutable revision.
+     * @description Requires fresh project ReadMetadata authority for the exact actor and full revision ancestry; all four project roles qualify. Enabled features are independent of organization project-creation capability and upload authority. All route and query UUIDs are canonical nonzero lowercase D strings. Unknown, repeated and escaped-duplicate query names are rejected; no actor, digest, backend profile, policy or private object inputs are accepted. No body or Content-Type is supported. Content-Encoding is absent or one identity token, Transfer-Encoding is absent, and Content-Length is zero or the server proves no body. Unknown/chunked/nonempty framing is rejected before body consumption. Conditional headers and Idempotency-Key are unsupported. Reads never derive, claim, repair, provision storage or start a worker. Current selects the server's full report key for this revision, independently of the mapping head. No query is accepted. Lifecycle, backend status and read refusal are separate. False validation is a usable report. Missing, corrupt, unsupported or over-budget selected payloads retain honest available metadata with a categorical read refusal and null report. The complete wrapper including linked findings is bounded before response bytes and followed by fresh authority/source validation. Local work/read admission is nonwaiting 429; report dependency availability is closed 503. A ResourceLimit wrapper that cannot fit its policy uses a fixed categorical 503 error of at most 1024 bytes. All responses are no-store and carry no ETag.
+     */
+    get: operations["GetCatalogProjectionReport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/projection/{derivationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read one exact retained successful projection report.
+     * @description Requires fresh project ReadMetadata authority for the exact actor and full revision ancestry; all four project roles qualify. Enabled features are independent of organization project-creation capability and upload authority. All route and query UUIDs are canonical nonzero lowercase D strings. Unknown, repeated and escaped-duplicate query names are rejected; no actor, digest, backend profile, policy or private object inputs are accepted. No body or Content-Type is supported. Content-Encoding is absent or one identity token, Transfer-Encoding is absent, and Content-Length is zero or the server proves no body. Unknown/chunked/nonempty framing is rejected before body consumption. Conditional headers and Idempotency-Key are unsupported. Reads never derive, claim, repair, provision storage or start a worker. The derivationId selects an immutable successful result, never a pending or failed attempt. No query is accepted. Lifecycle, backend status and read refusal are separate. False validation is a usable report. Missing, corrupt, unsupported or over-budget selected payloads retain honest available metadata with a categorical read refusal and null report. The complete wrapper including linked findings is bounded before response bytes and followed by fresh authority/source validation. Local work/read admission is nonwaiting 429; report dependency availability is closed 503. A ResourceLimit wrapper that cannot fit its policy uses a fixed categorical 503 error of at most 1024 bytes. All responses are no-store and carry no ETag.
+     */
+    get: operations["GetRetainedCatalogProjectionReport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/projection/ensure": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Explicitly ensure one scoped persisted projection report.
+     * @description Requires fresh project ReadMetadata authority for the exact actor and full revision ancestry; all four project roles qualify. Enabled features are independent of organization project-creation capability and upload authority. All route and query UUIDs are canonical nonzero lowercase D strings. Unknown, repeated and escaped-duplicate query names are rejected; no actor, digest, backend profile, policy or private object inputs are accepted. No body or Content-Type is supported. Content-Encoding is absent or one identity token, Transfer-Encoding is absent, and Content-Length is zero or the server proves no body. Unknown/chunked/nonempty framing is rejected before body consumption. Conditional headers and Idempotency-Key are unsupported. A cookie-bound framework request token and exact configured Origin are required. Optional repairDerivationId selects only the exact current successful result; there is no implicit repair or projection-link selector. Completed or cached observations return 200; actual pending or retry-delayed observations return 202. ClaimLost, SelectionChanged and GenerationExhausted are distinct 409 errors. Lifecycle, backend status and read refusal are separate. False validation is a usable report. Missing, corrupt, unsupported or over-budget selected payloads retain honest available metadata with a categorical read refusal and null report. The complete wrapper including linked findings is bounded before response bytes and followed by fresh authority/source validation. Local work/read admission is nonwaiting 429; report dependency availability is closed 503. A ResourceLimit wrapper that cannot fit its policy uses a fixed categorical 503 error of at most 1024 bytes. All responses are no-store and carry no ETag.
+     */
+    post: operations["EnsureCatalogProjectionReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/validation": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the current selected validation report for one immutable revision.
+     * @description Requires fresh project ReadMetadata authority for the exact actor and full revision ancestry; all four project roles qualify. Enabled features are independent of organization project-creation capability and upload authority. All route and query UUIDs are canonical nonzero lowercase D strings. Unknown, repeated and escaped-duplicate query names are rejected; no actor, digest, backend profile, policy or private object inputs are accepted. No body or Content-Type is supported. Content-Encoding is absent or one identity token, Transfer-Encoding is absent, and Content-Length is zero or the server proves no body. Unknown/chunked/nonempty framing is rejected before body consumption. Conditional headers and Idempotency-Key are unsupported. Reads never derive, claim, repair, provision storage or start a worker. Current selects the server's full report key for this revision, independently of the mapping head. Optional projectionDerivationId links findings only through that exact verified projection; unavailable selection is opaque 404. Lifecycle, backend status and read refusal are separate. False validation is a usable report. Missing, corrupt, unsupported or over-budget selected payloads retain honest available metadata with a categorical read refusal and null report. The complete wrapper including linked findings is bounded before response bytes and followed by fresh authority/source validation. Local work/read admission is nonwaiting 429; report dependency availability is closed 503. A ResourceLimit wrapper that cannot fit its policy uses a fixed categorical 503 error of at most 1024 bytes. All responses are no-store and carry no ETag.
+     */
+    get: operations["GetCatalogValidationReport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/validation/{derivationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read one exact retained successful validation report.
+     * @description Requires fresh project ReadMetadata authority for the exact actor and full revision ancestry; all four project roles qualify. Enabled features are independent of organization project-creation capability and upload authority. All route and query UUIDs are canonical nonzero lowercase D strings. Unknown, repeated and escaped-duplicate query names are rejected; no actor, digest, backend profile, policy or private object inputs are accepted. No body or Content-Type is supported. Content-Encoding is absent or one identity token, Transfer-Encoding is absent, and Content-Length is zero or the server proves no body. Unknown/chunked/nonempty framing is rejected before body consumption. Conditional headers and Idempotency-Key are unsupported. Reads never derive, claim, repair, provision storage or start a worker. The derivationId selects an immutable successful result, never a pending or failed attempt. Optional projectionDerivationId links findings only through that exact verified projection; unavailable selection is opaque 404. Lifecycle, backend status and read refusal are separate. False validation is a usable report. Missing, corrupt, unsupported or over-budget selected payloads retain honest available metadata with a categorical read refusal and null report. The complete wrapper including linked findings is bounded before response bytes and followed by fresh authority/source validation. Local work/read admission is nonwaiting 429; report dependency availability is closed 503. A ResourceLimit wrapper that cannot fit its policy uses a fixed categorical 503 error of at most 1024 bytes. All responses are no-store and carry no ETag.
+     */
+    get: operations["GetRetainedCatalogValidationReport"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/validation/ensure": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Explicitly ensure one scoped persisted validation report.
+     * @description Requires fresh project ReadMetadata authority for the exact actor and full revision ancestry; all four project roles qualify. Enabled features are independent of organization project-creation capability and upload authority. All route and query UUIDs are canonical nonzero lowercase D strings. Unknown, repeated and escaped-duplicate query names are rejected; no actor, digest, backend profile, policy or private object inputs are accepted. No body or Content-Type is supported. Content-Encoding is absent or one identity token, Transfer-Encoding is absent, and Content-Length is zero or the server proves no body. Unknown/chunked/nonempty framing is rejected before body consumption. Conditional headers and Idempotency-Key are unsupported. A cookie-bound framework request token and exact configured Origin are required. Optional repairDerivationId selects only the exact current successful result; there is no implicit repair or projection-link selector. Completed or cached observations return 200; actual pending or retry-delayed observations return 202. ClaimLost, SelectionChanged and GenerationExhausted are distinct 409 errors. Lifecycle, backend status and read refusal are separate. False validation is a usable report. Missing, corrupt, unsupported or over-budget selected payloads retain honest available metadata with a categorical read refusal and null report. The complete wrapper including linked findings is bounded before response bytes and followed by fresh authority/source validation. Local work/read admission is nonwaiting 429; report dependency availability is closed 503. A ResourceLimit wrapper that cannot fit its policy uses a fixed categorical 503 error of at most 1024 bytes. All responses are no-store and carry no ETag.
+     */
+    post: operations["EnsureCatalogValidationReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/revision-ingestions/{operationId}": {
     parameters: {
       query?: never;
@@ -303,6 +423,7 @@ export interface components {
       chat: boolean;
       createMappings: boolean;
       createProjects: boolean;
+      deriveReports: boolean;
       editMetadata: boolean;
       manageMembership: boolean;
       preview: boolean;
@@ -337,7 +458,13 @@ export interface components {
       | "ingestionAdmissionBusy"
       | "permissionDenied"
       | "idempotencyConflict"
-      | "projectCreationAdmissionBusy";
+      | "projectCreationAdmissionBusy"
+      | "revisionReportAdmissionBusy"
+      | "revisionReportClaimLost"
+      | "revisionReportSelectionChanged"
+      | "revisionReportGenerationExhausted"
+      | "revisionReportUnavailable"
+      | "revisionReportResourceLimit";
     CatalogErrorV1: {
       code: components["schemas"]["CatalogErrorCodeV1"];
     };
@@ -345,6 +472,7 @@ export interface components {
       chat: boolean;
       createMappings: boolean;
       createProjects: boolean;
+      deriveReports: boolean;
       editMetadata: boolean;
       manageMembership: boolean;
       preview: boolean;
@@ -416,6 +544,23 @@ export interface components {
       outcome: components["schemas"]["CatalogProjectCreationOutcomeV1"];
       projectUrl: string;
       receipt: components["schemas"]["CatalogProjectCreationReceiptV1"];
+    };
+    CatalogProjectionReportV1: {
+      currentAttempt:
+        null | components["schemas"]["CatalogRevisionReportAttemptV1"];
+      failure: null | components["schemas"]["CatalogRevisionReportFailureV1"];
+      /** Format: date-time */
+      nextAttemptAtUtc: null | string;
+      /** @enum {string} */
+      readonly operation: "projection";
+      readOutcome: components["schemas"]["CatalogRevisionReportReadOutcomeV1"];
+      report: null | components["schemas"]["ProjectionReportV1"];
+      result: null | components["schemas"]["CatalogRevisionReportResultV1"];
+      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      /** @enum {string} */
+      readonly schemaVersion: "weft.catalog-revision-report.v1";
+      state: components["schemas"]["CatalogRevisionReportStateV1"];
+      status: null | components["schemas"]["OperationStatusV1"];
     };
     CatalogProjectPageV1: {
       nextCursor?: null | string;
@@ -510,6 +655,58 @@ export interface components {
       nextCursor?: null | string;
       revisions: components["schemas"]["CatalogRevisionV1"][];
     };
+    CatalogRevisionReportAttemptV1: {
+      /**
+       * Format: uuid
+       * @description Canonical nonzero lowercase D-format UUID. A failed or pending attempt ID is not a retained success.
+       */
+      derivationId: string;
+      failure: null | components["schemas"]["CatalogRevisionReportFailureV1"];
+      /** Format: date-time */
+      finishedAtUtc: null | string;
+      /** @description Exact canonical positive decimal generation in 1..9223372036854775807; never a JSON number. */
+      generation: string;
+      /** Format: date-time */
+      startedAtUtc: string;
+      status: null | components["schemas"]["OperationStatusV1"];
+    };
+    /** @enum {string} */
+    CatalogRevisionReportFailureV1:
+      | "objectUnavailable"
+      | "storageIntegrity"
+      | "storageIo"
+      | "backendUnavailable"
+      | "backendFailure"
+      | "timedOut"
+      | "canceled"
+      | "isolationFailure"
+      | "protocolFailure"
+      | "profileUnavailable"
+      | "resourceLimit"
+      | "unsupportedArtifact";
+    /** @enum {string} */
+    CatalogRevisionReportReadOutcomeV1:
+      | "observed"
+      | "objectUnavailable"
+      | "storageIntegrity"
+      | "unsupportedFormat"
+      | "resourceLimit";
+    CatalogRevisionReportResultV1: {
+      /**
+       * Format: uuid
+       * @description Canonical nonzero lowercase D-format UUID. A failed or pending attempt ID is not a retained success.
+       */
+      derivationId: string;
+      /** Format: date-time */
+      finishedAtUtc: string;
+      /** @description Exact canonical positive decimal generation in 1..9223372036854775807; never a JSON number. */
+      generation: string;
+      /** Format: date-time */
+      startedAtUtc: string;
+    };
+    /** @enum {string} */
+    CatalogRevisionReportStateV1:
+      "notDerived" | "pending" | "available" | "failed";
     CatalogRevisionScopeV1: {
       mappingId: string;
       organizationId: string;
@@ -532,6 +729,25 @@ export interface components {
     };
     /** @enum {unknown} */
     CatalogRoleV1: "viewer" | "runner" | "publisher" | "administrator";
+    CatalogValidationReportV1: {
+      currentAttempt:
+        null | components["schemas"]["CatalogRevisionReportAttemptV1"];
+      failure: null | components["schemas"]["CatalogRevisionReportFailureV1"];
+      /** Format: date-time */
+      nextAttemptAtUtc: null | string;
+      /** @enum {string} */
+      readonly operation: "validation";
+      /** Format: uuid */
+      projectionDerivationId: null | string;
+      readOutcome: components["schemas"]["CatalogRevisionReportReadOutcomeV1"];
+      report: null | components["schemas"]["ValidationReportV1"];
+      result: null | components["schemas"]["CatalogRevisionReportResultV1"];
+      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      /** @enum {string} */
+      readonly schemaVersion: "weft.catalog-revision-report.v1";
+      state: components["schemas"]["CatalogRevisionReportStateV1"];
+      status: null | components["schemas"]["OperationStatusV1"];
+    };
     /** @enum {unknown} */
     ControlKind:
       | "unknown"
@@ -790,7 +1006,7 @@ export interface components {
       nativeArtifactDigest: components["schemas"]["ArtifactDigest"];
       revision: components["schemas"]["ScopedRevisionId"];
     };
-    /** @enum {unknown} */
+    /** @enum {string} */
     OperationStatusV1:
       | "succeeded"
       | "invalidMapping"
@@ -2267,6 +2483,722 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogProjectionReport: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Absent or a single identity token; no other coding or request body is accepted. */
+        "Content-Encoding"?: string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogProjectionReportV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetRetainedCatalogProjectionReport: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Absent or a single identity token; no other coding or request body is accepted. */
+        "Content-Encoding"?: string;
+      };
+      path: {
+        derivationId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogProjectionReportV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  EnsureCatalogProjectionReport: {
+    parameters: {
+      query?: {
+        /** @description Exact selected successful derivation to repair explicitly; no current-result substitution. */
+        repairDerivationId?: string;
+      };
+      header: {
+        /** @description Absent or a single identity token; no other coding or request body is accepted. */
+        "Content-Encoding"?: string;
+        /** @description One exact configured canonical browser origin. */
+        Origin: string;
+        /** @description Framework cookie-bound token issued by an admitted catalog context. */
+        "X-XSRF-TOKEN": string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogProjectionReportV1"];
+        };
+      };
+      /** @description Accepted */
+      202: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          /** @description Canonical full-scoped current report GET URL; future reads independently recheck authority. */
+          Location?: string;
+          /** @description Optional positive integer seconds from the actual database-observed next-attempt time. */
+          "Retry-After"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogProjectionReportV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogValidationReport: {
+    parameters: {
+      query?: {
+        /** @description Exact verified projection result for optional diagnostic linking. */
+        projectionDerivationId?: string;
+      };
+      header?: {
+        /** @description Absent or a single identity token; no other coding or request body is accepted. */
+        "Content-Encoding"?: string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogValidationReportV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetRetainedCatalogValidationReport: {
+    parameters: {
+      query?: {
+        /** @description Exact verified projection result for optional diagnostic linking. */
+        projectionDerivationId?: string;
+      };
+      header?: {
+        /** @description Absent or a single identity token; no other coding or request body is accepted. */
+        "Content-Encoding"?: string;
+      };
+      path: {
+        derivationId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogValidationReportV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  EnsureCatalogValidationReport: {
+    parameters: {
+      query?: {
+        /** @description Exact selected successful derivation to repair explicitly; no current-result substitution. */
+        repairDerivationId?: string;
+      };
+      header: {
+        /** @description Absent or a single identity token; no other coding or request body is accepted. */
+        "Content-Encoding"?: string;
+        /** @description One exact configured canonical browser origin. */
+        Origin: string;
+        /** @description Framework cookie-bound token issued by an admitted catalog context. */
+        "X-XSRF-TOKEN": string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogValidationReportV1"];
+        };
+      };
+      /** @description Accepted */
+      202: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          /** @description Canonical full-scoped current report GET URL; future reads independently recheck authority. */
+          Location?: string;
+          /** @description Optional positive integer seconds from the actual database-observed next-attempt time. */
+          "Retry-After"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogValidationReportV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {

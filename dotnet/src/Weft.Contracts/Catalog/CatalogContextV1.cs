@@ -26,14 +26,30 @@ public enum CatalogErrorCodeV1
     IngestionAdmissionBusy = 12,
     PermissionDenied = 13,
     IdempotencyConflict = 14,
-    ProjectCreationAdmissionBusy = 15
+    ProjectCreationAdmissionBusy = 15,
+    RevisionReportAdmissionBusy = 16,
+    RevisionReportClaimLost = 17,
+    RevisionReportSelectionChanged = 18,
+    RevisionReportGenerationExhausted = 19,
+    RevisionReportUnavailable = 20,
+    RevisionReportResourceLimit = 21
 }
 
 public sealed record CatalogFeaturesV1
 {
     public CatalogFeaturesV1(bool readCatalog, bool createProjects, bool createMappings, bool editMetadata,
         bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership)
+        : this(readCatalog, createProjects, createMappings, editMetadata, uploadRevisions, readReports,
+            chat, preview, manageMembership, false)
     {
+    }
+
+    [JsonConstructor]
+    public CatalogFeaturesV1(bool readCatalog, bool createProjects, bool createMappings, bool editMetadata,
+        bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership, bool deriveReports)
+    {
+        if (deriveReports && !readReports)
+            throw new ArgumentException("Report derivation requires report reads.", nameof(deriveReports));
         ReadCatalog = readCatalog;
         CreateProjects = createProjects;
         CreateMappings = createMappings;
@@ -43,6 +59,7 @@ public sealed record CatalogFeaturesV1
         Chat = chat;
         Preview = preview;
         ManageMembership = manageMembership;
+        DeriveReports = deriveReports;
     }
 
     public bool ReadCatalog { get; }
@@ -54,6 +71,7 @@ public sealed record CatalogFeaturesV1
     public bool Chat { get; }
     public bool Preview { get; }
     public bool ManageMembership { get; }
+    public bool DeriveReports { get; }
 
     public static CatalogFeaturesV1 ReadOnly { get; } = new(true, false, false, false, false, false, false, false, false);
 }
@@ -62,7 +80,17 @@ public sealed record CatalogActionsV1
 {
     public CatalogActionsV1(bool view, bool createProjects, bool createMappings, bool editMetadata,
         bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership)
+        : this(view, createProjects, createMappings, editMetadata, uploadRevisions, readReports,
+            chat, preview, manageMembership, false)
     {
+    }
+
+    [JsonConstructor]
+    public CatalogActionsV1(bool view, bool createProjects, bool createMappings, bool editMetadata,
+        bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership, bool deriveReports)
+    {
+        if (deriveReports && !readReports)
+            throw new ArgumentException("Report derivation requires report reads.", nameof(deriveReports));
         View = view;
         CreateProjects = createProjects;
         CreateMappings = createMappings;
@@ -72,6 +100,7 @@ public sealed record CatalogActionsV1
         Chat = chat;
         Preview = preview;
         ManageMembership = manageMembership;
+        DeriveReports = deriveReports;
     }
 
     public bool View { get; }
@@ -83,6 +112,7 @@ public sealed record CatalogActionsV1
     public bool Chat { get; }
     public bool Preview { get; }
     public bool ManageMembership { get; }
+    public bool DeriveReports { get; }
 
     public static CatalogActionsV1 ReadOnly { get; } = new(true, false, false, false, false, false, false, false, false);
 }

@@ -17,7 +17,7 @@ builder.Services.SuppressRequestDiagnostics();
 CatalogHostConfiguration.Configure(builder, address);
 if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE") is { Length: > 0 } workerImage)
 {
-    builder.Services.AddSingleton<IInspectionWorkerRunner>(new DockerInspectionWorkerRunner(
+    builder.Services.AddSingleton<IInspectionWorkerRunner>(_ => new DockerInspectionWorkerRunner(
         new DockerInspectionWorkerOptions("/usr/bin/docker", workerImage)));
     builder.Services.AddSingleton<FerruleInspectionBackend>();
     builder.Services.AddSingleton<IMappingInspectionBackend>(services => services.GetRequiredService<FerruleInspectionBackend>());

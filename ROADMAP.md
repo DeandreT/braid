@@ -120,10 +120,23 @@ lifecycle, resource bounds, package integrity and ordinary tool publication
 checks passed; independent source and runtime reviews accepted the increment.
 The worker and Ferrule pins remain unchanged. The
 [trusted Ferrule report adapter](docs/ferrule-revision-reports.md) describes its
-boundaries. P3e2c's persistent workflow is in progress under
-[#55](https://github.com/DeandreT/weft/issues/55), with the
-[workflow contract](docs/revision-report-workflow.md); persisted-report HTTP remains
-the separate [#51](https://github.com/DeandreT/weft/issues/51) increment.
+boundaries.
+
+P3e2c is qualified and merged in [#58](https://github.com/DeandreT/weft/pull/58),
+completing [#50](https://github.com/DeandreT/weft/issues/50). Its fresh-container
+suite passed 2,163 cases with no failures or skips, including all 25 new actual
+workflow cases. Real commit-acknowledgment loss, process death, natural lease
+expiry, worker-free reopening, revocation, capacity and repair checks passed.
+Independent source, runtime and packaging reviews accepted the increment; native
+bytes, immutable history, dependency integrity and owned-resource cleanup remained
+verified. Browser and Rust evidence retains its unchanged-input scope. The
+[workflow contract](docs/revision-report-workflow.md) describes the library seam.
+
+P3e3's persisted-report API and lazy host composition are in progress under
+[#51](https://github.com/DeandreT/weft/issues/51). The
+[API contract](docs/persisted-report-api.md) describes current and retained reads,
+explicit derivation/repair and complete-response admission. Its HTTP and published
+fresh/upgrade/restart qualification remains separate from the workflow proof.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's

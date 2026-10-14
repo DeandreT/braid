@@ -78,6 +78,13 @@ public static partial class CatalogEndpoints
     public static IServiceCollection AddWeftCatalog(this IServiceCollection services,
         CatalogApiOptions options, IHostEnvironment environment, CatalogMetadataEditOptions metadataEditOptions,
         CatalogRevisionIngestionOptions ingestionOptions, CatalogProjectCreationOptions creationOptions)
+        => AddWeftCatalog(services, options, environment, metadataEditOptions, ingestionOptions, creationOptions,
+            new CatalogRevisionReportOptions());
+
+    public static IServiceCollection AddWeftCatalog(this IServiceCollection services,
+        CatalogApiOptions options, IHostEnvironment environment, CatalogMetadataEditOptions metadataEditOptions,
+        CatalogRevisionIngestionOptions ingestionOptions, CatalogProjectCreationOptions creationOptions,
+        CatalogRevisionReportOptions revisionReportOptions)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
@@ -85,6 +92,7 @@ public static partial class CatalogEndpoints
         ArgumentNullException.ThrowIfNull(metadataEditOptions);
         ArgumentNullException.ThrowIfNull(ingestionOptions);
         ArgumentNullException.ThrowIfNull(creationOptions);
+        ArgumentNullException.ThrowIfNull(revisionReportOptions);
         options.Validate(environment);
         if (metadataEditOptions.Enabled && !options.Enabled)
             throw new InvalidOperationException("Metadata edits require an enabled catalog.");
@@ -92,10 +100,13 @@ public static partial class CatalogEndpoints
             throw new InvalidOperationException("Revision ingestion requires an enabled catalog.");
         if (creationOptions.Enabled && !options.Enabled)
             throw new InvalidOperationException("Project creation requires an enabled catalog.");
+        if (revisionReportOptions.Enabled && !options.Enabled)
+            throw new InvalidOperationException("Revision reports require an enabled catalog.");
         services.AddSingleton(options);
         services.AddSingleton(metadataEditOptions);
         services.AddSingleton(ingestionOptions);
         services.AddSingleton(creationOptions);
+        services.AddSingleton(revisionReportOptions);
         services.AddSingleton<CatalogRevisionIngestionGate>();
         services.AddSingleton<CatalogProjectCreationGate>();
         services.AddAntiforgery(antiforgery =>

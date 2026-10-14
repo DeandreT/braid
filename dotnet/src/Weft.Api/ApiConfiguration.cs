@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
+using Weft.Api.Catalog;
 using Weft.Contracts.Projections;
 
 namespace Weft.Api;
@@ -41,6 +42,7 @@ public static class ApiConfiguration
                     projection.Required.Add("schemaVersion");
                 }
             }
+            CatalogEndpoints.TransformRevisionReportSchemas(document);
             return Task.CompletedTask;
         }));
         return services;

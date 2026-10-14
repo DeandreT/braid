@@ -27,7 +27,9 @@ public static class CatalogHostConfiguration
         var metadataOptions = new CatalogMetadataEditOptions(Flag("WEFT_METADATA_EDITS_ENABLED"));
         var ingestionOptions = new CatalogRevisionIngestionOptions(Flag("WEFT_REVISION_INGESTION_ENABLED"));
         var creationOptions = new CatalogProjectCreationOptions(Flag("WEFT_PROJECT_CREATION_ENABLED"));
-        builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions, creationOptions);
+        var reportOptions = new CatalogRevisionReportOptions(Flag("WEFT_REVISION_REPORTS_ENABLED"),
+            Flag("WEFT_REVISION_REPORT_DERIVATION_ENABLED"));
+        builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions, creationOptions, reportOptions);
         if (!options.Enabled)
             return;
 
@@ -62,6 +64,7 @@ public static class CatalogHostConfiguration
             builder.Services.AddSingleton<IMappingMetadataWriter>(services =>
                 new PostgresMappingMetadataWriter(services.GetRequiredService<PostgresMappingMetadataDatabase>()));
         }
+        FileSystemStorageOptions? storageOptions = null;
         if (ingestionOptions.Enabled)
         {
             var ingestionConnectionString = readEnvironment("WEFT_POSTGRES_INGESTION_CONNECTION_STRING");
@@ -71,20 +74,18 @@ public static class CatalogHostConfiguration
             if (string.IsNullOrWhiteSpace(root))
                 throw new InvalidOperationException("Enabled revision ingestion requires an explicit private storage root.");
             var nativeLimit = NativeLimit(readEnvironment("WEFT_NATIVE_BYTE_LIMIT"));
-            var storageOptions = new FileSystemStorageOptions(root,
+            storageOptions = new FileSystemStorageOptions(root,
                 Path.TrimEndingDirectorySeparator(Path.GetFullPath(builder.Environment.ContentRootPath)));
             // Current admission reductions must not prevent verification of an
             // original reserved object. Physical and registration caps stay equal.
-            builder.Services.AddSingleton(storageOptions);
             builder.Services.AddSingleton(_ => new PostgresIngestionDatabase(ingestionConnectionString));
             builder.Services.AddSingleton(services => new PostgresRevisionIngestionStore(services.GetRequiredService<PostgresIngestionDatabase>()));
             builder.Services.AddSingleton<IIngestionMetadataStore>(services => services.GetRequiredService<PostgresRevisionIngestionStore>());
             builder.Services.AddSingleton<IIngestionWorkflowReader>(services => services.GetRequiredService<PostgresRevisionIngestionStore>());
             builder.Services.AddSingleton<IProjectReader>(services => services.GetRequiredService<PostgresCatalogReader>());
-            builder.Services.AddSingleton<LazyPrivateObjectStore>();
-            builder.Services.AddSingleton<IPrivateObjectStore>(services => services.GetRequiredService<LazyPrivateObjectStore>());
+            var ingestionStorageOptions = storageOptions;
             builder.Services.AddSingleton(services => new IngestionPrivateStoreRegistration(
-                services.GetRequiredService<IPrivateObjectStore>(), storageOptions.NativeByteLimit));
+                services.GetRequiredService<IPrivateObjectStore>(), ingestionStorageOptions.NativeByteLimit));
             builder.Services.AddSingleton<IIngestionBackendRegistry>(services =>
             {
                 var runner = services.GetService<IInspectionWorkerRunner>();
@@ -93,6 +94,17 @@ public static class CatalogHostConfiguration
             builder.Services.AddSingleton(new RevisionIngestionOptions(nativeLimit));
             builder.Services.AddSingleton<IRevisionIngestionService, RevisionIngestionService>();
         }
+        if (ingestionOptions.Enabled || reportOptions.Enabled)
+        {
+            if (storageOptions is not null)
+                builder.Services.AddSingleton(storageOptions);
+            else
+                builder.Services.AddSingleton(_ => CatalogRevisionReportHostConfiguration.CreateStorageOptions(
+                    builder.Environment.ContentRootPath, readEnvironment));
+            builder.Services.AddSingleton<LazyPrivateObjectStore>();
+            builder.Services.AddSingleton<IPrivateObjectStore>(services => services.GetRequiredService<LazyPrivateObjectStore>());
+        }
+        CatalogRevisionReportHostConfiguration.Configure(builder, reportOptions, readEnvironment);
 
         bool Flag(string variable) => readEnvironment(variable) switch
         {

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Weft.Contracts.Catalog;
 
 namespace Weft.Contracts.Projections;
 
@@ -20,6 +21,11 @@ public static class ProjectionJson
         options.NumberHandling = JsonNumberHandling.Strict;
         options.RespectRequiredConstructorParameters = true;
         options.RespectNullableAnnotations = true;
+        // Options converters take precedence over attributes. Keep the new closed report
+        // enums ahead of any generic enum converter already supplied by composition.
+        options.Converters.Insert(0, new CatalogRevisionReportStateConverterV1());
+        options.Converters.Insert(1, new CatalogRevisionReportReadOutcomeConverterV1());
+        options.Converters.Insert(2, new CatalogRevisionReportFailureConverterV1());
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
     }
 }
