@@ -102,6 +102,7 @@ public sealed class PostgresIngestionSecurityTests(PostgresFixture fixture)
         var seed = await PostgresSeedData.CreateAsync(test);
         await using var database = new PostgresIngestionDatabase(test.IngestionConnectionString);
         await test.ExecuteAsync("CREATE TABLE weft.ingestion_grant_probe(id integer)");
+        await test.ExecuteAsync("CREATE SEQUENCE weft.ingestion_grant_probe_sequence");
         await test.ExecuteAsync("CREATE FUNCTION weft.ingestion_grant_probe() RETURNS integer LANGUAGE sql AS 'SELECT 1'");
         await test.ExecuteAsync("REVOKE ALL ON FUNCTION weft.ingestion_grant_probe() FROM PUBLIC");
         try
@@ -128,6 +129,8 @@ public sealed class PostgresIngestionSecurityTests(PostgresFixture fixture)
                 ("GRANT TRUNCATE,TRIGGER ON weft.mapping_revisions TO weft_ingest", "REVOKE TRUNCATE,TRIGGER ON weft.mapping_revisions FROM weft_ingest"),
                 ("GRANT SELECT ON weft.schema_migrations TO weft_ingest", "REVOKE SELECT ON weft.schema_migrations FROM weft_ingest"),
                 ("GRANT SELECT(id) ON weft.ingestion_grant_probe TO weft_ingest", "REVOKE SELECT(id) ON weft.ingestion_grant_probe FROM weft_ingest"),
+                ("GRANT USAGE ON SEQUENCE weft.ingestion_grant_probe_sequence TO weft_ingest", "REVOKE USAGE ON SEQUENCE weft.ingestion_grant_probe_sequence FROM weft_ingest"),
+                ("GRANT SELECT ON SEQUENCE weft.ingestion_grant_probe_sequence TO PUBLIC", "REVOKE SELECT ON SEQUENCE weft.ingestion_grant_probe_sequence FROM PUBLIC"),
                 ("GRANT EXECUTE ON FUNCTION weft.ingestion_grant_probe() TO weft_ingest", "REVOKE EXECUTE ON FUNCTION weft.ingestion_grant_probe() FROM weft_ingest"),
                 ("GRANT SELECT ON weft.mappings TO weft_ingest WITH GRANT OPTION", "REVOKE GRANT OPTION FOR SELECT ON weft.mappings FROM weft_ingest; GRANT SELECT ON weft.mappings TO weft_ingest"),
                 ("GRANT UPDATE(head_sequence) ON weft.mappings TO weft_ingest WITH GRANT OPTION", "REVOKE GRANT OPTION FOR UPDATE(head_sequence) ON weft.mappings FROM weft_ingest; GRANT UPDATE(head_sequence) ON weft.mappings TO weft_ingest"),
@@ -147,6 +150,7 @@ public sealed class PostgresIngestionSecurityTests(PostgresFixture fixture)
         finally
         {
             await test.ExecuteAsync("DROP FUNCTION weft.ingestion_grant_probe()");
+            await test.ExecuteAsync("DROP SEQUENCE weft.ingestion_grant_probe_sequence");
             await test.ExecuteAsync("DROP TABLE weft.ingestion_grant_probe");
         }
     }

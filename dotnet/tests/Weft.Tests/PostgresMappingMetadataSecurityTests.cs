@@ -126,6 +126,7 @@ public sealed class PostgresMappingMetadataSecurityTests(PostgresFixture fixture
                 ($"GRANT SELECT(id) ON weft.metadata_grant_probe TO {Login}", $"REVOKE SELECT(id) ON weft.metadata_grant_probe FROM {Login}"),
                 ($"GRANT EXECUTE ON FUNCTION weft.metadata_grant_probe() TO {Login}", $"REVOKE EXECUTE ON FUNCTION weft.metadata_grant_probe() FROM {Login}"),
                 ($"GRANT USAGE ON SEQUENCE weft.metadata_grant_probe_sequence TO {Login}", $"REVOKE USAGE ON SEQUENCE weft.metadata_grant_probe_sequence FROM {Login}"),
+                ("GRANT SELECT ON SEQUENCE weft.metadata_grant_probe_sequence TO PUBLIC", "REVOKE SELECT ON SEQUENCE weft.metadata_grant_probe_sequence FROM PUBLIC"),
                 ($"GRANT UPDATE(name) ON weft.mappings TO {Login} WITH GRANT OPTION", $"REVOKE GRANT OPTION FOR UPDATE(name) ON weft.mappings FROM {Login}"),
                 ($"GRANT SELECT ON weft.mappings TO {Login} WITH GRANT OPTION", $"REVOKE GRANT OPTION FOR SELECT ON weft.mappings FROM {Login}"),
                 ($"GRANT SELECT(name) ON weft.mappings TO {Login} WITH GRANT OPTION", $"REVOKE SELECT(name) ON weft.mappings FROM {Login}"),
