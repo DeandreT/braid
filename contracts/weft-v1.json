@@ -436,6 +436,362 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Create a mapping and its first revision from exact native bytes.",
+        "description": "One raw application/octet-stream source with no media parameters, at most 4194304 bytes. Content-Encoding permits only identity. A canonical nonzero UUID Idempotency-Key is required; If-Match and If-None-Match are unsupported. The exact body is consumed only after fresh Publisher or Administrator authority and bounded work admission. Accepted results expose safe own receipts only; only committed outcomes include a committed revision URL.",
+        "operationId": "CreateCatalogMapping",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "One canonical nonzero lowercase UUID, with surrounding protocol OWS allowed. Repeated fields and lists are rejected.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Content-Encoding",
+            "in": "header",
+            "description": "Absent or one identity token; compressed or multiple codings are unsupported.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Required display name: trim before nonblank and 200 Unicode scalar validation; valid Unicode and no NUL.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "backendId",
+            "in": "query",
+            "description": "Required exact backend ID, nonblank and at most 128 UTF-8 bytes; no profile or default backend is accepted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "description",
+            "in": "query",
+            "description": "Preserved text, default empty, at most 4000 Unicode scalars; valid Unicode and no NUL.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "originalFilename",
+            "in": "query",
+            "description": "Safe display basename, default entry.native.json; at most 255 UTF-8 bytes, no control characters or path separators.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "description": "Canonical full-scoped own receipt URL for the actual InProgress operation.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}": {
@@ -945,6 +1301,365 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Append one native revision using the mapping's persisted backend.",
+        "description": "One raw application/octet-stream source with no media parameters, at most 4194304 bytes. Content-Encoding permits only identity. A canonical nonzero UUID Idempotency-Key is required; If-Match and If-None-Match are unsupported. The exact body is consumed only after fresh Publisher or Administrator authority and bounded work admission. Accepted results expose safe own receipts only; only committed outcomes include a committed revision URL.",
+        "operationId": "AppendCatalogRevision",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "One canonical nonzero lowercase UUID, with surrounding protocol OWS allowed. Repeated fields and lists are rejected.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Content-Encoding",
+            "in": "header",
+            "description": "Absent or one identity token; compressed or multiple codings are unsupported.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "head",
+            "in": "query",
+            "description": "Exact any (default) or equal. equal requires expectedHeadRevisionId; any forbids it.",
+            "schema": {
+              "enum": [
+                "any",
+                "equal"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedHeadRevisionId",
+            "in": "query",
+            "description": "Canonical nonzero lowercase revision UUID, required only with head=equal.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "originalFilename",
+            "in": "query",
+            "description": "Safe display basename, default entry.native.json; at most 255 UTF-8 bytes, no control characters or path separators.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "description": "Canonical full-scoped own receipt URL for the actual InProgress operation.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}": {
@@ -1035,6 +1750,452 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/revision-ingestions/{operationId}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Read the original actor's safe durable revision ingestion receipt after fresh upload authority.",
+        "description": "No query fields. Fresh Publisher or Administrator authority and original operation ownership are required. This read never acquires a work permit, claims, executes, or touches native storage. Future scopes do not imply that resources exist.",
+        "operationId": "GetCatalogRevisionIngestionReceipt",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/revision-ingestions/{operationId}/resume": {
+      "post": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Attempt one explicit source-free recovery of the original actor's ingestion operation.",
+        "description": "No query fields, Idempotency-Key, If-Match, If-None-Match or body. Fresh own-receipt authority precedes the bounded empty-body check and immediate work admission. This synchronous operation attempts one claim without retry; terminal results replay and missing reserved native source yields NeedsSource.",
+        "operationId": "ResumeCatalogRevisionIngestion",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "headers": {
+              "Location": {
+                "description": "Canonical full-scoped own receipt URL for the actual InProgress operation.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
                 }
               }
             }
@@ -1236,7 +2397,8 @@
           "preconditionFailed",
           "unsupportedMediaType",
           "bodyLimit",
-          "versionExhausted"
+          "versionExhausted",
+          "ingestionAdmissionBusy"
         ]
       },
       "CatalogErrorV1": {
@@ -1516,6 +2678,149 @@
           },
           "access": {
             "$ref": "#/components/schemas/CatalogAccessV1"
+          }
+        }
+      },
+      "CatalogRevisionIngestionFailureV1": {
+        "enum": [
+          "needsSource",
+          "storageIntegrity",
+          "storageIo",
+          "backendUnavailable",
+          "backendFailure",
+          "timedOut",
+          "canceled",
+          "isolationFailure",
+          "protocolFailure",
+          "reservedProfileUnavailable",
+          "evidenceLimit",
+          null
+        ]
+      },
+      "CatalogRevisionIngestionOutcomeV1": {
+        "enum": [
+          "committedValid",
+          "committedDecodedInvalid",
+          "inProgress",
+          "needsSource",
+          "retryableFailure",
+          "rejected",
+          "headConflict",
+          "attemptExhausted",
+          "idempotencyConflict",
+          "claimLost",
+          "notAuthorizedOrNotFound"
+        ]
+      },
+      "CatalogRevisionIngestionPhaseV1": {
+        "enum": [
+          "reserved",
+          "staged",
+          "ready",
+          "committed",
+          "rejected",
+          "headConflict",
+          "attemptExhausted"
+        ]
+      },
+      "CatalogRevisionIngestionReceiptV1": {
+        "required": [
+          "operationId",
+          "project",
+          "futureMapping",
+          "futureRevision",
+          "phase",
+          "claimCount",
+          "reservedAtUtc",
+          "completedAtUtc",
+          "originalFilename",
+          "committedSequence",
+          "committedAdmission",
+          "latestFailure"
+        ],
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "project": {
+            "$ref": "#/components/schemas/CatalogProjectScopeV1"
+          },
+          "futureMapping": {
+            "$ref": "#/components/schemas/CatalogMappingScopeV1"
+          },
+          "futureRevision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/CatalogRevisionIngestionPhaseV1"
+          },
+          "claimCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reservedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "originalFilename": {
+            "type": "string"
+          },
+          "committedSequence": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "committedAdmission": {
+            "$ref": "#/components/schemas/CatalogAdmissionV1"
+          },
+          "latestFailure": {
+            "$ref": "#/components/schemas/CatalogRevisionIngestionFailureV1"
+          }
+        }
+      },
+      "CatalogRevisionIngestionRejectionV1": {
+        "enum": [
+          "emptyNative",
+          "nativeLimit",
+          "unregisteredBackend",
+          "nativeDecode",
+          "unsupportedArtifact",
+          "resourceLimit",
+          null
+        ]
+      },
+      "CatalogRevisionIngestionResultV1": {
+        "required": [
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/CatalogRevisionIngestionOutcomeV1"
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/CatalogRevisionIngestionReceiptV1"
+          },
+          "rejection": {
+            "$ref": "#/components/schemas/CatalogRevisionIngestionRejectionV1"
+          },
+          "failure": {
+            "$ref": "#/components/schemas/CatalogRevisionIngestionFailureV1"
+          },
+          "committedRevisionUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

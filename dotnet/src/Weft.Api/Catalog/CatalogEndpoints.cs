@@ -33,6 +33,10 @@ public static partial class CatalogEndpoints
             "GetCatalogRevisions", "Read immutable revision history in descending committed sequence.");
         Describe<CatalogRevisionV1>(endpoints.MapGet(mapping + "/revisions/{revisionId}", GetRevision),
             "GetCatalogRevision", "Read one scoped immutable revision's catalog metadata.");
+        DescribeRevisionUpload(endpoints.MapPost(project + "/mappings", CreateCatalogMapping), create: true);
+        DescribeRevisionUpload(endpoints.MapPost(mapping + "/revisions", AppendCatalogRevision), create: false);
+        DescribeIngestionReceipt(endpoints.MapGet(project + "/revision-ingestions/{operationId}", GetCatalogIngestionReceipt));
+        DescribeIngestionResume(endpoints.MapPost(project + "/revision-ingestions/{operationId}/resume", ResumeCatalogRevisionIngestion));
         return endpoints;
     }
 
@@ -45,7 +49,7 @@ public static partial class CatalogEndpoints
             .Produces<CatalogErrorV1>(StatusCodes.Status500InternalServerError);
 
     private static Task<IResult> GetContext(HttpContext context, CatalogRequestBoundary boundary,
-        CatalogMetadataEditOptions metadataEditOptions) =>
+        CatalogMetadataEditOptions metadataEditOptions, CatalogRevisionIngestionOptions ingestionOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -54,12 +58,13 @@ public static partial class CatalogEndpoints
             {
                 RequireOrganization(organization, admission);
                 var token = boundary.IssueRequestToken(context, admission.Actor!);
-                return Results.Ok(CatalogPublicMapper.Context(organization, token, metadataEditOptions.Enabled));
+                return Results.Ok(CatalogPublicMapper.Context(organization, token, metadataEditOptions.Enabled, ingestionOptions.Enabled));
             });
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,
-        CatalogRequestBoundary boundary, string? limit = null, string? cursor = null) =>
+        CatalogRequestBoundary boundary, CatalogRevisionIngestionOptions ingestionOptions,
+        string? limit = null, string? cursor = null) =>
         WithAdmission(context, boundary, async admission =>
         {
             var organization = Id(organizationId);
@@ -73,12 +78,12 @@ public static partial class CatalogEndpoints
                 RequireOrganization(projects.Admission, admission);
                 foreach (var item in projects.Projects)
                     RequireAccess(item.Access, admission.Actor!, item.Summary.Scope);
-                return Results.Ok(CatalogPublicMapper.Projects(projects));
+                return Results.Ok(CatalogPublicMapper.Projects(projects, ingestionOptions.Enabled));
             });
         });
 
     private static Task<IResult> GetProject(string organizationId, string projectId,
-        HttpContext context, CatalogRequestBoundary boundary) =>
+        HttpContext context, CatalogRequestBoundary boundary, CatalogRevisionIngestionOptions ingestionOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -89,12 +94,13 @@ public static partial class CatalogEndpoints
             {
                 RequireScope(project.Summary.Scope == scope);
                 RequireAccess(project.Access, admission.Actor!, scope);
-                return Results.Ok(CatalogPublicMapper.Project(project));
+                return Results.Ok(CatalogPublicMapper.Project(project, ingestionOptions.Enabled));
             });
         });
 
     private static Task<IResult> GetMappings(string organizationId, string projectId,
         HttpContext context, CatalogRequestBoundary boundary, CatalogMetadataEditOptions metadataEditOptions,
+        CatalogRevisionIngestionOptions ingestionOptions,
         string? limit = null, string? cursor = null) =>
         WithAdmission(context, boundary, async admission =>
         {
@@ -107,12 +113,13 @@ public static partial class CatalogEndpoints
                 page.Limit, continuation, context.RequestAborted), mappings =>
             {
                 RequireAccess(mappings.Access, admission.Actor!, scope);
-                return Results.Ok(CatalogPublicMapper.Mappings(mappings, metadataEditOptions.Enabled));
+                return Results.Ok(CatalogPublicMapper.Mappings(mappings, metadataEditOptions.Enabled, ingestionOptions.Enabled));
             });
         });
 
     private static Task<IResult> GetMapping(string organizationId, string projectId, string mappingId,
-        HttpContext context, CatalogRequestBoundary boundary, CatalogMetadataEditOptions metadataEditOptions) =>
+        HttpContext context, CatalogRequestBoundary boundary, CatalogMetadataEditOptions metadataEditOptions,
+        CatalogRevisionIngestionOptions ingestionOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
@@ -123,7 +130,7 @@ public static partial class CatalogEndpoints
             {
                 RequireScope(mapping.Summary.Scope == scope);
                 RequireAccess(mapping.Access, admission.Actor!, Project(scope));
-                return Results.Ok(CatalogPublicMapper.Mapping(mapping, metadataEditOptions.Enabled));
+                return Results.Ok(CatalogPublicMapper.Mapping(mapping, metadataEditOptions.Enabled, ingestionOptions.Enabled));
             });
         });
 
@@ -196,6 +203,16 @@ public static partial class CatalogEndpoints
             if (!admission.IsAdmitted)
                 return Error(admission.Error!.Value, admission.StatusCode);
             return await action(admission);
+        }
+        catch (CatalogRevisionPersistenceException)
+        {
+            context.Response.Headers.Remove("ETag");
+            return Error(CatalogErrorCodeV1.PersistenceFailure, StatusCodes.Status500InternalServerError);
+        }
+        catch (CatalogRevisionRequestException exception)
+        {
+            context.Response.Headers.Remove("ETag");
+            return Error(exception.Code, exception.StatusCode);
         }
         catch (CatalogMetadataRequestException exception)
         {

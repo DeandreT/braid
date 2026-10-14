@@ -66,17 +66,27 @@ public static partial class CatalogEndpoints
         AddWeftCatalog(services, options, environment, new CatalogMetadataEditOptions());
 
     public static IServiceCollection AddWeftCatalog(this IServiceCollection services,
-        CatalogApiOptions options, IHostEnvironment environment, CatalogMetadataEditOptions metadataEditOptions)
+        CatalogApiOptions options, IHostEnvironment environment, CatalogMetadataEditOptions metadataEditOptions) =>
+        AddWeftCatalog(services, options, environment, metadataEditOptions, new CatalogRevisionIngestionOptions());
+
+    public static IServiceCollection AddWeftCatalog(this IServiceCollection services,
+        CatalogApiOptions options, IHostEnvironment environment, CatalogMetadataEditOptions metadataEditOptions,
+        CatalogRevisionIngestionOptions ingestionOptions)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(metadataEditOptions);
+        ArgumentNullException.ThrowIfNull(ingestionOptions);
         options.Validate(environment);
         if (metadataEditOptions.Enabled && !options.Enabled)
             throw new InvalidOperationException("Metadata edits require an enabled catalog.");
+        if (ingestionOptions.Enabled && !options.Enabled)
+            throw new InvalidOperationException("Revision ingestion requires an enabled catalog.");
         services.AddSingleton(options);
         services.AddSingleton(metadataEditOptions);
+        services.AddSingleton(ingestionOptions);
+        services.AddSingleton<CatalogRevisionIngestionGate>();
         services.AddAntiforgery(antiforgery =>
         {
             antiforgery.HeaderName = CatalogRequestBoundary.RequestTokenHeader;

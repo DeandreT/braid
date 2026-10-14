@@ -13,6 +13,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 });
 builder.WebHost.ConfigureKestrel(server => DevelopmentListenAddress.ConfigureKestrel(server, address));
 builder.Services.AddWeftApi();
+builder.Services.SuppressRequestDiagnostics();
 CatalogHostConfiguration.Configure(builder, address);
 if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE") is { Length: > 0 } workerImage)
 {

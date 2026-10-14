@@ -426,3 +426,86 @@ export function metadataUpdatedResponse(
 
 export const metadataPreconditionError: components["schemas"]["CatalogErrorV1"]["code"] =
   "preconditionFailed";
+
+type RevisionIngestionReceipt =
+  components["schemas"]["CatalogRevisionIngestionReceiptV1"];
+type RevisionIngestionResult =
+  components["schemas"]["CatalogRevisionIngestionResultV1"];
+type MappingCreate =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/mappings"]["post"];
+type RevisionAppend =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions"]["post"];
+type OwnReceiptGet =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/revision-ingestions/{operationId}"]["get"];
+type OwnReceiptResume =
+  paths["/api/v1/organizations/{organizationId}/projects/{projectId}/revision-ingestions/{operationId}/resume"]["post"];
+type MappingCreateContent = NonNullable<
+  MappingCreate["requestBody"]
+>["content"];
+type RevisionAppendContent = NonNullable<
+  RevisionAppend["requestBody"]
+>["content"];
+
+export function rawMappingCreateBody(
+  native: MappingCreateContent["application/octet-stream"],
+): MappingCreateContent {
+  return { "application/octet-stream": native };
+}
+
+export function rawRevisionAppendBody(
+  native: RevisionAppendContent["application/octet-stream"],
+): RevisionAppendContent {
+  return { "application/octet-stream": native };
+}
+
+export const jsonMappingCreateBody: MappingCreateContent = {
+  // @ts-expect-error Native uploads use exact binary content rather than a JSON envelope.
+  "application/json": { native: "{}" },
+};
+
+export const ingestionCommittedSequence: RevisionIngestionReceipt["committedSequence"] =
+  "9223372036854775807";
+// @ts-expect-error Committed ingestion sequences retain bigint precision as text.
+export const numericIngestionSequence: RevisionIngestionReceipt["committedSequence"] = 9007199254740993;
+// @ts-expect-error Safe receipt polling does not expose idempotency keys.
+export const receiptIdempotencyKey: RevisionIngestionReceipt["idempotencyKey"] =
+  "key";
+// @ts-expect-error Safe receipt polling does not expose private object references.
+export const receiptPrivateReference: RevisionIngestionReceipt["nativeReference"] =
+  null;
+// @ts-expect-error Rejection reasons belong to actual mutation results, not inferred polling outcomes.
+export const receiptRejection: RevisionIngestionReceipt["rejection"] =
+  "nativeDecode";
+// @ts-expect-error An ingestion failure is a closed category rather than provider exception text.
+export const arbitraryIngestionFailure: RevisionIngestionResult["failure"] =
+  "provider detail";
+// @ts-expect-error Future receipt phases are not automatically accepted as supported categories.
+export const unknownIngestionPhase: RevisionIngestionReceipt["phase"] =
+  "running";
+
+export function ownReceiptResponse(
+  receipt: RevisionIngestionReceipt,
+): OwnReceiptGet["responses"][200]["content"] {
+  return { "application/json": receipt };
+}
+
+export function committedMappingCreateResponse(
+  result: RevisionIngestionResult,
+): MappingCreate["responses"][200]["content"] {
+  return { "application/json": result };
+}
+
+export function inProgressRevisionAppendResponse(
+  result: RevisionIngestionResult,
+): RevisionAppend["responses"][202]["content"] {
+  return { "application/json": result };
+}
+
+export function explicitResumeConflictResponse(
+  result: RevisionIngestionResult,
+): OwnReceiptResume["responses"][409]["content"] {
+  return { "application/json": result };
+}
+
+export const ingestionAdmissionBusy: components["schemas"]["CatalogErrorV1"]["code"] =
+  "ingestionAdmissionBusy";

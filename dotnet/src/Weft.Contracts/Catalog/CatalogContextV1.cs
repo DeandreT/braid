@@ -22,7 +22,8 @@ public enum CatalogErrorCodeV1
     PreconditionFailed = 8,
     UnsupportedMediaType = 9,
     BodyLimit = 10,
-    VersionExhausted = 11
+    VersionExhausted = 11,
+    IngestionAdmissionBusy = 12
 }
 
 public sealed record CatalogFeaturesV1

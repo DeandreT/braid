@@ -1,9 +1,13 @@
+using System.Globalization;
 using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Weft.Api.Catalog;
 using Weft.Application;
+using Weft.MappingBackends.Ingestion;
+using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
+using Weft.Storage.FileSystem;
 
 namespace Weft.Server;
 
@@ -21,7 +25,8 @@ public static class CatalogHostConfiguration
             Id("WEFT_DEV_PRINCIPAL_ID"), Id("WEFT_DEV_ORGANIZATION_ID"),
             readEnvironment("WEFT_DEV_BROWSER_ORIGIN"));
         var metadataOptions = new CatalogMetadataEditOptions(Flag("WEFT_METADATA_EDITS_ENABLED"));
-        builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions);
+        var ingestionOptions = new CatalogRevisionIngestionOptions(Flag("WEFT_REVISION_INGESTION_ENABLED"));
+        builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions);
         if (!options.Enabled)
             return;
 
@@ -33,8 +38,9 @@ public static class CatalogHostConfiguration
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new InvalidOperationException("Enabled catalog requires its dedicated reader connection configuration.");
         builder.Services.AddSingleton(_ => new PostgresCatalogDatabase(connectionString));
-        builder.Services.AddSingleton<ICatalogReader>(services =>
+        builder.Services.AddSingleton(services =>
             new PostgresCatalogReader(services.GetRequiredService<PostgresCatalogDatabase>()));
+        builder.Services.AddSingleton<ICatalogReader>(services => services.GetRequiredService<PostgresCatalogReader>());
         if (metadataOptions.Enabled)
         {
             var metadataConnectionString = readEnvironment("WEFT_POSTGRES_METADATA_CONNECTION_STRING");
@@ -43,6 +49,37 @@ public static class CatalogHostConfiguration
             builder.Services.AddSingleton(_ => new PostgresMappingMetadataDatabase(metadataConnectionString));
             builder.Services.AddSingleton<IMappingMetadataWriter>(services =>
                 new PostgresMappingMetadataWriter(services.GetRequiredService<PostgresMappingMetadataDatabase>()));
+        }
+        if (ingestionOptions.Enabled)
+        {
+            var ingestionConnectionString = readEnvironment("WEFT_POSTGRES_INGESTION_CONNECTION_STRING");
+            if (string.IsNullOrWhiteSpace(ingestionConnectionString))
+                throw new InvalidOperationException("Enabled revision ingestion requires its dedicated ingestion connection configuration.");
+            var root = readEnvironment("WEFT_PRIVATE_STORAGE_ROOT");
+            if (string.IsNullOrWhiteSpace(root))
+                throw new InvalidOperationException("Enabled revision ingestion requires an explicit private storage root.");
+            var nativeLimit = NativeLimit(readEnvironment("WEFT_NATIVE_BYTE_LIMIT"));
+            var storageOptions = new FileSystemStorageOptions(root,
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(builder.Environment.ContentRootPath)));
+            // Current admission reductions must not prevent verification of an
+            // original reserved object. Physical and registration caps stay equal.
+            builder.Services.AddSingleton(storageOptions);
+            builder.Services.AddSingleton(_ => new PostgresIngestionDatabase(ingestionConnectionString));
+            builder.Services.AddSingleton(services => new PostgresRevisionIngestionStore(services.GetRequiredService<PostgresIngestionDatabase>()));
+            builder.Services.AddSingleton<IIngestionMetadataStore>(services => services.GetRequiredService<PostgresRevisionIngestionStore>());
+            builder.Services.AddSingleton<IIngestionWorkflowReader>(services => services.GetRequiredService<PostgresRevisionIngestionStore>());
+            builder.Services.AddSingleton<IProjectReader>(services => services.GetRequiredService<PostgresCatalogReader>());
+            builder.Services.AddSingleton<LazyPrivateObjectStore>();
+            builder.Services.AddSingleton<IPrivateObjectStore>(services => services.GetRequiredService<LazyPrivateObjectStore>());
+            builder.Services.AddSingleton(services => new IngestionPrivateStoreRegistration(
+                services.GetRequiredService<IPrivateObjectStore>(), storageOptions.NativeByteLimit));
+            builder.Services.AddSingleton<IIngestionBackendRegistry>(services =>
+            {
+                var runner = services.GetService<IInspectionWorkerRunner>();
+                return new IngestionBackendRegistry(runner is null ? [] : [FerruleIngestionAdmissionBackend.CreateRegistration(runner)]);
+            });
+            builder.Services.AddSingleton(new RevisionIngestionOptions(nativeLimit));
+            builder.Services.AddSingleton<IRevisionIngestionService, RevisionIngestionService>();
         }
 
         bool Flag(string variable) => readEnvironment(variable) switch
@@ -61,5 +98,15 @@ public static class CatalogHostConfiguration
                 throw new ArgumentException("Catalog identity configuration requires canonical nonempty UUIDs.");
             return id;
         }
+    }
+
+    private static long NativeLimit(string? value)
+    {
+        if (value is null) return FileSystemStorageOptions.NativeHardMaximum;
+        if (value.Length is < 1 or > 7 || value[0] == '0' || value.Any(character => character is < '0' or > '9') ||
+            !long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var limit) ||
+            limit is < 1 or > FileSystemStorageOptions.NativeHardMaximum)
+            throw new ArgumentException("The native byte admission limit must be a canonical positive decimal at most 4194304.");
+        return limit;
     }
 }

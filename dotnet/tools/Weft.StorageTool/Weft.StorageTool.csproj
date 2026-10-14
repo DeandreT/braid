@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+  </ItemGroup>
+</Project>

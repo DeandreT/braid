@@ -13,7 +13,9 @@ public static class DevelopmentListenAddress
         }
         // Replace configured endpoints so environment settings cannot add public listeners.
         server.Configure();
-        server.Listen(address.Address, address.Port);
+        server.Limits.MaxRequestLineSize = 65_536;
+        // Only this HTTP/1 request-line profile is qualified; HTTP/2 has separate bounds.
+        server.Listen(address.Address, address.Port, listener => listener.Protocols = HttpProtocols.Http1);
     }
 
     public static IPEndPoint Parse(string? configured)

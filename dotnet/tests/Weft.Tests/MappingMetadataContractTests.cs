@@ -174,7 +174,7 @@ public sealed class MappingMetadataContractTests
         Assert.Equal(4, (int)CatalogErrorCodeV1.IdentityRejected);
         Assert.Equal(5, (int)CatalogErrorCodeV1.PersistenceFailure);
         Assert.Equal(6, (int)CatalogErrorCodeV1.InternalFailure);
-        Assert.Throws<ArgumentOutOfRangeException>(() => new CatalogErrorV1((CatalogErrorCodeV1)12));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new CatalogErrorV1((CatalogErrorCodeV1)999));
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<CatalogErrorCodeV1>("\"unknownCategory\"", Options));
     }
 }

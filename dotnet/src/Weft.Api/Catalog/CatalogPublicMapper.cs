@@ -12,27 +12,30 @@ public static class CatalogPublicMapper
     public static CatalogFeaturesV1 Features { get; } = new(true, false, false, false, false, false, false, false, false);
 
     public static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string requestToken,
-        bool metadataEditsEnabled = false) =>
+        bool metadataEditsEnabled = false, bool revisionIngestionEnabled = false) =>
         new("development", Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name,
-            metadataEditsEnabled ? new(true, false, false, true, false, false, false, false, false) : Features, requestToken);
+            metadataEditsEnabled || revisionIngestionEnabled
+                ? new(true, false, revisionIngestionEnabled, metadataEditsEnabled, revisionIngestionEnabled, false, false, false, false)
+                : Features, requestToken);
 
-    public static CatalogProjectV1 Project(CatalogProject project)
+    public static CatalogProjectV1 Project(CatalogProject project, bool revisionIngestionEnabled = false)
     {
         var summary = project.Summary;
         return new(ProjectScope(summary.Scope), summary.Name, summary.Description,
             Id(summary.CreatorPrincipalId.Value), summary.CreatedAtUtc, summary.UpdatedAtUtc,
-            Decimal(summary.Version), Access(project.Access));
+            Decimal(summary.Version), Access(project.Access, createMappingsEnabled: revisionIngestionEnabled));
     }
 
-    public static CatalogMappingV1 Mapping(CatalogMapping mapping, bool metadataEditsEnabled = false) =>
-        Mapping(mapping.Summary, mapping.Access, metadataEditsEnabled);
+    public static CatalogMappingV1 Mapping(CatalogMapping mapping, bool metadataEditsEnabled = false,
+        bool revisionIngestionEnabled = false) => Mapping(mapping.Summary, mapping.Access, metadataEditsEnabled, revisionIngestionEnabled);
 
     public static CatalogMappingV1 Mapping(CatalogMappingSummary summary, ProjectAccess access,
-        bool metadataEditsEnabled = false) =>
+        bool metadataEditsEnabled = false, bool revisionIngestionEnabled = false) =>
         new(MappingScope(summary.Scope), summary.Name, summary.Description, summary.BackendId,
             Id(summary.Creator.Value), Id(summary.Owner.Value), summary.CreatedAtUtc, summary.UpdatedAtUtc,
             Decimal(summary.Version), new CatalogHeadV1(RevisionScope(summary.Head.Scope),
-                Decimal(summary.Head.Sequence), Admission(summary.Head.Admission)), Access(access, metadataEditsEnabled));
+                Decimal(summary.Head.Sequence), Admission(summary.Head.Admission)), Access(access, metadataEditsEnabled,
+                    uploadRevisionsEnabled: revisionIngestionEnabled));
 
     public static CatalogMappingMetadataV1 Metadata(CatalogMappingMetadata metadata) =>
         new(MappingScope(metadata.Scope), metadata.Name, metadata.Description, Decimal(metadata.Version));
@@ -44,11 +47,13 @@ public static class CatalogPublicMapper
             Id(summary.Creator.Value), summary.CommittedAtUtc, summary.OriginalFilename, summary.LogicalDocument,
             new ArtifactDigest("sha256", summary.NativeDigest.Value), checked((int)summary.NativeByteCount), summary.BackendId);
 
-    public static CatalogProjectPageV1 Projects(CatalogProjectPage page) =>
-        new(page.Projects.Select(Project), page.NextCursor is { } cursor ? CatalogCursorCodec.Encode(cursor) : null);
+    public static CatalogProjectPageV1 Projects(CatalogProjectPage page, bool revisionIngestionEnabled = false) =>
+        new(page.Projects.Select(project => Project(project, revisionIngestionEnabled)),
+            page.NextCursor is { } cursor ? CatalogCursorCodec.Encode(cursor) : null);
 
-    public static CatalogMappingPageV1 Mappings(CatalogMappingPage page, bool metadataEditsEnabled = false) =>
-        new(page.Mappings.Select(mapping => Mapping(mapping, page.Access, metadataEditsEnabled)),
+    public static CatalogMappingPageV1 Mappings(CatalogMappingPage page, bool metadataEditsEnabled = false,
+        bool revisionIngestionEnabled = false) =>
+        new(page.Mappings.Select(mapping => Mapping(mapping, page.Access, metadataEditsEnabled, revisionIngestionEnabled)),
             page.NextCursor is { } cursor ? CatalogCursorCodec.Encode(cursor) : null);
 
     public static CatalogRevisionPageV1 Revisions(CatalogRevisionPage page) =>
@@ -60,15 +65,18 @@ public static class CatalogPublicMapper
     public static CatalogRevisionScopeV1 RevisionScope(RevisionScope scope) =>
         new(Id(scope.OrganizationId), Id(scope.ProjectId), Id(scope.MappingId), Id(scope.RevisionId));
 
-    private static CatalogAccessV1 Access(ProjectAccess access, bool metadataEditsEnabled = false) => new(access.Role switch
-    {
-        ProjectRole.Viewer => CatalogRoleV1.Viewer,
-        ProjectRole.Runner => CatalogRoleV1.Runner,
-        ProjectRole.Publisher => CatalogRoleV1.Publisher,
-        ProjectRole.Administrator => CatalogRoleV1.Administrator,
-        _ => throw new InvalidOperationException("The catalog role is unknown.")
-    }, new CatalogActionsV1(access.Can(ProjectAction.ReadMetadata), false, false,
-        metadataEditsEnabled && access.Can(ProjectAction.EditMetadata), false, false, false, false, false));
+    private static CatalogAccessV1 Access(ProjectAccess access, bool metadataEditsEnabled = false,
+        bool createMappingsEnabled = false, bool uploadRevisionsEnabled = false) => new(access.Role switch
+        {
+            ProjectRole.Viewer => CatalogRoleV1.Viewer,
+            ProjectRole.Runner => CatalogRoleV1.Runner,
+            ProjectRole.Publisher => CatalogRoleV1.Publisher,
+            ProjectRole.Administrator => CatalogRoleV1.Administrator,
+            _ => throw new InvalidOperationException("The catalog role is unknown.")
+        }, new CatalogActionsV1(access.Can(ProjectAction.ReadMetadata), false,
+        createMappingsEnabled && access.Can(ProjectAction.UploadRevision),
+        metadataEditsEnabled && access.Can(ProjectAction.EditMetadata),
+        uploadRevisionsEnabled && access.Can(ProjectAction.UploadRevision), false, false, false, false));
 
     private static CatalogAdmissionV1 Admission(IngestionAdmissionClassification admission) => admission switch
     {

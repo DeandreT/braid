@@ -21,14 +21,24 @@ public sealed class CatalogHttpConfigurationTests
         await using var api = await CatalogHttpTestSupport.StartAsync(environment: environment);
         var project = "/api/v1/organizations/11111111-1111-1111-1111-111111111111/projects/00000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
         var mapping = project + "/mappings/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        var receipt = project + "/revision-ingestions/cccccccc-cccc-cccc-cccc-cccccccccccc";
         foreach (var path in new[]
         {
             "/api/v1/catalog/context", project[..project.LastIndexOf('/')], project,
             project + "/mappings", mapping, mapping + "/metadata", mapping + "/revisions",
-            mapping + "/revisions/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            mapping + "/revisions/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", receipt
         })
         {
             using var response = await api.Client.GetAsync(path);
+            var error = await CatalogHttpTestSupport.JsonAsync(response, HttpStatusCode.NotFound);
+            Assert.Equal("unavailable", error.GetProperty("code").GetString());
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.False(response.Headers.Contains("Set-Cookie"));
+        }
+        foreach (var path in new[] { project + "/mappings", mapping + "/revisions", receipt + "/resume" })
+        {
+            using var body = new ByteArrayContent([1, 2, 3]);
+            using var response = await api.Client.PostAsync(path, body);
             var error = await CatalogHttpTestSupport.JsonAsync(response, HttpStatusCode.NotFound);
             Assert.Equal("unavailable", error.GetProperty("code").GetString());
             Assert.True(response.Headers.CacheControl?.NoStore);
@@ -44,6 +54,7 @@ public sealed class CatalogHttpConfigurationTests
         var organizationRoute = "/api/v1/organizations/{organizationId}";
         var projectRoute = organizationRoute + "/projects/{projectId}";
         var mappingRoute = projectRoute + "/mappings/{mappingId}";
+        var receiptRoute = projectRoute + "/revision-ingestions/{operationId}";
         foreach (var (route, schemaName) in new[]
         {
             ("/api/v1/catalog/context", "CatalogContextV1"),
@@ -53,19 +64,28 @@ public sealed class CatalogHttpConfigurationTests
             (mappingRoute, "CatalogMappingV1"),
             (mappingRoute + "/metadata", "CatalogMappingMetadataV1"),
             (mappingRoute + "/revisions", "CatalogRevisionPageV1"),
-            (mappingRoute + "/revisions/{revisionId}", "CatalogRevisionV1")
+            (mappingRoute + "/revisions/{revisionId}", "CatalogRevisionV1"),
+            (receiptRoute, "CatalogRevisionIngestionReceiptV1")
         })
         {
             var operation = paths.GetProperty(route).GetProperty("get");
             var responseSchema = operation.GetProperty("responses").GetProperty("200").GetProperty("content")
                 .GetProperty("application/json").GetProperty("schema");
             Assert.Equal("#/components/schemas/" + schemaName, responseSchema.GetProperty("$ref").GetString());
-            Assert.DoesNotContain(paths.GetProperty(route).EnumerateObject(), property =>
-                property.Name is "put" or "post" or "delete" ||
-                (property.Name == "patch" && route != mappingRoute + "/metadata"));
-            if (route == mappingRoute + "/metadata")
-                Assert.True(paths.GetProperty(route).TryGetProperty("patch", out _));
+            string[] expectedMethods = route == mappingRoute + "/metadata" ? ["get", "patch"] :
+                route == projectRoute + "/mappings" || route == mappingRoute + "/revisions" ? ["get", "post"] : ["get"];
+            Assert.Equal(expectedMethods, paths.GetProperty(route).EnumerateObject()
+                .Select(property => property.Name).Order(StringComparer.Ordinal));
         }
+        foreach (var route in new[] { projectRoute + "/mappings", mappingRoute + "/revisions", receiptRoute + "/resume" })
+        {
+            var operation = paths.GetProperty(route).GetProperty("post");
+            var responseSchema = operation.GetProperty("responses").GetProperty("200").GetProperty("content")
+                .GetProperty("application/json").GetProperty("schema");
+            Assert.Equal("#/components/schemas/CatalogRevisionIngestionResultV1", responseSchema.GetProperty("$ref").GetString());
+        }
+        Assert.Equal(new[] { "post" }, paths.GetProperty(receiptRoute + "/resume").EnumerateObject()
+            .Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.False(paths.TryGetProperty(CatalogHttpTestSupport.UnsafePath, out _));
         var schemas = document.GetProperty("components").GetProperty("schemas");
         Assert.Equal("string", schemas.GetProperty("CatalogMappingV1").GetProperty("properties").GetProperty("version").GetProperty("type").GetString());

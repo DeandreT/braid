@@ -1,17 +1,24 @@
 # P3d: persistent catalog and revision HTTP API
 
 Status: accepted delivery contract; implementation and qualification follow in
-four focused increments. Native ingestion is qualified and merged in
+five focused increments. Native ingestion is qualified and merged in
 [PR #27](https://github.com/DeandreT/weft/pull/27). Parent
-[#16](https://github.com/DeandreT/weft/issues/16) completes only after all four
+[#16](https://github.com/DeandreT/weft/issues/16) completes only after all five
 increments are qualified and merged. P3e report/cache work then follows.
+
+P3d1 and P3d2 are qualified and merged in
+[PR #33](https://github.com/DeandreT/weft/pull/33) and
+[PR #38](https://github.com/DeandreT/weft/pull/38). P3d3 adds raw upload
+and original-actor recovery; its independent qualification is separate from the
+completed metadata checks.
 
 | Increment | Cohesive scope | Dependency |
 | --- | --- | --- |
 | [P3d1 #28](https://github.com/DeandreT/weft/issues/28) | Catalog read models/queries, narrow reader grants, generated HTTP contracts, explicit Development identity and request boundary | Qualified/merged P3c |
 | [P3d2 #29](https://github.com/DeandreT/weft/issues/29) | Conditional mapping metadata maintenance, dedicated writer and metadata ETag | Qualified/merged P3d1 |
 | [P3d3 #30](https://github.com/DeandreT/weft/issues/30) | Exact raw native upload, original-actor receipt and explicit resume HTTP routes | Qualified/merged P3d2 and C2 service |
-| [P3d4 #31](https://github.com/DeandreT/weft/issues/31) | Explicit-capability project creation with atomic first Administrator membership and durable idempotency | Qualified/merged P3d3 |
+| [P3d4a #39](https://github.com/DeandreT/weft/issues/39) | Explicit organization creation capability, restricted creator persistence, atomic first Administrator membership and durable idempotency | Qualified/merged P3d3 |
+| [P3d4b #31](https://github.com/DeandreT/weft/issues/31) | Project creation HTTP routes, fresh organization actions and host composition | Qualified/merged P3d4a |
 
 This sequence preserves the complete accepted API boundary. Project creation is
 included so authorized users can create projects without manual database inserts.

@@ -6,8 +6,15 @@ at `e5915598d608b4df4b19c113d53a8bbda326cf9f`, closing
 runs each passed 1,162 tests with no skips; the independent run included 138 actual
 PostgreSQL cases, fresh/0002-upgrade owner CLI and published API checks, and 22
 browser cases. All 105 workers created by that run were automatically removed.
-The PR records the frozen evidence and its limits. P3d2 metadata editing is under
-verification and is not qualified by these read-only checks.
+The PR records the frozen evidence and its limits. P3d2 metadata editing is
+qualified and merged in [PR #38](https://github.com/DeandreT/weft/pull/38) at
+`2a0557e554eafcd72bf7d0f71b34d9b23d2de398`, closing
+[#29](https://github.com/DeandreT/weft/issues/29). Local and independent runs each
+passed 1,246 C# cases with zero skips, including 193 PostgreSQL-gated cases. The
+independent run also passed 22 browser cases without retries and fresh/upgrade
+published CLI/API checks. All 110 actual workers were automatically removed.
+These checks do not qualify the following raw-upload increment or a metadata
+editing frontend.
 The accepted sequence is in [Catalog API plan](catalog-api-plan.md).
 
 The API reads saved projects, mapping metadata and immutable revision history.
