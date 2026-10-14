@@ -71,7 +71,8 @@ internal sealed class RevisionUploadHttpTestSupport : IAsyncDisposable
 
     internal static async Task<RevisionUploadHttpTestSupport> StartAsync(RevisionIngestionTestSupport? test = null,
         IRevisionIngestionService? service = null, bool enabled = true, int maximumConcurrentOperations = 2,
-        bool registerIngestion = true, Guid? principal = null, Guid? organization = null)
+        bool registerIngestion = true, Guid? principal = null, Guid? organization = null,
+        Action<Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions>? configureListener = null)
     {
         var reservation = new TcpListener(IPAddress.Loopback, 0);
         reservation.Start();
@@ -85,7 +86,7 @@ internal sealed class RevisionUploadHttpTestSupport : IAsyncDisposable
             builder.WebHost.ConfigureKestrel(server =>
             {
                 server.Limits.MaxRequestLineSize = MaximumRequestLineBytes;
-                server.Listen(IPAddress.Loopback, origin.Port);
+                server.Listen(IPAddress.Loopback, origin.Port, configureListener ?? (_ => { }));
             });
             builder.Services.AddWeftApi();
             builder.Services.AddSingleton(TestKeys);
@@ -345,13 +346,15 @@ internal sealed class RevisionUploadHttpTestSupport : IAsyncDisposable
         Assert.Equal(code, body.RootElement.GetProperty("code").GetString());
     }
 
-    /// <summary>Consumes the actual three-byte prefix before TCP half-close, then probes the very first response byte.</summary>
-    internal async Task<int> TruncatedFinPostAsync(string path, string token, Guid key, RequestObservation observation)
+    /// <summary>Holds the real FIN client's receive side through observed cancellation and terminal encoded-output settlement.</summary>
+    internal async Task<FinReply> TruncatedFinPostAsync(string path, string token, Guid key, RequestObservation observation,
+        RevisionUploadTransportObserver transport)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var client = new TcpClient();
         await client.ConnectAsync(IPAddress.Loopback, Origin.Port, deadline.Token);
         await using var stream = client.GetStream();
+        var selected = await transport.SelectAsync(((IPEndPoint)client.Client.LocalEndPoint!).Port, deadline.Token);
         var headers = $"POST {path} HTTP/1.1\r\nHost: {Origin.Authority}\r\nConnection: close\r\nContent-Length: 128\r\n" +
             $"Cookie: {Cookies.GetCookieHeader(new Uri(Origin, "/api/v1"))}\r\n" +
             $"Origin: {Origin.GetLeftPart(UriPartial.Authority)}\r\nX-XSRF-TOKEN: {token}\r\n" +
@@ -361,10 +364,38 @@ internal sealed class RevisionUploadHttpTestSupport : IAsyncDisposable
         await observation.SuccessfulReadThreshold.Task.WaitAsync(deadline.Token);
         Assert.Equal(3L, observation.SuccessfulBytes);
         client.Client.Shutdown(SocketShutdown.Send);
-        // Returning zero proves there were no response bytes. ReadLine EOF could also
-        // occur after a partial response and cannot establish this transport fact.
-        return await stream.ReadAsync(new byte[1], deadline.Token);
+        int? firstWireReadCount = null;
+        long deliveredBytes = 0;
+        FinTermination termination;
+        try
+        {
+            firstWireReadCount = await stream.ReadAsync(new byte[1], deadline.Token);
+            deliveredBytes += firstWireReadCount.Value;
+            termination = firstWireReadCount == 0 ? FinTermination.EndOfStream : FinTermination.ResponseBytes;
+        }
+        catch (IOException error) when (error.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionReset })
+        {
+            // The peer reset is distinct from a returned zero and never becomes a
+            // fabricated EOF. Every unrelated read/socket failure still propagates.
+            termination = FinTermination.PeerConnectionReset;
+        }
+        await observation.Aborted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await observation.Finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        using (var settledDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+        {
+            while (ServiceCalls != 1 || CompletedServiceCalls != 1)
+                await Task.Delay(1, settledDeadline.Token);
+        }
+        // This is the completed HTTP connection pipeline, not an assumed
+        // ConnectionClosed callback. No application bytes can be encoded later.
+        await selected.PipelineSettled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        return new(termination, firstWireReadCount, deliveredBytes, selected.EncodedBytes,
+            selected.PipelineSettled.Task.IsCompletedSuccessfully);
     }
+
+    internal enum FinTermination { EndOfStream, PeerConnectionReset, ResponseBytes }
+    internal sealed record FinReply(FinTermination Termination, int? FirstWireReadCount, long DeliveredBytes,
+        long EncodedBytes, bool ConnectionPipelineSettled);
 
     /// <summary>A valid observed chunk precedes an invalid size; the client send side stays open through the complete reply.</summary>
     internal async Task<RawReply> MalformedChunkPostAsync(string path, string token, Guid key, RequestObservation observation)

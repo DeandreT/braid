@@ -390,31 +390,41 @@ public sealed class RevisionUploadHttpRecoveryTests(PostgresFixture fixture, ITe
     public async Task ActualTruncatedFinCancelsTheObservedRequestBeforeReservationAndTheSameAdmissionSlotRecovers()
     {
         await using var test = await RevisionIngestionTestSupport.CreateAsync(fixture);
-        await using var api = await RevisionUploadHttpTestSupport.StartAsync(test, maximumConcurrentOperations: 1);
+        var transport = new RevisionUploadTransportObserver();
+        await using var api = await RevisionUploadHttpTestSupport.StartAsync(test, maximumConcurrentOperations: 1,
+            configureListener: transport.Configure);
         var token = await api.TokenAsync();
         var path = RevisionUploadHttpTestSupport.CreatePath(test.Project) + RevisionUploadHttpTestSupport.CreateQuery();
         using var observation = api.ObserveNextPost(3);
-        int? firstWireReadCount = null;
+        RevisionUploadHttpTestSupport.FinReply? reply = null;
         try
         {
-            firstWireReadCount = await api.TruncatedFinPostAsync(path, token, Guid.NewGuid(), observation);
+            reply = await api.TruncatedFinPostAsync(path, token, Guid.NewGuid(), observation, transport);
             await observation.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await observation.Aborted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            var finish = await observation.Finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.Equal(0, firstWireReadCount.Value);
+            await observation.Finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(reply.Termination is RevisionUploadHttpTestSupport.FinTermination.EndOfStream or
+                RevisionUploadHttpTestSupport.FinTermination.PeerConnectionReset);
+            if (reply.Termination == RevisionUploadHttpTestSupport.FinTermination.EndOfStream)
+                Assert.Equal(0, reply.FirstWireReadCount!.Value);
+            else Assert.Null(reply.FirstWireReadCount);
+            Assert.Equal(0L, reply.DeliveredBytes);
+            Assert.Equal(0L, reply.EncodedBytes);
+            Assert.True(reply.ConnectionPipelineSettled);
             Assert.True(observation.CanObserveCancellation);
             Assert.True(observation.IsRequestAborted);
-            Assert.False(finish.ResponseStarted);
             Assert.Equal(3L, observation.SuccessfulBytes);
             Assert.Equal(1, api.ServiceCalls);
             Assert.Equal(1, api.CompletedServiceCalls);
             Assert.Equal(3L, api.BodyBytes);
             Assert.Equal(0L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.revision_ingestions"));
+            Assert.Equal(0L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.mapping_revisions"));
             Assert.Equal(0, test.StorePort.PublishCalls);
             Assert.Equal(0, test.StorePort.ReadCalls);
             Assert.Equal(0, test.BackendPort.Calls);
             Assert.Empty(test.Runner.NativeBodies);
             Assert.Empty(test.Launcher.Commands);
+            Assert.Empty(test.PhysicalRoot.AttemptFiles());
             await test.AssertNoHeldTransactionsAsync();
             await api.AssertNoHeldCatalogTransactionAsync();
             using var next = await api.PostAsync(path, token, Guid.NewGuid(), RevisionIngestionTestSupport.Fixture("valid-basic"));
@@ -422,7 +432,19 @@ public sealed class RevisionUploadHttpRecoveryTests(PostgresFixture fixture, ITe
             Assert.Equal(api.ServiceCalls, api.CompletedServiceCalls);
             Assert.Empty(test.PhysicalRoot.AttemptFiles());
         }
-        finally { WriteTransportObservation("truncatedFin", observation, firstWireReadCount); }
+        finally
+        {
+            WriteTransportObservation("truncatedFin", observation, reply?.FirstWireReadCount);
+            output.WriteLine(JsonSerializer.Serialize(new
+            {
+                transport = "truncatedFinTermination",
+                termination = reply?.Termination.ToString(),
+                firstWireReadCount = reply?.FirstWireReadCount,
+                deliveredBytes = reply?.DeliveredBytes,
+                encodedBytes = reply?.EncodedBytes,
+                connectionPipelineSettled = reply?.ConnectionPipelineSettled
+            }));
+        }
     }
 
     [RevisionIngestionFact]
