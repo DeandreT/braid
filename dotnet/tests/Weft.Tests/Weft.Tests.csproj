@@ -21,6 +21,7 @@
     <ProjectReference Include="../../tools/Weft.DatabaseTool/Weft.DatabaseTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.IngestionProbe/Weft.IngestionProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.RevisionReportWorkflowProbe/Weft.RevisionReportWorkflowProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
@@ -59,5 +60,11 @@
       <DatabaseToolFiles Include="../../tools/Weft.DatabaseTool/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(DatabaseToolFiles)" DestinationFiles="@(DatabaseToolFiles->'$(OutDir)DatabaseTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyRevisionReportWorkflowProbe" AfterTargets="Build">
+    <ItemGroup>
+      <RevisionReportWorkflowProbeFiles Include="../../tools/Weft.RevisionReportWorkflowProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RevisionReportWorkflowProbeFiles)" DestinationFiles="@(RevisionReportWorkflowProbeFiles->'$(OutDir)RevisionReportWorkflowProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 </Project>

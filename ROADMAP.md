@@ -111,9 +111,19 @@ retained their runtime dependency closure. Browser and Rust evidence was inherit
 for unchanged source. The first qualification build exposed a package-hash audit
 error; its failed evidence remains retained separately from the corrected fresh
 qualification. This increment qualifies owned contracts and the codec, rather
-than report publication. P3e2b's trusted adapter is tracked under
-[#54](https://github.com/DeandreT/weft/issues/54); its boundaries are described in
-the [trusted Ferrule report adapter](docs/ferrule-revision-reports.md).
+than report publication.
+
+P3e2b is qualified and merged in [#57](https://github.com/DeandreT/weft/pull/57).
+Its fresh-container C# suite passed 2,023 cases with no failures or skips, and
+all 22 browser checks passed on an alternate display. Actual worker/database
+lifecycle, resource bounds, package integrity and ordinary tool publication
+checks passed; independent source and runtime reviews accepted the increment.
+The worker and Ferrule pins remain unchanged. The
+[trusted Ferrule report adapter](docs/ferrule-revision-reports.md) describes its
+boundaries. P3e2c's persistent workflow is in progress under
+[#55](https://github.com/DeandreT/weft/issues/55), with the
+[workflow contract](docs/revision-report-workflow.md); persisted-report HTTP remains
+the separate [#51](https://github.com/DeandreT/weft/issues/51) increment.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's

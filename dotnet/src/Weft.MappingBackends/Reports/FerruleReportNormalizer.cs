@@ -54,6 +54,7 @@ public static partial class FerruleReportNormalizer
         context.CheckProvenance(provenance, artifact);
         var status = Status(result.Status);
         context.Require((status == OperationStatusV1.Succeeded) == (result.Projection is not null));
+        var projection = result.Projection;
         if (result.Projection is { } document)
         {
             var observed = document.Provenance;
@@ -61,7 +62,7 @@ public static partial class FerruleReportNormalizer
                 observed.NativeArtifactDigest == provenance.NativeArtifactDigest && observed.Backend == provenance.Backend &&
                 observed.AdapterVersion == provenance.AdapterVersion);
             if (!context.Example)
-                FerruleInspectionBackend.ValidateStoredProjectionDocument(document, context.Limits, context.Token);
+                projection = StrictProjectionLinks(document, context);
         }
         var diagnostics = context.Copy(result.Diagnostics, diagnostic =>
         {
@@ -69,7 +70,7 @@ public static partial class FerruleReportNormalizer
             return new OperationDiagnosticV1(context.Text(diagnostic.Code, false), diagnostic.Severity,
                 context.Text(diagnostic.Message), diagnostic.MessageTruncated, diagnostic.NativeLocator);
         }, context.Limits.DiagnosticLimit);
-        return new(status, provenance, result.Projection, diagnostics);
+        return new(status, provenance, projection, diagnostics);
     }
 
     private static ValidationReportV1 ValidationCore(MappingValidationResult result, NativeArtifact artifact, Context context,

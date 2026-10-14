@@ -18,6 +18,7 @@
     <Project Path="tools/Weft.DatabaseTool/Weft.DatabaseTool.csproj" />
     <Project Path="tools/Weft.IngestionProbe/Weft.IngestionProbe.csproj" />
     <Project Path="tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" />
+    <Project Path="tools/Weft.RevisionReportWorkflowProbe/Weft.RevisionReportWorkflowProbe.csproj" />
     <Project Path="tools/Weft.StorageProbe/Weft.StorageProbe.csproj" />
     <Project Path="tools/Weft.StorageTool/Weft.StorageTool.csproj" />
   </Folder>
