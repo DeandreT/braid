@@ -97,7 +97,11 @@ export interface paths {
     /** Read a bounded page of currently visible projects. */
     get: operations["GetCatalogProjects"];
     put?: never;
-    post?: never;
+    /**
+     * Atomically create one project and its original actor's first Administrator membership, or replay its original creation.
+     * @description Requires fresh active organization admission and an explicit project-creation capability, independent of existing project roles. The document contains exactly the case-sensitive string properties name and description; both are required, unknown and duplicate fields are rejected. The strict UTF-8 entity is limited to 65536 bytes with no BOM, comments, trailing commas or decompression. Name is trimmed once and limited to 1–200 Unicode scalars and 800 UTF-8 bytes; description is preserved exactly and limited to 4000 scalars and 16000 UTF-8 bytes. Neither permits NUL or invalid Unicode. Only an optional UTF-8 charset and absent or one identity Content-Encoding are supported. No query, If-Match or If-None-Match fields are supported. One canonical nonzero lowercase UUID Idempotency-Key is required. Fresh capability admission and bounded immediate work admission precede body consumption; the final short atomic operation rechecks authority. 201 means actual creation and 200 exact replay after commit; changed intent or another actor's key is opaque 409. Initial membership facts are historical and never establish current project access or repair a revoked membership.
+     */
+    post: operations["CreateCatalogProject"];
     delete?: never;
     options?: never;
     head?: never;
@@ -313,6 +317,7 @@ export interface components {
       allowedOrganizationId: string;
       features: components["schemas"]["CatalogFeaturesV1"];
       mode: string;
+      organizationActions: components["schemas"]["CatalogOrganizationActionsV1"];
       organizationName: string;
       requestToken: string;
     };
@@ -329,7 +334,10 @@ export interface components {
       | "unsupportedMediaType"
       | "bodyLimit"
       | "versionExhausted"
-      | "ingestionAdmissionBusy";
+      | "ingestionAdmissionBusy"
+      | "permissionDenied"
+      | "idempotencyConflict"
+      | "projectCreationAdmissionBusy";
     CatalogErrorV1: {
       code: components["schemas"]["CatalogErrorCodeV1"];
     };
@@ -382,6 +390,32 @@ export interface components {
       /** Format: date-time */
       updatedAtUtc: string;
       version: string;
+    };
+    CatalogOrganizationActionsV1: {
+      createProjects: boolean;
+    };
+    CatalogProjectCreateV1: {
+      description: string;
+      name: string;
+    };
+    /** @enum {unknown} */
+    CatalogProjectCreationOutcomeV1: "created" | "replayed";
+    CatalogProjectCreationReceiptV1: {
+      /** Format: date-time */
+      createdAtUtc: string;
+      creatorPrincipalId: string;
+      description: string;
+      initialMembershipActive: boolean;
+      initialMembershipRole: components["schemas"]["CatalogRoleV1"];
+      initialMembershipVersion: string;
+      initialProjectVersion: string;
+      name: string;
+      project: components["schemas"]["CatalogProjectScopeV1"];
+    };
+    CatalogProjectCreationResultV1: {
+      outcome: components["schemas"]["CatalogProjectCreationOutcomeV1"];
+      projectUrl: string;
+      receipt: components["schemas"]["CatalogProjectCreationReceiptV1"];
     };
     CatalogProjectPageV1: {
       nextCursor?: null | string;
@@ -1256,6 +1290,146 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  CreateCatalogProject: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Absent or one identity value; compressed and multiple codings are unsupported. */
+        "Content-Encoding"?: string;
+        /** @description Exactly one nonzero canonical lowercase D-format UUID with only surrounding SP/HTAB OWS allowed. Raw value at most 128 characters; duplicates and lists are rejected. */
+        "Idempotency-Key": string;
+        /** @description One exact canonical configured browser origin, checked before any body read. */
+        Origin: string;
+        /** @description Cookie-bound framework request token from a successfully admitted catalog context, at most 4096 characters. */
+        "X-XSRF-TOKEN": string;
+      };
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/vnd.weft.project-create.v1+json": components["schemas"]["CatalogProjectCreateV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          /** @description Exact full-scoped relative ordinary GET project URL. That read still checks current project membership. */
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogProjectCreationResultV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          /** @description Exact full-scoped relative ordinary GET project URL. That read still checks current project membership. */
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogProjectCreationResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {

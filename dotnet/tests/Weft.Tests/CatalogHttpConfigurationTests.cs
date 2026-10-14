@@ -73,7 +73,8 @@ public sealed class CatalogHttpConfigurationTests
                 .GetProperty("application/json").GetProperty("schema");
             Assert.Equal("#/components/schemas/" + schemaName, responseSchema.GetProperty("$ref").GetString());
             string[] expectedMethods = route == mappingRoute + "/metadata" ? ["get", "patch"] :
-                route == projectRoute + "/mappings" || route == mappingRoute + "/revisions" ? ["get", "post"] : ["get"];
+                route == organizationRoute + "/projects" || route == projectRoute + "/mappings" ||
+                route == mappingRoute + "/revisions" ? ["get", "post"] : ["get"];
             Assert.Equal(expectedMethods, paths.GetProperty(route).EnumerateObject()
                 .Select(property => property.Name).Order(StringComparer.Ordinal));
         }

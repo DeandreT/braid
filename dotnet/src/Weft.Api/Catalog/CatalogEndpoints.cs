@@ -21,6 +21,7 @@ public static partial class CatalogEndpoints
         const string mapping = project + "/mappings/{mappingId}";
         Describe<CatalogProjectPageV1>(endpoints.MapGet(organization + "/projects", GetProjects),
             "GetCatalogProjects", "Read a bounded page of currently visible projects.");
+        DescribeProjectCreation(endpoints.MapPost(organization + "/projects", CreateCatalogProject));
         Describe<CatalogProjectV1>(endpoints.MapGet(project, GetProject),
             "GetCatalogProject", "Read project metadata and current supported actions.");
         Describe<CatalogMappingPageV1>(endpoints.MapGet(project + "/mappings", GetMappings),
@@ -49,17 +50,27 @@ public static partial class CatalogEndpoints
             .Produces<CatalogErrorV1>(StatusCodes.Status500InternalServerError);
 
     private static Task<IResult> GetContext(HttpContext context, CatalogRequestBoundary boundary,
-        CatalogMetadataEditOptions metadataEditOptions, CatalogRevisionIngestionOptions ingestionOptions) =>
+        CatalogMetadataEditOptions metadataEditOptions, CatalogRevisionIngestionOptions ingestionOptions,
+        CatalogProjectCreationOptions creationOptions) =>
         WithAdmission(context, boundary, async admission =>
         {
             RequireQuery(context);
-            return await Read(context, reader => reader.GetOrganizationAdmissionAsync(admission.Actor!,
-                admission.AllowedOrganizationId!.Value, context.RequestAborted), organization =>
+            var organization = await ProjectCreationPersistence(context, () => context.RequestServices.GetRequiredService<ICatalogReader>()
+                .GetOrganizationAdmissionAsync(admission.Actor!, admission.AllowedOrganizationId!.Value, context.RequestAborted));
+            if (organization is null)
+                return NotFound();
+            RequireOrganization(organization, admission);
+            var canCreateProjects = false;
+            if (creationOptions.Enabled)
             {
-                RequireOrganization(organization, admission);
-                var token = boundary.IssueRequestToken(context, admission.Actor!);
-                return Results.Ok(CatalogPublicMapper.Context(organization, token, metadataEditOptions.Enabled, ingestionOptions.Enabled));
-            });
+                var creation = await ReadProjectCreationAdmission(context, admission.Actor!, organization.OrganizationId);
+                if (creation is null)
+                    return NotFound();
+                canCreateProjects = creation.CanCreateProjects;
+            }
+            var token = boundary.IssueRequestToken(context, admission.Actor!);
+            return Results.Ok(CatalogPublicMapper.Context(organization, token, metadataEditOptions.Enabled,
+                ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects));
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,
@@ -209,6 +220,16 @@ public static partial class CatalogEndpoints
             context.Response.Headers.Remove("ETag");
             return Error(CatalogErrorCodeV1.PersistenceFailure, StatusCodes.Status500InternalServerError);
         }
+        catch (CatalogProjectCreationPersistenceException)
+        {
+            context.Response.Headers.Remove("ETag");
+            return Error(CatalogErrorCodeV1.PersistenceFailure, StatusCodes.Status500InternalServerError);
+        }
+        catch (CatalogProjectCreationRequestException exception)
+        {
+            context.Response.Headers.Remove("ETag");
+            return Error(exception.Code, exception.StatusCode);
+        }
         catch (CatalogRevisionRequestException exception)
         {
             context.Response.Headers.Remove("ETag");
@@ -223,6 +244,11 @@ public static partial class CatalogEndpoints
         {
             context.Response.Headers.Remove("ETag");
             return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+        }
+        catch (CatalogProjectCreationBodyTransportException)
+        {
+            context.Abort();
+            throw;
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {

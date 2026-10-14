@@ -509,3 +509,110 @@ export function explicitResumeConflictResponse(
 
 export const ingestionAdmissionBusy: components["schemas"]["CatalogErrorV1"]["code"] =
   "ingestionAdmissionBusy";
+
+type CatalogContext = components["schemas"]["CatalogContextV1"];
+type ProjectCreate = components["schemas"]["CatalogProjectCreateV1"];
+type ProjectCreationReceipt =
+  components["schemas"]["CatalogProjectCreationReceiptV1"];
+type ProjectCreationResult =
+  components["schemas"]["CatalogProjectCreationResultV1"];
+type ProjectCreatePost =
+  paths["/api/v1/organizations/{organizationId}/projects"]["post"];
+type ProjectCreateContent = NonNullable<
+  ProjectCreatePost["requestBody"]
+>["content"];
+
+export const projectCreate = {
+  name: "Customer imports",
+  description: "",
+} satisfies ProjectCreate;
+
+export const projectCreateDocument = {
+  "application/vnd.weft.project-create.v1+json": projectCreate,
+} satisfies ProjectCreateContent;
+
+export const projectCreationReceipt = {
+  project: {
+    organizationId: "11111111-1111-1111-1111-111111111111",
+    projectId: "22222222-2222-2222-2222-222222222222",
+  },
+  name: "Customer imports",
+  description: "",
+  creatorPrincipalId: "33333333-3333-3333-3333-333333333333",
+  createdAtUtc: "2026-10-14T00:00:00Z",
+  initialProjectVersion: "1",
+  initialMembershipRole: "administrator",
+  initialMembershipActive: true,
+  initialMembershipVersion: "1",
+} satisfies ProjectCreationReceipt;
+
+export const createdProject = {
+  outcome: "created",
+  receipt: projectCreationReceipt,
+  projectUrl:
+    "/api/v1/organizations/11111111-1111-1111-1111-111111111111/projects/22222222-2222-2222-2222-222222222222",
+} satisfies ProjectCreationResult;
+
+export const replayedProject = {
+  ...createdProject,
+  outcome: "replayed",
+} satisfies ProjectCreationResult;
+
+export function createdProjectResponse(
+  result: ProjectCreationResult,
+): ProjectCreatePost["responses"][201]["content"] {
+  return { "application/json": result };
+}
+
+export function replayedProjectResponse(
+  result: ProjectCreationResult,
+): ProjectCreatePost["responses"][200]["content"] {
+  return { "application/json": result };
+}
+
+export function canCreateProject(context: CatalogContext): boolean {
+  return (
+    context.features.createProjects &&
+    context.organizationActions.createProjects
+  );
+}
+
+// @ts-expect-error Creation requires an explicit description, including an empty one.
+export const incompleteProjectCreate: ProjectCreate = { name: "Project" };
+// @ts-expect-error Clients cannot choose a new project's identity.
+export const projectCreateId: ProjectCreate["projectId"] = "project";
+// @ts-expect-error Clients cannot choose their first membership role.
+export const projectCreateRole: ProjectCreate["role"] = "administrator";
+// @ts-expect-error The trusted boundary supplies the creator identity.
+export const projectCreateActor: ProjectCreate["creatorPrincipalId"] = "actor";
+export const genericProjectCreate: ProjectCreateContent = {
+  // @ts-expect-error Project creation requires its own versioned media type.
+  "application/json": projectCreate,
+};
+// @ts-expect-error Initial versions preserve their decimal string representation.
+export const numericInitialProjectVersion: ProjectCreationReceipt["initialProjectVersion"] = 1;
+// @ts-expect-error Initial membership versions also remain decimal strings.
+export const numericInitialMembershipVersion: ProjectCreationReceipt["initialMembershipVersion"] = 1;
+// @ts-expect-error Creation history does not advertise current project access.
+export const creationCurrentAccess: ProjectCreationReceipt["access"] = null;
+// @ts-expect-error Creation history does not advertise current project actions.
+export const creationCurrentActions: ProjectCreationResult["actions"] = null;
+// @ts-expect-error Creation receipts omit private intent fingerprints.
+export const creationFingerprint: ProjectCreationReceipt["fingerprint"] =
+  "digest";
+// @ts-expect-error Creation receipts omit the idempotency key.
+export const creationIdempotencyKey: ProjectCreationReceipt["idempotencyKey"] =
+  "key";
+// @ts-expect-error Organization actions are required context data.
+export const missingOrganizationAction: CatalogContext["organizationActions"] =
+  {};
+// @ts-expect-error Creation results have a closed outcome vocabulary.
+export const arbitraryCreationOutcome: ProjectCreationResult["outcome"] =
+  "pending";
+
+export const projectCreationDenied: components["schemas"]["CatalogErrorV1"]["code"] =
+  "permissionDenied";
+export const projectCreationConflict: components["schemas"]["CatalogErrorV1"]["code"] =
+  "idempotencyConflict";
+export const projectCreationAdmissionBusy: components["schemas"]["CatalogErrorV1"]["code"] =
+  "projectCreationAdmissionBusy";

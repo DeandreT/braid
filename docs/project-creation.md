@@ -5,7 +5,8 @@ prerequisite for project creation. Its implementation and actual PostgreSQL
 qualification follow the merged upload API in
 [PR #40](https://github.com/DeandreT/weft/pull/40). The HTTP route, organization
 actions and server composition are a separate dependent increment,
-[P3d4b #31](https://github.com/DeandreT/weft/issues/31).
+[P3d4b #31](https://github.com/DeandreT/weft/issues/31). Its request and host
+contract is documented in [Project creation HTTP](project-creation-http.md).
 
 ## Creation authority
 

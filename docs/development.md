@@ -8,8 +8,11 @@ that increment's qualification status is recorded there.
 The Angular/ASP.NET Core workspace is local-only. It supplies a live API health
 check and a read-only mapping viewer over development native examples, with
 generated API contracts. A separate Ferrule adapter supplies native inspection,
-validation, and projection. Catalog uploads/browser integration, hosted
-authentication, chat and Wolverine-backed execution follow separate increments.
+validation, and projection. The catalog API supports immutable native uploads;
+saved-revision browser integration, hosted authentication, chat and
+Wolverine-backed execution follow separate increments. The separate
+[project creation HTTP](project-creation-http.md) increment adds explicit
+organization actions and its dedicated creator configuration.
 
 ## Prerequisites
 

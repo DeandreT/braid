@@ -23,7 +23,10 @@ public enum CatalogErrorCodeV1
     UnsupportedMediaType = 9,
     BodyLimit = 10,
     VersionExhausted = 11,
-    IngestionAdmissionBusy = 12
+    IngestionAdmissionBusy = 12,
+    PermissionDenied = 13,
+    IdempotencyConflict = 14,
+    ProjectCreationAdmissionBusy = 15
 }
 
 public sealed record CatalogFeaturesV1
@@ -106,15 +109,28 @@ public sealed record CatalogContextV1
 {
     public CatalogContextV1(string mode, string actorPrincipalId, string allowedOrganizationId,
         string organizationName, CatalogFeaturesV1 features, string requestToken)
+        : this(mode, actorPrincipalId, allowedOrganizationId, organizationName, features,
+            CatalogOrganizationActionsV1.None, requestToken)
+    {
+    }
+
+    [JsonConstructor]
+    public CatalogContextV1(string mode, string actorPrincipalId, string allowedOrganizationId,
+        string organizationName, CatalogFeaturesV1 features, CatalogOrganizationActionsV1 organizationActions,
+        string requestToken)
     {
         if (mode != "development")
             throw new ArgumentException("The catalog identity mode is unsupported.", nameof(mode));
         ArgumentNullException.ThrowIfNull(features);
+        ArgumentNullException.ThrowIfNull(organizationActions);
+        if (organizationActions.CreateProjects && !features.CreateProjects)
+            throw new ArgumentException("An organization action requires its corresponding catalog feature.", nameof(organizationActions));
         Mode = mode;
         ActorPrincipalId = CatalogValueV1.RequireId(actorPrincipalId, nameof(actorPrincipalId));
         AllowedOrganizationId = CatalogValueV1.RequireId(allowedOrganizationId, nameof(allowedOrganizationId));
         OrganizationName = CatalogValueV1.RequireName(organizationName, nameof(organizationName));
         Features = features;
+        OrganizationActions = organizationActions;
         RequestToken = CatalogValueV1.RequireText(requestToken, 4096, nameof(requestToken));
     }
 
@@ -123,6 +139,7 @@ public sealed record CatalogContextV1
     public string AllowedOrganizationId { get; }
     public string OrganizationName { get; }
     public CatalogFeaturesV1 Features { get; }
+    public CatalogOrganizationActionsV1 OrganizationActions { get; }
     public string RequestToken { get; }
 
     public override string ToString() => $"CatalogContextV1 {{ Mode = {Mode}, ActorPrincipalId = {ActorPrincipalId}, AllowedOrganizationId = {AllowedOrganizationId} }}";

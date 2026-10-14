@@ -12,11 +12,12 @@ public static class CatalogPublicMapper
     public static CatalogFeaturesV1 Features { get; } = new(true, false, false, false, false, false, false, false, false);
 
     public static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string requestToken,
-        bool metadataEditsEnabled = false, bool revisionIngestionEnabled = false) =>
+        bool metadataEditsEnabled = false, bool revisionIngestionEnabled = false,
+        bool projectCreationEnabled = false, bool canCreateProjects = false) =>
         new("development", Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name,
-            metadataEditsEnabled || revisionIngestionEnabled
-                ? new(true, false, revisionIngestionEnabled, metadataEditsEnabled, revisionIngestionEnabled, false, false, false, false)
-                : Features, requestToken);
+            metadataEditsEnabled || revisionIngestionEnabled || projectCreationEnabled
+                ? new(true, projectCreationEnabled, revisionIngestionEnabled, metadataEditsEnabled, revisionIngestionEnabled, false, false, false, false)
+                : Features, new CatalogOrganizationActionsV1(projectCreationEnabled && canCreateProjects), requestToken);
 
     public static CatalogProjectV1 Project(CatalogProject project, bool revisionIngestionEnabled = false)
     {

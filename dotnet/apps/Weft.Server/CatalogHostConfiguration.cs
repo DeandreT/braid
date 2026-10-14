@@ -26,7 +26,8 @@ public static class CatalogHostConfiguration
             readEnvironment("WEFT_DEV_BROWSER_ORIGIN"));
         var metadataOptions = new CatalogMetadataEditOptions(Flag("WEFT_METADATA_EDITS_ENABLED"));
         var ingestionOptions = new CatalogRevisionIngestionOptions(Flag("WEFT_REVISION_INGESTION_ENABLED"));
-        builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions);
+        var creationOptions = new CatalogProjectCreationOptions(Flag("WEFT_PROJECT_CREATION_ENABLED"));
+        builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions, creationOptions);
         if (!options.Enabled)
             return;
 
@@ -41,6 +42,17 @@ public static class CatalogHostConfiguration
         builder.Services.AddSingleton(services =>
             new PostgresCatalogReader(services.GetRequiredService<PostgresCatalogDatabase>()));
         builder.Services.AddSingleton<ICatalogReader>(services => services.GetRequiredService<PostgresCatalogReader>());
+        if (creationOptions.Enabled)
+        {
+            var creationConnectionString = readEnvironment("WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING");
+            if (string.IsNullOrWhiteSpace(creationConnectionString))
+                throw new InvalidOperationException("Enabled project creation requires its dedicated creator connection configuration.");
+            builder.Services.AddSingleton(_ => CreateProjectCreationDatabase(creationConnectionString));
+            builder.Services.AddSingleton(services =>
+                new PostgresProjectCreator(services.GetRequiredService<PostgresProjectCreationDatabase>()));
+            builder.Services.AddSingleton<IOrganizationProjectCreationReader>(services => services.GetRequiredService<PostgresProjectCreator>());
+            builder.Services.AddSingleton<IProjectCreator>(services => services.GetRequiredService<PostgresProjectCreator>());
+        }
         if (metadataOptions.Enabled)
         {
             var metadataConnectionString = readEnvironment("WEFT_POSTGRES_METADATA_CONNECTION_STRING");
@@ -97,6 +109,15 @@ public static class CatalogHostConfiguration
             if (!Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty || value != id.ToString("D"))
                 throw new ArgumentException("Catalog identity configuration requires canonical nonempty UUIDs.");
             return id;
+        }
+    }
+
+    private static PostgresProjectCreationDatabase CreateProjectCreationDatabase(string connectionString)
+    {
+        try { return new PostgresProjectCreationDatabase(connectionString); }
+        catch (ArgumentException)
+        {
+            throw new InvalidOperationException("The project creation connection configuration is invalid.");
         }
     }
 

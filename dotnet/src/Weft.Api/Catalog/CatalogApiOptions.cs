@@ -71,22 +71,33 @@ public static partial class CatalogEndpoints
 
     public static IServiceCollection AddWeftCatalog(this IServiceCollection services,
         CatalogApiOptions options, IHostEnvironment environment, CatalogMetadataEditOptions metadataEditOptions,
-        CatalogRevisionIngestionOptions ingestionOptions)
+        CatalogRevisionIngestionOptions ingestionOptions) =>
+        AddWeftCatalog(services, options, environment, metadataEditOptions, ingestionOptions,
+            new CatalogProjectCreationOptions());
+
+    public static IServiceCollection AddWeftCatalog(this IServiceCollection services,
+        CatalogApiOptions options, IHostEnvironment environment, CatalogMetadataEditOptions metadataEditOptions,
+        CatalogRevisionIngestionOptions ingestionOptions, CatalogProjectCreationOptions creationOptions)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(metadataEditOptions);
         ArgumentNullException.ThrowIfNull(ingestionOptions);
+        ArgumentNullException.ThrowIfNull(creationOptions);
         options.Validate(environment);
         if (metadataEditOptions.Enabled && !options.Enabled)
             throw new InvalidOperationException("Metadata edits require an enabled catalog.");
         if (ingestionOptions.Enabled && !options.Enabled)
             throw new InvalidOperationException("Revision ingestion requires an enabled catalog.");
+        if (creationOptions.Enabled && !options.Enabled)
+            throw new InvalidOperationException("Project creation requires an enabled catalog.");
         services.AddSingleton(options);
         services.AddSingleton(metadataEditOptions);
         services.AddSingleton(ingestionOptions);
+        services.AddSingleton(creationOptions);
         services.AddSingleton<CatalogRevisionIngestionGate>();
+        services.AddSingleton<CatalogProjectCreationGate>();
         services.AddAntiforgery(antiforgery =>
         {
             antiforgery.HeaderName = CatalogRequestBoundary.RequestTokenHeader;

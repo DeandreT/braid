@@ -264,6 +264,295 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Atomically create one project and its original actor's first Administrator membership, or replay its original creation.",
+        "description": "Requires fresh active organization admission and an explicit project-creation capability, independent of existing project roles. The document contains exactly the case-sensitive string properties name and description; both are required, unknown and duplicate fields are rejected. The strict UTF-8 entity is limited to 65536 bytes with no BOM, comments, trailing commas or decompression. Name is trimmed once and limited to 1–200 Unicode scalars and 800 UTF-8 bytes; description is preserved exactly and limited to 4000 scalars and 16000 UTF-8 bytes. Neither permits NUL or invalid Unicode. Only an optional UTF-8 charset and absent or one identity Content-Encoding are supported. No query, If-Match or If-None-Match fields are supported. One canonical nonzero lowercase UUID Idempotency-Key is required. Fresh capability admission and bounded immediate work admission precede body consumption; the final short atomic operation rechecks authority. 201 means actual creation and 200 exact replay after commit; changed intent or another actor's key is opaque 409. Initial membership facts are historical and never establish current project access or repair a revoked membership.",
+        "operationId": "CreateCatalogProject",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Exactly one nonzero canonical lowercase D-format UUID with only surrounding SP/HTAB OWS allowed. Raw value at most 128 characters; duplicates and lists are rejected.",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "One exact canonical configured browser origin, checked before any body read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "Cookie-bound framework request token from a successfully admitted catalog context, at most 4096 characters.",
+            "required": true,
+            "schema": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          {
+            "name": "Content-Encoding",
+            "in": "header",
+            "description": "Absent or one identity value; compressed and multiple codings are unsupported.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/vnd.weft.project-create.v1+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogProjectCreateV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "description": "Exact full-scoped relative ordinary GET project URL. That read still checks current project membership.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogProjectCreationResultV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "description": "Exact full-scoped relative ordinary GET project URL. That read still checks current project membership.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogProjectCreationResultV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/organizations/{organizationId}/projects/{projectId}": {
@@ -2361,6 +2650,7 @@
           "allowedOrganizationId",
           "organizationName",
           "features",
+          "organizationActions",
           "requestToken"
         ],
         "type": "object",
@@ -2380,6 +2670,9 @@
           "features": {
             "$ref": "#/components/schemas/CatalogFeaturesV1"
           },
+          "organizationActions": {
+            "$ref": "#/components/schemas/CatalogOrganizationActionsV1"
+          },
           "requestToken": {
             "type": "string"
           }
@@ -2398,7 +2691,10 @@
           "unsupportedMediaType",
           "bodyLimit",
           "versionExhausted",
-          "ingestionAdmissionBusy"
+          "ingestionAdmissionBusy",
+          "permissionDenied",
+          "idempotencyConflict",
+          "projectCreationAdmissionBusy"
         ]
       },
       "CatalogErrorV1": {
@@ -2602,6 +2898,102 @@
           },
           "access": {
             "$ref": "#/components/schemas/CatalogAccessV1"
+          }
+        }
+      },
+      "CatalogOrganizationActionsV1": {
+        "required": [
+          "createProjects"
+        ],
+        "type": "object",
+        "properties": {
+          "createProjects": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CatalogProjectCreateV1": {
+        "required": [
+          "name",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogProjectCreationOutcomeV1": {
+        "enum": [
+          "created",
+          "replayed"
+        ]
+      },
+      "CatalogProjectCreationReceiptV1": {
+        "required": [
+          "project",
+          "name",
+          "description",
+          "creatorPrincipalId",
+          "createdAtUtc",
+          "initialProjectVersion",
+          "initialMembershipRole",
+          "initialMembershipActive",
+          "initialMembershipVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/CatalogProjectScopeV1"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "creatorPrincipalId": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "initialProjectVersion": {
+            "type": "string"
+          },
+          "initialMembershipRole": {
+            "$ref": "#/components/schemas/CatalogRoleV1"
+          },
+          "initialMembershipActive": {
+            "type": "boolean"
+          },
+          "initialMembershipVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "CatalogProjectCreationResultV1": {
+        "required": [
+          "outcome",
+          "receipt",
+          "projectUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/CatalogProjectCreationOutcomeV1"
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/CatalogProjectCreationReceiptV1"
+          },
+          "projectUrl": {
+            "type": "string"
           }
         }
       },

@@ -25,7 +25,9 @@ endpoint are distinct workflows.
 
 The local web/API foundation and read-only mapping viewer are implemented. The
 workspace displays native development examples through the Ferrule adapter.
-Catalog persistence, authentication, AI chat, and deployment follow the focused
+Catalog persistence, scoped reads, metadata edits, native uploads, and atomic
+project creation persistence are qualified. Project creation HTTP, saved-revision
+viewer integration, authentication, AI chat, and deployment follow the focused
 delivery sequence below.
 
 Versioned mapping contracts and development-only synthetic projections provide
@@ -35,8 +37,9 @@ the C# API schema.
 The Ferrule adapter can inspect, validate, and project native artifacts through a
 bounded, isolated worker. Its revision-specific projection contains fields,
 rules, controls, lineage, and located coverage gaps. Development example routes
-provide separate projection and validation reports; uploads follow with the
-catalog increment.
+provide separate projection and validation reports. The catalog API accepts
+immutable native uploads; serving their saved projection and validation reports
+to the viewer follows in the remaining catalog increments.
 
 See [Local development](docs/development.md) to run and verify the application.
 
@@ -48,6 +51,8 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
 - [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.
 - [Project ownership](docs/project-ownership.md): qualified scoped PostgreSQL reads, migrations, and local setup.
+- [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
+- [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
 - [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
