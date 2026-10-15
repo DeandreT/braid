@@ -116,9 +116,10 @@
           <dt>Name</dt>
           <dd>{{ receipt.name }}</dd>
           <dt>Description</dt>
-          <dd class="creation-description">
-            {{ receipt.description || "No description" }}
-          </dd>
+          <dd
+            class="creation-description"
+            [textContent]="receipt.description || 'No description'"
+          ></dd>
           <dt>Project ID</dt>
           <dd>
             <code>{{ receipt.project.projectId }}</code>
