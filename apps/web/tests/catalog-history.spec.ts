@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import type { Locator, Page, Request } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import {
   catalogApi,
@@ -21,16 +21,51 @@ async function capture<T>(
   page: Page,
   path: string,
   action: () => Promise<unknown>,
+  query: Readonly<Record<string, string>> = {},
 ): Promise<T> {
-  const response = page.waitForResponse(
-    (reply) =>
-      new URL(reply.url()).pathname === path &&
-      reply.request().method() === "GET",
-  );
-  await action();
-  const reply = await response;
-  expect(reply.status()).toBe(200);
-  return (await reply.json()) as T;
+  const origin = process.env.WEFT_CATALOG_BASE_URL;
+  if (!origin) throw new Error("Expected explicit packaged catalog origin");
+  const expected = new URL(path, origin);
+  const requests = new Set<Request>();
+  const observe = (request: Request) => {
+    const url = new URL(request.url());
+    let queryCount = 0;
+    url.searchParams.forEach(() => {
+      queryCount++;
+    });
+    if (
+      request.method() === "GET" &&
+      url.origin === expected.origin &&
+      url.pathname === expected.pathname &&
+      queryCount === Object.keys(query).length &&
+      Object.entries(query).every(
+        ([key, value]) =>
+          url.searchParams.getAll(key).length === 1 &&
+          url.searchParams.get(key) === value,
+      )
+    )
+      requests.add(request);
+  };
+  page.on("request", observe);
+  try {
+    const body = page
+      .waitForResponse((reply) => requests.has(reply.request()))
+      .then(async (reply) => {
+        expect(reply.status()).toBe(200);
+        return (await reply.json()) as T;
+      });
+    const [value] = await Promise.all([body, action()]);
+    return value;
+  } finally {
+    page.off("request", observe);
+  }
+}
+function nextPageQuery(
+  cursor: string | null | undefined,
+): Record<string, string> {
+  if (typeof cursor !== "string")
+    throw new Error("Expected actual emitted next-page cursor");
+  return { limit: "10", cursor };
 }
 async function linkPaths(list: Locator): Promise<string[]> {
   return list
@@ -78,8 +113,11 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
   });
 
   await test.step("real viewer projects preserve UUID order, exact emitted cursor and Back/First navigation", async () => {
-    const first = await capture<ProjectPage>(page, catalogApi(projects), () =>
-      page.goto(projects),
+    const first = await capture<ProjectPage>(
+      page,
+      catalogApi(projects),
+      () => page.goto(projects),
+      { limit: "10" },
     );
     expect(first.projects.map((p) => p.scope)).toEqual(
       fixture.projects.viewerVisibleUuidOrder.slice(0, 10),
@@ -91,8 +129,11 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       first.projects.map((p) => projectPath(p.scope)),
     );
     const pages = page.getByRole("navigation", { name: "Project pages" });
-    const second = await capture<ProjectPage>(page, catalogApi(projects), () =>
-      pages.getByRole("link", { name: "Next page" }).click(),
+    const second = await capture<ProjectPage>(
+      page,
+      catalogApi(projects),
+      () => pages.getByRole("link", { name: "Next page" }).click(),
+      nextPageQuery(first.nextCursor),
     );
     expect(second.projects.map((p) => p.scope)).toEqual(
       fixture.projects.viewerVisibleUuidOrder.slice(10),
@@ -102,13 +143,24 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     );
     await expect(list.getByRole("listitem")).toHaveCount(1);
     await expect(pages.getByRole("link", { name: "Next page" })).toHaveCount(0);
-    await capture<ProjectPage>(page, catalogApi(projects), () => page.goBack());
-    await expect(list.getByRole("listitem")).toHaveCount(10);
-    await capture<ProjectPage>(page, catalogApi(projects), () =>
-      pages.getByRole("link", { name: "Next page" }).click(),
+    await capture<ProjectPage>(
+      page,
+      catalogApi(projects),
+      () => page.goBack(),
+      { limit: "10" },
     );
-    await capture<ProjectPage>(page, catalogApi(projects), () =>
-      pages.getByRole("link", { name: "First page" }).click(),
+    await expect(list.getByRole("listitem")).toHaveCount(10);
+    await capture<ProjectPage>(
+      page,
+      catalogApi(projects),
+      () => pages.getByRole("link", { name: "Next page" }).click(),
+      nextPageQuery(first.nextCursor),
+    );
+    await capture<ProjectPage>(
+      page,
+      catalogApi(projects),
+      () => pages.getByRole("link", { name: "First page" }).click(),
+      { limit: "10" },
     );
     expect(new URL(page.url()).searchParams.has("cursor")).toBe(false);
     await readOnly(page);
@@ -119,6 +171,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       page,
       catalogApi(projectPath(fixture.projects.empty)) + "/mappings",
       () => page.goto(projectPath(fixture.projects.empty)),
+      { limit: "10" },
     );
     expect(empty.mappings).toEqual([]);
     await expect(page.getByText("No mappings", { exact: true })).toBeVisible();
@@ -142,8 +195,11 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
 
   await test.step("real mapping pages retain exact API UUID order and opaque cursor", async () => {
     const endpoint = catalogApi(projectPath(project)) + "/mappings";
-    const first = await capture<MappingPage>(page, endpoint, () =>
-      page.goto(projectPath(project)),
+    const first = await capture<MappingPage>(
+      page,
+      endpoint,
+      () => page.goto(projectPath(project)),
+      { limit: "10" },
     );
     expect(first.mappings.map((m) => m.scope)).toEqual(
       fixture.mappings.uuidOrder.slice(0, 10),
@@ -155,8 +211,11 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     const next = page
       .getByRole("navigation", { name: "Mapping pages" })
       .getByRole("link", { name: "Next page" });
-    const second = await capture<MappingPage>(page, endpoint, () =>
-      next.click(),
+    const second = await capture<MappingPage>(
+      page,
+      endpoint,
+      () => next.click(),
+      nextPageQuery(first.nextCursor),
     );
     expect(second.mappings.map((m) => m.scope)).toEqual(
       fixture.mappings.uuidOrder.slice(10),
@@ -209,8 +268,11 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       await readOnly(page);
     }
     await catalogOwner.control("restart-profile", "noProjects");
-    const empty = await capture<ProjectPage>(page, catalogApi(projects), () =>
-      page.goto(projects),
+    const empty = await capture<ProjectPage>(
+      page,
+      catalogApi(projects),
+      () => page.goto(projects),
+      { limit: "10" },
     );
     expect(empty.projects).toEqual([]);
     await expect(page.getByText("No projects", { exact: true })).toBeVisible();
@@ -219,8 +281,11 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
 
   await test.step("real revision pages are descending strings and retain the original concrete URL", async () => {
     const endpoint = catalogApi(mappingPath(mapping)) + "/revisions";
-    const first = await capture<RevisionPage>(page, endpoint, () =>
-      page.goto(mappingPath(mapping)),
+    const first = await capture<RevisionPage>(
+      page,
+      endpoint,
+      () => page.goto(mappingPath(mapping)),
+      { limit: "10" },
     );
     expect(first.revisions).toEqual(
       fixture.history.sequenceDescending.slice(0, 10),
@@ -232,11 +297,15 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     expect(await linkPaths(list)).toEqual(
       first.revisions.map((r) => revisionPath(r.scope)),
     );
-    const second = await capture<RevisionPage>(page, endpoint, () =>
-      page
-        .getByRole("navigation", { name: "Revision pages" })
-        .getByRole("link", { name: "Next page" })
-        .click(),
+    const second = await capture<RevisionPage>(
+      page,
+      endpoint,
+      () =>
+        page
+          .getByRole("navigation", { name: "Revision pages" })
+          .getByRole("link", { name: "Next page" })
+          .click(),
+      nextPageQuery(first.nextCursor),
     );
     expect(second.revisions).toEqual(
       fixture.history.sequenceDescending.slice(10),
