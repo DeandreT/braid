@@ -40,7 +40,7 @@ authorization mechanism. Choose two distinct available loopback origins. The
 operator fails if their fixed ports are occupied and does not retarget them.
 PostgreSQL gets one explicitly pinned loopback-only port on its owned bridge.
 
-Copy the following *unbound* example into the private directory. Fill every null
+Copy the following _unbound_ example into the private directory. Fill every null
 from the actual source, publications and observer records. Keep the immutable
 image pins. Set `runtimeReleased` only after the inputs have been reviewed.
 
@@ -91,6 +91,22 @@ checks succeed. This example is deliberately unable to start a fixture.
 }
 ```
 
+After `npm ci`, install the browser using the locked local Playwright package.
+Resolve its matching executable rather than selecting an arbitrary system
+Chromium. Use the same optional absolute `PLAYWRIGHT_BROWSERS_PATH` for both
+commands and the browser run:
+
+```sh
+node node_modules/playwright/cli.js install chromium --no-shell
+WEFT_CHROMIUM_EXECUTABLE="$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
+export WEFT_CHROMIUM_EXECUTABLE
+```
+
+Each Playwright version expects its corresponding browser build; repeat this
+installation after a dependency update. The executable override remains available
+for a deliberately chosen compatible browser. Linux browser libraries and Xvfb
+are still prerequisites; see [local browser setup](../../docs/development.md#verification).
+
 Set these Node-only environment values and run the browser command:
 
 ```sh
@@ -98,7 +114,6 @@ WEFT_CATALOG_BROWSER_OPERATOR=/absolute/checkout/tools/catalog-browser/operator.
 WEFT_CATALOG_BROWSER_OPERATOR_CONFIG=/absolute/private/configuration.json
 WEFT_CATALOG_BROWSER_MANIFEST=/absolute/private/manifest.json
 WEFT_CATALOG_BASE_URL=http://127.0.0.1:45921
-WEFT_CHROMIUM_EXECUTABLE=/usr/bin/chromium
 export WEFT_CATALOG_BROWSER_OPERATOR WEFT_CATALOG_BROWSER_OPERATOR_CONFIG
 export WEFT_CATALOG_BROWSER_MANIFEST WEFT_CATALOG_BASE_URL WEFT_CHROMIUM_EXECUTABLE
 npm run test:catalog-browser

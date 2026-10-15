@@ -27,7 +27,8 @@ organization actions and its dedicated creator configuration.
 
 - .NET SDK 10.0.112, pinned in the root `global.json`.
 - Node 22.23.3 and npm 12.1.0, pinned in `.node-version` and `package.json`.
-- For Linux browser tests: Xvfb and Chromium, or Playwright's installed Chromium.
+- For Linux browser tests: Xvfb and the Chromium build installed by the locked
+  Playwright package, as described below.
 - For Ferrule worker checks: Rust nightly `2026-07-21` with rustfmt/clippy,
   Linux Docker with cgroup v2, and BuildKit. See [Ferrule worker](ferrule-worker.md)
   for the image build and live-test configuration.
@@ -117,13 +118,26 @@ The browser harness owns API and Angular development processes on ports 4101
 and 5174, fails on occupied ports, and stops them when it exits. Build the Release
 server before invoking it. The root browser-test command always uses a fresh
 alternate virtual display and unsets Wayland. Never run headed Playwright on an
-active user display. For a preinstalled Chromium executable:
+active user display.
+
+After `npm ci`, install and resolve Chromium through that same locked Playwright
+package. Each Playwright version expects its corresponding browser build;
+an arbitrary system Chromium can behave differently even when it launches.
 
 ```sh
-WEFT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:browser
+node node_modules/playwright/cli.js install chromium --no-shell
+WEFT_CHROMIUM_EXECUTABLE="$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
+export WEFT_CHROMIUM_EXECUTABLE
+npm run test:browser
 ```
 
-Otherwise run `npx playwright install chromium` before browser verification.
+For a private browser cache, export an absolute `PLAYWRIGHT_BROWSERS_PATH` before
+both installation and executable lookup. Keep it set when running the tests.
+`WEFT_CHROMIUM_EXECUTABLE` also permits a deliberately chosen compatible browser;
+use the locked package's installed build for reproducible verification. Repeat
+the installation after a Playwright dependency update. Linux system libraries
+are still required; see [Playwright's browser setup](https://playwright.dev/docs/browsers).
+
 The harness runs the API in Development. Supply the configured immutable worker
 image for actual native viewer flows; missing configuration does not qualify
 those flows. Display-only fixtures are explicitly labelled synthetic and exercise
