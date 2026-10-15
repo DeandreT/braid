@@ -177,7 +177,7 @@ public sealed partial class RevisionReportService
                     _storage.ValidateDerivedReference(claim.Key, encoded.Reference, _readCaps);
                     var bytes = encoded.CopyBytes(token);
                     if (await SourceAsync(actor, claim.Key.Scope, claim.Key.Source, token) is null) return HiddenEnsure();
-                    var publication = await PublishAsync(store, encoded.Reference, bytes, token);
+                    var publication = await PublishAsync(store, actor, claim, encoded.Reference, bytes, token);
                     if (publication != PrivateObjectPublishResult.Created)
                         throw new PrivateObjectStorageException(PrivateObjectStorageError.Conflict);
                     _storage.ValidateDerivedReference(claim.Key, encoded.Reference, _readCaps);
@@ -236,10 +236,17 @@ public sealed partial class RevisionReportService
     }
 
     private static async Task<PrivateObjectPublishResult> PublishAsync(IPrivateObjectStore store,
-        PrivateObjectReference reference, byte[] bytes, CancellationToken token)
+        ActorContext actor, RevisionReportClaim claim, PrivateObjectReference reference, byte[] bytes,
+        CancellationToken token)
     {
         using var stream = new MemoryStream(bytes, writable: false);
-        try { return await store.PublishCreateOnlyAsync(reference.Id.Scope, reference, stream, token); }
+        try
+        {
+            return store is IPrivateObjectPublicationStore publicationStore
+                ? await publicationStore.PublishCreateOnlyAsync(PrivatePublicationOwner.ForReport(actor, claim),
+                    reference.Id.Scope, reference, stream, token)
+                : await store.PublishCreateOnlyAsync(reference.Id.Scope, reference, stream, token);
+        }
         catch (OperationCanceledException) { throw; }
         catch (PrivateObjectStorageException) { throw; }
         catch (RevisionReportServiceException) { throw; }

@@ -106,9 +106,12 @@ internal static class Program
 
     private static async Task<long?> ExecuteAsync(ProbeCommand command, ProbeState state, CancellationToken token)
     {
-        if (command.Operation is not ("initialize" or "open" or "publish" or "read" or "retire") ||
+        if (command.Operation is not ("initialize" or "open" or "publish" or "read" or "retire" or "activate") ||
             command.RegistryMode is not ("syntheticPhysical" or "postgres") ||
             command.DenyFlockAfterOpen && command.Operation is not ("publish" or "read" or "retire"))
+            throw new InvalidDataException();
+        var activation = command.Operation == "activate";
+        if (activation != command.OfflineAcknowledged || activation && command.RegistryMode != "syntheticPhysical")
             throw new InvalidDataException();
         var publication = command.Operation == "publish";
         var retirement = command.Operation == "retire";
@@ -131,6 +134,25 @@ internal static class Program
         var owner = command.Owner?.Restore();
         var cleanup = command.Cleanup?.Restore(reference!.Id);
         var gate = new ProbeGate(command);
+        if (activation)
+        {
+            var result = await FileSystemV2PrivateObjectStore.ActivateAsync(options, command.OfflineAcknowledged, gate, token);
+            state.Status = result.Outcome switch
+            {
+                PrivateStorageV2ActivationOutcome.Activated => "Activated",
+                PrivateStorageV2ActivationOutcome.AlreadyActive => "AlreadyActive",
+                PrivateStorageV2ActivationOutcome.Busy => "Busy",
+                _ => throw new InvalidDataException()
+            };
+            // The activation component performs no fallible observation after
+            // its marker exchange. Lost replies are gated only after it returns.
+            if ((result.Outcome is PrivateStorageV2ActivationOutcome.Activated or PrivateStorageV2ActivationOutcome.AlreadyActive) &&
+                command.GateStage == "afterActivationReturned")
+                await gate.AfterActivationReturnedAsync(token);
+            if (command.GateStage is not null && !gate.Reached)
+                throw new InvalidDataException();
+            return null;
+        }
         using var source = publication ? new ProbeContentStream(command.Base64Content is { } encoded
             ? Protocol.Base64(encoded, Protocol.MaximumSourceBytes) : null, command.PatternLength, state, gate, token) : null;
         await using var registry = new ProbeRegistry(command, owner, state);

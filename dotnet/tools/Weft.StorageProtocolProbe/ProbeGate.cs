@@ -5,7 +5,7 @@ using Weft.Storage.FileSystem;
 namespace Weft.StorageProtocolProbe;
 
 [SupportedOSPlatform("linux")]
-internal sealed class ProbeGate : IV2StorageObserver
+internal sealed class ProbeGate : IV2StorageObserver, IV2ActivationObserver
 {
     private readonly string? _directory;
     private readonly string? _stage;
@@ -25,7 +25,14 @@ internal sealed class ProbeGate : IV2StorageObserver
                 throw new InvalidDataException();
             return;
         }
-        if (command.Operation is "initialize" or "open" ||
+        if (command.Operation == "activate")
+        {
+            if (command.GateRecordKind is not null || _stage != "afterActivationReturned" &&
+                (!Enum.TryParse<V2ActivationPhase>(_stage, out var activationPhase) ||
+                 !Enum.IsDefined(activationPhase) || activationPhase.ToString() != _stage))
+                throw new InvalidDataException();
+        }
+        else if (command.Operation is "initialize" or "open" ||
             (_stage is "afterRename" or "beforeSecondSourceRead" ? command.Operation != "publish" :
                 !Enum.TryParse<V2StoragePhase>(_stage, out var phase) || !Enum.IsDefined(phase) || phase.ToString() != _stage))
             throw new InvalidDataException();
@@ -53,6 +60,20 @@ internal sealed class ProbeGate : IV2StorageObserver
             Interlocked.CompareExchange(ref _reached, 1, 0) != 0)
             return;
         await WaitAsync(cancellationToken);
+    }
+
+    public async ValueTask ObserveAsync(V2ActivationObservation observation, CancellationToken cancellationToken)
+    {
+        if (observation.Phase.ToString() != _stage || Interlocked.CompareExchange(ref _reached, 1, 0) != 0)
+            return;
+        await WaitAsync(cancellationToken);
+    }
+
+    internal async Task AfterActivationReturnedAsync(CancellationToken token)
+    {
+        if (_stage != "afterActivationReturned" || Interlocked.CompareExchange(ref _reached, 1, 0) != 0)
+            throw new InvalidDataException();
+        await WaitAsync(token);
     }
 
     internal async Task AfterRenameAsync(CancellationToken token)

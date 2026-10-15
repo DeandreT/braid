@@ -1,7 +1,15 @@
 using Weft.Application;
 using Weft.Storage.FileSystem;
 
-if (args.Length is < 3 or > 4 || args[0] != "initialize")
+var command = args.Length == 0 ? null : args[0];
+var activation = command == "activate-v2";
+if (activation && (args.Length < 2 || args[1] != "--offline"))
+{
+    Console.Error.WriteLine("OfflineAcknowledgementRequired");
+    return 2;
+}
+if (activation ? args.Length is < 4 or > 5 :
+    command is not ("initialize" or "initialize-v2") || args.Length is < 3 or > 4)
 {
     Console.Error.WriteLine("Usage: Weft.StorageTool initialize ROOT APPLICATION_ROOT [REPOSITORY_ROOT]");
     return 2;
@@ -9,9 +17,29 @@ if (args.Length is < 3 or > 4 || args[0] != "initialize")
 
 try
 {
-    var options = new FileSystemStorageOptions(args[1], args[2], args.Length == 4 ? args[3] : null);
-    using var store = FileSystemPrivateObjectStore.Initialize(options);
-    Console.WriteLine("Initialized");
+    var offset = activation ? 2 : 1;
+    var options = new FileSystemStorageOptions(args[offset], args[offset + 1],
+        args.Length == offset + 3 ? args[offset + 2] : null);
+    if (activation)
+    {
+        var result = await FileSystemV2PrivateObjectStore.ActivateAsync(options, offlineAcknowledged: true);
+        if (result.Outcome == PrivateStorageV2ActivationOutcome.Busy)
+        {
+            Console.Error.WriteLine("Busy");
+            return 1;
+        }
+        Console.WriteLine(result.Outcome.ToString());
+    }
+    else if (command == "initialize-v2")
+    {
+        using var store = FileSystemV2PrivateObjectStore.Initialize(options);
+        Console.WriteLine("InitializedV2");
+    }
+    else
+    {
+        using var store = FileSystemPrivateObjectStore.Initialize(options);
+        Console.WriteLine("Initialized");
+    }
     return 0;
 }
 catch (ArgumentException)
@@ -27,6 +55,6 @@ catch (PrivateObjectStorageException error)
 }
 catch (Exception)
 {
-    Console.Error.WriteLine("InitializationFailure");
+    Console.Error.WriteLine(activation ? "ActivationFailure" : "InitializationFailure");
     return 1;
 }

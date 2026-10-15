@@ -211,8 +211,11 @@ public sealed class RevisionIngestionService : IRevisionIngestionService
             if (sourceBytes is not null)
             {
                 using var ownedSource = new MemoryStream(sourceBytes, writable: false);
-                var published = await _privateStore.Store.PublishCreateOnlyAsync(facts.FutureRevision,
-                    reference, ownedSource, cancellationToken);
+                var store = _privateStore.Store;
+                var published = store is IPrivateObjectPublicationStore publicationStore
+                    ? await publicationStore.PublishCreateOnlyAsync(PrivatePublicationOwner.ForIngestion(actor, claim),
+                        facts.FutureRevision, reference, ownedSource, cancellationToken)
+                    : await store.PublishCreateOnlyAsync(facts.FutureRevision, reference, ownedSource, cancellationToken);
                 if (published is not (PrivateObjectPublishResult.Created or PrivateObjectPublishResult.AlreadyPresent))
                     throw new PrivateObjectStorageException(PrivateObjectStorageError.Integrity);
             }

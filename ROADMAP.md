@@ -152,8 +152,10 @@ P3f maintenance follows three dependent, independently qualified increments:
 2. [#61](https://github.com/DeandreT/weft/issues/61): cross-process storage fencing
    and tracked temporary publication. Its focused sequence is
    [#65](https://github.com/DeandreT/weft/issues/65), the unactivated claim-aware
-   v2 filesystem component, then [#66](https://github.com/DeandreT/weft/issues/66),
-   service composition and explicit offline activation after #65 qualifies.
+   v2 filesystem component, qualified and merged in
+   [#68](https://github.com/DeandreT/weft/pull/68), then
+   [#66](https://github.com/DeandreT/weft/issues/66), service composition and
+   explicit offline activation, currently being implemented and qualified.
 3. [#62](https://github.com/DeandreT/weft/issues/62): bounded run-once maintenance
    and actual database/storage/process recovery, after #61 qualifies and merges.
 

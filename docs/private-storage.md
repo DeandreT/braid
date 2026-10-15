@@ -5,6 +5,12 @@ implementation and qualification are tracked in
 [#14](https://github.com/DeandreT/weft/issues/14). Catalog ingestion follows in
 P3c; this library adds no HTTP upload route or database revision record.
 
+This document describes the original v1 library adapter. The configured
+application host selects [claim-aware v2 storage](private-storage-v2.md).
+Existing v1 roots require [explicit offline activation](private-storage-activation.md)
+before that host can perform object I/O; the v1 library factories retain their
+original behavior.
+
 ## Reference and authority
 
 `PrivateObjectId` combines the full organization/project/mapping/revision scope,

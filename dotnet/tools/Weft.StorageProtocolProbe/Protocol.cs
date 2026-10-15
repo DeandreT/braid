@@ -25,6 +25,7 @@ internal sealed record ProbeCommand
     public string? GateStage { get; init; }
     public string? GateRecordKind { get; init; }
     public bool DenyFlockAfterOpen { get; init; }
+    public bool OfflineAcknowledged { get; init; }
 }
 
 internal sealed record ReferenceCommand

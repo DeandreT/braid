@@ -41,6 +41,8 @@ internal static class CatalogRevisionReportHostConfiguration
         if (options.DerivationEnabled)
         {
             builder.Services.AddSingleton(_ => WriteDatabase(readEnvironment));
+            builder.Services.AddSingleton(services => new PostgresRevisionReportPublicationRegistry(
+                services.GetRequiredService<PostgresRevisionDerivationDatabase>()));
             builder.Services.AddSingleton(services =>
                 new PostgresRevisionDerivationStore(services.GetRequiredService<PostgresRevisionDerivationDatabase>()));
             builder.Services.AddSingleton<IRevisionReportMetadataStore>(services => new LazyRevisionReportMetadataStore(() =>

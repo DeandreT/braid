@@ -79,6 +79,8 @@ public static class CatalogHostConfiguration
             // Current admission reductions must not prevent verification of an
             // original reserved object. Physical and registration caps stay equal.
             builder.Services.AddSingleton(_ => new PostgresIngestionDatabase(ingestionConnectionString));
+            builder.Services.AddSingleton(services =>
+                new PostgresIngestionPublicationRegistry(services.GetRequiredService<PostgresIngestionDatabase>()));
             builder.Services.AddSingleton(services => new PostgresRevisionIngestionStore(services.GetRequiredService<PostgresIngestionDatabase>()));
             builder.Services.AddSingleton<IIngestionMetadataStore>(services => services.GetRequiredService<PostgresRevisionIngestionStore>());
             builder.Services.AddSingleton<IIngestionWorkflowReader>(services => services.GetRequiredService<PostgresRevisionIngestionStore>());
@@ -101,8 +103,14 @@ public static class CatalogHostConfiguration
             else
                 builder.Services.AddSingleton(_ => CatalogRevisionReportHostConfiguration.CreateStorageOptions(
                     builder.Environment.ContentRootPath, readEnvironment));
-            builder.Services.AddSingleton<LazyPrivateObjectStore>();
+            builder.Services.AddSingleton(services => new LazyPrivateObjectPublicationRegistry(
+                () => services.GetRequiredService<PostgresIngestionPublicationRegistry>(),
+                () => services.GetRequiredService<PostgresRevisionReportPublicationRegistry>()));
+            builder.Services.AddSingleton(services => new LazyPrivateObjectStore(
+                services.GetRequiredService<FileSystemStorageOptions>(),
+                () => services.GetRequiredService<LazyPrivateObjectPublicationRegistry>()));
             builder.Services.AddSingleton<IPrivateObjectStore>(services => services.GetRequiredService<LazyPrivateObjectStore>());
+            builder.Services.AddSingleton<IPrivateObjectPublicationStore>(services => services.GetRequiredService<LazyPrivateObjectStore>());
         }
         CatalogRevisionReportHostConfiguration.Configure(builder, reportOptions, readEnvironment);
 

@@ -106,6 +106,8 @@ public sealed class CatalogRevisionIngestionHostTests(PostgresFixture fixture)
         using (var initialized = root.Initialize())
         using (var source = new MemoryStream(bytes))
             Assert.Equal(PrivateObjectPublishResult.Created, await initialized.PublishCreateOnlyAsync(reference.Id.Scope, reference, source));
+        var activation = await FileSystemV2PrivateObjectStore.ActivateAsync(root.Options, offlineAcknowledged: true);
+        Assert.Equal(PrivateStorageV2ActivationOutcome.Activated, activation.Outcome);
         var values = Enabled(root);
         values["WEFT_NATIVE_BYTE_LIMIT"] = "1";
         var builder = Builder(root.ApplicationRoot);

@@ -4,11 +4,15 @@ Issue [#65](https://github.com/DeandreT/weft/issues/65) adds an explicitly selec
 v2 component behind `IPrivateObjectPublicationStore` and
 `IPrivateObjectRetirementStore`. It retains the original publication owner and
 coordinates publishers, verified readers and physical retirement across
-processes. The existing v1 factories and production host configuration remain
-available. This increment does not activate v2 for an existing root.
+processes. The component was qualified and merged in
+[#68](https://github.com/DeandreT/weft/pull/68).
 
-Service composition and explicit offline activation follow in
-[#66](https://github.com/DeandreT/weft/issues/66). The bounded cleanup command and
+The configured application host now selects v2, forwarding the original
+ingestion or report claim through a lazy role-specific registry. Existing v1
+library factories remain available for deliberately selected legacy adapters.
+Existing application roots require [explicit offline activation](private-storage-activation.md);
+requests never initialize or convert a root. This integration is being qualified
+in [#66](https://github.com/DeandreT/weft/issues/66). The bounded cleanup command and
 fresh database acknowledgements follow in
 [#62](https://github.com/DeandreT/weft/issues/62). The
 [maintenance metadata contract](private-object-maintenance-metadata.md) supplies

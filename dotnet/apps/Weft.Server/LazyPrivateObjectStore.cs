@@ -5,21 +5,26 @@ using Weft.Storage.FileSystem;
 namespace Weft.Server;
 
 /// <summary>Opens only at actual object I/O; metadata receipt and replay resolution perform no root probes.</summary>
-public sealed class LazyPrivateObjectStore : IPrivateObjectStore, IDisposable, IAsyncDisposable
+public sealed class LazyPrivateObjectStore : IPrivateObjectPublicationStore, IDisposable, IAsyncDisposable
 {
     private readonly FileSystemStorageOptions options;
+    private readonly Func<IPrivateObjectPublicationRegistry>? registryFactory;
     private readonly SemaphoreSlim opening = new(1, 1);
     private readonly object lifetime = new();
     private readonly TaskCompletionSource drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private FileSystemPrivateObjectStore? store;
+    private FileSystemV2PrivateObjectStore? store;
     private int operations;
     private bool disposing;
     private Task? disposal;
 
-    public LazyPrivateObjectStore(FileSystemStorageOptions options) =>
+    public LazyPrivateObjectStore(FileSystemStorageOptions options,
+        Func<IPrivateObjectPublicationRegistry>? registryFactory = null)
+    {
         this.options = options ?? throw new ArgumentNullException(nameof(options));
+        this.registryFactory = registryFactory;
+    }
 
-    public async Task<PrivateObjectPublishResult> PublishCreateOnlyAsync(RevisionScope expectedScope,
+    public Task<PrivateObjectPublishResult> PublishCreateOnlyAsync(RevisionScope expectedScope,
         PrivateObjectReference reference, Stream source, CancellationToken cancellationToken = default)
     {
         ValidateReference(expectedScope, reference);
@@ -27,9 +32,28 @@ public sealed class LazyPrivateObjectStore : IPrivateObjectStore, IDisposable, I
         BeginOperation(cancellationToken);
         try
         {
+            // A capability-dropping caller cannot obtain an untracked host write.
+            // This refusal needs no root opening or publication-registry resolution.
+            return Task.FromException<PrivateObjectPublishResult>(
+                new PrivateObjectStorageException(PrivateObjectStorageError.Unsupported));
+        }
+        finally { EndOperation(); }
+    }
+
+    public async Task<PrivateObjectPublishResult> PublishCreateOnlyAsync(PrivatePublicationOwner owner,
+        RevisionScope expectedScope,
+        PrivateObjectReference reference, Stream source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ValidateReference(expectedScope, reference);
+        ArgumentNullException.ThrowIfNull(source);
+        _ = owner.OriginFor(reference.Id);
+        BeginOperation(cancellationToken);
+        try
+        {
             var current = await OpenAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            return await current.PublishCreateOnlyAsync(expectedScope, reference, source, cancellationToken);
+            return await current.PublishCreateOnlyAsync(owner, expectedScope, reference, source, cancellationToken);
         }
         finally { EndOperation(); }
     }
@@ -78,7 +102,7 @@ public sealed class LazyPrivateObjectStore : IPrivateObjectStore, IDisposable, I
         }
     }
 
-    private async Task<FileSystemPrivateObjectStore> OpenAsync(CancellationToken cancellationToken)
+    private async Task<FileSystemV2PrivateObjectStore> OpenAsync(CancellationToken cancellationToken)
     {
         await opening.WaitAsync(cancellationToken);
         try
@@ -86,7 +110,7 @@ public sealed class LazyPrivateObjectStore : IPrivateObjectStore, IDisposable, I
             cancellationToken.ThrowIfCancellationRequested();
             // Assignment happens only after a complete successful Open. Failed
             // validation is not cached, and the web host never initializes/adopts.
-            return store ??= FileSystemPrivateObjectStore.Open(options);
+            return store ??= FileSystemV2PrivateObjectStore.Open(options, registryFactory);
         }
         finally { opening.Release(); }
     }

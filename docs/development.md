@@ -7,6 +7,10 @@ that increment's qualification status is recorded there.
 Current database setup also requires the separate maintenance login before
 migration 0007; its explicit upgrade and metadata-only scope are described in
 [Maintenance metadata](private-object-maintenance-metadata.md).
+Configured catalog storage uses the v2 filesystem profile. Provision new roots
+or activate existing v1 roots explicitly using the
+[offline storage procedure](private-storage-activation.md); the server does
+neither during startup or requests.
 
 The Angular/ASP.NET Core workspace is local-only. It supplies a live API health
 check and a read-only mapping viewer over development native examples, with
