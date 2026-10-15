@@ -19,6 +19,7 @@
     "format": "prettier --write \"apps/web/**/*.{ts,html,css,json}\" \"tools/**/*.{mjs,json}\" package.json global.json",
     "test:browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e",
     "test:catalog-browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.catalog.config.ts",
+    "test:reports-browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.reports.config.ts",
     "format:check": "prettier --check \"apps/web/**/*.{ts,html,css,json}\" \"tools/**/*.{mjs,json}\" package.json global.json"
   },
   "devDependencies": {

@@ -180,10 +180,12 @@ retains its unchanged-installation-input scope. Earlier failures remain retained
 P3g follows focused increments: read-only catalog/history, persisted mapping
 explanations, project creation, metadata editing, native mapping upload/recovery,
 then conditional revision append. The first increment is tracked in
-[#75](https://github.com/DeandreT/weft/issues/75). Its isolated source work consumes
-the qualified catalog reads; its maintenance dependency is now qualified and
-merged. Browser qualification remains separate. See
-[Catalog browser](docs/catalog-browser.md).
+[#75](https://github.com/DeandreT/weft/issues/75) and merged through
+[PR #76](https://github.com/DeandreT/weft/pull/76) after 20 catalog plus 22
+example/shell browser cases passed. The saved-report viewer is tracked separately
+in [#77](https://github.com/DeandreT/weft/issues/77); its implementation is in
+progress and exact-candidate qualification remains pending. See
+[Catalog browser](docs/catalog-browser.md) and [Saved reports](docs/saved-reports.md).
 
 The [v2 filesystem contract](docs/private-storage-v2.md) fixes the private
 records, permanent gates and original-owner recovery boundary. The independent

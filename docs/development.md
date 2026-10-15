@@ -17,9 +17,11 @@ check and a read-only mapping viewer over development native examples, with
 generated API contracts. A separate Ferrule adapter supplies native inspection,
 validation, and projection. The first [catalog browser](catalog-browser.md)
 increment adds read-only saved metadata and immutable history; its qualification
-status is recorded there. The catalog API supports immutable native uploads;
-saved explanations, browser writes, hosted authentication, chat and
-Wolverine-backed execution follow separate increments. The separate
+status is recorded there. The [saved reports](saved-reports.md) increment connects
+the revision page to explanations and validation with explicit generation and
+repair controls; its qualification is tracked separately. The catalog API
+supports immutable native uploads. Browser writes, hosted authentication, chat
+and Wolverine-backed execution follow separate increments. The separate
 [project creation HTTP](project-creation-http.md) increment adds explicit
 organization actions and its dedicated creator configuration.
 

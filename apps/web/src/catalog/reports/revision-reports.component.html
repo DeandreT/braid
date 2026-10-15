@@ -1,0 +1,634 @@
+<section class="revision-reports" aria-labelledby="revision-reports-title">
+  <header class="reports-heading">
+    <div>
+      <p class="reports-eyebrow">Understand this revision</p>
+      <h2 id="revision-reports-title">Saved reports</h2>
+      <p>
+        Reading a report does not generate one. Explanation and validation are
+        independent, and each belongs to this exact revision.
+      </p>
+    </div>
+    @if (needsCurrentLink()) {
+      <a
+        class="reports-button"
+        [routerLink]="revisionPath()"
+        [queryParams]="{}"
+      >
+        Read current reports for this revision
+      </a>
+    }
+  </header>
+  @if (!reports().canRead() && !reports().refreshingAdmission()) {
+    <p class="reports-availability">
+      Report reading is currently unavailable for this mapping. Refresh the
+      catalog to check current access and availability.
+    </p>
+  }
+
+  <div class="report-panels">
+    <section
+      class="report-panel"
+      aria-labelledby="saved-explanation-title"
+      [attr.aria-busy]="busy(projection())"
+    >
+      <header class="report-heading">
+        <h3 id="saved-explanation-title" tabindex="-1">Saved explanation</h3>
+        <span class="report-selection">{{
+          projection().pinned
+            ? "Pinned saved result"
+            : "Current selection for this revision"
+        }}</span>
+      </header>
+      <p class="report-progress" role="status">
+        {{ phase(projection(), "projection") }}
+      </p>
+      @if (projection().error; as problem) {
+        <p class="report-error" role="alert">{{ error(problem.kind) }}</p>
+      }
+      @if (projection().response; as response) {
+        @let body = response.body;
+        <dl class="report-facts">
+          <dt>Lifecycle</dt>
+          <dd>{{ lifecycle(body.state) }}</dd>
+          <dt>Saved payload</dt>
+          <dd>{{ readOutcome(body.readOutcome) }}</dd>
+          <dt>Operation</dt>
+          <dd>
+            {{ body.status ? operation(body.status) : "No operation result" }}
+          </dd>
+          @if (body.result; as result) {
+            <dt>Saved result ID</dt>
+            <dd>
+              <code>{{ result.derivationId }}</code>
+            </dd>
+            <dt>Generation</dt>
+            <dd>{{ result.generation }}</dd>
+            <dt>Started</dt>
+            <dd>
+              <time [attr.datetime]="result.startedAtUtc"
+                >{{ result.startedAtUtc | date: "medium" : "UTC" }} UTC</time
+              >
+            </dd>
+            <dt>Saved</dt>
+            <dd>
+              <time [attr.datetime]="result.finishedAtUtc"
+                >{{ result.finishedAtUtc | date: "medium" : "UTC" }} UTC</time
+              >
+            </dd>
+          }
+        </dl>
+        @if (body.failure; as failureCode) {
+          <p class="report-notice">{{ failure(failureCode) }}</p>
+        }
+        @if (body.result && body.report === null) {
+          <p class="report-notice">
+            A successful result is saved, but its payload could not be read. Its
+            saved identity is shown above; no empty explanation is drawn.
+          </p>
+        } @else if (body.report && !body.report.document) {
+          <p class="report-notice">
+            This operation returned no explanation document. Its operation
+            status and notices remain available.
+          </p>
+        } @else if (body.state === "notDerived") {
+          <p>No explanation has been generated for this selection.</p>
+        } @else if (body.state === "pending") {
+          <p>
+            The explanation is still in progress. Checking its state does not
+            start another attempt.
+          </p>
+        }
+        @if (body.currentAttempt; as attempt) {
+          <details class="report-evidence">
+            <summary>Latest explanation attempt</summary>
+            <dl class="report-facts">
+              <dt>Attempt ID</dt>
+              <dd>
+                <code>{{ attempt.derivationId }}</code>
+              </dd>
+              <dt>Attempt generation</dt>
+              <dd>{{ attempt.generation }}</dd>
+              <dt>Started</dt>
+              <dd>
+                <time [attr.datetime]="attempt.startedAtUtc"
+                  >{{ attempt.startedAtUtc | date: "medium" : "UTC" }} UTC</time
+                >
+              </dd>
+              @if (attempt.finishedAtUtc; as finished) {
+                <dt>Finished</dt>
+                <dd>
+                  <time [attr.datetime]="finished"
+                    >{{ finished | date: "medium" : "UTC" }} UTC</time
+                  >
+                </dd>
+              }
+              <dt>Attempt operation</dt>
+              <dd>
+                {{
+                  attempt.status
+                    ? operation(attempt.status)
+                    : "No operation result"
+                }}
+              </dd>
+              @if (attempt.failure; as failureCode) {
+                <dt>Attempt failure</dt>
+                <dd>{{ failure(failureCode) }}</dd>
+              }
+            </dl>
+            <p>An attempt ID is not a link to a saved successful result.</p>
+          </details>
+        }
+        @if (body.nextAttemptAtUtc; as next) {
+          <p class="report-note">
+            Earliest next attempt:
+            <time [attr.datetime]="next"
+              >{{ next | date: "medium" : "UTC" }} UTC</time
+            >.
+          </p>
+        }
+        @if (body.report?.provenance; as provenance) {
+          <details class="report-evidence">
+            <summary>Explanation backend evidence</summary>
+            <dl class="report-facts">
+              <dt>Confirmed</dt>
+              <dd>
+                {{
+                  provenance.confirmed
+                    ? "Confirmed for this attempt"
+                    : "Not confirmed for this attempt"
+                }}
+              </dd>
+              <dt>Backend</dt>
+              <dd>{{ provenance.backend.id }}</dd>
+              <dt>Engine revision</dt>
+              <dd>
+                <code>{{ provenance.backend.revision }}</code>
+              </dd>
+              <dt>Backend build</dt>
+              <dd>
+                <code>{{ provenance.backend.buildId }}</code>
+              </dd>
+              <dt>Adapter</dt>
+              <dd>{{ provenance.adapterVersion }}</dd>
+              <dt>Revision</dt>
+              <dd>
+                <code>{{ provenance.revision.revisionId }}</code>
+              </dd>
+              <dt>Native digest</dt>
+              <dd>
+                <span>{{ provenance.nativeArtifactDigest.algorithm }}</span>
+                <code>{{ provenance.nativeArtifactDigest.value }}</code>
+              </dd>
+            </dl>
+          </details>
+        }
+      }
+      <div class="report-actions">
+        <button
+          class="reports-button"
+          type="button"
+          (click)="reports().readAgain('projection')"
+          [disabled]="
+            busy(projection()) || reports().busy() || !reports().canRead()
+          "
+        >
+          Read again
+        </button>
+        @if (projection().checkAgain) {
+          <button
+            class="reports-button"
+            type="button"
+            (click)="reports().readAgain('projection')"
+            [disabled]="
+              busy(projection()) || reports().busy() || !reports().canRead()
+            "
+          >
+            Check again
+          </button>
+        }
+        @if (
+          !projection().pinned &&
+          projection().response?.body?.state === "notDerived"
+        ) {
+          <button
+            class="reports-button reports-primary"
+            type="button"
+            (click)="reports().ensure('projection')"
+            [disabled]="busy(projection()) || !reports().canEnsure()"
+          >
+            Generate explanation
+          </button>
+        }
+        @if (
+          !projection().pinned &&
+          projection().response?.body?.state === "failed"
+        ) {
+          <button
+            class="reports-button reports-primary"
+            type="button"
+            (click)="reports().ensure('projection')"
+            [disabled]="busy(projection()) || !reports().canEnsure()"
+          >
+            Try derivation again
+          </button>
+        }
+        @if (projection().canRepair) {
+          <button
+            class="reports-button"
+            type="button"
+            (click)="reports().repair('projection')"
+            [disabled]="busy(projection()) || !reports().canEnsure()"
+          >
+            Repair saved result
+          </button>
+        }
+        @if (projectionPin(); as query) {
+          <a
+            class="reports-link"
+            [routerLink]="revisionPath()"
+            [queryParams]="query"
+            >Open saved explanation link</a
+          >
+        }
+      </div>
+      @if (projection().pinned) {
+        <p class="report-note">
+          This link keeps one saved explanation selected. Read current reports
+          explicitly to choose a current result or request work.
+        </p>
+      }
+    </section>
+
+    <section
+      class="report-panel"
+      aria-labelledby="saved-validation-title"
+      [attr.aria-busy]="busy(validation())"
+    >
+      <header class="report-heading">
+        <h3 id="saved-validation-title" tabindex="-1">Saved validation</h3>
+        <span class="report-selection">{{
+          validation().pinned
+            ? "Pinned saved result"
+            : "Current selection for this revision"
+        }}</span>
+      </header>
+      <p class="report-progress" role="status">
+        {{ phase(validation(), "validation") }}
+      </p>
+      @if (validation().error; as problem) {
+        <p class="report-error" role="alert">{{ error(problem.kind) }}</p>
+      }
+      @if (validation().response; as response) {
+        @let body = response.body;
+        <dl class="report-facts">
+          <dt>Lifecycle</dt>
+          <dd>{{ lifecycle(body.state) }}</dd>
+          <dt>Saved payload</dt>
+          <dd>{{ readOutcome(body.readOutcome) }}</dd>
+          <dt>Operation</dt>
+          <dd>
+            {{ body.status ? operation(body.status) : "No operation result" }}
+          </dd>
+          @if (body.result; as result) {
+            <dt>Saved result ID</dt>
+            <dd>
+              <code>{{ result.derivationId }}</code>
+            </dd>
+            <dt>Generation</dt>
+            <dd>{{ result.generation }}</dd>
+            <dt>Started</dt>
+            <dd>
+              <time [attr.datetime]="result.startedAtUtc"
+                >{{ result.startedAtUtc | date: "medium" : "UTC" }} UTC</time
+              >
+            </dd>
+            <dt>Saved</dt>
+            <dd>
+              <time [attr.datetime]="result.finishedAtUtc"
+                >{{ result.finishedAtUtc | date: "medium" : "UTC" }} UTC</time
+              >
+            </dd>
+          }
+        </dl>
+        @if (body.failure; as failureCode) {
+          <p class="report-notice">{{ failure(failureCode) }}</p>
+        }
+        @if (body.result && body.report === null) {
+          <p class="report-notice">
+            A successful validation result is saved, but its payload could not
+            be read. No validity decision or notice count can be inferred from
+            the missing payload.
+          </p>
+        } @else if (body.state === "notDerived") {
+          <p>No validation has been generated for this selection.</p>
+        } @else if (body.state === "pending") {
+          <p>
+            Validation is still in progress. Checking its state does not start
+            another attempt.
+          </p>
+        }
+        @if (body.report; as report) {
+          <h4 class="validation-title">{{ validationTitle(report) }}</h4>
+          <dl class="report-facts">
+            <dt>Validity</dt>
+            <dd>
+              {{
+                report.isValid === true
+                  ? "Valid"
+                  : report.isValid === false
+                    ? "Issues found"
+                    : "No decision returned"
+              }}
+            </dd>
+            <dt>Total notices</dt>
+            <dd>{{ report.totalIssueCount }}</dd>
+            <dt>Notices returned</dt>
+            <dd>{{ report.emittedIssueCount }}</dd>
+            <dt>Notice list</dt>
+            <dd>
+              {{
+                report.truncated
+                  ? "Some content or notices shortened"
+                  : "Not shortened"
+              }}
+            </dd>
+          </dl>
+          <p class="report-note">
+            Validation does not establish explanation coverage. Coverage is
+            shown with the explanation.
+          </p>
+          @if (linkedValidation()) {
+            <p class="report-link-status">
+              Finding locations are linked to the exact saved explanation shown
+              below.
+            </p>
+          } @else {
+            <p class="report-link-status">
+              Finding locations are not linked to the explanation shown. Native
+              evidence remains available.
+            </p>
+          }
+          @if (report.provenance; as provenance) {
+            <details class="report-evidence">
+              <summary>Validation backend evidence</summary>
+              <dl class="report-facts">
+                <dt>Confirmed</dt>
+                <dd>
+                  {{
+                    provenance.confirmed
+                      ? "Confirmed for this attempt"
+                      : "Not confirmed for this attempt"
+                  }}
+                </dd>
+                <dt>Backend</dt>
+                <dd>{{ provenance.backend.id }}</dd>
+                <dt>Engine revision</dt>
+                <dd>
+                  <code>{{ provenance.backend.revision }}</code>
+                </dd>
+                <dt>Backend build</dt>
+                <dd>
+                  <code>{{ provenance.backend.buildId }}</code>
+                </dd>
+                <dt>Adapter</dt>
+                <dd>{{ provenance.adapterVersion }}</dd>
+                <dt>Revision</dt>
+                <dd>
+                  <code>{{ provenance.revision.revisionId }}</code>
+                </dd>
+                <dt>Native digest</dt>
+                <dd>
+                  <span>{{ provenance.nativeArtifactDigest.algorithm }}</span>
+                  <code>{{ provenance.nativeArtifactDigest.value }}</code>
+                </dd>
+              </dl>
+            </details>
+          }
+        }
+        @if (body.currentAttempt; as attempt) {
+          <details class="report-evidence">
+            <summary>Latest validation attempt</summary>
+            <dl class="report-facts">
+              <dt>Attempt ID</dt>
+              <dd>
+                <code>{{ attempt.derivationId }}</code>
+              </dd>
+              <dt>Attempt generation</dt>
+              <dd>{{ attempt.generation }}</dd>
+              <dt>Started</dt>
+              <dd>
+                <time [attr.datetime]="attempt.startedAtUtc"
+                  >{{ attempt.startedAtUtc | date: "medium" : "UTC" }} UTC</time
+                >
+              </dd>
+              @if (attempt.finishedAtUtc; as finished) {
+                <dt>Finished</dt>
+                <dd>
+                  <time [attr.datetime]="finished"
+                    >{{ finished | date: "medium" : "UTC" }} UTC</time
+                  >
+                </dd>
+              }
+              <dt>Attempt operation</dt>
+              <dd>
+                {{
+                  attempt.status
+                    ? operation(attempt.status)
+                    : "No operation result"
+                }}
+              </dd>
+              @if (attempt.failure; as failureCode) {
+                <dt>Attempt failure</dt>
+                <dd>{{ failure(failureCode) }}</dd>
+              }
+            </dl>
+            <p>An attempt ID is not a link to a saved successful result.</p>
+          </details>
+        }
+        @if (body.nextAttemptAtUtc; as next) {
+          <p class="report-note">
+            Earliest next attempt:
+            <time [attr.datetime]="next"
+              >{{ next | date: "medium" : "UTC" }} UTC</time
+            >.
+          </p>
+        }
+      }
+      <div class="report-actions">
+        <button
+          class="reports-button"
+          type="button"
+          (click)="reports().readAgain('validation')"
+          [disabled]="
+            busy(validation()) || reports().busy() || !reports().canRead()
+          "
+        >
+          Read again
+        </button>
+        @if (validation().checkAgain) {
+          <button
+            class="reports-button"
+            type="button"
+            (click)="reports().readAgain('validation')"
+            [disabled]="
+              busy(validation()) || reports().busy() || !reports().canRead()
+            "
+          >
+            Check again
+          </button>
+        }
+        @if (
+          !validation().pinned &&
+          validation().response?.body?.state === "notDerived"
+        ) {
+          <button
+            class="reports-button reports-primary"
+            type="button"
+            (click)="reports().ensure('validation')"
+            [disabled]="busy(validation()) || !reports().canEnsure()"
+          >
+            Generate validation
+          </button>
+        }
+        @if (
+          !validation().pinned &&
+          validation().response?.body?.state === "failed"
+        ) {
+          <button
+            class="reports-button reports-primary"
+            type="button"
+            (click)="reports().ensure('validation')"
+            [disabled]="busy(validation()) || !reports().canEnsure()"
+          >
+            Try derivation again
+          </button>
+        }
+        @if (validation().canRepair) {
+          <button
+            class="reports-button"
+            type="button"
+            (click)="reports().repair('validation')"
+            [disabled]="busy(validation()) || !reports().canEnsure()"
+          >
+            Repair saved result
+          </button>
+        }
+        @if (validationPin(); as query) {
+          <a
+            class="reports-link"
+            [routerLink]="revisionPath()"
+            [queryParams]="query"
+            >Open saved validation link</a
+          >
+        }
+        @if (linkedPin(); as query) {
+          <a
+            class="reports-link"
+            [routerLink]="revisionPath()"
+            [queryParams]="query"
+            >Link validation to this explanation</a
+          >
+        }
+        <button
+          class="reports-button"
+          type="button"
+          (click)="reports().readValidationWithoutLinks()"
+          [disabled]="
+            busy(validation()) || reports().busy() || !reports().canRead()
+          "
+        >
+          Read validation without links
+        </button>
+      </div>
+      @if (validation().pinned) {
+        <p class="report-note">
+          This link keeps one saved validation result selected. Reading without
+          links makes a fresh authorized request for that result.
+        </p>
+      }
+    </section>
+  </div>
+
+  @if (projection().response?.body?.report; as report) {
+    @if (report.diagnostics.length > 0) {
+      <section
+        class="report-panel report-notices"
+        aria-labelledby="saved-explanation-notices-title"
+      >
+        <h3 id="saved-explanation-notices-title">
+          Explanation service notices
+        </h3>
+        <ul class="report-notice-list">
+          @for (diagnostic of report.diagnostics; track $index) {
+            <li>
+              <span class="report-severity">{{ diagnostic.severity }}</span>
+              <p>
+                {{ diagnostic.message
+                }}{{
+                  diagnostic.messageTruncated ? " (message shortened)" : ""
+                }}
+              </p>
+              <weft-native-evidence [locator]="diagnostic.nativeLocator" />
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+
+  @if (document(); as document) {
+    <section class="saved-mapping-view" aria-label="Saved mapping explanation">
+      <weft-mapping-projection
+        [document]="document"
+        [validation]="linkedValidation()"
+      />
+    </section>
+  }
+
+  @if (!linkedValidation()) {
+    @if (validation().response?.body?.report; as report) {
+      @if (report.diagnostics.length > 0) {
+        <section
+          class="report-panel report-notices"
+          aria-labelledby="saved-validation-notices-title"
+        >
+          <h3 id="saved-validation-notices-title">Native validation notices</h3>
+          <p>
+            These findings are not linked to the explanation shown. Review their
+            native evidence.
+          </p>
+          <ul class="report-notice-list">
+            @for (diagnostic of report.diagnostics; track $index) {
+              <li>
+                <span class="report-severity">{{ diagnostic.severity }}</span>
+                <p>
+                  {{ diagnostic.message
+                  }}{{
+                    diagnostic.messageTruncated ? " (message shortened)" : ""
+                  }}
+                </p>
+                <weft-native-evidence
+                  [locator]="diagnostic.nativeLocator"
+                  [owner]="diagnostic.owner"
+                />
+                @if (diagnostic.location) {
+                  <details class="report-evidence">
+                    <summary>Validator location</summary>
+                    <p>
+                      {{ diagnostic.location
+                      }}{{
+                        diagnostic.locationTruncated
+                          ? " (location shortened)"
+                          : ""
+                      }}
+                    </p>
+                  </details>
+                }
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    }
+  }
+</section>

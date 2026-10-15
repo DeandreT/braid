@@ -155,6 +155,7 @@
         View current head
       </button>
     </section>
+    <weft-revision-reports [reports]="reports" [revision]="view.revision" />
   } @else {
     <weft-catalog-status
       [kind]="kind()"

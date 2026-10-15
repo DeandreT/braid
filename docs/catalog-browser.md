@@ -2,9 +2,11 @@
 
 This read-only increment connects Angular to the existing catalog API. Its scope
 is [#75](https://github.com/DeandreT/weft/issues/75), the first part of
-[#19](https://github.com/DeandreT/weft/issues/19). Its implementation and browser
-qualification status is recorded in that issue and its implementing PR. Uploads, metadata editing, saved mapping
-explanations, sign-in and chat follow their separate increments.
+[#19](https://github.com/DeandreT/weft/issues/19). It merged through
+[PR #76](https://github.com/DeandreT/weft/pull/76) after all 20 catalog and 22
+existing example/shell browser cases passed. [Saved mapping reports](saved-reports.md)
+follow in increment B. Uploads, metadata editing, sign-in and chat retain their
+separate increments.
 
 ## Navigation
 
@@ -24,7 +26,8 @@ and revision sequences remain exact strings.
 Revision details show sequence, admission, digest, byte count, original filename,
 logical document and commit time. A decoded-invalid revision remains part of
 history. Mapping names and descriptions alongside an old revision are labelled
-as current metadata. A metadata read does not derive or load an explanation.
+as current metadata. Catalog metadata reads never derive explanations. When
+report reading is enabled, the revision page reads saved reports separately.
 
 ## Access and refresh
 

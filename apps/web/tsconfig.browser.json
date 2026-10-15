@@ -1,5 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
-  "include": ["playwright.catalog.config.ts", "tests/catalog*.ts"]
+  "include": [
+    "playwright.catalog.config.ts",
+    "playwright.reports.config.ts",
+    "tests/catalog*.ts",
+    "tests/revision-reports*.ts"
+  ]
 }

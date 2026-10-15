@@ -21,6 +21,7 @@ import { combineLatest, filter, of, startWith, type Observable } from "rxjs";
 import { CatalogApi } from "./catalog-api";
 import { CatalogContextStore } from "./catalog-context";
 import { createCatalogRead } from "./catalog-state";
+import { revisionReportSelectors } from "./reports/revision-report-selection";
 import {
   catalogRoutes,
   isCatalogCursor,
@@ -264,7 +265,12 @@ function routeSelection(
   const revisionId = params.get("revisionId");
   if (!isCatalogId(organizationId)) return null;
   const canPage = kind !== "revision";
-  if (query.keys.some((key) => !canPage || key !== "cursor")) return null;
+  if (
+    canPage
+      ? query.keys.some((key) => key !== "cursor")
+      : revisionReportSelectors(query) === null
+  )
+    return null;
   const cursors = query.getAll("cursor");
   if (
     cursors.length > 1 ||
