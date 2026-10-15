@@ -1,5 +1,12 @@
 <div class="app-shell">
-  <a class="skip-link" href="#main-content">Skip to content</a>
+  <a
+    class="skip-link"
+    [routerLink]="[]"
+    queryParamsHandling="preserve"
+    fragment="main-content"
+    (click)="skipToContent($event)"
+    >Skip to content</a
+  >
   <header class="app-header">
     <a class="brand" routerLink="/examples" aria-label="Weft home"
       ><span class="brand-mark" aria-hidden="true">w</span

@@ -371,6 +371,25 @@ test("controlled retained identities: exact selectors and Int64 generation pin s
       .reads("validation")
       .every((r) => r.path === reports.data.reportPath("validation", V)),
   ).toBe(true);
+  const contentUrl = new URL(page.url());
+  contentUrl.hash = "main-content";
+  const skip = page.getByRole("link", {
+    name: "Skip to content",
+    exact: true,
+  });
+  await expect(skip).toHaveAttribute(
+    "href",
+    contentUrl.pathname + contentUrl.search + contentUrl.hash,
+  );
+  for (let activation = 0; activation < 2; ++activation) {
+    await skip.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(contentUrl.href);
+    await expect(page.locator("#main-content")).toBeFocused();
+    await expect(fact(panel(page, "projection"), "Generation")).toHaveText(
+      "9223372036854775807",
+    );
+  }
   reports.set("GET", reports.data.reportPath("projection"), {
     json: pending(reports.data.projection),
   });

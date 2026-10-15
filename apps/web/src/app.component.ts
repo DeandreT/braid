@@ -16,8 +16,9 @@ import { filter } from "rxjs";
   templateUrl: "./app.component.html",
 })
 export class AppComponent {
+  private readonly document = inject(DOCUMENT);
+
   constructor() {
-    const document = inject(DOCUMENT);
     let initialNavigation = true;
     inject(Router)
       .events.pipe(
@@ -29,7 +30,21 @@ export class AppComponent {
           initialNavigation = false;
           return;
         }
-        queueMicrotask(() => document.getElementById("main-content")?.focus());
+        queueMicrotask(() =>
+          this.document.getElementById("main-content")?.focus(),
+        );
       });
+  }
+
+  skipToContent(event: MouseEvent): void {
+    if (
+      event.button !== 0 ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.metaKey
+    )
+      return;
+    this.document.getElementById("main-content")?.focus();
   }
 }
