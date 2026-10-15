@@ -831,16 +831,46 @@ test("controlled creation: uncertainty survives later busy, forbidden, absent, i
     await expect(name(page)).toBeDisabled();
     await expect(description(page)).toBeDisabled();
     const responses = [
-      refusal(503, "projectCreationAdmissionBusy"),
-      refusal(403, "permissionDenied"),
-      refusal(404, "notFound"),
-      refusal(400, "invalidRequest"),
-      refusal(409, "idempotencyConflict"),
-      refusal(500, "persistenceFailure"),
-    ];
-    for (const reply of responses) {
+      [
+        refusal(503, "projectCreationAdmissionBusy"),
+        "Project creation is busy. No automatic retry was made.",
+      ],
+      [
+        refusal(403, "permissionDenied"),
+        "You do not currently have permission to create projects in this organization.",
+      ],
+      [
+        refusal(404, "notFound"),
+        "This organization or creation request is unavailable to your current identity.",
+      ],
+      [
+        refusal(400, "invalidRequest"),
+        "The service refused this request as invalid.",
+      ],
+      [
+        refusal(409, "idempotencyConflict"),
+        "The original request identity conflicts with a saved request. No different project was adopted.",
+      ],
+      [
+        refusal(500, "persistenceFailure"),
+        "The service could not confirm the creation outcome.",
+      ],
+    ] as const;
+    for (const [index, [reply, message]] of responses.entries()) {
       fixture.postReply = reply;
+      const refusedResponse = page.waitForResponse((response) => {
+        const request = response.request();
+        const url = new URL(response.url());
+        return (
+          request.method() === "POST" &&
+          url.pathname === postPath &&
+          !url.search &&
+          response.status() === reply.status
+        );
+      });
       await recover(page).click();
+      expect(await (await refusedResponse).finished()).toBeNull();
+      await expect(page.getByRole("alert")).toHaveText(message);
       await unknown(page);
       await expect(
         page.getByRole("button", { name: "Edit refused request", exact: true }),
@@ -851,9 +881,21 @@ test("controlled creation: uncertainty survives later busy, forbidden, absent, i
             wire.sameOriginalBody && wire.sameOriginalKey && wire.freshToken,
         ),
       ).toBe(true);
+      expectedWires(fixture, index + 2);
     }
     fixture.postReply = fixture.success(200);
+    const replayResponse = page.waitForResponse((response) => {
+      const request = response.request();
+      const url = new URL(response.url());
+      return (
+        request.method() === "POST" &&
+        url.pathname === postPath &&
+        !url.search &&
+        response.status() === 200
+      );
+    });
     await recover(page).click();
+    expect(await (await replayResponse).finished()).toBeNull();
     await confirmed(page);
     expectedWires(fixture, responses.length + 2);
     expect(
