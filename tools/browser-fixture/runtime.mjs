@@ -26,6 +26,7 @@ export async function runBrowserFixture(definition) {
   try {
     const creationScenario = definition.kind === "project-creation";
     const metadataScenario = definition.kind === "mapping-metadata";
+    const uploadScenario = definition.kind === "native-mapping-upload";
     class Failure extends Error {
       constructor(category) {
         super(category);
@@ -147,20 +148,24 @@ export async function runBrowserFixture(definition) {
       process.env[
         creationScenario
           ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
-          : metadataScenario
-            ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
-            : definition.kind === "catalog"
-              ? "WEFT_CATALOG_BROWSER_MANIFEST"
-              : "WEFT_REPORTS_BROWSER_MANIFEST"
+          : uploadScenario
+            ? "WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
+            : metadataScenario
+              ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
+              : definition.kind === "catalog"
+                ? "WEFT_CATALOG_BROWSER_MANIFEST"
+                : "WEFT_REPORTS_BROWSER_MANIFEST"
       ] === cfg.manifestPath &&
         process.env[
           creationScenario
             ? "WEFT_PROJECT_CREATION_BASE_URL"
-            : metadataScenario
-              ? "WEFT_MAPPING_METADATA_BASE_URL"
-              : definition.kind === "catalog"
-                ? "WEFT_CATALOG_BASE_URL"
-                : "WEFT_REPORTS_BASE_URL"
+            : uploadScenario
+              ? "WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL"
+              : metadataScenario
+                ? "WEFT_MAPPING_METADATA_BASE_URL"
+                : definition.kind === "catalog"
+                  ? "WEFT_CATALOG_BASE_URL"
+                  : "WEFT_REPORTS_BASE_URL"
         ] === origin(cfg.readOrigin),
     );
     origin(cfg.mutationOrigin);
@@ -774,7 +779,7 @@ export async function runBrowserFixture(definition) {
     // inside PostgreSQL so even the built-in routine ACL set stays below pipe limits.
     // Relation capture includes column ACLs, not only table-level relacl.
     function creationGrantState() {
-      check(creationScenario || metadataScenario);
+      check(creationScenario || metadataScenario || uploadScenario);
       return jsonSql(
         `SELECT json_build_object(
         'database',(SELECT jsonb_build_array(oid,datname,datdba,datacl::text) FROM pg_catalog.pg_database WHERE datname=current_database()),
@@ -823,7 +828,7 @@ export async function runBrowserFixture(definition) {
       journal: journal(),
       credentials: credentialState(),
       physical: physical(),
-      ...(creationScenario || metadataScenario
+      ...(creationScenario || metadataScenario || uploadScenario
         ? { grants: creationGrantState() }
         : {}),
     });
@@ -1005,7 +1010,9 @@ export async function runBrowserFixture(definition) {
                   kind: "http",
                   origin: host.origin,
                   method,
-                  path,
+                  path: uploadScenario
+                    ? new URL(path, host.origin).pathname
+                    : path,
                   status: response.statusCode,
                   bytes: bytes.length,
                   bodySha256:
@@ -1050,9 +1057,9 @@ export async function runBrowserFixture(definition) {
         const expectedFeatures = {
           readCatalog: true,
           createProjects: host.writer || host.creationOnly,
-          createMappings: host.writer,
+          createMappings: host.writer || host.uploadOnly,
           editMetadata: host.metadataEdits,
-          uploadRevisions: host.writer,
+          uploadRevisions: host.writer || host.uploadOnly,
           readReports: host.reportMode !== null,
           chat: false,
           preview: false,
@@ -1076,6 +1083,7 @@ export async function runBrowserFixture(definition) {
         writer = false,
         creationOnly = false,
         metadataEdits = false,
+        uploadOnly = false,
         reportMode = null,
       } = {},
     ) {
@@ -1109,6 +1117,19 @@ export async function runBrowserFixture(definition) {
       );
       if (metadataScenario && kind === "read")
         check(!writer && !creationOnly && reportMode === null);
+      check(
+        !uploadOnly ||
+          (uploadScenario &&
+            kind === "read" &&
+            !writer &&
+            !creationOnly &&
+            !metadataEdits &&
+            reportMode === null),
+      );
+      if (uploadScenario && kind === "read")
+        check(
+          !writer && !creationOnly && !metadataEdits && reportMode === null,
+        );
       const address = kind === "read" ? cfg.readOrigin : cfg.mutationOrigin;
       await listenerAbsent(address);
       const actualActor =
@@ -1152,7 +1173,7 @@ export async function runBrowserFixture(definition) {
             ? connections.unavailable
             : connections.weft_catalog_reader,
         WEFT_PROJECT_CREATION_ENABLED: String(writer || creationOnly),
-        WEFT_REVISION_INGESTION_ENABLED: String(writer),
+        WEFT_REVISION_INGESTION_ENABLED: String(writer || uploadOnly),
         WEFT_METADATA_EDITS_ENABLED: String(metadataEdits),
         WEFT_REVISION_REPORTS_ENABLED: "false",
         WEFT_REVISION_REPORT_DERIVATION_ENABLED: "false",
@@ -1178,6 +1199,16 @@ export async function runBrowserFixture(definition) {
           WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
           WEFT_FERRULE_WORKER_IMAGE: workerImage,
         });
+      if (uploadOnly)
+        Object.assign(environment, {
+          WEFT_POSTGRES_INGESTION_CONNECTION_STRING: connections.weft_ingest,
+          WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
+          WEFT_FERRULE_WORKER_IMAGE: workerImage,
+        });
+      if (uploadScenario && kind === "read" && !uploadOnly) {
+        delete environment.DOCKER_HOST;
+        delete environment.DOCKER_CONFIG;
+      }
       if (reportMode !== null) {
         Object.assign(environment, {
           WEFT_REVISION_REPORTS_ENABLED: "true",
@@ -1229,7 +1260,35 @@ export async function runBrowserFixture(definition) {
                   "WEFT_POSTGRES_METADATA_CONNECTION_STRING",
                 )),
         );
-      if (!writer && !creationOnly && !metadataEdits && reportMode === null)
+      if (uploadScenario && kind === "read")
+        check(
+          environment.WEFT_PROJECT_CREATION_ENABLED === "false" &&
+            environment.WEFT_METADATA_EDITS_ENABLED === "false" &&
+            environment.WEFT_REVISION_REPORTS_ENABLED === "false" &&
+            environment.WEFT_REVISION_REPORT_DERIVATION_ENABLED === "false" &&
+            !Object.keys(environment).some((key) =>
+              /PROJECT_CREATION_CONNECTION|METADATA_CONNECTION|REPORT_CONNECTION|DERIVATION_CONNECTION|MAINTENANCE_CONNECTION/.test(
+                key,
+              ),
+            ) &&
+            (uploadOnly
+              ? environment.WEFT_REVISION_INGESTION_ENABLED === "true" &&
+                environment.WEFT_POSTGRES_INGESTION_CONNECTION_STRING ===
+                  connections.weft_ingest &&
+                environment.WEFT_PRIVATE_STORAGE_ROOT === storageRoot &&
+                environment.WEFT_FERRULE_WORKER_IMAGE === workerImage
+              : environment.WEFT_REVISION_INGESTION_ENABLED === "false" &&
+                !Object.keys(environment).some((key) =>
+                  /POSTGRES_|PRIVATE_STORAGE|WORKER_IMAGE|DOCKER_/.test(key),
+                )),
+        );
+      if (
+        !writer &&
+        !creationOnly &&
+        !metadataEdits &&
+        !uploadOnly &&
+        reportMode === null
+      )
         check(
           !Object.keys(environment).some((key) =>
             /POSTGRES_|PRIVATE_STORAGE|WORKER_IMAGE/.test(key),
@@ -1250,6 +1309,7 @@ export async function runBrowserFixture(definition) {
         writer,
         creationOnly,
         metadataEdits,
+        uploadOnly,
         reportMode,
         child,
         cookies: [],
@@ -1295,8 +1355,13 @@ export async function runBrowserFixture(definition) {
           processorCount: 2,
           gcHeapLimitBytes: 1073741824,
           metadataOnly:
-            !writer && !creationOnly && !metadataEdits && reportMode === null,
+            !writer &&
+            !creationOnly &&
+            !metadataEdits &&
+            !uploadOnly &&
+            reportMode === null,
           ...(metadataScenario ? { metadataEdits } : {}),
+          ...(uploadScenario ? { uploadOnly } : {}),
           ...(creationScenario ? { creationOnly } : {}),
           reportMode,
           terminal: null,
@@ -1839,7 +1904,7 @@ export async function runBrowserFixture(definition) {
         manifestSha256: sha(bytes),
         profile: creationScenario
           ? "creator"
-          : metadataScenario
+          : metadataScenario || uploadScenario
             ? "publisher"
             : "viewer",
       });
@@ -2170,7 +2235,11 @@ export async function runBrowserFixture(definition) {
     }
     let metadataPublisher = null;
     function captureMetadataPublisher(projectId) {
-      check(metadataScenario && metadataPublisher === null && !mutationHost);
+      check(
+        (metadataScenario || uploadScenario) &&
+          metadataPublisher === null &&
+          !mutationHost,
+      );
       guid(projectId);
       const current = rows(),
         project = current.projects.filter(
@@ -2196,7 +2265,7 @@ export async function runBrowserFixture(definition) {
     }
     function changeMetadataPublisherRole(role) {
       check(
-        metadataScenario &&
+        (metadataScenario || uploadScenario) &&
           metadataPublisher !== null &&
           !mutationHost &&
           ["publisher", "viewer"].includes(role),
@@ -2618,6 +2687,12 @@ export async function runBrowserFixture(definition) {
         : {}),
       ...(metadataScenario
         ? { captureMetadataPublisher, changeMetadataPublisherRole }
+        : {}),
+      ...(uploadScenario
+        ? {
+            captureUploadPublisher: captureMetadataPublisher,
+            changeUploadPublisherRole: changeMetadataPublisherRole,
+          }
         : {}),
       verifyInputBodies,
       state,

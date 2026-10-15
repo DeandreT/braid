@@ -1,0 +1,618 @@
+<section
+  class="native-upload"
+  aria-labelledby="upload-title"
+  [attr.aria-busy]="state.busy() || state.preparingFile()"
+>
+  <header class="upload-heading">
+    <p class="upload-eyebrow">Native mapping</p>
+    <h1 id="upload-title" tabindex="-1">Upload mapping</h1>
+    <p>
+      Choose a Ferrule native JSON mapping. The original file is stored
+      unchanged. Files can be up to 4 MiB; this service may have a lower limit.
+    </p>
+    <p>
+      This creates a new mapping and its first saved revision. It does not
+      append to an existing mapping or include referenced files and resources.
+    </p>
+    @if (state.project(); as project) {
+      <a [routerLink]="routes.project(project.scope)" [queryParams]="{}"
+        >Back to project</a
+      >
+    } @else {
+      <a routerLink="/catalog" [queryParams]="{}">Open catalog</a>
+    }
+    <button
+      type="button"
+      (click)="state.refreshAccess()"
+      [disabled]="
+        state.busy() ||
+        state.preparingFile() ||
+        leaveDecision() !== null ||
+        state.admission() === 'invalidLink'
+      "
+    >
+      Refresh access
+    </button>
+  </header>
+
+  @if (leaveDecision(); as risk) {
+    <section
+      class="upload-card upload-notice"
+      aria-labelledby="upload-leave"
+      role="alert"
+    >
+      <h2 id="upload-leave" tabindex="-1">
+        {{
+          risk === "draft"
+            ? "Leave this upload draft?"
+            : "Leave and keep upload recovery?"
+        }}
+      </h2>
+      @if (risk === "draft") {
+        <p>
+          Your unsent fields and selected file will be discarded from this
+          editor.
+        </p>
+      } @else {
+        <p>
+          This tab will keep the original upload's recovery information. Waiting
+          stops here, but an upload already sent may still save. Leaving is not
+          an undo.
+        </p>
+      }
+      <div class="upload-actions">
+        <button type="button" (click)="stay()">Stay</button>
+        <button type="button" (click)="confirmLeave()">
+          {{
+            risk === "draft"
+              ? "Discard draft and leave"
+              : "Keep recovery information and leave"
+          }}
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (state.admission() === "loading") {
+    <p role="status">Checking current identity and project access…</p>
+  } @else if (state.admission() !== "ready") {
+    <section class="upload-card" role="status">
+      <h2>Upload form unavailable</h2>
+      @switch (state.admission()) {
+        @case ("invalidLink") {
+          <p>
+            This upload link is invalid. Open the catalog to choose a project.
+          </p>
+        }
+        @case ("readOnly") {
+          <p>
+            Native upload is not enabled or permitted for your current project
+            access. A confirmed saved revision can still be read when ordinary
+            view access permits it.
+          </p>
+        }
+        @case ("notFound") {
+          <p>
+            This project or upload is unavailable to your current identity.
+            Private upload details are hidden.
+          </p>
+        }
+        @case ("rejected") {
+          <p>
+            Your identity could not be admitted. Private upload details are
+            hidden.
+          </p>
+        }
+        @default {
+          <p>
+            Current access could not be checked. No automatic upload, status
+            check or resume was sent.
+          </p>
+        }
+      }
+    </section>
+  }
+
+  @if (state.quarantined()) {
+    <section
+      class="upload-card upload-notice"
+      aria-labelledby="upload-quarantine"
+      role="status"
+    >
+      <h2 id="upload-quarantine" tabindex="-1">
+        An original upload is retained privately
+      </h2>
+      <p>
+        This tab keeps one original upload for another identity or project. Its
+        file, fields and operation details are hidden. Return to the original
+        identity and project to recover it; it will never be sent as another
+        actor.
+      </p>
+    </section>
+  }
+
+  @if (state.error(); as error) {
+    <p class="upload-error" role="alert">{{ errorMessage(error.kind) }}</p>
+  }
+  @if (state.outcomeUnknown()) {
+    <section class="upload-card upload-notice" aria-labelledby="upload-unknown">
+      <h2 id="upload-unknown" tabindex="-1">Upload outcome is unknown</h2>
+      <p>
+        The upload may have saved. Keep this tab open and recover the original
+        upload before starting another. A later refusal or a matching catalog
+        item cannot resolve this outcome.
+      </p>
+      @if (state.waitingStopped()) {
+        <p>
+          Waiting stopped. This does not promise that the server canceled the
+          upload.
+        </p>
+      }
+    </section>
+  }
+
+  @if (state.acknowledgement(); as saved) {
+    <section class="upload-card" aria-labelledby="upload-saved">
+      <h2 id="upload-saved" tabindex="-1">
+        {{
+          saved.detailed && saved.admission === "decodedInvalid"
+            ? "Mapping saved with validation issues"
+            : "Mapping saved"
+        }}
+      </h2>
+      @if (!saved.detailed) {
+        <p role="status">
+          This tab retained a verified saved acknowledgement. Its details are
+          hidden until the original identity and project access can be checked.
+        </p>
+      } @else if (saved.admission === "decodedInvalid") {
+        <p role="status">
+          The mapping was saved with validation issues. Open its exact revision
+          to review available details.
+        </p>
+      } @else {
+        <p role="status">
+          The upload's exact operation has a committed first revision.
+        </p>
+      }
+      @switch (state.currentAccess().kind) {
+        @case ("loading") {
+          <p role="status">Checking current revision access…</p>
+        }
+        @case ("ready") {
+          @let access = state.currentAccess();
+          @if (access.kind === "ready") {
+            <dl class="upload-facts">
+              <dt>Saved filename</dt>
+              <dd
+                class="upload-literal"
+                [textContent]="access.revision.originalFilename"
+              ></dd>
+              <dt>Revision</dt>
+              <dd>{{ access.revision.sequence }}</dd>
+              <dt>Native bytes</dt>
+              <dd>{{ access.revision.nativeByteCount }}</dd>
+            </dl>
+            <a
+              class="upload-button"
+              [routerLink]="routes.revision(access.revision.scope)"
+              [queryParams]="{}"
+              >View revision</a
+            >
+          }
+        }
+        @default {
+          <p>
+            Saving remains acknowledged. Current revision access is unavailable
+            until a fresh ordinary read succeeds; no upload is needed to retry
+            that read.
+          </p>
+        }
+      }
+      <div class="upload-actions">
+        <button
+          type="button"
+          (click)="state.retryRevisionAccess()"
+          [disabled]="
+            !state.canRetryRevisionAccess() || leaveDecision() !== null
+          "
+        >
+          Retry revision access
+        </button>
+        @if (state.canStartAnother()) {
+          <button
+            type="button"
+            (click)="startAnother()"
+            [disabled]="leaveDecision() !== null"
+          >
+            Upload another mapping
+          </button>
+        }
+      </div>
+    </section>
+  }
+
+  @let operation = state.operationStatus();
+  @if (operation) {
+    <section class="upload-card" aria-labelledby="upload-operation">
+      <h2 id="upload-operation" tabindex="-1">
+        {{
+          operation.committed
+            ? "Saved upload operation"
+            : operation.terminal
+              ? "Upload ended without a saved revision"
+              : "Upload is not confirmed saved yet"
+        }}
+      </h2>
+      @if (!operation.terminal) {
+        <p>
+          The known operation is {{ operation.phase }}. Attempts observed:
+          {{ operation.claimCount }}. Check its status or deliberately resume
+          it; no automatic polling or retry runs.
+        </p>
+        @if (operation.failure === "needsSource") {
+          <p>
+            The operation needs its original file. Resend the retained original
+            file; a replacement cannot recover this request.
+          </p>
+        } @else if (operation.failure) {
+          <p>
+            The operation reports a recoverable failure. A resume makes one
+            deliberate attempt; it may remain pending or fail again.
+          </p>
+        }
+      } @else if (!operation.committed) {
+        <p>This exact own operation has no committed revision.</p>
+        @if (operation.phase === "attemptExhausted") {
+          <p>Its attempt budget is exhausted.</p>
+        } @else {
+          <p>{{ rejectionMessage(state.response()?.rejection ?? null) }}</p>
+        }
+        @if (state.canStartAnother()) {
+          <button
+            type="button"
+            (click)="startAnother()"
+            [disabled]="leaveDecision() !== null"
+          >
+            Upload another mapping
+          </button>
+        }
+      }
+      <div class="upload-actions">
+        <button
+          type="button"
+          (click)="state.checkUploadStatus()"
+          [disabled]="!state.canCheckStatus() || leaveDecision() !== null"
+        >
+          Check upload status
+        </button>
+        <button
+          type="button"
+          (click)="state.resumeUpload()"
+          [disabled]="!state.canResume() || leaveDecision() !== null"
+        >
+          {{ operation.terminal ? "Replay upload result" : "Resume upload" }}
+        </button>
+      </div>
+      @if (operation.terminal) {
+        <p class="upload-help">
+          Replay is an explicit source-free request for the original operation's
+          result. Reading a saved revision never starts it.
+        </p>
+      }
+    </section>
+  }
+  @if (state.response(); as response) {
+    @if (
+      !state.acknowledgement() &&
+      (response.outcome === "idempotencyConflict" ||
+        response.outcome === "claimLost" ||
+        (response.outcome === "rejected" && !operation))
+    ) {
+      <section class="upload-card upload-notice" role="status">
+        <h2>
+          {{
+            response.outcome === "idempotencyConflict"
+              ? "Original upload conflicts"
+              : response.outcome === "claimLost"
+                ? "Upload claim lost"
+                : "Upload call refused"
+          }}
+        </h2>
+        @if (response.rejection) {
+          <p>{{ rejectionMessage(response.rejection) }}</p>
+        } @else {
+          <p>
+            This call did not acknowledge a saved mapping. The original request
+            stays unchanged; no replacement key was generated.
+          </p>
+        }
+      </section>
+    }
+  }
+
+  @if (
+    state.canResend() && (!operation || operation.failure === "needsSource")
+  ) {
+    <button
+      type="button"
+      (click)="state.resendOriginal()"
+      [disabled]="leaveDecision() !== null"
+    >
+      {{
+        operation?.failure === "needsSource"
+          ? "Resend original file"
+          : "Resend original upload"
+      }}
+    </button>
+  }
+
+  @if (state.formVisible()) {
+    @let errors = state.fieldErrors();
+    @let fileError = state.fileError();
+    @if (
+      errors.name ||
+      errors.description ||
+      errors.originalFilename ||
+      errors.request ||
+      fileError
+    ) {
+      <section
+        id="upload-errors"
+        class="upload-card upload-error"
+        tabindex="-1"
+        role="alert"
+        aria-label="Upload fields need attention"
+      >
+        <h2>Check the upload fields</h2>
+        <ul>
+          @if (errors.name) {
+            <li>
+              <button
+                type="button"
+                class="upload-error-link"
+                (click)="focusField('name')"
+              >
+                {{ fieldError(errors.name, "name") }}
+              </button>
+            </li>
+          }
+          @if (errors.description) {
+            <li>
+              <button
+                type="button"
+                class="upload-error-link"
+                (click)="focusField('description')"
+              >
+                {{ fieldError(errors.description, "description") }}
+              </button>
+            </li>
+          }
+          @if (errors.originalFilename) {
+            <li>
+              <button
+                type="button"
+                class="upload-error-link"
+                (click)="focusField('originalFilename')"
+              >
+                {{ fieldError(errors.originalFilename, "originalFilename") }}
+              </button>
+            </li>
+          }
+          @if (errors.request) {
+            <li>
+              The encoded upload request is too long. Shorten the mapping
+              fields.
+            </li>
+          }
+          @if (fileError) {
+            <li>
+              <button
+                type="button"
+                class="upload-error-link"
+                (click)="focusField('file')"
+              >
+                {{ errorMessage(fileError.kind) }}
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+    <form
+      class="upload-card upload-form"
+      [formGroup]="form"
+      (ngSubmit)="submit()"
+      novalidate
+    >
+      <div>
+        <label for="upload-name">Name</label>
+        <input
+          id="upload-name"
+          type="text"
+          formControlName="name"
+          autocomplete="off"
+          [readOnly]="!state.canEdit() || leaveDecision() !== null"
+          [attr.aria-invalid]="errors.name ? 'true' : null"
+          aria-describedby="upload-name-help upload-name-error"
+        />
+        <p id="upload-name-help" class="upload-help">
+          Required. Up to 200 Unicode characters after surrounding whitespace is
+          removed. The accepted name is sent with the upload.
+        </p>
+        <p id="upload-name-error" class="upload-error">
+          {{ errors.name ? fieldError(errors.name, "name") : "" }}
+        </p>
+      </div>
+      <div>
+        <label for="upload-description"
+          >Description <span>(optional)</span></label
+        >
+        <textarea
+          id="upload-description"
+          formControlName="description"
+          rows="5"
+          [readOnly]="!state.canEdit() || leaveDecision() !== null"
+          [attr.aria-invalid]="errors.description ? 'true' : null"
+          aria-describedby="upload-description-help upload-description-error"
+        ></textarea>
+        <p id="upload-description-help" class="upload-help">
+          Up to 4,000 Unicode characters; whitespace is preserved exactly.
+        </p>
+        <p id="upload-description-error" class="upload-error">
+          {{
+            errors.description
+              ? fieldError(errors.description, "description")
+              : ""
+          }}
+        </p>
+      </div>
+      <div>
+        <label for="upload-file">Native mapping file</label>
+        <input
+          id="upload-file"
+          type="file"
+          accept=".json,application/json"
+          (change)="selectFile($event)"
+          [disabled]="!state.canChooseFile() || leaveDecision() !== null"
+          [attr.aria-invalid]="fileError ? 'true' : null"
+          aria-describedby="upload-file-help"
+        />
+        <p id="upload-file-help" class="upload-help">
+          Ferrule native JSON only. Selecting a file does not upload it; its
+          original bytes are kept for your deliberate upload and recovery.
+        </p>
+        @if (state.file(); as file) {
+          <dl class="upload-facts">
+            <dt>
+              {{ state.locked() ? "Saved filename" : "Selected filename" }}
+            </dt>
+            <dd class="upload-literal" [textContent]="file.name"></dd>
+            <dt>File bytes</dt>
+            <dd>{{ file.byteCount }}</dd>
+          </dl>
+        }
+        @if (state.preparingFile()) {
+          <p role="status">
+            Preparing the selected file… You can select a replacement while
+            preparation settles.
+          </p>
+        }
+      </div>
+      <div>
+        <label for="upload-filename">Saved filename</label>
+        <input
+          id="upload-filename"
+          type="text"
+          formControlName="originalFilename"
+          autocomplete="off"
+          [readOnly]="!state.canEdit() || leaveDecision() !== null"
+          [attr.aria-invalid]="errors.originalFilename ? 'true' : null"
+          aria-describedby="upload-filename-help upload-filename-error"
+        />
+        <p id="upload-filename-help" class="upload-help">
+          Starts with the selected file's exact name. Choose a safe basename up
+          to 255 UTF-8 bytes, without path separators or control characters. It
+          is a display name, not a storage path.
+        </p>
+        <p id="upload-filename-error" class="upload-error">
+          {{
+            errors.originalFilename
+              ? fieldError(errors.originalFilename, "originalFilename")
+              : ""
+          }}
+        </p>
+      </div>
+      <p>
+        Backend: <strong>Ferrule native JSON</strong>. This does not convert
+        XML, MapForce files or project bundles, or resolve referenced resources.
+      </p>
+      @if (!state.locked()) {
+        <button
+          class="upload-primary"
+          type="submit"
+          [disabled]="!state.canUpload() || leaveDecision() !== null"
+        >
+          Upload mapping
+        </button>
+      } @else {
+        <p class="upload-help">
+          The original file and fields are locked for recovery. A different file
+          or metadata needs a new upload.
+        </p>
+      }
+    </form>
+  }
+
+  @if (state.sending()) {
+    <p role="status">
+      Waiting for this upload call. No second upload or resume will be sent
+      automatically.
+    </p>
+  }
+  @if (state.busy() || state.preparingFile()) {
+    <button
+      type="button"
+      (click)="state.stopWaiting()"
+      [disabled]="leaveDecision() !== null"
+    >
+      Stop waiting
+    </button>
+  }
+
+  @if (
+    state.hasRetainedUpload() &&
+    !state.acknowledgement() &&
+    !operation?.terminal &&
+    state.canAbandon()
+  ) {
+    <button
+      type="button"
+      (click)="abandonDecision.set(true)"
+      [disabled]="leaveDecision() !== null"
+    >
+      Abandon original upload
+    </button>
+  }
+  @if (abandonDecision()) {
+    <section class="upload-card upload-notice" aria-labelledby="upload-abandon">
+      <h2 id="upload-abandon">Forget this upload's recovery information?</h2>
+      <p>
+        Abandoning releases only this tab's file and request information. It
+        does not cancel or delete server facts; starting another upload may
+        create another mapping.
+      </p>
+      <label class="upload-checkbox"
+        ><input
+          type="checkbox"
+          [checked]="abandonAcknowledged()"
+          (change)="abandonAcknowledged.set($any($event.target).checked)"
+        />I understand a mapping may already exist.</label
+      >
+      <div class="upload-actions">
+        <button
+          type="button"
+          (click)="abandon()"
+          [disabled]="
+            !abandonAcknowledged() ||
+            !state.canAbandon() ||
+            leaveDecision() !== null
+          "
+        >
+          Abandon and start a new upload</button
+        ><button
+          type="button"
+          (click)="abandonDecision.set(false); abandonAcknowledged.set(false)"
+        >
+          Keep original upload
+        </button>
+      </div>
+    </section>
+  }
+  <p class="upload-help">
+    Recovery stays only in this tab's memory. Reloading or closing loses the
+    original file and key; an upload already sent may still finish. Normal
+    workspace navigation can retain unresolved recovery information when you
+    choose to keep it.
+  </p>
+</section>

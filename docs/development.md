@@ -25,6 +25,14 @@ and Wolverine-backed execution follow separate increments. The separate
 [project creation HTTP](project-creation-http.md) increment adds explicit
 organization actions and its dedicated creator configuration.
 
+The [native mapping upload page](native-mapping-upload-ui.md) creates a mapping
+and its first immutable revision from the original file. Its separate
+[browser fixture](../tools/native-mapping-upload-browser/README.md) exercises
+explicit replay, source-free recovery and permission changes with private fixture
+bindings. Run `npm run test:native-mapping-upload-browser` through the alternate
+display; controlled frontend checks and actual packaged-host results retain their
+separate qualification scopes. Appending a revision follows separately.
+
 ## Prerequisites
 
 - .NET SDK 10.0.112, pinned in the root `global.json`.

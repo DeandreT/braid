@@ -6,10 +6,15 @@ import { ProjectsPageComponent } from "./catalog/projects-page.component";
 import { RevisionPageComponent } from "./catalog/revision-page.component";
 import { CreateProjectPageComponent } from "./catalog/projects/create-project-page.component";
 import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-page.component";
+import type { UploadMappingPageComponent } from "./catalog/uploads/upload-mapping-page.component";
 import { ExamplesComponent } from "./examples.component";
 import { NotFoundComponent } from "./not-found.component";
 
 const leaveMappingEditor: CanDeactivateFn<EditMappingPageComponent> = (
+  component,
+) => component.requestLeave();
+
+const leaveMappingUpload: CanDeactivateFn<UploadMappingPageComponent> = (
   component,
 ) => component.requestLeave();
 
@@ -20,6 +25,16 @@ export const routes: Routes = [
     path: "catalog",
     component: CatalogShellComponent,
     children: [
+      {
+        path: "organizations/:organizationId/projects/:projectId/mappings/new",
+        loadComponent: () =>
+          import("./catalog/uploads/upload-mapping-page.component").then(
+            (module) => module.UploadMappingPageComponent,
+          ),
+        canDeactivate: [leaveMappingUpload],
+        runGuardsAndResolvers: "paramsOrQueryParamsChange",
+        title: "Upload mapping · Weft",
+      },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/edit",
         loadComponent: () =>

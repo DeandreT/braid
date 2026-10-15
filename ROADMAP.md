@@ -188,13 +188,17 @@ in [#77](https://github.com/DeandreT/weft/issues/77) and qualified and merged in
 20 catalog and 22 example/shell browser cases passed. Project creation and
 explicit original-request recovery are tracked in
 [#81](https://github.com/DeandreT/weft/issues/81). Conditional mapping metadata
-editing is tracked in [#83](https://github.com/DeandreT/weft/issues/83), with its
-merge dependent on qualified project creation. Later increments remain separate;
+editing is qualified and merged in [#85](https://github.com/DeandreT/weft/pull/85).
+Its 97-case coverage comprises 55 actual editor/project/report passes inherited
+with exact source and application-artifact conservation, plus 42 fresh catalog
+and example/shell passes. Native mapping upload and explicit original-request
+recovery are tracked separately in [#84](https://github.com/DeandreT/weft/issues/84);
+conditional revision append follows in [#88](https://github.com/DeandreT/weft/issues/88).
 #19 stays open until all six workflow gates pass. See
-[Catalog browser](docs/catalog-browser.md), [Saved reports](docs/saved-reports.md)
-and [Project creation](docs/project-creation-ui.md). The
-[metadata editor](docs/mapping-metadata-ui.md) records the next increment's
-conditional save and conflict behavior; its source is not yet qualified.
+[Catalog browser](docs/catalog-browser.md), [Saved reports](docs/saved-reports.md),
+[Project creation](docs/project-creation-ui.md),
+[Metadata editor](docs/mapping-metadata-ui.md) and
+[Native mapping upload](docs/native-mapping-upload-ui.md).
 
 The [v2 filesystem contract](docs/private-storage-v2.md) fixes the private
 records, permanent gates and original-owner recovery boundary. The independent

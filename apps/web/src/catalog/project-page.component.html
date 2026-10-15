@@ -85,6 +85,19 @@
     </section>
     <div class="catalog-section-heading">
       <h2 class="catalog-section-title">Mappings</h2>
+      @if (context(); as context) {
+        @if (
+          context.features.createMappings === true &&
+          view.project.access.actions.createMappings === true
+        ) {
+          <a
+            class="catalog-button"
+            [routerLink]="routes.uploadMapping(view.project.scope)"
+            [queryParams]="{}"
+            >Upload mapping</a
+          >
+        }
+      }
     </div>
     @if (view.page.mappings.length === 0) {
       <section class="catalog-state catalog-empty">

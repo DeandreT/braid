@@ -114,6 +114,9 @@ export const catalogRoutes = {
     return `${catalogRoutes.projects(organizationId)}/new`;
   },
   project: projectRoute,
+  uploadMapping(scope: CatalogProjectScope): string {
+    return `${projectRoute(scope)}/mappings/new`;
+  },
   mapping: mappingRoute,
   editMapping(scope: CatalogMappingScope): string {
     return `${mappingRoute(scope)}/edit`;
