@@ -26,10 +26,11 @@ public sealed class PostgresRevisionDerivationConcurrencyTests(PostgresFixture f
             var original = Assert.IsType<RevisionReportClaim>(held.Claim);
             Assert.Equal(RevisionReportStoreOutcome.Claimed, held.Outcome);
             Assert.Equal(new long[] { 0, 0, 0, 0 }, await test.CountsAsync());
+            await using var observer = await PostgresRevisionDerivationTestSupport.OpenBlockingObserverAsync(test.Case, contenderPid, winnerPid);
             var pending = contender.TryClaimAsync(test.AdmittedActor, test.Key, Guid.NewGuid());
             try
             {
-                await PostgresRevisionDerivationTestSupport.WaitForBlockedAsync(test.Case, contenderPid, winnerPid, pending);
+                await observer.WaitForBlockedAsync(pending);
                 if (commit) await winner.CommitAsync();
                 else await winner.RollbackAsync();
                 var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
@@ -77,11 +78,12 @@ public sealed class PostgresRevisionDerivationConcurrencyTests(PostgresFixture f
                 await using var first = await test.DerivationDatabase.BeginTransactionAsync(test.Revision.OrganizationId);
                 var held = await test.Store.TryClaimInTransactionAsync(first, test.Actor, test.Key, Guid.NewGuid());
                 Assert.Equal(RevisionReportStoreOutcome.Claimed, held.Outcome);
+                await using var observer = await PostgresRevisionDerivationTestSupport.OpenBlockingObserverAsync(test.Case, otherPid, firstPid);
                 var pending = other.TryClaimAsync(test.AdmittedActor, test.Key, Guid.NewGuid());
                 var (revoke, restore, values) = AuthorityMutation(test, test.AdmittedActor, authority);
                 try
                 {
-                    await PostgresRevisionDerivationTestSupport.WaitForBlockedAsync(test.Case, otherPid, firstPid, pending);
+                    await observer.WaitForBlockedAsync(pending);
                     await test.Case.ExecuteAsync(revoke, values).WaitAsync(TimeSpan.FromSeconds(5));
                     Assert.False(pending.IsCompleted);
                     if (commit) await first.CommitAsync();
@@ -144,10 +146,11 @@ public sealed class PostgresRevisionDerivationConcurrencyTests(PostgresFixture f
             PostgresRevisionDerivationTestSupport.SyntheticProjectionCompletion(claim));
         Assert.Equal(RevisionReportStoreOutcome.Applied, held.Outcome);
         Assert.Equal(RevisionReportState.Pending, (await test.Reader.GetCurrentAsync(test.Actor, test.Key))!.State);
+        await using var observer = await PostgresRevisionDerivationTestSupport.OpenBlockingObserverAsync(test.Case, otherPid, winnerPid);
         var pending = other.TryClaimAsync(test.AdmittedActor, test.Key, Guid.NewGuid());
         try
         {
-            await PostgresRevisionDerivationTestSupport.WaitForBlockedAsync(test.Case, otherPid, winnerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             await publication.CommitAsync();
             var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(RevisionReportStoreOutcome.Available, result.Outcome);
@@ -185,6 +188,7 @@ public sealed class PostgresRevisionDerivationConcurrencyTests(PostgresFixture f
                 var ownerPid = await BackendAsync(owner);
                 await using var keyLock = await owner.BeginTransactionAsync();
                 await LockKeyAsync(owner, keyLock, claim);
+                await using var observer = await PostgresRevisionDerivationTestSupport.OpenBlockingObserverAsync(test.Case, backend, ownerPid);
                 var pending = operation switch
                 {
                     "claim" => test.Store.TryClaimAsync(actor, test.Key, Guid.NewGuid()),
@@ -195,7 +199,7 @@ public sealed class PostgresRevisionDerivationConcurrencyTests(PostgresFixture f
                 var (revoke, restore, values) = AuthorityMutation(test, actor, authority);
                 try
                 {
-                    await PostgresRevisionDerivationTestSupport.WaitForBlockedAsync(test.Case, backend, ownerPid, pending);
+                    await observer.WaitForBlockedAsync(pending);
                     // A separate real owner transaction commits revocation before
                     // releasing the key lock; the pre-wait source snapshot is stale.
                     await test.Case.ExecuteAsync(revoke, values).WaitAsync(TimeSpan.FromSeconds(5));
@@ -304,10 +308,11 @@ public sealed class PostgresRevisionDerivationConcurrencyTests(PostgresFixture f
             var heldClaim = Assert.IsType<RevisionReportClaim>(held.Claim);
             Assert.Equal(RevisionReportStoreOutcome.Claimed, held.Outcome);
             Assert.Equal(selected, (await test.Reader.GetCurrentAsync(test.Actor, test.Key))!.SelectedResult);
+            await using var observer = await PostgresRevisionDerivationTestSupport.OpenBlockingObserverAsync(test.Case, secondPid, firstPid);
             var pending = other.RepairAsync(test.Actor, Target(selected), Guid.NewGuid());
             try
             {
-                await PostgresRevisionDerivationTestSupport.WaitForBlockedAsync(test.Case, secondPid, firstPid, pending);
+                await observer.WaitForBlockedAsync(pending);
                 if (commit) await first.CommitAsync();
                 else await first.RollbackAsync();
                 var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
@@ -371,11 +376,12 @@ public sealed class PostgresRevisionDerivationConcurrencyTests(PostgresFixture f
         await using var first = await test.DerivationDatabase.BeginTransactionAsync(test.Revision.OrganizationId);
         var held = await test.Store.FinishInTransactionAsync(first, test.Actor, claim,
             PostgresRevisionDerivationTestSupport.SyntheticProjectionCompletion(claim));
+        await using var observer = await PostgresRevisionDerivationTestSupport.OpenBlockingObserverAsync(test.Case, otherPid, firstPid);
         var pending = other.FinishAsync(test.Actor, claim,
             RevisionReportCompletion.ForFailure(RevisionReportFailureCategory.StorageIo));
         try
         {
-            await PostgresRevisionDerivationTestSupport.WaitForBlockedAsync(test.Case, otherPid, firstPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             await first.CommitAsync();
             Opaque(await pending.WaitAsync(TimeSpan.FromSeconds(5)), RevisionReportStoreOutcome.ClaimLost);
         }

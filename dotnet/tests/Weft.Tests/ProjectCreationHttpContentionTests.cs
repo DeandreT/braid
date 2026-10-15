@@ -34,6 +34,7 @@ public sealed class ProjectCreationHttpContentionTests(PostgresFixture fixture)
             // Both contenders execute actual HTTP and the unchanged production
             // creator. The relay holds only the first frontend COMMIT after its
             // advisory read has completed; no facts or SQL result are injected.
+            await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, secondPid, firstPid);
             var firstPending = ProjectCreationHttpTransactionSupport.PostAsync(first, firstToken, key, metadata);
             Task<HttpResponseMessage>? secondPending = null;
             try
@@ -48,7 +49,7 @@ public sealed class ProjectCreationHttpContentionTests(PostgresFixture fixture)
                 Assert.False(firstPending.IsCompleted);
                 secondPending = ProjectCreationHttpTransactionSupport.PostAsync(second, secondToken, key,
                     mode == "changed-intent" ? new(metadata.Name, metadata.Description + " ") : metadata);
-                await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, secondPid, firstPid, secondPending);
+                await observer.WaitForBlockedAsync(secondPending);
                 Assert.Equal(before, await test.CountsAsync());
                 relay.ReleaseCommit();
                 using var firstResponse = await firstPending.WaitAsync(TimeSpan.FromSeconds(5));
@@ -96,12 +97,14 @@ public sealed class ProjectCreationHttpContentionTests(PostgresFixture fixture)
         var ownerPid = await ProjectCreationHttpTransactionSupport.BackendAsync(owner);
         await using var blocker = await owner.BeginTransactionAsync();
         await ProjectCreationHttpTransactionSupport.LockFactsAsync(owner, blocker);
+        await using var firstObserver = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, firstPid, ownerPid);
+        await using var secondObserver = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, secondPid, ownerPid);
         var firstPending = ProjectCreationHttpTransactionSupport.PostAsync(first, firstToken, firstKey);
         var secondPending = ProjectCreationHttpTransactionSupport.PostAsync(second, secondToken, secondKey);
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, firstPid, ownerPid, firstPending);
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, secondPid, ownerPid, secondPending);
+            await firstObserver.WaitForBlockedAsync(firstPending);
+            await secondObserver.WaitForBlockedAsync(secondPending);
             await ProjectCreationHttpTransactionSupport.AssertLateFactInsertLocksAsync(test.Case, firstPid);
             await ProjectCreationHttpTransactionSupport.AssertLateFactInsertLocksAsync(test.Case, secondPid);
             await blocker.RollbackAsync();
@@ -143,10 +146,11 @@ public sealed class ProjectCreationHttpContentionTests(PostgresFixture fixture)
         // The independently pooled contender below is actual HTTP.
         var original = await test.Creator.CreateInTransactionAsync(winner, test.Actor, test.OrganizationId, key,
             ProjectCreationTestSupport.DefaultMetadata);
+        await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, contenderPid, winnerPid);
         var pending = ProjectCreationHttpTransactionSupport.PostAsync(api, token, key);
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, contenderPid, winnerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             Assert.Equal(before, await test.CountsAsync());
             await winner.CommitAsync();
             using var response = await pending.WaitAsync(TimeSpan.FromSeconds(5));

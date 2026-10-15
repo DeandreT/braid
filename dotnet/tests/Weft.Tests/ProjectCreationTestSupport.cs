@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using Npgsql;
@@ -69,11 +70,11 @@ internal sealed class ProjectCreationTestSupport : IAsyncDisposable
         WHERE organization_id=$1 AND idempotency_key=$2
         """, OrganizationId, key);
 
-    internal static async Task<NpgsqlConnection> OpenOwnerAsync(PostgresCase test)
+    internal static async Task<NpgsqlConnection> OpenOwnerAsync(PostgresCase test, CancellationToken cancellationToken = default)
     {
         var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(test.MigrationConnectionString)
         { Pooling = false }.ConnectionString);
-        try { await connection.OpenAsync(); return connection; }
+        try { await connection.OpenAsync(cancellationToken); return connection; }
         catch { await connection.DisposeAsync(); throw; }
     }
 
@@ -85,25 +86,75 @@ internal sealed class ProjectCreationTestSupport : IAsyncDisposable
         return (int)(await command.ExecuteScalarAsync())!;
     }
 
-    internal static async Task WaitForBlockedAsync(PostgresCase test, int contenderPid, int blockerPid,
-        Task operation, CancellationToken cancellationToken = default)
+    internal static async Task<BlockingObserver> OpenBlockingObserverAsync(PostgresCase test,
+        int contenderPid, int blockerPid, CancellationToken cancellationToken = default)
     {
-        // Observe a real backend graph before the unchanged one-second product lock deadline.
+        // Prepare independent observation before dispatching the contender, so
+        // connection/authentication/command setup cannot consume its lock wait.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TimeSpan.FromMilliseconds(750));
-        await using var observer = await OpenOwnerAsync(test);
-        while (true)
+        deadline.CancelAfter(TimeSpan.FromSeconds(5));
+        var connection = await OpenOwnerAsync(test, deadline.Token);
+        NpgsqlCommand? command = null;
+        try
         {
-            if (operation.IsCompleted)
-            {
-                await operation;
-                throw new InvalidOperationException("The creator completed before its intended actual PostgreSQL wait.");
-            }
-            await using var command = new NpgsqlCommand("SELECT $2=ANY(pg_blocking_pids($1))", observer);
+            command = new NpgsqlCommand("SELECT $2=ANY(pg_blocking_pids($1))", connection);
             command.Parameters.AddWithValue(contenderPid);
             command.Parameters.AddWithValue(blockerPid);
-            if (await command.ExecuteScalarAsync(deadline.Token) is true) return;
-            await Task.Delay(TimeSpan.FromMilliseconds(5), deadline.Token);
+            await command.PrepareAsync(deadline.Token);
+            if (await command.ExecuteScalarAsync(deadline.Token) is not false)
+                throw new InvalidOperationException("The owned contender was already blocked before dispatch.");
+            return new BlockingObserver(connection, command, contenderPid, blockerPid);
+        }
+        catch
+        {
+            try { if (command is not null) await command.DisposeAsync(); }
+            finally { await connection.DisposeAsync(); }
+            throw;
+        }
+    }
+
+    internal sealed class BlockingObserver(NpgsqlConnection connection, NpgsqlCommand command,
+        int contenderPid, int blockerPid) : IAsyncDisposable
+    {
+        internal async Task WaitForBlockedAsync(Task operation, CancellationToken cancellationToken = default)
+        {
+            // Admission/guard work precedes the actual row-lock request. This
+            // fixture budget does not alter the product's 1s lock/5s SQL limits.
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(5));
+            var elapsed = Stopwatch.StartNew();
+            var polls = 0;
+            try
+            {
+                while (true)
+                {
+                    await RequirePendingAsync(operation);
+                    var blocked = await command.ExecuteScalarAsync(deadline.Token);
+                    polls++;
+                    await RequirePendingAsync(operation);
+                    deadline.Token.ThrowIfCancellationRequested();
+                    if (blocked is true) return;
+                    await Task.Delay(TimeSpan.FromMilliseconds(5), deadline.Token);
+                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
+            {
+                await RequirePendingAsync(operation);
+                throw new TimeoutException($"The exact blocking edge for owned contender {contenderPid} and blocker {blockerPid} was not observed after {polls} samples in {elapsed.ElapsedMilliseconds} ms; contender status {operation.Status}.");
+            }
+        }
+
+        private static async Task RequirePendingAsync(Task operation)
+        {
+            if (!operation.IsCompleted) return;
+            await operation;
+            throw new InvalidOperationException("The creator completed before its intended actual PostgreSQL wait was observed.");
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            try { await command.DisposeAsync(); }
+            finally { await connection.DisposeAsync(); }
         }
     }
 

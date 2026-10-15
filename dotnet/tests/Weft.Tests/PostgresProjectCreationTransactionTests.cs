@@ -28,10 +28,11 @@ public sealed class PostgresProjectCreationTransactionTests(PostgresFixture fixt
         Assert.Equal(ProjectCreationOutcome.Created, original.Outcome);
         Assert.NotNull(original.Receipt);
         Assert.Equal(new long[] { 3, 3, 0 }, await test.CountsAsync());
+        await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, contenderPid, winnerPid);
         var pending = contender.CreateAsync(test.Actor, test.OrganizationId, key, metadata);
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, contenderPid, winnerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             await winner.CommitAsync();
             var replay = await pending.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(ProjectCreationOutcome.Replayed, replay.Outcome);
@@ -60,11 +61,12 @@ public sealed class PostgresProjectCreationTransactionTests(PostgresFixture fixt
         await using var winner = await test.Database.BeginTransactionAsync(test.OrganizationId);
         var abandoned = await test.Creator.CreateInTransactionAsync(winner, test.Actor, test.OrganizationId, key, metadata);
         Assert.Equal(ProjectCreationOutcome.Created, abandoned.Outcome);
+        await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, contenderPid, winnerPid);
         var pending = contender.CreateAsync(test.Actor, test.OrganizationId, key, metadata);
         ProjectCreationReceipt created;
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, contenderPid, winnerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             await winner.RollbackAsync();
             var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(ProjectCreationOutcome.Created, result.Outcome);
@@ -105,11 +107,12 @@ public sealed class PostgresProjectCreationTransactionTests(PostgresFixture fixt
             await using var winner = await test.Database.BeginTransactionAsync(test.OrganizationId);
             var original = await test.Creator.CreateInTransactionAsync(winner, test.Actor, test.OrganizationId, key, metadata);
             Assert.Equal(ProjectCreationOutcome.Created, original.Outcome);
+            await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, contenderPid, winnerPid);
             var pending = contender.CreateAsync(actor, test.OrganizationId, key,
                 anotherActor ? metadata : Metadata("Different exact intent"));
             try
             {
-                await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, contenderPid, winnerPid, pending);
+                await observer.WaitForBlockedAsync(pending);
                 await winner.CommitAsync();
                 var conflict = await pending.WaitAsync(TimeSpan.FromSeconds(5));
                 Assert.Equal(ProjectCreationOutcome.IdempotencyConflict, conflict.Outcome);
@@ -165,10 +168,11 @@ public sealed class PostgresProjectCreationTransactionTests(PostgresFixture fixt
             await using (var update = RevocationCommand(owner, revocation, authority, test.OrganizationId, test.Actor.PrincipalId.Value))
                 Assert.Equal(1, await update.ExecuteNonQueryAsync());
             using var cancellation = new CancellationTokenSource();
+            await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, creatorPid, revokerPid);
             var pending = test.CreateAsync(cancellationToken: cancellation.Token);
             try
             {
-                await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, creatorPid, revokerPid, pending);
+                await observer.WaitForBlockedAsync(pending);
                 await revocation.CommitAsync();
                 var denied = await pending.WaitAsync(TimeSpan.FromSeconds(5));
                 Assert.Equal(Denial(authority), denied.Outcome);
@@ -202,10 +206,11 @@ public sealed class PostgresProjectCreationTransactionTests(PostgresFixture fixt
             await using var revocation = await owner.BeginTransactionAsync();
             await using var update = RevocationCommand(owner, revocation, authority, test.OrganizationId, test.Actor.PrincipalId.Value);
             using var cancellation = new CancellationTokenSource();
+            await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, revokerPid, creatorPid);
             var pending = update.ExecuteNonQueryAsync(cancellation.Token);
             try
             {
-                await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, revokerPid, creatorPid, pending);
+                await observer.WaitForBlockedAsync(pending);
                 await creation.CommitAsync();
                 Assert.Equal(1, await pending.WaitAsync(TimeSpan.FromSeconds(5)));
                 await revocation.CommitAsync();
@@ -240,10 +245,11 @@ public sealed class PostgresProjectCreationTransactionTests(PostgresFixture fixt
         await using var blocker = await owner.BeginTransactionAsync();
         await LockFactsAsync(owner, blocker);
         using var cancellation = new CancellationTokenSource();
+        await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, creatorPid, blockerPid);
         var pending = test.CreateAsync(key, metadata, cancellation.Token);
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, creatorPid, blockerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             await AssertLateFactInsertLocksAsync(test.Case, creatorPid);
             cancellation.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
@@ -273,10 +279,11 @@ public sealed class PostgresProjectCreationTransactionTests(PostgresFixture fixt
         var blockerPid = await BackendAsync(owner);
         await using var blocker = await owner.BeginTransactionAsync();
         await LockFactsAsync(owner, blocker);
+        await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, creatorPid, blockerPid);
         var pending = test.CreateAsync(key, metadata);
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, creatorPid, blockerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             await AssertLateFactInsertLocksAsync(test.Case, creatorPid);
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
             Assert.Equal("Project creation persistence failed.", error.Message);
@@ -306,10 +313,11 @@ public sealed class PostgresProjectCreationTransactionTests(PostgresFixture fixt
         await using var winner = await test.Database.BeginTransactionAsync(test.OrganizationId);
         var original = await test.Creator.CreateInTransactionAsync(winner, test.Actor, test.OrganizationId, key, metadata);
         using var cancellation = new CancellationTokenSource();
+        await using var observer = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, contenderPid, winnerPid);
         var pending = contender.CreateAsync(test.Actor, test.OrganizationId, key, metadata, cancellation.Token);
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, contenderPid, winnerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             cancellation.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
             await AssertUnboundAsync(contenderDatabase, contenderPid);

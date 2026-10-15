@@ -19,10 +19,11 @@ public sealed class PostgresPrivateObjectMaintenanceConcurrencyTests(PostgresFix
         await using var writer = await test.IngestionDatabase.BeginTransactionAsync(test.Project.OrganizationId);
         var writerPid = writer.Connection.ProcessID;
         Assert.Equal(1, await PostgresPrivateObjectMaintenanceTestSupport.InsertHistoricalNativeReferenceAsync(writer.Connection, writer.Transaction, facts));
+        await using var observer = await test.OpenBlockingObserverAsync(maintenancePid, writerPid);
         var waiting = test.Maintenance.ClaimAsync(test.Project, Guid.NewGuid());
         try
         {
-            await test.WaitForBlockedAsync(maintenancePid, writerPid, waiting);
+            await observer.WaitForBlockedAsync(waiting);
             await writer.CommitAsync();
             Assert.DoesNotContain((await waiting.WaitAsync(TimeSpan.FromSeconds(5))).Claims,
                 c => c.Retirement.Target.Object == facts.NativeObject.Id);
@@ -45,13 +46,14 @@ public sealed class PostgresPrivateObjectMaintenanceConcurrencyTests(PostgresFix
             Assert.Equal(facts.NativeObject.Id, claim.Retirement.Target.Object);
             Assert.Equal(new long[] { 0, 0, 0 }, await test.CountsAsync());
             await using var writer = await test.IngestionDatabase.BeginTransactionAsync(test.Project.OrganizationId);
+            await using var observer = await test.OpenBlockingObserverAsync(writer.Connection.ProcessID, retiring.Connection.ProcessID);
             // The INSERT ... SELECT has its original outer snapshot before the
             // maintenance commit. Only the trigger's separate post-lock query sees it.
             var insertion = PostgresPrivateObjectMaintenanceTestSupport.InsertHistoricalNativeReferenceAsync(
                 writer.Connection, writer.Transaction, facts);
             try
             {
-                await test.WaitForBlockedAsync(writer.Connection.ProcessID, retiring.Connection.ProcessID, insertion);
+                await observer.WaitForBlockedAsync(insertion);
                 if (commit) await retiring.CommitAsync(); else await retiring.RollbackAsync();
                 if (commit)
                 {
@@ -107,10 +109,11 @@ public sealed class PostgresPrivateObjectMaintenanceConcurrencyTests(PostgresFix
             var otherPid = await PostgresPrivateObjectMaintenanceTestSupport.BackendAsync(otherDatabase.DataSource);
             await using var first = await test.MaintenanceDatabase.BeginTransactionAsync(test.Project);
             var original = Assert.Single((await test.Maintenance.ClaimInTransactionAsync(first, test.Project, Guid.NewGuid())).Claims);
+            await using var observer = await test.OpenBlockingObserverAsync(otherPid, first.Connection.ProcessID);
             var pending = other.ClaimAsync(test.Project, Guid.NewGuid());
             try
             {
-                await test.WaitForBlockedAsync(otherPid, first.Connection.ProcessID, pending);
+                await observer.WaitForBlockedAsync(pending);
                 if (commit) await first.CommitAsync(); else await first.RollbackAsync();
                 var batch = await pending.WaitAsync(TimeSpan.FromSeconds(5));
                 if (commit) Assert.Empty(batch.Claims);
@@ -142,10 +145,11 @@ public sealed class PostgresPrivateObjectMaintenanceConcurrencyTests(PostgresFix
             Assert.Equal(facts.OperationId, await command.ExecuteScalarAsync());
         }
         using var cancel = new CancellationTokenSource();
+        await using var observer = await test.OpenBlockingObserverAsync(pid, owner.ProcessID);
         var pending = test.Maintenance.ClaimAsync(test.Project, Guid.NewGuid(), cancellationToken: cancel.Token);
         try
         {
-            await test.WaitForBlockedAsync(pid, owner.ProcessID, pending);
+            await observer.WaitForBlockedAsync(pending);
             cancel.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
         }
@@ -168,10 +172,11 @@ public sealed class PostgresPrivateObjectMaintenanceConcurrencyTests(PostgresFix
         await using var retiring = await test.MaintenanceDatabase.BeginTransactionAsync(test.Project);
         var cleanup = Assert.Single((await test.Maintenance.ClaimInTransactionAsync(retiring, test.Project, Guid.NewGuid())).Claims);
         Assert.Equal(original.CandidateObjectId, cleanup.Retirement.Target.Object);
+        await using var observer = await test.OpenBlockingObserverAsync(reportPid, retiring.Connection.ProcessID);
         var pending = test.Reports.TryClaimAsync(test.Actor, original.Key, Guid.NewGuid());
         try
         {
-            await test.WaitForBlockedAsync(reportPid, retiring.Connection.ProcessID, pending);
+            await observer.WaitForBlockedAsync(pending);
             await retiring.CommitAsync();
             var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(RevisionReportStoreOutcome.Claimed, result.Outcome);

@@ -259,9 +259,9 @@ internal sealed class PostgresRevisionDerivationTestSupport : IAsyncDisposable
 
     internal static Task<NpgsqlConnection> OpenOwnerAsync(PostgresCase test) => ProjectCreationTestSupport.OpenOwnerAsync(test);
     internal static Task<int> BackendAsync(NpgsqlDataSource pool) => ProjectCreationTestSupport.BackendAsync(pool);
-    internal static Task WaitForBlockedAsync(PostgresCase test, int contenderPid, int blockerPid, Task operation,
+    internal static Task<ProjectCreationTestSupport.BlockingObserver> OpenBlockingObserverAsync(PostgresCase test, int contenderPid, int blockerPid,
         CancellationToken cancellationToken = default) =>
-        ProjectCreationTestSupport.WaitForBlockedAsync(test, contenderPid, blockerPid, operation, cancellationToken);
+        ProjectCreationTestSupport.OpenBlockingObserverAsync(test, contenderPid, blockerPid, cancellationToken);
 
     public async ValueTask DisposeAsync()
     {

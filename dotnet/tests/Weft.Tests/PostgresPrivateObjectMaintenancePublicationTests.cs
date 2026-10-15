@@ -184,11 +184,12 @@ public sealed class PostgresPrivateObjectMaintenancePublicationTests(PostgresFix
             command.Parameters.AddWithValue(facts.OperationId);
             Assert.Equal(facts.OperationId, await command.ExecuteScalarAsync());
         }
+        await using var observer = await test.OpenBlockingObserverAsync(pid, owner.ProcessID);
         var pending = test.NativePublications.ReserveAsync(publicationOwner, Guid.NewGuid(), facts.NativeObject.Id,
             Guid.NewGuid(), PostgresPrivateObjectMaintenanceTestSupport.AbsenceDigest);
         try
         {
-            await test.WaitForBlockedAsync(pid, owner.ProcessID, pending);
+            await observer.WaitForBlockedAsync(pending);
             await test.Case.ExecuteAsync("UPDATE weft.project_memberships SET active=false,version=version+1 WHERE organization_id=$1 AND project_id=$2 AND principal_id=$3",
                 test.Project.OrganizationId, test.Project.ProjectId, test.Actor.PrincipalId.Value);
             await held.CommitAsync();

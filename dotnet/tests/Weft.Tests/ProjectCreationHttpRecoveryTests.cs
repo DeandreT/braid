@@ -151,10 +151,11 @@ public sealed class ProjectCreationHttpRecoveryTests(PostgresFixture fixture)
         await using var blocker = await owner.BeginTransactionAsync();
         await ProjectCreationHttpTransactionSupport.LockFactsAsync(owner, blocker);
         using var cancellation = new CancellationTokenSource();
+        await using var blockingObserver = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, creatorPid, blockerPid);
         var pending = ProjectCreationHttpTransactionSupport.PostAsync(api, token, key, cancellationToken: cancellation.Token);
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, creatorPid, blockerPid, pending);
+            await blockingObserver.WaitForBlockedAsync(pending);
             await ProjectCreationHttpTransactionSupport.AssertLateFactInsertLocksAsync(test.Case, creatorPid);
             cancellation.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
@@ -192,10 +193,11 @@ public sealed class ProjectCreationHttpRecoveryTests(PostgresFixture fixture)
         var blockerPid = await ProjectCreationHttpTransactionSupport.BackendAsync(owner);
         await using var blocker = await owner.BeginTransactionAsync();
         await ProjectCreationHttpTransactionSupport.LockFactsAsync(owner, blocker);
+        await using var blockingObserver = await ProjectCreationTestSupport.OpenBlockingObserverAsync(test.Case, creatorPid, blockerPid);
         var pending = ProjectCreationHttpTransactionSupport.PostAsync(api, token, key);
         try
         {
-            await ProjectCreationTestSupport.WaitForBlockedAsync(test.Case, creatorPid, blockerPid, pending);
+            await blockingObserver.WaitForBlockedAsync(pending);
             await ProjectCreationHttpTransactionSupport.AssertLateFactInsertLocksAsync(test.Case, creatorPid);
             using var failed = await pending.WaitAsync(TimeSpan.FromSeconds(5));
             await ProjectCreationHttpTransactionSupport.ErrorAsync(failed, HttpStatusCode.InternalServerError, "persistenceFailure");

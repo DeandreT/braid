@@ -276,8 +276,8 @@ internal sealed class PostgresPrivateObjectMaintenanceTestSupport : IAsyncDispos
 
     internal Task<NpgsqlConnection> OpenOwnerAsync() => ProjectCreationTestSupport.OpenOwnerAsync(Case);
     internal static Task<int> BackendAsync(NpgsqlDataSource pool) => ProjectCreationTestSupport.BackendAsync(pool);
-    internal Task WaitForBlockedAsync(int contender, int blocker, Task operation, CancellationToken cancellationToken = default) =>
-        ProjectCreationTestSupport.WaitForBlockedAsync(Case, contender, blocker, operation, cancellationToken);
+    internal Task<ProjectCreationTestSupport.BlockingObserver> OpenBlockingObserverAsync(int contender, int blocker, CancellationToken cancellationToken = default) =>
+        ProjectCreationTestSupport.OpenBlockingObserverAsync(Case, contender, blocker, cancellationToken);
 
     internal async Task<(NpgsqlConnection Connection, NpgsqlTransaction Transaction)> OpenRestrictedAsync(string connectionString,
         IsolationLevel isolation = IsolationLevel.ReadCommitted)

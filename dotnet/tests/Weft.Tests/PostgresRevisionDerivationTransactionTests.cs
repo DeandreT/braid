@@ -248,10 +248,11 @@ public sealed class PostgresRevisionDerivationTransactionTests(PostgresFixture f
         int ownerPid;
         await using (var command = new NpgsqlCommand("SELECT pg_backend_pid()", owner, blocker))
             ownerPid = (int)(await command.ExecuteScalarAsync())!;
+        await using var observer = await PostgresRevisionDerivationTestSupport.OpenBlockingObserverAsync(test.Case, backend, ownerPid);
         var pending = test.Store.TryClaimAsync(test.Actor, test.Key, Guid.NewGuid());
         try
         {
-            await PostgresRevisionDerivationTestSupport.WaitForBlockedAsync(test.Case, backend, ownerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             var error = await Assert.ThrowsAsync<PostgresException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
             Assert.Equal(PostgresErrorCodes.LockNotAvailable, error.SqlState);
         }
@@ -282,10 +283,11 @@ public sealed class PostgresRevisionDerivationTransactionTests(PostgresFixture f
         int ownerPid;
         await using (var command = new NpgsqlCommand("SELECT pg_backend_pid()", owner, blocker))
             ownerPid = (int)(await command.ExecuteScalarAsync())!;
+        await using var observer = await PostgresRevisionDerivationTestSupport.OpenBlockingObserverAsync(test.Case, backend, ownerPid);
         var pending = test.Reader.GetCurrentAsync(test.Actor, test.Key);
         try
         {
-            await PostgresRevisionDerivationTestSupport.WaitForBlockedAsync(test.Case, backend, ownerPid, pending);
+            await observer.WaitForBlockedAsync(pending);
             var error = await Assert.ThrowsAsync<PostgresException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
             Assert.Equal(PostgresErrorCodes.LockNotAvailable, error.SqlState);
         }
