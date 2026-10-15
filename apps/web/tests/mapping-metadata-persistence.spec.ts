@@ -152,8 +152,20 @@ class MetadataWire {
       )
         return;
       const task = (async () => {
+        let body: Buffer;
         try {
-          const value: unknown = await reply.json(),
+          body = await reply.body();
+        } catch {
+          if (request.failure()?.errorText !== "net::ERR_ABORTED") {
+            this.failed = true;
+            this.failure ??= new Error(
+              "Mapping metadata browser fixture: actual GET body observation failed",
+            );
+          }
+          return;
+        }
+        try {
+          const value: unknown = JSON.parse(body.toString("utf8")),
             tag = reply.headers()["etag"];
           this.reads.push({
             path: url.pathname,
@@ -177,6 +189,9 @@ class MetadataWire {
             this.baseline = this.admitted(value, tag);
         } catch {
           this.failed = true;
+          this.failure ??= new Error(
+            "Mapping metadata browser fixture: actual GET contract admission failed",
+          );
         }
       })();
       this.tasks.push(task);
@@ -207,6 +222,9 @@ class MetadataWire {
             names.length !== 0)
       ) {
         this.unexpected = true;
+        this.failure ??= new Error(
+          "Mapping metadata browser fixture: closed request boundary failed",
+        );
         await route.abort("blockedbyclient");
         return;
       }
