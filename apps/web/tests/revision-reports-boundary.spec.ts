@@ -938,9 +938,26 @@ test("controlled observation bounds: long delays stay pending and repeated GET o
   const contexts = reports.requests.filter(
     (r) => r.path === "/api/v1/catalog/context",
   ).length;
-  await panel(page, "projection")
-    .getByRole("button", { name: "Check again", exact: true })
-    .click();
+  // The old pending label is identical; wait for the fresh report after admission.
+  const [checked] = await Promise.all([
+    page.waitForResponse(
+      (response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === "GET" &&
+          url.origin === process.env.WEFT_REPORTS_BASE_URL &&
+          url.pathname === path &&
+          url.search === "" &&
+          response.status() === 200
+        );
+      },
+      { timeout: 10000 },
+    ),
+    panel(page, "projection")
+      .getByRole("button", { name: "Check again", exact: true })
+      .click(),
+  ]);
+  expect(await checked.finished()).toBeNull();
   await expect(fact(panel(page, "projection"), "Lifecycle")).toHaveText(
     "In progress",
   );
