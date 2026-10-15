@@ -42,7 +42,7 @@ public sealed class PostgresTransactionTests(PostgresFixture fixture)
             Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, error.SqlState);
         }
         Assert.Equal(3L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.projects"));
-        Assert.Equal(6L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+        Assert.Equal(7L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
     }
 
     [PostgresFact]
