@@ -244,6 +244,435 @@ function waitResponse(
     { timeout: 45000 },
   );
 }
+
+type RevisionFetchObservation = {
+  signalSupplied: boolean;
+  signalInitiallyAborted: boolean;
+  abortEventSeen: boolean;
+  abortBeforeDone: boolean;
+  abortAfterDone: boolean;
+  fetchFulfilled: boolean;
+  fetchRejected: boolean;
+  fetchThrew: boolean;
+  statusIs200: boolean;
+  bodyPresent: boolean;
+  readerObserved: boolean;
+  readObserved: boolean;
+  nonemptyChunkObserved: boolean;
+  doneObserved: boolean;
+  doneBeforeAbort: boolean;
+  doneAfterAbort: boolean;
+  readRejected: boolean;
+  readThrew: boolean;
+  streamCancelCalled: boolean;
+  readerCancelCalled: boolean;
+};
+type RevisionFetchSnapshot = {
+  hookInstalled: boolean;
+  hookArmed: boolean;
+  hookFault: boolean;
+  overflow: boolean;
+  contextGetIssued: boolean;
+  projectGetIssued: boolean;
+  createPostIssued: boolean;
+  domSnapshotAvailable: boolean;
+  savedAcknowledgementVisible: boolean;
+  exactRevisionLinkVisible: boolean;
+  otherRevisionLinkVisible: boolean;
+  unknownHeadingPresent: boolean;
+  timedOutMessageVisible: boolean;
+  incompatibleMessageVisible: boolean;
+  unavailableMessageVisible: boolean;
+  records: RevisionFetchObservation[];
+};
+type RevisionFetchCleanup = {
+  restoreAttempted: boolean;
+  restored: boolean;
+  ownershipLost: boolean;
+  cleanupFault: boolean;
+};
+
+/** Diagnostic only: observe the existing fetch/read promises without replacing them. */
+async function installRevisionFetchDiagnostic(
+  page: Page,
+  target: {
+    origin: string;
+    revisionPath: string;
+    revisionHref: string;
+    projectPath: string;
+    createPath: string;
+  },
+) {
+  return page.evaluateHandle((target) => {
+    const records: RevisionFetchObservation[] = [];
+    const streams = new WeakMap<object, RevisionFetchObservation>();
+    const readers = new WeakMap<object, RevisionFetchObservation>();
+    const listeners: { signal: AbortSignal; listener: () => void }[] = [];
+    const patches: {
+      owner: object;
+      key: string;
+      before: PropertyDescriptor;
+      wrapper: unknown;
+    }[] = [];
+    let hookInstalled = false,
+      hookArmed = false,
+      hookFault = false,
+      overflow = false;
+    let contextGetIssued = false,
+      projectGetIssued = false,
+      createPostIssued = false;
+    let restoreAttempted = false,
+      restored = false,
+      ownershipLost = false,
+      cleanupFault = false;
+    const nativeFetch = globalThis.fetch;
+    const nativeGetReader = ReadableStream.prototype.getReader;
+    const nativeStreamCancel = ReadableStream.prototype.cancel;
+    const nativeRead = ReadableStreamDefaultReader.prototype.read;
+    const nativeReaderCancel = ReadableStreamDefaultReader.prototype.cancel;
+    const observe = <T>(
+      promise: Promise<T>,
+      fulfilled: (value: T) => void,
+      rejected: () => void,
+    ): void => {
+      try {
+        // Both reactions contain their failures; the derived observation promise cannot reject.
+        void promise.then(
+          (value) => {
+            try {
+              fulfilled(value);
+            } catch {
+              hookFault = true;
+            }
+          },
+          () => {
+            try {
+              rejected();
+            } catch {
+              hookFault = true;
+            }
+          },
+        );
+      } catch {
+        hookFault = true;
+      }
+    };
+    const newRecord = (): RevisionFetchObservation => ({
+      signalSupplied: false,
+      signalInitiallyAborted: false,
+      abortEventSeen: false,
+      abortBeforeDone: false,
+      abortAfterDone: false,
+      fetchFulfilled: false,
+      fetchRejected: false,
+      fetchThrew: false,
+      statusIs200: false,
+      bodyPresent: false,
+      readerObserved: false,
+      readObserved: false,
+      nonemptyChunkObserved: false,
+      doneObserved: false,
+      doneBeforeAbort: false,
+      doneAfterAbort: false,
+      readRejected: false,
+      readThrew: false,
+      streamCancelCalled: false,
+      readerCancelCalled: false,
+    });
+    const wrappedFetch = function (
+      this: unknown,
+      ...args: Parameters<typeof fetch>
+    ): ReturnType<typeof fetch> {
+      let record: RevisionFetchObservation | undefined;
+      try {
+        if (hookArmed) {
+          const [input, init] = args;
+          const request = input instanceof Request ? input : undefined;
+          const url = new URL(
+            request ? request.url : String(input),
+            location.href,
+          );
+          const method = init?.method ?? request?.method ?? "GET";
+          if (url.origin === target.origin) {
+            if (
+              method === "GET" &&
+              !url.search &&
+              url.pathname === "/api/v1/catalog/context"
+            )
+              contextGetIssued = true;
+            if (
+              method === "GET" &&
+              !url.search &&
+              url.pathname === target.projectPath
+            )
+              projectGetIssued = true;
+            // The unchanged actual wire owns the create query/body/header assertions.
+            if (method === "POST" && url.pathname === target.createPath)
+              createPostIssued = true;
+            if (
+              method === "GET" &&
+              !url.search &&
+              url.pathname === target.revisionPath
+            ) {
+              if (records.length === 16) overflow = true;
+              else {
+                record = newRecord();
+                records.push(record);
+                const signal =
+                  init && "signal" in init ? init.signal : request?.signal;
+                if (signal) {
+                  record.signalSupplied = true;
+                  record.signalInitiallyAborted = signal.aborted;
+                  const observed = record;
+                  const listener = () => {
+                    try {
+                      observed.abortEventSeen = true;
+                      if (observed.doneObserved) observed.abortAfterDone = true;
+                      else observed.abortBeforeDone = true;
+                    } catch {
+                      hookFault = true;
+                    }
+                  };
+                  signal.addEventListener("abort", listener, { once: true });
+                  listeners.push({ signal, listener });
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        hookFault = true;
+      }
+      let result: ReturnType<typeof fetch>;
+      try {
+        result = Reflect.apply(nativeFetch, this, args);
+      } catch (error) {
+        if (record) record.fetchThrew = true;
+        throw error;
+      }
+      if (record) {
+        const observed = record;
+        observe(
+          result,
+          (response) => {
+            observed.fetchFulfilled = true;
+            observed.statusIs200 = response.status === 200;
+            const body = response.body;
+            observed.bodyPresent = body !== null;
+            if (body) streams.set(body, observed);
+          },
+          () => {
+            observed.fetchRejected = true;
+          },
+        );
+      }
+      return result;
+    };
+    const wrappedGetReader = function (
+      this: ReadableStream<unknown>,
+      ...args: unknown[]
+    ): unknown {
+      const result: unknown = Reflect.apply(nativeGetReader, this, args);
+      try {
+        const record = streams.get(this);
+        if (record && typeof result === "object" && result !== null) {
+          record.readerObserved = true;
+          readers.set(result, record);
+        }
+      } catch {
+        hookFault = true;
+      }
+      return result;
+    };
+    const wrappedRead = function (
+      this: ReadableStreamDefaultReader<unknown>,
+      ...args: unknown[]
+    ): Promise<ReadableStreamReadResult<unknown>> {
+      const record = readers.get(this);
+      if (record) record.readObserved = true;
+      let result: Promise<ReadableStreamReadResult<unknown>>;
+      try {
+        result = Reflect.apply(nativeRead, this, args);
+      } catch (error) {
+        if (record) record.readThrew = true;
+        throw error;
+      }
+      if (record)
+        observe(
+          result,
+          (value) => {
+            if (value.done) {
+              record.doneObserved = true;
+              if (record.signalInitiallyAborted || record.abortEventSeen)
+                record.doneAfterAbort = true;
+              else record.doneBeforeAbort = true;
+            } else if (
+              value.value instanceof Uint8Array &&
+              value.value.byteLength > 0
+            )
+              record.nonemptyChunkObserved = true;
+          },
+          () => {
+            record.readRejected = true;
+          },
+        );
+      return result;
+    };
+    const wrappedStreamCancel = function (
+      this: ReadableStream<unknown>,
+      ...args: unknown[]
+    ): unknown {
+      try {
+        const record = streams.get(this);
+        if (record) record.streamCancelCalled = true;
+      } catch {
+        hookFault = true;
+      }
+      return Reflect.apply(nativeStreamCancel, this, args);
+    };
+    const wrappedReaderCancel = function (
+      this: ReadableStreamDefaultReader<unknown>,
+      ...args: unknown[]
+    ): unknown {
+      try {
+        const record = readers.get(this);
+        if (record) record.readerCancelCalled = true;
+      } catch {
+        hookFault = true;
+      }
+      return Reflect.apply(nativeReaderCancel, this, args);
+    };
+    const patch = (owner: object, key: string, wrapper: unknown): void => {
+      const before = Object.getOwnPropertyDescriptor(owner, key);
+      if (!before || !("value" in before) || before.writable !== true) {
+        hookFault = true;
+        return;
+      }
+      Object.defineProperty(owner, key, { ...before, value: wrapper });
+      patches.push({ owner, key, before, wrapper });
+    };
+    const restore = (): RevisionFetchCleanup => {
+      hookArmed = false;
+      restoreAttempted = true;
+      for (const { signal, listener } of listeners) {
+        try {
+          signal.removeEventListener("abort", listener);
+        } catch {
+          cleanupFault = true;
+        }
+      }
+      listeners.length = 0;
+      for (const entry of patches.splice(0).reverse()) {
+        try {
+          if (
+            Object.getOwnPropertyDescriptor(entry.owner, entry.key)?.value ===
+            entry.wrapper
+          )
+            Object.defineProperty(entry.owner, entry.key, entry.before);
+          else ownershipLost = true;
+        } catch {
+          cleanupFault = true;
+        }
+      }
+      restored = !ownershipLost && !cleanupFault;
+      return { restoreAttempted, restored, ownershipLost, cleanupFault };
+    };
+    const shown = (element: Element | null): boolean => {
+      if (!element) return false;
+      const bounds = element.getBoundingClientRect(),
+        style = getComputedStyle(element);
+      return (
+        bounds.width > 0 &&
+        bounds.height > 0 &&
+        style.visibility !== "hidden" &&
+        style.display !== "none"
+      );
+    };
+    const snapshot = (): RevisionFetchSnapshot => {
+      let domSnapshotAvailable = false,
+        savedAcknowledgementVisible = false;
+      let exactRevisionLinkVisible = false,
+        otherRevisionLinkVisible = false,
+        unknownHeadingPresent = false;
+      let timedOutMessageVisible = false,
+        incompatibleMessageVisible = false,
+        unavailableMessageVisible = false;
+      try {
+        const region = document.querySelector(
+          'section[aria-labelledby="upload-saved"]',
+        );
+        const title = region?.querySelector("#upload-saved") ?? null;
+        savedAcknowledgementVisible =
+          shown(title) && title?.textContent?.trim() === "Mapping saved";
+        for (const link of region?.querySelectorAll("a") ?? []) {
+          if (shown(link) && link.textContent?.trim() === "View revision") {
+            if (link.getAttribute("href") === target.revisionHref)
+              exactRevisionLinkVisible = true;
+            else otherRevisionLinkVisible = true;
+          }
+        }
+        unknownHeadingPresent =
+          document.querySelector(".native-upload #upload-unknown") !== null;
+        const hasAlert = (text: string) =>
+          Array.from(
+            document.querySelectorAll(
+              '.native-upload .upload-error[role="alert"]',
+            ),
+          ).some(
+            (element) => shown(element) && element.textContent?.trim() === text,
+          );
+        timedOutMessageVisible = hasAlert(
+          "Waiting timed out. A sent upload may already have saved.",
+        );
+        incompatibleMessageVisible = hasAlert(
+          "The reply could not be verified as the original upload operation.",
+        );
+        unavailableMessageVisible = hasAlert(
+          "This operation could not be confirmed. No automatic upload or resume was made.",
+        );
+        domSnapshotAvailable = true;
+      } catch {
+        hookFault = true;
+      }
+      return {
+        hookInstalled,
+        hookArmed,
+        hookFault,
+        overflow,
+        contextGetIssued,
+        projectGetIssued,
+        createPostIssued,
+        domSnapshotAvailable,
+        savedAcknowledgementVisible,
+        exactRevisionLinkVisible,
+        otherRevisionLinkVisible,
+        unknownHeadingPresent,
+        timedOutMessageVisible,
+        incompatibleMessageVisible,
+        unavailableMessageVisible,
+        records: records.map((record) => ({ ...record })),
+      };
+    };
+    try {
+      patch(globalThis, "fetch", wrappedFetch);
+      patch(ReadableStream.prototype, "getReader", wrappedGetReader);
+      patch(ReadableStream.prototype, "cancel", wrappedStreamCancel);
+      patch(ReadableStreamDefaultReader.prototype, "read", wrappedRead);
+      patch(
+        ReadableStreamDefaultReader.prototype,
+        "cancel",
+        wrappedReaderCancel,
+      );
+      hookInstalled = patches.length === 5;
+      hookArmed = hookInstalled && !hookFault;
+      if (!hookArmed) restore();
+    } catch {
+      hookFault = true;
+      restore();
+    }
+    return { snapshot, restore };
+  }, target);
+}
 function sameCounts(actual: UploadCounts, expected: UploadCounts): void {
   requireUpload(
     isDeepStrictEqual(actual, expected),
@@ -907,6 +1336,24 @@ class UploadWire {
     requireUpload(receipt, "expected an actual learned own receipt");
     return receipt;
   }
+  /** Point-in-time diagnostic flags only; do not settle or promote an old observation. */
+  revisionDiagnostic(sample: Sample, mutationIndex: number) {
+    const original = this.originals.get(sample),
+      observation = original
+        ? this.revisionReadFailures.get(original)
+        : undefined;
+    return {
+      observationPresent: observation !== undefined,
+      isGet: observation?.isGet === true,
+      statusIs200: observation?.statusIs200 === true,
+      hasFailure: observation?.hasFailure === true,
+      isAborted: observation?.isAborted === true,
+      verifiedRevisionPresent: original?.revision != null,
+      learnedOwnReceiptPresent: original?.receipt != null,
+      nodeParsedMutationResultPresent:
+        this.mutations[mutationIndex]?.result != null,
+    };
+  }
   async checkpoint(): Promise<UploadCounts> {
     await this.settleReads();
     const current = await this.owner.checkpoint();
@@ -1210,7 +1657,7 @@ test.describe.configure({ mode: "serial" });
 test("real packaged native create/upload: exact original bytes, durable recovery, authority and truthful native outcomes", async ({
   page,
   nativeMappingUploadOwner: owner,
-}) => {
+}, testInfo) => {
   test.setTimeout(600000);
   const initial = await owner.checkpoint(),
     wire = new UploadWire(page, owner, initial),
@@ -1369,15 +1816,122 @@ test("real packaged native create/upload: exact original bytes, durable recovery
       await owner.control({ action: "pg-normal-restart" });
       sameCounts(await wire.checkpoint(), trusted);
       await wire.arm(fixed.versioned, "normal", true);
+      const wireAtArm = wire.revisionDiagnostic("versioned", index + 1);
+      const fetchDiagnostic = await installRevisionFetchDiagnostic(page, {
+        origin: fixture.readOrigin,
+        revisionPath: catalogApi(revisionPath(committed.futureRevision)),
+        revisionHref: revisionPath(committed.futureRevision),
+        projectPath: wire.projectApi,
+        createPath: wire.createApi,
+      }).catch(() => null);
       const resendRevision = waitResponse(
         page,
         "GET",
         catalogApi(revisionPath(committed.futureRevision)),
         200,
       );
-      await button(page, "Resend original upload").click();
-      await wire.complete(index + 1, 200);
-      await responseDone(await resendRevision);
+      let failureDiagnostic: {
+        pageSnapshotAvailable: boolean;
+        page: RevisionFetchSnapshot;
+        wireSnapshotAvailable: boolean;
+        wireAtArm: ReturnType<UploadWire["revisionDiagnostic"]>;
+        wireAtFailure: ReturnType<UploadWire["revisionDiagnostic"]>;
+      } | null = null;
+      try {
+        await button(page, "Resend original upload").click();
+        await wire.complete(index + 1, 200);
+        try {
+          await responseDone(await resendRevision);
+        } catch (failure) {
+          failureDiagnostic = {
+            pageSnapshotAvailable: false,
+            page: {
+              hookInstalled: false,
+              hookArmed: false,
+              hookFault: false,
+              overflow: false,
+              contextGetIssued: false,
+              projectGetIssued: false,
+              createPostIssued: false,
+              domSnapshotAvailable: false,
+              savedAcknowledgementVisible: false,
+              exactRevisionLinkVisible: false,
+              otherRevisionLinkVisible: false,
+              unknownHeadingPresent: false,
+              timedOutMessageVisible: false,
+              incompatibleMessageVisible: false,
+              unavailableMessageVisible: false,
+              records: [],
+            },
+            wireSnapshotAvailable: false,
+            wireAtArm,
+            wireAtFailure: wireAtArm,
+          };
+          try {
+            failureDiagnostic.wireAtFailure = wire.revisionDiagnostic(
+              "versioned",
+              index + 1,
+            );
+            failureDiagnostic.wireSnapshotAvailable = true;
+          } catch {
+            /* Preserve the original waiter/body failure. */
+          }
+          if (fetchDiagnostic) {
+            try {
+              failureDiagnostic.page = await fetchDiagnostic.evaluate(
+                (diagnostic) => diagnostic.snapshot(),
+              );
+              failureDiagnostic.pageSnapshotAvailable = true;
+            } catch {
+              /* An unavailable page snapshot is not a negative observation. */
+            }
+          }
+          throw failure;
+        }
+      } finally {
+        let cleanupSnapshotAvailable = false,
+          handleDisposed = false;
+        let cleanup: RevisionFetchCleanup = {
+          restoreAttempted: false,
+          restored: false,
+          ownershipLost: false,
+          cleanupFault: false,
+        };
+        if (fetchDiagnostic) {
+          try {
+            cleanup = await fetchDiagnostic.evaluate((diagnostic) =>
+              diagnostic.restore(),
+            );
+            cleanupSnapshotAvailable = true;
+          } catch {
+            /* Cleanup availability must not replace the original failure. */
+          }
+          try {
+            await fetchDiagnostic.dispose();
+            handleDisposed = true;
+          } catch {
+            /* No arbitrary error output. */
+          }
+        }
+        if (failureDiagnostic) {
+          try {
+            await testInfo.attach("post-restart-revision-fetch-diagnostic", {
+              body: Buffer.from(
+                JSON.stringify(
+                  Object.assign(
+                    { diagnosticOnly: true, waiterFailureCaptured: true },
+                    failureDiagnostic,
+                    { cleanupSnapshotAvailable, handleDisposed, cleanup },
+                  ),
+                ),
+              ),
+              contentType: "application/json",
+            });
+          } catch {
+            /* Attachment failure must not replace the original waiter/body failure. */
+          }
+        }
+      }
       await saved(page, wire, fixed.versioned);
       requireUpload(
         isDeepStrictEqual(wire.operation("versioned"), committed) &&
