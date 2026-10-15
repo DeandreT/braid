@@ -431,16 +431,17 @@ BEGIN
     IF TG_TABLE_NAME = 'revision_ingestions' AND TG_OP = 'INSERT' THEN RETURN NEW; END IF;
     IF TG_TABLE_NAME = 'revision_ingestions' AND TG_OP = 'UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN RETURN NEW; END IF;
     IF TG_TABLE_NAME = 'mapping_revisions' THEN
-        SELECT * INTO STRICT origin_row FROM weft.revision_ingestions i WHERE i.organization_id = NEW.organization_id
+        SELECT * INTO origin_row FROM weft.revision_ingestions i WHERE i.organization_id = NEW.organization_id
             AND i.project_id = NEW.project_id AND i.operation_id = NEW.ingestion_operation_id FOR UPDATE;
-        IF ROW(origin_row.future_mapping_id,origin_row.future_revision_id,origin_row.native_object_id,origin_row.native_class)
-            IS DISTINCT FROM ROW(NEW.mapping_id,NEW.id,NEW.native_object_id,NEW.native_class) THEN
-            RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'Revision attachment requires its exact native origin.';
-        END IF;
     ELSE
-        SELECT * INTO STRICT origin_row FROM weft.revision_ingestions i WHERE i.organization_id = NEW.organization_id
+        SELECT * INTO origin_row FROM weft.revision_ingestions i WHERE i.organization_id = NEW.organization_id
             AND i.project_id = NEW.project_id AND i.operation_id = NEW.operation_id FOR UPDATE;
     END IF;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'Native attachment requires its existing scoped origin.';
+    END IF;
+    -- A successful attachment must satisfy the existing full native-facts or ingestion FK
+    -- against this locked immutable parent. Preserve those FK/CHECK error classifications.
     IF EXISTS (SELECT 1 FROM weft.private_object_retirements r WHERE r.organization_id = origin_row.organization_id
         AND r.project_id = origin_row.project_id AND r.mapping_id = origin_row.future_mapping_id AND r.revision_id = origin_row.future_revision_id
         AND r.object_class = 'native' AND r.object_id = origin_row.native_object_id AND r.target_kind = 'final_object') THEN

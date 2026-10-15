@@ -8,7 +8,7 @@ namespace Weft.Persistence.Postgres;
 internal static class MaintenanceSchemaContract
 {
     internal const string MigrationName = "0007_private_object_maintenance";
-    internal const string MigrationChecksum = "a7de73d263b5a8ae7c0ca4a14d0608d4e50222ffdd68c2dab6bec9ac77e0d259";
+    internal const string MigrationChecksum = "39cbd985bf607ae1fac08700794ad7bd939988d4fe49766f181ca6984b2a29fa";
     internal sealed record Function(string Name, string IdentityArguments, string ResultType, string Body,
         bool SecurityDefiner = true, char Volatility = 'v', char Parallel = 'u', string SearchPath = "pg_catalog, weft, pg_temp");
     internal sealed record Trigger(string Name, string Table, string Function, short Events);
