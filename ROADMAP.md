@@ -144,7 +144,7 @@ accepted the increment. The
 [API contract](docs/persisted-report-api.md) describes current and retained reads,
 explicit derivation/repair and complete-response admission.
 
-P3f maintenance follows three dependent, independently qualified increments:
+P3f maintenance follows four dependent, independently qualified increments:
 
 1. [#60](https://github.com/DeandreT/weft/issues/60): retirement metadata, fenced
    cleanup claims and positive publication registration; qualified and merged in
@@ -155,14 +155,22 @@ P3f maintenance follows three dependent, independently qualified increments:
    v2 filesystem component, qualified and merged in
    [#68](https://github.com/DeandreT/weft/pull/68), then
    [#66](https://github.com/DeandreT/weft/issues/66), service composition and
-   explicit offline activation, currently being implemented and qualified.
-3. [#62](https://github.com/DeandreT/weft/issues/62): bounded run-once maintenance
-   and actual database/storage/process recovery, after #61 qualifies and merges.
+   explicit offline activation, qualified and merged in
+   [#69](https://github.com/DeandreT/weft/pull/69), completing #61.
+3. [#72](https://github.com/DeandreT/weft/issues/72): bounded read-only maintenance
+   observations, the command's prerequisite; qualified and merged in
+   [#73](https://github.com/DeandreT/weft/pull/73).
+4. [#62](https://github.com/DeandreT/weft/issues/62): bounded run-once maintenance
+   and actual database/storage/process recovery; implemented and in qualification.
+   The [maintenance command contract](docs/maintenance-command.md) describes the
+   explicit command, bounded evidence, continuation cursors and exit codes.
 
 The [maintenance metadata contract](docs/private-object-maintenance-metadata.md)
 keeps native history, resumable uploads and every successful derived report
-protected. The metadata foundation performs no filesystem deletion. Full
-maintenance qualification remains required before Angular catalog #19.
+protected. The metadata foundation performs no filesystem deletion. Parent
+[#18](https://github.com/DeandreT/weft/issues/18) remains open until the complete
+maintenance command qualifies; that qualification is required before Angular
+catalog #19.
 
 The [v2 filesystem contract](docs/private-storage-v2.md) fixes the private
 records, permanent gates and original-owner recovery boundary. The independent

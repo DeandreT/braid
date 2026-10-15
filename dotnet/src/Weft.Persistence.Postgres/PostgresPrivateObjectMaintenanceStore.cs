@@ -38,8 +38,19 @@ public sealed partial class PostgresPrivateObjectMaintenanceStore : IPrivateObje
         return ExecuteAsync(() => FinishCommittedAsync(claim, disposition, cancellationToken), cancellationToken);
     }
 
+    public Task<ObjectCleanupFinishResult> FinishAsync(ObjectCleanupClaim claim, ObjectCleanupDisposition disposition,
+        CancellationToken cancellationToken, CancellationToken settlementCancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        _ = Disposition(disposition);
+        cancellationToken.ThrowIfCancellationRequested();
+        settlementCancellationToken.ThrowIfCancellationRequested();
+        return ExecuteAsync(() => FinishCommittedAsync(claim, disposition, cancellationToken, settlementCancellationToken), cancellationToken);
+    }
+
     private async Task<ObjectCleanupFinishResult> FinishCommittedAsync(ObjectCleanupClaim claim,
-        ObjectCleanupDisposition disposition, CancellationToken cancellationToken)
+        ObjectCleanupDisposition disposition, CancellationToken cancellationToken,
+        CancellationToken settlementCancellationToken = default)
     {
         var project = Project(claim);
         var commitStarted = false;
@@ -54,12 +65,14 @@ public sealed partial class PostgresPrivateObjectMaintenanceStore : IPrivateObje
             staged?.Outcome is ObjectCleanupFinishOutcome.Applied or ObjectCleanupFinishOutcome.AlreadyApplied)
         {
             using var recovery = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var sharedRecovery = CancellationTokenSource.CreateLinkedTokenSource(recovery.Token, settlementCancellationToken);
             ObjectCleanupAttempt? retained;
             try
             {
-                retained = await GetAttemptAsync(project, claim.Retirement.RetirementId, claim.Generation, recovery.Token);
+                retained = await GetAttemptAsync(project, claim.Retirement.RetirementId, claim.Generation, sharedRecovery.Token);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
+            catch (OperationCanceledException) when (settlementCancellationToken.IsCancellationRequested) { throw new OperationCanceledException(settlementCancellationToken); }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { throw Unavailable(); }
             cancellationToken.ThrowIfCancellationRequested();
             if (retained is null || retained.Claim != claim || retained.Disposition != disposition || retained.FinishedAtUtc is null)

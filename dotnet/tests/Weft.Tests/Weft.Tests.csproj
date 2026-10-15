@@ -21,6 +21,8 @@
     <ProjectReference Include="../../tools/Weft.StorageTool/Weft.StorageTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.DatabaseTool/Weft.DatabaseTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.IngestionProbe/Weft.IngestionProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.MaintenanceProbe/Weft.MaintenanceProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.MaintenanceTool/Weft.MaintenanceTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.RevisionReportWorkflowProbe/Weft.RevisionReportWorkflowProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
@@ -73,5 +75,17 @@
       <RevisionReportWorkflowProbeFiles Include="../../tools/Weft.RevisionReportWorkflowProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(RevisionReportWorkflowProbeFiles)" DestinationFiles="@(RevisionReportWorkflowProbeFiles->'$(OutDir)RevisionReportWorkflowProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyMaintenanceProbe" AfterTargets="Build">
+    <ItemGroup>
+      <MaintenanceProbeFiles Include="../../tools/Weft.MaintenanceProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MaintenanceProbeFiles)" DestinationFiles="@(MaintenanceProbeFiles->'$(OutDir)MaintenanceProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyMaintenanceTool" AfterTargets="Build">
+    <ItemGroup>
+      <MaintenanceToolFiles Include="../../tools/Weft.MaintenanceTool/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MaintenanceToolFiles)" DestinationFiles="@(MaintenanceToolFiles->'$(OutDir)MaintenanceTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 </Project>

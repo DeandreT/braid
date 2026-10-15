@@ -231,6 +231,10 @@ public interface IPrivateObjectMaintenanceMetadata
     Task<ObjectCleanupFinishResult> FinishAsync(ObjectCleanupClaim claim, ObjectCleanupDisposition disposition,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Bounds acknowledgement recovery with the caller's shared absolute settlement token.</summary>
+    Task<ObjectCleanupFinishResult> FinishAsync(ObjectCleanupClaim claim, ObjectCleanupDisposition disposition,
+        CancellationToken cancellationToken, CancellationToken settlementCancellationToken);
+
     /// <summary>Recovers only the retained exact generation after the original call settles, never a newer current attempt.</summary>
     Task<ObjectCleanupAttempt?> GetAttemptAsync(ProjectScope project, Guid retirementId, long generation,
         CancellationToken cancellationToken = default);
