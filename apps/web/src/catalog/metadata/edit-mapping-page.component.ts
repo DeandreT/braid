@@ -2,6 +2,8 @@ import { DOCUMENT } from "@angular/common";
 import {
   Component,
   DestroyRef,
+  Injector,
+  afterNextRender,
   effect,
   inject,
   signal,
@@ -34,6 +36,8 @@ export class EditMappingPageComponent {
     description: new FormControl("", { nonNullable: true }),
   });
   private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
+  private focusRequest = 0;
   private leaveChoice: Subscriber<boolean> | null = null;
   private returnFocusId = "metadata-title";
   private lastEditingOwner = "";
@@ -250,8 +254,20 @@ export class EditMappingPageComponent {
   }
 
   private queueFocus(target: string): void {
-    queueMicrotask(() => {
-      if (!this.destroyed) this.document.getElementById(target)?.focus();
-    });
+    const request = ++this.focusRequest;
+    // Conditional notices must be in the rendered view before they receive focus.
+    afterNextRender(
+      () => {
+        if (
+          !this.destroyed &&
+          request === this.focusRequest &&
+          (target === "metadata-leave"
+            ? this.leaveDecision()
+            : !this.leaveDecision())
+        )
+          this.document.getElementById(target)?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 }
