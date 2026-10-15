@@ -4869,7 +4869,14 @@
             ]
           },
           "committedAdmission": {
-            "$ref": "#/components/schemas/CatalogAdmissionV1"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogAdmissionV1"
+              }
+            ]
           },
           "latestFailure": {
             "$ref": "#/components/schemas/CatalogRevisionIngestionFailureV1"
@@ -4897,7 +4904,14 @@
             "$ref": "#/components/schemas/CatalogRevisionIngestionOutcomeV1"
           },
           "receipt": {
-            "$ref": "#/components/schemas/CatalogRevisionIngestionReceiptV1"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogRevisionIngestionReceiptV1"
+              }
+            ]
           },
           "rejection": {
             "$ref": "#/components/schemas/CatalogRevisionIngestionRejectionV1"

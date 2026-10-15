@@ -465,6 +465,28 @@ export const jsonMappingCreateBody: MappingCreateContent = {
 
 export const ingestionCommittedSequence: RevisionIngestionReceipt["committedSequence"] =
   "9223372036854775807";
+export const nullableIngestionAdmission: RevisionIngestionReceipt["committedAdmission"] =
+  null;
+export const nullableIngestionReceipt: RevisionIngestionResult["receipt"] =
+  null;
+export const optionalIngestionReceipt: RevisionIngestionResult["receipt"] =
+  undefined;
+export const receiptlessIngestionRejection = {
+  outcome: "rejected",
+  receipt: null,
+  rejection: "emptyNative",
+  failure: null,
+  committedRevisionUrl: null,
+} satisfies RevisionIngestionResult;
+// @ts-expect-error The receipt admission is present even when its value is null.
+export const omittedIngestionAdmission: RevisionIngestionReceipt["committedAdmission"] =
+  undefined;
+// @ts-expect-error Committed revision/head admission remains a nonnull shared enum.
+export const nullableCommittedAdmission: components["schemas"]["CatalogAdmissionV1"] =
+  null;
+// @ts-expect-error Pending is a receipt phase, not a committed admission value.
+export const pendingAdmission: RevisionIngestionReceipt["committedAdmission"] =
+  "pending";
 // @ts-expect-error Committed ingestion sequences retain bigint precision as text.
 export const numericIngestionSequence: RevisionIngestionReceipt["committedSequence"] = 9007199254740993;
 // @ts-expect-error Safe receipt polling does not expose idempotency keys.

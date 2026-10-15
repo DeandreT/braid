@@ -60,6 +60,8 @@ public sealed class CatalogRevisionIngestionContractTests
             Assert.Null(receipt.CommittedAdmission);
             Assert.Null(receipt.CompletedAtUtc);
             Assert.Equal(RevisionScope, receipt.FutureRevision);
+            using var pendingJson = JsonDocument.Parse(JsonSerializer.Serialize(receipt, Options));
+            Assert.Equal(JsonValueKind.Null, pendingJson.RootElement.GetProperty("committedAdmission").ValueKind);
         }
         var rejected = Receipt(CatalogRevisionIngestionPhaseV1.Rejected, latestFailure: CatalogRevisionIngestionFailureV1.EvidenceLimit);
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(rejected, Options));
@@ -69,6 +71,7 @@ public sealed class CatalogRevisionIngestionContractTests
         Assert.False(json.RootElement.TryGetProperty("rejectionReason", out _));
         Assert.Null(rejected.CommittedSequence);
         Assert.Null(rejected.CommittedAdmission);
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("committedAdmission").ValueKind);
     }
 
     [Fact]
@@ -166,6 +169,8 @@ public sealed class CatalogRevisionIngestionContractTests
             Assert.Equal(new[] { "committedRevisionUrl", "failure", "outcome", "receipt", "rejection" },
                 json.RootElement.EnumerateObject().Select(property => property.Name).OrderBy(name => name, StringComparer.Ordinal));
             Assert.Equal(result, JsonSerializer.Deserialize<CatalogRevisionIngestionResultV1>(encoded, Options));
+            if (result.Receipt is null)
+                Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("receipt").ValueKind);
             if (result.Outcome is not (CatalogRevisionIngestionOutcomeV1.CommittedValid or CatalogRevisionIngestionOutcomeV1.CommittedDecodedInvalid))
                 Assert.Null(result.CommittedRevisionUrl);
         }
@@ -180,6 +185,8 @@ public sealed class CatalogRevisionIngestionContractTests
             Assert.Null(result.Receipt);
             Assert.Null(result.Failure);
             Assert.Null(result.CommittedRevisionUrl);
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(result, Options));
+            Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("receipt").ValueKind);
             Rejects(() => new CatalogRevisionIngestionResultV1(CatalogRevisionIngestionOutcomeV1.Rejected, Receipt(CatalogRevisionIngestionPhaseV1.Rejected), rejection));
         }
         Rejects(() => new CatalogRevisionIngestionResultV1(CatalogRevisionIngestionOutcomeV1.Rejected, rejection: CatalogRevisionIngestionRejectionV1.NativeDecode));

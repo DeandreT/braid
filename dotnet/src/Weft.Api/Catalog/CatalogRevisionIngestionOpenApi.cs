@@ -124,6 +124,25 @@ public static partial class CatalogEndpoints
             });
     }
 
+    internal static void TransformRevisionIngestionSchemas(OpenApiDocument document)
+    {
+        if (document.Components?.Schemas is not { } schemas)
+            return;
+        // Shared references settle after operation generation. Null belongs to
+        // these properties, not the admission enum or standalone receipt object.
+        if (schemas.TryGetValue(nameof(CatalogRevisionIngestionReceiptV1), out var receiptSchema) &&
+            receiptSchema is OpenApiSchema { Properties: { } receiptProperties })
+            receiptProperties["committedAdmission"] = NullableReference(nameof(CatalogAdmissionV1));
+        if (schemas.TryGetValue(nameof(CatalogRevisionIngestionResultV1), out var resultSchema) &&
+            resultSchema is OpenApiSchema { Properties: { } resultProperties })
+            resultProperties["receipt"] = NullableReference(nameof(CatalogRevisionIngestionReceiptV1));
+
+        OpenApiSchema NullableReference(string name) => new()
+        {
+            OneOf = [new OpenApiSchema { Type = JsonSchemaType.Null }, new OpenApiSchemaReference(name, document)]
+        };
+    }
+
     private static void AddRevisionParameter(OpenApiOperation operation, string name, ParameterLocation location,
         bool required, string description, bool uuid = false, string[]? values = null)
     {

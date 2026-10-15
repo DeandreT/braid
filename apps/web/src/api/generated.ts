@@ -621,7 +621,7 @@ export interface components {
     CatalogRevisionIngestionReceiptV1: {
       /** Format: int32 */
       claimCount: number;
-      committedAdmission: components["schemas"]["CatalogAdmissionV1"];
+      committedAdmission: null | components["schemas"]["CatalogAdmissionV1"];
       committedSequence: null | string;
       /** Format: date-time */
       completedAtUtc: null | string;
@@ -648,7 +648,8 @@ export interface components {
       committedRevisionUrl?: null | string;
       failure?: components["schemas"]["CatalogRevisionIngestionFailureV1"];
       outcome: components["schemas"]["CatalogRevisionIngestionOutcomeV1"];
-      receipt?: components["schemas"]["CatalogRevisionIngestionReceiptV1"];
+      receipt?:
+        null | components["schemas"]["CatalogRevisionIngestionReceiptV1"];
       rejection?: components["schemas"]["CatalogRevisionIngestionRejectionV1"];
     };
     CatalogRevisionPageV1: {

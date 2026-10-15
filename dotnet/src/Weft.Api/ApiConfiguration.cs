@@ -42,6 +42,7 @@ public static class ApiConfiguration
                     projection.Required.Add("schemaVersion");
                 }
             }
+            CatalogEndpoints.TransformRevisionIngestionSchemas(document);
             CatalogEndpoints.TransformRevisionReportSchemas(document);
             return Task.CompletedTask;
         }));
