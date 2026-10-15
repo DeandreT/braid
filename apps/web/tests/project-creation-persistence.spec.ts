@@ -601,15 +601,15 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       await expect(page).toHaveURL(
         new RegExp(projectPath(result.receipt.project) + "$"),
       );
+      await expect(
+        page.getByRole("heading", { name: "No mappings", exact: true }),
+      ).toBeVisible();
       requireCreation(
         (await page.getByRole("heading", { level: 1 }).textContent())?.includes(
           bom.acceptedName,
         ),
         "BOM-only ordinary project heading changed",
       );
-      await expect(
-        page.getByRole("heading", { name: "No mappings", exact: true }),
-      ).toBeVisible();
       await page.goBack();
       await confirmed(page);
       await named(page, "Start another project").click();
@@ -634,6 +634,9 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
         .getByRole("link", { name: "Back to projects", exact: true })
         .click();
       await expect(
+        page.getByRole("list", { name: "Projects", exact: true }),
+      ).toBeVisible();
+      await expect(
         page.getByRole("link", { name: "Create project", exact: true }),
       ).toHaveCount(0);
       await page
@@ -654,6 +657,9 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
         "seed role/action evidence differs",
       );
       await page.goBack();
+      await expect(
+        page.getByRole("list", { name: "Projects", exact: true }),
+      ).toBeVisible();
       await page.goBack();
       await expect(named(page, "Create project")).toBeDisabled();
       expect(wire.postCount).toBe(1);
@@ -681,6 +687,9 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
         .getByRole("link", { name: "Back to projects", exact: true })
         .click();
       await expect(heading(page, "Projects")).toBeVisible();
+      await expect(
+        page.getByRole("list", { name: "Projects", exact: true }),
+      ).toBeVisible();
       await page.goBack();
       await expect(
         heading(page, "Creation information is retained for another identity"),
@@ -774,8 +783,23 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       const posts = wire.postCount,
         contexts = wire.contextCount,
         reads = wire.projectReadCount;
+      const accessReply = page.waitForResponse((reply) => {
+        const url = new URL(reply.url());
+        return (
+          reply.request().method() === "GET" &&
+          url.origin === fixture.readOrigin &&
+          url.pathname === catalogApi(projectPath(original.receipt.project)) &&
+          url.search === "" &&
+          reply.status() === 200
+        );
+      });
       await named(page, "Retry project access").click();
+      requireCreation(
+        (await (await accessReply).finished()) === null,
+        "actual current Viewer access response did not finish",
+      );
       await confirmed(page);
+      await wire.settle();
       expect(wire.postCount).toBe(posts);
       expect(wire.contextCount).toBe(contexts + 1);
       expect(wire.projectReadCount).toBe(reads + 1);
@@ -833,8 +857,23 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       const posts = wire.postCount,
         contexts = wire.contextCount,
         reads = wire.projectReadCount;
+      const accessReply = page.waitForResponse((reply) => {
+        const url = new URL(reply.url());
+        return (
+          reply.request().method() === "GET" &&
+          url.origin === fixture.readOrigin &&
+          url.pathname === catalogApi(projectPath(first.receipt.project)) &&
+          url.search === "" &&
+          reply.status() === 404
+        );
+      });
       await named(page, "Retry project access").click();
+      requireCreation(
+        (await (await accessReply).finished()) === null,
+        "actual deleted-membership access response did not finish",
+      );
       await confirmed(page);
+      await wire.settle();
       expect(wire.postCount).toBe(posts);
       expect(wire.contextCount).toBe(contexts + 1);
       expect(wire.projectReadCount).toBe(reads + 1);
