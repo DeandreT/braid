@@ -62,7 +62,7 @@ class ActualCreationWire {
     entered: () => void;
     wait: Promise<void>;
   } | null = null;
-  private failure = false;
+  private failure: Error | null = null;
   private readonly unexpected: string[] = [];
   constructor(
     private readonly page: Page,
@@ -108,7 +108,9 @@ class ActualCreationWire {
       post.location = reply.headers()["location"];
       post.value = await reply.json();
     } catch {
-      this.failure = true;
+      this.failure ??= new Error(
+        "Project creation browser fixture: actual POST response observation failed",
+      );
     } finally {
       post.finish();
     }
@@ -126,8 +128,18 @@ class ActualCreationWire {
       if (url.origin !== origin || !url.pathname.startsWith("/api/")) return;
       if (request.method() === "GET") {
         const task = (async () => {
+          let bytes: Buffer;
           try {
-            const body: unknown = await reply.json();
+            bytes = await reply.body();
+          } catch {
+            if (request.failure()?.errorText !== "net::ERR_ABORTED")
+              this.failure ??= new Error(
+                "Project creation browser fixture: actual GET body observation failed",
+              );
+            return;
+          }
+          try {
+            const body: unknown = JSON.parse(bytes.toString("utf8"));
             this.reads.push({
               path: url.pathname,
               status: reply.status(),
@@ -139,7 +151,9 @@ class ActualCreationWire {
             )
               this.contexts.set(request, body as Context);
           } catch {
-            this.failure = true;
+            this.failure ??= new Error(
+              "Project creation browser fixture: actual GET JSON or admission failed",
+            );
           }
         })();
         this.readTasks.push(task);
@@ -249,17 +263,17 @@ class ActualCreationWire {
         else await route.fulfill({ response: reply });
       } catch {
         // A real request canceled by SPA departure cannot receive a late committed response.
-        if (!request.failure()) this.failure = true;
+        if (!request.failure())
+          this.failure ??= new Error(
+            "Project creation browser fixture: actual POST delivery observation failed",
+          );
         post.finish();
       }
     });
   }
   async settle(): Promise<void> {
     await Promise.all(this.readTasks);
-    requireCreation(
-      !this.failure,
-      "an actual product response could not be observed",
-    );
+    if (this.failure) throw this.failure;
   }
   async original(
     index: number,
@@ -471,6 +485,17 @@ const named = (page: Page, name: string) =>
   page.getByRole("button", { name, exact: true });
 const heading = (page: Page, name: string) =>
   page.getByRole("heading", { name, exact: true });
+async function accessResponseBody(response: Promise<Response>): Promise<void> {
+  let nonempty: boolean;
+  try {
+    nonempty = (await (await response).body()).length > 0;
+  } catch {
+    throw new Error(
+      "Project creation browser fixture: actual access response body could not be consumed",
+    );
+  }
+  requireCreation(nonempty, "actual access response body was empty");
+}
 async function fill(page: Page, draft: Draft): Promise<void> {
   await page.getByLabel("Name", { exact: true }).fill(draft.name);
   await page
@@ -794,10 +819,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
         );
       });
       await named(page, "Retry project access").click();
-      requireCreation(
-        (await (await accessReply).finished()) === null,
-        "actual current Viewer access response did not finish",
-      );
+      await accessResponseBody(accessReply);
       await confirmed(page);
       await wire.settle();
       expect(wire.postCount).toBe(posts);
@@ -868,10 +890,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
         );
       });
       await named(page, "Retry project access").click();
-      requireCreation(
-        (await (await accessReply).finished()) === null,
-        "actual deleted-membership access response did not finish",
-      );
+      await accessResponseBody(accessReply);
       await confirmed(page);
       await wire.settle();
       expect(wire.postCount).toBe(posts);
