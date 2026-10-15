@@ -1002,7 +1002,44 @@ test("controlled native upload: superseded or failed file preparation cannot pub
     await privateInput(() =>
       nameField(current).fill("Controlled replacement source"),
     );
+    const filenameAtChange = await fileField(current).evaluateHandle(
+      (input) => {
+        if (!(input instanceof HTMLInputElement))
+          throw new Error("The controlled file input was unavailable.");
+        let selectedName: string | null = null;
+        let observed = false;
+        let synchronous = false;
+        const capture = (event: Event) => {
+          if (event.target === input)
+            selectedName = input.files?.item(0)?.name ?? null;
+        };
+        const inspect = (event: Event) => {
+          if (event.target !== input) return;
+          observed = true;
+          const filename = document.getElementById("upload-filename");
+          synchronous =
+            selectedName !== null &&
+            filename instanceof HTMLInputElement &&
+            filename.value === selectedName;
+          selectedName = null;
+          document.removeEventListener("input", capture, true);
+          document.removeEventListener("change", inspect);
+        };
+        // Keep the selected name before Angular clears FileList; inspect after its handler.
+        document.addEventListener("input", capture, {
+          capture: true,
+          passive: true,
+        });
+        document.addEventListener("change", inspect, { passive: true });
+        return () => observed && synchronous;
+      },
+    );
     await privateInput(() => fileField(current).setInputFiles(fixture.file()));
+    expect(
+      await filenameAtChange.evaluate((read) => read()),
+      "The selected filename was not reflected before the file change event completed.",
+    ).toBe(true);
+    await filenameAtChange.dispose();
     await expect(
       current.getByText("Preparing the selected file…", { exact: false }),
     ).toBeVisible();

@@ -226,7 +226,14 @@ export class UploadMappingPageComponent {
     this.lastFocus = "";
     const input = event.target as HTMLInputElement;
     const file = input.files?.item(0) ?? null;
-    if (!this.leaveDecision()) this.state.selectFile(file);
+    if (!this.leaveDecision()) {
+      this.state.selectFile(file);
+      const filename = this.state.draft().originalFilename;
+      if (this.form.controls.originalFilename.value !== filename)
+        this.form.controls.originalFilename.setValue(filename, {
+          emitEvent: false,
+        });
+    }
     // Recovery owns an immutable private snapshot, never a live FileList or path.
     input.value = "";
   }
