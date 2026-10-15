@@ -1,0 +1,87 @@
+<section class="catalog-page" aria-labelledby="catalog-page-title">
+  <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><span aria-current="page">Projects</span></li>
+    </ol>
+  </nav>
+  <header class="catalog-heading">
+    <div>
+      <p class="catalog-eyebrow">Catalog</p>
+      <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
+        Projects
+      </h1>
+      <p class="catalog-intro">Choose a project to browse its mappings.</p>
+    </div>
+    <button
+      class="catalog-button"
+      type="button"
+      (click)="retry()"
+      [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
+    >
+      Refresh catalog
+    </button>
+  </header>
+  @if (data(); as page) {
+    <p class="catalog-live" role="status">
+      {{ page.projects.length }} projects shown.
+    </p>
+    @if (page.projects.length === 0) {
+      <section class="catalog-state catalog-empty">
+        <h2>No projects</h2>
+        <p>No projects are available on this page for your workspace.</p>
+      </section>
+    } @else {
+      <ul class="catalog-list" aria-label="Projects">
+        @for (project of page.projects; track project.scope.projectId) {
+          <li class="catalog-list-item">
+            <div class="catalog-item-heading">
+              <h2>
+                <a [routerLink]="routes.project(project.scope)">{{
+                  project.name
+                }}</a>
+              </h2>
+              <span class="catalog-badge">{{
+                roleLabel(project.access.role)
+              }}</span>
+            </div>
+            @if (project.description) {
+              <p class="catalog-description">{{ project.description }}</p>
+            } @else {
+              <p class="catalog-description-empty">No description.</p>
+            }
+            <div class="catalog-item-meta">
+              <span>Version {{ project.version }}</span>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+    @if (context(); as context) {
+      <nav class="catalog-pagination" aria-label="Project pages">
+        <p>Up to 10 projects per page.</p>
+        @if (cursor()) {
+          <a
+            class="catalog-page-link"
+            [routerLink]="routes.projects(context.allowedOrganizationId)"
+            [queryParams]="{}"
+            >First page</a
+          >
+        }
+        @if (page.nextCursor) {
+          <a
+            class="catalog-page-link"
+            [routerLink]="routes.projects(context.allowedOrganizationId)"
+            [queryParams]="{ cursor: page.nextCursor }"
+            >Next page</a
+          >
+        }
+      </nav>
+    }
+  } @else {
+    <weft-catalog-status
+      [kind]="kind()"
+      [firstPage]="firstPage()"
+      (retry)="retry()"
+    />
+  }
+</section>

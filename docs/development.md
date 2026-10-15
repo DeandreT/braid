@@ -15,8 +15,10 @@ neither during startup or requests.
 The Angular/ASP.NET Core workspace is local-only. It supplies a live API health
 check and a read-only mapping viewer over development native examples, with
 generated API contracts. A separate Ferrule adapter supplies native inspection,
-validation, and projection. The catalog API supports immutable native uploads;
-saved-revision browser integration, hosted authentication, chat and
+validation, and projection. The first [catalog browser](catalog-browser.md)
+increment adds read-only saved metadata and immutable history; its qualification
+status is recorded there. The catalog API supports immutable native uploads;
+saved explanations, browser writes, hosted authentication, chat and
 Wolverine-backed execution follow separate increments. The separate
 [project creation HTTP](project-creation-http.md) increment adds explicit
 organization actions and its dedicated creator configuration.
@@ -52,6 +54,11 @@ Angular assets with its build. For frontend development, run `npm run dev` in
 another terminal and open http://127.0.0.1:5173; Angular forwards `/api` requests
 to the local service. `WEFT_DEV_LISTEN_ADDR` changes the API's loopback address.
 The unauthenticated shell rejects public interfaces.
+
+Examples are at `/examples`, and `/` redirects there. Use `/catalog` at the
+packaged API origin for configured catalog reads. Its strict Development Host
+boundary is preserved; the separate Angular development proxy is not the
+catalog qualification origin.
 
 To browse real Ferrule examples, build the restricted worker image as described
 in [Ferrule worker](ferrule-worker.md). Set `WEFT_FERRULE_WORKER_IMAGE` to its

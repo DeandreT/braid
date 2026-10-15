@@ -1,0 +1,148 @@
+<section class="catalog-page" aria-labelledby="catalog-page-title">
+  @if (data(); as view) {
+    <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <a [routerLink]="routes.projects(view.project.scope.organizationId)"
+            >Projects</a
+          >
+        </li>
+        <li>
+          <span aria-current="page">{{ view.project.name }}</span>
+        </li>
+      </ol>
+    </nav>
+  }
+  <header class="catalog-heading">
+    <div>
+      <p class="catalog-eyebrow">Project</p>
+      <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
+        {{ data()?.project?.name ?? "Project" }}
+      </h1>
+    </div>
+    <button
+      class="catalog-button"
+      type="button"
+      (click)="retry()"
+      [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
+    >
+      Refresh catalog
+    </button>
+  </header>
+  @if (data(); as view) {
+    <p class="catalog-live" role="status">
+      {{ view.page.mappings.length }} mappings shown.
+    </p>
+    <section class="catalog-summary" aria-label="Project metadata">
+      <dl class="catalog-facts">
+        <dt>Your role</dt>
+        <dd>{{ view.project.access.role }}</dd>
+      </dl>
+      @if (view.project.description) {
+        <p class="catalog-description">{{ view.project.description }}</p>
+      } @else {
+        <p class="catalog-description-empty">No description.</p>
+      }
+      <details class="catalog-details">
+        <summary>Project details</summary>
+        <dl class="catalog-facts">
+          <dt>Project ID</dt>
+          <dd>
+            <code class="catalog-code">{{ view.project.scope.projectId }}</code>
+          </dd>
+          <dt>Version</dt>
+          <dd>{{ view.project.version }}</dd>
+          <dt>Created</dt>
+          <dd>
+            <time
+              [attr.datetime]="view.project.createdAtUtc"
+              [title]="view.project.createdAtUtc"
+              >{{
+                view.project.createdAtUtc | date: "medium" : "UTC"
+              }}
+              UTC</time
+            >
+          </dd>
+          <dt>Updated</dt>
+          <dd>
+            <time
+              [attr.datetime]="view.project.updatedAtUtc"
+              [title]="view.project.updatedAtUtc"
+              >{{
+                view.project.updatedAtUtc | date: "medium" : "UTC"
+              }}
+              UTC</time
+            >
+          </dd>
+          <dt>Creator</dt>
+          <dd>
+            <code class="catalog-code">{{
+              view.project.creatorPrincipalId
+            }}</code>
+          </dd>
+        </dl>
+      </details>
+    </section>
+    <div class="catalog-section-heading">
+      <h2 class="catalog-section-title">Mappings</h2>
+    </div>
+    @if (view.page.mappings.length === 0) {
+      <section class="catalog-state catalog-empty">
+        <h3>No mappings</h3>
+        <p>No mappings are available on this page in this project.</p>
+      </section>
+    } @else {
+      <ul class="catalog-list" aria-label="Mappings">
+        @for (mapping of view.page.mappings; track mapping.scope.mappingId) {
+          <li class="catalog-list-item">
+            <div class="catalog-item-heading">
+              <h3>
+                <a [routerLink]="routes.mapping(mapping.scope)">{{
+                  mapping.name
+                }}</a>
+              </h3>
+              <span class="catalog-badge">{{
+                roleLabel(mapping.access.role)
+              }}</span>
+            </div>
+            @if (mapping.description) {
+              <p class="catalog-description">{{ mapping.description }}</p>
+            } @else {
+              <p class="catalog-description-empty">No description.</p>
+            }
+            <div class="catalog-item-meta">
+              <span>Backend {{ mapping.backendId }}</span>
+              <span>Head revision {{ mapping.head.sequence }}</span>
+              <span>Version {{ mapping.version }}</span>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+    <nav class="catalog-pagination" aria-label="Mapping pages">
+      <p>Up to 10 mappings per page.</p>
+      @if (cursor()) {
+        <a
+          class="catalog-page-link"
+          [routerLink]="routes.project(view.project.scope)"
+          [queryParams]="{}"
+          >First page</a
+        >
+      }
+      @if (view.page.nextCursor) {
+        <a
+          class="catalog-page-link"
+          [routerLink]="routes.project(view.project.scope)"
+          [queryParams]="{ cursor: view.page.nextCursor }"
+          >Next page</a
+        >
+      }
+    </nav>
+  } @else {
+    <weft-catalog-status
+      [kind]="kind()"
+      [firstPage]="firstPage()"
+      (retry)="retry()"
+    />
+  }
+</section>

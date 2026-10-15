@@ -1,39 +1,35 @@
-import { Component, inject, signal } from "@angular/core";
+import { DOCUMENT } from "@angular/common";
+import { Component, inject } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { Subject, startWith, switchMap, tap } from "rxjs";
-import { type HealthState, WorkspaceConnection } from "./health";
-import { MappingWorkspaceComponent } from "./mappings/workspace.component";
+import {
+  NavigationEnd,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from "@angular/router";
+import { filter } from "rxjs";
 
 @Component({
   selector: "weft-root",
-  imports: [MappingWorkspaceComponent],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet],
   templateUrl: "./app.component.html",
 })
 export class AppComponent {
-  readonly health = signal<HealthState>({ kind: "checking" });
-  private readonly connection = inject(WorkspaceConnection);
-  private readonly attempts = new Subject<void>();
-
   constructor() {
-    this.attempts
-      .pipe(
-        startWith(undefined),
-        tap(() => this.health.set({ kind: "checking" })),
-        switchMap(() => this.connection.check()),
+    const document = inject(DOCUMENT);
+    let initialNavigation = true;
+    inject(Router)
+      .events.pipe(
+        filter((event) => event instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe((state) => this.health.set(state));
-  }
-
-  retry(): void {
-    this.attempts.next();
-  }
-
-  status(): string {
-    return {
-      checking: "Connecting to your workspace…",
-      connected: "Workspace connected",
-      unavailable: "Workspace unavailable",
-    }[this.health().kind];
+      .subscribe(() => {
+        if (initialNavigation) {
+          initialNavigation = false;
+          return;
+        }
+        queueMicrotask(() => document.getElementById("main-content")?.focus());
+      });
   }
 }

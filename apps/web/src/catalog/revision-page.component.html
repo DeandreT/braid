@@ -1,0 +1,165 @@
+<section class="catalog-page" aria-labelledby="catalog-page-title">
+  @if (data(); as view) {
+    <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <a [routerLink]="routes.projects(view.project.scope.organizationId)"
+            >Projects</a
+          >
+        </li>
+        <li>
+          <a [routerLink]="routes.project(view.project.scope)">{{
+            view.project.name
+          }}</a>
+        </li>
+        <li>
+          <a [routerLink]="routes.mapping(view.mapping.scope)">{{
+            view.mapping.name
+          }}</a>
+        </li>
+        <li>
+          <span aria-current="page">Revision {{ view.revision.sequence }}</span>
+        </li>
+      </ol>
+    </nav>
+  }
+  <header class="catalog-heading">
+    <div>
+      <p class="catalog-eyebrow">Saved revision</p>
+      <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
+        {{ data() ? "Revision " + data()!.revision.sequence : "Revision" }}
+      </h1>
+      <p class="catalog-intro">
+        This link identifies one saved revision. Later uploads do not change it.
+      </p>
+    </div>
+    <button
+      class="catalog-button"
+      type="button"
+      (click)="retry()"
+      [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
+    >
+      Refresh catalog
+    </button>
+  </header>
+  @if (data(); as view) {
+    <p class="catalog-live" role="status">
+      Revision {{ view.revision.sequence }} loaded.
+    </p>
+    <section class="catalog-summary" aria-labelledby="saved-revision-title">
+      <h2 id="saved-revision-title">Revision details</h2>
+      <dl class="catalog-facts">
+        <dt>Revision ID</dt>
+        <dd>
+          <code class="catalog-code">{{ view.revision.scope.revisionId }}</code>
+        </dd>
+        <dt>Sequence</dt>
+        <dd>{{ view.revision.sequence }}</dd>
+        <dt>Admission</dt>
+        <dd>
+          <span
+            class="catalog-badge"
+            [class.catalog-badge-issues]="
+              view.revision.admission === 'decodedInvalid'
+            "
+            >{{ admissionLabel(view.revision.admission) }}</span
+          >
+        </dd>
+        <dt>Original filename</dt>
+        <dd>{{ view.revision.originalFilename }}</dd>
+        <dt>Native digest</dt>
+        <dd>
+          <span>{{ view.revision.nativeDigest.algorithm }}</span>
+          <code class="catalog-code">{{
+            view.revision.nativeDigest.value
+          }}</code>
+        </dd>
+        <dt>Native bytes</dt>
+        <dd>{{ view.revision.nativeByteCount }}</dd>
+        <dt>Backend</dt>
+        <dd>{{ view.revision.backendId }}</dd>
+        <dt>Logical document</dt>
+        <dd>{{ view.revision.logicalDocument }}</dd>
+        <dt>Committed</dt>
+        <dd>
+          <time
+            [attr.datetime]="view.revision.committedAtUtc"
+            [title]="view.revision.committedAtUtc"
+            >{{
+              view.revision.committedAtUtc | date: "medium" : "UTC"
+            }}
+            UTC</time
+          >
+        </dd>
+        <dt>Creator</dt>
+        <dd>
+          <code class="catalog-code">{{
+            view.revision.creatorPrincipalId
+          }}</code>
+        </dd>
+      </dl>
+      @if (view.revision.admission === "decodedInvalid") {
+        <p class="catalog-inline-error">
+          This revision was saved with validation issues.
+        </p>
+      }
+    </section>
+    <section class="catalog-summary" aria-labelledby="current-mapping-title">
+      <h2 id="current-mapping-title">Current mapping metadata</h2>
+      <p class="catalog-intro">
+        The name and description below describe the mapping now.
+      </p>
+      <p class="catalog-description">
+        <a [routerLink]="routes.mapping(view.mapping.scope)">{{
+          view.mapping.name
+        }}</a>
+      </p>
+      @if (view.mapping.description) {
+        <p class="catalog-description">{{ view.mapping.description }}</p>
+      } @else {
+        <p class="catalog-description-empty">No description.</p>
+      }
+      <div class="catalog-item-meta">
+        <span>Version {{ view.mapping.version }}</span>
+      </div>
+      <dl class="catalog-facts">
+        <dt>Your role</dt>
+        <dd>{{ view.mapping.access.role }}</dd>
+        <dt>Mapping ID</dt>
+        <dd>
+          <code class="catalog-code">{{ view.mapping.scope.mappingId }}</code>
+        </dd>
+      </dl>
+    </section>
+    <section class="catalog-head" aria-label="Current head">
+      <div>
+        <p>Current head when this view loaded</p>
+        <a
+          class="catalog-head-link"
+          [routerLink]="routes.revision(view.mapping.head.scope)"
+          >Revision {{ view.mapping.head.sequence }}</a
+        >
+        <span
+          class="catalog-badge"
+          [class.catalog-badge-issues]="
+            view.mapping.head.admission === 'decodedInvalid'
+          "
+          >{{ admissionLabel(view.mapping.head.admission) }}</span
+        >
+      </div>
+      <button
+        class="catalog-button"
+        type="button"
+        (click)="viewCurrentHead(view.mapping.scope)"
+      >
+        View current head
+      </button>
+    </section>
+  } @else {
+    <weft-catalog-status
+      [kind]="kind()"
+      [firstPage]="firstPage()"
+      (retry)="retry()"
+    />
+  }
+</section>

@@ -13,11 +13,12 @@
   "scripts": {
     "dev": "npm --workspace @weft/web run dev",
     "build": "npm --workspace @weft/web run build",
-    "check": "npm run format:check && npm run contracts:check && npm --workspace @weft/web run check",
+    "check": "npm run format:check && npm run contracts:check && npm --workspace @weft/web run check && npm --workspace @weft/web run check:browser",
     "contracts:generate": "npm --prefix tools/contracts-generator run generate",
     "contracts:check": "npm --prefix tools/contracts-generator run check && npm --workspace @weft/web run check:contracts",
     "format": "prettier --write \"apps/web/**/*.{ts,html,css,json}\" \"tools/**/*.{mjs,json}\" package.json global.json",
     "test:browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e",
+    "test:catalog-browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.catalog.config.ts",
     "format:check": "prettier --check \"apps/web/**/*.{ts,html,css,json}\" \"tools/**/*.{mjs,json}\" package.json global.json"
   },
   "devDependencies": {

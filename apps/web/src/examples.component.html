@@ -1,0 +1,26 @@
+<section
+  [class]="'connection-card ' + health().kind"
+  aria-labelledby="connection-title"
+>
+  <div class="connection-icon" aria-hidden="true">
+    <span class="connection-dot"></span>
+  </div>
+  <div class="connection-copy">
+    <h2 id="connection-title">Your workspace</h2>
+    <p role="status">{{ status() }}</p>
+    @if (health().kind === "unavailable") {
+      <p class="connection-detail">
+        Check that your workspace service is running, then try again.
+      </p>
+    }
+  </div>
+  <button
+    type="button"
+    class="secondary-button"
+    [disabled]="health().kind === 'checking'"
+    (click)="retry()"
+  >
+    Check connection
+  </button>
+</section>
+<weft-mapping-workspace />

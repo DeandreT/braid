@@ -1,0 +1,197 @@
+<section class="catalog-page" aria-labelledby="catalog-page-title">
+  @if (data(); as view) {
+    <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <a [routerLink]="routes.projects(view.project.scope.organizationId)"
+            >Projects</a
+          >
+        </li>
+        <li>
+          <a [routerLink]="routes.project(view.project.scope)">{{
+            view.project.name
+          }}</a>
+        </li>
+        <li>
+          <span aria-current="page">{{ view.mapping.name }}</span>
+        </li>
+      </ol>
+    </nav>
+  }
+  <header class="catalog-heading">
+    <div>
+      <p class="catalog-eyebrow">Mapping</p>
+      <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
+        {{ data()?.mapping?.name ?? "Mapping" }}
+      </h1>
+    </div>
+    <button
+      class="catalog-button"
+      type="button"
+      (click)="retry()"
+      [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
+    >
+      Refresh catalog
+    </button>
+  </header>
+  @if (data(); as view) {
+    <p class="catalog-live" role="status">
+      {{ view.page.revisions.length }} revisions shown.
+    </p>
+    <section class="catalog-summary" aria-labelledby="current-mapping-title">
+      <h2 id="current-mapping-title">Current mapping metadata</h2>
+      @if (view.mapping.description) {
+        <p class="catalog-description">{{ view.mapping.description }}</p>
+      } @else {
+        <p class="catalog-description-empty">No description.</p>
+      }
+      <div class="catalog-item-meta">
+        <span>Backend {{ view.mapping.backendId }}</span>
+        <span>Version {{ view.mapping.version }}</span>
+      </div>
+      <dl class="catalog-facts">
+        <dt>Your role</dt>
+        <dd>{{ view.mapping.access.role }}</dd>
+      </dl>
+      <details class="catalog-details">
+        <summary>Mapping details</summary>
+        <dl class="catalog-facts">
+          <dt>Mapping ID</dt>
+          <dd>
+            <code class="catalog-code">{{ view.mapping.scope.mappingId }}</code>
+          </dd>
+          <dt>Created</dt>
+          <dd>
+            <time
+              [attr.datetime]="view.mapping.createdAtUtc"
+              [title]="view.mapping.createdAtUtc"
+              >{{
+                view.mapping.createdAtUtc | date: "medium" : "UTC"
+              }}
+              UTC</time
+            >
+          </dd>
+          <dt>Updated</dt>
+          <dd>
+            <time
+              [attr.datetime]="view.mapping.updatedAtUtc"
+              [title]="view.mapping.updatedAtUtc"
+              >{{
+                view.mapping.updatedAtUtc | date: "medium" : "UTC"
+              }}
+              UTC</time
+            >
+          </dd>
+          <dt>Creator</dt>
+          <dd>
+            <code class="catalog-code">{{
+              view.mapping.creatorPrincipalId
+            }}</code>
+          </dd>
+          <dt>Owner</dt>
+          <dd>
+            <code class="catalog-code">{{
+              view.mapping.ownerPrincipalId
+            }}</code>
+          </dd>
+        </dl>
+      </details>
+    </section>
+    <section class="catalog-head" aria-label="Current head">
+      <div>
+        <p>Current head when this view loaded</p>
+        <a
+          class="catalog-head-link"
+          [routerLink]="routes.revision(view.mapping.head.scope)"
+          >Revision {{ view.mapping.head.sequence }}</a
+        >
+        <span
+          class="catalog-badge"
+          [class.catalog-badge-issues]="
+            view.mapping.head.admission === 'decodedInvalid'
+          "
+          >{{ admissionLabel(view.mapping.head.admission) }}</span
+        >
+      </div>
+      <button
+        class="catalog-button"
+        type="button"
+        (click)="viewCurrentHead(view.mapping.scope)"
+      >
+        View current head
+      </button>
+    </section>
+    <div class="catalog-section-heading">
+      <h2 class="catalog-section-title">Revision history</h2>
+      <p>Each link opens a specific saved revision.</p>
+    </div>
+    @if (view.page.revisions.length === 0) {
+      <section class="catalog-state catalog-empty">
+        <h3>No revisions</h3>
+        <p>No revisions are available on this page.</p>
+      </section>
+    } @else {
+      <ul class="catalog-list" aria-label="Revision history">
+        @for (
+          revision of view.page.revisions;
+          track revision.scope.revisionId
+        ) {
+          <li class="catalog-list-item">
+            <div class="catalog-item-heading">
+              <h3>
+                <a [routerLink]="routes.revision(revision.scope)"
+                  >Revision {{ revision.sequence }}</a
+                >
+              </h3>
+              <span
+                class="catalog-badge"
+                [class.catalog-badge-issues]="
+                  revision.admission === 'decodedInvalid'
+                "
+                >{{ admissionLabel(revision.admission) }}</span
+              >
+            </div>
+            <div class="catalog-item-meta">
+              <span>{{ revision.originalFilename }}</span>
+              <span
+                ><time
+                  [attr.datetime]="revision.committedAtUtc"
+                  [title]="revision.committedAtUtc"
+                  >{{
+                    revision.committedAtUtc | date: "medium" : "UTC"
+                  }}
+                  UTC</time
+                ></span
+              >
+            </div>
+          </li>
+        }
+      </ul>
+    }
+    <nav class="catalog-pagination" aria-label="Revision pages">
+      <p>Up to 10 revisions per page.</p>
+      @if (cursor()) {
+        <a
+          class="catalog-page-link"
+          [routerLink]="routes.mapping(view.mapping.scope)"
+          [queryParams]="{}"
+          >First page</a
+        >
+      }
+      @if (view.page.nextCursor) {
+        <a
+          class="catalog-page-link"
+          [routerLink]="routes.mapping(view.mapping.scope)"
+          [queryParams]="{ cursor: view.page.nextCursor }"
+          >Next page</a
+        >
+      }
+    </nav>
+  } @else {
+    <weft-catalog-status
+      [kind]="kind()"
+      [firstPage]="firstPage()"
+      (retry)="retry()"
+    />
+  }
+</section>

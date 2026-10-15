@@ -1,0 +1,31 @@
+<section class="catalog-shell" aria-label="Catalog workspace">
+  @if (contextStore.context(); as context) {
+    <div class="catalog-context">
+      <p>
+        <strong>{{ context.organizationName }}</strong>
+      </p>
+      <details class="catalog-identity">
+        <summary>Development identity</summary>
+        <p>
+          Principal
+          <code class="catalog-code">{{ context.actorPrincipalId }}</code>
+        </p>
+        <p>
+          Organization
+          <code class="catalog-code">{{ context.allowedOrganizationId }}</code>
+        </p>
+      </details>
+    </div>
+  }
+  @if (landing()) {
+    <div class="catalog-heading">
+      <div>
+        <p class="catalog-eyebrow">Your workspace</p>
+        <h1>Catalog</h1>
+      </div>
+    </div>
+    <weft-catalog-status [kind]="landingRead.state().kind" (retry)="retry()" />
+  } @else {
+    <router-outlet />
+  }
+</section>

@@ -1,39 +1,28 @@
 <div class="app-shell">
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="app-header">
-    <a class="brand" href="/" aria-label="Weft home"
+    <a class="brand" routerLink="/examples" aria-label="Weft home"
       ><span class="brand-mark" aria-hidden="true">w</span
       ><span>weft<span class="brand-period">.</span></span></a
     >
+    <nav class="workspace-nav" aria-label="Workspace">
+      <a
+        routerLink="/examples"
+        routerLinkActive="active"
+        ariaCurrentWhenActive="page"
+        >Examples</a
+      >
+      <a
+        routerLink="/catalog"
+        routerLinkActive="active"
+        ariaCurrentWhenActive="page"
+        >Catalog</a
+      >
+    </nav>
     <span class="environment-label">Development workspace</span>
   </header>
-  <main id="main-content">
-    <section
-      [class]="'connection-card ' + health().kind"
-      aria-labelledby="connection-title"
-    >
-      <div class="connection-icon" aria-hidden="true">
-        <span class="connection-dot"></span>
-      </div>
-      <div class="connection-copy">
-        <h2 id="connection-title">Your workspace</h2>
-        <p role="status">{{ status() }}</p>
-        @if (health().kind === "unavailable") {
-          <p class="connection-detail">
-            Check that your workspace service is running, then try again.
-          </p>
-        }
-      </div>
-      <button
-        type="button"
-        class="secondary-button"
-        [disabled]="health().kind === 'checking'"
-        (click)="retry()"
-      >
-        Check connection
-      </button>
-    </section>
-    <weft-mapping-workspace />
+  <main id="main-content" tabindex="-1">
+    <router-outlet />
   </main>
   <footer>
     <span>Built around your mappings.</span

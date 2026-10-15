@@ -1,4 +1,5 @@
 @import "./mappings/mapping.css";
+@import "./catalog/catalog.css";
 
 :root {
   font-family: "DM Sans", system-ui, sans-serif;
@@ -85,6 +86,34 @@ a:focus-visible {
   border: 1px solid #dce4da;
   border-radius: 20px;
   padding: 7px 13px;
+}
+.workspace-nav {
+  display: flex;
+  gap: 8px;
+}
+.workspace-nav a {
+  padding: 9px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+}
+.workspace-nav a.active {
+  background: #e4eee1;
+  color: #174d3f;
+  font-weight: 700;
+}
+@media (max-width: 600px) {
+  .app-header {
+    height: auto;
+    min-height: 76px;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px 0;
+  }
+  .workspace-nav {
+    order: 3;
+    width: 100%;
+  }
 }
 .welcome {
   padding: 68px 0 40px;
@@ -255,7 +284,8 @@ footer {
     width: calc(100% - 36px);
   }
   .app-header {
-    height: 72px;
+    height: auto;
+    min-height: 72px;
   }
   .welcome {
     padding: 44px 0 28px;

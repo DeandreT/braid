@@ -9,7 +9,7 @@ test("the packaged C# host serves nested Angular navigation and preserves API 40
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("http://127.0.0.1:4101/projects/example");
+  await page.goto("http://127.0.0.1:4101/examples");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "Understand your mapping.",
   );

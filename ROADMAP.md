@@ -33,8 +33,10 @@ P1's mapping contracts are tracked in [#5](https://github.com/DeandreT/weft/issu
 
 Each row is one focused, independently reviewable PR. Use `feat/<description>`
 branches and keep each increment buildable. Merge qualified increments before
-starting dependent implementation. A feature's written contract, implementation,
-and qualification are separate statuses.
+their dependents merge. Independent source work may proceed in isolated
+worktrees against already qualified contracts while a preceding increment
+finishes verification. A feature's written contract, implementation, and
+qualification are separate statuses.
 
 Before implementation, open a scoped issue with source ownership, exclusions,
 dependencies, and acceptance checks. Record the implementing PR and verification
@@ -161,16 +163,27 @@ P3f maintenance follows four dependent, independently qualified increments:
    observations, the command's prerequisite; qualified and merged in
    [#73](https://github.com/DeandreT/weft/pull/73).
 4. [#62](https://github.com/DeandreT/weft/issues/62): bounded run-once maintenance
-   and actual database/storage/process recovery; implemented and in qualification.
+   and actual database/storage/process recovery; qualified and merged in
+   [#74](https://github.com/DeandreT/weft/pull/74).
    The [maintenance command contract](docs/maintenance-command.md) describes the
    explicit command, bounded evidence, continuation cursors and exit codes.
 
 The [maintenance metadata contract](docs/private-object-maintenance-metadata.md)
 keeps native history, resumable uploads and every successful derived report
 protected. The metadata foundation performs no filesystem deletion. Parent
-[#18](https://github.com/DeandreT/weft/issues/18) remains open until the complete
-maintenance command qualifies; that qualification is required before Angular
-catalog #19.
+[#18](https://github.com/DeandreT/weft/issues/18) is complete after the final
+command's exact-head clean regression passed 2,835 cases with no failures or
+skips. Ordinary command publication, source/package stability and actual
+automatic worker cleanup passed. Fresh-install and prefix-6 upgrade evidence
+retains its unchanged-installation-input scope. Earlier failures remain retained.
+
+P3g follows focused increments: read-only catalog/history, persisted mapping
+explanations, project creation, metadata editing, native mapping upload/recovery,
+then conditional revision append. The first increment is tracked in
+[#75](https://github.com/DeandreT/weft/issues/75). Its isolated source work consumes
+the qualified catalog reads; its maintenance dependency is now qualified and
+merged. Browser qualification remains separate. See
+[Catalog browser](docs/catalog-browser.md).
 
 The [v2 filesystem contract](docs/private-storage-v2.md) fixes the private
 records, permanent gates and original-owner recovery boundary. The independent
