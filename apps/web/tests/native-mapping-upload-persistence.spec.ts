@@ -1310,11 +1310,6 @@ test("real packaged native create/upload: exact original bytes, durable recovery
       sameCounts(await wire.checkpoint(), trusted);
       await owner.control({ action: "api-stop" });
       await owner.control({ action: "pg-normal-restart" });
-      await owner.control({
-        action: "api-start",
-        profile: "publisher",
-        mode: "upload",
-      });
       sameCounts(await wire.checkpoint(), trusted);
       await wire.arm(fixed.versioned, "normal", true);
       await button(page, "Resend original upload").click();
