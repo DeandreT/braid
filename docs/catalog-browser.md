@@ -2,8 +2,8 @@
 
 This read-only increment connects Angular to the existing catalog API. Its scope
 is [#75](https://github.com/DeandreT/weft/issues/75), the first part of
-[#19](https://github.com/DeandreT/weft/issues/19). Implementation and browser
-qualification are in progress. Uploads, metadata editing, saved mapping
+[#19](https://github.com/DeandreT/weft/issues/19). Its implementation and browser
+qualification status is recorded in that issue and its implementing PR. Uploads, metadata editing, saved mapping
 explanations, sign-in and chat follow their separate increments.
 
 ## Navigation
