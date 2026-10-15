@@ -9,7 +9,8 @@ internal static class IngestionRoleGuard
     {
         var tables = IngestionSchemaContract.Tables.Keys.ToArray();
         var reads = IngestionSchemaContract.LegacyReadTables.Concat(tables).ToArray();
-        var updates = IngestionSchemaContract.MutableColumns.SelectMany(pair => pair.Value.Select(column => pair.Key + "." + column)).ToArray();
+        var updates = IngestionSchemaContract.MutableColumns.SelectMany(pair => pair.Value.Select(column => pair.Key + "." + column))
+            .Concat(SupplementalMaintenanceSchemaAdmission.PublicationUpdates).ToArray();
         await using (var guard = new NpgsqlCommand("""
             WITH reachable_roles AS (
                 SELECT role.* FROM pg_catalog.pg_roles role
@@ -59,8 +60,10 @@ internal static class IngestionRoleGuard
                   CROSS JOIN reachable_roles role
                   WHERE attribute.attnum > 0 AND NOT attribute.attisdropped
                     AND (pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION')
-                         OR (NOT relation.relname = ANY($1::text[]) AND pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'SELECT'))
-                         OR (NOT relation.relname = ANY($2::text[]) AND pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'INSERT'))
+                         OR (NOT relation.relname = ANY($1::text[]) AND NOT (relation.relname || '.' || attribute.attname) = ANY($4::text[])
+                             AND pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'SELECT'))
+                         OR (NOT relation.relname = ANY($2::text[]) AND NOT (relation.relname || '.' || attribute.attname) = ANY($5::text[])
+                             AND pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'INSERT'))
                          OR (NOT (relation.relname || '.' || attribute.attname) = ANY($3::text[]) AND pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'UPDATE')))
               )
               AND NOT EXISTS (
@@ -101,6 +104,8 @@ internal static class IngestionRoleGuard
             guard.Parameters.AddWithValue(reads);
             guard.Parameters.AddWithValue(tables);
             guard.Parameters.AddWithValue(updates);
+            guard.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.PublicationReads);
+            guard.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.PublicationInserts);
             if (await guard.ExecuteScalarAsync(cancellationToken) is not true)
                 throw Refusal("Ingestion access requires the separate minimally privileged ownership role and exact table/column grants.");
         }
@@ -110,6 +115,7 @@ internal static class IngestionRoleGuard
             string.Join(", ", scoped.Select(name => "ONLY weft." + name)) + " IN ACCESS SHARE MODE", connection, transaction))
             await protect.ExecuteNonQueryAsync(cancellationToken);
 
+        await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, scoped, cancellationToken);
         foreach (var table in IngestionSchemaContract.Tables.Values)
         {
@@ -238,8 +244,10 @@ internal static class IngestionRoleGuard
             JOIN pg_catalog.pg_roles owner ON owner.oid = function.proowner
             JOIN pg_catalog.pg_language language ON language.oid = function.prolang
             WHERE trigger_row.tgrelid = ('weft.' || $1)::regclass AND NOT trigger_row.tgisinternal
+              AND NOT trigger_row.tgname = ANY($2::text[])
             """, connection, transaction);
         command.Parameters.AddWithValue(table.Name);
+        command.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.TriggerNames(table.Name));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken) || reader.GetString(0) != table.Name + "_transition_guard" ||
             reader.GetInt16(1) != 31 || reader.GetString(2) != "O" || reader.GetInt16(3) != 0 || reader.GetString(4) != "" ||

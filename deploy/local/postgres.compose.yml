@@ -16,6 +16,7 @@ services:
       WEFT_LOCAL_CREATOR_PASSWORD: ${WEFT_LOCAL_CREATOR_PASSWORD:?Set a separate project creator password}
       WEFT_LOCAL_REPORT_PASSWORD: ${WEFT_LOCAL_REPORT_PASSWORD:?Set a separate report reader password}
       WEFT_LOCAL_DERIVATION_PASSWORD: ${WEFT_LOCAL_DERIVATION_PASSWORD:?Set a separate report derivation password}
+      WEFT_LOCAL_MAINTENANCE_PASSWORD: ${WEFT_LOCAL_MAINTENANCE_PASSWORD:?Set a separate maintenance password}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:

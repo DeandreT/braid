@@ -116,6 +116,7 @@ internal static class CatalogRoleGuard
             "SELECT organization_id FROM ONLY weft.revision_ingestions WHERE false", connection, transaction))
             await protectReservations.ExecuteNonQueryAsync(cancellationToken);
 
+        await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await ValidateRelationsAsync(connection, transaction, sources, cancellationToken);
         await ValidateConstraintTriggersAsync(connection, transaction, sources, cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, sources, cancellationToken);
@@ -303,8 +304,10 @@ internal static class CatalogRoleGuard
             JOIN pg_catalog.pg_roles owner ON owner.oid = function.proowner
             JOIN pg_catalog.pg_language language ON language.oid = function.prolang
             WHERE trigger_row.tgrelid = ('weft.' || $1)::regclass AND NOT trigger_row.tgisinternal
+              AND NOT trigger_row.tgname = ANY($2::text[])
             """, connection, transaction);
         command.Parameters.AddWithValue(table.Name);
+        command.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.TriggerNames(table.Name));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken) || reader.GetString(0) != table.Name + "_transition_guard" ||
             reader.GetInt16(1) != 31 || reader.GetString(2) != "O" || reader.GetInt16(3) != 0 || reader.GetString(4) != "" ||

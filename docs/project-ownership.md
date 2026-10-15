@@ -87,6 +87,13 @@ Revision report metadata provisions `weft_report_reader` and `weft_deriver`;
 existing databases require both CONNECT-only logins before migration 0006. See
 [Revision report metadata](revision-report-metadata.md) for the explicit upgrade
 step and separate passwords.
+Maintenance metadata adds the separate `weft_maintenance` login before migration
+0007. Existing six-migration databases need the explicit one-shot
+`deploy/local/postgres-add-maintenance-role.sh` administrator step, with a separate
+`WEFT_LOCAL_MAINTENANCE_PASSWORD`; it grants only CONNECT before migration.
+See [Maintenance metadata](private-object-maintenance-metadata.md) for its scope
+and coordinated upgrade. Older databases must also complete their earlier
+explicit role-provisioning prerequisites before the latest migration command.
 Initialization reads passwords from the environment inside `psql`; they are
 absent from command arguments. Initialization does not run again on an existing
 volume. Updating the environment alone does not rotate an existing role password.

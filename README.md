@@ -25,9 +25,9 @@ endpoint are distinct workflows.
 
 The local web/API foundation and read-only mapping viewer are implemented. The
 workspace displays native development examples through the Ferrule adapter.
-Catalog persistence, scoped reads, metadata edits, native uploads, and project
-creation through the API are qualified and merged. Stored revision reports,
-saved-revision viewer integration, authentication, AI chat, and deployment follow
+Catalog persistence, scoped reads, metadata edits, native uploads, project
+creation, and saved revision reports through the API are qualified and merged.
+Maintenance, saved-revision viewer integration, authentication, AI chat, and deployment follow
 the focused delivery sequence below.
 
 Versioned mapping contracts and development-only synthetic projections provide
@@ -38,8 +38,8 @@ The Ferrule adapter can inspect, validate, and project native artifacts through 
 bounded, isolated worker. Its revision-specific projection contains fields,
 rules, controls, lineage, and located coverage gaps. Development example routes
 provide separate projection and validation reports. The catalog API accepts
-immutable native uploads; serving their saved projection and validation reports
-to the viewer follows in the remaining catalog increments.
+immutable native uploads and serves their saved projection and validation reports.
+Connecting those catalog revisions to the viewer follows maintenance.
 
 See [Local development](docs/development.md) to run and verify the application.
 
@@ -55,6 +55,8 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
 - [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.
 - [Revision report metadata](docs/revision-report-metadata.md): complete report identity, restricted roles, claims, retained attempts, and repair.
+- [Persisted report API](docs/persisted-report-api.md): current and retained report reads, explicit derivation, and complete-response limits.
+- [Maintenance metadata](docs/private-object-maintenance-metadata.md): permanent retirement, fenced cleanup claims, and positive publication registration; implementation in progress.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 

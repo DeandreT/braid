@@ -4,6 +4,9 @@ The PostgreSQL ownership library and its separate local setup are described in
 [Project ownership](project-ownership.md). Explicit local identity, persistent
 catalog reads and owner provisioning are described in [Catalog reads](catalog-reads.md);
 that increment's qualification status is recorded there.
+Current database setup also requires the separate maintenance login before
+migration 0007; its explicit upgrade and metadata-only scope are described in
+[Maintenance metadata](private-object-maintenance-metadata.md).
 
 The Angular/ASP.NET Core workspace is local-only. It supplies a live API health
 check and a read-only mapping viewer over development native examples, with

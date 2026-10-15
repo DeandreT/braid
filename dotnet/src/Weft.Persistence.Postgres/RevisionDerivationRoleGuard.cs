@@ -62,13 +62,17 @@ internal static class RevisionDerivationRoleGuard
                   CROSS JOIN reachable_roles role
                   WHERE attribute.attnum > 0 AND NOT attribute.attisdropped
                     AND (pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
-                         OR (NOT relation.relname = ANY($3::text[]) AND pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'SELECT'))
+                         OR (NOT relation.relname = ANY($3::text[])
+                             AND NOT ($1 AND (relation.relname || '.' || attribute.attname) = ANY($8::text[]))
+                             AND pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'SELECT'))
                          OR (pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'INSERT')
                              AND NOT ($1 AND ((relation.relname = 'revision_derivations' AND attribute.attname = ANY($4::text[]))
-                                              OR (relation.relname = 'revision_derivation_attempts' AND attribute.attname = ANY($5::text[])))))
+                                              OR (relation.relname = 'revision_derivation_attempts' AND attribute.attname = ANY($5::text[]))
+                                              OR (relation.relname || '.' || attribute.attname) = ANY($9::text[]))))
                          OR (pg_catalog.has_column_privilege(role.oid, relation.oid, attribute.attnum, 'UPDATE')
                              AND NOT ($1 AND ((relation.relname = 'revision_derivations' AND attribute.attname = ANY($6::text[]))
-                                              OR (relation.relname = 'revision_derivation_attempts' AND attribute.attname = ANY($7::text[]))))))
+                                              OR (relation.relname = 'revision_derivation_attempts' AND attribute.attname = ANY($7::text[]))
+                                              OR (relation.relname || '.' || attribute.attname) = ANY($10::text[])))))
               )
               AND NOT EXISTS (
                   SELECT 1 FROM owned_relations relation
@@ -89,12 +93,15 @@ internal static class RevisionDerivationRoleGuard
                   CROSS JOIN LATERAL pg_catalog.aclexplode(attribute.attacl) grant_entry
                   WHERE attribute.attnum > 0 AND NOT attribute.attisdropped AND grant_entry.grantee IN (SELECT oid FROM reachable_roles)
                     AND (grant_entry.grantor <> relation.relowner OR grant_entry.is_grantable OR NOT $1
-                         OR NOT ((grant_entry.privilege_type = 'INSERT' AND
+                         OR NOT ((grant_entry.privilege_type = 'SELECT' AND (relation.relname || '.' || attribute.attname) = ANY($8::text[]))
+                                 OR (grant_entry.privilege_type = 'INSERT' AND
                                   ((relation.relname = 'revision_derivations' AND attribute.attname = ANY($4::text[]))
-                                   OR (relation.relname = 'revision_derivation_attempts' AND attribute.attname = ANY($5::text[]))))
+                                   OR (relation.relname = 'revision_derivation_attempts' AND attribute.attname = ANY($5::text[]))
+                                   OR (relation.relname || '.' || attribute.attname) = ANY($9::text[])))
                                  OR (grant_entry.privilege_type = 'UPDATE' AND
                                      ((relation.relname = 'revision_derivations' AND attribute.attname = ANY($6::text[]))
-                                      OR (relation.relname = 'revision_derivation_attempts' AND attribute.attname = ANY($7::text[]))))))
+                                      OR (relation.relname = 'revision_derivation_attempts' AND attribute.attname = ANY($7::text[]))
+                                      OR (relation.relname || '.' || attribute.attname) = ANY($10::text[])))))
               )
               AND (NOT $1 OR (
                   (SELECT count(*) FROM owned_relations relation JOIN pg_catalog.pg_attribute attribute ON attribute.attrelid = relation.oid
@@ -144,6 +151,9 @@ internal static class RevisionDerivationRoleGuard
             guard.Parameters.AddWithValue(RevisionDerivationSchemaContract.AttemptInsertColumns);
             guard.Parameters.AddWithValue(RevisionDerivationSchemaContract.KeyUpdateColumns);
             guard.Parameters.AddWithValue(RevisionDerivationSchemaContract.AttemptUpdateColumns);
+            guard.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.PublicationReads);
+            guard.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.PublicationInserts);
+            guard.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.PublicationUpdates);
             if (await guard.ExecuteScalarAsync(cancellationToken) is not true)
                 throw Refusal("Revision report metadata requires its dedicated login and exact restricted privilege profile.");
         }
@@ -153,6 +163,7 @@ internal static class RevisionDerivationRoleGuard
         await using (var protect = new NpgsqlCommand("LOCK TABLE " +
             string.Join(", ", reads.Select(name => "ONLY weft." + name)) + " IN ACCESS SHARE MODE", connection, transaction))
             await protect.ExecuteNonQueryAsync(cancellationToken);
+        await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await ValidateRelationsAsync(connection, transaction, reads, cancellationToken);
         await ValidateConstraintTriggersAsync(connection, transaction, reads, cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, reads, cancellationToken);
@@ -205,9 +216,11 @@ internal static class RevisionDerivationRoleGuard
             LEFT JOIN pg_catalog.pg_constraint constraint_row ON constraint_row.conrelid = relation.oid
                 AND constraint_row.conindid = index_relation.oid AND constraint_row.contype IN ('p','u')
             WHERE namespace.nspname = 'weft' AND relation.relname = ANY($1::text[])
+              AND NOT index_relation.relname = ANY($3::text[])
             """, connection, transaction);
         command.Parameters.AddWithValue(RevisionDerivationSchemaContract.NewTables);
         command.Parameters.AddWithValue(count);
+        command.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.IndexNames(RevisionDerivationSchemaContract.NewTables));
         if (await command.ExecuteScalarAsync(cancellationToken) is not true)
             throw Refusal("Revision derivation keys must preserve their exact accepted unique indexes.");
     }
@@ -466,8 +479,10 @@ internal static class RevisionDerivationRoleGuard
             JOIN pg_catalog.pg_roles owner ON owner.oid = function.proowner
             JOIN pg_catalog.pg_language language ON language.oid = function.prolang
             WHERE trigger_row.tgrelid = ('weft.' || $1)::regclass AND NOT trigger_row.tgisinternal
+              AND NOT trigger_row.tgname = ANY($2::text[])
             """, connection, transaction);
         command.Parameters.AddWithValue(table.Name);
+        command.Parameters.AddWithValue(SupplementalMaintenanceSchemaAdmission.TriggerNames(table.Name));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken) || reader.GetString(0) != table.Name + "_transition_guard" ||
             reader.GetInt16(1) != 31 || reader.GetString(2) != "O" || reader.GetInt16(3) != 0 || reader.GetString(4) != "" ||

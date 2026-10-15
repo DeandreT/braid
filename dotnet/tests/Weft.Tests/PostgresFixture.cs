@@ -41,10 +41,12 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string projectCreationPassword = Guid.NewGuid().ToString("N");
     private readonly string reportPassword = Guid.NewGuid().ToString("N");
     private readonly string derivationPassword = Guid.NewGuid().ToString("N");
+    private readonly string maintenancePassword = Guid.NewGuid().ToString("N");
     private readonly bool provisionMetadataEditor;
     private readonly bool provisionProjectCreator;
     private readonly bool provisionReportReader;
     private readonly bool provisionDeriver;
+    private readonly bool provisionMaintenance;
     private readonly ConcurrentDictionary<string, byte> caseDatabases = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim caseRemoval = new(1, 1);
     private readonly string? client = Environment.GetEnvironmentVariable("WEFT_TEST_CLIENT_CONTAINER");
@@ -63,12 +65,13 @@ public sealed class PostgresFixture : IAsyncLifetime
     public PostgresFixture() : this(provisionMetadataEditor: true, provisionProjectCreator: true) { }
 
     internal PostgresFixture(bool provisionMetadataEditor, bool provisionProjectCreator = true,
-        bool provisionReportReader = true, bool provisionDeriver = true)
+        bool provisionReportReader = true, bool provisionDeriver = true, bool provisionMaintenance = true)
     {
         this.provisionMetadataEditor = provisionMetadataEditor;
         this.provisionProjectCreator = provisionProjectCreator;
         this.provisionReportReader = provisionReportReader;
         this.provisionDeriver = provisionDeriver;
+        this.provisionMaintenance = provisionMaintenance;
     }
 
     public async Task InitializeAsync()
@@ -169,6 +172,14 @@ public sealed class PostgresFixture : IAsyncLifetime
                     """, bootstrap);
                 await derivationRole.ExecuteNonQueryAsync();
             }
+            if (provisionMaintenance)
+            {
+                await using var maintenanceRole = new NpgsqlCommand($"""
+                    CREATE ROLE weft_maintenance LOGIN PASSWORD '{maintenancePassword}'
+                      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                    """, bootstrap);
+                await maintenanceRole.ExecuteNonQueryAsync();
+            }
         }
         catch (Exception initialization)
         {
@@ -194,6 +205,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             if (provisionProjectCreator) connectRoles.Add("weft_project_creator");
             if (provisionReportReader) connectRoles.Add("weft_report_reader");
             if (provisionDeriver) connectRoles.Add("weft_deriver");
+            if (provisionMaintenance) connectRoles.Add("weft_maintenance");
             await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO {string.Join(", ", connectRoles)}", bootstrap))
                 await grants.ExecuteNonQueryAsync();
             test = new PostgresCase(this, database, ConnectionString(database, "weft_migrator", migratorPassword),
@@ -202,7 +214,8 @@ public sealed class PostgresFixture : IAsyncLifetime
                 ConnectionString(database, "weft_catalog_editor", metadataPassword),
                 ConnectionString(database, "weft_project_creator", projectCreationPassword),
                 ConnectionString(database, "weft_report_reader", reportPassword),
-                ConnectionString(database, "weft_deriver", derivationPassword));
+                ConnectionString(database, "weft_deriver", derivationPassword),
+                ConnectionString(database, "weft_maintenance", maintenancePassword));
             await using var ownerConnection = await test.Owner.OpenConnectionAsync();
             await using var publicSchema = new NpgsqlCommand("REVOKE ALL ON SCHEMA public FROM PUBLIC", ownerConnection);
             await publicSchema.ExecuteNonQueryAsync();
@@ -479,11 +492,13 @@ public sealed class PostgresCase : IAsyncDisposable
     public string ProjectCreationConnectionString { get; }
     public string ReportConnectionString { get; }
     public string DerivationConnectionString { get; }
+    public string MaintenanceConnectionString { get; }
     public NpgsqlDataSource Owner { get; }
 
     internal PostgresCase(PostgresFixture fixture, string name, string migrationConnectionString, string runtimeConnectionString,
         string ingestionConnectionString, string catalogConnectionString, string metadataConnectionString,
-        string projectCreationConnectionString, string reportConnectionString, string derivationConnectionString)
+        string projectCreationConnectionString, string reportConnectionString, string derivationConnectionString,
+        string maintenanceConnectionString)
     {
         this.fixture = fixture;
         Name = name;
@@ -495,6 +510,7 @@ public sealed class PostgresCase : IAsyncDisposable
         ProjectCreationConnectionString = projectCreationConnectionString;
         ReportConnectionString = reportConnectionString;
         DerivationConnectionString = derivationConnectionString;
+        MaintenanceConnectionString = maintenanceConnectionString;
         Owner = NpgsqlDataSource.Create(migrationConnectionString);
     }
 

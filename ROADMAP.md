@@ -132,11 +132,31 @@ bytes, immutable history, dependency integrity and owned-resource cleanup remain
 verified. Browser and Rust evidence retains its unchanged-input scope. The
 [workflow contract](docs/revision-report-workflow.md) describes the library seam.
 
-P3e3's persisted-report API and lazy host composition are in progress under
-[#51](https://github.com/DeandreT/weft/issues/51). The
+P3e3 is qualified and merged in [#59](https://github.com/DeandreT/weft/pull/59),
+completing [#51](https://github.com/DeandreT/weft/issues/51) and
+[#17](https://github.com/DeandreT/weft/issues/17). Its fresh-container full suite
+passed 2,368 cases with no failures or skips, and 22 browser checks passed on an
+alternate display. Actual published fresh installation and genuine historical
+upgrade checks created native mappings through HTTP, derived and reloaded their
+reports, and preserved them through fresh application instances and normal
+same-volume database restart. Independent source, runtime and packaging reviews
+accepted the increment. The
 [API contract](docs/persisted-report-api.md) describes current and retained reads,
-explicit derivation/repair and complete-response admission. Its HTTP and published
-fresh/upgrade/restart qualification remains separate from the workflow proof.
+explicit derivation/repair and complete-response admission.
+
+P3f maintenance follows three dependent, independently qualified increments:
+
+1. [#60](https://github.com/DeandreT/weft/issues/60): retirement metadata, fenced
+   cleanup claims and positive publication registration; implementation in progress.
+2. [#61](https://github.com/DeandreT/weft/issues/61): cross-process storage fencing
+   and tracked temporary publication, after #60 qualifies and merges.
+3. [#62](https://github.com/DeandreT/weft/issues/62): bounded run-once maintenance
+   and actual database/storage/process recovery, after #61 qualifies and merges.
+
+The [maintenance metadata contract](docs/private-object-maintenance-metadata.md)
+keeps native history, resumable uploads and every successful derived report
+protected. The metadata foundation performs no filesystem deletion. Full
+maintenance qualification remains required before Angular catalog #19.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's

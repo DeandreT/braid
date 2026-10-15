@@ -20,7 +20,8 @@ public sealed class PostgresRevisionDerivationMigrationTests(PostgresFixture fix
     [PostgresFact]
     public async Task Fresh0006HasNoSeededFactsAndReplayPreservesJournalDefinitionsAndCredentials()
     {
-        await using var test = await fixture.CreateCaseAsync();
+        await using var test = await fixture.CreateCaseAsync(migrate: false);
+        await Migrate0006Async(test);
         await AssertCurrentHistoryAsync(test);
         Assert.Equal(0L, await test.ScalarAsync<long>("""
             SELECT (SELECT count(*) FROM weft.organizations)+(SELECT count(*) FROM weft.principals)
@@ -36,8 +37,8 @@ public sealed class PostgresRevisionDerivationMigrationTests(PostgresFixture fix
         var definitions = await OldDefinitionsAsync(test);
         var roles = await OldRolesAsync(test);
         await AssertCredentialsAsync(test);
-        await test.MigrateAsync();
-        await test.MigrateAsync();
+        await Migrate0006Async(test);
+        await Migrate0006Async(test);
         Assert.Equal(journal, await JournalAsync(test));
         Assert.Equal(definitions, await OldDefinitionsAsync(test));
         Assert.Equal(roles, await OldRolesAsync(test));
@@ -56,7 +57,8 @@ public sealed class PostgresRevisionDerivationMigrationTests(PostgresFixture fix
         await AssertCredentialsAsync(old.Case);
         await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
         {
-            await using var runner = new MigrationRunner(old.Case.MigrationConnectionString);
+            await using var runner = new MigrationRunner(old.Case.MigrationConnectionString,
+                MigrationRunner.EmbeddedMigrations.Take(6).ToArray());
             await runner.MigrateAsync();
         }));
         await AssertCurrentHistoryAsync(old.Case);
@@ -68,8 +70,8 @@ public sealed class PostgresRevisionDerivationMigrationTests(PostgresFixture fix
         await AssertNoReportRowsAsync(old.Case);
         await AssertSourceIndexAsync(old.Case);
         var allJournal = await JournalAsync(old.Case);
-        await old.Case.MigrateAsync();
-        await old.Case.MigrateAsync();
+        await Migrate0006Async(old.Case);
+        await Migrate0006Async(old.Case);
         Assert.Equal(allJournal, await JournalAsync(old.Case));
         Assert.Equal(before, await FactsAsync(old.Case));
         Assert.Equal(definitions, await OldDefinitionsAsync(old.Case));
@@ -99,7 +101,7 @@ public sealed class PostgresRevisionDerivationMigrationTests(PostgresFixture fix
         Assert.Equal(new[] { 1, 2, 3, 4, 5 }, await VersionsAsync(old.Case));
         await AssertNo0006ObjectsOrRightsAsync(old.Case);
         await AssertCredentialsAsync(old.Case);
-        await old.Case.MigrateAsync();
+        await Migrate0006Async(old.Case);
         await AssertCurrentHistoryAsync(old.Case);
         Assert.Equal(facts, await FactsAsync(old.Case));
         Assert.Equal(definitions, await OldDefinitionsAsync(old.Case));
@@ -131,10 +133,10 @@ public sealed class PostgresRevisionDerivationMigrationTests(PostgresFixture fix
             var definitions = await OldDefinitionsAsync(old.Case);
             var roles = await OldRolesAsync(old.Case);
             var journal = await JournalAsync(old.Case, 5);
-            var freshError = await Assert.ThrowsAsync<PostgresException>(fresh.MigrateAsync);
+            var freshError = await Assert.ThrowsAsync<PostgresException>(() => Migrate0006Async(fresh));
             Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, freshError.SqlState);
             Assert.Equal(0L, await fresh.ScalarAsync<long>("SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname='weft'"));
-            var upgradeError = await Assert.ThrowsAsync<PostgresException>(old.Case.MigrateAsync);
+            var upgradeError = await Assert.ThrowsAsync<PostgresException>(() => Migrate0006Async(old.Case));
             Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, upgradeError.SqlState);
             Assert.Equal(facts, await FactsAsync(old.Case));
             Assert.Equal(definitions, await OldDefinitionsAsync(old.Case));
@@ -150,8 +152,8 @@ public sealed class PostgresRevisionDerivationMigrationTests(PostgresFixture fix
                   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
                 GRANT CONNECT ON DATABASE {fresh.Name}, {old.Case.Name} TO {role};
                 """);
-            await fresh.MigrateAsync();
-            await old.Case.MigrateAsync();
+            await Migrate0006Async(fresh);
+            await Migrate0006Async(old.Case);
             await AssertCurrentHistoryAsync(fresh);
             await AssertCurrentHistoryAsync(old.Case);
             Assert.Equal(facts, await FactsAsync(old.Case));
@@ -234,6 +236,14 @@ public sealed class PostgresRevisionDerivationMigrationTests(PostgresFixture fix
             Assert.Equal(1, await seed.ExecuteNonQueryAsync());
         }
         await transaction.CommitAsync();
+    }
+
+    // Keep the original0006 acceptance scoped to its exact immutable prefix.
+    private static async Task Migrate0006Async(PostgresCase test)
+    {
+        await using var runner = new MigrationRunner(test.MigrationConnectionString,
+            MigrationRunner.EmbeddedMigrations.Take(6).ToArray());
+        await runner.MigrateAsync();
     }
 
     private static Task<int[]> VersionsAsync(PostgresCase test) => test.ScalarAsync<int[]>(

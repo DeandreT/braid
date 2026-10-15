@@ -30,7 +30,7 @@ public sealed class PostgresMetadataMigrationTests(PostgresFixture fixture)
             await runner.MigrateAsync();
         }));
         await support.Case.MigrateAsync();
-        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, await support.Case.ScalarAsync<int[]>(
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7 }, await support.Case.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(MetadataChecksum, await support.Case.ScalarAsync<string>(
             "SELECT checksum FROM weft.schema_migrations WHERE version=4"));
@@ -178,13 +178,18 @@ public sealed class PostgresMetadataMigrationTests(PostgresFixture fixture)
         await runner.MigrateAsync();
     }
 
+    // Compare the exact0003 relation scope;0007 publication grants have separate exact-profile coverage.
     private static Task<string> OlderGrantsAsync(PostgresCase test) => test.ScalarAsync<string>("""
         SELECT jsonb_build_object(
           'tables', (SELECT jsonb_agg(to_jsonb(g) ORDER BY grantee,table_name,privilege_type)
             FROM information_schema.role_table_grants g WHERE table_schema='weft'
+            AND table_name IN ('organizations','principals','organization_memberships','projects','project_memberships',
+              'mappings','mapping_revisions','revision_ingestions','revision_ingestion_attempts','schema_migrations')
             AND grantee IN ('weft_runtime','weft_ingest','weft_catalog_reader')),
           'columns', (SELECT jsonb_agg(to_jsonb(g) ORDER BY grantee,table_name,column_name,privilege_type)
             FROM information_schema.role_column_grants g WHERE table_schema='weft'
+            AND table_name IN ('organizations','principals','organization_memberships','projects','project_memberships',
+              'mappings','mapping_revisions','revision_ingestions','revision_ingestion_attempts','schema_migrations')
             AND grantee IN ('weft_runtime','weft_ingest','weft_catalog_reader')),
           'schema', (SELECT jsonb_agg(jsonb_build_object('role',r.name,
             'usage',has_schema_privilege(r.name,'weft','USAGE'),
