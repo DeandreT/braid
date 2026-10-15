@@ -5,7 +5,7 @@ using Weft.Application;
 namespace Weft.Storage.FileSystem;
 
 /// <summary>Only the admitted Linux x86-64 descriptor-relative filesystem primitives.</summary>
-internal static class LinuxFileSystem
+internal static partial class LinuxFileSystem
 {
     private const string Libc = "libc.so.6";
     private const long OpenAt2SystemCall = 437;

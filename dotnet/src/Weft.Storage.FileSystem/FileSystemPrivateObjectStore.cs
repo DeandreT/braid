@@ -36,6 +36,16 @@ public sealed class FileSystemPrivateObjectStore : IPrivateObjectStore, IDisposa
         _concurrency = new SemaphoreSlim(options.MaximumConcurrency, options.MaximumConcurrency);
     }
 
+    /// <summary>Explicitly initializes a new, unactivated v2 component root.</summary>
+    public static FileSystemV2PrivateObjectStore InitializeV2(FileSystemStorageOptions options,
+        Func<IPrivateObjectPublicationRegistry>? registryFactory = null) =>
+        FileSystemV2PrivateObjectStore.Initialize(options, registryFactory);
+
+    /// <summary>Validates an existing v2 root without adopting a v1 root.</summary>
+    public static FileSystemV2PrivateObjectStore OpenV2(FileSystemStorageOptions options,
+        Func<IPrivateObjectPublicationRegistry>? registryFactory = null) =>
+        FileSystemV2PrivateObjectStore.Open(options, registryFactory);
+
     /// <summary>Explicitly creates one new private root beneath an existing verified parent.</summary>
     public static FileSystemPrivateObjectStore Initialize(FileSystemStorageOptions options)
     {

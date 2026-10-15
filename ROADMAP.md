@@ -147,9 +147,13 @@ explicit derivation/repair and complete-response admission.
 P3f maintenance follows three dependent, independently qualified increments:
 
 1. [#60](https://github.com/DeandreT/weft/issues/60): retirement metadata, fenced
-   cleanup claims and positive publication registration; implementation in progress.
+   cleanup claims and positive publication registration; qualified and merged in
+   [#63](https://github.com/DeandreT/weft/pull/63).
 2. [#61](https://github.com/DeandreT/weft/issues/61): cross-process storage fencing
-   and tracked temporary publication, after #60 qualifies and merges.
+   and tracked temporary publication. Its focused sequence is
+   [#65](https://github.com/DeandreT/weft/issues/65), the unactivated claim-aware
+   v2 filesystem component, then [#66](https://github.com/DeandreT/weft/issues/66),
+   service composition and explicit offline activation after #65 qualifies.
 3. [#62](https://github.com/DeandreT/weft/issues/62): bounded run-once maintenance
    and actual database/storage/process recovery, after #61 qualifies and merges.
 
@@ -157,6 +161,12 @@ The [maintenance metadata contract](docs/private-object-maintenance-metadata.md)
 keeps native history, resumable uploads and every successful derived report
 protected. The metadata foundation performs no filesystem deletion. Full
 maintenance qualification remains required before Angular catalog #19.
+
+The [v2 filesystem contract](docs/private-storage-v2.md) fixes the private
+records, permanent gates and original-owner recovery boundary. The independent
+[#64](https://github.com/DeandreT/weft/issues/64) contract correction preserves
+nullable upload responses before the upload screens in #19 consume their
+generated types.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's

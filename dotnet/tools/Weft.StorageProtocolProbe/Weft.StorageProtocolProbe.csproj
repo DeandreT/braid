@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Weft.Application/Weft.Application.csproj" />
+    <ProjectReference Include="../../src/Weft.Domain/Weft.Domain.csproj" />
+    <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+  </ItemGroup>
+</Project>

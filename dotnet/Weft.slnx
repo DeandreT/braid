@@ -20,6 +20,7 @@
     <Project Path="tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" />
     <Project Path="tools/Weft.RevisionReportWorkflowProbe/Weft.RevisionReportWorkflowProbe.csproj" />
     <Project Path="tools/Weft.StorageProbe/Weft.StorageProbe.csproj" />
+    <Project Path="tools/Weft.StorageProtocolProbe/Weft.StorageProtocolProbe.csproj" />
     <Project Path="tools/Weft.StorageTool/Weft.StorageTool.csproj" />
   </Folder>
 </Solution>
