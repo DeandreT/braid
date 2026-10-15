@@ -1830,64 +1830,144 @@ test("real packaged native create/upload: exact original bytes, durable recovery
         catalogApi(revisionPath(committed.futureRevision)),
         200,
       );
+      let phaseOriginalResend = true,
+        phaseCheckStatus = false,
+        phaseResume = false,
+        activeMutationIndex = index + 1,
+        wireBeforeAction = wireAtArm;
       let failureDiagnostic: {
         pageSnapshotAvailable: boolean;
         page: RevisionFetchSnapshot;
         wireSnapshotAvailable: boolean;
         wireAtArm: ReturnType<UploadWire["revisionDiagnostic"]>;
+        wireBeforeAction: ReturnType<UploadWire["revisionDiagnostic"]>;
         wireAtFailure: ReturnType<UploadWire["revisionDiagnostic"]>;
+        phaseOriginalResend: boolean;
+        phaseCheckStatus: boolean;
+        phaseResume: boolean;
       } | null = null;
       try {
+        wireBeforeAction = wire.revisionDiagnostic(
+          "versioned",
+          activeMutationIndex,
+        );
         await button(page, "Resend original upload").click();
         await wire.complete(index + 1, 200);
+        await responseDone(await resendRevision);
+        await saved(page, wire, fixed.versioned);
+        requireUpload(
+          isDeepStrictEqual(wire.operation("versioned"), committed) &&
+            wire.postCount === index + 2,
+          "durable original resend did not replay exact terminal receipt once",
+        );
+        sameCounts(await wire.checkpoint(), trusted);
+        phaseOriginalResend = false;
+        phaseCheckStatus = true;
+        const receiptReply = waitResponse(
+            page,
+            "GET",
+            receiptPath(committed),
+            200,
+          ),
+          receiptRevision = waitResponse(
+            page,
+            "GET",
+            catalogApi(revisionPath(committed.futureRevision)),
+            200,
+          ),
+          priorPosts = wire.postCount;
+        wireBeforeAction = wire.revisionDiagnostic(
+          "versioned",
+          activeMutationIndex,
+        );
+        await button(page, "Check upload status").click();
+        await responseDone(await receiptReply);
+        await responseDone(await receiptRevision);
+        await saved(page, wire, fixed.versioned);
+        requireUpload(
+          wire.postCount === priorPosts,
+          "own receipt read submitted a mutation",
+        );
+        sameCounts(await wire.checkpoint(), trusted);
+        phaseCheckStatus = false;
+        phaseResume = true;
+        activeMutationIndex = priorPosts;
+        wireBeforeAction = wire.revisionDiagnostic(
+          "versioned",
+          activeMutationIndex,
+        );
+        await wire.arm(fixed.versioned, "normal", true, "resume");
+        const replayReply = waitResponse(
+            page,
+            "POST",
+            receiptPath(committed) + "/resume",
+            200,
+          ),
+          replayRevision = waitResponse(
+            page,
+            "GET",
+            catalogApi(revisionPath(committed.futureRevision)),
+            200,
+          );
+        wireBeforeAction = wire.revisionDiagnostic(
+          "versioned",
+          activeMutationIndex,
+        );
+        await button(page, "Replay upload result").click();
+        await responseDone(await replayReply);
+        await responseDone(await replayRevision);
+        await wire.complete(priorPosts, 200);
+        await saved(page, wire, fixed.versioned);
+        sameCounts(await wire.checkpoint(), trusted);
+      } catch (failure) {
+        failureDiagnostic = {
+          pageSnapshotAvailable: false,
+          page: {
+            hookInstalled: false,
+            hookArmed: false,
+            hookFault: false,
+            overflow: false,
+            contextGetIssued: false,
+            projectGetIssued: false,
+            createPostIssued: false,
+            domSnapshotAvailable: false,
+            savedAcknowledgementVisible: false,
+            exactRevisionLinkVisible: false,
+            otherRevisionLinkVisible: false,
+            unknownHeadingPresent: false,
+            timedOutMessageVisible: false,
+            incompatibleMessageVisible: false,
+            unavailableMessageVisible: false,
+            records: [],
+          },
+          wireSnapshotAvailable: false,
+          wireAtArm,
+          wireBeforeAction,
+          wireAtFailure: wireBeforeAction,
+          phaseOriginalResend,
+          phaseCheckStatus,
+          phaseResume,
+        };
         try {
-          await responseDone(await resendRevision);
-        } catch (failure) {
-          failureDiagnostic = {
-            pageSnapshotAvailable: false,
-            page: {
-              hookInstalled: false,
-              hookArmed: false,
-              hookFault: false,
-              overflow: false,
-              contextGetIssued: false,
-              projectGetIssued: false,
-              createPostIssued: false,
-              domSnapshotAvailable: false,
-              savedAcknowledgementVisible: false,
-              exactRevisionLinkVisible: false,
-              otherRevisionLinkVisible: false,
-              unknownHeadingPresent: false,
-              timedOutMessageVisible: false,
-              incompatibleMessageVisible: false,
-              unavailableMessageVisible: false,
-              records: [],
-            },
-            wireSnapshotAvailable: false,
-            wireAtArm,
-            wireAtFailure: wireAtArm,
-          };
-          try {
-            failureDiagnostic.wireAtFailure = wire.revisionDiagnostic(
-              "versioned",
-              index + 1,
-            );
-            failureDiagnostic.wireSnapshotAvailable = true;
-          } catch {
-            /* Preserve the original waiter/body failure. */
-          }
-          if (fetchDiagnostic) {
-            try {
-              failureDiagnostic.page = await fetchDiagnostic.evaluate(
-                (diagnostic) => diagnostic.snapshot(),
-              );
-              failureDiagnostic.pageSnapshotAvailable = true;
-            } catch {
-              /* An unavailable page snapshot is not a negative observation. */
-            }
-          }
-          throw failure;
+          failureDiagnostic.wireAtFailure = wire.revisionDiagnostic(
+            "versioned",
+            activeMutationIndex,
+          );
+          failureDiagnostic.wireSnapshotAvailable = true;
+        } catch {
+          /* Preserve the original recovery-segment failure. */
         }
+        if (fetchDiagnostic) {
+          try {
+            failureDiagnostic.page = await fetchDiagnostic.evaluate(
+              (diagnostic) => diagnostic.snapshot(),
+            );
+            failureDiagnostic.pageSnapshotAvailable = true;
+          } catch {
+            /* An unavailable page snapshot is not a negative observation. */
+          }
+        }
+        throw failure;
       } finally {
         let cleanupSnapshotAvailable = false,
           handleDisposed = false;
@@ -1919,7 +1999,7 @@ test("real packaged native create/upload: exact original bytes, durable recovery
               body: Buffer.from(
                 JSON.stringify(
                   Object.assign(
-                    { diagnosticOnly: true, waiterFailureCaptured: true },
+                    { diagnosticOnly: true, boundaryFailureCaptured: true },
                     failureDiagnostic,
                     { cleanupSnapshotAvailable, handleDisposed, cleanup },
                   ),
@@ -1928,58 +2008,10 @@ test("real packaged native create/upload: exact original bytes, durable recovery
               contentType: "application/json",
             });
           } catch {
-            /* Attachment failure must not replace the original waiter/body failure. */
+            /* Attachment failure must not replace the original recovery-segment failure. */
           }
         }
       }
-      await saved(page, wire, fixed.versioned);
-      requireUpload(
-        isDeepStrictEqual(wire.operation("versioned"), committed) &&
-          wire.postCount === index + 2,
-        "durable original resend did not replay exact terminal receipt once",
-      );
-      sameCounts(await wire.checkpoint(), trusted);
-      const receiptReply = waitResponse(
-          page,
-          "GET",
-          receiptPath(committed),
-          200,
-        ),
-        receiptRevision = waitResponse(
-          page,
-          "GET",
-          catalogApi(revisionPath(committed.futureRevision)),
-          200,
-        ),
-        priorPosts = wire.postCount;
-      await button(page, "Check upload status").click();
-      await responseDone(await receiptReply);
-      await responseDone(await receiptRevision);
-      await saved(page, wire, fixed.versioned);
-      requireUpload(
-        wire.postCount === priorPosts,
-        "own receipt read submitted a mutation",
-      );
-      sameCounts(await wire.checkpoint(), trusted);
-      await wire.arm(fixed.versioned, "normal", true, "resume");
-      const replayReply = waitResponse(
-          page,
-          "POST",
-          receiptPath(committed) + "/resume",
-          200,
-        ),
-        replayRevision = waitResponse(
-          page,
-          "GET",
-          catalogApi(revisionPath(committed.futureRevision)),
-          200,
-        );
-      await button(page, "Replay upload result").click();
-      await responseDone(await replayReply);
-      await responseDone(await replayRevision);
-      await wire.complete(priorPosts, 200);
-      await saved(page, wire, fixed.versioned);
-      sameCounts(await wire.checkpoint(), trusted);
     });
     await test.step("same-actor Viewer demotion preserves acknowledged ordinary view while own receipt and source-free resume refuse404", async () => {
       await wire.focusAdmission("Check upload status");
