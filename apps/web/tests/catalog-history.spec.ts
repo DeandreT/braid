@@ -1,4 +1,4 @@
-import type { Locator, Page, Request } from "@playwright/test";
+import type { Locator, Page, Request, Response } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import {
   catalogApi,
@@ -27,6 +27,43 @@ async function capture<T>(
   if (!origin) throw new Error("Expected explicit packaged catalog origin");
   const expected = new URL(path, origin);
   const requests = new Set<Request>();
+  const pendingRequests = new Set<Request>();
+  const responses = new Set<Request>();
+  const failedRequests = new Map<Request, string | undefined>();
+  const pending = new Set<Promise<void>>();
+  const values: { usable: boolean; value?: T }[] = [];
+  const stop = Symbol("catalog capture stopped");
+  let stopReads!: () => void;
+  const stopped = new Promise<typeof stop>((resolve) => {
+    stopReads = () => resolve(stop);
+  });
+  type Outcome = { ok: true; value: T } | { ok: false; error: unknown };
+  let finish!: (outcome: Outcome) => void;
+  const done = new Promise<Outcome>((resolve) => {
+    finish = resolve;
+  });
+  let closed = false;
+  let actionDone = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    page.off("request", observe);
+    page.off("response", observeResponse);
+    page.off("requestfailed", observeFailure);
+    stopReads();
+  };
+  const fail = (error: unknown) => {
+    if (closed) return;
+    close();
+    finish({ ok: false, error });
+  };
+  const complete = () => {
+    if (closed || !actionDone || pendingRequests.size || pending.size) return;
+    const first = values.find((value) => value.usable);
+    if (!first) return;
+    close();
+    finish({ ok: true, value: first.value as T });
+  };
   const observe = (request: Request) => {
     const url = new URL(request.url());
     let queryCount = 0;
@@ -43,21 +80,91 @@ async function capture<T>(
           url.searchParams.getAll(key).length === 1 &&
           url.searchParams.get(key) === value,
       )
-    )
+    ) {
       requests.add(request);
+      pendingRequests.add(request);
+    }
+  };
+  const observeFailure = (request: Request) => {
+    if (!requests.has(request)) return;
+    const errorText = request.failure()?.errorText;
+    failedRequests.set(request, errorText);
+    if (errorText !== "net::ERR_ABORTED") {
+      fail(new Error("Expected successful actual catalog request"));
+    } else if (!responses.has(request)) {
+      pendingRequests.delete(request);
+      complete();
+    }
+  };
+  const read = async (
+    reply: Response,
+    value: { usable: boolean; value?: T },
+  ) => {
+    expect(reply.status()).toBe(200);
+    let body: Awaited<ReturnType<Response["body"]>>;
+    try {
+      const received = await Promise.race([reply.body(), stopped]);
+      if (received === stop) return;
+      body = received;
+    } catch {
+      if (failedRequests.get(reply.request()) === "net::ERR_ABORTED") return;
+      throw new Error("Expected usable actual catalog response body");
+    }
+    try {
+      value.value = JSON.parse(body.toString("utf8")) as T;
+    } catch {
+      throw new Error("Expected valid actual catalog response JSON");
+    }
+    value.usable = true;
+  };
+  const observeResponse = (reply: Response) => {
+    const request = reply.request();
+    if (!requests.has(request)) return;
+    responses.add(request);
+    const value: { usable: boolean; value?: T } = { usable: false };
+    values.push(value);
+    const task = read(reply, value);
+    pending.add(task);
+    void task.then(
+      () => {
+        pending.delete(task);
+        pendingRequests.delete(request);
+        complete();
+      },
+      (error: unknown) => {
+        pending.delete(task);
+        fail(error);
+      },
+    );
   };
   page.on("request", observe);
+  page.on("response", observeResponse);
+  page.on("requestfailed", observeFailure);
+  // Use the catalog's existing expectation budget for the whole observation.
+  const timer = setTimeout(() => {
+    fail(
+      new Error(
+        "Expected usable actual catalog JSON within observation deadline",
+      ),
+    );
+  }, 10_000);
+  let actionTask: Promise<void> = Promise.resolve();
   try {
-    const body = page
-      .waitForResponse((reply) => requests.has(reply.request()))
-      .then(async (reply) => {
-        expect(reply.status()).toBe(200);
-        return (await reply.json()) as T;
-      });
-    const [value] = await Promise.all([body, action()]);
-    return value;
+    actionTask = Promise.race([action(), stopped]).then(() => {
+      if (closed) return;
+      actionDone = true;
+      complete();
+    }, fail);
+    const outcome = await done;
+    if (!outcome.ok) throw outcome.error;
+    return outcome.value;
+  } catch (error) {
+    fail(error);
+    throw error;
   } finally {
-    page.off("request", observe);
+    close();
+    clearTimeout(timer);
+    await Promise.allSettled([...pending, actionTask]);
   }
 }
 function nextPageQuery(
