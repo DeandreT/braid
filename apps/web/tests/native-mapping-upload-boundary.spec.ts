@@ -773,9 +773,9 @@ test("controlled native upload: Unicode scalar, safe filename and native size er
     { field: "name", value: "\u0085 \u0085" },
     { field: "name", value: "😀".repeat(201) },
     { field: "name", value: "bad\0name" },
-    { field: "name", value: "bad\ud800" },
+    { field: "name", value: "bad\ud800", exactUtf16: true },
     { field: "description", value: "😀".repeat(4001) },
-    { field: "description", value: "bad\udc00" },
+    { field: "description", value: "bad\udc00", exactUtf16: true },
     { field: "filename", value: ".." },
     { field: "filename", value: "folder/file.native.json" },
     { field: "filename", value: "folder\\file.native.json" },
@@ -792,7 +792,39 @@ test("controlled native upload: Unicode scalar, safe filename and native size er
           : vector.field === "description"
             ? descriptionField(current)
             : filenameField(current);
-      await privateInput(() => field.fill(vector.value));
+      const assignExactUtf16 = "exactUtf16" in vector;
+      const codeUnits = vector.value
+        .split("")
+        .map((unit) => unit.charCodeAt(0));
+      let delivered = false;
+      await privateInput(async () => {
+        if (!assignExactUtf16) await field.fill(vector.value);
+        delivered = await field.evaluate(
+          (element, input) => {
+            if (
+              !(element instanceof HTMLInputElement) &&
+              !(element instanceof HTMLTextAreaElement)
+            )
+              return false;
+            if (input.assign) {
+              element.value = String.fromCharCode(...input.codeUnits);
+              element.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+            const actual = element.value;
+            return (
+              actual.length === input.codeUnits.length &&
+              input.codeUnits.every(
+                (unit, index) => actual.charCodeAt(index) === unit,
+              )
+            );
+          },
+          { assign: assignExactUtf16, codeUnits },
+        );
+      });
+      expect(
+        delivered,
+        "An invalid upload field was altered before validation.",
+      ).toBe(true);
       await button(current, "Upload mapping").click();
       await expect(
         current.getByRole("alert", {
