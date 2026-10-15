@@ -185,8 +185,15 @@ async function responseDone(response: BrowserResponse): Promise<void> {
   try {
     nonempty = (await response.body()).length > 0;
   } catch {
+    const request = response.request(),
+      failure = request.failure(),
+      isGet = request.method() === "GET",
+      statusIs200 = response.status() === 200,
+      hasFailure = failure !== null,
+      isAborted = failure?.errorText === "net::ERR_ABORTED";
     throw new Error(
-      "Native mapping upload browser fixture: expected browser response body could not be consumed",
+      "Native mapping upload browser fixture: expected browser response body could not be consumed" +
+        ` [isGet=${isGet}; statusIs200=${statusIs200}; hasFailure=${hasFailure}; isAborted=${isAborted}]`,
     );
   }
   requireUpload(nonempty, "expected browser response body was empty");
