@@ -252,7 +252,9 @@ public sealed partial class PostgresPrivateObjectMaintenanceStore : IPrivateObje
 
     private static PrivateObjectClass ObservationClass(string value) => value switch
     {
-        "native" => PrivateObjectClass.NativeArtifact, "derived" => PrivateObjectClass.DerivedArtifact, _ => throw InvalidFacts()
+        "native" => PrivateObjectClass.NativeArtifact,
+        "derived" => PrivateObjectClass.DerivedArtifact,
+        _ => throw InvalidFacts()
     };
 
     // Same network-byte ordering as CatalogReadGuard; no Application-internal dependency.

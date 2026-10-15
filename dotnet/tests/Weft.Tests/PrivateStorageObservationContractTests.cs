@@ -35,12 +35,12 @@ public sealed class PrivateStorageObservationContractTests
     [Fact]
     public void ArbitraryInvalidUtf8AndHiddenNamesRemainDistinctWithoutLossyConversion()
     {
-        byte[][] names = [ [0xff], [0xfe], Encoding.ASCII.GetBytes(".hidden"), Encoding.ASCII.GetBytes(".attempt-unknown.tmp") ];
+        byte[][] names = [[0xff], [0xfe], Encoding.ASCII.GetBytes(".hidden"), Encoding.ASCII.GetBytes(".attempt-unknown.tmp")];
         var entries = names.Select((name, index) => Unknown(index, name)).ToArray();
         var page = StoragePage(entries);
         Assert.Equal(4, page.ExaminedCount);
         for (var index = 0; index < names.Length; index++) Assert.Equal(names[index], page.Entries[index].CopyRawName());
-        byte[][] invalid = [ [], [0], [(byte)'/'], Encoding.ASCII.GetBytes("."), Encoding.ASCII.GetBytes(".."), new byte[256] ];
+        byte[][] invalid = [[], [0], [(byte)'/'], Encoding.ASCII.GetBytes("."), Encoding.ASCII.GetBytes(".."), new byte[256]];
         Assert.All(invalid, name => Assert.Throws<ArgumentException>(() => Unknown(name: name)));
         var longest = Enumerable.Repeat((byte)0xff, 255).ToArray();
         Assert.Equal(longest, Unknown(name: longest).CopyRawName());
