@@ -29,6 +29,7 @@ type Draft = {
   readonly acceptedName: string;
 };
 type Read = {
+  readonly request: Request;
   readonly path: string;
   readonly status: number;
   readonly body: unknown;
@@ -54,6 +55,7 @@ class ActualCreationWire {
   private readonly readTasks: Promise<void>[] = [];
   private readonly reads: Read[] = [];
   private readonly requestContexts: Request[] = [];
+  private readonly projectRequests = new Map<Request, number>();
   private readonly contexts = new Map<Request, Context>();
   private readonly pending = new Map<Request, PrivatePost>();
   private readonly releases: (() => void)[] = [];
@@ -73,6 +75,9 @@ class ActualCreationWire {
   }
   get contextCount(): number {
     return this.requestContexts.length;
+  }
+  get projectRequestCount(): number {
+    return this.projectRequests.size;
   }
   get projectReadCount(): number {
     return this.reads.filter((r) =>
@@ -141,6 +146,7 @@ class ActualCreationWire {
           try {
             const body: unknown = JSON.parse(bytes.toString("utf8"));
             this.reads.push({
+              request,
               path: url.pathname,
               status: reply.status(),
               body,
@@ -195,6 +201,8 @@ class ActualCreationWire {
       }
       if (request.method() === "GET") {
         if (context) this.requestContexts.push(request);
+        if (projectGet.test(url.pathname) && !this.projectRequests.has(request))
+          this.projectRequests.set(request, this.projectRequests.size);
         await route.continue();
         return;
       }
@@ -442,16 +450,61 @@ class ActualCreationWire {
   }
   async latestProject(
     projectId: string,
+    after: number,
   ): Promise<{ status: number; project: Project | null }> {
-    await this.settle();
-    const row = this.reads
-      .filter((r) => r.path.endsWith("/projects/" + projectId))
-      .at(-1);
-    requireCreation(row, "expected actual current project GET");
-    return {
-      status: row.status,
-      project: row.status === 200 ? (row.body as Project) : null,
+    const path = catalogApi(
+      projectPath({
+        organizationId: this.owner.manifest.organizationId,
+        projectId,
+      }),
+    );
+    const latest = () =>
+      this.reads
+        .filter(
+          (r) =>
+            r.path === path &&
+            (this.projectRequests.get(r.request) ?? -1) >= after,
+        )
+        .at(-1);
+    const observe = async () => {
+      await expect
+        .poll(() => this.failure !== null || latest() !== undefined, {
+          message: "Expected fresh actual scoped project GET was not observed",
+          timeout: 10000,
+        })
+        .toBe(true);
+      if (this.failure) throw this.failure;
+      await this.settle();
+      const row = latest();
+      requireCreation(row, "expected actual current project GET");
+      return {
+        status: row.status,
+        project: row.status === 200 ? (row.body as Project) : null,
+      };
     };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        observe(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(
+                this.failure ??
+                  new Error(
+                    "Project creation browser fixture: actual scoped project observation deadline exceeded",
+                  ),
+              ),
+            10000,
+          );
+        }),
+      ]);
+    } catch (error: unknown) {
+      if (this.failure) throw this.failure;
+      throw error;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
   async initialListIsEmpty(): Promise<void> {
     await this.settle();
@@ -600,6 +653,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       expect(wire.postCount).toBe(0);
       await fill(page, bom);
       const contextBefore = wire.contextCount;
+      const projectRequestsBefore = wire.projectRequestCount;
       await page.getByLabel("Name", { exact: true }).press("Enter");
       await confirmed(page);
       expect(wire.postCount).toBe(1);
@@ -608,6 +662,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       baseline = await capture(owner, result, baseline);
       const current = await wire.latestProject(
         result.receipt.project.projectId,
+        projectRequestsBefore,
       );
       requireCreation(
         current.status === 200 &&
@@ -664,6 +719,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       await expect(
         page.getByRole("link", { name: "Create project", exact: true }),
       ).toHaveCount(0);
+      const projectRequestsBefore = wire.projectRequestCount;
       await page
         .locator(`a[href="${projectPath(fixture.seedProject.scope)}"]`)
         .click();
@@ -674,6 +730,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       ).toHaveText("administrator");
       const seed = await wire.latestProject(
         fixture.seedProject.scope.projectId,
+        projectRequestsBefore,
       );
       requireCreation(
         seed.status === 200 &&
@@ -784,6 +841,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       const demoted = await owner.counts();
       expect(demoted).toEqual(baseline);
       const replayContexts = wire.contextCount;
+      const projectRequestsBefore = wire.projectRequestCount;
       await named(page, "Recover creation").click();
       await confirmed(page);
       const replay = await wire.original(before, unicode, 200);
@@ -794,6 +852,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       expect(await owner.counts()).toEqual(demoted);
       const current = await wire.latestProject(
         original.receipt.project.projectId,
+        projectRequestsBefore,
       );
       requireCreation(
         current.status === 200 && current.project?.access.role === "viewer",
@@ -855,6 +914,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       });
       const replayIndex = wire.postCount;
       const replayContexts = wire.contextCount;
+      const projectRequestsBefore = wire.projectRequestCount;
       await named(page, "Recover creation").click();
       await confirmed(page);
       const replay = await wire.original(replayIndex, deleted, 200);
@@ -863,8 +923,12 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       await wire.freshAdmission(replayIndex, replayContexts);
       expect(await owner.counts()).toEqual(removed);
       requireCreation(
-        (await wire.latestProject(first.receipt.project.projectId)).status ===
-          404,
+        (
+          await wire.latestProject(
+            first.receipt.project.projectId,
+            projectRequestsBefore,
+          )
+        ).status === 404,
         "deleted membership unexpectedly granted project access",
       );
       await expect(
