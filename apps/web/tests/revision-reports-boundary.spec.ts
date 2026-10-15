@@ -578,7 +578,11 @@ test("controlled admission: feature and action intersections govern reads and de
 }) => {
   for (const disabled of ["feature", "action"] as const) {
     reports.data.context.features.readReports = disabled !== "feature";
+    reports.data.context.features.deriveReports =
+      reports.data.context.features.readReports;
     reports.data.mapping.access.actions.readReports = disabled !== "action";
+    reports.data.mapping.access.actions.deriveReports =
+      reports.data.mapping.access.actions.readReports;
     const before =
       reports.reads("projection").length + reports.reads("validation").length;
     await open(page, reports);
@@ -595,6 +599,8 @@ test("controlled admission: feature and action intersections govern reads and de
   }
   reports.data.context.features.readReports = true;
   reports.data.mapping.access.actions.readReports = true;
+  reports.data.context.features.deriveReports = true;
+  reports.data.mapping.access.actions.deriveReports = true;
   for (const disabled of ["feature", "action"] as const) {
     reports.data.context.features.deriveReports = disabled !== "feature";
     reports.data.mapping.access.actions.deriveReports = disabled !== "action";
