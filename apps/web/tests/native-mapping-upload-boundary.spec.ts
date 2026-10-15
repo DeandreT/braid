@@ -34,6 +34,15 @@ type Kind =
 type Wire = {
   exactBytes: boolean;
   exactQuery: boolean;
+  queryKeyCount: boolean;
+  queryDistinctKeys: boolean;
+  queryAllowedKeys: boolean;
+  queryName: boolean;
+  queryDescription: boolean;
+  queryFilename: boolean;
+  queryBackend: boolean;
+  queryAscii: boolean;
+  queryLineWithinLimit: boolean;
   correctHeaders: boolean;
   freshToken: boolean;
   sameOriginalBytes: boolean;
@@ -465,6 +474,22 @@ class ControlledUpload {
     this.wires.push({
       exactBytes: body !== null && body.equals(this.#bytes),
       exactQuery,
+      queryKeyCount: keys.length === 4,
+      queryDistinctKeys: new Set(keys).size === 4,
+      queryAllowedKeys: keys.every((value) =>
+        ["name", "backendId", "description", "originalFilename"].includes(
+          value,
+        ),
+      ),
+      queryName: url.searchParams.get("name") === this.#input.name,
+      queryDescription:
+        url.searchParams.get("description") === this.#input.description,
+      queryFilename:
+        url.searchParams.get("originalFilename") === this.#input.filename,
+      queryBackend: url.searchParams.get("backendId") === "ferrule",
+      queryAscii: /^[\x00-\x7f]*$/.test(query),
+      queryLineWithinLimit:
+        ("POST " + url.pathname + query + " HTTP/1.1\r\n").length <= 65536,
       correctHeaders:
         headers["content-type"] === "application/octet-stream" &&
         canonicalId(key) &&
@@ -551,6 +576,42 @@ function wires(fixture: ControlledUpload, count: number): void {
   expect(
     fixture.wires.every((wire) => wire.exactBytes),
     "Native byte identity differs.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryKeyCount),
+    "Reviewed query key count differs.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryDistinctKeys),
+    "Reviewed query key uniqueness differs.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryAllowedKeys),
+    "Reviewed query contains an unexpected field.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryName),
+    "Reviewed query name differs.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryDescription),
+    "Reviewed query description differs.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryFilename),
+    "Reviewed query filename differs.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryBackend),
+    "Reviewed query backend differs.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryAscii),
+    "Reviewed query encoding differs.",
+  ).toBe(true);
+  expect(
+    fixture.wires.every((wire) => wire.queryLineWithinLimit),
+    "Reviewed upload request line exceeds its limit.",
   ).toBe(true);
   expect(
     fixture.wires.every((wire) => wire.exactQuery),
