@@ -1369,8 +1369,15 @@ test("real packaged native create/upload: exact original bytes, durable recovery
       await owner.control({ action: "pg-normal-restart" });
       sameCounts(await wire.checkpoint(), trusted);
       await wire.arm(fixed.versioned, "normal", true);
+      const resendRevision = waitResponse(
+        page,
+        "GET",
+        catalogApi(revisionPath(committed.futureRevision)),
+        200,
+      );
       await button(page, "Resend original upload").click();
       await wire.complete(index + 1, 200);
+      await responseDone(await resendRevision);
       await saved(page, wire, fixed.versioned);
       requireUpload(
         isDeepStrictEqual(wire.operation("versioned"), committed) &&
