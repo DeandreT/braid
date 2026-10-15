@@ -281,6 +281,15 @@ class UploadWire {
   private readonly readTasks: Promise<void>[] = [];
   private readonly mutations: Mutation[] = [];
   private readonly originals = new Map<Sample, Original>();
+  private readonly revisionReadFailures = new Map<
+    Original,
+    {
+      readonly isGet: boolean;
+      readonly statusIs200: boolean;
+      readonly hasFailure: boolean;
+      readonly isAborted: boolean;
+    }
+  >();
   private readonly captured = new Set<Sample>();
   private readonly releases: (() => void)[] = [];
   private failure: Error | null = null;
@@ -430,6 +439,20 @@ class UploadWire {
             }
           }
         } catch (error) {
+          const failure = request.failure();
+          for (const original of this.originals.values())
+            if (
+              original.receipt?.phase === "committed" &&
+              !url.search &&
+              url.pathname ===
+                catalogApi(revisionPath(original.receipt.futureRevision))
+            )
+              this.revisionReadFailures.set(original, {
+                isGet: request.method() === "GET",
+                statusIs200: reply.status() === 200,
+                hasFailure: failure !== null,
+                isAborted: failure?.errorText === "net::ERR_ABORTED",
+              });
           // An obsolete project GET can be aborted by the foreign-identity guard. Explicit admission
           // and revision boundaries below still require their own successful complete responses.
           if (!request.failure())
@@ -875,8 +898,18 @@ class UploadWire {
   }
   async revision(sample: Sample): Promise<Revision> {
     await this.settleReads();
-    const revision = this.originals.get(sample)?.revision;
-    requireUpload(revision, "expected exact ordinary saved revision read");
+    const original = this.originals.get(sample),
+      revision = original?.revision,
+      observation = original
+        ? this.revisionReadFailures.get(original)
+        : undefined;
+    requireUpload(
+      revision,
+      "expected exact ordinary saved revision read" +
+        (!revision
+          ? ` [observationPresent=${observation !== undefined}; isGet=${observation?.isGet === true}; statusIs200=${observation?.statusIs200 === true}; hasFailure=${observation?.hasFailure === true}; isAborted=${observation?.isAborted === true}]`
+          : ""),
+    );
     return revision;
   }
   async protectedRevision(): Promise<Revision> {
