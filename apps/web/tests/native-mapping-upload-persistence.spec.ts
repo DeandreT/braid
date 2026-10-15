@@ -214,15 +214,32 @@ function waitResponse(
   path: string,
   status: number,
 ): Promise<BrowserResponse> {
+  let complete = Promise.resolve(false);
   return page.waitForResponse(
     (reply) => {
       const url = new URL(reply.url());
-      return (
+      const matches =
         reply.request().method() === method &&
         url.pathname === path &&
         !url.search &&
-        reply.status() === status
-      );
+        reply.status() === status;
+      if (!matches) return false;
+      if (method !== "GET" || status !== 200) return true;
+      complete = complete.then(async () => {
+        let nonempty: boolean;
+        try {
+          nonempty = (await reply.body()).length > 0;
+        } catch {
+          if (reply.request().failure()?.errorText === "net::ERR_ABORTED")
+            return false;
+          throw new Error(
+            "Native mapping upload browser fixture: expected matching GET200 response body could not be consumed",
+          );
+        }
+        requireUpload(nonempty, "expected browser response body was empty");
+        return true;
+      });
+      return complete;
     },
     { timeout: 45000 },
   );
