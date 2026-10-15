@@ -13,8 +13,6 @@ import {
 // These controlled responses exercise browser boundaries, not PostgreSQL, native
 // workers, real admission contention, or server commit acknowledgement faults.
 // Attempt bodies/keys/tokens stay in closures; assertions expose only booleans.
-test.use({ trace: "off", video: "off", screenshot: "off" });
-
 type Context = components["schemas"]["CatalogContextV1"];
 type CreationResult = components["schemas"]["CatalogProjectCreationResultV1"];
 type Reply = {
