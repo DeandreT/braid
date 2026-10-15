@@ -2145,7 +2145,7 @@ test("controlled native upload: keyboard mobile flow renders literal filenames a
     await saved(page);
     await expect(heading(page, "Mapping saved")).toBeFocused();
     const literalMatches = await page
-      .locator("#upload-saved .upload-literal")
+      .locator('section[aria-labelledby="upload-saved"] .upload-literal')
       .evaluate(
         (element, expected) => element.textContent === expected,
         filename,
