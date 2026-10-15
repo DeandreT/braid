@@ -880,6 +880,12 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         mappings = editorWire.actionReadCount;
       await editorWire.arm(draft, "publisher", "lose");
       await button(active, "Save metadata").click();
+      await expect
+        .poll(() => editorWire.patchCount, {
+          message: "Expected deliberate lost-response PATCH did not arrive",
+          timeout: 10000,
+        })
+        .toBe(count + 1);
       await editorWire.complete(count, 200);
       await editorWire.fresh(count, contexts, mappings);
       await expect(heading(active, "Save outcome is unknown")).toBeVisible();
