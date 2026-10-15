@@ -1,12 +1,17 @@
-import { type Routes } from "@angular/router";
+import { type CanDeactivateFn, type Routes } from "@angular/router";
 import { CatalogShellComponent } from "./catalog/catalog-shell.component";
 import { MappingPageComponent } from "./catalog/mapping-page.component";
 import { ProjectPageComponent } from "./catalog/project-page.component";
 import { ProjectsPageComponent } from "./catalog/projects-page.component";
 import { RevisionPageComponent } from "./catalog/revision-page.component";
 import { CreateProjectPageComponent } from "./catalog/projects/create-project-page.component";
+import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-page.component";
 import { ExamplesComponent } from "./examples.component";
 import { NotFoundComponent } from "./not-found.component";
+
+const leaveMappingEditor: CanDeactivateFn<EditMappingPageComponent> = (
+  component,
+) => component.requestLeave();
 
 export const routes: Routes = [
   { path: "", pathMatch: "full", redirectTo: "examples" },
@@ -15,6 +20,16 @@ export const routes: Routes = [
     path: "catalog",
     component: CatalogShellComponent,
     children: [
+      {
+        path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/edit",
+        loadComponent: () =>
+          import("./catalog/metadata/edit-mapping-page.component").then(
+            (module) => module.EditMappingPageComponent,
+          ),
+        canDeactivate: [leaveMappingEditor],
+        runGuardsAndResolvers: "paramsOrQueryParamsChange",
+        title: "Edit mapping metadata · Weft",
+      },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",
         component: RevisionPageComponent,

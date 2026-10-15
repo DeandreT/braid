@@ -5,8 +5,10 @@
     "playwright.catalog.config.ts",
     "playwright.reports.config.ts",
     "playwright.project-creation.config.ts",
+    "playwright.mapping-metadata.config.ts",
     "tests/catalog*.ts",
     "tests/revision-reports*.ts",
-    "tests/project-creation*.ts"
+    "tests/project-creation*.ts",
+    "tests/mapping-metadata*.ts"
   ]
 }

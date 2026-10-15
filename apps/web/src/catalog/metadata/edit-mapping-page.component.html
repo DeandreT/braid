@@ -1,0 +1,399 @@
+<section
+  class="metadata-editor"
+  aria-labelledby="metadata-title"
+  [attr.aria-busy]="state.busy()"
+>
+  <header class="metadata-heading">
+    <p class="metadata-eyebrow">Mapping</p>
+    <h1 id="metadata-title" tabindex="-1">Edit mapping metadata</h1>
+    <p>
+      Replace the name and description. Saved revisions, native content and
+      reports stay separate from this edit.
+    </p>
+    @if (state.mapping(); as mapping) {
+      <a [routerLink]="routes.mapping(mapping.scope)" [queryParams]="{}"
+        >Back to mapping</a
+      >
+    } @else {
+      <a routerLink="/catalog" [queryParams]="{}">Open catalog</a>
+    }
+    <button
+      type="button"
+      (click)="state.refreshAdmission()"
+      [disabled]="
+        state.busy() || leaveDecision() || state.admission() === 'invalidLink'
+      "
+    >
+      Refresh admission
+    </button>
+  </header>
+
+  @if (leaveDecision()) {
+    <section
+      class="metadata-card metadata-notice"
+      aria-labelledby="metadata-leave"
+      role="alert"
+    >
+      <h2 id="metadata-leave" tabindex="-1">Leave this metadata edit?</h2>
+      <p>
+        Unsaved fields and any unconfirmed save information will be lost. A save
+        already sent may still commit; leaving is not an undo.
+      </p>
+      <div class="metadata-actions">
+        <button type="button" (click)="keepEditing()">Keep editing</button>
+        <button type="button" (click)="discardAndLeave()">
+          Discard changes and leave
+        </button>
+      </div>
+    </section>
+  }
+
+  @if (state.admission() === "loading") {
+    <p role="status">Checking current identity and mapping access…</p>
+  } @else if (state.admission() !== "ready") {
+    <section class="metadata-card" role="status">
+      <h2>Metadata editor unavailable</h2>
+      @switch (state.admission()) {
+        @case ("invalidLink") {
+          <p>
+            This editor link is invalid. Open the catalog to choose a mapping.
+          </p>
+        }
+        @case ("readOnly") {
+          <p>
+            Metadata editing is not available for your current workspace or
+            mapping role. Private draft fields are hidden.
+          </p>
+        }
+        @case ("notFound") {
+          <p>
+            This mapping is unavailable to your current identity. Private editor
+            details are hidden.
+          </p>
+        }
+        @case ("rejected") {
+          <p>
+            Your identity could not be admitted. Private editor details are
+            hidden.
+          </p>
+        }
+        @default {
+          <p>
+            Current access could not be checked. Any retained work is hidden
+            until the same identity can view this mapping again.
+          </p>
+        }
+      }
+    </section>
+  }
+
+  @if (state.error(); as error) {
+    <p class="metadata-error" role="alert">{{ errorMessage(error.kind) }}</p>
+  }
+  @if (state.outcomeUnknown()) {
+    <section
+      class="metadata-card metadata-notice"
+      aria-labelledby="metadata-unknown"
+    >
+      <h2 id="metadata-unknown">Save outcome is unknown</h2>
+      <p>
+        A previous save may already have committed. Checking current metadata
+        reads only; matching values cannot acknowledge that particular save.
+      </p>
+      <button
+        type="button"
+        (click)="state.checkCurrent()"
+        [disabled]="state.busy() || leaveDecision()"
+      >
+        Check current metadata
+      </button>
+    </section>
+  }
+
+  @let reconciliation = state.reconciliation();
+  @if (reconciliation.kind !== "idle") {
+    <section class="metadata-card" aria-labelledby="metadata-checked">
+      <h2 id="metadata-checked">Current metadata checked</h2>
+      <p role="status">
+        {{
+          reconciliation.kind === "matches"
+            ? "Current values match the attempted values."
+            : "Current values differ from the attempted values."
+        }}
+        This read does not confirm which request wrote them.
+      </p>
+      <dl class="metadata-facts">
+        <dt>Current name</dt>
+        <dd
+          class="metadata-literal"
+          [textContent]="reconciliation.metadata.name"
+        ></dd>
+        <dt>Current description</dt>
+        <dd
+          class="metadata-literal"
+          [textContent]="
+            reconciliation.metadata.description || 'No description'
+          "
+        ></dd>
+        <dt>Current version</dt>
+        <dd>{{ reconciliation.metadata.version }}</dd>
+      </dl>
+    </section>
+  }
+
+  @if (state.metadata(); as metadata) {
+    <p class="metadata-snapshot">
+      Editing the metadata snapshot at version {{ metadata.version }}.
+      @if (state.mapping(); as mapping) {
+        Role from the latest admitted view: {{ mapping.access.role }}.
+      } @else {
+        Current access is being checked; saving is disabled.
+      }
+    </p>
+    @if (state.saved(); as saved) {
+      <section class="metadata-card" aria-labelledby="metadata-saved">
+        <h2 id="metadata-saved" tabindex="-1">Metadata save confirmed</h2>
+        <p role="status">
+          {{
+            saved.changed
+              ? "The mapping name and description were saved."
+              : "The accepted values were unchanged; the metadata version did not advance."
+          }}
+        </p>
+      </section>
+    }
+    @if (state.priorUnknown()) {
+      <p class="metadata-notice">
+        An earlier save was not acknowledged. The latest confirmed save or your
+        explicit current-value choice does not prove what that earlier request
+        did.
+      </p>
+    }
+    @if (state.conflict()) {
+      <section
+        class="metadata-card metadata-notice"
+        aria-labelledby="metadata-conflict"
+      >
+        <h2 id="metadata-conflict">Review before another save</h2>
+        <p>
+          Your draft and original baseline are preserved. Read the latest
+          metadata, compare it with yours, then choose explicitly. Reviewing
+          never saves.
+        </p>
+      </section>
+    }
+    <button
+      type="button"
+      (click)="state.reviewLatest()"
+      [disabled]="state.busy() || leaveDecision()"
+    >
+      Review latest
+    </button>
+
+    @if (state.comparison(); as comparison) {
+      <section class="metadata-card" aria-labelledby="metadata-review">
+        <h2 id="metadata-review" tabindex="-1">Compare mapping metadata</h2>
+        <div class="metadata-comparison">
+          <section aria-label="Base metadata">
+            <h3>Base</h3>
+            <p>Version {{ comparison.base.version }}</p>
+            <dl>
+              <dt>Name</dt>
+              <dd
+                class="metadata-literal"
+                [textContent]="comparison.base.name"
+              ></dd>
+              <dt>Description</dt>
+              <dd
+                class="metadata-literal"
+                [textContent]="comparison.base.description || 'No description'"
+              ></dd>
+            </dl>
+          </section>
+          <section aria-label="Current metadata">
+            <h3>Current</h3>
+            <p>Version {{ comparison.current.version }}</p>
+            <dl>
+              <dt>Name</dt>
+              <dd
+                class="metadata-literal"
+                [textContent]="comparison.current.name"
+              ></dd>
+              <dt>Description</dt>
+              <dd
+                class="metadata-literal"
+                [textContent]="
+                  comparison.current.description || 'No description'
+                "
+              ></dd>
+            </dl>
+          </section>
+          <section aria-label="My metadata">
+            <h3>Mine</h3>
+            <dl>
+              <dt>Name</dt>
+              <dd
+                class="metadata-literal"
+                [textContent]="comparison.mine.name"
+              ></dd>
+              <dt>Description</dt>
+              <dd
+                class="metadata-literal"
+                [textContent]="comparison.mine.description || 'No description'"
+              ></dd>
+            </dl>
+          </section>
+        </div>
+        <p>
+          Keep mine and Edit mine select this reviewed version for a separate
+          deliberate save. Use current discards your local changes and active
+          uncertainty without claiming the earlier request was acknowledged.
+        </p>
+        <div class="metadata-actions">
+          <button
+            type="button"
+            (click)="state.keepMine()"
+            [disabled]="!state.canEdit() || leaveDecision()"
+          >
+            Keep mine
+          </button>
+          <button
+            type="button"
+            (click)="editMine()"
+            [disabled]="!state.canEdit() || leaveDecision()"
+          >
+            Edit mine
+          </button>
+          <button
+            type="button"
+            (click)="state.useCurrent()"
+            [disabled]="!state.canEdit() || leaveDecision()"
+          >
+            Use current
+          </button>
+        </div>
+      </section>
+    }
+
+    @let errors = state.fieldErrors();
+    @if (errors.name || errors.description || errors.body) {
+      <section
+        id="metadata-errors"
+        class="metadata-card metadata-error"
+        tabindex="-1"
+        role="alert"
+        aria-label="Metadata fields need attention"
+      >
+        <h2>Check the metadata fields</h2>
+        <ul>
+          @if (errors.name) {
+            <li>
+              <button
+                type="button"
+                class="metadata-error-link"
+                (click)="focusField('name')"
+              >
+                {{ fieldError(errors.name, "name") }}
+              </button>
+            </li>
+          }
+          @if (errors.description) {
+            <li>
+              <button
+                type="button"
+                class="metadata-error-link"
+                (click)="focusField('description')"
+              >
+                {{ fieldError(errors.description, "description") }}
+              </button>
+            </li>
+          }
+          @if (errors.body) {
+            <li>
+              The complete request is too large. Shorten the raw name or
+              description.
+            </li>
+          }
+        </ul>
+      </section>
+    }
+    <form
+      class="metadata-card metadata-form"
+      [formGroup]="form"
+      (ngSubmit)="submit()"
+      novalidate
+    >
+      <div>
+        <label for="metadata-name">Name</label>
+        <input
+          id="metadata-name"
+          type="text"
+          formControlName="name"
+          maxlength="65536"
+          autocomplete="off"
+          [readOnly]="!state.canEdit() || leaveDecision()"
+          [attr.aria-invalid]="errors.name ? 'true' : null"
+          aria-describedby="metadata-name-help metadata-name-error"
+        />
+        <p id="metadata-name-help" class="metadata-help">
+          Required. Up to 200 Unicode characters after surrounding whitespace is
+          removed. The complete raw request also has a byte limit.
+        </p>
+        <p id="metadata-name-error" class="metadata-error">
+          {{ errors.name ? fieldError(errors.name, "name") : "" }}
+        </p>
+      </div>
+      <div>
+        <label for="metadata-description"
+          >Description <span>(optional)</span></label
+        >
+        <textarea
+          id="metadata-description"
+          formControlName="description"
+          maxlength="8000"
+          rows="5"
+          [readOnly]="!state.canEdit() || leaveDecision()"
+          [attr.aria-invalid]="errors.description ? 'true' : null"
+          aria-describedby="metadata-description-help metadata-description-error"
+        ></textarea>
+        <p id="metadata-description-help" class="metadata-help">
+          Up to 4,000 Unicode characters. Whitespace is preserved exactly.
+        </p>
+        <p id="metadata-description-error" class="metadata-error">
+          {{
+            errors.description
+              ? fieldError(errors.description, "description")
+              : ""
+          }}
+        </p>
+      </div>
+      <button
+        class="metadata-primary"
+        type="submit"
+        [disabled]="!state.canSave() || leaveDecision()"
+      >
+        Save metadata
+      </button>
+    </form>
+  }
+
+  @if (state.saving()) {
+    <p role="status">
+      Waiting for this metadata save. No second save will be sent automatically.
+    </p>
+  }
+  @if (state.busy()) {
+    <button
+      type="button"
+      (click)="state.stopWaiting()"
+      [disabled]="leaveDecision()"
+    >
+      Stop waiting
+    </button>
+  }
+  <p class="metadata-help">
+    This editor keeps one draft and save attempt only in memory. Closing or
+    reloading loses that information. A sent save cannot be undone by closing
+    the page.
+  </p>
+</section>

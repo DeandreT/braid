@@ -35,6 +35,21 @@
     </button>
   </header>
   @if (data(); as view) {
+    @if (context(); as context) {
+      @if (
+        context.features.editMetadata &&
+        view.mapping.access.actions.editMetadata
+      ) {
+        <p>
+          <a
+            class="catalog-button"
+            [routerLink]="routes.editMapping(view.mapping.scope)"
+          >
+            Edit mapping metadata
+          </a>
+        </p>
+      }
+    }
     <p class="catalog-live" role="status">
       {{ view.page.revisions.length }} revisions shown.
     </p>

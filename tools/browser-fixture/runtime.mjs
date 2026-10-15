@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 export async function runBrowserFixture(definition) {
   try {
     const creationScenario = definition.kind === "project-creation";
+    const metadataScenario = definition.kind === "mapping-metadata";
     class Failure extends Error {
       constructor(category) {
         super(category);
@@ -146,16 +147,20 @@ export async function runBrowserFixture(definition) {
       process.env[
         creationScenario
           ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
-          : definition.kind === "catalog"
-            ? "WEFT_CATALOG_BROWSER_MANIFEST"
-            : "WEFT_REPORTS_BROWSER_MANIFEST"
+          : metadataScenario
+            ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
+            : definition.kind === "catalog"
+              ? "WEFT_CATALOG_BROWSER_MANIFEST"
+              : "WEFT_REPORTS_BROWSER_MANIFEST"
       ] === cfg.manifestPath &&
         process.env[
           creationScenario
             ? "WEFT_PROJECT_CREATION_BASE_URL"
-            : definition.kind === "catalog"
-              ? "WEFT_CATALOG_BASE_URL"
-              : "WEFT_REPORTS_BASE_URL"
+            : metadataScenario
+              ? "WEFT_MAPPING_METADATA_BASE_URL"
+              : definition.kind === "catalog"
+                ? "WEFT_CATALOG_BASE_URL"
+                : "WEFT_REPORTS_BASE_URL"
         ] === origin(cfg.readOrigin),
     );
     origin(cfg.mutationOrigin);
@@ -765,11 +770,11 @@ export async function runBrowserFixture(definition) {
         "SELECT json_build_object('roles',(SELECT jsonb_agg(to_jsonb(r) ORDER BY rolname) FROM pg_authid r WHERE rolname LIKE 'weft_%'),'memberships',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY to_jsonb(m)::text),'[]'::jsonb) FROM pg_auth_members m))",
         true,
       );
-    // C-only, fixed read-only grant capture. Hash complete ordered catalog arrays
+    // C/D-only, fixed read-only grant capture. Hash complete ordered catalog arrays
     // inside PostgreSQL so even the built-in routine ACL set stays below pipe limits.
     // Relation capture includes column ACLs, not only table-level relacl.
     function creationGrantState() {
-      check(creationScenario);
+      check(creationScenario || metadataScenario);
       return jsonSql(
         `SELECT json_build_object(
         'database',(SELECT jsonb_build_array(oid,datname,datdba,datacl::text) FROM pg_catalog.pg_database WHERE datname=current_database()),
@@ -818,7 +823,9 @@ export async function runBrowserFixture(definition) {
       journal: journal(),
       credentials: credentialState(),
       physical: physical(),
-      ...(creationScenario ? { grants: creationGrantState() } : {}),
+      ...(creationScenario || metadataScenario
+        ? { grants: creationGrantState() }
+        : {}),
     });
     function tool(command, extra = {}) {
       return run(
@@ -1044,7 +1051,7 @@ export async function runBrowserFixture(definition) {
           readCatalog: true,
           createProjects: host.writer || host.creationOnly,
           createMappings: host.writer,
-          editMetadata: false,
+          editMetadata: host.metadataEdits,
           uploadRevisions: host.writer,
           readReports: host.reportMode !== null,
           chat: false,
@@ -1068,6 +1075,7 @@ export async function runBrowserFixture(definition) {
         organization = ids.organization,
         writer = false,
         creationOnly = false,
+        metadataEdits = false,
         reportMode = null,
       } = {},
     ) {
@@ -1080,7 +1088,8 @@ export async function runBrowserFixture(definition) {
         );
       check(
         reportMode === null ||
-          (definition.kind === "reports" &&
+          ((definition.kind === "reports" ||
+            (metadataScenario && kind === "mutation")) &&
             ["full", "readOnlyNoWorker", "profileUnavailable"].includes(
               reportMode,
             )),
@@ -1090,6 +1099,16 @@ export async function runBrowserFixture(definition) {
       );
       if (creationScenario)
         check(creationOnly && !writer && reportMode === null);
+      check(
+        !metadataEdits ||
+          (metadataScenario &&
+            kind === "read" &&
+            !writer &&
+            !creationOnly &&
+            reportMode === null),
+      );
+      if (metadataScenario && kind === "read")
+        check(!writer && !creationOnly && reportMode === null);
       const address = kind === "read" ? cfg.readOrigin : cfg.mutationOrigin;
       await listenerAbsent(address);
       const actualActor =
@@ -1134,7 +1153,7 @@ export async function runBrowserFixture(definition) {
             : connections.weft_catalog_reader,
         WEFT_PROJECT_CREATION_ENABLED: String(writer || creationOnly),
         WEFT_REVISION_INGESTION_ENABLED: String(writer),
-        WEFT_METADATA_EDITS_ENABLED: "false",
+        WEFT_METADATA_EDITS_ENABLED: String(metadataEdits),
         WEFT_REVISION_REPORTS_ENABLED: "false",
         WEFT_REVISION_REPORT_DERIVATION_ENABLED: "false",
       });
@@ -1143,6 +1162,13 @@ export async function runBrowserFixture(definition) {
           connections.weft_project_creator;
         delete environment.DOCKER_HOST;
         delete environment.DOCKER_CONFIG;
+      }
+      if (metadataScenario && kind === "read") {
+        delete environment.DOCKER_HOST;
+        delete environment.DOCKER_CONFIG;
+        if (metadataEdits)
+          environment.WEFT_POSTGRES_METADATA_CONNECTION_STRING =
+            connections.weft_catalog_editor;
       }
       if (writer)
         Object.assign(environment, {
@@ -1186,7 +1212,24 @@ export async function runBrowserFixture(definition) {
             environment.WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING ===
               connections.weft_project_creator,
         );
-      if (!writer && !creationOnly && reportMode === null)
+      if (metadataScenario && kind === "read")
+        check(
+          !Object.keys(environment).some((key) =>
+            /PROJECT_CREATION_CONNECTION|INGESTION_CONNECTION|REPORT_CONNECTION|DERIVATION_CONNECTION|MAINTENANCE_CONNECTION|PRIVATE_STORAGE|WORKER_IMAGE|DOCKER_/.test(
+              key,
+            ),
+          ) &&
+            environment.WEFT_PROJECT_CREATION_ENABLED === "false" &&
+            environment.WEFT_REVISION_INGESTION_ENABLED === "false" &&
+            (metadataEdits
+              ? environment.WEFT_POSTGRES_METADATA_CONNECTION_STRING ===
+                connections.weft_catalog_editor
+              : !Object.hasOwn(
+                  environment,
+                  "WEFT_POSTGRES_METADATA_CONNECTION_STRING",
+                )),
+        );
+      if (!writer && !creationOnly && !metadataEdits && reportMode === null)
         check(
           !Object.keys(environment).some((key) =>
             /POSTGRES_|PRIVATE_STORAGE|WORKER_IMAGE/.test(key),
@@ -1206,6 +1249,7 @@ export async function runBrowserFixture(definition) {
         origin: address,
         writer,
         creationOnly,
+        metadataEdits,
         reportMode,
         child,
         cookies: [],
@@ -1250,7 +1294,9 @@ export async function runBrowserFixture(definition) {
           source: cfg.source.commit,
           processorCount: 2,
           gcHeapLimitBytes: 1073741824,
-          metadataOnly: !writer && !creationOnly && reportMode === null,
+          metadataOnly:
+            !writer && !creationOnly && !metadataEdits && reportMode === null,
+          ...(metadataScenario ? { metadataEdits } : {}),
           ...(creationScenario ? { creationOnly } : {}),
           reportMode,
           terminal: null,
@@ -1791,7 +1837,11 @@ export async function runBrowserFixture(definition) {
         schemaVersion: `weft.${definition.kind}-browser-ready.v1`,
         fixtureId,
         manifestSha256: sha(bytes),
-        profile: creationScenario ? "creator" : "viewer",
+        profile: creationScenario
+          ? "creator"
+          : metadataScenario
+            ? "publisher"
+            : "viewer",
       });
     }
 
@@ -2117,6 +2167,125 @@ export async function runBrowserFixture(definition) {
       });
       save();
       return { organizationId: ids.organization, projectId };
+    }
+    let metadataPublisher = null;
+    function captureMetadataPublisher(projectId) {
+      check(metadataScenario && metadataPublisher === null && !mutationHost);
+      guid(projectId);
+      const current = rows(),
+        project = current.projects.filter(
+          (row) =>
+            row.organization_id === ids.organization &&
+            row.id === projectId &&
+            row.creator_principal_id === ids.administrator,
+        );
+      const members = current.project_memberships.filter(
+        (row) =>
+          row.organization_id === ids.organization &&
+          row.project_id === projectId &&
+          row.principal_id === ids.publisher,
+      );
+      check(
+        project.length === 1 &&
+          members.length === 1 &&
+          members[0].role === "publisher" &&
+          members[0].active === true &&
+          String(members[0].version) === "1",
+      );
+      metadataPublisher = { projectId, member: members[0] };
+    }
+    function changeMetadataPublisherRole(role) {
+      check(
+        metadataScenario &&
+          metadataPublisher !== null &&
+          !mutationHost &&
+          ["publisher", "viewer"].includes(role),
+      );
+      inspectOwned();
+      const bound = metadataPublisher,
+        old = rows();
+      const mine = (row) =>
+        row.organization_id === ids.organization &&
+        row.project_id === bound.projectId &&
+        row.principal_id === ids.publisher;
+      const current = old.project_memberships.filter(mine);
+      check(
+        current.length === 1 &&
+          equivalent(current[0], bound.member) &&
+          bound.member.active === true &&
+          bound.member.role !== role,
+      );
+      const version = BigInt(bound.member.version);
+      check(version > 0n && version < 9223372036854775807n);
+      const query =
+        "UPDATE weft.project_memberships SET role='" +
+        role +
+        "',version=version+1 WHERE organization_id='" +
+        ids.organization +
+        "' AND project_id='" +
+        bound.projectId +
+        "' AND principal_id='" +
+        ids.publisher +
+        "' AND role='" +
+        bound.member.role +
+        "' AND active=true AND version=" +
+        version +
+        " RETURNING row_to_json(project_memberships)";
+      const reply = run(
+        cfg.docker,
+        [
+          "--host=unix://" + cfg.daemonSocket,
+          "exec",
+          "--interactive",
+          "--env",
+          "PGPASSWORD",
+          pg.Id,
+          "psql",
+          "-X",
+          "-qAt",
+          "--host=127.0.0.1",
+          "--username",
+          "weft_migrator",
+          "--dbname",
+          "weft",
+          "--set=ON_ERROR_STOP=1",
+        ],
+        {
+          env: { ...roleEnvironment, PGPASSWORD: secrets.get("MIGRATOR") },
+          timeout: 10000,
+          input:
+            "BEGIN;\nSET LOCAL lock_timeout='1s';\nSET LOCAL statement_timeout='5s';\n" +
+            query +
+            ";\nCOMMIT;\n",
+        },
+      );
+      const lines = reply.stdout.split("\n").filter(Boolean);
+      check(lines.length === 1, "productFailure");
+      const actual = JSON.parse(lines[0]),
+        after = rows();
+      check(
+        equivalent(
+          { ...actual, version: String(actual.version) },
+          { ...bound.member, role, version: String(version + 1n) },
+        ) &&
+          after.project_memberships.filter(mine).length === 1 &&
+          equivalent(after.project_memberships.filter(mine)[0], actual) &&
+          equivalent(
+            old.project_memberships.filter((row) => !mine(row)),
+            after.project_memberships.filter((row) => !mine(row)),
+          ) &&
+          equivalent(
+            { ...old, project_memberships: [] },
+            { ...after, project_memberships: [] },
+          ),
+      );
+      metadataPublisher = { projectId: bound.projectId, member: actual };
+      state.observations.push({
+        kind: "captured-metadata-publisher-role",
+        role,
+        allUnrelatedRowsPreserved: true,
+      });
+      save();
     }
     function verifyInputBodies() {
       for (const item of sourceManifest)
@@ -2446,6 +2615,9 @@ export async function runBrowserFixture(definition) {
       captureMembership,
       ...(creationScenario
         ? { captureCreatedFact, changeCreatedMembership }
+        : {}),
+      ...(metadataScenario
+        ? { captureMetadataPublisher, changeMetadataPublisherRole }
         : {}),
       verifyInputBodies,
       state,

@@ -70,6 +70,13 @@ private-object storage. Run its browser checks through
 `npm run test:project-creation-browser`; it requires the explicit private bindings
 documented there and uses an alternate display.
 
+The separate [mapping metadata editor](mapping-metadata-ui.md) changes a saved
+mapping's name and description using its actual metadata ETag. Its
+[browser fixture](../tools/mapping-metadata-browser/README.md) exercises restricted
+metadata writes independently of native ingestion and report generation. Run
+`npm run test:mapping-metadata-browser` with the explicit private fixture bindings;
+its qualification remains separate from project creation and read-only viewing.
+
 To browse real Ferrule examples, build the restricted worker image as described
 in [Ferrule worker](ferrule-worker.md). Set `WEFT_FERRULE_WORKER_IMAGE` to its
 immutable `sha256:...` image ID and start the server with
