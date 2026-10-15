@@ -1,5 +1,6 @@
 // Actual metadata-only editor scenario. All PATCHes originate in the browser.
 import { runBrowserFixture } from "../browser-fixture/runtime.mjs";
+import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
 
 await runBrowserFixture({
@@ -49,6 +50,8 @@ await runBrowserFixture({
       changeMetadataPublisherRole,
       normalPgRestart,
       verifyInputBodies,
+      fileIdentity,
+      storageRoot,
     } = fx;
     const profiles = ["administrator", "publisher", "runner", "viewer"],
       modes = ["edit", "featureOff"];
@@ -56,6 +59,7 @@ await runBrowserFixture({
       primary = null,
       unrelated = null,
       baseline = null,
+      initializedStorage = null,
       appended = false,
       publisherRole = "publisher";
     const scopeOnly = (value) => ({
@@ -67,6 +71,74 @@ await runBrowserFixture({
       row.organization_id === ids.organization &&
       row.project_id === project.projectId &&
       row.id === primary.scope.mappingId;
+    function captureInitializedStorage() {
+      check(
+        initializedStorage === null && typeof process.geteuid === "function",
+      );
+      const markerPath = join(storageRoot, ".weft-private-storage"),
+        identity = fileIdentity(markerPath);
+      check(
+        identity.mode === 0o400 &&
+          identity.userId === String(process.geteuid()) &&
+          identity.links === "1",
+      );
+      const fd = openSync(
+        markerPath,
+        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      );
+      try {
+        const initial = fstatSync(fd, { bigint: true });
+        check(
+          initial.isFile() &&
+            initial.size === 90n &&
+            (initial.mode & 0o7777n) === 0o400n &&
+            String(initial.ino) === identity.inode &&
+            String(initial.dev) === identity.device &&
+            String(initial.uid) === identity.userId &&
+            initial.nlink === 1n,
+        );
+        const buffer = Buffer.alloc(91);
+        check(readSync(fd, buffer, 0, buffer.length, 0) === 90);
+        const bytes = buffer.subarray(0, 90),
+          match =
+            /^weft-private-storage-v2\n([0-9a-f]{32})\n([0-9a-f]{32})\n$/.exec(
+              bytes.toString("utf8"),
+            );
+        check(
+          match &&
+            match[1] !== "0".repeat(32) &&
+            match[2] !== "0".repeat(32) &&
+            bytes.equals(
+              Buffer.from(
+                `weft-private-storage-v2\n${match[1]}\n${match[2]}\n`,
+                "ascii",
+              ),
+            ),
+        );
+        const complete = fstatSync(fd, { bigint: true });
+        check(
+          complete.size === initial.size &&
+            complete.mode === initial.mode &&
+            complete.ino === initial.ino &&
+            complete.dev === initial.dev &&
+            complete.uid === initial.uid &&
+            complete.nlink === initial.nlink &&
+            equivalent(fileIdentity(markerPath), identity),
+        );
+        initializedStorage = Object.freeze({
+          rootIdN: match[1],
+          controlIdN: match[2],
+          marker: Object.freeze({
+            path: ".weft-private-storage",
+            bytes: 90,
+            sha256: sha(bytes),
+            ...identity,
+          }),
+        });
+      } finally {
+        closeSync(fd);
+      }
+    }
     function version(value) {
       check(
         typeof value === "string" &&
@@ -228,6 +300,7 @@ await runBrowserFixture({
         "true",
       ]);
       initializeStorage();
+      captureInitializedStorage();
       const host = await startHost("mutation", {
         profile: "administrator",
         writer: true,
@@ -246,6 +319,15 @@ await runBrowserFixture({
       const editor = await open("publisher", "edit"),
         initialMetadata = await metadata(editor);
       baseline = snapshot();
+      check(
+        initializedStorage !== null &&
+          equivalent(
+            baseline.physical.find(
+              (file) => file.path === ".weft-private-storage",
+            ),
+            initializedStorage.marker,
+          ),
+      );
       verifyPublications(baseline);
       const mapping = currentMapping(baseline);
       check(
@@ -577,6 +659,10 @@ await runBrowserFixture({
       );
       verifyPublications(current);
       const compact = (value) => guid(value).replaceAll("-", "");
+      check(
+        compact(pub.root_id) === initializedStorage.rootIdN &&
+          compact(pub.control_namespace_id) === initializedStorage.controlIdN,
+      );
       const parts = [
         "objects",
         "native",
@@ -590,6 +676,7 @@ await runBrowserFixture({
       const blob = join(...parts, compact(revision.native_object_id) + ".blob"),
         control = join(
           ".weft-private-control",
+          initializedStorage.controlIdN,
           ...parts,
           compact(revision.native_object_id),
         );
