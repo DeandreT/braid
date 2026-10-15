@@ -29,6 +29,7 @@ import {
   type CatalogRevisionScope,
   type CatalogScope,
 } from "./catalog-types";
+import { trimCatalogName } from "./catalog-text";
 
 const pageSize = 10;
 const actionKeys = [
@@ -398,7 +399,7 @@ function text(
     typeof value !== "string" ||
     value.length > maximumScalars * 2 ||
     value.includes("\0") ||
-    (nonblank && value.trim().length === 0)
+    (nonblank && trimCatalogName(value).length === 0)
   )
     return false;
   let count = 0;

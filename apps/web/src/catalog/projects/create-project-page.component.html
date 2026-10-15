@@ -1,0 +1,422 @@
+<section
+  class="create-project"
+  aria-labelledby="create-project-title"
+  [attr.aria-busy]="state.busy()"
+>
+  <header class="creation-heading">
+    <p class="creation-eyebrow">Your workspace</p>
+    <h1 id="create-project-title">Create project</h1>
+    <p>
+      Create one project in the admitted organization. A deliberate recovery
+      keeps your original request unchanged.
+    </p>
+    @if (state.context(); as context) {
+      <a
+        [routerLink]="routes.projects(context.allowedOrganizationId)"
+        [queryParams]="{}"
+        >Back to projects</a
+      >
+    } @else {
+      <a routerLink="/catalog" [queryParams]="{}">Open catalog</a>
+    }
+    <button
+      type="button"
+      (click)="state.refresh()"
+      [disabled]="state.busy() || state.admission() === 'invalidLink'"
+    >
+      Refresh admission
+    </button>
+  </header>
+
+  @if (state.admission() === "loading") {
+    <p class="creation-status" role="status">
+      Checking current identity and organization…
+    </p>
+  } @else if (state.admission() !== "ready") {
+    <section class="creation-card" role="alert">
+      <h2>Creation form unavailable</h2>
+      @switch (state.admission()) {
+        @case ("invalidLink") {
+          <p>
+            This creation link is invalid. Open the catalog to choose an
+            organization.
+          </p>
+        }
+        @case ("notFound") {
+          <p>This organization is unavailable to your current identity.</p>
+        }
+        @case ("rejected") {
+          <p>Your Development identity could not be admitted.</p>
+        }
+        @default {
+          <p>
+            Current admission could not be read. No automatic creation request
+            was sent.
+          </p>
+        }
+      }
+    </section>
+  }
+
+  @if (state.retainedConfirmation()) {
+    <section
+      class="creation-card"
+      aria-labelledby="creation-retained-result"
+      role="status"
+    >
+      <h2 id="creation-retained-result" tabindex="-1">
+        Project creation confirmed
+      </h2>
+      <p>
+        This tab retained a verified creation receipt. Its details are hidden
+        until the original identity and organization can be checked.
+      </p>
+      <p>
+        Current project access is unavailable. A retry checks identity and reads
+        access only; it does not create another project.
+      </p>
+      <button
+        type="button"
+        (click)="state.retryAccess()"
+        [disabled]="state.busy()"
+      >
+        Retry project access
+      </button>
+    </section>
+  }
+
+  @if (state.context(); as context) {
+    @if (state.quarantined()) {
+      <section
+        class="creation-card creation-notice"
+        aria-labelledby="creation-quarantine"
+        role="status"
+      >
+        <h2 id="creation-quarantine" tabindex="-1">
+          Creation information is retained for another identity
+        </h2>
+        <p>
+          This tab keeps one original request or receipt. Its fields and receipt
+          are hidden here. Return to its original identity and organization to
+          continue; it will never be sent as your current identity.
+        </p>
+      </section>
+    } @else if (state.confirmation(); as confirmation) {
+      @let receipt = confirmation.body.receipt;
+      <section class="creation-card" aria-labelledby="creation-result">
+        <h2 id="creation-result" tabindex="-1">Project creation confirmed</h2>
+        <p class="creation-status" role="status">
+          {{
+            confirmation.body.outcome === "replayed"
+              ? "The original creation receipt was recovered."
+              : "The project was created."
+          }}
+        </p>
+        <dl class="creation-facts">
+          <dt>Name</dt>
+          <dd>{{ receipt.name }}</dd>
+          <dt>Description</dt>
+          <dd class="creation-description">
+            {{ receipt.description || "No description" }}
+          </dd>
+          <dt>Project ID</dt>
+          <dd>
+            <code>{{ receipt.project.projectId }}</code>
+          </dd>
+          <dt>Created</dt>
+          <dd>
+            <time [attr.datetime]="receipt.createdAtUtc"
+              >{{ receipt.createdAtUtc | date: "medium" : "UTC" }} UTC</time
+            >
+          </dd>
+          <dt>Initial project version</dt>
+          <dd>{{ receipt.initialProjectVersion }}</dd>
+          <dt>Initial membership</dt>
+          <dd>
+            Administrator · active · version
+            {{ receipt.initialMembershipVersion }}
+          </dd>
+        </dl>
+        <p>
+          Initial membership is historical creation evidence. It does not grant
+          current access or actions.
+        </p>
+        @switch (state.currentAccess().kind) {
+          @case ("loading") {
+            <p role="status">Checking current project access…</p>
+          }
+          @case ("ready") {
+            @let access = state.currentAccess();
+            @if (access.kind === "ready") {
+              <p>
+                Current project role:
+                <strong>{{ access.project.access.role }}</strong
+                >.
+              </p>
+              <a
+                class="creation-button"
+                [routerLink]="routes.project(access.project.scope)"
+                [queryParams]="{}"
+                >Open project</a
+              >
+            }
+          }
+          @default {
+            <p class="creation-notice" role="status">
+              Creation remains confirmed, but current project access could not
+              be loaded. A retry reads access only; it does not create another
+              project.
+            </p>
+          }
+        }
+        <div class="creation-actions">
+          <button
+            type="button"
+            (click)="state.retryAccess()"
+            [disabled]="state.busy()"
+          >
+            Retry project access
+          </button>
+          <button
+            type="button"
+            (click)="startAnother()"
+            [disabled]="state.busy()"
+          >
+            Start another project
+          </button>
+        </div>
+      </section>
+    } @else {
+      @if (!context.features.createProjects) {
+        <p class="creation-notice" role="status">
+          Project creation is not enabled for this workspace.
+        </p>
+      } @else if (!context.organizationActions.createProjects) {
+        <p class="creation-notice" role="status">
+          You do not currently have permission to create projects in this
+          organization. Project roles do not grant this organization capability.
+        </p>
+      }
+      @if (state.attemptSummary(); as attempt) {
+        <section
+          class="creation-card creation-notice"
+          aria-labelledby="creation-attempt"
+        >
+          <h2 id="creation-attempt" tabindex="-1">
+            {{
+              attempt.sending
+                ? "Sending creation request"
+                : attempt.uncertain
+                  ? "Creation outcome is unknown"
+                  : "Creation request refused"
+            }}
+          </h2>
+          @if (attempt.sending) {
+            <p role="status">
+              Waiting for the original request. No second request will be sent
+              automatically.
+            </p>
+          }
+          @if (attempt.uncertain) {
+            <p>
+              Your project may already exist. The original request is retained
+              in this tab; later refusals do not disprove an earlier commit.
+            </p>
+          } @else if (!attempt.sending) {
+            <p>
+              The last send was refused. Recover creation deliberately resends
+              the same original request after fresh admission.
+            </p>
+          }
+          @if (attempt.stopped) {
+            <p>
+              Waiting stopped. This does not promise that the server canceled
+              the request.
+            </p>
+          }
+          @if (!attempt.sending) {
+            <div class="creation-actions">
+              <button
+                type="button"
+                (click)="state.recover()"
+                [disabled]="!state.canRecover()"
+              >
+                Recover creation
+              </button>
+              @if (!attempt.requiresAbandonment) {
+                <button
+                  type="button"
+                  (click)="editRefused()"
+                  [disabled]="state.busy()"
+                >
+                  Edit refused request
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  (click)="abandonDecision.set(true)"
+                  [disabled]="state.busy()"
+                >
+                  Abandon original request
+                </button>
+              }
+            </div>
+          }
+          @if (abandonDecision()) {
+            <div class="creation-abandon">
+              <p>
+                Starting a different request uses a new identity and may create
+                a duplicate project. Browsing projects cannot prove which
+                request created a matching name.
+              </p>
+              <label class="creation-checkbox"
+                ><input
+                  type="checkbox"
+                  [checked]="abandonAcknowledged()"
+                  (change)="
+                    abandonAcknowledged.set($any($event.target).checked)
+                  "
+                />I understand a project may already exist.</label
+              >
+              <button
+                type="button"
+                (click)="abandon()"
+                [disabled]="!abandonAcknowledged() || state.busy()"
+              >
+                Abandon and start a new request
+              </button>
+              <button
+                type="button"
+                (click)="
+                  abandonDecision.set(false); abandonAcknowledged.set(false)
+                "
+              >
+                Keep original request
+              </button>
+            </div>
+          }
+        </section>
+      }
+      @if (state.error(); as problem) {
+        <p class="creation-error" role="alert">
+          {{ errorMessage(problem.kind) }}
+        </p>
+      }
+      @let errors = state.fieldErrors();
+      @if (errors.name || errors.description || errors.body) {
+        <section
+          id="creation-errors"
+          class="creation-card creation-error"
+          tabindex="-1"
+          role="alert"
+          aria-label="Project fields need attention"
+        >
+          <h2>Check the project fields</h2>
+          <ul>
+            @if (errors.name) {
+              <li>
+                <button
+                  type="button"
+                  class="creation-error-link"
+                  (click)="focusField('name')"
+                >
+                  {{ fieldError(errors.name, "name") }}
+                </button>
+              </li>
+            }
+            @if (errors.description) {
+              <li>
+                <button
+                  type="button"
+                  class="creation-error-link"
+                  (click)="focusField('description')"
+                >
+                  {{ fieldError(errors.description, "description") }}
+                </button>
+              </li>
+            }
+            @if (errors.body) {
+              <li>
+                The complete request is too large. Shorten the name or
+                description.
+              </li>
+            }
+          </ul>
+        </section>
+      }
+      <form
+        class="creation-card creation-form"
+        [formGroup]="form"
+        (ngSubmit)="submit()"
+        novalidate
+      >
+        <div>
+          <label for="project-name">Name</label>
+          <input
+            id="project-name"
+            type="text"
+            formControlName="name"
+            maxlength="65536"
+            autocomplete="off"
+            [attr.aria-invalid]="errors.name ? 'true' : null"
+            aria-describedby="project-name-help project-name-error"
+          />
+          <p id="project-name-help" class="creation-help">
+            Required. Up to 200 Unicode characters after surrounding whitespace
+            is removed; your raw text is kept in the original request.
+          </p>
+          <p id="project-name-error" class="creation-field-error">
+            {{ errors.name ? fieldError(errors.name, "name") : "" }}
+          </p>
+        </div>
+        <div>
+          <label for="project-description"
+            >Description <span>(optional)</span></label
+          >
+          <textarea
+            id="project-description"
+            formControlName="description"
+            maxlength="8000"
+            rows="5"
+            [attr.aria-invalid]="errors.description ? 'true' : null"
+            aria-describedby="project-description-help project-description-error"
+          ></textarea>
+          <p id="project-description-help" class="creation-help">
+            Up to 4,000 Unicode characters. Whitespace is preserved exactly.
+          </p>
+          <p id="project-description-error" class="creation-field-error">
+            {{
+              errors.description
+                ? fieldError(errors.description, "description")
+                : ""
+            }}
+          </p>
+        </div>
+        @if (!state.attemptSummary()) {
+          <button
+            class="creation-primary"
+            type="submit"
+            [disabled]="!state.canCreate()"
+          >
+            Create project
+          </button>
+        }
+        @if (state.submitting()) {
+          <p class="creation-status" role="status">
+            Sending the original creation request…
+          </p>
+        }
+      </form>
+    }
+  }
+  @if (state.busy()) {
+    <button type="button" (click)="state.stopWaiting()">Stop waiting</button>
+  }
+  @if (state.hasRetainedRequest()) {
+    <p class="creation-tab-warning">
+      Creation information is kept only in this tab’s memory. Closing or
+      reloading the tab loses its original recovery information. Normal
+      navigation within this workspace keeps it.
+    </p>
+  }
+</section>

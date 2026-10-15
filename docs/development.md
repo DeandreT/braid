@@ -63,6 +63,13 @@ packaged API origin for configured catalog reads. Its strict Development Host
 boundary is preserved; the separate Angular development proxy is not the
 catalog qualification origin.
 
+The [project creation form](project-creation-ui.md) uses the separate organization
+creation capability. Its [browser fixture](../tools/project-creation-browser/README.md)
+uses only catalog and restricted creator credentials, without native workers or
+private-object storage. Run its browser checks through
+`npm run test:project-creation-browser`; it requires the explicit private bindings
+documented there and uses an alternate display.
+
 To browse real Ferrule examples, build the restricted worker image as described
 in [Ferrule worker](ferrule-worker.md). Set `WEFT_FERRULE_WORKER_IMAGE` to its
 immutable `sha256:...` image ID and start the server with

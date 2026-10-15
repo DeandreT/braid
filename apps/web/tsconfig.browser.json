@@ -4,7 +4,9 @@
   "include": [
     "playwright.catalog.config.ts",
     "playwright.reports.config.ts",
+    "playwright.project-creation.config.ts",
     "tests/catalog*.ts",
-    "tests/revision-reports*.ts"
+    "tests/revision-reports*.ts",
+    "tests/project-creation*.ts"
   ]
 }

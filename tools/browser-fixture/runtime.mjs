@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 
 export async function runBrowserFixture(definition) {
   try {
+    const creationScenario = definition.kind === "project-creation";
     class Failure extends Error {
       constructor(category) {
         super(category);
@@ -143,14 +144,18 @@ export async function runBrowserFixture(definition) {
     );
     check(
       process.env[
-        definition.kind === "catalog"
-          ? "WEFT_CATALOG_BROWSER_MANIFEST"
-          : "WEFT_REPORTS_BROWSER_MANIFEST"
+        creationScenario
+          ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
+          : definition.kind === "catalog"
+            ? "WEFT_CATALOG_BROWSER_MANIFEST"
+            : "WEFT_REPORTS_BROWSER_MANIFEST"
       ] === cfg.manifestPath &&
         process.env[
-          definition.kind === "catalog"
-            ? "WEFT_CATALOG_BASE_URL"
-            : "WEFT_REPORTS_BASE_URL"
+          creationScenario
+            ? "WEFT_PROJECT_CREATION_BASE_URL"
+            : definition.kind === "catalog"
+              ? "WEFT_CATALOG_BASE_URL"
+              : "WEFT_REPORTS_BASE_URL"
         ] === origin(cfg.readOrigin),
     );
     origin(cfg.mutationOrigin);
@@ -209,11 +214,12 @@ export async function runBrowserFixture(definition) {
             },
           ];
         });
-    for (const [kind, assembly] of [
+    const publicationKinds = [
       ["server", "Weft.Server"],
       ["databaseTool", "Weft.DatabaseTool"],
-      ["storageTool", "Weft.StorageTool"],
-    ]) {
+      ...(creationScenario ? [] : [["storageTool", "Weft.StorageTool"]]),
+    ];
+    for (const [kind, assembly] of publicationKinds) {
       const item = cfg.publications[kind];
       absolute(item.directory);
       check(
@@ -235,9 +241,14 @@ export async function runBrowserFixture(definition) {
     const postgresImage =
       "postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc";
     check(
-      cfg.workerImage === workerImage && cfg.postgresImage === postgresImage,
+      (creationScenario
+        ? cfg.workerImage === null && cfg.nativeWorkers === "forbidden"
+        : cfg.workerImage === workerImage) &&
+        cfg.postgresImage === postgresImage,
     );
     const fixedFixtures = definition.fixtures;
+    if (creationScenario)
+      check(Array.isArray(fixedFixtures) && fixedFixtures.length === 0);
     const fixtures = fixedFixtures.map(([path, digest, length]) => {
       const bytes = readFileSync(join(workspace, path));
       check(
@@ -276,7 +287,10 @@ export async function runBrowserFixture(definition) {
     mkdirSync(scratch, { mode: 0o700 });
     const storageRoot = join(scratch, "private-objects"),
       nonce = randomBytes(8).toString("hex");
-    const resourceName = "weft-catalog-browser-" + nonce;
+    const resourceName =
+      (creationScenario
+        ? "weft-project-creation-browser-"
+        : "weft-catalog-browser-") + nonce;
     const labels = {
       "weft.qualification.owner": fixtureId,
       "weft.qualification.nonce": nonce,
@@ -540,6 +554,13 @@ export async function runBrowserFixture(definition) {
                 const item = JSON.parse(line),
                   name = item.Actor?.Attributes?.name;
                 if (
+                  creationScenario &&
+                  item.Type === "container" &&
+                  (/^weft-inspect-[0-9a-f]{32}$/.test(name ?? "") ||
+                    item.Actor?.Attributes?.image === workerImage)
+                )
+                  throw new Failure("productFailure");
+                if (
                   item.Type === "container" &&
                   /^weft-inspect-[0-9a-f]{32}$/.test(name ?? "") &&
                   ["create", "destroy"].includes(item.Action)
@@ -584,6 +605,8 @@ export async function runBrowserFixture(definition) {
         const workers = [...workerEvents.values()].filter(
           (item) => item.create,
         );
+        if (creationScenario)
+          check(!requireSome && workers.length === 0, "productFailure");
         const observations = [];
         for (const item of workers)
           observations.push({
@@ -742,6 +765,23 @@ export async function runBrowserFixture(definition) {
         "SELECT json_build_object('roles',(SELECT jsonb_agg(to_jsonb(r) ORDER BY rolname) FROM pg_authid r WHERE rolname LIKE 'weft_%'),'memberships',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY to_jsonb(m)::text),'[]'::jsonb) FROM pg_auth_members m))",
         true,
       );
+    // C-only, fixed read-only grant capture. Hash complete ordered catalog arrays
+    // inside PostgreSQL so even the built-in routine ACL set stays below pipe limits.
+    // Relation capture includes column ACLs, not only table-level relacl.
+    function creationGrantState() {
+      check(creationScenario);
+      return jsonSql(
+        `SELECT json_build_object(
+        'database',(SELECT jsonb_build_array(oid,datname,datdba,datacl::text) FROM pg_catalog.pg_database WHERE datname=current_database()),
+        'schemasSha256',(SELECT encode(sha256(convert_to(coalesce(jsonb_agg(jsonb_build_array(oid,nspname,nspowner,nspacl::text) ORDER BY oid),'[]'::jsonb)::text,'UTF8')),'hex') FROM pg_catalog.pg_namespace),
+        'relationsAndColumnsSha256',(SELECT encode(sha256(convert_to(coalesce(jsonb_agg(jsonb_build_array(c.oid,c.relnamespace,c.relname,c.relkind,c.relowner,c.relacl::text,
+          (SELECT coalesce(jsonb_agg(jsonb_build_array(a.attnum,a.attname,a.attacl::text) ORDER BY a.attnum),'[]'::jsonb)
+           FROM pg_catalog.pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped AND a.attacl IS NOT NULL)) ORDER BY c.oid),'[]'::jsonb)::text,'UTF8')),'hex') FROM pg_catalog.pg_class c),
+        'functionsSha256',(SELECT encode(sha256(convert_to(coalesce(jsonb_agg(jsonb_build_array(oid,pronamespace,proname,prokind,proargtypes::text,proowner,proacl::text) ORDER BY oid),'[]'::jsonb)::text,'UTF8')),'hex') FROM pg_catalog.pg_proc),
+        'defaultPrivilegesSha256',(SELECT encode(sha256(convert_to(coalesce(jsonb_agg(jsonb_build_array(oid,defaclrole,defaclnamespace,defaclobjtype,defaclacl::text) ORDER BY oid),'[]'::jsonb)::text,'UTF8')),'hex') FROM pg_catalog.pg_default_acl))`,
+        true,
+      );
+    }
     function fileIdentity(path) {
       const stat = lstatSync(path, { bigint: true });
       check(stat.isFile() && !stat.isSymbolicLink());
@@ -763,16 +803,22 @@ export async function runBrowserFixture(definition) {
         closeSync(fd);
       }
     }
-    const physical = () =>
-      walk(storageRoot).map((item) => ({
+    const physical = () => {
+      if (creationScenario) {
+        check(!existsSync(storageRoot));
+        return [];
+      }
+      return walk(storageRoot).map((item) => ({
         ...item,
         ...fileIdentity(join(storageRoot, item.path)),
       }));
+    };
     const snapshot = () => ({
       rows: rows(),
       journal: journal(),
       credentials: credentialState(),
       physical: physical(),
+      ...(creationScenario ? { grants: creationGrantState() } : {}),
     });
     function tool(command, extra = {}) {
       return run(
@@ -996,7 +1042,7 @@ export async function runBrowserFixture(definition) {
         host.token = reply.body.requestToken;
         const expectedFeatures = {
           readCatalog: true,
-          createProjects: host.writer,
+          createProjects: host.writer || host.creationOnly,
           createMappings: host.writer,
           editMetadata: false,
           uploadRevisions: host.writer,
@@ -1021,6 +1067,7 @@ export async function runBrowserFixture(definition) {
         actor = null,
         organization = ids.organization,
         writer = false,
+        creationOnly = false,
         reportMode = null,
       } = {},
     ) {
@@ -1038,6 +1085,11 @@ export async function runBrowserFixture(definition) {
               reportMode,
             )),
       );
+      check(
+        !creationOnly || (creationScenario && !writer && reportMode === null),
+      );
+      if (creationScenario)
+        check(creationOnly && !writer && reportMode === null);
       const address = kind === "read" ? cfg.readOrigin : cfg.mutationOrigin;
       await listenerAbsent(address);
       const actualActor =
@@ -1080,12 +1132,18 @@ export async function runBrowserFixture(definition) {
           profile === "readerUnavailable"
             ? connections.unavailable
             : connections.weft_catalog_reader,
-        WEFT_PROJECT_CREATION_ENABLED: String(writer),
+        WEFT_PROJECT_CREATION_ENABLED: String(writer || creationOnly),
         WEFT_REVISION_INGESTION_ENABLED: String(writer),
         WEFT_METADATA_EDITS_ENABLED: "false",
         WEFT_REVISION_REPORTS_ENABLED: "false",
         WEFT_REVISION_REPORT_DERIVATION_ENABLED: "false",
       });
+      if (creationOnly) {
+        environment.WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING =
+          connections.weft_project_creator;
+        delete environment.DOCKER_HOST;
+        delete environment.DOCKER_CONFIG;
+      }
       if (writer)
         Object.assign(environment, {
           WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING:
@@ -1116,7 +1174,19 @@ export async function runBrowserFixture(definition) {
           /MIGRATION|LOCAL_|POSTGRES_ADMIN/.test(key),
         ),
       );
-      if (!writer && reportMode === null)
+      if (creationOnly)
+        check(
+          !Object.keys(environment).some((key) =>
+            /INGESTION_CONNECTION|DERIVATION_CONNECTION|REPORT_CONNECTION|PRIVATE_STORAGE|WORKER_IMAGE|MAINTENANCE_CONNECTION/.test(
+              key,
+            ),
+          ) &&
+            environment.WEFT_PROJECT_CREATION_ENABLED === "true" &&
+            environment.WEFT_REVISION_INGESTION_ENABLED === "false" &&
+            environment.WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING ===
+              connections.weft_project_creator,
+        );
+      if (!writer && !creationOnly && reportMode === null)
         check(
           !Object.keys(environment).some((key) =>
             /POSTGRES_|PRIVATE_STORAGE|WORKER_IMAGE/.test(key),
@@ -1135,6 +1205,7 @@ export async function runBrowserFixture(definition) {
         organization,
         origin: address,
         writer,
+        creationOnly,
         reportMode,
         child,
         cookies: [],
@@ -1179,7 +1250,8 @@ export async function runBrowserFixture(definition) {
           source: cfg.source.commit,
           processorCount: 2,
           gcHeapLimitBytes: 1073741824,
-          metadataOnly: !writer && reportMode === null,
+          metadataOnly: !writer && !creationOnly && reportMode === null,
+          ...(creationScenario ? { creationOnly } : {}),
           reportMode,
           terminal: null,
         };
@@ -1528,12 +1600,15 @@ export async function runBrowserFixture(definition) {
       before = inventories();
       state.preexisting = before;
       save();
-      const worker = jsonDocker(["image", "inspect", workerImage])[0],
+      const worker = creationScenario
+          ? null
+          : jsonDocker(["image", "inspect", workerImage])[0],
         postgres = jsonDocker(["image", "inspect", postgresImage])[0];
       check(
-        worker.Id === workerImage &&
-          worker.Os === "linux" &&
-          worker.Architecture === "amd64" &&
+        (creationScenario ||
+          (worker.Id === workerImage &&
+            worker.Os === "linux" &&
+            worker.Architecture === "amd64")) &&
           postgres.RepoDigests?.includes(postgresImage) &&
           postgres.Os === "linux" &&
           postgres.Architecture === "amd64",
@@ -1716,11 +1791,12 @@ export async function runBrowserFixture(definition) {
         schemaVersion: `weft.${definition.kind}-browser-ready.v1`,
         fixtureId,
         manifestSha256: sha(bytes),
-        profile: "viewer",
+        profile: creationScenario ? "creator" : "viewer",
       });
     }
 
     function initializeStorage() {
+      check(!creationScenario);
       run(
         cfg.dotnet,
         [
@@ -1766,7 +1842,8 @@ export async function runBrowserFixture(definition) {
       );
     }
 
-    // The only owner-write SQL consists of these two fixed, captured-identity controls.
+    // A/B revocation uses only these two fixed, captured-identity owner writes.
+    // The separate C membership seam below also accepts only captured creation identities.
     // General sql() above always opens READ ONLY and rejects any other top-level verb.
     function revoke(kind) {
       inspectOwned();
@@ -1883,6 +1960,164 @@ export async function runBrowserFixture(definition) {
       });
       save();
     }
+    const capturedCreations = new Map();
+    function captureCreatedFact(projectId) {
+      check(
+        creationScenario &&
+          !capturedCreations.has(guid(projectId)) &&
+          !mutationHost,
+      );
+      const current = rows();
+      const fact = current.project_creations.filter(
+        (row) =>
+          row.organization_id === ids.organization &&
+          row.project_id === projectId &&
+          row.original_actor_id === ids.viewer,
+      );
+      const project = current.projects.filter(
+        (row) =>
+          row.organization_id === ids.organization && row.id === projectId,
+      );
+      const member = current.project_memberships.filter(
+        (row) =>
+          row.organization_id === ids.organization &&
+          row.project_id === projectId,
+      );
+      check(fact.length === 1 && project.length === 1 && member.length === 1);
+      const f = fact[0],
+        p = project[0],
+        m = member[0];
+      check(
+        p.creator_principal_id === ids.viewer &&
+          p.name === f.name &&
+          p.description === f.description &&
+          String(p.version) === "1" &&
+          p.created_at === p.updated_at &&
+          p.created_at === f.created_at &&
+          String(f.initial_project_version) === "1" &&
+          f.initial_membership_role === "administrator" &&
+          f.initial_membership_active === true &&
+          String(f.initial_membership_version) === "1" &&
+          m.principal_id === ids.viewer &&
+          m.role === "administrator" &&
+          m.active === true &&
+          String(m.version) === "1" &&
+          f.fingerprint_version === 1 &&
+          /^[a-f0-9]{64}$/.test(f.fingerprint),
+      );
+      capturedCreations.set(projectId, f);
+      return { organizationId: ids.organization, projectId };
+    }
+    function changeCreatedMembership(projectId, mode) {
+      check(
+        creationScenario &&
+          !mutationHost &&
+          ["viewer", "deleted"].includes(mode),
+      );
+      guid(projectId);
+      inspectOwned();
+      const captured = capturedCreations.get(projectId);
+      check(captured);
+      const old = rows();
+      check(old.project_creations.some((row) => equivalent(row, captured)));
+      const mine = (row) =>
+        row.organization_id === ids.organization &&
+        row.project_id === projectId &&
+        row.principal_id === ids.viewer;
+      const members = old.project_memberships.filter(mine);
+      check(
+        members.length === 1 &&
+          members[0].active === true &&
+          ["administrator", "viewer"].includes(members[0].role),
+      );
+      const member = members[0];
+      check(/^[1-9][0-9]*$/.test(String(member.version)));
+      if (mode === "viewer") check(member.role === "administrator");
+      const where =
+        " WHERE organization_id='" +
+        ids.organization +
+        "' AND project_id='" +
+        projectId +
+        "' AND principal_id='" +
+        ids.viewer +
+        "' AND role='" +
+        member.role +
+        "' AND active=true AND version=" +
+        BigInt(member.version);
+      const query =
+        (mode === "viewer"
+          ? "UPDATE weft.project_memberships SET role='viewer',version=version+1"
+          : "DELETE FROM weft.project_memberships") +
+        where +
+        " RETURNING row_to_json(project_memberships)";
+      const result = run(
+        cfg.docker,
+        [
+          "--host=unix://" + cfg.daemonSocket,
+          "exec",
+          "--interactive",
+          "--env",
+          "PGPASSWORD",
+          pg.Id,
+          "psql",
+          "-X",
+          "-qAt",
+          "--host=127.0.0.1",
+          "--username",
+          "weft_migrator",
+          "--dbname",
+          "weft",
+          "--set=ON_ERROR_STOP=1",
+        ],
+        {
+          env: { ...roleEnvironment, PGPASSWORD: secrets.get("MIGRATOR") },
+          timeout: 10000,
+          input:
+            "BEGIN;\nSET LOCAL lock_timeout='1s';\nSET LOCAL statement_timeout='5s';\n" +
+            query +
+            ";\nCOMMIT;\n",
+        },
+      );
+      const lines = result.stdout.split("\n").filter(Boolean);
+      check(lines.length === 1, "productFailure");
+      const actual = JSON.parse(lines[0]),
+        after = rows();
+      const expected =
+        mode === "viewer"
+          ? {
+              ...member,
+              role: "viewer",
+              version: String(BigInt(member.version) + 1n),
+            }
+          : { ...member, version: String(member.version) };
+      check(
+        equivalent({ ...actual, version: String(actual.version) }, expected),
+      );
+      const remaining = after.project_memberships.filter(mine);
+      check(
+        mode === "viewer"
+          ? remaining.length === 1 && equivalent(remaining[0], actual)
+          : remaining.length === 0,
+      );
+      check(
+        equivalent(
+          old.project_memberships.filter((row) => !mine(row)),
+          after.project_memberships.filter((row) => !mine(row)),
+        ) &&
+          equivalent(
+            { ...old, project_memberships: [] },
+            { ...after, project_memberships: [] },
+          ),
+      );
+      state.observations.push({
+        kind: "captured-creation-membership-change",
+        projectId,
+        mode,
+        immutableCreationFactsAndAllOtherRowsPreserved: true,
+      });
+      save();
+      return { organizationId: ids.organization, projectId };
+    }
     function verifyInputBodies() {
       for (const item of sourceManifest)
         check(
@@ -1890,7 +2125,7 @@ export async function runBrowserFixture(definition) {
             (ordinary(join(workspace, item.path)).mode & 0o777) ===
               (String(item.mode) === "100755" ? 0o755 : 0o644),
         );
-      for (const key of ["server", "databaseTool", "storageTool"]) {
+      for (const [key] of publicationKinds) {
         const item = cfg.publications[key],
           actual = walk(item.directory);
         check(actual.length === Object.keys(item.hashes).length);
@@ -2209,6 +2444,9 @@ export async function runBrowserFixture(definition) {
       jsonSql,
       sql,
       captureMembership,
+      ...(creationScenario
+        ? { captureCreatedFact, changeCreatedMembership }
+        : {}),
       verifyInputBodies,
       state,
       budget,

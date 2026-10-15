@@ -110,6 +110,9 @@ export const catalogRoutes = {
     if (!isCatalogId(organizationId)) throw new CatalogReadError("invalidLink");
     return `/catalog/organizations/${organizationId}/projects`;
   },
+  createProject(organizationId: string): string {
+    return `${catalogRoutes.projects(organizationId)}/new`;
+  },
   project: projectRoute,
   mapping: mappingRoute,
   revision(scope: CatalogRevisionScope): string {

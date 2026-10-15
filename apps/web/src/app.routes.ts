@@ -4,6 +4,7 @@ import { MappingPageComponent } from "./catalog/mapping-page.component";
 import { ProjectPageComponent } from "./catalog/project-page.component";
 import { ProjectsPageComponent } from "./catalog/projects-page.component";
 import { RevisionPageComponent } from "./catalog/revision-page.component";
+import { CreateProjectPageComponent } from "./catalog/projects/create-project-page.component";
 import { ExamplesComponent } from "./examples.component";
 import { NotFoundComponent } from "./not-found.component";
 
@@ -23,6 +24,11 @@ export const routes: Routes = [
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId",
         component: MappingPageComponent,
         title: "Mapping · Weft",
+      },
+      {
+        path: "organizations/:organizationId/projects/new",
+        component: CreateProjectPageComponent,
+        title: "Create project · Weft",
       },
       {
         path: "organizations/:organizationId/projects/:projectId",

@@ -12,6 +12,18 @@
       </h1>
       <p class="catalog-intro">Choose a project to browse its mappings.</p>
     </div>
+    @if (context(); as context) {
+      @if (
+        context.features.createProjects &&
+        context.organizationActions.createProjects
+      ) {
+        <a
+          class="catalog-button"
+          [routerLink]="routes.createProject(context.allowedOrganizationId)"
+          >Create project</a
+        >
+      }
+    }
     <button
       class="catalog-button"
       type="button"
