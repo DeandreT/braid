@@ -99,6 +99,47 @@ class MetadataWire {
       "actual HTTP observation or closed request boundary failed",
     );
   }
+  async focusAdmission(): Promise<void> {
+    await this.page.bringToFront();
+    await expect
+      .poll(() =>
+        this.page.evaluate(
+          () => document.hasFocus() && document.visibilityState === "visible",
+        ),
+      )
+      .toBe(true);
+    await expect(button(this.page, "Refresh admission")).toBeEnabled();
+    const response = (path: string) =>
+      this.page.waitForResponse(
+        (reply) => {
+          const url = new URL(reply.url());
+          return (
+            reply.request().method() === "GET" &&
+            url.origin === this.owner.manifest.readOrigin &&
+            url.pathname === path &&
+            !url.search &&
+            reply.status() === 200
+          );
+        },
+        { timeout: 10000 },
+      );
+    const context = response("/api/v1/catalog/context"),
+      mapping = response(this.mappingApi);
+    await this.page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    for (const reply of await Promise.all([context, mapping])) {
+      let nonempty: boolean;
+      try {
+        nonempty = (await reply.body()).length > 0;
+      } catch {
+        throw new Error(
+          "Mapping metadata browser fixture: focus admission response body could not be consumed",
+        );
+      }
+      requireMetadata(nonempty, "focus admission response body was empty");
+    }
+    await this.settle();
+    await ready(this.page);
+  }
   private admitted(value: unknown, tag: string | undefined): Baseline {
     requireMetadata(
       value !== null && typeof value === "object" && !Array.isArray(value),
@@ -529,6 +570,7 @@ async function save(
   draft: Draft,
   profile: Profile = "publisher",
 ): Promise<number> {
+  await wire.focusAdmission();
   await fill(page, draft);
   await wire.arm(draft, profile);
   const index = wire.patchCount,
@@ -691,6 +733,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
       await fill(active, mine);
       await save(page, wire, unicode);
       const trusted = await owner.checkpoint();
+      await contender.focusAdmission();
       const index = contender.patchCount,
         contexts = contender.contextCount,
         mappings = contender.actionReadCount;
@@ -807,6 +850,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         "same-actor restoration lost retained draft",
       );
       expect(editorWire.patchCount).toBe(count);
+      await editorWire.focusAdmission();
       const contexts = editorWire.contextCount,
         mappings = editorWire.actionReadCount,
         held = await editorWire.arm(draft, "publisher", "hold-forward");
@@ -829,6 +873,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         acceptedName: "Unacknowledged actual metadata",
         description: " Exact lost-response description. ",
       };
+      await editorWire.focusAdmission();
       await fill(active, draft);
       const count = editorWire.patchCount,
         contexts = editorWire.contextCount,
