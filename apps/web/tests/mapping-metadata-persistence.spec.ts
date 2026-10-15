@@ -68,6 +68,7 @@ class MetadataWire {
     wait: Promise<void>;
   } | null = null;
   private failed = false;
+  private failure: Error | null = null;
   private unexpected = false;
   readonly metadataPath: string;
   readonly mappingApi: string;
@@ -92,6 +93,7 @@ class MetadataWire {
   }
   async settle(): Promise<void> {
     await Promise.all(this.tasks);
+    if (this.failure) throw this.failure;
     requireMetadata(
       !this.failed && !this.unexpected,
       "actual HTTP observation or closed request boundary failed",
@@ -353,8 +355,22 @@ class MetadataWire {
         if (plan.delivery !== "hold-forward") plan.entered();
         if (plan.delivery === "lose") await route.abort("failed");
         else await route.fulfill({ response: reply });
-      } catch {
-        if (!request.failure()) this.failed = true;
+      } catch (error: unknown) {
+        if (!request.failure()) {
+          this.failed = true;
+          this.failure ??=
+            error instanceof Error &&
+            error.message.startsWith("Mapping metadata browser fixture: ")
+              ? error
+              : new Error(
+                  "Mapping metadata browser fixture: actual PATCH observation failed",
+                );
+        }
+        try {
+          await route.abort("failed");
+        } catch {
+          // The original request may already be settled or canceled; retain its first failure.
+        }
         patch.finish();
       }
     });
@@ -612,7 +628,10 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
           exact: true,
         }),
       ).toBeVisible();
-      expect(await (await mappingResponse).finished()).toBeNull();
+      requireMetadata(
+        (await (await mappingResponse).body()).length > 0,
+        "ordinary mapping response body was empty",
+      );
       await wire.settle();
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       requireMetadata(
@@ -848,7 +867,10 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
           exact: true,
         }),
       ).toBeVisible();
-      expect(await (await mappingResponse).finished()).toBeNull();
+      requireMetadata(
+        (await (await mappingResponse).body()).length > 0,
+        "ordinary mapping response body was empty",
+      );
       await editorWire.settle();
       await active.goto(revisionPath(fixture.primary.initialRevision.scope));
       await expect(active.getByRole("heading", { level: 1 })).toHaveText(
