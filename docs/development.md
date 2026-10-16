@@ -37,8 +37,8 @@ separate qualification scopes. Appending a revision follows separately.
 
 - .NET SDK 10.0.112, pinned in the root `global.json`.
 - Node 22.23.3 and npm 12.1.0, pinned in `.node-version` and `package.json`.
-- For Linux browser tests: Xvfb and the Chromium build installed by the locked
-  Playwright package, as described below.
+- For Linux browser tests: Xvfb, curl, unzip, and the pinned Chrome for Testing
+  build described below.
 - For Ferrule worker checks: Rust nightly `2026-07-21` with rustfmt/clippy,
   Linux Docker with cgroup v2, and BuildKit. See [Ferrule worker](ferrule-worker.md)
   for the image build and live-test configuration.
@@ -144,23 +144,32 @@ server before invoking it. The root browser-test command always uses a fresh
 alternate virtual display and unsets Wayland. Never run headed Playwright on an
 active user display.
 
-After `npm ci`, install and resolve Chromium through that same locked Playwright
-package. Each Playwright version expects its corresponding browser build;
-an arbitrary system Chromium can behave differently even when it launches.
+After `npm ci`, use Chrome for Testing **157.0.8090.0** for Linux browser checks.
+The Chromium bundled with the locked Playwright package lacks the
+[streaming-response fix](https://chromium.googlesource.com/chromium/src/+/62473ad0f747e245e514c93e741bb8e168a2a207)
+reported in [Playwright #42742](https://github.com/microsoft/playwright/issues/42742).
+That defect can report `ERR_ABORTED` for a `no-store` response after the page has
+read it to EOF. Keep the application headers and strict failure assertions.
+Verify the archive checksum before extracting it:
 
 ```sh
-node node_modules/playwright/cli.js install chromium --no-shell
-WEFT_CHROMIUM_EXECUTABLE="$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
+npx playwright install-deps chromium
+weft_browser_directory="$(mktemp -d "${TMPDIR:-/tmp}/weft-chromium.XXXXXXXX")"
+curl --fail --location --retry 3 --output "$weft_browser_directory/chrome.zip" \
+  https://storage.googleapis.com/chrome-for-testing-public/157.0.8090.0/linux64/chrome-linux64.zip
+printf '%s  %s\n' 3ec877f440c1ea393c4f164ce5339dc0fd6b5384184a84b38550a78721c2086c "$weft_browser_directory/chrome.zip" | sha256sum --check --status && \
+  unzip -q "$weft_browser_directory/chrome.zip" -d "$weft_browser_directory"
+WEFT_CHROMIUM_EXECUTABLE="$weft_browser_directory/chrome-linux64/chrome"
 export WEFT_CHROMIUM_EXECUTABLE
 npm run test:browser
 ```
 
-For a private browser cache, export an absolute `PLAYWRIGHT_BROWSERS_PATH` before
-both installation and executable lookup. Keep it set when running the tests.
-`WEFT_CHROMIUM_EXECUTABLE` also permits a deliberately chosen compatible browser;
-use the locked package's installed build for reproducible verification. Repeat
-the installation after a Playwright dependency update. Linux system libraries
-are still required; see [Playwright's browser setup](https://playwright.dev/docs/browsers).
+CI uses this same version, checksum and executable override. Playwright does not
+guarantee compatibility with arbitrary external executables; keep this tested
+pin when reproducing results and verify any future browser update with the
+existing suite. The lockfile continues to select the Playwright API version.
+Linux system libraries are still required; see
+[Playwright's browser setup](https://playwright.dev/docs/browsers).
 
 The harness runs the API in Development. Supply the configured immutable worker
 image for actual native viewer flows; missing configuration does not qualify
