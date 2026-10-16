@@ -1267,6 +1267,12 @@ class MetadataWire {
       }))
       .sort(
         (left, right) =>
+          Number(
+            right.state.failureCategory !== null && !right.state.ownedTeardown,
+          ) -
+            Number(
+              left.state.failureCategory !== null && !left.state.ownedTeardown,
+            ) ||
           Number(!right.state.ready && right.state.failureCategory === null) -
             Number(!left.state.ready && left.state.failureCategory === null) ||
           right.ordinal - left.ordinal,
@@ -1502,6 +1508,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         await expect(page.getByLabel("Name", { exact: true })).toHaveCount(0);
         expect(wire.patchCount).toBe(0);
         expect((await owner.checkpoint()).state).toEqual(initial.state);
+        await wire.settle();
       }
       await owner.control({
         action: "restart-profile",
@@ -1512,6 +1519,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
       await expect(heading(page, "Metadata editor unavailable")).toBeVisible();
       await expect(page.getByLabel("Name", { exact: true })).toHaveCount(0);
       expect(wire.patchCount).toBe(0);
+      await wire.settle();
     });
     await test.step("actual Administrator saves and exact trimmed no-op preserve timestamps; BOM-only remains ordinarily readable", async () => {
       await owner.control({
