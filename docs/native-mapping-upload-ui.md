@@ -68,3 +68,12 @@ restart, permission changes, decoded-invalid admission and decode/format refusal
 Controlled responses establish frontend behavior only. The final implementation
 and qualification report must record exact committed source and actual results;
 implementation and qualification are tracked separately in [#84](https://github.com/DeandreT/weft/issues/84).
+
+The packaged scenario mediates upload responses and ordinary revision reads
+whose exact identity was learned from a committed upload. Each such read makes
+one real API request, retains its complete JSON entity, and delivers those exact
+bytes to the originating browser request. Checks bind the actual response status,
+immutable revision facts and a fresh pending-to-ready page transition. Other
+catalog reads retain their direct browser-response checks. This qualifies the
+mediated API and frontend flow; browser-to-server cancellation propagation and
+network streaming timing have separate verification boundaries.

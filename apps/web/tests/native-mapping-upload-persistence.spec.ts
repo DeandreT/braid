@@ -172,6 +172,109 @@ const button = (page: Page, name: string) =>
   page.getByRole("button", { name, exact: true });
 const heading = (page: Page, name: string) =>
   page.getByRole("heading", { name, exact: true });
+/** One received HTTP entity, shared only by the exact intercepted browser Request. */
+class MediatedRevisionRead {
+  readonly deadline = performance.now() + 8000;
+  readonly ready: Promise<Buffer>;
+  private resolve!: (body: Buffer) => void;
+  private reject!: (error: Error) => void;
+  private readonly timer: ReturnType<typeof setTimeout>;
+  private bytes: Buffer | null = null;
+  private status: number | null = null;
+  private fulfilled = false;
+  private responseSeen = false;
+  private failure: Error | null = null;
+  canceled = false;
+  constructor(readonly request: Request) {
+    this.ready = new Promise<Buffer>((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+    void this.ready.catch(() => undefined);
+    this.timer = setTimeout(
+      () =>
+        this.fail(
+          "mediated revision delivery exceeded the existing read budget",
+        ),
+      8000,
+    );
+  }
+  remaining(): number {
+    this.assertLive();
+    return Math.max(1, Math.floor(this.deadline - performance.now()));
+  }
+  assertLive(): void {
+    if (!this.failure && performance.now() >= this.deadline)
+      this.fail("mediated revision delivery exceeded the existing read budget");
+    if (this.failure) throw this.failure;
+    requireUpload(
+      !this.request.failure(),
+      "mediated revision request was canceled",
+    );
+  }
+  candidate(bytes: Buffer, status: number): void {
+    this.assertLive();
+    this.bytes = bytes;
+    this.status = status;
+  }
+  response(reply: BrowserResponse): void {
+    try {
+      this.assertLive();
+      requireUpload(
+        reply.request() === this.request &&
+          reply.url() === this.request.url() &&
+          reply.status() === this.status,
+        "mediated browser response identity or status differs",
+      );
+      this.responseSeen = true;
+      this.complete();
+    } catch {
+      this.fail("mediated browser response could not be admitted");
+    }
+  }
+  delivered(): void {
+    this.assertLive();
+    this.fulfilled = true;
+    this.complete();
+  }
+  private complete(): void {
+    if (this.failure || !this.fulfilled || !this.responseSeen || !this.bytes)
+      return;
+    clearTimeout(this.timer);
+    this.resolve(this.bytes);
+  }
+  fail(category: string, canceled = false): void {
+    this.canceled ||= canceled;
+    this.failure ??= new Error(
+      "Native mapping upload browser fixture: " + category,
+    );
+    clearTimeout(this.timer);
+    this.reject(this.failure);
+  }
+  close(): void {
+    if (!this.fulfilled || !this.responseSeen)
+      this.fail("mediated revision closed before delivery", true);
+    clearTimeout(this.timer);
+  }
+  async body(reply: BrowserResponse): Promise<Buffer> {
+    const bytes = await this.ready;
+    if (this.failure) throw this.failure;
+    requireUpload(
+      reply.request() === this.request &&
+        reply.status() === this.status &&
+        this.fulfilled &&
+        this.responseSeen &&
+        !this.request.failure(),
+      "mediated response was not a valid delivery",
+    );
+    return bytes;
+  }
+}
+const mediatedRevisionReads = new WeakMap<Request, MediatedRevisionRead>();
+async function actualResponseBody(reply: BrowserResponse): Promise<Buffer> {
+  const captured = mediatedRevisionReads.get(reply.request());
+  return captured ? captured.body(reply) : reply.body();
+}
 async function visibleHeading(page: Page, name: string): Promise<void> {
   await expect
     .poll(() => heading(page, name).isVisible(), {
@@ -183,17 +286,10 @@ async function visibleHeading(page: Page, name: string): Promise<void> {
 async function responseDone(response: BrowserResponse): Promise<void> {
   let nonempty: boolean;
   try {
-    nonempty = (await response.body()).length > 0;
+    nonempty = (await actualResponseBody(response)).length > 0;
   } catch {
-    const request = response.request(),
-      failure = request.failure(),
-      isGet = request.method() === "GET",
-      statusIs200 = response.status() === 200,
-      hasFailure = failure !== null,
-      isAborted = failure?.errorText === "net::ERR_ABORTED";
     throw new Error(
-      "Native mapping upload browser fixture: expected browser response body could not be consumed" +
-        ` [isGet=${isGet}; statusIs200=${statusIs200}; hasFailure=${hasFailure}; isAborted=${isAborted}]`,
+      "Native mapping upload browser fixture: expected browser response body could not be consumed",
     );
   }
   requireUpload(nonempty, "expected browser response body was empty");
@@ -208,470 +304,53 @@ async function privateJson(
     throw new Error("Native mapping upload browser fixture: " + category);
   }
 }
-function waitResponse(
+async function waitResponse(
   page: Page,
   method: string,
   path: string,
   status: number,
 ): Promise<BrowserResponse> {
   let complete = Promise.resolve(false);
-  return page.waitForResponse(
-    (reply) => {
-      const url = new URL(reply.url());
-      const matches =
-        reply.request().method() === method &&
-        url.pathname === path &&
-        !url.search &&
-        reply.status() === status;
-      if (!matches) return false;
-      if (method !== "GET" || status !== 200) return true;
-      complete = complete.then(async () => {
-        let nonempty: boolean;
-        try {
-          nonempty = (await reply.body()).length > 0;
-        } catch {
-          if (reply.request().failure()?.errorText === "net::ERR_ABORTED")
-            return false;
-          throw new Error(
-            "Native mapping upload browser fixture: expected matching GET200 response body could not be consumed",
-          );
-        }
-        requireUpload(nonempty, "expected browser response body was empty");
-        return true;
-      });
-      return complete;
-    },
-    { timeout: 45000 },
-  );
-}
-
-type RevisionFetchObservation = {
-  signalSupplied: boolean;
-  signalInitiallyAborted: boolean;
-  abortEventSeen: boolean;
-  abortBeforeDone: boolean;
-  abortAfterDone: boolean;
-  fetchFulfilled: boolean;
-  fetchRejected: boolean;
-  fetchThrew: boolean;
-  statusIs200: boolean;
-  bodyPresent: boolean;
-  readerObserved: boolean;
-  readObserved: boolean;
-  nonemptyChunkObserved: boolean;
-  doneObserved: boolean;
-  doneBeforeAbort: boolean;
-  doneAfterAbort: boolean;
-  readRejected: boolean;
-  readThrew: boolean;
-  streamCancelCalled: boolean;
-  readerCancelCalled: boolean;
-};
-type RevisionFetchSnapshot = {
-  hookInstalled: boolean;
-  hookArmed: boolean;
-  hookFault: boolean;
-  overflow: boolean;
-  contextGetIssued: boolean;
-  projectGetIssued: boolean;
-  createPostIssued: boolean;
-  domSnapshotAvailable: boolean;
-  savedAcknowledgementVisible: boolean;
-  exactRevisionLinkVisible: boolean;
-  otherRevisionLinkVisible: boolean;
-  unknownHeadingPresent: boolean;
-  timedOutMessageVisible: boolean;
-  incompatibleMessageVisible: boolean;
-  unavailableMessageVisible: boolean;
-  records: RevisionFetchObservation[];
-};
-type RevisionFetchCleanup = {
-  restoreAttempted: boolean;
-  restored: boolean;
-  ownershipLost: boolean;
-  cleanupFault: boolean;
-};
-
-/** Diagnostic only: observe the existing fetch/read promises without replacing them. */
-async function installRevisionFetchDiagnostic(
-  page: Page,
-  target: {
-    origin: string;
-    revisionPath: string;
-    revisionHref: string;
-    projectPath: string;
-    createPath: string;
-  },
-) {
-  return page.evaluateHandle((target) => {
-    const records: RevisionFetchObservation[] = [];
-    const streams = new WeakMap<object, RevisionFetchObservation>();
-    const readers = new WeakMap<object, RevisionFetchObservation>();
-    const listeners: { signal: AbortSignal; listener: () => void }[] = [];
-    const patches: {
-      owner: object;
-      key: string;
-      before: PropertyDescriptor;
-      wrapper: unknown;
-    }[] = [];
-    let hookInstalled = false,
-      hookArmed = false,
-      hookFault = false,
-      overflow = false;
-    let contextGetIssued = false,
-      projectGetIssued = false,
-      createPostIssued = false;
-    let restoreAttempted = false,
-      restored = false,
-      ownershipLost = false,
-      cleanupFault = false;
-    const nativeFetch = globalThis.fetch;
-    const nativeGetReader = ReadableStream.prototype.getReader;
-    const nativeStreamCancel = ReadableStream.prototype.cancel;
-    const nativeRead = ReadableStreamDefaultReader.prototype.read;
-    const nativeReaderCancel = ReadableStreamDefaultReader.prototype.cancel;
-    const observe = <T>(
-      promise: Promise<T>,
-      fulfilled: (value: T) => void,
-      rejected: () => void,
-    ): void => {
-      try {
-        // Both reactions contain their failures; the derived observation promise cannot reject.
-        void promise.then(
-          (value) => {
-            try {
-              fulfilled(value);
-            } catch {
-              hookFault = true;
-            }
-          },
-          () => {
-            try {
-              rejected();
-            } catch {
-              hookFault = true;
-            }
-          },
-        );
-      } catch {
-        hookFault = true;
-      }
-    };
-    const newRecord = (): RevisionFetchObservation => ({
-      signalSupplied: false,
-      signalInitiallyAborted: false,
-      abortEventSeen: false,
-      abortBeforeDone: false,
-      abortAfterDone: false,
-      fetchFulfilled: false,
-      fetchRejected: false,
-      fetchThrew: false,
-      statusIs200: false,
-      bodyPresent: false,
-      readerObserved: false,
-      readObserved: false,
-      nonemptyChunkObserved: false,
-      doneObserved: false,
-      doneBeforeAbort: false,
-      doneAfterAbort: false,
-      readRejected: false,
-      readThrew: false,
-      streamCancelCalled: false,
-      readerCancelCalled: false,
-    });
-    const wrappedFetch = function (
-      this: unknown,
-      ...args: Parameters<typeof fetch>
-    ): ReturnType<typeof fetch> {
-      let record: RevisionFetchObservation | undefined;
-      try {
-        if (hookArmed) {
-          const [input, init] = args;
-          const request = input instanceof Request ? input : undefined;
-          const url = new URL(
-            request ? request.url : String(input),
-            location.href,
-          );
-          const method = init?.method ?? request?.method ?? "GET";
-          if (url.origin === target.origin) {
-            if (
-              method === "GET" &&
-              !url.search &&
-              url.pathname === "/api/v1/catalog/context"
-            )
-              contextGetIssued = true;
-            if (
-              method === "GET" &&
-              !url.search &&
-              url.pathname === target.projectPath
-            )
-              projectGetIssued = true;
-            // The unchanged actual wire owns the create query/body/header assertions.
-            if (method === "POST" && url.pathname === target.createPath)
-              createPostIssued = true;
-            if (
-              method === "GET" &&
-              !url.search &&
-              url.pathname === target.revisionPath
-            ) {
-              if (records.length === 16) overflow = true;
-              else {
-                record = newRecord();
-                records.push(record);
-                const signal =
-                  init && "signal" in init ? init.signal : request?.signal;
-                if (signal) {
-                  record.signalSupplied = true;
-                  record.signalInitiallyAborted = signal.aborted;
-                  const observed = record;
-                  const listener = () => {
-                    try {
-                      observed.abortEventSeen = true;
-                      if (observed.doneObserved) observed.abortAfterDone = true;
-                      else observed.abortBeforeDone = true;
-                    } catch {
-                      hookFault = true;
-                    }
-                  };
-                  signal.addEventListener("abort", listener, { once: true });
-                  listeners.push({ signal, listener });
-                }
-              }
-            }
+  const freshRequests = new WeakSet<Request>();
+  const observeRequest = (request: Request) => freshRequests.add(request);
+  page.on("request", observeRequest);
+  try {
+    return await page.waitForResponse(
+      (reply) => {
+        const url = new URL(reply.url());
+        const matches =
+          reply.request().method() === method &&
+          url.pathname === path &&
+          !url.search &&
+          reply.status() === status;
+        if (!matches) return false;
+        if (
+          mediatedRevisionReads.has(reply.request()) &&
+          !freshRequests.has(reply.request())
+        )
+          return false;
+        if (method !== "GET" || status !== 200) return true;
+        complete = complete.then(async () => {
+          let nonempty: boolean;
+          try {
+            nonempty = (await actualResponseBody(reply)).length > 0;
+          } catch {
+            if (reply.request().failure()?.errorText === "net::ERR_ABORTED")
+              return false;
+            throw new Error(
+              "Native mapping upload browser fixture: expected matching GET200 response body could not be consumed",
+            );
           }
-        }
-      } catch {
-        hookFault = true;
-      }
-      let result: ReturnType<typeof fetch>;
-      try {
-        result = Reflect.apply(nativeFetch, this, args);
-      } catch (error) {
-        if (record) record.fetchThrew = true;
-        throw error;
-      }
-      if (record) {
-        const observed = record;
-        observe(
-          result,
-          (response) => {
-            observed.fetchFulfilled = true;
-            observed.statusIs200 = response.status === 200;
-            const body = response.body;
-            observed.bodyPresent = body !== null;
-            if (body) streams.set(body, observed);
-          },
-          () => {
-            observed.fetchRejected = true;
-          },
-        );
-      }
-      return result;
-    };
-    const wrappedGetReader = function (
-      this: ReadableStream<unknown>,
-      ...args: unknown[]
-    ): unknown {
-      const result: unknown = Reflect.apply(nativeGetReader, this, args);
-      try {
-        const record = streams.get(this);
-        if (record && typeof result === "object" && result !== null) {
-          record.readerObserved = true;
-          readers.set(result, record);
-        }
-      } catch {
-        hookFault = true;
-      }
-      return result;
-    };
-    const wrappedRead = function (
-      this: ReadableStreamDefaultReader<unknown>,
-      ...args: unknown[]
-    ): Promise<ReadableStreamReadResult<unknown>> {
-      const record = readers.get(this);
-      if (record) record.readObserved = true;
-      let result: Promise<ReadableStreamReadResult<unknown>>;
-      try {
-        result = Reflect.apply(nativeRead, this, args);
-      } catch (error) {
-        if (record) record.readThrew = true;
-        throw error;
-      }
-      if (record)
-        observe(
-          result,
-          (value) => {
-            if (value.done) {
-              record.doneObserved = true;
-              if (record.signalInitiallyAborted || record.abortEventSeen)
-                record.doneAfterAbort = true;
-              else record.doneBeforeAbort = true;
-            } else if (
-              value.value instanceof Uint8Array &&
-              value.value.byteLength > 0
-            )
-              record.nonemptyChunkObserved = true;
-          },
-          () => {
-            record.readRejected = true;
-          },
-        );
-      return result;
-    };
-    const wrappedStreamCancel = function (
-      this: ReadableStream<unknown>,
-      ...args: unknown[]
-    ): unknown {
-      try {
-        const record = streams.get(this);
-        if (record) record.streamCancelCalled = true;
-      } catch {
-        hookFault = true;
-      }
-      return Reflect.apply(nativeStreamCancel, this, args);
-    };
-    const wrappedReaderCancel = function (
-      this: ReadableStreamDefaultReader<unknown>,
-      ...args: unknown[]
-    ): unknown {
-      try {
-        const record = readers.get(this);
-        if (record) record.readerCancelCalled = true;
-      } catch {
-        hookFault = true;
-      }
-      return Reflect.apply(nativeReaderCancel, this, args);
-    };
-    const patch = (owner: object, key: string, wrapper: unknown): void => {
-      const before = Object.getOwnPropertyDescriptor(owner, key);
-      if (!before || !("value" in before) || before.writable !== true) {
-        hookFault = true;
-        return;
-      }
-      Object.defineProperty(owner, key, { ...before, value: wrapper });
-      patches.push({ owner, key, before, wrapper });
-    };
-    const restore = (): RevisionFetchCleanup => {
-      hookArmed = false;
-      restoreAttempted = true;
-      for (const { signal, listener } of listeners) {
-        try {
-          signal.removeEventListener("abort", listener);
-        } catch {
-          cleanupFault = true;
-        }
-      }
-      listeners.length = 0;
-      for (const entry of patches.splice(0).reverse()) {
-        try {
-          if (
-            Object.getOwnPropertyDescriptor(entry.owner, entry.key)?.value ===
-            entry.wrapper
-          )
-            Object.defineProperty(entry.owner, entry.key, entry.before);
-          else ownershipLost = true;
-        } catch {
-          cleanupFault = true;
-        }
-      }
-      restored = !ownershipLost && !cleanupFault;
-      return { restoreAttempted, restored, ownershipLost, cleanupFault };
-    };
-    const shown = (element: Element | null): boolean => {
-      if (!element) return false;
-      const bounds = element.getBoundingClientRect(),
-        style = getComputedStyle(element);
-      return (
-        bounds.width > 0 &&
-        bounds.height > 0 &&
-        style.visibility !== "hidden" &&
-        style.display !== "none"
-      );
-    };
-    const snapshot = (): RevisionFetchSnapshot => {
-      let domSnapshotAvailable = false,
-        savedAcknowledgementVisible = false;
-      let exactRevisionLinkVisible = false,
-        otherRevisionLinkVisible = false,
-        unknownHeadingPresent = false;
-      let timedOutMessageVisible = false,
-        incompatibleMessageVisible = false,
-        unavailableMessageVisible = false;
-      try {
-        const region = document.querySelector(
-          'section[aria-labelledby="upload-saved"]',
-        );
-        const title = region?.querySelector("#upload-saved") ?? null;
-        savedAcknowledgementVisible =
-          shown(title) && title?.textContent?.trim() === "Mapping saved";
-        for (const link of region?.querySelectorAll("a") ?? []) {
-          if (shown(link) && link.textContent?.trim() === "View revision") {
-            if (link.getAttribute("href") === target.revisionHref)
-              exactRevisionLinkVisible = true;
-            else otherRevisionLinkVisible = true;
-          }
-        }
-        unknownHeadingPresent =
-          document.querySelector(".native-upload #upload-unknown") !== null;
-        const hasAlert = (text: string) =>
-          Array.from(
-            document.querySelectorAll(
-              '.native-upload .upload-error[role="alert"]',
-            ),
-          ).some(
-            (element) => shown(element) && element.textContent?.trim() === text,
-          );
-        timedOutMessageVisible = hasAlert(
-          "Waiting timed out. A sent upload may already have saved.",
-        );
-        incompatibleMessageVisible = hasAlert(
-          "The reply could not be verified as the original upload operation.",
-        );
-        unavailableMessageVisible = hasAlert(
-          "This operation could not be confirmed. No automatic upload or resume was made.",
-        );
-        domSnapshotAvailable = true;
-      } catch {
-        hookFault = true;
-      }
-      return {
-        hookInstalled,
-        hookArmed,
-        hookFault,
-        overflow,
-        contextGetIssued,
-        projectGetIssued,
-        createPostIssued,
-        domSnapshotAvailable,
-        savedAcknowledgementVisible,
-        exactRevisionLinkVisible,
-        otherRevisionLinkVisible,
-        unknownHeadingPresent,
-        timedOutMessageVisible,
-        incompatibleMessageVisible,
-        unavailableMessageVisible,
-        records: records.map((record) => ({ ...record })),
-      };
-    };
-    try {
-      patch(globalThis, "fetch", wrappedFetch);
-      patch(ReadableStream.prototype, "getReader", wrappedGetReader);
-      patch(ReadableStream.prototype, "cancel", wrappedStreamCancel);
-      patch(ReadableStreamDefaultReader.prototype, "read", wrappedRead);
-      patch(
-        ReadableStreamDefaultReader.prototype,
-        "cancel",
-        wrappedReaderCancel,
-      );
-      hookInstalled = patches.length === 5;
-      hookArmed = hookInstalled && !hookFault;
-      if (!hookArmed) restore();
-    } catch {
-      hookFault = true;
-      restore();
-    }
-    return { snapshot, restore };
-  }, target);
+          requireUpload(nonempty, "expected browser response body was empty");
+          return true;
+        });
+        return complete;
+      },
+      { timeout: 45000 },
+    );
+  } finally {
+    page.off("request", observeRequest);
+  }
 }
 function sameCounts(actual: UploadCounts, expected: UploadCounts): void {
   requireUpload(
@@ -727,15 +406,14 @@ class UploadWire {
   private readonly readTasks: Promise<void>[] = [];
   private readonly mutations: Mutation[] = [];
   private readonly originals = new Map<Sample, Original>();
-  private readonly revisionReadFailures = new Map<
-    Original,
-    {
-      readonly isGet: boolean;
-      readonly statusIs200: boolean;
-      readonly hasFailure: boolean;
-      readonly isAborted: boolean;
-    }
-  >();
+  private readonly mediated = new Set<MediatedRevisionRead>();
+  private readonly mediatedJobs: Promise<void>[] = [];
+  private readonly pendingMediatedJobs = new Set<Promise<void>>();
+  private closingReads = false;
+  private readonly failedRead = (request: Request) => {
+    const capture = mediatedRevisionReads.get(request);
+    if (capture) capture.fail("mediated revision browser request failed", true);
+  };
   private readonly captured = new Set<Sample>();
   private readonly releases: (() => void)[] = [];
   private failure: Error | null = null;
@@ -834,6 +512,7 @@ class UploadWire {
   }
   async install(): Promise<void> {
     const origin = this.owner.manifest.readOrigin;
+    this.page.on("requestfailed", this.failedRead);
     this.page.on("response", (reply) => {
       const request = reply.request(),
         url = new URL(reply.url());
@@ -843,10 +522,14 @@ class UploadWire {
         !url.pathname.startsWith("/api/")
       )
         return;
+      const capture = mediatedRevisionReads.get(request);
+      capture?.response(reply);
       const task = (async () => {
         try {
           await responseDone(reply);
-          const value: unknown = await reply.json();
+          const value: unknown = capture
+            ? JSON.parse((await capture.body(reply)).toString("utf8"))
+            : await reply.json();
           this.reads.push({
             path: url.pathname,
             status: reply.status(),
@@ -885,23 +568,9 @@ class UploadWire {
             }
           }
         } catch (error) {
-          const failure = request.failure();
-          for (const original of this.originals.values())
-            if (
-              original.receipt?.phase === "committed" &&
-              !url.search &&
-              url.pathname ===
-                catalogApi(revisionPath(original.receipt.futureRevision))
-            )
-              this.revisionReadFailures.set(original, {
-                isGet: request.method() === "GET",
-                statusIs200: reply.status() === 200,
-                hasFailure: failure !== null,
-                isAborted: failure?.errorText === "net::ERR_ABORTED",
-              });
           // An obsolete project GET can be aborted by the foreign-identity guard. Explicit admission
           // and revision boundaries below still require their own successful complete responses.
-          if (!request.failure())
+          if (!request.failure() && !capture?.canceled)
             this.remember(error, "actual GET observation failed");
         }
       })();
@@ -961,6 +630,34 @@ class UploadWire {
         if (url.pathname === "/api/v1/catalog/context")
           this.contexts.push(request);
         if (url.pathname === this.projectApi) this.projects.push(request);
+        const original = [...this.originals.values()].find(
+          (original) =>
+            original.receipt?.phase === "committed" &&
+            url.pathname ===
+              catalogApi(revisionPath(original.receipt.futureRevision)),
+        );
+        if (original) {
+          requireUpload(
+            !this.closingReads,
+            "revision arrived during owned read teardown",
+          );
+          const capture = new MediatedRevisionRead(request);
+          mediatedRevisionReads.set(request, capture);
+          this.mediated.add(capture);
+          const job = this.mediateRevision(route, capture, original);
+          this.mediatedJobs.push(job);
+          this.pendingMediatedJobs.add(job);
+          void job.then(
+            () => {
+              this.pendingMediatedJobs.delete(job);
+            },
+            () => {
+              this.pendingMediatedJobs.delete(job);
+            },
+          );
+          await job;
+          return;
+        }
         await route.continue();
         return;
       }
@@ -1140,6 +837,130 @@ class UploadWire {
       }
     } finally {
       mutation?.finish();
+    }
+  }
+  private async mediateRevision(
+    route: Route,
+    capture: MediatedRevisionRead,
+    original: Original,
+  ): Promise<void> {
+    let reply: APIResponse | undefined;
+    try {
+      reply = await route.fetch({
+        maxRetries: 0,
+        maxRedirects: 0,
+        timeout: capture.remaining(),
+      });
+      capture.assertLive();
+      const bytes = await reply.body(),
+        headers = reply.headers();
+      capture.assertLive();
+      requireUpload(
+        bytes.length > 0 && bytes.length <= 65536,
+        "mediated revision entity exceeded the metadata observation bound",
+      );
+      requireUpload(
+        reply.url() === capture.request.url() &&
+          (headers["content-encoding"] === undefined ||
+            headers["content-encoding"] === "identity"),
+        "mediated revision representation identity differs",
+      );
+      const length = headers["content-length"];
+      requireUpload(
+        length === undefined ||
+          (/^(0|[1-9][0-9]*)$/.test(length) &&
+            BigInt(length) === BigInt(bytes.length)),
+        "mediated revision content length differs from received bytes",
+      );
+      let value: unknown;
+      try {
+        value = JSON.parse(bytes.toString("utf8"));
+      } catch {
+        throw new Error(
+          "Native mapping upload browser fixture: mediated revision response is not JSON",
+        );
+      }
+      if (reply.status() === 200) {
+        this.verifyRevision(value, original);
+        if (original.revision)
+          requireUpload(
+            isDeepStrictEqual(value, original.revision),
+            "ordinary saved revision facts changed",
+          );
+      }
+      capture.candidate(bytes, reply.status());
+      const receipt = original.receipt;
+      requireUpload(
+        receipt?.phase === "committed",
+        "mediated revision lost its learned receipt",
+      );
+      const upload = uploadPath(receipt.project),
+        revision = revisionPath(receipt.futureRevision);
+      await expect
+        .poll(
+          async () => {
+            capture.assertLive();
+            const path = new URL(this.page.url()).pathname;
+            if (path === upload)
+              return this.page
+                .locator(".native-upload")
+                .evaluateAll((roots) => {
+                  if (
+                    roots.length !== 1 ||
+                    roots[0].getAttribute("aria-busy") !== "true"
+                  )
+                    return false;
+                  return !Array.from(roots[0].querySelectorAll("a")).some(
+                    (link) => {
+                      if (link.textContent?.trim() !== "View revision")
+                        return false;
+                      const box = link.getBoundingClientRect(),
+                        style = getComputedStyle(link);
+                      return (
+                        box.width > 0 &&
+                        box.height > 0 &&
+                        style.visibility !== "hidden" &&
+                        style.display !== "none"
+                      );
+                    },
+                  );
+                });
+            return (
+              path === revision &&
+              (await this.page.locator(".native-upload").count()) === 0
+            );
+          },
+          {
+            message:
+              "Mediated revision did not reach its fresh cleared UI boundary",
+            timeout: Math.min(10000, capture.remaining()),
+          },
+        )
+        .toBe(true);
+      capture.assertLive();
+      await route.fulfill({ response: reply, body: bytes });
+      capture.delivered();
+    } catch (error) {
+      const canceled =
+        capture.canceled ||
+        capture.request.failure() !== null ||
+        this.closingReads;
+      capture.fail("actual mediated revision could not be delivered", canceled);
+      if (!canceled)
+        this.remember(error, "actual mediated revision observation failed");
+      try {
+        await route.abort("failed");
+      } catch {
+        /* A canceled interception is not a positive delivery. */
+      }
+    } finally {
+      if (reply) {
+        try {
+          await reply.dispose();
+        } catch {
+          this.remember(null, "mediated revision response disposal failed");
+        }
+      }
     }
   }
   private verifyResult(
@@ -1336,24 +1157,6 @@ class UploadWire {
     requireUpload(receipt, "expected an actual learned own receipt");
     return receipt;
   }
-  /** Point-in-time diagnostic flags only; do not settle or promote an old observation. */
-  revisionDiagnostic(sample: Sample, mutationIndex: number) {
-    const original = this.originals.get(sample),
-      observation = original
-        ? this.revisionReadFailures.get(original)
-        : undefined;
-    return {
-      observationPresent: observation !== undefined,
-      isGet: observation?.isGet === true,
-      statusIs200: observation?.statusIs200 === true,
-      hasFailure: observation?.hasFailure === true,
-      isAborted: observation?.isAborted === true,
-      verifiedRevisionPresent: original?.revision != null,
-      learnedOwnReceiptPresent: original?.receipt != null,
-      nodeParsedMutationResultPresent:
-        this.mutations[mutationIndex]?.result != null,
-    };
-  }
   async checkpoint(): Promise<UploadCounts> {
     await this.settleReads();
     const current = await this.owner.checkpoint();
@@ -1362,18 +1165,8 @@ class UploadWire {
   }
   async revision(sample: Sample): Promise<Revision> {
     await this.settleReads();
-    const original = this.originals.get(sample),
-      revision = original?.revision,
-      observation = original
-        ? this.revisionReadFailures.get(original)
-        : undefined;
-    requireUpload(
-      revision,
-      "expected exact ordinary saved revision read" +
-        (!revision
-          ? ` [observationPresent=${observation !== undefined}; isGet=${observation?.isGet === true}; statusIs200=${observation?.statusIs200 === true}; hasFailure=${observation?.hasFailure === true}; isAborted=${observation?.isAborted === true}]`
-          : ""),
-    );
+    const revision = this.originals.get(sample)?.revision;
+    requireUpload(revision, "expected exact ordinary saved revision read");
     return revision;
   }
   async protectedRevision(): Promise<Revision> {
@@ -1482,6 +1275,24 @@ class UploadWire {
   }
   release(): void {
     for (const release of this.releases) release();
+  }
+  async disposeReads(): Promise<void> {
+    this.closingReads = true;
+    for (const capture of this.mediated) capture.close();
+    if (this.pendingMediatedJobs.size > 0 && !this.page.isClosed()) {
+      try {
+        await this.page.close({ runBeforeUnload: false });
+      } catch {
+        this.remember(
+          null,
+          "owned page could not settle mediated read teardown",
+        );
+      }
+    }
+    await Promise.allSettled(this.mediatedJobs);
+    await Promise.allSettled(this.readTasks);
+    this.page.off("requestfailed", this.failedRead);
+    if (this.failure) throw this.failure;
   }
   async closed(): Promise<void> {
     await Promise.all(this.mutations.map((m) => m.done));
@@ -1618,10 +1429,17 @@ async function saved(
   );
   await expect
     .poll(
-      () =>
-        page
+      async () =>
+        (await page
           .getByRole("link", { name: "View revision", exact: true })
-          .isVisible(),
+          .isVisible()) &&
+        (await page
+          .locator(".native-upload")
+          .evaluateAll(
+            (roots) =>
+              roots.length === 1 &&
+              roots[0].getAttribute("aria-busy") === "false",
+          )),
       {
         message:
           "Acknowledged upload did not settle exact ordinary revision access",
@@ -1657,7 +1475,7 @@ test.describe.configure({ mode: "serial" });
 test("real packaged native create/upload: exact original bytes, durable recovery, authority and truthful native outcomes", async ({
   page,
   nativeMappingUploadOwner: owner,
-}, testInfo) => {
+}) => {
   test.setTimeout(600000);
   const initial = await owner.checkpoint(),
     wire = new UploadWire(page, owner, initial),
@@ -1668,6 +1486,7 @@ test("real packaged native create/upload: exact original bytes, durable recovery
   );
   await wire.install();
   let protectedBefore: Revision | null = null;
+  let primaryFailure = false;
   try {
     await page.setViewportSize({ width: 390, height: 844 });
     await test.step("actual Viewer, Runner and disabled feature direct routes refuse upload without work", async () => {
@@ -1816,202 +1635,63 @@ test("real packaged native create/upload: exact original bytes, durable recovery
       await owner.control({ action: "pg-normal-restart" });
       sameCounts(await wire.checkpoint(), trusted);
       await wire.arm(fixed.versioned, "normal", true);
-      const wireAtArm = wire.revisionDiagnostic("versioned", index + 1);
-      const fetchDiagnostic = await installRevisionFetchDiagnostic(page, {
-        origin: fixture.readOrigin,
-        revisionPath: catalogApi(revisionPath(committed.futureRevision)),
-        revisionHref: revisionPath(committed.futureRevision),
-        projectPath: wire.projectApi,
-        createPath: wire.createApi,
-      }).catch(() => null);
       const resendRevision = waitResponse(
         page,
         "GET",
         catalogApi(revisionPath(committed.futureRevision)),
         200,
       );
-      let phaseOriginalResend = true,
-        phaseCheckStatus = false,
-        phaseResume = false,
-        activeMutationIndex = index + 1,
-        wireBeforeAction = wireAtArm;
-      let failureDiagnostic: {
-        pageSnapshotAvailable: boolean;
-        page: RevisionFetchSnapshot;
-        wireSnapshotAvailable: boolean;
-        wireAtArm: ReturnType<UploadWire["revisionDiagnostic"]>;
-        wireBeforeAction: ReturnType<UploadWire["revisionDiagnostic"]>;
-        wireAtFailure: ReturnType<UploadWire["revisionDiagnostic"]>;
-        phaseOriginalResend: boolean;
-        phaseCheckStatus: boolean;
-        phaseResume: boolean;
-      } | null = null;
-      try {
-        wireBeforeAction = wire.revisionDiagnostic(
-          "versioned",
-          activeMutationIndex,
+      await button(page, "Resend original upload").click();
+      await wire.complete(index + 1, 200);
+      await responseDone(await resendRevision);
+      await saved(page, wire, fixed.versioned);
+      requireUpload(
+        isDeepStrictEqual(wire.operation("versioned"), committed) &&
+          wire.postCount === index + 2,
+        "durable original resend did not replay exact terminal receipt once",
+      );
+      sameCounts(await wire.checkpoint(), trusted);
+      const receiptReply = waitResponse(
+          page,
+          "GET",
+          receiptPath(committed),
+          200,
+        ),
+        receiptRevision = waitResponse(
+          page,
+          "GET",
+          catalogApi(revisionPath(committed.futureRevision)),
+          200,
+        ),
+        priorPosts = wire.postCount;
+      await button(page, "Check upload status").click();
+      await responseDone(await receiptReply);
+      await responseDone(await receiptRevision);
+      await saved(page, wire, fixed.versioned);
+      requireUpload(
+        wire.postCount === priorPosts,
+        "own receipt read submitted a mutation",
+      );
+      sameCounts(await wire.checkpoint(), trusted);
+      await wire.arm(fixed.versioned, "normal", true, "resume");
+      const replayReply = waitResponse(
+          page,
+          "POST",
+          receiptPath(committed) + "/resume",
+          200,
+        ),
+        replayRevision = waitResponse(
+          page,
+          "GET",
+          catalogApi(revisionPath(committed.futureRevision)),
+          200,
         );
-        await button(page, "Resend original upload").click();
-        await wire.complete(index + 1, 200);
-        await responseDone(await resendRevision);
-        await saved(page, wire, fixed.versioned);
-        requireUpload(
-          isDeepStrictEqual(wire.operation("versioned"), committed) &&
-            wire.postCount === index + 2,
-          "durable original resend did not replay exact terminal receipt once",
-        );
-        sameCounts(await wire.checkpoint(), trusted);
-        phaseOriginalResend = false;
-        phaseCheckStatus = true;
-        const receiptReply = waitResponse(
-            page,
-            "GET",
-            receiptPath(committed),
-            200,
-          ),
-          receiptRevision = waitResponse(
-            page,
-            "GET",
-            catalogApi(revisionPath(committed.futureRevision)),
-            200,
-          ),
-          priorPosts = wire.postCount;
-        wireBeforeAction = wire.revisionDiagnostic(
-          "versioned",
-          activeMutationIndex,
-        );
-        await button(page, "Check upload status").click();
-        await responseDone(await receiptReply);
-        await responseDone(await receiptRevision);
-        await saved(page, wire, fixed.versioned);
-        requireUpload(
-          wire.postCount === priorPosts,
-          "own receipt read submitted a mutation",
-        );
-        sameCounts(await wire.checkpoint(), trusted);
-        phaseCheckStatus = false;
-        phaseResume = true;
-        activeMutationIndex = priorPosts;
-        wireBeforeAction = wire.revisionDiagnostic(
-          "versioned",
-          activeMutationIndex,
-        );
-        await wire.arm(fixed.versioned, "normal", true, "resume");
-        const replayReply = waitResponse(
-            page,
-            "POST",
-            receiptPath(committed) + "/resume",
-            200,
-          ),
-          replayRevision = waitResponse(
-            page,
-            "GET",
-            catalogApi(revisionPath(committed.futureRevision)),
-            200,
-          );
-        wireBeforeAction = wire.revisionDiagnostic(
-          "versioned",
-          activeMutationIndex,
-        );
-        await button(page, "Replay upload result").click();
-        await responseDone(await replayReply);
-        await responseDone(await replayRevision);
-        await wire.complete(priorPosts, 200);
-        await saved(page, wire, fixed.versioned);
-        sameCounts(await wire.checkpoint(), trusted);
-      } catch (failure) {
-        failureDiagnostic = {
-          pageSnapshotAvailable: false,
-          page: {
-            hookInstalled: false,
-            hookArmed: false,
-            hookFault: false,
-            overflow: false,
-            contextGetIssued: false,
-            projectGetIssued: false,
-            createPostIssued: false,
-            domSnapshotAvailable: false,
-            savedAcknowledgementVisible: false,
-            exactRevisionLinkVisible: false,
-            otherRevisionLinkVisible: false,
-            unknownHeadingPresent: false,
-            timedOutMessageVisible: false,
-            incompatibleMessageVisible: false,
-            unavailableMessageVisible: false,
-            records: [],
-          },
-          wireSnapshotAvailable: false,
-          wireAtArm,
-          wireBeforeAction,
-          wireAtFailure: wireBeforeAction,
-          phaseOriginalResend,
-          phaseCheckStatus,
-          phaseResume,
-        };
-        try {
-          failureDiagnostic.wireAtFailure = wire.revisionDiagnostic(
-            "versioned",
-            activeMutationIndex,
-          );
-          failureDiagnostic.wireSnapshotAvailable = true;
-        } catch {
-          /* Preserve the original recovery-segment failure. */
-        }
-        if (fetchDiagnostic) {
-          try {
-            failureDiagnostic.page = await fetchDiagnostic.evaluate(
-              (diagnostic) => diagnostic.snapshot(),
-            );
-            failureDiagnostic.pageSnapshotAvailable = true;
-          } catch {
-            /* An unavailable page snapshot is not a negative observation. */
-          }
-        }
-        throw failure;
-      } finally {
-        let cleanupSnapshotAvailable = false,
-          handleDisposed = false;
-        let cleanup: RevisionFetchCleanup = {
-          restoreAttempted: false,
-          restored: false,
-          ownershipLost: false,
-          cleanupFault: false,
-        };
-        if (fetchDiagnostic) {
-          try {
-            cleanup = await fetchDiagnostic.evaluate((diagnostic) =>
-              diagnostic.restore(),
-            );
-            cleanupSnapshotAvailable = true;
-          } catch {
-            /* Cleanup availability must not replace the original failure. */
-          }
-          try {
-            await fetchDiagnostic.dispose();
-            handleDisposed = true;
-          } catch {
-            /* No arbitrary error output. */
-          }
-        }
-        if (failureDiagnostic) {
-          try {
-            await testInfo.attach("post-restart-revision-fetch-diagnostic", {
-              body: Buffer.from(
-                JSON.stringify(
-                  Object.assign(
-                    { diagnosticOnly: true, boundaryFailureCaptured: true },
-                    failureDiagnostic,
-                    { cleanupSnapshotAvailable, handleDisposed, cleanup },
-                  ),
-                ),
-              ),
-              contentType: "application/json",
-            });
-          } catch {
-            /* Attachment failure must not replace the original recovery-segment failure. */
-          }
-        }
-      }
+      await button(page, "Replay upload result").click();
+      await responseDone(await replayReply);
+      await responseDone(await replayRevision);
+      await wire.complete(priorPosts, 200);
+      await saved(page, wire, fixed.versioned);
+      sameCounts(await wire.checkpoint(), trusted);
     });
     await test.step("same-actor Viewer demotion preserves acknowledged ordinary view while own receipt and source-free resume refuse404", async () => {
       await wire.focusAdmission("Check upload status");
@@ -2221,7 +1901,15 @@ test("real packaged native create/upload: exact original bytes, durable recovery
       );
       await wire.closed();
     });
+  } catch (error) {
+    primaryFailure = true;
+    throw error;
   } finally {
     wire.release();
+    try {
+      await wire.disposeReads();
+    } catch (error) {
+      if (!primaryFailure) throw error;
+    }
   }
 });
