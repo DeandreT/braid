@@ -1,4 +1,13 @@
 import type { components } from "../../api/generated";
+import {
+  NativeIngestionSource,
+  NativeIngestionSourceError,
+  encodeNativeIngestionQueryValue as encode,
+  inspectNativeIngestionText as unicode,
+  nativeIngestionFilenameError as filenameError,
+  nativeIngestionWireTargetError,
+  withNativeIngestionSource,
+} from "./native-ingestion-leaves";
 import { trimCatalogName } from "../catalog-text";
 import {
   isCatalogId,
@@ -86,7 +95,6 @@ export class NativeMappingUploadError extends Error {
   }
 }
 
-const maximumNativeBytes = 4_194_304;
 type JsonObject = Record<string, unknown>;
 type SourceFacts = {
   readonly body: Blob;
@@ -175,10 +183,7 @@ export function validateNativeMappingUploadInput(
       input.originalFilename,
     );
     if (query.length > 65536) request = "queryLimit";
-    else if (
-      ("POST " + createPath(scope) + query + " HTTP/1.1\r\n").length > 65536
-    )
-      request = "requestLineLimit";
+    else request = nativeIngestionWireTargetError(createPath(scope), query);
   }
   if (
     name !== null ||
@@ -209,47 +214,17 @@ export class NativeMappingUploadSource {
     file: Blob,
     signal?: AbortSignal,
   ): Promise<NativeMappingUploadSource> {
-    requireNotCanceled(signal);
-    if (!(file instanceof Blob) || !Number.isSafeInteger(file.size))
-      throw new NativeMappingUploadError("invalidInput");
-    requireNativeSize(file.size);
-    const byteCount = file.size;
-    if (typeof globalThis.crypto?.subtle?.digest !== "function")
-      throw new NativeMappingUploadError("hashUnavailable");
-    let owned: ArrayBuffer;
     try {
-      const bytes = await file.arrayBuffer();
-      requireNotCanceled(signal);
-      if (
-        !(bytes instanceof ArrayBuffer) ||
-        bytes.byteLength !== byteCount ||
-        file.size !== byteCount
-      )
-        throw new NativeMappingUploadError("fileReadUnavailable");
-      requireNativeSize(bytes.byteLength);
-      owned = bytes.slice(0);
+      const source = await NativeIngestionSource.capture(file, signal);
+      return withNativeIngestionSource(
+        source,
+        (facts) => new NativeMappingUploadSource(facts),
+      );
     } catch (error: unknown) {
-      if (error instanceof NativeMappingUploadError) throw error;
-      requireNotCanceled(signal);
-      throw new NativeMappingUploadError("fileReadUnavailable");
+      if (error instanceof NativeIngestionSourceError)
+        throw new NativeMappingUploadError(error.kind);
+      throw error;
     }
-    const body = new Blob([owned], { type: "application/octet-stream" });
-    let digestBytes: ArrayBuffer;
-    try {
-      digestBytes = await globalThis.crypto.subtle.digest("SHA-256", owned);
-    } catch {
-      requireNotCanceled(signal);
-      throw new NativeMappingUploadError("hashUnavailable");
-    }
-    requireNotCanceled(signal);
-    if (digestBytes.byteLength !== 32 || body.size !== byteCount)
-      throw new NativeMappingUploadError("hashUnavailable");
-    const digest = Array.from(new Uint8Array(digestBytes), (value) =>
-      value.toString(16).padStart(2, "0"),
-    ).join("");
-    return new NativeMappingUploadSource(
-      Object.freeze({ body, digest, byteCount }),
-    );
   }
   get byteCount(): number {
     return sourceFacts(this).byteCount;
@@ -830,48 +805,6 @@ function encodedQuery(
     encode(filename)
   );
 }
-function encode(value: string): string {
-  return encodeURIComponent(value).replace(
-    /[!'()*]/g,
-    (character) => "%" + character.charCodeAt(0).toString(16).toUpperCase(),
-  );
-}
-function filenameError(value: string): NativeMappingUploadFieldError | null {
-  if (value.length === 0) return "required";
-  const facts = unicode(value);
-  return (
-    facts.error ??
-    (value === "." ||
-    value === ".." ||
-    /[/\\\u0000-\u001f\u007f-\u009f]/.test(value)
-      ? "unsafeFilename"
-      : facts.bytes > 255
-        ? "byteLimit"
-        : null)
-  );
-}
-function unicode(value: string): {
-  readonly scalars: number;
-  readonly bytes: number;
-  readonly error: "invalidUnicode" | "nul" | null;
-} {
-  let scalars = 0,
-    bytes = 0;
-  for (let index = 0; index < value.length; ++index) {
-    const code = value.charCodeAt(index);
-    if (code === 0) return { scalars, bytes, error: "nul" };
-    if (code >= 0xd800 && code <= 0xdbff) {
-      const low = value.charCodeAt(++index);
-      if (!(low >= 0xdc00 && low <= 0xdfff))
-        return { scalars, bytes, error: "invalidUnicode" };
-      bytes += 4;
-    } else if (code >= 0xdc00 && code <= 0xdfff)
-      return { scalars, bytes, error: "invalidUnicode" };
-    else bytes += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : 3;
-    ++scalars;
-  }
-  return { scalars, bytes, error: null };
-}
 function utcTime(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const match =
@@ -1006,12 +939,4 @@ function bindingExpectation(
 }
 function incompatible(): NativeMappingUploadError {
   return new NativeMappingUploadError("incompatible");
-}
-function requireNotCanceled(signal?: AbortSignal): void {
-  if (signal?.aborted) throw new NativeMappingUploadError("canceled");
-}
-function requireNativeSize(size: number): void {
-  if (size < 1) throw new NativeMappingUploadError("emptyNative");
-  if (size > maximumNativeBytes)
-    throw new NativeMappingUploadError("nativeLimit");
 }

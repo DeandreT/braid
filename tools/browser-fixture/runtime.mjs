@@ -27,6 +27,7 @@ export async function runBrowserFixture(definition) {
     const creationScenario = definition.kind === "project-creation";
     const metadataScenario = definition.kind === "mapping-metadata";
     const uploadScenario = definition.kind === "native-mapping-upload";
+    const appendScenario = definition.kind === "native-revision-append";
     class Failure extends Error {
       constructor(category) {
         super(category);
@@ -148,24 +149,28 @@ export async function runBrowserFixture(definition) {
       process.env[
         creationScenario
           ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
-          : uploadScenario
-            ? "WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
-            : metadataScenario
-              ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
-              : definition.kind === "catalog"
-                ? "WEFT_CATALOG_BROWSER_MANIFEST"
-                : "WEFT_REPORTS_BROWSER_MANIFEST"
+          : appendScenario
+            ? "WEFT_NATIVE_REVISION_APPEND_BROWSER_MANIFEST"
+            : uploadScenario
+              ? "WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
+              : metadataScenario
+                ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
+                : definition.kind === "catalog"
+                  ? "WEFT_CATALOG_BROWSER_MANIFEST"
+                  : "WEFT_REPORTS_BROWSER_MANIFEST"
       ] === cfg.manifestPath &&
         process.env[
           creationScenario
             ? "WEFT_PROJECT_CREATION_BASE_URL"
-            : uploadScenario
-              ? "WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL"
-              : metadataScenario
-                ? "WEFT_MAPPING_METADATA_BASE_URL"
-                : definition.kind === "catalog"
-                  ? "WEFT_CATALOG_BASE_URL"
-                  : "WEFT_REPORTS_BASE_URL"
+            : appendScenario
+              ? "WEFT_NATIVE_REVISION_APPEND_BASE_URL"
+              : uploadScenario
+                ? "WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL"
+                : metadataScenario
+                  ? "WEFT_MAPPING_METADATA_BASE_URL"
+                  : definition.kind === "catalog"
+                    ? "WEFT_CATALOG_BASE_URL"
+                    : "WEFT_REPORTS_BASE_URL"
         ] === origin(cfg.readOrigin),
     );
     origin(cfg.mutationOrigin);
@@ -779,7 +784,12 @@ export async function runBrowserFixture(definition) {
     // inside PostgreSQL so even the built-in routine ACL set stays below pipe limits.
     // Relation capture includes column ACLs, not only table-level relacl.
     function creationGrantState() {
-      check(creationScenario || metadataScenario || uploadScenario);
+      check(
+        creationScenario ||
+          metadataScenario ||
+          uploadScenario ||
+          appendScenario,
+      );
       return jsonSql(
         `SELECT json_build_object(
         'database',(SELECT jsonb_build_array(oid,datname,datdba,datacl::text) FROM pg_catalog.pg_database WHERE datname=current_database()),
@@ -828,7 +838,10 @@ export async function runBrowserFixture(definition) {
       journal: journal(),
       credentials: credentialState(),
       physical: physical(),
-      ...(creationScenario || metadataScenario || uploadScenario
+      ...(creationScenario ||
+      metadataScenario ||
+      uploadScenario ||
+      appendScenario
         ? { grants: creationGrantState() }
         : {}),
     });
@@ -955,6 +968,7 @@ export async function runBrowserFixture(definition) {
         body = null,
         media = null,
         key = null,
+        ifMatch = null,
         unsafe = false,
         timeout = 40000,
       } = {},
@@ -974,6 +988,30 @@ export async function runBrowserFixture(definition) {
       }
       if (media) headers["Content-Type"] = media;
       if (key) headers["Idempotency-Key"] = guid(key);
+      if (ifMatch !== null) {
+        check(
+          appendScenario &&
+            host.kind === "mutation" &&
+            host.metadataEdits &&
+            method === "PATCH" &&
+            typeof ifMatch === "string",
+        );
+        const target =
+          /^\/api\/v1\/organizations\/([0-9a-f-]{36})\/projects\/([0-9a-f-]{36})\/mappings\/([0-9a-f-]{36})\/metadata$/.exec(
+            path,
+          );
+        check(target);
+        for (const id of target.slice(1)) guid(id);
+        const prefix =
+          '"metadata-v1:' + target[1] + ":" + target[2] + ":" + target[3] + ":";
+        check(ifMatch.startsWith(prefix) && ifMatch.endsWith('"'));
+        const version = ifMatch.slice(prefix.length, -1);
+        check(
+          /^[1-9][0-9]{0,18}$/.test(version) &&
+            BigInt(version) <= 9223372036854775807n,
+        );
+        headers["If-Match"] = ifMatch;
+      }
       if (body !== null) headers["Content-Length"] = String(body.length);
       return await new Promise((fulfil, reject) => {
         const req = http.request(
@@ -1010,9 +1048,10 @@ export async function runBrowserFixture(definition) {
                   kind: "http",
                   origin: host.origin,
                   method,
-                  path: uploadScenario
-                    ? new URL(path, host.origin).pathname
-                    : path,
+                  path:
+                    uploadScenario || appendScenario
+                      ? new URL(path, host.origin).pathname
+                      : path,
                   status: response.statusCode,
                   bytes: bytes.length,
                   bodySha256:
@@ -1100,7 +1139,8 @@ export async function runBrowserFixture(definition) {
             (metadataScenario && kind === "mutation")) &&
             ["full", "readOnlyNoWorker", "profileUnavailable"].includes(
               reportMode,
-            )),
+            )) ||
+          (appendScenario && kind === "mutation" && reportMode === "full"),
       );
       check(
         !creationOnly || (creationScenario && !writer && reportMode === null),
@@ -1109,8 +1149,8 @@ export async function runBrowserFixture(definition) {
         check(creationOnly && !writer && reportMode === null);
       check(
         !metadataEdits ||
-          (metadataScenario &&
-            kind === "read" &&
+          (((metadataScenario && kind === "read") ||
+            (appendScenario && kind === "mutation")) &&
             !writer &&
             !creationOnly &&
             reportMode === null),
@@ -1119,14 +1159,14 @@ export async function runBrowserFixture(definition) {
         check(!writer && !creationOnly && reportMode === null);
       check(
         !uploadOnly ||
-          (uploadScenario &&
+          ((uploadScenario || appendScenario) &&
             kind === "read" &&
             !writer &&
             !creationOnly &&
             !metadataEdits &&
             reportMode === null),
       );
-      if (uploadScenario && kind === "read")
+      if ((uploadScenario || appendScenario) && kind === "read")
         check(
           !writer && !creationOnly && !metadataEdits && reportMode === null,
         );
@@ -1191,6 +1231,12 @@ export async function runBrowserFixture(definition) {
           environment.WEFT_POSTGRES_METADATA_CONNECTION_STRING =
             connections.weft_catalog_editor;
       }
+      if (appendScenario && kind === "mutation" && metadataEdits) {
+        environment.WEFT_POSTGRES_METADATA_CONNECTION_STRING =
+          connections.weft_catalog_editor;
+        delete environment.DOCKER_HOST;
+        delete environment.DOCKER_CONFIG;
+      }
       if (writer)
         Object.assign(environment, {
           WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING:
@@ -1205,7 +1251,11 @@ export async function runBrowserFixture(definition) {
           WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
           WEFT_FERRULE_WORKER_IMAGE: workerImage,
         });
-      if (uploadScenario && kind === "read" && !uploadOnly) {
+      if (
+        (uploadScenario || appendScenario) &&
+        kind === "read" &&
+        !uploadOnly
+      ) {
         delete environment.DOCKER_HOST;
         delete environment.DOCKER_CONFIG;
       }
@@ -1260,7 +1310,7 @@ export async function runBrowserFixture(definition) {
                   "WEFT_POSTGRES_METADATA_CONNECTION_STRING",
                 )),
         );
-      if (uploadScenario && kind === "read")
+      if ((uploadScenario || appendScenario) && kind === "read")
         check(
           environment.WEFT_PROJECT_CREATION_ENABLED === "false" &&
             environment.WEFT_METADATA_EDITS_ENABLED === "false" &&
@@ -1360,8 +1410,8 @@ export async function runBrowserFixture(definition) {
             !metadataEdits &&
             !uploadOnly &&
             reportMode === null,
-          ...(metadataScenario ? { metadataEdits } : {}),
-          ...(uploadScenario ? { uploadOnly } : {}),
+          ...(metadataScenario || appendScenario ? { metadataEdits } : {}),
+          ...(uploadScenario || appendScenario ? { uploadOnly } : {}),
           ...(creationScenario ? { creationOnly } : {}),
           reportMode,
           terminal: null,
@@ -1904,7 +1954,7 @@ export async function runBrowserFixture(definition) {
         manifestSha256: sha(bytes),
         profile: creationScenario
           ? "creator"
-          : metadataScenario || uploadScenario
+          : metadataScenario || uploadScenario || appendScenario
             ? "publisher"
             : "viewer",
       });
@@ -2236,7 +2286,7 @@ export async function runBrowserFixture(definition) {
     let metadataPublisher = null;
     function captureMetadataPublisher(projectId) {
       check(
-        (metadataScenario || uploadScenario) &&
+        (metadataScenario || uploadScenario || appendScenario) &&
           metadataPublisher === null &&
           !mutationHost,
       );
@@ -2265,7 +2315,7 @@ export async function runBrowserFixture(definition) {
     }
     function changeMetadataPublisherRole(role) {
       check(
-        (metadataScenario || uploadScenario) &&
+        (metadataScenario || uploadScenario || appendScenario) &&
           metadataPublisher !== null &&
           !mutationHost &&
           ["publisher", "viewer"].includes(role),
@@ -2692,6 +2742,12 @@ export async function runBrowserFixture(definition) {
         ? {
             captureUploadPublisher: captureMetadataPublisher,
             changeUploadPublisherRole: changeMetadataPublisherRole,
+          }
+        : {}),
+      ...(appendScenario
+        ? {
+            captureAppendPublisher: captureMetadataPublisher,
+            changeAppendPublisherRole: changeMetadataPublisherRole,
           }
         : {}),
       verifyInputBodies,

@@ -7,6 +7,7 @@ import { RevisionPageComponent } from "./catalog/revision-page.component";
 import { CreateProjectPageComponent } from "./catalog/projects/create-project-page.component";
 import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-page.component";
 import type { UploadMappingPageComponent } from "./catalog/uploads/upload-mapping-page.component";
+import type { AppendRevisionPageComponent } from "./catalog/uploads/append-revision-page.component";
 import { ExamplesComponent } from "./examples.component";
 import { NotFoundComponent } from "./not-found.component";
 
@@ -15,6 +16,10 @@ const leaveMappingEditor: CanDeactivateFn<EditMappingPageComponent> = (
 ) => component.requestLeave();
 
 const leaveMappingUpload: CanDeactivateFn<UploadMappingPageComponent> = (
+  component,
+) => component.requestLeave();
+
+const leaveRevisionAppend: CanDeactivateFn<AppendRevisionPageComponent> = (
   component,
 ) => component.requestLeave();
 
@@ -44,6 +49,16 @@ export const routes: Routes = [
         canDeactivate: [leaveMappingEditor],
         runGuardsAndResolvers: "paramsOrQueryParamsChange",
         title: "Edit mapping metadata · Weft",
+      },
+      {
+        path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/new",
+        loadComponent: () =>
+          import("./catalog/uploads/append-revision-page.component").then(
+            (module) => module.AppendRevisionPageComponent,
+          ),
+        canDeactivate: [leaveRevisionAppend],
+        runGuardsAndResolvers: "paramsOrQueryParamsChange",
+        title: "Upload revision · Weft",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",

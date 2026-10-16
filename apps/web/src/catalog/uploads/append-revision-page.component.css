@@ -1,0 +1,222 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.native-append {
+  box-sizing: border-box;
+  max-width: 900px;
+  min-width: 0;
+  padding: 4px 0 32px;
+}
+.append-heading {
+  margin-bottom: 22px;
+}
+.append-eyebrow {
+  margin: 0 0 8px;
+  color: #64806b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 0 0 12px;
+  font-size: clamp(28px, 4vw, 40px);
+  letter-spacing: -1px;
+}
+h2,
+h3 {
+  margin: 0 0 12px;
+  color: #284c3c;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+p {
+  color: #536e5e;
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+a {
+  color: #345d45;
+  overflow-wrap: anywhere;
+}
+.append-card {
+  box-sizing: border-box;
+  min-width: 0;
+  margin: 18px 0;
+  padding: 22px;
+  border: 1px solid #dce5d8;
+  border-radius: 14px;
+  background: #fff;
+}
+.append-form {
+  display: grid;
+  gap: 18px;
+}
+.append-form > div {
+  min-width: 0;
+}
+label {
+  display: block;
+  margin-bottom: 8px;
+  color: #284c3c;
+  font-size: 14px;
+  font-weight: 600;
+}
+input[type="text"],
+input[type="file"] {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 12px;
+  border: 1px solid #aabbab;
+  border-radius: 8px;
+  background: #fff;
+  color: #193b2d;
+  font: inherit;
+  font-size: 16px;
+}
+input[type="file"] {
+  overflow: hidden;
+}
+input:read-only,
+input:disabled {
+  background: #f3f5f0;
+}
+input[aria-invalid="true"] {
+  border-color: #a33e32;
+}
+button,
+.append-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid #b9ccb7;
+  border-radius: 8px;
+  background: #f0f5e9;
+  color: #284c3c;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  text-decoration: none;
+}
+button:hover,
+.append-button:hover {
+  background: #e5eddd;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.append-primary {
+  justify-self: start;
+  border-color: #285a40;
+  background: #285a40;
+  color: #fff;
+}
+.append-primary:hover {
+  background: #1c4831;
+}
+.append-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.append-help {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.append-error,
+.append-error a {
+  color: #96382e;
+}
+.append-card.append-error {
+  border-color: #c99185;
+  background: #fff7f2;
+}
+.append-error li {
+  margin: 10px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.append-notice {
+  padding: 14px 18px;
+  border-color: #d8d6b5;
+  background: #fcfbed;
+}
+.append-facts {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(0, 3fr);
+  gap: 10px 18px;
+  color: #284c3c;
+  font-size: 14px;
+}
+dt {
+  min-width: 0;
+  color: #657967;
+  overflow-wrap: anywhere;
+}
+dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.append-literal {
+  white-space: pre-wrap;
+}
+.append-checkbox {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.append-checkbox input {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+}
+.append-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+:is(button, a, input):focus-visible,
+[tabindex="-1"]:focus {
+  outline: 3px solid #967b30;
+  outline-offset: 3px;
+}
+@media (max-width: 540px) {
+  .append-card {
+    padding: 16px;
+  }
+  .append-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+  dd {
+    margin-bottom: 10px;
+  }
+  .append-actions > * {
+    flex: 1 1 180px;
+  }
+}

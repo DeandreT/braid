@@ -37,6 +37,20 @@
   @if (data(); as view) {
     @if (context(); as context) {
       @if (
+        context.features.uploadRevisions &&
+        view.mapping.access.actions.uploadRevisions &&
+        view.mapping.backendId === "ferrule"
+      ) {
+        <p>
+          <a
+            class="catalog-button"
+            [routerLink]="routes.appendRevision(view.mapping.scope)"
+          >
+            Upload revision
+          </a>
+        </p>
+      }
+      @if (
         context.features.editMetadata &&
         view.mapping.access.actions.editMetadata
       ) {

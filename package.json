@@ -23,6 +23,7 @@
     "test:project-creation-browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.project-creation.config.ts",
     "test:mapping-metadata-browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.mapping-metadata.config.ts",
     "test:native-mapping-upload-browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.native-mapping-upload.config.ts",
+    "test:native-revision-append-browser": "env -u WAYLAND_DISPLAY xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.native-revision-append.config.ts",
     "format:check": "prettier --check \"apps/web/**/*.{ts,html,css,json}\" \"tools/**/*.{mjs,json}\" package.json global.json"
   },
   "devDependencies": {

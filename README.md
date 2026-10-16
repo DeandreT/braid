@@ -23,12 +23,15 @@ endpoint are distinct workflows.
 
 ## Status and planning
 
-The local web/API foundation and read-only mapping viewer are implemented. The
-workspace displays native development examples through the Ferrule adapter.
-Catalog persistence, scoped reads, metadata edits, native uploads, project
-creation, and saved revision reports through the API are qualified and merged.
-Maintenance, saved-revision viewer integration, authentication, AI chat, and deployment follow
-the focused delivery sequence below.
+The Angular frontend and C# API provide a mapping catalog, immutable revision
+history, saved projection and validation views, project creation, metadata editing,
+and native-file upload with explicit recovery. A separate upload page appends a
+revision against a reviewed head. Ferrule is the first mapping backend.
+
+Catalog persistence, scoped APIs, private storage, and maintenance are qualified
+and merged. Browser workflows follow focused implementation and qualification
+increments recorded in the roadmap. Authentication, AI chat, sample previews,
+and deployment follow those catalog workflows.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
@@ -37,9 +40,9 @@ the C# API schema.
 The Ferrule adapter can inspect, validate, and project native artifacts through a
 bounded, isolated worker. Its revision-specific projection contains fields,
 rules, controls, lineage, and located coverage gaps. Development example routes
-provide separate projection and validation reports. The catalog API accepts
-immutable native uploads and serves their saved projection and validation reports.
-Connecting those catalog revisions to the viewer follows maintenance.
+provide separate projection and validation reports. The catalog retains
+immutable native uploads and their saved projection and validation reports; its
+scoped viewer opens those reports for the exact selected revision.
 
 See [Local development](docs/development.md) to run and verify the application.
 
@@ -47,6 +50,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
 - [Projection v1](docs/projection-contract.md): public read model and fixture behavior.
 - [Mapping viewer](docs/mapping-viewer.md): navigation, exact values, coverage, and validation.
+- [Revision upload](docs/native-revision-append-ui.md): reviewed heads, immutable history, and explicit recovery.
 - [Ferrule worker](docs/ferrule-worker.md): native authority, transport, isolation, and qualification.
 - [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
 - [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.

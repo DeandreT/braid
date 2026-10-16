@@ -121,6 +121,9 @@ export const catalogRoutes = {
   editMapping(scope: CatalogMappingScope): string {
     return `${mappingRoute(scope)}/edit`;
   },
+  appendRevision(scope: CatalogMappingScope): string {
+    return `${mappingRoute(scope)}/revisions/new`;
+  },
   revision(scope: CatalogRevisionScope): string {
     const copy = snapshotCatalogScope(scope);
     if (!("revisionId" in copy)) throw new CatalogReadError("invalidLink");

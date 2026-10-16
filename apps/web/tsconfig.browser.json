@@ -7,10 +7,12 @@
     "playwright.project-creation.config.ts",
     "playwright.mapping-metadata.config.ts",
     "playwright.native-mapping-upload.config.ts",
+    "playwright.native-revision-append.config.ts",
     "tests/catalog*.ts",
     "tests/revision-reports*.ts",
     "tests/project-creation*.ts",
     "tests/mapping-metadata*.ts",
-    "tests/native-mapping-upload*.ts"
+    "tests/native-mapping-upload*.ts",
+    "tests/native-revision-append*.ts"
   ]
 }

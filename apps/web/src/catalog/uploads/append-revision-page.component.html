@@ -1,0 +1,663 @@
+@let view = state.view();
+<section
+  class="native-append"
+  aria-labelledby="append-title"
+  [attr.aria-busy]="view.work !== 'idle' || view.preparingFile"
+>
+  <header class="append-heading">
+    <p class="append-eyebrow">Native mapping</p>
+    <h1 id="append-title" tabindex="-1">Upload revision</h1>
+    <p>
+      Append one original native file as a new immutable revision of an existing
+      mapping. This form supports Ferrule native JSON. Files can be up to 4 MiB;
+      this service may have a lower limit.
+    </p>
+    <p>
+      A new append is saved only while the mapping still has the head you
+      reviewed. Existing revisions and mapping metadata stay intact.
+    </p>
+    <div class="append-actions">
+      @if (view.mapping; as mapping) {
+        <a [routerLink]="routes.mapping(mapping.scope)" [queryParams]="{}"
+          >Back to mapping</a
+        >
+      } @else {
+        <a routerLink="/catalog" [queryParams]="{}">Open catalog</a>
+      }
+      <button
+        type="button"
+        (click)="state.refreshAccess()"
+        [disabled]="
+          view.work !== 'idle' ||
+          view.preparingFile ||
+          uiBlocked() ||
+          view.admission === 'invalidLink'
+        "
+      >
+        Refresh access
+      </button>
+    </div>
+  </header>
+
+  @if (state.leavePrompt(); as risk) {
+    <section
+      class="append-card append-notice"
+      aria-labelledby="append-leave"
+      role="alert"
+    >
+      <h2 id="append-leave" tabindex="-1">
+        {{
+          risk === "draft"
+            ? "Leave this append draft?"
+            : "Leave and keep append recovery?"
+        }}
+      </h2>
+      @if (risk === "draft") {
+        <p>Your unsent filename and selected file will be discarded.</p>
+      } @else {
+        <p>
+          This tab keeps the original append's recovery information. Waiting
+          stops here, but an append already sent may still save. Leaving does
+          not undo it.
+        </p>
+      }
+      <div class="append-actions">
+        <button type="button" (click)="stay()">Stay</button>
+        @if (risk === "draft") {
+          <button type="button" (click)="state.discardDraftAndLeave()">
+            Discard draft and leave
+          </button>
+        } @else {
+          <button type="button" (click)="state.keepRecoveryAndLeave()">
+            Keep recovery information and leave
+          </button>
+        }
+      </div>
+    </section>
+  }
+
+  <section
+    id="append-status"
+    class="append-status"
+    aria-labelledby="append-status-title"
+    tabindex="-1"
+  >
+    <h2 id="append-status-title" class="append-visually-hidden">
+      Append status
+    </h2>
+    @if (view.admission === "loading") {
+      <p role="status">Checking current identity and mapping access…</p>
+    } @else if (view.admission !== "ready") {
+      <section class="append-card" role="status">
+        <h3>Append form unavailable</h3>
+        @switch (view.admission) {
+          @case ("invalidLink") {
+            <p>
+              This append link is invalid. Open the catalog to choose a mapping.
+            </p>
+          }
+          @case ("readOnly") {
+            <p>
+              Revision upload is not currently enabled or permitted for this
+              mapping. Ordinary mapping and saved-revision reads remain
+              available when current view access permits them.
+            </p>
+          }
+          @case ("notFound") {
+            <p>
+              This mapping or append is unavailable to your current identity.
+              Private append details are hidden.
+            </p>
+          }
+          @case ("rejected") {
+            <p>
+              Your identity could not be admitted. Private append details are
+              hidden.
+            </p>
+          }
+          @default {
+            <p>
+              Current access could not be checked. No automatic append, status
+              check or resume was sent.
+            </p>
+          }
+        }
+      </section>
+    }
+
+    @if (view.quarantined) {
+      <section class="append-card append-notice" role="status">
+        <h3>An original append is retained privately</h3>
+        <p>
+          This tab keeps one original append for another identity or mapping.
+          Its file, filename and operation details are hidden. Return to the
+          original identity and mapping to recover it; it will never be sent as
+          another actor.
+        </p>
+      </section>
+    }
+    @if (view.error; as error) {
+      <p class="append-error" role="alert">{{ errorMessage(error) }}</p>
+    }
+    @if (view.outcomeUnknown) {
+      <section
+        class="append-card append-notice"
+        aria-labelledby="append-unknown"
+      >
+        <h3 id="append-unknown">Append outcome is unknown</h3>
+        <p>
+          The append may have saved. Keep this tab open and recover the original
+          request before starting another. A later refusal or a matching current
+          head cannot resolve this outcome.
+        </p>
+        @if (view.waitingStopped) {
+          <p>
+            Waiting stopped. This does not promise that the server canceled the
+            append.
+          </p>
+        }
+      </section>
+    }
+
+    @if (view.acknowledgement; as saved) {
+      <section class="append-card" aria-labelledby="append-saved">
+        <h3 id="append-saved">
+          {{
+            saved.detailed && saved.revision?.admission === "decodedInvalid"
+              ? "Revision saved with validation issues"
+              : "Revision saved"
+          }}
+        </h3>
+        @if (!saved.detailed) {
+          <p role="status">
+            This tab retained a verified saved acknowledgement. Its details are
+            hidden until the original identity and current read access can be
+            checked.
+          </p>
+        } @else if (saved.revision; as revision) {
+          <p role="status">
+            This acknowledges the original append's immutable revision. A later
+            current head does not change which revision was saved.
+          </p>
+          @if (revision.admission === "decodedInvalid") {
+            <p>
+              The native revision was saved with validation issues. Open that
+              exact revision to inspect the available details.
+            </p>
+          }
+          <dl class="append-facts">
+            <dt>Saved sequence</dt>
+            <dd>{{ revision.sequence }}</dd>
+            <dt>Saved admission</dt>
+            <dd>{{ revision.admission }}</dd>
+            <dt>Organization</dt>
+            <dd>{{ revision.scope.organizationId }}</dd>
+            <dt>Project</dt>
+            <dd>{{ revision.scope.projectId }}</dd>
+            <dt>Mapping</dt>
+            <dd>{{ revision.scope.mappingId }}</dd>
+            <dt>Saved revision</dt>
+            <dd>{{ revision.scope.revisionId }}</dd>
+            <dt>Completed at</dt>
+            <dd>{{ saved.completedAtUtc }}</dd>
+          </dl>
+        }
+        @switch (view.currentAccess.kind) {
+          @case ("loading") {
+            <p role="status">Checking current access to the saved revision…</p>
+          }
+          @case ("ready") {
+            @let access = view.currentAccess;
+            @if (access.kind === "ready") {
+              <dl class="append-facts">
+                <dt>Saved filename</dt>
+                <dd
+                  class="append-literal"
+                  [textContent]="access.revision.originalFilename"
+                ></dd>
+                <dt>Native bytes</dt>
+                <dd>{{ access.revision.nativeByteCount }}</dd>
+              </dl>
+              <a
+                class="append-button"
+                [routerLink]="routes.revision(access.revision.scope)"
+                [queryParams]="{}"
+                >View saved revision</a
+              >
+            }
+          }
+          @default {
+            <p>
+              Saving remains acknowledged. Current revision access is
+              unavailable until a fresh ordinary read succeeds. Retrying that
+              read sends no append.
+            </p>
+          }
+        }
+        <div class="append-actions">
+          <button
+            type="button"
+            (click)="state.retryRevisionAccess()"
+            [disabled]="!view.canRetryRevisionAccess || uiBlocked()"
+          >
+            Retry revision access
+          </button>
+        </div>
+      </section>
+    }
+
+    @let operation = view.operationStatus;
+    @if (operation) {
+      <section class="append-card" aria-labelledby="append-operation">
+        <h3 id="append-operation">
+          {{
+            operation.headConflict
+              ? "Append was not saved: head changed"
+              : operation.committed
+                ? "Saved append operation"
+                : operation.terminal
+                  ? "Append ended without a saved revision"
+                  : "Append pending"
+          }}
+        </h3>
+        @if (operation.headConflict) {
+          <p>
+            The mapping head changed; this append was not saved as a revision.
+            The completed conflict receipt belongs to this original attempt.
+          </p>
+          <p>
+            Review the current mapping below. A new append requires a deliberate
+            new head review and file selection.
+          </p>
+          <button
+            type="button"
+            (click)="state.refreshAccess()"
+            [disabled]="view.work !== 'idle' || uiBlocked()"
+          >
+            Review current head
+          </button>
+        } @else if (!operation.terminal) {
+          <p>
+            The known operation is {{ operation.phase }}. Attempts observed:
+            {{ operation.claimCount }}. Check its status or deliberately resume
+            it; no automatic polling or retry runs.
+          </p>
+          @if (operation.failure === "needsSource") {
+            <p>
+              This operation needs its original file. Resend the retained
+              original file; a replacement cannot recover the request.
+            </p>
+          } @else if (operation.failure) {
+            <p>
+              This operation reports a recoverable failure. Resume makes one
+              source-free attempt, which may remain pending or fail again.
+            </p>
+          }
+        } @else if (!operation.committed) {
+          <p>This exact own operation has no committed revision.</p>
+          @if (operation.phase === "attemptExhausted") {
+            <p>Its attempt budget is exhausted.</p>
+          } @else {
+            <p>{{ rejectionMessage(view.response?.rejection ?? null) }}</p>
+          }
+        }
+        <div class="append-actions">
+          <button
+            type="button"
+            (click)="state.checkAppendStatus()"
+            [disabled]="!view.canCheckStatus || uiBlocked()"
+          >
+            Check append status
+          </button>
+          @if (!operation.terminal && operation.failure !== "needsSource") {
+            <button
+              type="button"
+              (click)="state.resumeAppend()"
+              [disabled]="!view.canResume || uiBlocked()"
+            >
+              Resume append
+            </button>
+          }
+        </div>
+      </section>
+    }
+    @if (view.response; as response) {
+      @if (
+        !view.acknowledgement &&
+        (response.outcome === "idempotencyConflict" ||
+          response.outcome === "claimLost" ||
+          response.outcome === "notAuthorizedOrNotFound" ||
+          (response.outcome === "rejected" && !operation))
+      ) {
+        <section class="append-card append-notice" role="status">
+          <h3>Append call was not acknowledged as saved</h3>
+          @if (response.rejection) {
+            <p>{{ rejectionMessage(response.rejection) }}</p>
+          } @else if (response.outcome === "notAuthorizedOrNotFound") {
+            <p>
+              This call could not access the requested mapping or own operation.
+              It does not resolve an earlier unknown append outcome.
+            </p>
+          } @else {
+            <p>
+              The service reports {{ response.outcome }} for this call. The
+              original request stays unchanged, and any earlier unknown outcome
+              remains unknown.
+            </p>
+          }
+        </section>
+      }
+    }
+    @if (view.work === "append" || view.work === "resume") {
+      <p role="status">
+        Waiting for this append call. No second append or resume is sent
+        automatically.
+      </p>
+    } @else if (view.work === "receipt") {
+      <p role="status">Reading the known own append receipt…</p>
+    } @else if (view.work === "admitting") {
+      <p role="status">Checking fresh authority for this deliberate action…</p>
+    }
+    <div class="append-actions">
+      @if (view.canResend) {
+        <button
+          type="button"
+          (click)="state.resendOriginal()"
+          [disabled]="uiBlocked()"
+        >
+          {{
+            operation?.failure === "needsSource"
+              ? "Resend original file"
+              : "Resend original append"
+          }}
+        </button>
+      }
+      @if (view.canStopWaiting) {
+        <button
+          type="button"
+          (click)="state.stopWaiting()"
+          [disabled]="uiBlocked()"
+        >
+          Stop waiting
+        </button>
+      }
+      @if (view.canStartNew) {
+        <button
+          type="button"
+          (click)="state.startNewAppend()"
+          [disabled]="uiBlocked()"
+        >
+          Start a new append
+        </button>
+      }
+      @if (view.canAbandon) {
+        <button type="button" (click)="openAbandon()" [disabled]="uiBlocked()">
+          Abandon original append
+        </button>
+      }
+    </div>
+  </section>
+
+  @if (view.mapping; as mapping) {
+    <section class="append-card" aria-labelledby="append-current-mapping">
+      <h2 id="append-current-mapping">Current mapping</h2>
+      <dl class="append-facts">
+        <dt>Name</dt>
+        <dd class="append-literal" [textContent]="mapping.name"></dd>
+        <dt>Backend</dt>
+        <dd class="append-literal" [textContent]="mapping.backendId"></dd>
+        <dt>Organization</dt>
+        <dd>{{ mapping.scope.organizationId }}</dd>
+        <dt>Project</dt>
+        <dd>{{ mapping.scope.projectId }}</dd>
+        <dt>Mapping</dt>
+        <dd>{{ mapping.scope.mappingId }}</dd>
+        <dt>Current head</dt>
+        <dd>{{ mapping.head.scope.revisionId }}</dd>
+        <dt>Current sequence</dt>
+        <dd>{{ mapping.head.sequence }}</dd>
+        <dt>Current admission</dt>
+        <dd>{{ mapping.head.admission }}</dd>
+      </dl>
+      <p class="append-help">
+        Current mapping information comes from ordinary fresh reads. Name and
+        description are read-only here; metadata changes do not replace the
+        reviewed native head.
+      </p>
+      @if (mapping.backendId !== "ferrule") {
+        <p role="status">
+          Revision upload for this persisted backend is not supported by this
+          form. The mapping remains available through ordinary catalog reads.
+        </p>
+      }
+    </section>
+  }
+
+  @if (view.reviewedHead || view.canReviewHead || view.headReviewRequired) {
+    <section class="append-card" aria-labelledby="append-review">
+      <h2 id="append-review" tabindex="-1">Reviewed head for this append</h2>
+      @if (view.reviewedHead; as head) {
+        <dl class="append-facts">
+          <dt>Organization</dt>
+          <dd>{{ head.scope.organizationId }}</dd>
+          <dt>Project</dt>
+          <dd>{{ head.scope.projectId }}</dd>
+          <dt>Mapping</dt>
+          <dd>{{ head.scope.mappingId }}</dd>
+          <dt>Reviewed revision</dt>
+          <dd>{{ head.scope.revisionId }}</dd>
+          <dt>Reviewed sequence</dt>
+          <dd>{{ head.sequence }}</dd>
+          <dt>Reviewed admission</dt>
+          <dd>{{ head.admission }}</dd>
+        </dl>
+      }
+      @if (view.headReviewRequired) {
+        <p class="append-error" role="status">
+          Review the current head before sending a new append. Your selected
+          file draft is retained.
+        </p>
+      }
+      @if (view.locked) {
+        <p>
+          The original reviewed head is locked with this attempt. Recovery uses
+          that original condition even if today's head has advanced.
+        </p>
+      } @else {
+        <p>
+          Refreshing access never replaces this reviewed head. The server also
+          checks this exact head when publishing the revision.
+        </p>
+      }
+      @if (!view.locked && view.canReviewHead) {
+        <button
+          type="button"
+          (click)="state.reviewCurrentHead()"
+          [disabled]="uiBlocked()"
+        >
+          Review current head
+        </button>
+      }
+    </section>
+  }
+
+  @let errors = view.fieldErrors;
+  @if (errors.originalFilename || errors.request || view.sourceError) {
+    <section
+      id="append-errors"
+      class="append-card append-error"
+      tabindex="-1"
+      role="alert"
+      aria-label="Append fields need attention"
+    >
+      <h2>Check the append fields</h2>
+      <ul>
+        @if (errors.originalFilename) {
+          <li>
+            <a href="#append-filename" (click)="focusField($event, 'filename')">
+              {{ filenameError(errors.originalFilename) }}
+            </a>
+          </li>
+        }
+        @if (view.sourceError; as error) {
+          <li>
+            <a href="#append-file" (click)="focusField($event, 'file')">
+              {{ sourceError(error) }}
+            </a>
+          </li>
+        }
+        @if (errors.request) {
+          <li>
+            @if (
+              errors.request === "queryLimit" ||
+              errors.request === "requestLineLimit"
+            ) {
+              <a
+                href="#append-filename"
+                (click)="focusField($event, 'filename')"
+              >
+                {{ requestError(errors.request) }}
+              </a>
+            } @else {
+              <a href="#append-review" (click)="focusField($event, 'review')">
+                {{ requestError(errors.request) }}
+              </a>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (
+    !view.quarantined &&
+    view.mapping?.backendId === "ferrule" &&
+    (view.canEdit || view.locked)
+  ) {
+    <form
+      class="append-card append-form"
+      [formGroup]="form"
+      (ngSubmit)="submit()"
+      novalidate
+    >
+      <div>
+        <label for="append-file">Native mapping file</label>
+        <input
+          id="append-file"
+          type="file"
+          accept=".json,application/json"
+          (change)="selectFile($event)"
+          [disabled]="!view.canChooseFile || uiBlocked()"
+          [attr.aria-invalid]="view.sourceError ? 'true' : null"
+          aria-describedby="append-file-help append-file-error"
+        />
+        <p id="append-file-help" class="append-help">
+          Ferrule native JSON only. Selecting a file does not send it. The
+          original bytes are kept for your deliberate append and recovery;
+          referenced files and resources are not included.
+        </p>
+        <p id="append-file-error" class="append-error">
+          {{ view.sourceError ? sourceError(view.sourceError) : "" }}
+        </p>
+        @if (view.file; as file) {
+          <dl class="append-facts">
+            <dt>
+              {{ view.locked ? "Original filename" : "Selected filename" }}
+            </dt>
+            <dd class="append-literal" [textContent]="file.name"></dd>
+            <dt>File bytes</dt>
+            <dd>{{ file.byteCount }}</dd>
+          </dl>
+        }
+        @if (view.preparingFile) {
+          <p role="status">
+            Preparing the selected file… You can select a replacement while
+            preparation settles.
+          </p>
+        }
+      </div>
+      <div>
+        <label for="append-filename">Saved filename</label>
+        <input
+          id="append-filename"
+          type="text"
+          formControlName="originalFilename"
+          autocomplete="off"
+          [readOnly]="!view.canEdit || uiBlocked()"
+          [attr.aria-invalid]="errors.originalFilename ? 'true' : null"
+          aria-describedby="append-filename-help append-filename-error"
+        />
+        <p id="append-filename-help" class="append-help">
+          Starts with the selected file's exact name. Choose a safe basename up
+          to 255 UTF-8 bytes without path separators or control characters. The
+          saved name is preserved exactly; it is not a storage path.
+        </p>
+        <p id="append-filename-error" class="append-error">
+          {{
+            errors.originalFilename
+              ? filenameError(errors.originalFilename)
+              : ""
+          }}
+        </p>
+      </div>
+      @if (view.locked) {
+        <p class="append-help">
+          The original file, saved filename and reviewed head are locked for
+          recovery. A different file or head requires a new append.
+        </p>
+      } @else {
+        <button
+          class="append-primary"
+          type="submit"
+          [disabled]="!view.canAppend || uiBlocked()"
+        >
+          Append revision
+        </button>
+      }
+    </form>
+  }
+
+  @if (abandonDecision()) {
+    <section class="append-card append-notice" aria-labelledby="append-abandon">
+      <h2 id="append-abandon" tabindex="-1">
+        Forget this append's recovery information?
+      </h2>
+      <p>
+        Abandoning releases only this tab's original file and request
+        information. It does not cancel or delete server facts. Starting another
+        append may save another revision.
+      </p>
+      <label class="append-checkbox">
+        <input
+          type="checkbox"
+          [checked]="abandonAcknowledged()"
+          (change)="abandonAcknowledged.set($any($event.target).checked)"
+        />
+        I understand an append may already have saved.
+      </label>
+      <div class="append-actions">
+        <button
+          type="button"
+          (click)="abandon()"
+          [disabled]="
+            !abandonAcknowledged() ||
+            !view.canAbandon ||
+            state.leavePrompt() !== null
+          "
+        >
+          Abandon and start a new append
+        </button>
+        <button type="button" (click)="keepOriginal()">
+          Keep original append
+        </button>
+      </div>
+    </section>
+  }
+  <p class="append-help">
+    Recovery stays only in this tab's memory. Reloading or closing loses the
+    original file and request recovery information; an append already sent may
+    still finish. Workspace navigation can retain unfinished recovery when you
+    choose to keep it. A saved revision is not proof that the mapping is
+    executable, deployed or fully explained.
+  </p>
+</section>
