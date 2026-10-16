@@ -616,7 +616,9 @@ class AppendWire {
     const fixture = this.ledger.owner.manifest,
       paths = new Set([
         "/api/v1/catalog/context",
+        catalogApi(projectPath(fixture.project.scope)),
         this.mappingApi,
+        catalogApi(mappingPath(fixture.protected.revision)),
         catalogApi(revisionPath(fixture.mapping.initialRevision.scope)),
         catalogApi(revisionPath(fixture.protected.revision)),
       ]);
