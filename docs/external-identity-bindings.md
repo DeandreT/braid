@@ -1,12 +1,12 @@
 # External identity bindings
 
-Status: P4a [#91](https://github.com/DeandreT/weft/issues/91) is selected source
-preparation awaiting integration and qualification. Its P3g prerequisite is
+Status: P4a [#91](https://github.com/DeandreT/weft/issues/91) is qualified and merged
+in [PR #98](https://github.com/DeandreT/weft/pull/98). Its P3g prerequisite is
 complete: revision append is qualified and merged through
 [PR #96](https://github.com/DeandreT/weft/pull/96), after all 140 fresh browser cases
 passed with no retries or skips, completing
-[#19](https://github.com/DeandreT/weft/issues/19). This document describes the
-selected contract; it does not establish a working sign-in or a passed P4a suite.
+[#19](https://github.com/DeandreT/weft/issues/19). This foundation does not enable
+Entra sign-in, browser sessions or production-payload access.
 
 ## Identity without implicit permissions
 
@@ -126,13 +126,17 @@ No CLI result enables the Development identity provider in a hosted environment.
 
 ## Verification boundary and later work
 
-The selected source declares 34 pure, 18 actual-PostgreSQL and 8 compiled-CLI
-cases: 60 intended cases, not compiled discovery or executed passes. Qualification
-must separately exercise fresh/real-prefix upgrades, old data/definitions/ACL and
-effective-right conservation, direct least-privilege refusal, current
-binding/principal changes, collision/disable concurrency, durable restart and the
-actual compiled command's private-safe outcomes. Synthetic policy facts do not
-replace those database/tool checks.
+All 60 new cases passed: 34 pure, 18 actual-PostgreSQL and 8 compiled-CLI cases.
+The clean container completed locked restore, formatting, builds and ordinary publication;
+the Linux host then executed its exact exported test binaries. The full backend
+regression passed 2,895 cases with no failures or skips. All 140 existing catalog
+browser cases passed across six fresh migration-8 fixtures.
+
+The database/tool cases cover fresh and populated seven-to-eight upgrades, old
+data/definitions/ACL and effective-right conservation, direct least-privilege
+refusal, current binding/principal changes, collision/disable concurrency,
+durable restart and the actual compiled command's private-safe outcomes.
+Synthetic policy facts remain separate from those database/tool checks.
 
 This increment adds no OIDC callback, provider credentials, cookie/session,
 HTTP authentication route, claims-to-role synchronization, payload access or

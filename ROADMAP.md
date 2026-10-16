@@ -215,14 +215,16 @@ nullable upload responses before the upload screens in #19 consume their
 generated types.
 
 P4 starts after complete qualified P3g, including revision append. Its first
-focused increment, [#91](https://github.com/DeandreT/weft/issues/91), prepares
+focused increment, [#91](https://github.com/DeandreT/weft/issues/91), is qualified
+and merged in [PR #98](https://github.com/DeandreT/weft/pull/98). It adds
 provider-neutral external identity bindings, a restricted fresh reader and four
-explicit owner commands. It does not activate browser authentication or grant
-project roles. The selected source declares 34 pure, 18 actual-PostgreSQL and
-8 compiled-CLI cases; these are authored intent, not discovered or executed
-results. P4a remains unqualified pending integration and verification; its
-qualified, merged F dependency is complete through PR #96. Payload permission,
-durable sessions, Entra callbacks and Angular sign-in follow separate increments. See
+explicit owner commands. The 60 new cases passed: 34 pure, 18 actual-PostgreSQL
+and 8 compiled-CLI cases. The full backend regression passed 2,895 cases with no
+failures or skips, executing on the Linux host from the exact clean-container
+exports. All 140 existing catalog browser cases passed across six fresh migration-8
+fixtures. P4a does not activate browser authentication or grant project roles or
+production-payload access. Payload permission, durable sessions, Entra callbacks
+and Angular sign-in follow separate increments. See
 [External identity bindings](docs/external-identity-bindings.md).
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate

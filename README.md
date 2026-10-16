@@ -35,10 +35,11 @@ passed with no retries or skips, completing
 [#19](https://github.com/DeandreT/weft/issues/19). Authentication, AI chat, sample
 previews, and deployment follow those catalog workflows.
 
-The next identity increment prepares provider-neutral external bindings and
-explicit owner commands. It does not enable Entra sign-in or browser sessions;
-see [External identity bindings](docs/external-identity-bindings.md) for its
-operator contract and current qualification status.
+Provider-neutral external identity bindings and explicit owner commands are
+qualified and merged in [PR #98](https://github.com/DeandreT/weft/pull/98).
+They do not enable Entra sign-in, browser sessions, or production-payload access;
+see [External identity bindings](docs/external-identity-bindings.md) for the
+operator contract and qualification evidence.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
