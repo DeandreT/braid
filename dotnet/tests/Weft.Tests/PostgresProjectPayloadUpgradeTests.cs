@@ -93,22 +93,28 @@ public sealed class PostgresProjectPayloadUpgradeTests(PostgresFixture fixture)
                 """);
             await Task.WhenAll(Enumerable.Range(0, 3).Select(async _ =>
             {
-                await using var runner = new MigrationRunner(test.MigrationConnectionString);
+                await using var runner = new MigrationRunner(test.MigrationConnectionString,
+                    MigrationRunner.EmbeddedMigrations.Take(PrefixVersion + 1).ToArray());
                 await runner.MigrateAsync();
             }));
-            await AssertCurrentHistoryAsync(test);
+            await AssertPayloadHistoryAsync(test);
             await source.AssertPayloadUpgradePreservedAsync(connection);
             SameDigest(journal, await JournalDigestAsync(connection, PrefixVersion),
                 "Payload upgrade changed an old migration journal fact.");
             SameRows(rows, await RowDigestsAsync(connection, includePayload: false));
             Assert.True(await test.ScalarAsync<long>("SELECT count(*) FROM weft.project_payload_read_grants") == 0,
                 "Payload migration inferred a grant from existing authority or identity facts.");
-            var fullJournal = await JournalDigestAsync(connection);
-            await test.MigrateAsync();
-            await test.MigrateAsync();
-            SameDigest(fullJournal, await JournalDigestAsync(connection), "Repeated upgrade changed the complete migration journal.");
+            var payloadJournal = await JournalDigestAsync(connection);
+            await MigratePrefixAsync(test, PrefixVersion + 1);
+            await MigratePrefixAsync(test, PrefixVersion + 1);
+            SameDigest(payloadJournal, await JournalDigestAsync(connection), "Repeated upgrade changed the payload-prefix migration journal.");
             await source.AssertPayloadUpgradePreservedAsync(connection);
             SameRows(rows, await RowDigestsAsync(connection, includePayload: false));
+
+            // Finish the strict original eight-to-nine conservation before any
+            // later supplement. Current readers require the full embedded history.
+            await test.MigrateAsync();
+            await AssertCurrentHistoryAsync(test);
 
             // Existing runtime and identity profiles must still admit the same
             // current facts after the additive migration; neither grants payload.
@@ -248,13 +254,31 @@ public sealed class PostgresProjectPayloadUpgradeTests(PostgresFixture fixture)
             "The historical migration checksums are not the trusted eight-script prefix.");
     }
 
-    private static async Task AssertCurrentHistoryAsync(PostgresCase test)
+    private static async Task AssertPayloadHistoryAsync(PostgresCase test)
     {
-        var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.True(scripts.Count == PrefixVersion + 1, "This test requires exactly one additive payload migration after the trusted prefix.");
+        var scripts = MigrationRunner.EmbeddedMigrations.Take(PrefixVersion + 1).ToArray();
+        Assert.True(scripts.Length == PrefixVersion + 1, "This test requires exactly one additive payload migration after the trusted prefix.");
         Assert.True(scripts.Take(PrefixVersion).Select(script => script.Checksum)
             .SequenceEqual(PostgresProjectPayloadUpgradeConservation.PrefixChecksums, StringComparer.Ordinal),
             "The trusted eight-script migration bodies changed.");
+        Assert.True(StringComparer.Ordinal.Equals(scripts[^1].Checksum, PayloadPermissionSchemaContract.MigrationChecksum),
+            "The payload-prefix migration body changed.");
+        Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
+            .SequenceEqual(Enumerable.Range(1, scripts.Length)), "The historical migration versions are not the exact payload prefix.");
+        Assert.True((await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"))
+            .SequenceEqual(scripts.Select(script => script.Checksum), StringComparer.Ordinal),
+            "The historical migration checksums are not the trusted payload prefix.");
+    }
+
+    private static async Task AssertCurrentHistoryAsync(PostgresCase test)
+    {
+        var scripts = MigrationRunner.EmbeddedMigrations;
+        Assert.True(scripts.Take(PrefixVersion).Select(script => script.Checksum)
+            .SequenceEqual(PostgresProjectPayloadUpgradeConservation.PrefixChecksums, StringComparer.Ordinal),
+            "The trusted eight-script migration bodies changed.");
+        Assert.True(scripts.Skip(PrefixVersion).Select(script => script.Checksum)
+            .SequenceEqual(new[] { PayloadPermissionSchemaContract.MigrationChecksum, ServerSessionSchemaContract.MigrationChecksum }, StringComparer.Ordinal),
+            "The current migration supplements do not match the payload and session sources.");
         Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
             .SequenceEqual(Enumerable.Range(1, scripts.Count)), "The complete migration versions do not match this build.");
         Assert.True((await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"))
@@ -275,7 +299,7 @@ public sealed class PostgresProjectPayloadUpgradeTests(PostgresFixture fixture)
     private static async Task<IReadOnlyDictionary<string, byte[]>> RowDigestsAsync(NpgsqlConnection connection, bool includePayload)
     {
         var tables = PostgresProjectPayloadUpgradeConservation.PrefixTables.Where(name => name != "schema_migrations");
-        if (includePayload) tables = tables.Append("project_payload_read_grants");
+        if (includePayload) tables = tables.Append("project_payload_read_grants").Append(ServerSessionSchemaContract.SessionTable);
         var rows = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         foreach (var table in tables)
             rows.Add(table, Digest(await PostgresExternalIdentityTestSupport.TableRowsAsync(connection, table)));

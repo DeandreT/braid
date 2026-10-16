@@ -30,7 +30,7 @@ public sealed class PostgresMetadataMigrationTests(PostgresFixture fixture)
             await runner.MigrateAsync();
         }));
         await support.Case.MigrateAsync();
-        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, await support.Case.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, MigrationRunner.EmbeddedMigrations.Count), await support.Case.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(MetadataChecksum, await support.Case.ScalarAsync<string>(
             "SELECT checksum FROM weft.schema_migrations WHERE version=4"));

@@ -92,7 +92,7 @@ public sealed class PostgresIngestionSecurityTests(PostgresFixture fixture)
         })
             await AssertDirectPrivilegeDeniedAsync(ingestion, seed.OrganizationA, sql);
         Assert.Equal(3L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.projects"));
-        Assert.Equal(9L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+        Assert.Equal((long)MigrationRunner.EmbeddedMigrations.Count, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
     }
 
     [PostgresFact]

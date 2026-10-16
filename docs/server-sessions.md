@@ -165,3 +165,7 @@ login/status/logout route, host registration, provider resource, UI, payload I/O
 or retention/pruning authority. Existing Development-only identity behavior
 remains separately qualified. See the [delivery plan](../ROADMAP.md) and
 [identity bindings](external-identity-bindings.md).
+
+The [PostgreSQL implementation](postgres-server-sessions.md) passes its 33 focused
+database checks. Clean-build, full backend and browser regression qualification
+remain separate prerequisites before that store increment merges.

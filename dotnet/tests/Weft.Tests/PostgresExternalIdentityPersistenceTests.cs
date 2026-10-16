@@ -132,7 +132,7 @@ public sealed class PostgresExternalIdentityPersistenceTests(PostgresFixture fix
 
     private static async Task AssertHistoryAsync(PostgresCase test)
     {
-        Assert.Equal(Enumerable.Range(1, 9), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(Enumerable.Range(1, MigrationRunner.EmbeddedMigrations.Count), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(MigrationRunner.EmbeddedMigrations.Select(migration => migration.Checksum),
             await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
     }

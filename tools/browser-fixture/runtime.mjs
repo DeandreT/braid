@@ -283,6 +283,7 @@ export async function runBrowserFixture(definition) {
       "0007_private_object_maintenance.sql",
       "0008_external_identity_bindings.sql",
       "0009_project_payload_read_grants.sql",
+      "0010_server_sessions.sql",
     ];
     check(
       equivalent(
@@ -448,6 +449,8 @@ export async function runBrowserFixture(definition) {
       ["weft_maintenance", "MAINTENANCE"],
       ["weft_identity_reader", "IDENTITY"],
       ["weft_payload_permission_reader", "PAYLOAD_PERMISSION"],
+      ["weft_session_reader", "SESSION_READER"],
+      ["weft_session_writer", "SESSION_WRITER"],
     ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))
@@ -761,6 +764,7 @@ export async function runBrowserFixture(definition) {
       "private_object_cleanup_attempts",
       "external_identity_bindings",
       "project_payload_read_grants",
+      "server_sessions",
     ];
     const rows = () =>
       jsonSql(
@@ -2003,6 +2007,10 @@ export async function runBrowserFixture(definition) {
       check(
         Array.isArray(finalRows.project_payload_read_grants) &&
           finalRows.project_payload_read_grants.length === 0,
+      );
+      check(
+        Array.isArray(finalRows.server_sessions) &&
+          finalRows.server_sessions.length === 0,
       );
       const bytes = Buffer.from(JSON.stringify(manifest) + "\n");
       check(bytes.length <= 65536);

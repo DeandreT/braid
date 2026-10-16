@@ -99,6 +99,17 @@ progress. Its selected additive schema requires a separately passworded
 `weft_payload_permission_reader` CONNECT-only login and an explicit existing-volume
 upgrade step; it supplies no payload permission from a project role or identity.
 Its document records the pending integration and qualification boundary.
+The [server-session metadata setup](postgres-server-sessions.md) has passed its
+33 focused PostgreSQL checks; complete regression qualification is pending.
+Its local profile also requires separate
+`WEFT_LOCAL_SESSION_READER_PASSWORD` and `WEFT_LOCAL_SESSION_WRITER_PASSWORD`
+values. New-volume initialization creates both CONNECT-only logins. After this
+increment is integrated and released, existing nine-migration volumes require a
+coordinated stop/migrate/start upgrade: run the explicit database-administrator
+`deploy/local/postgres-add-session-roles.sh` step before `migrate`. It creates
+both logins in one transaction and refuses either existing role without adoption
+or password rotation. The session document records the complete procedure and
+pending qualification; this setup does not enable sign-in or a server identity.
 Initialization reads passwords from the environment inside `psql`; they are
 absent from command arguments. Initialization does not run again on an existing
 volume. Updating the environment alone does not rotate an existing role password.

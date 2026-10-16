@@ -14,6 +14,8 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv maintenance_password WEFT_LOCAL_MAINTENANCE_PASSWORD
 \getenv identity_password WEFT_LOCAL_IDENTITY_PASSWORD
 \getenv payload_permission_password WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD
+\getenv session_reader_password WEFT_LOCAL_SESSION_READER_PASSWORD
+\getenv session_writer_password WEFT_LOCAL_SESSION_WRITER_PASSWORD
 CREATE ROLE weft_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
   PASSWORD :'migrator_password';
 CREATE ROLE weft_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
@@ -36,8 +38,12 @@ CREATE ROLE weft_identity_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINH
   PASSWORD :'identity_password';
 CREATE ROLE weft_payload_permission_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'payload_permission_password';
+CREATE ROLE weft_session_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'session_reader_password';
+CREATE ROLE weft_session_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'session_writer_password';
 ALTER DATABASE weft OWNER TO weft_migrator;
 REVOKE ALL ON DATABASE weft FROM PUBLIC;
-GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader;
+GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SQL

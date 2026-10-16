@@ -292,8 +292,13 @@ internal static partial class ExternalIdentitySchemaContract
                 AND NOT EXISTS (
                     SELECT 1 FROM pg_catalog.pg_attribute column_row
                     WHERE column_row.attrelid=r.oid AND column_row.attnum>0
-                      AND (SELECT count(*)=1 AND bool_and(a.grantor=r.relowner
-                          AND a.grantee=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='weft_identity_reader')
+                      AND (SELECT count(*)=CASE WHEN column_row.attname IN
+                              ('binding_id','principal_id','enabled','version') THEN 3 ELSE 1 END
+                          AND bool_and(a.grantor=r.relowner
+                          AND (a.grantee=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='weft_identity_reader')
+                              OR (column_row.attname IN ('binding_id','principal_id','enabled','version')
+                                  AND a.grantee IN (SELECT oid FROM pg_catalog.pg_roles
+                                      WHERE rolname IN ('weft_session_reader','weft_session_writer'))))
                           AND a.privilege_type='SELECT' AND NOT a.is_grantable)
                           FROM pg_catalog.aclexplode(COALESCE(column_row.attacl,ARRAY[]::aclitem[])) a) IS DISTINCT FROM true
                 )
