@@ -197,9 +197,11 @@ for [#84](https://github.com/DeandreT/weft/issues/84). Its 116-case coverage com
 19 inherited upload cases with exact source/product conservation and 97 fresh
 metadata, project, report, catalog and example cases after the qualified
 [#95](https://github.com/DeandreT/weft/pull/95) observer correction. Conditional
-revision append is implemented in [#88](https://github.com/DeandreT/weft/issues/88);
-its source, packaging and browser qualification are recorded separately.
-#19 stays open until all six workflow gates pass. See
+revision append is qualified and merged in
+[PR #96](https://github.com/DeandreT/weft/pull/96), completing
+[#88](https://github.com/DeandreT/weft/issues/88). Its fresh browser qualification
+passed all 140 cases with no retries or skips, completing all six catalog
+workflows in [#19](https://github.com/DeandreT/weft/issues/19). See
 [Catalog browser](docs/catalog-browser.md), [Saved reports](docs/saved-reports.md),
 [Project creation](docs/project-creation-ui.md),
 [Metadata editor](docs/mapping-metadata-ui.md),
@@ -211,6 +213,17 @@ records, permanent gates and original-owner recovery boundary. The independent
 [#64](https://github.com/DeandreT/weft/issues/64) contract correction preserves
 nullable upload responses before the upload screens in #19 consume their
 generated types.
+
+P4 starts after complete qualified P3g, including revision append. Its first
+focused increment, [#91](https://github.com/DeandreT/weft/issues/91), prepares
+provider-neutral external identity bindings, a restricted fresh reader and four
+explicit owner commands. It does not activate browser authentication or grant
+project roles. The selected source declares 34 pure, 18 actual-PostgreSQL and
+8 compiled-CLI cases; these are authored intent, not discovered or executed
+results. P4a remains unqualified pending integration and verification; its
+qualified, merged F dependency is complete through PR #96. Payload permission,
+durable sessions, Entra callbacks and Angular sign-in follow separate increments. See
+[External identity bindings](docs/external-identity-bindings.md).
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's

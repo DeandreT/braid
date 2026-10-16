@@ -35,11 +35,11 @@ public sealed class PostgresProjectCreationMigrationTests(PostgresFixture fixtur
               AND NOT EXISTS (SELECT 1 FROM information_schema.role_column_grants
                 WHERE table_schema='weft' AND grantee='weft_project_creator')
             """));
-        var history = await JournalAsync(test);
+        var history = await JournalAsync(test, maximumVersion: 8);
         var structure = await OldStructureAsync(test);
         await test.MigrateAsync();
         await test.MigrateAsync();
-        Assert.Equal(history, await JournalAsync(test));
+        Assert.Equal(history, await JournalAsync(test, maximumVersion: 8));
         Assert.Equal(structure, await OldStructureAsync(test));
     }
 
@@ -71,11 +71,11 @@ public sealed class PostgresProjectCreationMigrationTests(PostgresFixture fixtur
         var newFact = await old.Case.ScalarAsync<string>("SELECT to_jsonb(fact)::text FROM weft.project_creations fact WHERE organization_id=$1 AND idempotency_key=$2",
             old.Project.OrganizationId, key);
         var afterCreation = await HistoricalIngestionSeed.CaptureSnapshotAsync(old.Case);
-        var allJournal = await JournalAsync(old.Case);
+        var allJournal = await JournalAsync(old.Case, maximumVersion: 8);
         await old.Case.MigrateAsync();
         await old.Case.MigrateAsync();
         Assert.Equal(afterCreation, await HistoricalIngestionSeed.CaptureSnapshotAsync(old.Case));
-        Assert.Equal(allJournal, await JournalAsync(old.Case));
+        Assert.Equal(allJournal, await JournalAsync(old.Case, maximumVersion: 8));
         Assert.Equal(newFact, await old.Case.ScalarAsync<string>("SELECT to_jsonb(fact)::text FROM weft.project_creations fact WHERE organization_id=$1 AND idempotency_key=$2",
             old.Project.OrganizationId, key));
         var replay = await creator.CreateAsync(old.Actor, old.Project.OrganizationId, key, ProjectCreationTestSupport.DefaultMetadata);
@@ -190,8 +190,8 @@ public sealed class PostgresProjectCreationMigrationTests(PostgresFixture fixtur
 
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
-        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
-        Assert.Equal(HistoricalChecksums.Append(ProjectCreationTestSupport.MigrationChecksum).Append(RevisionDerivationSchemaContract.MigrationChecksum).Append(MaintenanceSchemaContract.MigrationChecksum),
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(HistoricalChecksums.Append(ProjectCreationTestSupport.MigrationChecksum).Append(RevisionDerivationSchemaContract.MigrationChecksum).Append(MaintenanceSchemaContract.MigrationChecksum).Append(ExternalIdentitySchemaContract.MigrationChecksum),
             await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
     }
 

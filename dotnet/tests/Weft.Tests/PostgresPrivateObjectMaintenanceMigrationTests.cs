@@ -23,7 +23,8 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
     [PostgresFact]
     public async Task Fresh0007AndRepeatedMigrationHaveNoBackfillAndPreserveJournalCredentialsAndDefinitions()
     {
-        await using var test = await fixture.CreateCaseAsync();
+        await using var test = await fixture.CreateCaseAsync(migrate: false);
+        await Migrate0007Async(test);
         await AssertHistoryAsync(test);
         Assert.Equal(0L, await test.ScalarAsync<long>("""
             SELECT (SELECT count(*) FROM weft.organizations)+(SELECT count(*) FROM weft.principals)
@@ -38,8 +39,8 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
         var journal = await JournalAsync(test);
         var definitions = await AllDefinitionsAsync(test);
         await AssertCredentialsAsync(test);
-        await test.MigrateAsync();
-        await test.MigrateAsync();
+        await Migrate0007Async(test);
+        await Migrate0007Async(test);
         Assert.Equal(journal, await JournalAsync(test));
         Assert.Equal(definitions, await AllDefinitionsAsync(test));
         await AssertCredentialsAsync(test);
@@ -57,7 +58,8 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
         await AssertCredentialsAsync(old.Case);
         await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
         {
-            await using var runner = new MigrationRunner(old.Case.MigrationConnectionString);
+            await using var runner = new MigrationRunner(old.Case.MigrationConnectionString,
+                MigrationRunner.EmbeddedMigrations.Take(7).ToArray());
             await runner.MigrateAsync();
         }));
         await AssertHistoryAsync(old.Case);
@@ -69,8 +71,8 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
         await AssertNoMaintenanceRowsAsync(old.Case);
         var allJournal = await JournalAsync(old.Case);
         var allDefinitions = await AllDefinitionsAsync(old.Case);
-        await old.Case.MigrateAsync();
-        await old.Case.MigrateAsync();
+        await Migrate0007Async(old.Case);
+        await Migrate0007Async(old.Case);
         Assert.Equal(allJournal, await JournalAsync(old.Case));
         Assert.Equal(allDefinitions, await AllDefinitionsAsync(old.Case));
         Assert.Equal(facts, await FactsAsync(old.Case));
@@ -97,7 +99,7 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
         Assert.Equal(grants, await HistoricalGrantsAsync(old.Case));
         await AssertNo0007ObjectsOrRightsAsync(old.Case);
         await AssertCredentialsAsync(old.Case);
-        await old.Case.MigrateAsync();
+        await Migrate0007Async(old.Case);
         await AssertHistoryAsync(old.Case);
         Assert.Equal(facts, await FactsAsync(old.Case));
         Assert.Equal(journal, await JournalAsync(old.Case, 6));
@@ -116,7 +118,7 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
     public async Task DedicatedMaintenanceLoginCannotRunMigrationsOrChangeTheMigrationJournal()
     {
         await using var test = await fixture.CreateCaseAsync();
-        var journal = await JournalAsync(test);
+        var journal = await JournalAsync(test, 8);
         await using var runner = new MigrationRunner(test.MaintenanceConnectionString);
         await Assert.ThrowsAsync<InvalidOperationException>(() => runner.MigrateAsync());
         var options = new NpgsqlConnectionStringBuilder(test.MaintenanceConnectionString) { Pooling = false };
@@ -125,7 +127,7 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
         await using var command = new NpgsqlCommand("UPDATE weft.schema_migrations SET checksum=repeat('0',64)", connection);
         var denied = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, denied.SqlState);
-        Assert.Equal(journal, await JournalAsync(test));
+        Assert.Equal(journal, await JournalAsync(test, 8));
     }
 
     private static async Task RefusedRoleAsync(bool missing)
@@ -141,10 +143,10 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
             var journal = await JournalAsync(old.Case);
             var definitions = await AllDefinitionsAsync(old.Case);
             if (!missing) await fresh.BootstrapAsync("ALTER ROLE weft_maintenance INHERIT;");
-            var freshError = await Assert.ThrowsAsync<PostgresException>(fresh.MigrateAsync);
+            var freshError = await Assert.ThrowsAsync<PostgresException>(() => Migrate0007Async(fresh));
             Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, freshError.SqlState);
             Assert.Equal(0L, await fresh.ScalarAsync<long>("SELECT count(*) FROM pg_namespace WHERE nspname='weft'"));
-            var oldError = await Assert.ThrowsAsync<PostgresException>(old.Case.MigrateAsync);
+            var oldError = await Assert.ThrowsAsync<PostgresException>(() => Migrate0007Async(old.Case));
             Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, oldError.SqlState);
             Assert.Equal(facts, await FactsAsync(old.Case));
             Assert.Equal(journal, await JournalAsync(old.Case));
@@ -161,8 +163,8 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
                     """);
             }
             else await fresh.BootstrapAsync("ALTER ROLE weft_maintenance NOINHERIT;");
-            await fresh.MigrateAsync();
-            await old.Case.MigrateAsync();
+            await Migrate0007Async(fresh);
+            await Migrate0007Async(old.Case);
             await AssertHistoryAsync(fresh);
             await AssertHistoryAsync(old.Case);
             Assert.Equal(facts, await FactsAsync(old.Case));
@@ -171,6 +173,15 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
             await AssertCredentialsAsync(old.Case);
         }
         finally { await isolated.DisposeAsync(); }
+    }
+
+    // These source/ACL conservation cases qualify the original0007 increment.
+    // Current-full authority/runtime cases and the genuine0007-to0008 upgrade remain separate.
+    private static async Task Migrate0007Async(PostgresCase test)
+    {
+        await using var runner = new MigrationRunner(test.MigrationConnectionString,
+            MigrationRunner.EmbeddedMigrations.Take(7).ToArray());
+        await runner.MigrateAsync();
     }
 
     private static async Task<PostgresCatalogTestSupport> Current0006Async(PostgresFixture owner, bool maintenanceMissing = false)

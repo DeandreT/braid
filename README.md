@@ -28,10 +28,17 @@ history, saved projection and validation views, project creation, metadata editi
 and native-file upload with explicit recovery. A separate upload page appends a
 revision against a reviewed head. Ferrule is the first mapping backend.
 
-Catalog persistence, scoped APIs, private storage, and maintenance are qualified
-and merged. Browser workflows follow focused implementation and qualification
-increments recorded in the roadmap. Authentication, AI chat, sample previews,
-and deployment follow those catalog workflows.
+Catalog persistence, scoped APIs, private storage, maintenance, and all six catalog
+browser workflows are qualified and merged. Conditional revision append completed
+[PR #96](https://github.com/DeandreT/weft/pull/96) after 140 fresh browser cases
+passed with no retries or skips, completing
+[#19](https://github.com/DeandreT/weft/issues/19). Authentication, AI chat, sample
+previews, and deployment follow those catalog workflows.
+
+The next identity increment prepares provider-neutral external bindings and
+explicit owner commands. It does not enable Entra sign-in or browser sessions;
+see [External identity bindings](docs/external-identity-bindings.md) for its
+operator contract and current qualification status.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
@@ -55,6 +62,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
 - [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.
 - [Project ownership](docs/project-ownership.md): qualified scoped PostgreSQL reads, migrations, and local setup.
+- [External identity bindings](docs/external-identity-bindings.md): explicit owner preparation, exact account bindings, and the restricted reader.
 - [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
 - [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
 - [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.

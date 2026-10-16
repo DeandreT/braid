@@ -281,6 +281,7 @@ export async function runBrowserFixture(definition) {
       "0005_project_creation.sql",
       "0006_revision_derivations.sql",
       "0007_private_object_maintenance.sql",
+      "0008_external_identity_bindings.sql",
     ];
     check(
       equivalent(
@@ -444,6 +445,7 @@ export async function runBrowserFixture(definition) {
       ["weft_report_reader", "REPORT"],
       ["weft_deriver", "DERIVATION"],
       ["weft_maintenance", "MAINTENANCE"],
+      ["weft_identity_reader", "IDENTITY"],
     ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))
@@ -755,6 +757,7 @@ export async function runBrowserFixture(definition) {
       "private_object_publications",
       "private_object_retirements",
       "private_object_cleanup_attempts",
+      "external_identity_bindings",
     ];
     const rows = () =>
       jsonSql(
@@ -1982,7 +1985,7 @@ export async function runBrowserFixture(definition) {
       tool(["migrate"]);
       const migrated = journal();
       check(
-        migrated.length === 7 &&
+        migrated.length === 8 &&
           migrated.every(
             (row, index) =>
               String(row.version) === String(index + 1) &&

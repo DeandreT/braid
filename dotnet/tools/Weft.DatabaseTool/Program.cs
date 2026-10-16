@@ -1,6 +1,10 @@
 using Npgsql;
+using Weft.DatabaseTool;
 using Weft.Domain;
 using Weft.Persistence.Postgres;
+
+if (ExternalIdentityOwnerCommands.IsCommand(args))
+    return await ExternalIdentityOwnerCommands.RunAsync(args);
 
 var existingCommand = args.Length == 1 && args[0] is "migrate" or "provision-development-identity";
 var capabilityCommand = args.Length == 4 && args[0] == "set-project-creation-capability" && args[3] is "true" or "false";
