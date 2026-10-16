@@ -110,9 +110,50 @@ class MetadataGetCaptureError extends Error {
     super(message);
   }
 }
+const getRequestFailureKinds = {
+  "net::ERR_ABORTED": "ERR_ABORTED",
+  "net::ERR_FAILED": "FAILED",
+  "net::ERR_TIMED_OUT": "TIMED_OUT",
+  "net::ERR_CONNECTION_RESET": "CONNECTION_RESET",
+  "net::ERR_CONNECTION_CLOSED": "CLOSED",
+  "net::ERR_CONTENT_LENGTH_MISMATCH": "CONTENT_LENGTH_MISMATCH",
+  "net::ERR_INVALID_CHUNKED_ENCODING": "INVALID_CHUNKED_ENCODING",
+  "net::ERR_INCOMPLETE_CHUNKED_ENCODING": "INCOMPLETE_CHUNKED_ENCODING",
+  "net::ERR_HTTP2_PROTOCOL_ERROR": "HTTP2_PROTOCOL_ERROR",
+} as const;
+type BrowserGetRequestFailureKind =
+  | (typeof getRequestFailureKinds)[keyof typeof getRequestFailureKinds]
+  | "other";
+type PatchReadOrdinals = Readonly<{
+  contextCaptureOrdinal: number | null;
+  mappingCaptureOrdinal: number | null;
+}>;
+type GetRequestFailureSnapshot = Readonly<{
+  captureOrdinal: number | null;
+  kind: GetKind;
+  readyBeforeFailure: boolean;
+  requestFinished: boolean;
+  ownedTeardown: boolean;
+  failureKind: BrowserGetRequestFailureKind;
+  latestPatch:
+    | (PatchReadOrdinals &
+        Readonly<{
+          ordinal: number;
+          phases: Partial<Record<PatchPhase, number>>;
+        }>)
+    | null;
+}>;
+function getRequestFailureKind(request: Request): BrowserGetRequestFailureKind {
+  const errorText = request.failure()?.errorText;
+  return typeof errorText === "string" &&
+    Object.hasOwn(getRequestFailureKinds, errorText)
+    ? getRequestFailureKinds[errorText as keyof typeof getRequestFailureKinds]
+    : "other";
+}
 type WaiterObservation = {
   readonly path: string;
   readonly before: ReadonlySet<Request>;
+  selectedRequest: Request | null;
   readonly started: number;
   settledAt: number | null;
   matchingResponses: number;
@@ -311,6 +352,9 @@ class MetadataWire {
   private readonly getJobs: Promise<void>[] = [];
   private readonly pendingGetJobs = new Set<Promise<void>>();
   private readonly captures = new Set<MetadataGetCapture>();
+  private readonly finishedGetRequests = new WeakSet<Request>();
+  private firstGetRequestFailure:
+    GetRequestFailureSnapshot | "unavailable" | null = null;
   private readonly getRequests = new Set<Request>();
   private readonly waiters: Promise<BrowserResponse>[] = [];
   private readonly pendingWaiters = new Set<Promise<BrowserResponse>>();
@@ -338,6 +382,7 @@ class MetadataWire {
     }
     const capture = metadataGetCaptures.get(request);
     if (!capture) return;
+    this.recordFirstGetRequestFailure(request, capture);
     if (this.closingReads) capture.close();
     else
       capture.fail(
@@ -355,6 +400,9 @@ class MetadataWire {
   private readonly patchResponseTags = new Map<Request, string | undefined>();
   private patchObservationUnavailable = false;
   private readonly finishedPatch = (request: Request) => {
+    const capture = metadataGetCaptures.get(request);
+    if (capture && this.captures.has(capture))
+      this.finishedGetRequests.add(request);
     const patch = this.patchObservations.get(request);
     if (patch) {
       patch.requestFinished = true;
@@ -392,6 +440,52 @@ class MetadataWire {
   }
   get metadataReadCount(): number {
     return this.reads.filter((r) => r.path === this.metadataPath).length;
+  }
+  private captureOrdinal(request: Request | null | undefined): number | null {
+    if (!request) return null;
+    let ordinal = 0;
+    for (const capture of this.captures) {
+      ordinal++;
+      if (capture.request === request) return ordinal;
+    }
+    return null;
+  }
+  private patchReadOrdinals(ordinal: number): PatchReadOrdinals {
+    const patch = this.patches[ordinal - 1];
+    return {
+      contextCaptureOrdinal: this.captureOrdinal(
+        patch ? this.contexts[patch.context] : undefined,
+      ),
+      mappingCaptureOrdinal: this.captureOrdinal(
+        patch ? this.mappings[patch.mappingRead] : undefined,
+      ),
+    };
+  }
+  private recordFirstGetRequestFailure(
+    request: Request,
+    capture: MetadataGetCapture,
+  ): void {
+    if (this.firstGetRequestFailure !== null) return;
+    try {
+      const latest = Array.from(this.patchObservations.values()).at(-1);
+      this.firstGetRequestFailure = {
+        captureOrdinal: this.captureOrdinal(request),
+        kind: this.getKind(new URL(request.url()).pathname),
+        readyBeforeFailure: capture.diagnostic().ready,
+        requestFinished: this.finishedGetRequests.has(request),
+        ownedTeardown: this.closingReads,
+        failureKind: getRequestFailureKind(request),
+        latestPatch: latest
+          ? {
+              ordinal: latest.ordinal,
+              phases: { ...latest.phases },
+              ...this.patchReadOrdinals(latest.ordinal),
+            }
+          : null,
+      };
+    } catch {
+      this.firstGetRequestFailure = "unavailable";
+    }
   }
   private markPatch(request: Request, phase: PatchPhase): void {
     const patch = this.patchObservations.get(request);
@@ -432,6 +526,7 @@ class MetadataWire {
     const observation: WaiterObservation = {
       path,
       before,
+      selectedRequest: null,
       started: performance.now(),
       settledAt: null,
       matchingResponses: 0,
@@ -477,6 +572,7 @@ class MetadataWire {
           },
           { timeout: 10000 },
         );
+        observation.selectedRequest = reply.request();
         observation.state = "succeeded";
         observation.settledAt = performance.now();
         return reply;
@@ -1281,6 +1377,7 @@ class MetadataWire {
     return {
       collection: ui === null ? "snapshotUnavailable" : "complete",
       observationUnavailable: this.patchObservationUnavailable,
+      firstGetRequestFailure: this.firstGetRequestFailure,
       counts: {
         requests: requests.length,
         captures: captures.length,
@@ -1301,11 +1398,15 @@ class MetadataWire {
       captures: selectedCaptures.map(({ capture, ordinal, state }) => ({
         ordinal,
         kind: this.getKind(new URL(capture.request.url()).pathname),
+        requestFinished: this.finishedGetRequests.has(capture.request),
         ...state,
       })),
       waitersTruncated: this.waiterObservations.length > 2,
       waiters: this.waiterObservations.slice(-2).map((observation) => ({
         kind: this.getKind(observation.path),
+        selectedCaptureOrdinal: this.captureOrdinal(
+          observation.selectedRequest,
+        ),
         entryRequests: observation.before.size,
         newRequests: requests.filter(
           (request) =>
@@ -1328,6 +1429,7 @@ class MetadataWire {
         .slice(-1)
         .map((observation) => ({
           ordinal: observation.ordinal,
+          ...this.patchReadOrdinals(observation.ordinal),
           delivery: observation.delivery,
           phases: observation.phases,
           upstreamStatus: observation.upstreamStatus,
