@@ -18,6 +18,7 @@ services:
       WEFT_LOCAL_DERIVATION_PASSWORD: ${WEFT_LOCAL_DERIVATION_PASSWORD:?Set a separate report derivation password}
       WEFT_LOCAL_MAINTENANCE_PASSWORD: ${WEFT_LOCAL_MAINTENANCE_PASSWORD:?Set a separate maintenance password}
       WEFT_LOCAL_IDENTITY_PASSWORD: ${WEFT_LOCAL_IDENTITY_PASSWORD:?Set a separate identity reader password}
+      WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD: ${WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD:?Set a separate payload permission reader password}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:

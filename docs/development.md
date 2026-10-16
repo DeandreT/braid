@@ -7,6 +7,10 @@ that increment's qualification status is recorded there.
 Current database setup also requires the separate maintenance login before
 migration 0007; its explicit upgrade and metadata-only scope are described in
 [Maintenance metadata](private-object-maintenance-metadata.md).
+The [project payload permission foundation](project-payload-permissions.md) is in
+progress, with a separate reader credential and explicit migration-owner command.
+Its selected grant contract adds no HTTP/auth/payload or preview activation;
+integration and qualification remain pending as described there.
 Configured catalog storage uses the v2 filesystem profile. Provision new roots
 or activate existing v1 roots explicitly using the
 [offline storage procedure](private-storage-activation.md); the server does

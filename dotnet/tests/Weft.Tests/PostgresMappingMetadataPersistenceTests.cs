@@ -16,7 +16,8 @@ public sealed class PostgresMappingMetadataPersistenceTests(PostgresFixture fixt
         ProjectCreationTestSupport.MigrationChecksum,
         RevisionDerivationSchemaContract.MigrationChecksum,
         MaintenanceSchemaContract.MigrationChecksum,
-        ExternalIdentitySchemaContract.MigrationChecksum
+        ExternalIdentitySchemaContract.MigrationChecksum,
+        PayloadPermissionSchemaContract.MigrationChecksum
     ];
 
     [PostgresFact]
@@ -91,7 +92,7 @@ public sealed class PostgresMappingMetadataPersistenceTests(PostgresFixture fixt
 
     private static async Task AssertHistoryAsync(PostgresCase test)
     {
-        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(AcceptedChecksums, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
     }
 }

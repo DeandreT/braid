@@ -227,6 +227,13 @@ production-payload access. Payload permission, durable sessions, Entra callbacks
 and Angular sign-in follow separate increments. See
 [External identity bindings](docs/external-identity-bindings.md).
 
+P4b [#93](https://github.com/DeandreT/weft/issues/93) adds explicit project
+production-payload read grants, a restricted fresh reader and conditional owner
+operations. Migration 0009 preserves revoked rows and separates this permission
+from every project role. Qualification is in progress; this foundation enables
+no payload endpoint or sign-in. See
+[Payload permissions](docs/project-payload-permissions.md).
+
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
 feature. Bound concurrent builds. Check disk space before substantial Ferrule engine-host

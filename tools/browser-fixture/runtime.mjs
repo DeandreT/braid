@@ -282,6 +282,7 @@ export async function runBrowserFixture(definition) {
       "0006_revision_derivations.sql",
       "0007_private_object_maintenance.sql",
       "0008_external_identity_bindings.sql",
+      "0009_project_payload_read_grants.sql",
     ];
     check(
       equivalent(
@@ -446,6 +447,7 @@ export async function runBrowserFixture(definition) {
       ["weft_deriver", "DERIVATION"],
       ["weft_maintenance", "MAINTENANCE"],
       ["weft_identity_reader", "IDENTITY"],
+      ["weft_payload_permission_reader", "PAYLOAD_PERMISSION"],
     ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))
@@ -758,6 +760,7 @@ export async function runBrowserFixture(definition) {
       "private_object_retirements",
       "private_object_cleanup_attempts",
       "external_identity_bindings",
+      "project_payload_read_grants",
     ];
     const rows = () =>
       jsonSql(
@@ -1985,7 +1988,7 @@ export async function runBrowserFixture(definition) {
       tool(["migrate"]);
       const migrated = journal();
       check(
-        migrated.length === 8 &&
+        migrated.length === migrations.length &&
           migrated.every(
             (row, index) =>
               String(row.version) === String(index + 1) &&
@@ -1997,6 +2000,10 @@ export async function runBrowserFixture(definition) {
       check(equivalent(journal(), migrated));
       manifest = await scenario.setup(migrated);
       const finalRows = rows();
+      check(
+        Array.isArray(finalRows.project_payload_read_grants) &&
+          finalRows.project_payload_read_grants.length === 0,
+      );
       const bytes = Buffer.from(JSON.stringify(manifest) + "\n");
       check(bytes.length <= 65536);
       state.initialSnapshot = {

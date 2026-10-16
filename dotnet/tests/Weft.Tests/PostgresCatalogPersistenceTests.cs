@@ -135,8 +135,8 @@ public sealed class PostgresCatalogPersistenceTests(PostgresFixture fixture)
 
     private static async Task AssertPinnedHistoryAsync(PostgresCase test)
     {
-        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
-        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationTestSupport.MigrationChecksum, RevisionDerivationSchemaContract.MigrationChecksum, MaintenanceSchemaContract.MigrationChecksum, ExternalIdentitySchemaContract.MigrationChecksum },
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(new[] { OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum, ProjectCreationTestSupport.MigrationChecksum, RevisionDerivationSchemaContract.MigrationChecksum, MaintenanceSchemaContract.MigrationChecksum, ExternalIdentitySchemaContract.MigrationChecksum, PayloadPermissionSchemaContract.MigrationChecksum },
             await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
     }
 }

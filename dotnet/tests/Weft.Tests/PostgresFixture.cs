@@ -43,12 +43,14 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string derivationPassword = Guid.NewGuid().ToString("N");
     private readonly string maintenancePassword = Guid.NewGuid().ToString("N");
     private readonly string identityPassword = Guid.NewGuid().ToString("N");
+    private readonly string payloadPermissionPassword = Guid.NewGuid().ToString("N");
     private readonly bool provisionMetadataEditor;
     private readonly bool provisionProjectCreator;
     private readonly bool provisionReportReader;
     private readonly bool provisionDeriver;
     private readonly bool provisionMaintenance;
     private readonly bool provisionIdentityReader;
+    private readonly bool provisionPayloadPermissionReader;
     private readonly ConcurrentDictionary<string, byte> caseDatabases = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim caseRemoval = new(1, 1);
     private readonly string? client = Environment.GetEnvironmentVariable("WEFT_TEST_CLIENT_CONTAINER");
@@ -68,7 +70,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     internal PostgresFixture(bool provisionMetadataEditor, bool provisionProjectCreator = true,
         bool provisionReportReader = true, bool provisionDeriver = true, bool provisionMaintenance = true,
-        bool provisionIdentityReader = true)
+        bool provisionIdentityReader = true, bool provisionPayloadPermissionReader = true)
     {
         this.provisionMetadataEditor = provisionMetadataEditor;
         this.provisionProjectCreator = provisionProjectCreator;
@@ -76,6 +78,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         this.provisionDeriver = provisionDeriver;
         this.provisionMaintenance = provisionMaintenance;
         this.provisionIdentityReader = provisionIdentityReader;
+        this.provisionPayloadPermissionReader = provisionPayloadPermissionReader;
     }
 
     public async Task InitializeAsync()
@@ -192,6 +195,14 @@ public sealed class PostgresFixture : IAsyncLifetime
                     """, bootstrap);
                 await identityRole.ExecuteNonQueryAsync();
             }
+            if (provisionPayloadPermissionReader)
+            {
+                await using var payloadPermissionRole = new NpgsqlCommand($"""
+                    CREATE ROLE weft_payload_permission_reader LOGIN PASSWORD '{payloadPermissionPassword}'
+                      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                    """, bootstrap);
+                await payloadPermissionRole.ExecuteNonQueryAsync();
+            }
         }
         catch (Exception initialization)
         {
@@ -219,6 +230,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             if (provisionDeriver) connectRoles.Add("weft_deriver");
             if (provisionMaintenance) connectRoles.Add("weft_maintenance");
             if (provisionIdentityReader) connectRoles.Add("weft_identity_reader");
+            if (provisionPayloadPermissionReader) connectRoles.Add("weft_payload_permission_reader");
             await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO {string.Join(", ", connectRoles)}", bootstrap))
                 await grants.ExecuteNonQueryAsync();
             test = new PostgresCase(this, database, ConnectionString(database, "weft_migrator", migratorPassword),
@@ -229,7 +241,8 @@ public sealed class PostgresFixture : IAsyncLifetime
                 ConnectionString(database, "weft_report_reader", reportPassword),
                 ConnectionString(database, "weft_deriver", derivationPassword),
                 ConnectionString(database, "weft_maintenance", maintenancePassword),
-                ConnectionString(database, "weft_identity_reader", identityPassword));
+                ConnectionString(database, "weft_identity_reader", identityPassword),
+                ConnectionString(database, "weft_payload_permission_reader", payloadPermissionPassword));
             await using var ownerConnection = await test.Owner.OpenConnectionAsync();
             await using var publicSchema = new NpgsqlCommand("REVOKE ALL ON SCHEMA public FROM PUBLIC", ownerConnection);
             await publicSchema.ExecuteNonQueryAsync();
@@ -446,7 +459,10 @@ public sealed class PostgresFixture : IAsyncLifetime
             .Replace(metadataPassword, "[redacted]", StringComparison.Ordinal)
             .Replace(projectCreationPassword, "[redacted]", StringComparison.Ordinal)
             .Replace(reportPassword, "[redacted]", StringComparison.Ordinal)
-            .Replace(derivationPassword, "[redacted]", StringComparison.Ordinal).Trim();
+            .Replace(derivationPassword, "[redacted]", StringComparison.Ordinal)
+            .Replace(maintenancePassword, "[redacted]", StringComparison.Ordinal)
+            .Replace(identityPassword, "[redacted]", StringComparison.Ordinal)
+            .Replace(payloadPermissionPassword, "[redacted]", StringComparison.Ordinal).Trim();
         return safe.Length == 0 ? string.Empty : $" Docker reported: {safe[..Math.Min(safe.Length, 2000)]}";
     }
 
@@ -508,12 +524,13 @@ public sealed class PostgresCase : IAsyncDisposable
     public string DerivationConnectionString { get; }
     public string MaintenanceConnectionString { get; }
     public string IdentityConnectionString { get; }
+    public string PayloadPermissionConnectionString { get; }
     public NpgsqlDataSource Owner { get; }
 
     internal PostgresCase(PostgresFixture fixture, string name, string migrationConnectionString, string runtimeConnectionString,
         string ingestionConnectionString, string catalogConnectionString, string metadataConnectionString,
         string projectCreationConnectionString, string reportConnectionString, string derivationConnectionString,
-        string maintenanceConnectionString, string identityConnectionString)
+        string maintenanceConnectionString, string identityConnectionString, string payloadPermissionConnectionString)
     {
         this.fixture = fixture;
         Name = name;
@@ -527,6 +544,7 @@ public sealed class PostgresCase : IAsyncDisposable
         DerivationConnectionString = derivationConnectionString;
         MaintenanceConnectionString = maintenanceConnectionString;
         IdentityConnectionString = identityConnectionString;
+        PayloadPermissionConnectionString = payloadPermissionConnectionString;
         Owner = NpgsqlDataSource.Create(migrationConnectionString);
     }
 

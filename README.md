@@ -41,6 +41,11 @@ They do not enable Entra sign-in, browser sessions, or production-payload access
 see [External identity bindings](docs/external-identity-bindings.md) for the
 operator contract and qualification evidence.
 
+Explicit project payload-read permissions are being implemented in
+[#93](https://github.com/DeandreT/weft/issues/93), with a separate grant from
+project membership. See [Payload permissions](docs/project-payload-permissions.md)
+for the owner contract and qualification status.
+
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
 the C# API schema.

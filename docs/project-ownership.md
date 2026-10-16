@@ -94,6 +94,11 @@ Maintenance metadata adds the separate `weft_maintenance` login before migration
 See [Maintenance metadata](private-object-maintenance-metadata.md) for its scope
 and coordinated upgrade. Older databases must also complete their earlier
 explicit role-provisioning prerequisites before the latest migration command.
+The [project payload permission foundation](project-payload-permissions.md) is in
+progress. Its selected additive schema requires a separately passworded
+`weft_payload_permission_reader` CONNECT-only login and an explicit existing-volume
+upgrade step; it supplies no payload permission from a project role or identity.
+Its document records the pending integration and qualification boundary.
 Initialization reads passwords from the environment inside `psql`; they are
 absent from command arguments. Initialization does not run again on an existing
 volume. Updating the environment alone does not rotate an existing role password.

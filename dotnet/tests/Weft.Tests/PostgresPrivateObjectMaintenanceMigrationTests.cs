@@ -118,7 +118,7 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
     public async Task DedicatedMaintenanceLoginCannotRunMigrationsOrChangeTheMigrationJournal()
     {
         await using var test = await fixture.CreateCaseAsync();
-        var journal = await JournalAsync(test, 8);
+        var journal = await JournalAsync(test, MigrationRunner.EmbeddedMigrations[^1].Version);
         await using var runner = new MigrationRunner(test.MaintenanceConnectionString);
         await Assert.ThrowsAsync<InvalidOperationException>(() => runner.MigrateAsync());
         var options = new NpgsqlConnectionStringBuilder(test.MaintenanceConnectionString) { Pooling = false };
@@ -127,7 +127,7 @@ public sealed class PostgresPrivateObjectMaintenanceMigrationTests(PostgresFixtu
         await using var command = new NpgsqlCommand("UPDATE weft.schema_migrations SET checksum=repeat('0',64)", connection);
         var denied = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, denied.SqlState);
-        Assert.Equal(journal, await JournalAsync(test, 8));
+        Assert.Equal(journal, await JournalAsync(test, MigrationRunner.EmbeddedMigrations[^1].Version));
     }
 
     private static async Task RefusedRoleAsync(bool missing)

@@ -56,10 +56,11 @@ public sealed class PostgresExternalIdentityPersistenceTests(PostgresFixture fix
             await Assert.ThrowsAsync<InvalidOperationException>(() => new PostgresExternalIdentityReader(beforeDatabase).ResolveAsync(PostgresExternalIdentityTestSupport.Key()));
         await Task.WhenAll(Enumerable.Range(0, 3).Select(async _ =>
         {
-            await using var runner = new MigrationRunner(test.MigrationConnectionString);
+            await using var runner = new MigrationRunner(test.MigrationConnectionString,
+                MigrationRunner.EmbeddedMigrations.Take(8).ToArray());
             await runner.MigrateAsync();
         }));
-        await AssertHistoryAsync(test);
+        await AssertIdentityPrefixHistoryAsync(test);
         await conservation.AssertEightPreservedAsync(oldConnection);
         Assert.Equal(journal, await test.ScalarAsync<string[]>("SELECT array_agg(applied_at::text ORDER BY version) FROM weft.schema_migrations WHERE version<=7"));
         foreach (var name in names.Where(name => name != "schema_migrations"))
@@ -68,6 +69,11 @@ public sealed class PostgresExternalIdentityPersistenceTests(PostgresFixture fix
         var project = await new PostgresProjectReader(runtime).GetVisibleProjectAsync(new(new PrincipalId(seed.Alice)), new(seed.OrganizationA, seed.ProjectA));
         Assert.NotNull(project);
         Assert.Equal(new ProjectScope(seed.OrganizationA, seed.ProjectA), project.Scope);
+        // Complete the strict original eight-script conservation before applying
+        // any later supplement. The current owner still requires full history.
+        await conservation.AssertEightPreservedAsync(oldConnection);
+        await test.MigrateAsync();
+        await AssertHistoryAsync(test);
         await using var owner = new ExternalIdentityBindingProvisioner(test.MigrationConnectionString);
         var bound = await owner.BindAsync(PostgresExternalIdentityTestSupport.Key(), new PrincipalId(seed.Admitted));
         Assert.Equal(ExternalIdentityBindingOwnerOutcome.Created, bound.Outcome);
@@ -76,7 +82,7 @@ public sealed class PostgresExternalIdentityPersistenceTests(PostgresFixture fix
             PostgresExternalIdentityTestSupport.Resolved(await new PostgresExternalIdentityReader(database).ResolveBindingAsync(bound.Binding!.BindingId)));
         foreach (var name in names.Where(name => name != "schema_migrations"))
             Assert.True(string.Equals(rows[name], await PostgresExternalIdentityTestSupport.TableRowsAsync(oldConnection, name), StringComparison.Ordinal), "A private historical row snapshot changed.");
-        await conservation.AssertEightPreservedAsync(oldConnection);
+        await AssertHistoryAsync(test);
     }
 
     [PostgresFact]
@@ -126,8 +132,15 @@ public sealed class PostgresExternalIdentityPersistenceTests(PostgresFixture fix
 
     private static async Task AssertHistoryAsync(PostgresCase test)
     {
-        Assert.Equal(Enumerable.Range(1, 8), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(Enumerable.Range(1, 9), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(MigrationRunner.EmbeddedMigrations.Select(migration => migration.Checksum),
+            await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
+    }
+
+    private static async Task AssertIdentityPrefixHistoryAsync(PostgresCase test)
+    {
+        Assert.Equal(Enumerable.Range(1, 8), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(MigrationRunner.EmbeddedMigrations.Take(8).Select(migration => migration.Checksum),
             await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
     }
 }
