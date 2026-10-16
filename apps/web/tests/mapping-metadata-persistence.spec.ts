@@ -33,6 +33,7 @@ type Draft = {
   readonly acceptedName: string;
 };
 type Baseline = { readonly body: Metadata; readonly tag: string };
+type RefreshProof = Readonly<{ kind: "completedRefresh" }>;
 type Read = {
   readonly path: string;
   readonly status: number;
@@ -313,6 +314,10 @@ class MetadataWire {
   private readonly getRequests = new Set<Request>();
   private readonly waiters: Promise<BrowserResponse>[] = [];
   private readonly pendingWaiters = new Set<Promise<BrowserResponse>>();
+  private readonly refreshProofs = new WeakMap<
+    RefreshProof,
+    { context: Request; mapping: Request }
+  >();
   private readonly waiterObservations: WaiterObservation[] = [];
   private closingReads = false;
   private responseListener: ((reply: BrowserResponse) => void) | null = null;
@@ -502,24 +507,15 @@ class MetadataWire {
   mappingResponse(): Promise<BrowserResponse> {
     return this.waitForGet(this.mappingApi);
   }
-  async focusAdmission(): Promise<void> {
-    await expect(button(this.page, "Refresh admission")).toBeEnabled();
+  async refreshAdmission(page: Page): Promise<RefreshProof> {
+    requireMetadata(
+      page === this.page,
+      "refresh requires its owned browser page",
+    );
     const before = new Set(this.getRequests),
       context = this.waitForGet("/api/v1/catalog/context", before),
       mapping = this.waitForGet(this.mappingApi, before);
-    const foreground = await this.page.evaluate(
-      () => document.hasFocus() && document.visibilityState === "visible",
-    );
-    if (!foreground) await this.page.bringToFront();
-    else if (
-      ![...this.getRequests].some(
-        (request) =>
-          !before.has(request) &&
-          request.url() ===
-            this.owner.manifest.readOrigin + "/api/v1/catalog/context",
-      )
-    )
-      await this.page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await this.page.bringToFront();
     await expect
       .poll(() =>
         this.page.evaluate(
@@ -528,19 +524,40 @@ class MetadataWire {
       )
       .toBe(true);
     await expect(button(this.page, "Refresh admission")).toBeEnabled();
-    for (const reply of await Promise.all([context, mapping])) {
+    await button(this.page, "Refresh admission").click();
+    const replies = await Promise.all([context, mapping]);
+    for (const reply of replies) {
       let nonempty: boolean;
       try {
         nonempty = (await capturedGetBody(reply)).length > 0;
       } catch {
         throw new Error(
-          "Mapping metadata browser fixture: focus admission response body could not be consumed",
+          "Mapping metadata browser fixture: refresh admission response body could not be consumed",
         );
       }
-      requireMetadata(nonempty, "focus admission response body was empty");
+      requireMetadata(nonempty, "refresh admission response body was empty");
     }
     await this.settle();
     await ready(this.page);
+    const proof: RefreshProof = Object.freeze({ kind: "completedRefresh" });
+    this.refreshProofs.set(proof, {
+      context: replies[0]!.request(),
+      mapping: replies[1]!.request(),
+    });
+    return proof;
+  }
+  consumeRefresh(proof: RefreshProof | undefined): void {
+    const observed = proof ? this.refreshProofs.get(proof) : undefined;
+    requireMetadata(
+      proof &&
+        observed &&
+        this.contextValues.has(observed.context) &&
+        this.mappingValues.has(observed.mapping) &&
+        !observed.context.failure() &&
+        !observed.mapping.failure(),
+      "refresh proof is absent, foreign, reused or not a complete owned admission",
+    );
+    this.refreshProofs.delete(proof);
   }
   private admitted(value: unknown, tag: string | undefined): Baseline {
     requireMetadata(
@@ -1425,9 +1442,8 @@ async function fill(page: Page, draft: Draft): Promise<void> {
     .getByLabel("Description (optional)", { exact: true })
     .fill(draft.description);
 }
-async function refresh(page: Page): Promise<void> {
-  await button(page, "Refresh admission").click();
-  await expect(button(page, "Refresh admission")).toBeEnabled();
+async function refresh(page: Page, wire: MetadataWire): Promise<RefreshProof> {
+  return wire.refreshAdmission(page);
 }
 async function saved(page: Page): Promise<void> {
   await expect(heading(page, "Metadata save confirmed")).toBeVisible();
@@ -1438,8 +1454,9 @@ async function save(
   wire: MetadataWire,
   draft: Draft,
   profile: Profile = "publisher",
+  proof?: RefreshProof,
 ): Promise<number> {
-  await wire.focusAdmission();
+  wire.consumeRefresh(proof ?? (await refresh(page, wire)));
   await fill(page, draft);
   await wire.arm(draft, profile);
   const index = wire.patchCount,
@@ -1594,7 +1611,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
       await fill(active, mine);
       await save(page, wire, unicode);
       const trusted = await owner.checkpoint();
-      await contender.focusAdmission();
+      contender.consumeRefresh(await refresh(active, contender));
       const index = contender.patchCount,
         contexts = contender.contextCount,
         mappings = contender.actionReadCount;
@@ -1629,6 +1646,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
     });
     requireMetadata(other, "expected second actual session");
     const editorWire = other;
+    let restoredAdmission: RefreshProof | undefined;
     await test.step("dirty navigation is deliberate; a genuine native append leaves the received metadata tag valid and the next edit preserves its new head", async () => {
       const draft: Draft = {
         name: "After the native append",
@@ -1673,14 +1691,14 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
           draft.name,
         "append reset dirty metadata",
       );
-      await refresh(active);
+      const refreshed = await refresh(active, editorWire);
       requireMetadata(
         (await active.getByLabel("Name", { exact: true }).inputValue()) ===
           draft.name,
         "authority refresh reset dirty metadata",
       );
       expect(editorWire.patchCount).toBe(patches);
-      await save(active, editorWire, draft);
+      await save(active, editorWire, draft, "publisher", refreshed);
       const edited = await owner.checkpoint();
       expect(edited.state.headRevisionId).toBe(after.state.headRevisionId);
       expect(edited.state.headSequence).toBe(after.state.headSequence);
@@ -1703,7 +1721,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
       expect(editorWire.patchCount).toBe(count);
       await owner.checkpoint();
       await owner.control({ action: "restore-publisher" });
-      await refresh(active);
+      const restoredForHeldSave = await refresh(active, editorWire);
       await ready(active);
       requireMetadata(
         (await active.getByLabel("Name", { exact: true }).inputValue()) ===
@@ -1711,7 +1729,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         "same-actor restoration lost retained draft",
       );
       expect(editorWire.patchCount).toBe(count);
-      await editorWire.focusAdmission();
+      editorWire.consumeRefresh(restoredForHeldSave);
       const contexts = editorWire.contextCount,
         mappings = editorWire.actionReadCount,
         held = await editorWire.arm(draft, "publisher", "hold-forward");
@@ -1724,7 +1742,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
       expect(editorWire.patchCount).toBe(count + 1);
       await owner.checkpoint();
       await owner.control({ action: "restore-publisher" });
-      await refresh(active);
+      restoredAdmission = await refresh(active, editorWire);
       await ready(active);
       expect(editorWire.patchCount).toBe(count + 1);
     });
@@ -1734,7 +1752,8 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         acceptedName: "Unacknowledged actual metadata",
         description: " Exact lost-response description. ",
       };
-      await editorWire.focusAdmission();
+      editorWire.consumeRefresh(restoredAdmission);
+      restoredAdmission = undefined;
       await fill(active, draft);
       const count = editorWire.patchCount,
         contexts = editorWire.contextCount,
