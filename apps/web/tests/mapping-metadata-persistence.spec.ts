@@ -7,6 +7,8 @@ import type {
   Response as BrowserResponse,
 } from "@playwright/test";
 import { createHash } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import type { components } from "../src/api/generated";
 import {
@@ -53,6 +55,38 @@ type Patch = {
   changed?: boolean;
 };
 type Delivery = "normal" | "lose" | "hold-forward";
+type PatchPhase =
+  | "observed"
+  | "envelopePassed"
+  | "fetchEntered"
+  | "upstreamReceived"
+  | "jsonParsed"
+  | "authorityPassed"
+  | "fieldsPassed"
+  | "valueVersionTagPassed"
+  | "captureAckPassed"
+  | "doneResolved"
+  | "fulfillEntered"
+  | "fulfilled"
+  | "fulfillRejected"
+  | "handlerExited"
+  | "browserResponse"
+  | "requestFinished"
+  | "requestFailed";
+type PatchObservation = {
+  readonly ordinal: number;
+  readonly started: number;
+  delivery: Delivery | null;
+  readonly phases: Partial<Record<PatchPhase, number>>;
+  upstreamStatus: "none" | "200" | "other";
+  browserResponseSeen: boolean;
+  browserStatus200: boolean | null;
+  browserSameUrl: boolean | null;
+  browserTagMatchesUpstream: boolean | null;
+  requestFinished: boolean;
+  requestFailed: boolean;
+};
+let patchDiagnosticAttempted = false;
 const sha = (text: string) =>
   createHash("sha256").update(text, "utf8").digest("hex");
 
@@ -214,6 +248,11 @@ class MetadataWire {
       this.getRequests.add(request);
   };
   private readonly failedRead = (request: Request) => {
+    const patch = this.patchObservations.get(request);
+    if (patch) {
+      patch.requestFailed = true;
+      this.markPatch(request, "requestFailed");
+    }
     const capture = metadataGetCaptures.get(request);
     if (!capture) return;
     if (this.closingReads) capture.close();
@@ -224,6 +263,16 @@ class MetadataWire {
   private readonly mappings: Request[] = [];
   private readonly mappingValues = new Map<Request, Mapping>();
   private readonly patches: Patch[] = [];
+  private readonly patchObservations = new Map<Request, PatchObservation>();
+  private readonly patchResponseTags = new Map<Request, string | undefined>();
+  private patchObservationUnavailable = false;
+  private readonly finishedPatch = (request: Request) => {
+    const patch = this.patchObservations.get(request);
+    if (patch) {
+      patch.requestFinished = true;
+      this.markPatch(request, "requestFinished");
+    }
+  };
   private readonly releases: (() => void)[] = [];
   private plan: {
     draft: Draft;
@@ -255,6 +304,14 @@ class MetadataWire {
   }
   get metadataReadCount(): number {
     return this.reads.filter((r) => r.path === this.metadataPath).length;
+  }
+  private markPatch(request: Request, phase: PatchPhase): void {
+    const patch = this.patchObservations.get(request);
+    if (patch)
+      patch.phases[phase] ??= Math.min(
+        600000,
+        Math.max(0, Math.round(performance.now() - patch.started)),
+      );
   }
   private failGet(category: string): void {
     this.failed = true;
@@ -399,9 +456,24 @@ class MetadataWire {
     const revisionGet = new RegExp(`^${this.mappingApi}/revisions/${id}$`);
     this.page.on("request", this.observeRequest);
     this.page.on("requestfailed", this.failedRead);
+    this.page.on("requestfinished", this.finishedPatch);
     this.responseListener = (reply) => {
       const request = reply.request(),
         url = new URL(reply.url());
+      const patch = this.patchObservations.get(request);
+      if (patch) {
+        try {
+          patch.browserResponseSeen = true;
+          patch.browserStatus200 = reply.status() === 200;
+          patch.browserSameUrl = reply.url() === request.url();
+          patch.browserTagMatchesUpstream = this.patchResponseTags.has(request)
+            ? reply.headers()["etag"] === this.patchResponseTags.get(request)
+            : null;
+          this.markPatch(request, "browserResponse");
+        } catch {
+          this.patchObservationUnavailable = true;
+        }
+      }
       if (
         request.method() !== "GET" ||
         url.origin !== origin ||
@@ -531,7 +603,24 @@ class MetadataWire {
         await job;
         return;
       }
+      if (this.patchObservations.size < 9)
+        this.patchObservations.set(request, {
+          ordinal: this.patches.length + 1,
+          started: performance.now(),
+          delivery: null,
+          phases: { observed: 0 },
+          upstreamStatus: "none",
+          browserResponseSeen: false,
+          browserStatus200: null,
+          browserSameUrl: null,
+          browserTagMatchesUpstream: null,
+          requestFinished: false,
+          requestFailed: false,
+        });
+      else this.patchObservationUnavailable = true;
       const plan = this.plan;
+      const observation = this.patchObservations.get(request);
+      if (observation) observation.delivery = plan?.delivery ?? null;
       this.plan = null;
       requireMetadata(
         plan && this.baseline,
@@ -559,6 +648,7 @@ class MetadataWire {
           ].some((n) => n in headers),
         "actual PATCH envelope differs from received validator/transport",
       );
+      this.markPatch(request, "envelopePassed");
       let finish!: () => void;
       const done = new Promise<void>((resolve) => {
         finish = resolve;
@@ -581,13 +671,19 @@ class MetadataWire {
           plan.entered();
           await plan.wait;
         }
+        this.markPatch(request, "fetchEntered");
         const reply = await route.fetch({
           maxRetries: 0,
           maxRedirects: 0,
           timeout: 30000,
         });
         patch.status = reply.status();
+        if (observation)
+          observation.upstreamStatus = patch.status === 200 ? "200" : "other";
+        this.patchResponseTags.set(request, reply.headers()["etag"]);
+        this.markPatch(request, "upstreamReceived");
         patch.value = await reply.json();
+        this.markPatch(request, "jsonParsed");
         await this.settle();
         const context = this.contextValues.get(this.contexts[patch.context]),
           mapping = this.mappingValues.get(this.mappings[patch.mappingRead]);
@@ -600,6 +696,7 @@ class MetadataWire {
             mapping?.access.actions.editMetadata,
           "PATCH lacked fresh same-actor context/action/token",
         );
+        this.markPatch(request, "authorityPassed");
         let raw: unknown;
         try {
           raw = JSON.parse(body);
@@ -618,6 +715,7 @@ class MetadataWire {
             input.description === plan.draft.description,
           "exact raw replacement fields changed",
         );
+        this.markPatch(request, "fieldsPassed");
         if (reply.status() === 200) {
           const result = this.admitted(patch.value, reply.headers()["etag"]),
             changed =
@@ -632,6 +730,7 @@ class MetadataWire {
                   : patch.baseline.body.version),
             "actual successful replacement/version differs",
           );
+          this.markPatch(request, "valueVersionTagPassed");
           const ack = await this.owner.control({
             action: "capture-edit",
             previousVersion: patch.baseline.body.version,
@@ -643,6 +742,7 @@ class MetadataWire {
             ack.action === "capture-edit" && ack.changed === changed,
             "independent captured edit delta differs",
           );
+          this.markPatch(request, "captureAckPassed");
           patch.result = result;
           patch.changed = changed;
           this.baseline = result;
@@ -657,9 +757,19 @@ class MetadataWire {
           );
         }
         patch.finish();
+        this.markPatch(request, "doneResolved");
         if (plan.delivery !== "hold-forward") plan.entered();
         if (plan.delivery === "lose") await route.abort("failed");
-        else await route.fulfill({ response: reply });
+        else {
+          this.markPatch(request, "fulfillEntered");
+          try {
+            await route.fulfill({ response: reply });
+            this.markPatch(request, "fulfilled");
+          } catch (error) {
+            this.markPatch(request, "fulfillRejected");
+            throw error;
+          }
+        }
       } catch (error: unknown) {
         if (!request.failure()) {
           this.failed = true;
@@ -677,6 +787,9 @@ class MetadataWire {
           // The original request may already be settled or canceled; retain its first failure.
         }
         patch.finish();
+        this.markPatch(request, "doneResolved");
+      } finally {
+        this.markPatch(request, "handlerExited");
       }
     });
   }
@@ -837,6 +950,210 @@ class MetadataWire {
   release(): void {
     for (const release of this.releases) release();
   }
+  async diagnoseSavedFailure(
+    index: number,
+    draft: Draft,
+  ): Promise<"written" | "unavailable"> {
+    if (patchDiagnosticAttempted) return "unavailable";
+    patchDiagnosticAttempted = true;
+    const config = process.env.WEFT_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG;
+    if (!config || !isAbsolute(config)) return "unavailable";
+    const deadline = performance.now() + 1000;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const collection = (async (): Promise<"written" | "unavailable"> => {
+      try {
+        const accepted = this.patches[index]?.result?.body;
+        const ui = await this.page
+          .evaluate(
+            ({ expectedPath, rawName, rawDescription, accepted }) => {
+              const roots =
+                  document.querySelectorAll<HTMLElement>(".metadata-editor"),
+                root = roots.length === 1 ? roots[0] : null;
+              const visible = (element: Element | null): boolean => {
+                if (!element) return false;
+                const rect = element.getBoundingClientRect(),
+                  style = getComputedStyle(element);
+                return (
+                  rect.width > 0 &&
+                  rect.height > 0 &&
+                  style.display !== "none" &&
+                  style.visibility !== "hidden"
+                );
+              };
+              const headings = Array.from(
+                root?.querySelectorAll("h1,h2") ?? [],
+              );
+              const heading = (name: string) =>
+                headings.some(
+                  (element) =>
+                    element.textContent?.trim() === name && visible(element),
+                );
+              const enabled = (name: string): boolean | null => {
+                const matches = Array.from(
+                  root?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+                ).filter(
+                  (element) =>
+                    element.textContent?.trim() === name && visible(element),
+                );
+                return matches.length === 1 ? !matches[0]!.disabled : null;
+              };
+              const name =
+                  root?.querySelector<HTMLInputElement>("#metadata-name") ??
+                  null,
+                description =
+                  root?.querySelector<HTMLTextAreaElement>(
+                    "#metadata-description",
+                  ) ?? null;
+              const vocabulary = {
+                invalidInput: "Check the metadata fields before saving.",
+                identityChanged:
+                  "Your identity or organization changed. The previous editor information was cleared; refresh admission to start a new edit.",
+                identityRejected:
+                  "Your identity could not access this mapping. Private editor details are hidden.",
+                featureDisabled:
+                  "Metadata editing is not enabled for this workspace.",
+                editUnavailable:
+                  "You do not currently have permission to edit this mapping.",
+                notFound:
+                  "This mapping is unavailable to your current identity. Private editor details are hidden.",
+                invalidRequest:
+                  "The service refused this metadata request as invalid.",
+                preconditionFailed:
+                  "The mapping metadata changed. Review latest before deciding what to save.",
+                preconditionRequired:
+                  "A current metadata validator is required. Review latest before saving.",
+                versionExhausted:
+                  "This metadata version cannot advance further. No different version was adopted.",
+                bodyLimit:
+                  "The service refused the size of this metadata request.",
+                unsupportedMediaType:
+                  "The service did not accept the metadata request format.",
+                persistenceOrInternalFailure:
+                  "The service could not confirm this metadata operation.",
+                timedOut:
+                  "Waiting timed out. A sent save may already have committed.",
+                unavailable:
+                  "This operation could not be confirmed. No automatic save or retry was made.",
+                incompatible:
+                  "The reply could not be verified as this mapping's metadata.",
+              };
+              const errors = Array.from(
+                root?.querySelectorAll(".metadata-error") ?? [],
+              )
+                .filter(visible)
+                .slice(0, 32)
+                .map((element) => element.textContent?.trim() ?? "");
+              return {
+                expectedEditorRoute:
+                  location.pathname === expectedPath && location.search === "",
+                exactlyOneEditor: roots.length === 1,
+                editorVisible: root ? visible(root) : null,
+                ariaBusy: root
+                  ? root.getAttribute("aria-busy") === "true"
+                  : null,
+                confirmationVisible: heading("Metadata save confirmed"),
+                unknownVisible: heading("Save outcome is unknown"),
+                unavailableVisible: heading("Metadata editor unavailable"),
+                conflictVisible: heading("Review before another save"),
+                comparisonVisible: heading("Compare mapping metadata"),
+                fieldsAttentionVisible: heading("Check the metadata fields"),
+                saveEnabled: enabled("Save metadata"),
+                refreshEnabled: enabled("Refresh admission"),
+                namePresent: name !== null,
+                descriptionPresent: description !== null,
+                nameMatchesRaw: name ? name.value === rawName : null,
+                descriptionMatchesRaw: description
+                  ? description.value === rawDescription
+                  : null,
+                acceptedAvailable: accepted !== null,
+                nameMatchesAccepted:
+                  name && accepted ? name.value === accepted.name : null,
+                descriptionMatchesAccepted:
+                  description && accepted
+                    ? description.value === accepted.description
+                    : null,
+                documentFocused: document.hasFocus(),
+                documentVisible: document.visibilityState === "visible",
+                errors: {
+                  ...Object.fromEntries(
+                    Object.entries(vocabulary).map(([kind, text]) => [
+                      kind,
+                      errors.includes(text),
+                    ]),
+                  ),
+                  otherFixedCategory: errors.some(
+                    (text) =>
+                      text !== "" && !Object.values(vocabulary).includes(text),
+                  ),
+                },
+              };
+            },
+            {
+              expectedPath: editPath(this.owner.manifest.primary.scope),
+              rawName: draft.name,
+              rawDescription: draft.description,
+              accepted: accepted
+                ? { name: accepted.name, description: accepted.description }
+                : null,
+            },
+          )
+          .catch(() => null);
+        if (performance.now() >= deadline) return "unavailable";
+        let serialized = JSON.stringify({
+          schemaVersion: "weft.metadata-patch-delivery-diagnostic.v1",
+          collection: ui === null ? "snapshotUnavailable" : "complete",
+          selectedOrdinal: Math.min(9, Math.max(1, index + 1)),
+          observationUnavailable: this.patchObservationUnavailable,
+          patches: Array.from(this.patchObservations.values())
+            .slice(0, 9)
+            .map((observation) => ({
+              ordinal: observation.ordinal,
+              delivery: observation.delivery,
+              phases: observation.phases,
+              upstreamStatus: observation.upstreamStatus,
+              browserResponseSeen: observation.browserResponseSeen,
+              browserStatus200: observation.browserStatus200,
+              browserSameUrl: observation.browserSameUrl,
+              browserTagMatchesUpstream: observation.browserTagMatchesUpstream,
+              requestFinished: observation.requestFinished,
+              requestFailed: observation.requestFailed,
+            })),
+          ui,
+          historicalAcknowledgementClearedEstablished: false,
+        });
+        if (Buffer.byteLength(serialized, "utf8") > 8192)
+          serialized = JSON.stringify({
+            schemaVersion: "weft.metadata-patch-delivery-diagnostic.v1",
+            collection: "unavailable",
+            category: "sizeLimit",
+          });
+        await writeFile(
+          join(dirname(config), "metadata-patch-delivery-diagnostic.json"),
+          serialized,
+          { flag: "wx", mode: 0o600 },
+        );
+        return "written";
+      } catch {
+        return "unavailable";
+      }
+    })();
+    void collection.catch(() => undefined);
+    try {
+      return await Promise.race([
+        collection,
+        new Promise<"unavailable">((resolve) => {
+          timer = setTimeout(
+            () => resolve("unavailable"),
+            Math.max(0, Math.floor(deadline - performance.now())),
+          );
+        }),
+      ]);
+    } catch {
+      return "unavailable";
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
   /** The caller releases every planned PATCH hold before read cancellation can close a page. */
   async disposeReads(): Promise<void> {
     this.closingReads = true;
@@ -859,6 +1176,7 @@ class MetadataWire {
     } finally {
       this.page.off("request", this.observeRequest);
       this.page.off("requestfailed", this.failedRead);
+      this.page.off("requestfinished", this.finishedPatch);
       if (this.responseListener)
         this.page.off("response", this.responseListener);
     }
@@ -905,7 +1223,16 @@ async function save(
     contexts = wire.contextCount,
     mappings = wire.actionReadCount;
   await button(page, "Save metadata").click();
-  await saved(page);
+  try {
+    await saved(page);
+  } catch (error) {
+    try {
+      await wire.diagnoseSavedFailure(index, draft);
+    } catch {
+      /* Preserve the original assertion even if diagnostics are unavailable. */
+    }
+    throw error;
+  }
   await wire.complete(index, 200);
   await wire.fresh(index, contexts, mappings);
   return index;
