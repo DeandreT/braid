@@ -6,7 +6,8 @@ import type {
   Response as BrowserResponse,
 } from "@playwright/test";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import type { components } from "../src/api/generated";
 import {
@@ -212,6 +213,25 @@ class MediatedAppendRead {
       "actual GET delivery is incomplete",
     );
     return bytes;
+  }
+  diagnostic() {
+    const failure = this.request.failure();
+    return {
+      status: this.status,
+      candidatePresent: this.bytes !== null,
+      fulfilled: this.fulfilled,
+      responseSeen: this.responseSeen,
+      failed: this.failure !== null,
+      ownedTeardown: this.ownedTeardown,
+      requestFailure:
+        failure === null
+          ? null
+          : failure.errorText === "net::ERR_ABORTED"
+            ? "aborted"
+            : failure.errorText === "net::ERR_FAILED"
+              ? "failed"
+              : "other",
+    };
   }
 }
 const actualGetReads = new WeakMap<Request, MediatedAppendRead>();
@@ -458,6 +478,7 @@ class AppendWire {
   private readonly waiters: Promise<BrowserResponse>[] = [];
   private readonly pendingWaiters = new Set<Promise<BrowserResponse>>();
   private readonly captures = new Set<MediatedAppendRead>();
+  private diagnosticAttempted = false;
   private closingReads = false;
   private readonly failedRead = (request: Request) => {
     const capture = actualGetReads.get(request);
@@ -629,6 +650,98 @@ class AppendWire {
           paths.add(catalogApi(revisionPath(original.receipt.futureRevision)));
       }
     return !url.search && paths.has(url.pathname);
+  }
+  private diagnosticPathKind(request: Request): string {
+    const url = new URL(request.url()),
+      fixture = this.ledger.owner.manifest;
+    if (url.origin !== fixture.readOrigin || url.search) return "other";
+    if (url.pathname === "/api/v1/catalog/context") return "context";
+    if (url.pathname === catalogApi(projectPath(fixture.project.scope)))
+      return "project";
+    if (url.pathname === this.mappingApi) return "primaryMapping";
+    if (url.pathname === catalogApi(mappingPath(fixture.protected.revision)))
+      return "protectedMapping";
+    if (
+      url.pathname ===
+      catalogApi(revisionPath(fixture.mapping.initialRevision.scope))
+    )
+      return "initialRevision";
+    if (url.pathname === catalogApi(revisionPath(fixture.protected.revision)))
+      return "protectedRevision";
+    for (const original of this.ledger.originals.values())
+      if (original.receipt) {
+        if (url.pathname === receiptPath(original.receipt)) return "ownReceipt";
+        if (
+          original.receipt.phase === "committed" &&
+          url.pathname ===
+            catalogApi(revisionPath(original.receipt.futureRevision))
+        )
+          return "committedRevision";
+      }
+    return "other";
+  }
+  private diagnosticSnapshot(limit: number) {
+    const captures = [...this.captures];
+    return {
+      counts: {
+        contexts: this.contexts.length,
+        mappings: this.mappings.length,
+        receiptReads: this.exactReceiptReads,
+        mutations: this.mutations.length,
+        readTasks: this.tasks.length,
+        routeJobs: this.readJobs.length,
+        waiters: this.waiters.length,
+        captures: captures.length,
+      },
+      pendingJobs: this.pendingReadJobs.size,
+      pendingWaiters: this.pendingWaiters.size,
+      rememberedFailure: this.failure !== null,
+      capturesOmitted: Math.max(0, captures.length - limit),
+      captures: captures.slice(-limit).map((capture) => ({
+        pathKind: this.diagnosticPathKind(capture.request),
+        ...capture.diagnostic(),
+      })),
+    };
+  }
+  async diagnoseFailure(other: AppendWire | null): Promise<void> {
+    if (this.diagnosticAttempted) return;
+    this.diagnosticAttempted = true;
+    try {
+      const config =
+        process.env.WEFT_NATIVE_REVISION_APPEND_BROWSER_OPERATOR_CONFIG;
+      if (!config || !isAbsolute(config)) return;
+      const limit = other ? 16 : 32;
+      const serialized = JSON.stringify({
+        schemaVersion: "weft.native-append-get-diagnostic.v1",
+        diagnosticOnly: true,
+        primary: this.diagnosticSnapshot(limit),
+        secondary: other ? other.diagnosticSnapshot(limit) : null,
+      });
+      if (Buffer.byteLength(serialized, "utf8") > 8192) return;
+      const controller = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const writing = writeFile(
+        join(dirname(config), "native-revision-append-get-diagnostic.json"),
+        serialized,
+        { flag: "wx", mode: 0o600, signal: controller.signal },
+      );
+      void writing.catch(() => undefined);
+      try {
+        await Promise.race([
+          writing,
+          new Promise<void>((resolve) => {
+            timer = setTimeout(() => {
+              controller.abort();
+              resolve();
+            }, 1000);
+          }),
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch {
+      /* A missing diagnostic must never replace the original failure. */
+    }
   }
   private async observe(route: Route): Promise<void> {
     const request = route.request(),
@@ -1587,6 +1700,8 @@ test("real packaged equal-head append: exact bytes, competing intents, historica
         );
         await page.goto(revisionPath(scope));
         await bodyDone(await reply);
+        await expect(heading(page, "Revision 1")).toBeVisible();
+        await expect(heading(page, "Current mapping metadata")).toBeVisible();
         const revision = await wire.oldRevision(scope);
         if (scope.mappingId === fixture.mapping.scope.mappingId)
           oldPrimary = revision;
@@ -1999,6 +2114,8 @@ test("real packaged equal-head append: exact bytes, competing intents, historica
         );
         await page.goto(revisionPath(scope));
         await bodyDone(await reply);
+        await expect(heading(page, "Revision 1")).toBeVisible();
+        await expect(heading(page, "Current mapping metadata")).toBeVisible();
         requireAppend(
           original &&
             isDeepStrictEqual(await wire.oldRevision(scope), original),
@@ -2037,6 +2154,7 @@ test("real packaged equal-head append: exact bytes, competing intents, historica
     });
   } catch (error) {
     primaryFailure = true;
+    await wire.diagnoseFailure(secondResources.wire);
     throw error;
   } finally {
     let cleanupFailed = false,
