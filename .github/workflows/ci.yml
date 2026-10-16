@@ -58,6 +58,16 @@ jobs:
           git diff --exit-code -- contracts/weft-v1.json apps/web/src/api/generated.ts
       - run: dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
       - name: Install isolated browser dependencies
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install-deps chromium
+      - name: Install the pinned Chrome for Testing build
+        run: |
+          weft_browser_archive="$RUNNER_TEMP/weft-chromium-157.0.8090.0.zip"
+          weft_browser_directory="$RUNNER_TEMP/weft-chromium-157.0.8090.0"
+          curl --fail --location --retry 3 --output "$weft_browser_archive" \
+            https://storage.googleapis.com/chrome-for-testing-public/157.0.8090.0/linux64/chrome-linux64.zip
+          printf '%s  %s\n' 3ec877f440c1ea393c4f164ce5339dc0fd6b5384184a84b38550a78721c2086c "$weft_browser_archive" | sha256sum --check --status
+          mkdir "$weft_browser_directory"
+          unzip -q "$weft_browser_archive" -d "$weft_browser_directory"
+          printf 'WEFT_CHROMIUM_EXECUTABLE=%s\n' "$weft_browser_directory/chrome-linux64/chrome" >> "$GITHUB_ENV"
       - name: Browser verification on a virtual display
         run: npm run test:browser
