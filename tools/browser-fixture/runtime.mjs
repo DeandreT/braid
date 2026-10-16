@@ -1344,7 +1344,8 @@ export async function runBrowserFixture(definition) {
             /POSTGRES_|PRIVATE_STORAGE|WORKER_IMAGE/.test(key),
           ),
         );
-      const product = cfg.publications.server.directory,
+      const end = Date.now() + budget(30000),
+        product = cfg.publications.server.directory,
         child = spawn(cfg.dotnet, [join(product, "Weft.Server.dll")], {
           cwd: product,
           env: environment,
@@ -1369,14 +1370,34 @@ export async function runBrowserFixture(definition) {
         overflow: false,
         spawnFailure: false,
       };
+      const admission = {
+        stage: "spawn",
+        spawnConfirmed: false,
+        procReadSucceeded: false,
+        startTicksCaptured: false,
+        argvArityTwo: false,
+        expectedCommandMatch: false,
+      };
+      let resolveSpawn, rejectSpawn;
+      const spawned = new Promise((fulfil, reject) => {
+        resolveSpawn = fulfil;
+        rejectSpawn = reject;
+      });
+      void spawned.catch(() => undefined);
+      child.once("spawn", () => {
+        admission.spawnConfirmed = true;
+        resolveSpawn();
+      });
       host.closed = new Promise((fulfil) =>
         child.once("close", (code, signal) => {
           host.closeResult = { code, signal };
+          rejectSpawn(new Failure("productFailure"));
           fulfil(host.closeResult);
         }),
       );
       child.once("error", () => {
         host.spawnFailure = true;
+        rejectSpawn(new Failure("productFailure"));
       });
       for (const stream of [child.stdout, child.stderr])
         stream.on("data", (bytes) => {
@@ -1387,15 +1408,37 @@ export async function runBrowserFixture(definition) {
       if (kind === "read") readHost = host;
       else mutationHost = host;
       try {
+        let spawnTimer;
+        try {
+          await Promise.race([
+            spawned,
+            new Promise((_, reject) => {
+              spawnTimer = setTimeout(
+                () => reject(new Failure("deadline")),
+                budget(Math.max(1, end - Date.now())),
+              );
+            }),
+          ]);
+        } finally {
+          clearTimeout(spawnTimer);
+        }
+        check(Date.now() < end, "deadline");
+        check(
+          admission.spawnConfirmed && !host.closeResult && !host.spawnFailure,
+          "productFailure",
+        );
+        admission.stage = "initialIdentity";
         check(child.pid, "productFailure");
         host.identity = processIdentity(child.pid);
-        check(
-          equivalent(host.identity.command, [
-            cfg.dotnet,
-            join(product, "Weft.Server.dll"),
-          ]),
-          "ownershipChanged",
-        );
+        admission.procReadSucceeded = true;
+        admission.startTicksCaptured = true;
+        admission.stage = "initialCommand";
+        admission.argvArityTwo = host.identity.command.length === 2;
+        admission.expectedCommandMatch = equivalent(host.identity.command, [
+          cfg.dotnet,
+          join(product, "Weft.Server.dll"),
+        ]);
+        check(admission.expectedCommandMatch, "ownershipChanged");
         host.ledger = {
           ...host.identity,
           kind,
@@ -1418,7 +1461,7 @@ export async function runBrowserFixture(definition) {
         };
         state.children.push(host.ledger);
         save();
-        const end = Date.now() + budget(30000);
+        admission.stage = "health";
         while (true) {
           check(
             !host.closeResult && !host.spawnFailure && !host.overflow,
@@ -1441,6 +1484,7 @@ export async function runBrowserFixture(definition) {
             await pause(100);
           }
         }
+        admission.stage = "context";
         const expected =
           profile === "readerUnavailable"
             ? 500
@@ -1448,6 +1492,7 @@ export async function runBrowserFixture(definition) {
               ? 404
               : 200;
         host.contextStatus = await captureContext(host, expected);
+        admission.stage = "mappedIdentity";
         const mapped = readFileSync("/proc/" + child.pid + "/maps", "utf8");
         ownedChild(host);
         check(
@@ -1467,6 +1512,19 @@ export async function runBrowserFixture(definition) {
         save();
         return host;
       } catch (original) {
+        try {
+          state.observations.push({
+            kind: "host-start-admission-failure",
+            hostKind: kind,
+            metadataEdits,
+            ...admission,
+            pidPresent: Number.isSafeInteger(child.pid) && child.pid > 1,
+            childClosed: host.closeResult !== null,
+          });
+          save();
+        } catch {
+          // Diagnostic persistence must not replace the original startup failure.
+        }
         try {
           await stopHost(kind);
         } catch (cleanup) {
