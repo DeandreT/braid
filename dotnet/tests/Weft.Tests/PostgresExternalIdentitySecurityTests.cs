@@ -252,6 +252,12 @@ public sealed class PostgresExternalIdentitySecurityTests(PostgresFixture fixtur
         var key = PostgresExternalIdentityTestSupport.Key();
         var binding = await test.BindAsync(key, principal);
         var before = await test.BindingsAsync();
+        // The session FK rejects RESTRICT before truncate triggers run.
+        await using (var truncate = test.Case.Owner.CreateCommand("TRUNCATE weft.external_identity_bindings"))
+        {
+            var error = await Assert.ThrowsAsync<PostgresException>(() => truncate.ExecuteNonQueryAsync());
+            Assert.Equal(PostgresErrorCodes.FeatureNotSupported, error.SqlState);
+        }
         foreach (var sql in new[]
         {
             "UPDATE weft.external_identity_bindings SET principal_id=$1 WHERE binding_id=$2",
@@ -263,7 +269,7 @@ public sealed class PostgresExternalIdentitySecurityTests(PostgresFixture fixtur
             "UPDATE weft.external_identity_bindings SET created_at=created_at+interval '1 second'",
             "UPDATE weft.external_identity_bindings SET enabled=false,version=version+2,disabled_at=clock_timestamp()",
             "DELETE FROM weft.external_identity_bindings",
-            "TRUNCATE weft.external_identity_bindings"
+            "TRUNCATE weft.external_identity_bindings CASCADE"
         }) await PostgresExternalIdentityTestSupport.CheckViolationAsync(test.Case, sql);
         Assert.True(string.Equals(before, await test.BindingsAsync(), StringComparison.Ordinal), "The private binding snapshot changed.");
         Assert.Equal(ExternalIdentityBindingOwnerOutcome.Disabled, (await test.Owner.DisableAsync(key, principal, 1)).Outcome);
@@ -273,7 +279,7 @@ public sealed class PostgresExternalIdentitySecurityTests(PostgresFixture fixtur
             "UPDATE weft.external_identity_bindings SET enabled=true,disabled_at=NULL",
             "UPDATE weft.external_identity_bindings SET disabled_at=disabled_at+interval '1 second'",
             "DELETE FROM weft.external_identity_bindings",
-            "TRUNCATE weft.external_identity_bindings"
+            "TRUNCATE weft.external_identity_bindings CASCADE"
         }) await PostgresExternalIdentityTestSupport.CheckViolationAsync(test.Case, sql);
         Assert.True(string.Equals(disabled, await test.BindingsAsync(), StringComparison.Ordinal), "The private binding snapshot changed.");
     }
