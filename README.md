@@ -41,10 +41,17 @@ They do not enable Entra sign-in, browser sessions, or production-payload access
 see [External identity bindings](docs/external-identity-bindings.md) for the
 operator contract and qualification evidence.
 
-Explicit project payload-read permissions are being implemented in
-[#93](https://github.com/DeandreT/weft/issues/93), with a separate grant from
-project membership. See [Payload permissions](docs/project-payload-permissions.md)
-for the owner contract and qualification status.
+Explicit project payload-read permissions are qualified and merged in
+[PR #105](https://github.com/DeandreT/weft/pull/105), with a separate grant from
+project membership. The owner contract is described in
+[Payload permissions](docs/project-payload-permissions.md).
+
+Provider-neutral session facts, pure lifetime policy, and restricted-store ports
+pass all 41 pure contract checks for [#97](https://github.com/DeandreT/weft/issues/97),
+alongside locked restore, formatting verification and a Release build.
+They introduce no browser authentication or durable store implementation.
+See [Server sessions](docs/server-sessions.md) for the metadata contract and the
+separate PostgreSQL, cookie, Entra, and Angular increments.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
@@ -69,6 +76,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.
 - [Project ownership](docs/project-ownership.md): qualified scoped PostgreSQL reads, migrations, and local setup.
 - [External identity bindings](docs/external-identity-bindings.md): explicit owner preparation, exact account bindings, and the restricted reader.
+- [Server sessions](docs/server-sessions.md): pure lifetime and conditional-operation contracts, privacy, and separate store/authentication qualification.
 - [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
 - [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
 - [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.

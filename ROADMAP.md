@@ -230,9 +230,25 @@ and Angular sign-in follow separate increments. See
 P4b [#93](https://github.com/DeandreT/weft/issues/93) adds explicit project
 production-payload read grants, a restricted fresh reader and conditional owner
 operations. Migration 0009 preserves revoked rows and separates this permission
-from every project role. Qualification is in progress; this foundation enables
-no payload endpoint or sign-in. See
+from every project role. It is qualified and merged in
+[PR #105](https://github.com/DeandreT/weft/pull/105): all 2,944 backend cases,
+including 49 new permission cases, and all 140 browser cases passed freshly.
+This foundation enables no payload endpoint or sign-in. See
 [Payload permissions](docs/project-payload-permissions.md).
+
+P4c separates the session foundation into two focused increments. Application-only
+facts, pure lifetime/conditional-operation policy, and store ports in
+[#97](https://github.com/DeandreT/weft/issues/97) pass locked restore, formatting
+verification, Release build and all 41 new pure tests. Full discovery finds 2,985
+cases; the unchanged parent has its separate 2,944-case qualification, rather than
+a fresh full-suite run in this Application-only increment.
+The restricted PostgreSQL implementation and actual database/upgrade
+qualification follow in [#106](https://github.com/DeandreT/weft/issues/106).
+Only the completed foundation precedes protected ticket/Data Protection adapters,
+cookie and epoch-bound CSRF components, then the dormant catalog identity seam.
+Entra/public-route activation and Angular sign-in remain later P4d/P4e increments.
+See [Server sessions](docs/server-sessions.md); pure vectors do not qualify a store
+or authenticate a browser.
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
