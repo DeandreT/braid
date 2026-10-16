@@ -1,4 +1,11 @@
-import type { BrowserContext, Page, Request, Route } from "@playwright/test";
+import type {
+  APIResponse,
+  BrowserContext,
+  Page,
+  Request,
+  Route,
+  Response as BrowserResponse,
+} from "@playwright/test";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { components } from "../src/api/generated";
@@ -49,11 +56,169 @@ type Delivery = "normal" | "lose" | "hold-forward";
 const sha = (text: string) =>
   createHash("sha256").update(text, "utf8").digest("hex");
 
+function coherentLength(
+  headers: Record<string, string>,
+  bytes: Buffer,
+): boolean {
+  const length = headers["content-length"];
+  return (
+    length === undefined ||
+    (/^(0|[1-9][0-9]*)$/.test(length) &&
+      BigInt(length) === BigInt(bytes.length))
+  );
+}
+
+/** One actual received GET entity, admitted only with its exact browser Request and delivery. */
+class MetadataGetCapture {
+  readonly deadline = performance.now() + 8000;
+  readonly ready: Promise<Buffer>;
+  private resolve!: (bytes: Buffer) => void;
+  private reject!: (error: Error) => void;
+  private readonly timer: ReturnType<typeof setTimeout>;
+  private bytes: Buffer | null = null;
+  private status: number | null = null;
+  private headers: Record<string, string> | null = null;
+  private fulfilled = false;
+  private responseSeen = false;
+  private failure: Error | null = null;
+  ownedTeardown = false;
+  constructor(
+    readonly request: Request,
+    private readonly onFailure: (error: Error) => void,
+  ) {
+    this.ready = new Promise<Buffer>((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+    void this.ready.catch(() => undefined);
+    this.timer = setTimeout(
+      () => this.fail("actual GET capture exceeded the existing read budget"),
+      8000,
+    );
+  }
+  remaining(): number {
+    this.assertLive();
+    return Math.max(1, Math.floor(this.deadline - performance.now()));
+  }
+  assertLive(): void {
+    if (!this.failure && performance.now() >= this.deadline)
+      this.fail("actual GET capture exceeded the existing read budget");
+    if (this.failure) throw this.failure;
+    requireMetadata(
+      !this.request.failure(),
+      "actual GET request failed before complete delivery",
+    );
+  }
+  candidate(
+    bytes: Buffer,
+    status: number,
+    headers: Record<string, string>,
+  ): void {
+    this.assertLive();
+    this.bytes = bytes;
+    this.status = status;
+    this.headers = headers;
+  }
+  response(reply: BrowserResponse): void {
+    try {
+      this.assertLive();
+      const headers = reply.headers();
+      requireMetadata(
+        this.bytes &&
+          this.headers &&
+          reply.request() === this.request &&
+          reply.url() === this.request.url() &&
+          reply.status() === this.status &&
+          headers["etag"] === this.headers["etag"] &&
+          headers["content-encoding"] === this.headers["content-encoding"] &&
+          (headers["content-encoding"] === undefined ||
+            headers["content-encoding"] === "identity") &&
+          coherentLength(headers, this.bytes),
+        "actual browser GET identity/status/validator/representation differs",
+      );
+      this.responseSeen = true;
+      this.complete();
+    } catch {
+      this.fail("actual browser GET delivery could not be admitted");
+    }
+  }
+  delivered(): void {
+    this.assertLive();
+    this.fulfilled = true;
+    this.complete();
+  }
+  private complete(): void {
+    if (this.failure || !this.fulfilled || !this.responseSeen || !this.bytes)
+      return;
+    clearTimeout(this.timer);
+    this.resolve(this.bytes);
+  }
+  fail(category: string, ownedTeardown = false): void {
+    if (this.failure) return;
+    this.failure = new Error("Mapping metadata browser fixture: " + category);
+    this.ownedTeardown = ownedTeardown;
+    clearTimeout(this.timer);
+    if (!ownedTeardown) this.onFailure(this.failure);
+    this.reject(this.failure);
+  }
+  close(): void {
+    if (!this.fulfilled || !this.responseSeen)
+      this.fail("owned GET capture closed before complete delivery", true);
+    clearTimeout(this.timer);
+  }
+  async body(reply: BrowserResponse): Promise<Buffer> {
+    const bytes = await this.ready;
+    if (this.failure) throw this.failure;
+    requireMetadata(
+      reply.request() === this.request &&
+        reply.url() === this.request.url() &&
+        reply.status() === this.status &&
+        this.fulfilled &&
+        this.responseSeen &&
+        !this.request.failure(),
+      "actual GET capture is not a complete same-request delivery",
+    );
+    return bytes;
+  }
+}
+const metadataGetCaptures = new WeakMap<Request, MetadataGetCapture>();
+async function capturedGetBody(reply: BrowserResponse): Promise<Buffer> {
+  const capture = metadataGetCaptures.get(reply.request());
+  requireMetadata(
+    capture && reply.request().method() === "GET",
+    "allowed GET response has no exact request capture",
+  );
+  return capture.body(reply);
+}
+
 /** Private envelope comparisons; every PATCH forwards the original actual browser request exactly once. */
 class MetadataWire {
   private baseline: Baseline | null = null;
   private readonly reads: Read[] = [];
   private readonly tasks: Promise<void>[] = [];
+  private readonly getJobs: Promise<void>[] = [];
+  private readonly pendingGetJobs = new Set<Promise<void>>();
+  private readonly captures = new Set<MetadataGetCapture>();
+  private readonly getRequests = new Set<Request>();
+  private readonly waiters: Promise<BrowserResponse>[] = [];
+  private readonly pendingWaiters = new Set<Promise<BrowserResponse>>();
+  private closingReads = false;
+  private responseListener: ((reply: BrowserResponse) => void) | null = null;
+  private readonly observeRequest = (request: Request) => {
+    const url = new URL(request.url());
+    if (
+      request.method() === "GET" &&
+      url.origin === this.owner.manifest.readOrigin &&
+      url.pathname.startsWith("/api/")
+    )
+      this.getRequests.add(request);
+  };
+  private readonly failedRead = (request: Request) => {
+    const capture = metadataGetCaptures.get(request);
+    if (!capture) return;
+    if (this.closingReads) capture.close();
+    else capture.fail("actual browser GET request failed");
+  };
   private readonly contexts: Request[] = [];
   private readonly contextValues = new Map<Request, Context>();
   private readonly mappings: Request[] = [];
@@ -91,13 +256,76 @@ class MetadataWire {
   get metadataReadCount(): number {
     return this.reads.filter((r) => r.path === this.metadataPath).length;
   }
+  private failGet(category: string): void {
+    this.failed = true;
+    this.failure ??= new Error("Mapping metadata browser fixture: " + category);
+  }
+  private async drainReads(): Promise<void> {
+    let reads = 0,
+      jobs = 0;
+    while (reads < this.tasks.length || jobs < this.getJobs.length) {
+      const next = [...this.tasks.slice(reads), ...this.getJobs.slice(jobs)];
+      reads = this.tasks.length;
+      jobs = this.getJobs.length;
+      for (const result of await Promise.allSettled(next))
+        if (result.status === "rejected")
+          this.failGet("owned GET observation job failed");
+    }
+  }
   async settle(): Promise<void> {
-    await Promise.all(this.tasks);
+    await this.drainReads();
     if (this.failure) throw this.failure;
     requireMetadata(
       !this.failed && !this.unexpected,
       "actual HTTP observation or closed request boundary failed",
     );
+  }
+  private waitForGet(path: string): Promise<BrowserResponse> {
+    const before = new Set(this.getRequests);
+    let complete = Promise.resolve(false);
+    const waiting = (async () => {
+      try {
+        return await this.page.waitForResponse(
+          (reply) => {
+            const request = reply.request(),
+              url = new URL(reply.url());
+            if (
+              request.method() !== "GET" ||
+              url.origin !== this.owner.manifest.readOrigin ||
+              url.pathname !== path ||
+              url.search ||
+              reply.status() !== 200 ||
+              !this.getRequests.has(request) ||
+              before.has(request)
+            )
+              return false;
+            complete = complete.then(async () => {
+              requireMetadata(
+                (await capturedGetBody(reply)).length > 0,
+                "fresh GET response body was empty",
+              );
+              return true;
+            });
+            return complete;
+          },
+          { timeout: 10000 },
+        );
+      } catch {
+        throw new Error(
+          "Mapping metadata browser fixture: fresh complete GET response boundary failed",
+        );
+      }
+    })();
+    this.waiters.push(waiting);
+    this.pendingWaiters.add(waiting);
+    void waiting.then(
+      () => this.pendingWaiters.delete(waiting),
+      () => this.pendingWaiters.delete(waiting),
+    );
+    return waiting;
+  }
+  mappingResponse(): Promise<BrowserResponse> {
+    return this.waitForGet(this.mappingApi);
   }
   async focusAdmission(): Promise<void> {
     await this.page.bringToFront();
@@ -109,27 +337,13 @@ class MetadataWire {
       )
       .toBe(true);
     await expect(button(this.page, "Refresh admission")).toBeEnabled();
-    const response = (path: string) =>
-      this.page.waitForResponse(
-        (reply) => {
-          const url = new URL(reply.url());
-          return (
-            reply.request().method() === "GET" &&
-            url.origin === this.owner.manifest.readOrigin &&
-            url.pathname === path &&
-            !url.search &&
-            reply.status() === 200
-          );
-        },
-        { timeout: 10000 },
-      );
-    const context = response("/api/v1/catalog/context"),
-      mapping = response(this.mappingApi);
+    const context = this.waitForGet("/api/v1/catalog/context"),
+      mapping = this.waitForGet(this.mappingApi);
     await this.page.evaluate(() => window.dispatchEvent(new Event("focus")));
     for (const reply of await Promise.all([context, mapping])) {
       let nonempty: boolean;
       try {
-        nonempty = (await reply.body()).length > 0;
+        nonempty = (await capturedGetBody(reply)).length > 0;
       } catch {
         throw new Error(
           "Mapping metadata browser fixture: focus admission response body could not be consumed",
@@ -183,7 +397,9 @@ class MetadataWire {
       this.mappingApi + "/revisions",
     ]);
     const revisionGet = new RegExp(`^${this.mappingApi}/revisions/${id}$`);
-    this.page.on("response", (reply) => {
+    this.page.on("request", this.observeRequest);
+    this.page.on("requestfailed", this.failedRead);
+    this.responseListener = (reply) => {
       const request = reply.request(),
         url = new URL(reply.url());
       if (
@@ -192,17 +408,19 @@ class MetadataWire {
         !url.pathname.startsWith("/api/")
       )
         return;
+      const capture = metadataGetCaptures.get(request);
+      capture?.response(reply);
       const task = (async () => {
         let body: Buffer;
         try {
-          body = await reply.body();
+          requireMetadata(
+            capture,
+            "allowed GET response has no exact request capture",
+          );
+          body = await capture.body(reply);
         } catch {
-          if (request.failure()?.errorText !== "net::ERR_ABORTED") {
-            this.failed = true;
-            this.failure ??= new Error(
-              "Mapping metadata browser fixture: actual GET body observation failed",
-            );
-          }
+          if (!capture?.ownedTeardown)
+            this.failGet("actual GET capture observation failed");
           return;
         }
         try {
@@ -236,7 +454,8 @@ class MetadataWire {
         }
       })();
       this.tasks.push(task);
-    });
+    };
+    this.page.on("response", this.responseListener);
     await this.page.route("**/api/**", async (route: Route) => {
       const request = route.request(),
         url = new URL(request.url()),
@@ -270,19 +489,46 @@ class MetadataWire {
         return;
       }
       if (request.method() === "GET") {
-        requireMetadata(
-          ![
-            "if-match",
-            "if-none-match",
-            "if-modified-since",
-            "if-unmodified-since",
-          ].some((n) => n in headers),
-          "metadata/catalog read unexpectedly became conditional",
-        );
+        try {
+          requireMetadata(
+            ![
+              "if-match",
+              "if-none-match",
+              "if-modified-since",
+              "if-unmodified-since",
+            ].some((n) => n in headers),
+            "metadata/catalog read unexpectedly became conditional",
+          );
+        } catch {
+          this.failGet("metadata/catalog read unexpectedly became conditional");
+          try {
+            await route.abort("failed");
+          } catch {
+            this.failGet("conditional GET refusal could not settle");
+          }
+          return;
+        }
         if (url.pathname === "/api/v1/catalog/context")
           this.contexts.push(request);
         if (url.pathname === this.mappingApi) this.mappings.push(request);
-        await route.continue();
+        const capture = new MetadataGetCapture(request, (error) => {
+          this.failed = true;
+          this.failure ??= error;
+        });
+        metadataGetCaptures.set(request, capture);
+        this.captures.add(capture);
+        if (this.closingReads) capture.close();
+        const job = this.captureGet(route, capture);
+        this.getJobs.push(job);
+        this.pendingGetJobs.add(job);
+        void job.then(
+          () => this.pendingGetJobs.delete(job),
+          () => {
+            this.pendingGetJobs.delete(job);
+            this.failGet("owned GET route job rejected");
+          },
+        );
+        await job;
         return;
       }
       const plan = this.plan;
@@ -434,6 +680,61 @@ class MetadataWire {
       }
     });
   }
+  private async captureGet(
+    route: Route,
+    capture: MetadataGetCapture,
+  ): Promise<void> {
+    let reply: APIResponse | undefined;
+    try {
+      capture.assertLive();
+      reply = await route.fetch({
+        maxRetries: 0,
+        maxRedirects: 0,
+        timeout: capture.remaining(),
+      });
+      capture.assertLive();
+      const bytes = await reply.body(),
+        headers = reply.headers();
+      capture.assertLive();
+      requireMetadata(
+        bytes.length > 0 && bytes.length <= 65536,
+        "actual GET entity exceeded the metadata observation bound",
+      );
+      requireMetadata(
+        reply.url() === capture.request.url() &&
+          (headers["content-encoding"] === undefined ||
+            headers["content-encoding"] === "identity") &&
+          coherentLength(headers, bytes),
+        "actual GET representation identity or length differs",
+      );
+      try {
+        JSON.parse(bytes.toString("utf8"));
+      } catch {
+        throw new Error(
+          "Mapping metadata browser fixture: actual captured GET entity is not JSON",
+        );
+      }
+      capture.candidate(bytes, reply.status(), headers);
+      await route.fulfill({ response: reply, body: bytes });
+      capture.delivered();
+    } catch {
+      capture.fail("actual GET capture or delivery failed", this.closingReads);
+      try {
+        await route.abort("failed");
+      } catch {
+        if (!this.closingReads)
+          this.failGet("failed GET route could not settle");
+      }
+    } finally {
+      if (reply) {
+        try {
+          await reply.dispose();
+        } catch {
+          this.failGet("actual GET response disposal failed");
+        }
+      }
+    }
+  }
   async arm(
     draft: Draft,
     profile: Profile = "publisher",
@@ -536,6 +837,33 @@ class MetadataWire {
   release(): void {
     for (const release of this.releases) release();
   }
+  /** The caller releases every planned PATCH hold before read cancellation can close a page. */
+  async disposeReads(): Promise<void> {
+    this.closingReads = true;
+    for (const capture of this.captures) capture.close();
+    try {
+      if (
+        (this.pendingGetJobs.size > 0 || this.pendingWaiters.size > 0) &&
+        !this.page.isClosed()
+      ) {
+        try {
+          await this.page.close({ runBeforeUnload: false });
+        } catch {
+          this.failGet("owned page could not settle GET observation teardown");
+        }
+      }
+      await this.drainReads();
+      for (const result of await Promise.allSettled(this.waiters))
+        if (result.status === "rejected")
+          this.failGet("owned explicit GET boundary failed");
+    } finally {
+      this.page.off("request", this.observeRequest);
+      this.page.off("requestfailed", this.failedRead);
+      if (this.responseListener)
+        this.page.off("response", this.responseListener);
+    }
+    if (this.failure) throw this.failure;
+  }
   async closed(): Promise<void> {
     await this.settle();
     requireMetadata(!this.plan, "unused metadata delivery control");
@@ -593,10 +921,12 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
   const fixture = owner.manifest,
     path = editPath(fixture.primary.scope),
     wire = new MetadataWire(page, owner);
-  await wire.install();
   let secondContext: BrowserContext | undefined,
     other: MetadataWire | undefined;
+  let primaryFailure: unknown,
+    hasPrimaryFailure = false;
   try {
+    await wire.install();
     const initial = await owner.checkpoint();
     expect(initial.counts.workersCreated).toBeGreaterThan(0);
     await page.setViewportSize({ width: 390, height: 844 });
@@ -665,17 +995,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         { name: "\uFEFF", acceptedName: "\uFEFF", description: "" },
         "administrator",
       );
-      const mappingResponse = page.waitForResponse((response) => {
-        const request = response.request(),
-          url = new URL(response.url());
-        return (
-          request.method() === "GET" &&
-          url.origin === fixture.readOrigin &&
-          url.pathname === wire.mappingApi &&
-          !url.search &&
-          response.status() === 200
-        );
-      });
+      const mappingResponse = wire.mappingResponse();
       await page
         .getByRole("link", { name: "Back to mapping", exact: true })
         .click();
@@ -689,7 +1009,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         }),
       ).toBeVisible();
       requireMetadata(
-        (await (await mappingResponse).body()).length > 0,
+        (await capturedGetBody(await mappingResponse)).length > 0,
         "ordinary mapping response body was empty",
       );
       await wire.settle();
@@ -913,17 +1233,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
     });
     await test.step("ordinary API and same-owned PostgreSQL restart preserve current metadata plus original immutable revision and saved report facts", async () => {
       const before = await owner.checkpoint();
-      const mappingResponse = active.waitForResponse((response) => {
-        const request = response.request(),
-          url = new URL(response.url());
-        return (
-          request.method() === "GET" &&
-          url.origin === fixture.readOrigin &&
-          url.pathname === editorWire.mappingApi &&
-          !url.search &&
-          response.status() === 200
-        );
-      });
+      const mappingResponse = editorWire.mappingResponse();
       await active
         .getByRole("link", { name: "Back to mapping", exact: true })
         .click();
@@ -937,7 +1247,7 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
         }),
       ).toBeVisible();
       requireMetadata(
-        (await (await mappingResponse).body()).length > 0,
+        (await capturedGetBody(await mappingResponse)).length > 0,
         "ordinary mapping response body was empty",
       );
       await editorWire.settle();
@@ -990,9 +1300,35 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
     });
     await wire.closed();
     await editorWire.closed();
+  } catch (error) {
+    primaryFailure = error;
+    hasPrimaryFailure = true;
   } finally {
     wire.release();
     other?.release();
-    await secondContext?.close();
+    const cleanups = await Promise.allSettled([
+      wire.disposeReads(),
+      other?.disposeReads() ?? Promise.resolve(),
+    ]);
+    let cleanupFailure: Error | null = null;
+    for (const result of cleanups)
+      if (result.status === "rejected") {
+        cleanupFailure ??=
+          result.reason instanceof Error &&
+          result.reason.message.startsWith("Mapping metadata browser fixture:")
+            ? result.reason
+            : new Error(
+                "Mapping metadata browser fixture: owned GET cleanup failed",
+              );
+      }
+    try {
+      await secondContext?.close();
+    } catch {
+      cleanupFailure ??= new Error(
+        "Mapping metadata browser fixture: owned second context could not close",
+      );
+    }
+    if (!hasPrimaryFailure && cleanupFailure) throw cleanupFailure;
   }
+  if (hasPrimaryFailure) throw primaryFailure;
 });
