@@ -6,6 +6,8 @@ import {
   type Reply,
   type Receipt,
   synthetic,
+  catalogApi,
+  mappingPath,
   appendPath,
   otherActor,
   otherOrganization,
@@ -1560,7 +1562,98 @@ test("controlled revision append: foreign actor, organization or mode latches pr
       await prepare(current, fixture, "private-original.native.json");
       await loseOriginal(current, fixture);
       change(fixture);
-      await refresh(current, fixture);
+      if (change === changes[0]) {
+        const reads = {
+            context: fixture.contextReads,
+            mapping: fixture.mappingReads,
+          },
+          held = fixture.hold("mapping", {
+            json: structuredClone(fixture.mapping),
+          }),
+          context = fixture.response("context", 200),
+          mappingPathname = catalogApi(mappingPath(fixture.scope)),
+          origin = new URL(current.url()).origin;
+        const mappingRequest = current
+          .waitForRequest(
+            (request) => {
+              const url = new URL(request.url());
+              return (
+                request.method() === "GET" &&
+                url.origin === origin &&
+                url.pathname === mappingPathname &&
+                url.search === ""
+              );
+            },
+            { timeout: 10000 },
+          )
+          .catch(() => {
+            throw new Error(
+              "The held foreign admission mapping request was not observed.",
+            );
+          });
+        void mappingRequest.catch(() => undefined);
+        await button(current, "Refresh access").click();
+        await body(context);
+        const request = await mappingRequest;
+        await expect.poll(held.entered).toBe(true);
+        await expect(
+          heading(current, "An original append is retained privately"),
+        ).toBeVisible();
+        await expect(filenameField(current)).toHaveCount(0);
+        await expect(button(current, "Resend original append")).toHaveCount(0);
+        await expect(heading(current, "Revision saved")).toHaveCount(0);
+        expect(
+          await current
+            .locator(".native-append")
+            .evaluate(
+              (element) =>
+                !element.textContent?.includes("private-original.native.json"),
+            ),
+          "The held foreign admission exposed the original filename.",
+        ).toBe(true);
+        await expect(current.locator(".native-append")).toHaveAttribute(
+          "aria-busy",
+          "true",
+        );
+        await expect(button(current, "Refresh access")).toBeDisabled();
+        expect(
+          held.canceled(),
+          "The current foreign admission mapping was canceled while held.",
+        ).toBe(false);
+        expect(fixture.appendCount).toBe(1);
+        expect(fixture.receiptReads).toBe(0);
+        expect(fixture.resumeCount).toBe(0);
+        held.release();
+        const delivered = await request.response().catch(() => null);
+        expect(
+          delivered !== null,
+          "The exact held foreign admission mapping had no response.",
+        ).toBe(true);
+        if (!delivered)
+          throw new Error(
+            "The exact held foreign admission mapping had no response.",
+          );
+        expect(
+          delivered.request() === request,
+          "The foreign admission response belongs to another request.",
+        ).toBe(true);
+        await body(Promise.resolve(delivered));
+        expect(
+          request.failure() === null,
+          "The delivered foreign admission mapping request failed.",
+        ).toBe(true);
+        expect(
+          held.canceled(),
+          "The foreign admission mapping was canceled before complete delivery.",
+        ).toBe(false);
+        await expect(button(current, "Refresh access")).toBeEnabled();
+        await expect(
+          heading(current, "An original append is retained privately"),
+        ).toBeVisible();
+        expect(fixture.contextReads).toBe(reads.context + 1);
+        expect(fixture.mappingReads).toBe(reads.mapping + 1);
+        fixture.mappingReply = null;
+      } else await refresh(current, fixture);
       await expect(filenameField(current)).toHaveCount(0);
       await expect(button(current, "Resend original append")).toHaveCount(0);
       await expect(heading(current, "Revision saved")).toHaveCount(0);
@@ -1580,9 +1673,15 @@ test("controlled revision append: foreign actor, organization or mode latches pr
       fixture.context.actorPrincipalId = synthetic.actor;
       fixture.context.allowedOrganizationId = synthetic.org;
       fixture.context.mode = "development";
+      const restoredReads = {
+        context: fixture.contextReads,
+        mapping: fixture.mappingReads,
+      };
       await refresh(current, fixture);
       await unknown(current);
       await expect(button(current, "Resend original append")).toBeEnabled();
+      expect(fixture.contextReads).toBe(restoredReads.context + 1);
+      expect(fixture.mappingReads).toBe(restoredReads.mapping + 1);
       expect(fixture.receiptReads).toBe(0);
       expect(fixture.resumeCount).toBe(0);
       wires(fixture, 1);

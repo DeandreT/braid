@@ -202,14 +202,11 @@ export class NativeRevisionAppendState {
 
   constructor() {
     effect(() => {
-      const context = this.contexts.context(),
-        version = this.contexts.identityVersion();
+      const version = this.contexts.identityVersion();
       const owner = this.owner();
-      if (
-        owner &&
-        ((context && !owns(context, owner)) ||
-          version !== this.observedIdentityVersion)
-      ) {
+      // admit() quarantines and acknowledges its context before reading the mapping.
+      // Cancel only identity changes not yet handled by that admission.
+      if (owner && version !== this.observedIdentityVersion) {
         untracked(() => {
           this.observedIdentityVersion = version;
           this.cancelNetwork();
