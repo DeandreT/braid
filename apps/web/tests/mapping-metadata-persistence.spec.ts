@@ -6,6 +6,7 @@ import type {
   Route,
   Response as BrowserResponse,
 } from "@playwright/test";
+import { errors } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
@@ -86,7 +87,42 @@ type PatchObservation = {
   requestFinished: boolean;
   requestFailed: boolean;
 };
-let patchDiagnosticAttempted = false;
+type GetKind =
+  | "context"
+  | "primaryMapping"
+  | "metadata"
+  | "otherMapping"
+  | "revision"
+  | "list"
+  | "otherAllowed";
+type GetFailureKind =
+  | "deadline"
+  | "requestFailure"
+  | "browserAdmission"
+  | "captureOrDelivery"
+  | "ownedTeardown";
+class MetadataGetCaptureError extends Error {
+  constructor(
+    readonly category: GetFailureKind,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+type WaiterObservation = {
+  readonly path: string;
+  readonly before: ReadonlySet<Request>;
+  readonly started: number;
+  settledAt: number | null;
+  matchingResponses: number;
+  oldRequestRejected: number;
+  bodyEntered: boolean;
+  bodyReady: boolean;
+  state: "pending" | "succeeded" | "failed";
+  caught: "none" | "playwrightTimeout" | "captureFailure" | "other";
+  captureFailure: GetFailureKind | null;
+};
+let readDiagnosticAttempted = false;
 const sha = (text: string) =>
   createHash("sha256").update(text, "utf8").digest("hex");
 
@@ -115,6 +151,14 @@ class MetadataGetCapture {
   private fulfilled = false;
   private responseSeen = false;
   private failure: Error | null = null;
+  private failureCategory: GetFailureKind | null = null;
+  readonly phases = {
+    fetchEntered: false,
+    upstreamReceived: false,
+    jsonParsed: false,
+    fulfillEntered: false,
+    ready: false,
+  };
   ownedTeardown = false;
   constructor(
     readonly request: Request,
@@ -126,7 +170,12 @@ class MetadataGetCapture {
     });
     void this.ready.catch(() => undefined);
     this.timer = setTimeout(
-      () => this.fail("actual GET capture exceeded the existing read budget"),
+      () =>
+        this.fail(
+          "actual GET capture exceeded the existing read budget",
+          false,
+          "deadline",
+        ),
       8000,
     );
   }
@@ -136,7 +185,11 @@ class MetadataGetCapture {
   }
   assertLive(): void {
     if (!this.failure && performance.now() >= this.deadline)
-      this.fail("actual GET capture exceeded the existing read budget");
+      this.fail(
+        "actual GET capture exceeded the existing read budget",
+        false,
+        "deadline",
+      );
     if (this.failure) throw this.failure;
     requireMetadata(
       !this.request.failure(),
@@ -173,7 +226,11 @@ class MetadataGetCapture {
       this.responseSeen = true;
       this.complete();
     } catch {
-      this.fail("actual browser GET delivery could not be admitted");
+      this.fail(
+        "actual browser GET delivery could not be admitted",
+        false,
+        "browserAdmission",
+      );
     }
   }
   delivered(): void {
@@ -185,11 +242,20 @@ class MetadataGetCapture {
     if (this.failure || !this.fulfilled || !this.responseSeen || !this.bytes)
       return;
     clearTimeout(this.timer);
+    this.phases.ready = true;
     this.resolve(this.bytes);
   }
-  fail(category: string, ownedTeardown = false): void {
+  fail(
+    category: string,
+    ownedTeardown = false,
+    failureCategory: GetFailureKind = "captureOrDelivery",
+  ): void {
     if (this.failure) return;
-    this.failure = new Error("Mapping metadata browser fixture: " + category);
+    this.failureCategory = ownedTeardown ? "ownedTeardown" : failureCategory;
+    this.failure = new MetadataGetCaptureError(
+      this.failureCategory,
+      "Mapping metadata browser fixture: " + category,
+    );
     this.ownedTeardown = ownedTeardown;
     clearTimeout(this.timer);
     if (!ownedTeardown) this.onFailure(this.failure);
@@ -199,6 +265,17 @@ class MetadataGetCapture {
     if (!this.fulfilled || !this.responseSeen)
       this.fail("owned GET capture closed before complete delivery", true);
     clearTimeout(this.timer);
+  }
+  diagnostic() {
+    return {
+      ...this.phases,
+      fulfilled: this.fulfilled,
+      responseSeen: this.responseSeen,
+      bytesPresent: this.bytes !== null,
+      requestFailure: this.request.failure() !== null,
+      ownedTeardown: this.ownedTeardown,
+      failureCategory: this.failureCategory,
+    };
   }
   async body(reply: BrowserResponse): Promise<Buffer> {
     const bytes = await this.ready;
@@ -236,6 +313,7 @@ class MetadataWire {
   private readonly getRequests = new Set<Request>();
   private readonly waiters: Promise<BrowserResponse>[] = [];
   private readonly pendingWaiters = new Set<Promise<BrowserResponse>>();
+  private readonly waiterObservations: WaiterObservation[] = [];
   private closingReads = false;
   private responseListener: ((reply: BrowserResponse) => void) | null = null;
   private readonly observeRequest = (request: Request) => {
@@ -256,7 +334,12 @@ class MetadataWire {
     const capture = metadataGetCaptures.get(request);
     if (!capture) return;
     if (this.closingReads) capture.close();
-    else capture.fail("actual browser GET request failed");
+    else
+      capture.fail(
+        "actual browser GET request failed",
+        false,
+        "requestFailure",
+      );
   };
   private readonly contexts: Request[] = [];
   private readonly contextValues = new Map<Request, Context>();
@@ -337,12 +420,28 @@ class MetadataWire {
       "actual HTTP observation or closed request boundary failed",
     );
   }
-  private waitForGet(path: string): Promise<BrowserResponse> {
-    const before = new Set(this.getRequests);
+  private waitForGet(
+    path: string,
+    before: ReadonlySet<Request> = new Set(this.getRequests),
+  ): Promise<BrowserResponse> {
+    const observation: WaiterObservation = {
+      path,
+      before,
+      started: performance.now(),
+      settledAt: null,
+      matchingResponses: 0,
+      oldRequestRejected: 0,
+      bodyEntered: false,
+      bodyReady: false,
+      state: "pending",
+      caught: "none",
+      captureFailure: null,
+    };
+    this.waiterObservations.push(observation);
     let complete = Promise.resolve(false);
     const waiting = (async () => {
       try {
-        return await this.page.waitForResponse(
+        const reply = await this.page.waitForResponse(
           (reply) => {
             const request = reply.request(),
               url = new URL(reply.url());
@@ -352,22 +451,41 @@ class MetadataWire {
               url.pathname !== path ||
               url.search ||
               reply.status() !== 200 ||
-              !this.getRequests.has(request) ||
-              before.has(request)
+              !this.getRequests.has(request)
             )
               return false;
+            if (before.has(request)) {
+              observation.oldRequestRejected++;
+              return false;
+            }
+            observation.matchingResponses++;
             complete = complete.then(async () => {
+              observation.bodyEntered = true;
               requireMetadata(
                 (await capturedGetBody(reply)).length > 0,
                 "fresh GET response body was empty",
               );
+              observation.bodyReady = true;
               return true;
             });
             return complete;
           },
           { timeout: 10000 },
         );
-      } catch {
+        observation.state = "succeeded";
+        observation.settledAt = performance.now();
+        return reply;
+      } catch (error) {
+        observation.state = "failed";
+        observation.settledAt = performance.now();
+        observation.caught =
+          error instanceof errors.TimeoutError
+            ? "playwrightTimeout"
+            : error instanceof MetadataGetCaptureError
+              ? "captureFailure"
+              : "other";
+        if (error instanceof MetadataGetCaptureError)
+          observation.captureFailure = error.category;
         throw new Error(
           "Mapping metadata browser fixture: fresh complete GET response boundary failed",
         );
@@ -385,7 +503,23 @@ class MetadataWire {
     return this.waitForGet(this.mappingApi);
   }
   async focusAdmission(): Promise<void> {
-    await this.page.bringToFront();
+    await expect(button(this.page, "Refresh admission")).toBeEnabled();
+    const before = new Set(this.getRequests),
+      context = this.waitForGet("/api/v1/catalog/context", before),
+      mapping = this.waitForGet(this.mappingApi, before);
+    const foreground = await this.page.evaluate(
+      () => document.hasFocus() && document.visibilityState === "visible",
+    );
+    if (!foreground) await this.page.bringToFront();
+    else if (
+      ![...this.getRequests].some(
+        (request) =>
+          !before.has(request) &&
+          request.url() ===
+            this.owner.manifest.readOrigin + "/api/v1/catalog/context",
+      )
+    )
+      await this.page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect
       .poll(() =>
         this.page.evaluate(
@@ -394,9 +528,6 @@ class MetadataWire {
       )
       .toBe(true);
     await expect(button(this.page, "Refresh admission")).toBeEnabled();
-    const context = this.waitForGet("/api/v1/catalog/context"),
-      mapping = this.waitForGet(this.mappingApi);
-    await this.page.evaluate(() => window.dispatchEvent(new Event("focus")));
     for (const reply of await Promise.all([context, mapping])) {
       let nonempty: boolean;
       try {
@@ -800,11 +931,13 @@ class MetadataWire {
     let reply: APIResponse | undefined;
     try {
       capture.assertLive();
+      capture.phases.fetchEntered = true;
       reply = await route.fetch({
         maxRetries: 0,
         maxRedirects: 0,
         timeout: capture.remaining(),
       });
+      capture.phases.upstreamReceived = true;
       capture.assertLive();
       const bytes = await reply.body(),
         headers = reply.headers();
@@ -822,12 +955,14 @@ class MetadataWire {
       );
       try {
         JSON.parse(bytes.toString("utf8"));
+        capture.phases.jsonParsed = true;
       } catch {
         throw new Error(
           "Mapping metadata browser fixture: actual captured GET entity is not JSON",
         );
       }
       capture.candidate(bytes, reply.status(), headers);
+      capture.phases.fulfillEntered = true;
       await route.fulfill({ response: reply, body: bytes });
       capture.delivered();
     } catch {
@@ -950,180 +1085,268 @@ class MetadataWire {
   release(): void {
     for (const release of this.releases) release();
   }
-  async diagnoseSavedFailure(
-    index: number,
-    draft: Draft,
+  private getKind(path: string): GetKind {
+    if (path === "/api/v1/catalog/context") return "context";
+    if (path === this.mappingApi) return "primaryMapping";
+    if (path === this.metadataPath) return "metadata";
+    if (path === catalogApi(mappingPath(this.owner.manifest.unrelated.scope)))
+      return "otherMapping";
+    if (path.startsWith(this.mappingApi + "/revisions/")) return "revision";
+    if (path.endsWith("/mappings") || path === this.mappingApi + "/revisions")
+      return "list";
+    return "otherAllowed";
+  }
+  private async diagnosticSnapshot() {
+    const latest = this.patches.at(-1),
+      accepted = latest?.result?.body,
+      draft = this.plan?.draft ?? latest?.draft;
+    const ui = await this.page
+      .evaluate(
+        ({ expectedPath, rawName, rawDescription, accepted }) => {
+          const roots =
+              document.querySelectorAll<HTMLElement>(".metadata-editor"),
+            root = roots.length === 1 ? roots[0] : null;
+          const visible = (element: Element | null): boolean => {
+            if (!element) return false;
+            const rect = element.getBoundingClientRect(),
+              style = getComputedStyle(element);
+            return (
+              rect.width > 0 &&
+              rect.height > 0 &&
+              style.display !== "none" &&
+              style.visibility !== "hidden"
+            );
+          };
+          const headings = Array.from(root?.querySelectorAll("h1,h2") ?? []);
+          const heading = (name: string) =>
+            headings.some(
+              (element) =>
+                element.textContent?.trim() === name && visible(element),
+            );
+          const enabled = (name: string): boolean | null => {
+            const matches = Array.from(
+              root?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+            ).filter(
+              (element) =>
+                element.textContent?.trim() === name && visible(element),
+            );
+            return matches.length === 1 ? !matches[0]!.disabled : null;
+          };
+          const name =
+              root?.querySelector<HTMLInputElement>("#metadata-name") ?? null,
+            description =
+              root?.querySelector<HTMLTextAreaElement>(
+                "#metadata-description",
+              ) ?? null;
+          const vocabulary = {
+            invalidInput: "Check the metadata fields before saving.",
+            identityChanged:
+              "Your identity or organization changed. The previous editor information was cleared; refresh admission to start a new edit.",
+            identityRejected:
+              "Your identity could not access this mapping. Private editor details are hidden.",
+            featureDisabled:
+              "Metadata editing is not enabled for this workspace.",
+            editUnavailable:
+              "You do not currently have permission to edit this mapping.",
+            notFound:
+              "This mapping is unavailable to your current identity. Private editor details are hidden.",
+            invalidRequest:
+              "The service refused this metadata request as invalid.",
+            preconditionFailed:
+              "The mapping metadata changed. Review latest before deciding what to save.",
+            preconditionRequired:
+              "A current metadata validator is required. Review latest before saving.",
+            versionExhausted:
+              "This metadata version cannot advance further. No different version was adopted.",
+            bodyLimit: "The service refused the size of this metadata request.",
+            unsupportedMediaType:
+              "The service did not accept the metadata request format.",
+            persistenceOrInternalFailure:
+              "The service could not confirm this metadata operation.",
+            timedOut:
+              "Waiting timed out. A sent save may already have committed.",
+            unavailable:
+              "This operation could not be confirmed. No automatic save or retry was made.",
+            incompatible:
+              "The reply could not be verified as this mapping's metadata.",
+          };
+          const errors = Array.from(
+            root?.querySelectorAll(".metadata-error") ?? [],
+          )
+            .filter(visible)
+            .slice(0, 32)
+            .map((element) => element.textContent?.trim() ?? "");
+          return {
+            expectedEditorRoute:
+              location.pathname === expectedPath && location.search === "",
+            exactlyOneEditor: roots.length === 1,
+            editorVisible: root ? visible(root) : null,
+            ariaBusy: root ? root.getAttribute("aria-busy") === "true" : null,
+            confirmationVisible: heading("Metadata save confirmed"),
+            unknownVisible: heading("Save outcome is unknown"),
+            unavailableVisible: heading("Metadata editor unavailable"),
+            conflictVisible: heading("Review before another save"),
+            comparisonVisible: heading("Compare mapping metadata"),
+            fieldsAttentionVisible: heading("Check the metadata fields"),
+            saveEnabled: enabled("Save metadata"),
+            refreshEnabled: enabled("Refresh admission"),
+            namePresent: name !== null,
+            descriptionPresent: description !== null,
+            nameMatchesRaw:
+              name && rawName !== null ? name.value === rawName : null,
+            descriptionMatchesRaw:
+              description && rawDescription !== null
+                ? description.value === rawDescription
+                : null,
+            acceptedAvailable: accepted !== null,
+            nameMatchesAccepted:
+              name && accepted ? name.value === accepted.name : null,
+            descriptionMatchesAccepted:
+              description && accepted
+                ? description.value === accepted.description
+                : null,
+            documentFocused: document.hasFocus(),
+            documentVisible: document.visibilityState === "visible",
+            errors: {
+              ...Object.fromEntries(
+                Object.entries(vocabulary).map(([kind, text]) => [
+                  kind,
+                  errors.includes(text),
+                ]),
+              ),
+              otherFixedCategory: errors.some(
+                (text) =>
+                  text !== "" && !Object.values(vocabulary).includes(text),
+              ),
+            },
+          };
+        },
+        {
+          expectedPath: editPath(this.owner.manifest.primary.scope),
+          rawName: draft?.name ?? null,
+          rawDescription: draft?.description ?? null,
+          accepted: accepted
+            ? { name: accepted.name, description: accepted.description }
+            : null,
+        },
+      )
+      .catch(() => null);
+    const kinds: GetKind[] = [
+      "context",
+      "primaryMapping",
+      "metadata",
+      "otherMapping",
+      "revision",
+      "list",
+      "otherAllowed",
+    ];
+    const requests = [...this.getRequests],
+      captures = [...this.captures];
+    const selectedCaptures = captures
+      .map((capture, index) => ({
+        capture,
+        ordinal: index + 1,
+        state: capture.diagnostic(),
+      }))
+      .sort(
+        (left, right) =>
+          Number(!right.state.ready && right.state.failureCategory === null) -
+            Number(!left.state.ready && left.state.failureCategory === null) ||
+          right.ordinal - left.ordinal,
+      )
+      .slice(0, 3);
+    return {
+      collection: ui === null ? "snapshotUnavailable" : "complete",
+      observationUnavailable: this.patchObservationUnavailable,
+      counts: {
+        requests: requests.length,
+        captures: captures.length,
+        waiters: this.waiterObservations.length,
+        pendingRouteJobs: this.pendingGetJobs.size,
+        pendingWaiters: this.pendingWaiters.size,
+        patches: this.patches.length,
+      },
+      requestsByKind: Object.fromEntries(
+        kinds.map((kind) => [
+          kind,
+          requests.filter(
+            (request) => this.getKind(new URL(request.url()).pathname) === kind,
+          ).length,
+        ]),
+      ),
+      capturesTruncated: captures.length > 3,
+      captures: selectedCaptures.map(({ capture, ordinal, state }) => ({
+        ordinal,
+        kind: this.getKind(new URL(capture.request.url()).pathname),
+        ...state,
+      })),
+      waitersTruncated: this.waiterObservations.length > 2,
+      waiters: this.waiterObservations.slice(-2).map((observation) => ({
+        kind: this.getKind(observation.path),
+        entryRequests: observation.before.size,
+        newRequests: requests.filter(
+          (request) =>
+            !observation.before.has(request) &&
+            new URL(request.url()).pathname === observation.path,
+        ).length,
+        matchingResponses: observation.matchingResponses,
+        oldRequestRejected: observation.oldRequestRejected,
+        bodyEntered: observation.bodyEntered,
+        bodyReady: observation.bodyReady,
+        state: observation.state,
+        caught: observation.caught,
+        captureFailure: observation.captureFailure,
+        deadlineReached:
+          (observation.settledAt ?? performance.now()) - observation.started >=
+          10000,
+      })),
+      patchesTruncated: this.patchObservations.size > 1,
+      patches: Array.from(this.patchObservations.values())
+        .slice(-1)
+        .map((observation) => ({
+          ordinal: observation.ordinal,
+          delivery: observation.delivery,
+          phases: observation.phases,
+          upstreamStatus: observation.upstreamStatus,
+          browserResponseSeen: observation.browserResponseSeen,
+          browserStatus200: observation.browserStatus200,
+          browserSameUrl: observation.browserSameUrl,
+          browserTagMatchesUpstream: observation.browserTagMatchesUpstream,
+          requestFinished: observation.requestFinished,
+          requestFailed: observation.requestFailed,
+        })),
+      ui,
+      historicalAcknowledgementClearedEstablished: false,
+    };
+  }
+  async diagnoseFailure(
+    other?: MetadataWire,
   ): Promise<"written" | "unavailable"> {
-    if (patchDiagnosticAttempted) return "unavailable";
-    patchDiagnosticAttempted = true;
+    if (readDiagnosticAttempted) return "unavailable";
+    readDiagnosticAttempted = true;
     const config = process.env.WEFT_MAPPING_METADATA_BROWSER_OPERATOR_CONFIG;
     if (!config || !isAbsolute(config)) return "unavailable";
     const deadline = performance.now() + 1000;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const collection = (async (): Promise<"written" | "unavailable"> => {
       try {
-        const accepted = this.patches[index]?.result?.body;
-        const ui = await this.page
-          .evaluate(
-            ({ expectedPath, rawName, rawDescription, accepted }) => {
-              const roots =
-                  document.querySelectorAll<HTMLElement>(".metadata-editor"),
-                root = roots.length === 1 ? roots[0] : null;
-              const visible = (element: Element | null): boolean => {
-                if (!element) return false;
-                const rect = element.getBoundingClientRect(),
-                  style = getComputedStyle(element);
-                return (
-                  rect.width > 0 &&
-                  rect.height > 0 &&
-                  style.display !== "none" &&
-                  style.visibility !== "hidden"
-                );
-              };
-              const headings = Array.from(
-                root?.querySelectorAll("h1,h2") ?? [],
-              );
-              const heading = (name: string) =>
-                headings.some(
-                  (element) =>
-                    element.textContent?.trim() === name && visible(element),
-                );
-              const enabled = (name: string): boolean | null => {
-                const matches = Array.from(
-                  root?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-                ).filter(
-                  (element) =>
-                    element.textContent?.trim() === name && visible(element),
-                );
-                return matches.length === 1 ? !matches[0]!.disabled : null;
-              };
-              const name =
-                  root?.querySelector<HTMLInputElement>("#metadata-name") ??
-                  null,
-                description =
-                  root?.querySelector<HTMLTextAreaElement>(
-                    "#metadata-description",
-                  ) ?? null;
-              const vocabulary = {
-                invalidInput: "Check the metadata fields before saving.",
-                identityChanged:
-                  "Your identity or organization changed. The previous editor information was cleared; refresh admission to start a new edit.",
-                identityRejected:
-                  "Your identity could not access this mapping. Private editor details are hidden.",
-                featureDisabled:
-                  "Metadata editing is not enabled for this workspace.",
-                editUnavailable:
-                  "You do not currently have permission to edit this mapping.",
-                notFound:
-                  "This mapping is unavailable to your current identity. Private editor details are hidden.",
-                invalidRequest:
-                  "The service refused this metadata request as invalid.",
-                preconditionFailed:
-                  "The mapping metadata changed. Review latest before deciding what to save.",
-                preconditionRequired:
-                  "A current metadata validator is required. Review latest before saving.",
-                versionExhausted:
-                  "This metadata version cannot advance further. No different version was adopted.",
-                bodyLimit:
-                  "The service refused the size of this metadata request.",
-                unsupportedMediaType:
-                  "The service did not accept the metadata request format.",
-                persistenceOrInternalFailure:
-                  "The service could not confirm this metadata operation.",
-                timedOut:
-                  "Waiting timed out. A sent save may already have committed.",
-                unavailable:
-                  "This operation could not be confirmed. No automatic save or retry was made.",
-                incompatible:
-                  "The reply could not be verified as this mapping's metadata.",
-              };
-              const errors = Array.from(
-                root?.querySelectorAll(".metadata-error") ?? [],
-              )
-                .filter(visible)
-                .slice(0, 32)
-                .map((element) => element.textContent?.trim() ?? "");
-              return {
-                expectedEditorRoute:
-                  location.pathname === expectedPath && location.search === "",
-                exactlyOneEditor: roots.length === 1,
-                editorVisible: root ? visible(root) : null,
-                ariaBusy: root
-                  ? root.getAttribute("aria-busy") === "true"
-                  : null,
-                confirmationVisible: heading("Metadata save confirmed"),
-                unknownVisible: heading("Save outcome is unknown"),
-                unavailableVisible: heading("Metadata editor unavailable"),
-                conflictVisible: heading("Review before another save"),
-                comparisonVisible: heading("Compare mapping metadata"),
-                fieldsAttentionVisible: heading("Check the metadata fields"),
-                saveEnabled: enabled("Save metadata"),
-                refreshEnabled: enabled("Refresh admission"),
-                namePresent: name !== null,
-                descriptionPresent: description !== null,
-                nameMatchesRaw: name ? name.value === rawName : null,
-                descriptionMatchesRaw: description
-                  ? description.value === rawDescription
-                  : null,
-                acceptedAvailable: accepted !== null,
-                nameMatchesAccepted:
-                  name && accepted ? name.value === accepted.name : null,
-                descriptionMatchesAccepted:
-                  description && accepted
-                    ? description.value === accepted.description
-                    : null,
-                documentFocused: document.hasFocus(),
-                documentVisible: document.visibilityState === "visible",
-                errors: {
-                  ...Object.fromEntries(
-                    Object.entries(vocabulary).map(([kind, text]) => [
-                      kind,
-                      errors.includes(text),
-                    ]),
-                  ),
-                  otherFixedCategory: errors.some(
-                    (text) =>
-                      text !== "" && !Object.values(vocabulary).includes(text),
-                  ),
-                },
-              };
-            },
-            {
-              expectedPath: editPath(this.owner.manifest.primary.scope),
-              rawName: draft.name,
-              rawDescription: draft.description,
-              accepted: accepted
-                ? { name: accepted.name, description: accepted.description }
-                : null,
-            },
-          )
-          .catch(() => null);
+        const results = await Promise.allSettled([
+          this.diagnosticSnapshot(),
+          ...(other ? [other.diagnosticSnapshot()] : []),
+        ]);
         if (performance.now() >= deadline) return "unavailable";
         let serialized = JSON.stringify({
-          schemaVersion: "weft.metadata-patch-delivery-diagnostic.v1",
-          collection: ui === null ? "snapshotUnavailable" : "complete",
-          selectedOrdinal: Math.min(9, Math.max(1, index + 1)),
-          observationUnavailable: this.patchObservationUnavailable,
-          patches: Array.from(this.patchObservations.values())
-            .slice(0, 9)
-            .map((observation) => ({
-              ordinal: observation.ordinal,
-              delivery: observation.delivery,
-              phases: observation.phases,
-              upstreamStatus: observation.upstreamStatus,
-              browserResponseSeen: observation.browserResponseSeen,
-              browserStatus200: observation.browserStatus200,
-              browserSameUrl: observation.browserSameUrl,
-              browserTagMatchesUpstream: observation.browserTagMatchesUpstream,
-              requestFinished: observation.requestFinished,
-              requestFailed: observation.requestFailed,
-            })),
-          ui,
-          historicalAcknowledgementClearedEstablished: false,
+          schemaVersion: "weft.metadata-delivery-diagnostic.v2",
+          wires: results.map((result, index) => ({
+            wire: index === 0 ? "primary" : "secondary",
+            ...(result.status === "fulfilled"
+              ? result.value
+              : { collection: "unavailable" }),
+          })),
         });
         if (Buffer.byteLength(serialized, "utf8") > 8192)
           serialized = JSON.stringify({
-            schemaVersion: "weft.metadata-patch-delivery-diagnostic.v1",
+            schemaVersion: "weft.metadata-delivery-diagnostic.v2",
             collection: "unavailable",
             category: "sizeLimit",
           });
@@ -1223,16 +1446,7 @@ async function save(
     contexts = wire.contextCount,
     mappings = wire.actionReadCount;
   await button(page, "Save metadata").click();
-  try {
-    await saved(page);
-  } catch (error) {
-    try {
-      await wire.diagnoseSavedFailure(index, draft);
-    } catch {
-      /* Preserve the original assertion even if diagnostics are unavailable. */
-    }
-    throw error;
-  }
+  await saved(page);
   await wire.complete(index, 200);
   await wire.fresh(index, contexts, mappings);
   return index;
@@ -1630,6 +1844,11 @@ test("real packaged mapping metadata: strong-validator CAS, preserved native his
   } catch (error) {
     primaryFailure = error;
     hasPrimaryFailure = true;
+    try {
+      await wire.diagnoseFailure(other);
+    } catch {
+      /* Preserve the same primary failure if diagnostics are unavailable. */
+    }
   } finally {
     wire.release();
     other?.release();
