@@ -273,7 +273,14 @@ class MediatedRevisionRead {
 const mediatedRevisionReads = new WeakMap<Request, MediatedRevisionRead>();
 async function actualResponseBody(reply: BrowserResponse): Promise<Buffer> {
   const captured = mediatedRevisionReads.get(reply.request());
-  return captured ? captured.body(reply) : reply.body();
+  if (reply.request().method() === "GET") {
+    requireUpload(
+      captured,
+      "allowed GET response has no exact request capture",
+    );
+    return captured.body(reply);
+  }
+  return reply.body();
 }
 async function visibleHeading(page: Page, name: string): Promise<void> {
   await expect
@@ -469,27 +476,38 @@ class UploadWire {
       )
       .toBe(true);
     await expect(button(this.page, "Refresh access")).toBeEnabled();
-    const response = (path: string) =>
-      this.page.waitForResponse(
-        (reply) => {
-          const url = new URL(reply.url());
-          return (
-            reply.request().method() === "GET" &&
-            url.origin === this.owner.manifest.readOrigin &&
-            url.pathname === path &&
-            !url.search &&
-            reply.status() === 200
-          );
-        },
-        { timeout: 10000 },
-      );
-    const context = response("/api/v1/catalog/context"),
-      project = response(this.projectApi);
-    await this.page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await Promise.all([context.then(responseDone), project.then(responseDone)]);
-    await this.settleReads();
-    await expect(button(this.page, "Refresh access")).toBeEnabled();
-    await expect(button(this.page, action)).toBeEnabled();
+    const freshRequests = new WeakSet<Request>();
+    const observeRequest = (request: Request) => freshRequests.add(request);
+    this.page.on("request", observeRequest);
+    try {
+      const response = (path: string) =>
+        this.page.waitForResponse(
+          (reply) => {
+            const url = new URL(reply.url());
+            return (
+              freshRequests.has(reply.request()) &&
+              reply.request().method() === "GET" &&
+              url.origin === this.owner.manifest.readOrigin &&
+              url.pathname === path &&
+              !url.search &&
+              reply.status() === 200
+            );
+          },
+          { timeout: 10000 },
+        );
+      const context = response("/api/v1/catalog/context"),
+        project = response(this.projectApi);
+      await this.page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await Promise.all([
+        context.then(responseDone),
+        project.then(responseDone),
+      ]);
+      await this.settleReads();
+      await expect(button(this.page, "Refresh access")).toBeEnabled();
+      await expect(button(this.page, action)).toBeEnabled();
+    } finally {
+      this.page.off("request", observeRequest);
+    }
   }
   private remember(error: unknown, category: string): void {
     this.failure ??=
@@ -526,10 +544,14 @@ class UploadWire {
       capture?.response(reply);
       const task = (async () => {
         try {
+          requireUpload(
+            capture,
+            "allowed GET JSON has no exact request capture",
+          );
           await responseDone(reply);
-          const value: unknown = capture
-            ? JSON.parse((await capture.body(reply)).toString("utf8"))
-            : await reply.json();
+          const value: unknown = JSON.parse(
+            (await capture.body(reply)).toString("utf8"),
+          );
           this.reads.push({
             path: url.pathname,
             status: reply.status(),
@@ -636,29 +658,25 @@ class UploadWire {
             url.pathname ===
               catalogApi(revisionPath(original.receipt.futureRevision)),
         );
-        if (original) {
-          requireUpload(
-            !this.closingReads,
-            "revision arrived during owned read teardown",
-          );
-          const capture = new MediatedRevisionRead(request);
-          mediatedRevisionReads.set(request, capture);
-          this.mediated.add(capture);
-          const job = this.mediateRevision(route, capture, original);
-          this.mediatedJobs.push(job);
-          this.pendingMediatedJobs.add(job);
-          void job.then(
-            () => {
-              this.pendingMediatedJobs.delete(job);
-            },
-            () => {
-              this.pendingMediatedJobs.delete(job);
-            },
-          );
-          await job;
-          return;
-        }
-        await route.continue();
+        requireUpload(
+          !this.closingReads,
+          "catalog GET arrived during owned read teardown",
+        );
+        const capture = new MediatedRevisionRead(request);
+        mediatedRevisionReads.set(request, capture);
+        this.mediated.add(capture);
+        const job = this.mediateRevision(route, capture, original);
+        this.mediatedJobs.push(job);
+        this.pendingMediatedJobs.add(job);
+        void job.then(
+          () => {
+            this.pendingMediatedJobs.delete(job);
+          },
+          () => {
+            this.pendingMediatedJobs.delete(job);
+          },
+        );
+        await job;
         return;
       }
       const plan = this.plan;
@@ -842,7 +860,7 @@ class UploadWire {
   private async mediateRevision(
     route: Route,
     capture: MediatedRevisionRead,
-    original: Original,
+    original: Original | undefined,
   ): Promise<void> {
     let reply: APIResponse | undefined;
     try {
@@ -880,7 +898,7 @@ class UploadWire {
           "Native mapping upload browser fixture: mediated revision response is not JSON",
         );
       }
-      if (reply.status() === 200) {
+      if (original && reply.status() === 200) {
         this.verifyRevision(value, original);
         if (original.revision)
           requireUpload(
@@ -889,54 +907,56 @@ class UploadWire {
           );
       }
       capture.candidate(bytes, reply.status());
-      const receipt = original.receipt;
-      requireUpload(
-        receipt?.phase === "committed",
-        "mediated revision lost its learned receipt",
-      );
-      const upload = uploadPath(receipt.project),
-        revision = revisionPath(receipt.futureRevision);
-      await expect
-        .poll(
-          async () => {
-            capture.assertLive();
-            const path = new URL(this.page.url()).pathname;
-            if (path === upload)
-              return this.page
-                .locator(".native-upload")
-                .evaluateAll((roots) => {
-                  if (
-                    roots.length !== 1 ||
-                    roots[0].getAttribute("aria-busy") !== "true"
-                  )
-                    return false;
-                  return !Array.from(roots[0].querySelectorAll("a")).some(
-                    (link) => {
-                      if (link.textContent?.trim() !== "View revision")
-                        return false;
-                      const box = link.getBoundingClientRect(),
-                        style = getComputedStyle(link);
-                      return (
-                        box.width > 0 &&
-                        box.height > 0 &&
-                        style.visibility !== "hidden" &&
-                        style.display !== "none"
-                      );
-                    },
-                  );
-                });
-            return (
-              path === revision &&
-              (await this.page.locator(".native-upload").count()) === 0
-            );
-          },
-          {
-            message:
-              "Mediated revision did not reach its fresh cleared UI boundary",
-            timeout: Math.min(10000, capture.remaining()),
-          },
-        )
-        .toBe(true);
+      if (original) {
+        const receipt = original.receipt;
+        requireUpload(
+          receipt?.phase === "committed",
+          "mediated revision lost its learned receipt",
+        );
+        const upload = uploadPath(receipt.project),
+          revision = revisionPath(receipt.futureRevision);
+        await expect
+          .poll(
+            async () => {
+              capture.assertLive();
+              const path = new URL(this.page.url()).pathname;
+              if (path === upload)
+                return this.page
+                  .locator(".native-upload")
+                  .evaluateAll((roots) => {
+                    if (
+                      roots.length !== 1 ||
+                      roots[0].getAttribute("aria-busy") !== "true"
+                    )
+                      return false;
+                    return !Array.from(roots[0].querySelectorAll("a")).some(
+                      (link) => {
+                        if (link.textContent?.trim() !== "View revision")
+                          return false;
+                        const box = link.getBoundingClientRect(),
+                          style = getComputedStyle(link);
+                        return (
+                          box.width > 0 &&
+                          box.height > 0 &&
+                          style.visibility !== "hidden" &&
+                          style.display !== "none"
+                        );
+                      },
+                    );
+                  });
+              return (
+                path === revision &&
+                (await this.page.locator(".native-upload").count()) === 0
+              );
+            },
+            {
+              message:
+                "Mediated revision did not reach its fresh cleared UI boundary",
+              timeout: Math.min(10000, capture.remaining()),
+            },
+          )
+          .toBe(true);
+      }
       capture.assertLive();
       await route.fulfill({ response: reply, body: bytes });
       capture.delivered();
