@@ -4513,6 +4513,1072 @@
           }
         }
       }
+    },
+    "/api/auth/session": {
+      "get": {
+        "summary": "Explicit browser authentication protocol.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
+        "operationId": "ReadBrowserAuthentication",
+        "parameters": [
+          {
+            "name": "X-Weft-Session",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "enum": [
+                "1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completed only after the fixed protocol acknowledges success.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatusV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Explicit browser authentication protocol.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
+        "operationId": "BeginBrowserLogin",
+        "parameters": [
+          {
+            "name": "X-Weft-Login",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "enum": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Weft-Auth-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "schema": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completed only after the fixed protocol acknowledges success.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "Explicit browser authentication protocol.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
+        "operationId": "LogoutBrowserSession",
+        "parameters": [
+          {
+            "name": "X-Weft-Logout",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "enum": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Weft-Auth-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "schema": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Completed only after the fixed protocol acknowledges success.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/forget-local": {
+      "post": {
+        "summary": "Explicit browser authentication protocol.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
+        "operationId": "ForgetDeniedLocalSession",
+        "parameters": [
+          {
+            "name": "X-Weft-Forget-Local",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "enum": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Weft-Auth-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Completed only after the fixed protocol acknowledges success.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthForgetLocalV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/callback/entra": {
+      "get": {
+        "summary": "Complete the fixed Entra code flow.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. Success only303Location'/' after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.",
+        "operationId": "CompleteEntraLogin",
+        "responses": {
+          "303": {
+            "description": "Completed only after the fixed protocol acknowledges success.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Location": {
+                "schema": {
+                  "enum": [
+                    "/"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Fixed categorical readable HTML; no dynamic request/provider details.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/html": {
+                "schema": {
+                  "maxLength": 1024,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Closed categorical failure; no success or automatic retry.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Fixed categorical readable HTML; no dynamic request/provider details.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Referrer-Policy": {
+                "schema": {
+                  "enum": [
+                    "no-referrer"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/html": {
+                "schema": {
+                  "maxLength": 1024,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4531,6 +5597,250 @@
             "type": "string"
           }
         }
+      },
+      "AuthErrorV1": {
+        "required": [
+          "version",
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "enum": [
+              1
+            ],
+            "type": "integer"
+          },
+          "code": {
+            "enum": [
+              "invalidRequest",
+              "authenticationRequired",
+              "requestRejected",
+              "forgetNotAvailable",
+              "unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthForgetLocalV1": {
+        "required": [
+          "version",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "enum": [
+              1
+            ],
+            "type": "integer"
+          },
+          "outcome": {
+            "enum": [
+              "revocationUnconfirmed"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthLoginV1": {
+        "required": [
+          "version",
+          "authorizationUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "enum": [
+              1
+            ],
+            "type": "integer"
+          },
+          "authorizationUrl": {
+            "maxLength": 16384,
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthModeStatusV1": {
+        "required": [
+          "version",
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "enum": [
+              1
+            ],
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "development",
+              "disabled"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthSessionV1": {
+        "oneOf": [
+          {
+            "required": [
+              "version",
+              "mode",
+              "state",
+              "authActionRequestToken",
+              "requestToken",
+              "identityContext"
+            ],
+            "type": "object",
+            "properties": {
+              "version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              },
+              "mode": {
+                "enum": [
+                  "session"
+                ],
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "authenticated"
+                ],
+                "type": "string"
+              },
+              "authActionRequestToken": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "requestToken": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "identityContext": {
+                "maxLength": 46,
+                "minLength": 46,
+                "pattern": "^v1\\.[A-Za-z0-9_-]{43}$",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "required": [
+              "version",
+              "mode",
+              "state",
+              "authActionRequestToken",
+              "requestToken",
+              "identityContext"
+            ],
+            "type": "object",
+            "properties": {
+              "version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              },
+              "mode": {
+                "enum": [
+                  "session"
+                ],
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "anonymous"
+                ],
+                "type": "string"
+              },
+              "authActionRequestToken": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "requestToken": {
+                "type": "null"
+              },
+              "identityContext": {
+                "type": "null"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "required": [
+              "version",
+              "mode",
+              "state",
+              "authActionRequestToken",
+              "requestToken",
+              "identityContext"
+            ],
+            "type": "object",
+            "properties": {
+              "version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              },
+              "mode": {
+                "enum": [
+                  "session"
+                ],
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "authenticationRequired"
+                ],
+                "type": "string"
+              },
+              "authActionRequestToken": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "requestToken": {
+                "type": "null"
+              },
+              "identityContext": {
+                "type": "null"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "AuthStatusV1": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AuthSessionV1"
+          },
+          {
+            "$ref": "#/components/schemas/AuthModeStatusV1"
+          }
+        ]
       },
       "BackendIdentity": {
         "required": [
@@ -4670,39 +5980,93 @@
         ]
       },
       "CatalogContextV1": {
-        "required": [
-          "mode",
-          "actorPrincipalId",
-          "allowedOrganizationId",
-          "organizationName",
-          "features",
-          "organizationActions",
-          "requestToken"
-        ],
-        "type": "object",
-        "properties": {
-          "mode": {
-            "type": "string"
+        "oneOf": [
+          {
+            "required": [
+              "mode",
+              "actorPrincipalId",
+              "allowedOrganizationId",
+              "organizationName",
+              "features",
+              "organizationActions",
+              "requestToken"
+            ],
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "development"
+                ],
+                "type": "string"
+              },
+              "actorPrincipalId": {
+                "type": "string"
+              },
+              "allowedOrganizationId": {
+                "type": "string"
+              },
+              "organizationName": {
+                "type": "string"
+              },
+              "features": {
+                "$ref": "#/components/schemas/CatalogFeaturesV1"
+              },
+              "organizationActions": {
+                "$ref": "#/components/schemas/CatalogOrganizationActionsV1"
+              },
+              "requestToken": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
           },
-          "actorPrincipalId": {
-            "type": "string"
-          },
-          "allowedOrganizationId": {
-            "type": "string"
-          },
-          "organizationName": {
-            "type": "string"
-          },
-          "features": {
-            "$ref": "#/components/schemas/CatalogFeaturesV1"
-          },
-          "organizationActions": {
-            "$ref": "#/components/schemas/CatalogOrganizationActionsV1"
-          },
-          "requestToken": {
-            "type": "string"
+          {
+            "required": [
+              "mode",
+              "actorPrincipalId",
+              "allowedOrganizationId",
+              "organizationName",
+              "features",
+              "organizationActions",
+              "requestToken",
+              "identityContext"
+            ],
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "session"
+                ],
+                "type": "string"
+              },
+              "actorPrincipalId": {
+                "type": "string"
+              },
+              "allowedOrganizationId": {
+                "type": "string"
+              },
+              "organizationName": {
+                "type": "string"
+              },
+              "features": {
+                "$ref": "#/components/schemas/CatalogFeaturesV1"
+              },
+              "organizationActions": {
+                "$ref": "#/components/schemas/CatalogOrganizationActionsV1"
+              },
+              "requestToken": {
+                "type": "string"
+              },
+              "identityContext": {
+                "maxLength": 46,
+                "minLength": 46,
+                "pattern": "^v1\\.[A-Za-z0-9_-]{43}$",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
           }
-        }
+        ]
       },
       "CatalogErrorCodeV1": {
         "enum": [

@@ -1553,6 +1553,7 @@ test("controlled revision append: foreign actor, organization or mode latches pr
       fixture.context.allowedOrganizationId = otherOrganization;
     },
     (fixture) => {
+      // @ts-expect-error Deliberately send an unsupported wire mode to test invalidation.
       fixture.context.mode = "another-mode";
     },
   ];

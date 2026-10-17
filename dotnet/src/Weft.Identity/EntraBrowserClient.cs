@@ -24,6 +24,7 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
     internal const string CorrelationPrefix = "__Host-Weft.Entra.Correlation.";
     internal static readonly TimeSpan FlowLifetime = TimeSpan.FromMinutes(10);
     private readonly EntraClientOptions options;
+    private readonly DurableSessionKeyProfile borrowedProfile;
     private readonly Guid organization;
     private readonly X509Certificate2 certificate;
     private readonly EntraEndpointPolicy policy;
@@ -47,6 +48,7 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
         X509Certificate2 certificate, EntraHttpsFixtureTransport? fixture)
     {
         this.options = options;
+        borrowedProfile = profile;
         organization = profile.OrganizationId;
         this.certificate = certificate;
         RequireCertificate();

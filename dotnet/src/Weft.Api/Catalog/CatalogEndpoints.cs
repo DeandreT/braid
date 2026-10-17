@@ -74,7 +74,7 @@ public static partial class CatalogEndpoints
             var token = await boundary.IssueRequestTokenAsync(context, admission.Actor!, context.RequestAborted);
             return Results.Ok(CatalogPublicMapper.Context(organization, token, admission.ContextMode!, metadataEditOptions.Enabled,
                 ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
-                revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled));
+                revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, admission.IdentityContext));
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,

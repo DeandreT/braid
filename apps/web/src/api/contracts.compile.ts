@@ -707,3 +707,210 @@ export function catalogPendingReportResponse(
 export const linkedValidationQuery = {
   projectionDerivationId: "44444444-4444-4444-4444-444444444444",
 } satisfies NonNullable<CatalogValidationGet["parameters"]["query"]>;
+
+type AuthStatus = components["schemas"]["AuthStatusV1"];
+type AuthSession = components["schemas"]["AuthSessionV1"];
+type AuthModeStatus = components["schemas"]["AuthModeStatusV1"];
+type AuthenticatedSession = Extract<AuthSession, { state: "authenticated" }>;
+type AnonymousSession = Extract<AuthSession, { state: "anonymous" }>;
+type AuthenticationRequired = Extract<
+  AuthSession,
+  { state: "authenticationRequired" }
+>;
+type AuthError = components["schemas"]["AuthErrorV1"];
+type AuthForget = components["schemas"]["AuthForgetLocalV1"];
+type AuthRead = paths["/api/auth/session"]["get"];
+type AuthLogin = paths["/api/auth/login"]["post"];
+type AuthCallback = paths["/api/auth/callback/entra"]["get"];
+type AuthLogout = paths["/api/auth/logout"]["post"];
+type AuthForgetPost = paths["/api/auth/forget-local"]["post"];
+type DevelopmentCatalogContext = Extract<
+  CatalogContext,
+  { mode: "development" }
+>;
+type SessionCatalogContext = Extract<CatalogContext, { mode: "session" }>;
+
+// Generated supported-contract types do not imply runtime route activation.
+export const authenticatedStatus = {
+  version: 1,
+  mode: "session",
+  state: "authenticated",
+  authActionRequestToken: "action-token",
+  requestToken: "epoch-token",
+  identityContext: "v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+} satisfies AuthenticatedSession;
+
+export const anonymousStatus = {
+  ...authenticatedStatus,
+  state: "anonymous",
+  requestToken: null,
+  identityContext: null,
+} satisfies AnonymousSession;
+
+export const requiredStatus = {
+  ...anonymousStatus,
+  state: "authenticationRequired",
+} satisfies AuthenticationRequired;
+
+export const developmentStatus = {
+  version: 1,
+  mode: "development",
+} satisfies AuthModeStatus;
+
+export const disabledStatus = {
+  version: 1,
+  mode: "disabled",
+} satisfies AuthStatus;
+
+export function describeAuthentication(status: AuthStatus): string {
+  if (status.mode !== "session") return status.mode;
+  const actionToken: string = status.authActionRequestToken;
+  switch (status.state) {
+    case "authenticated": {
+      const token: string = status.requestToken;
+      const fingerprint: string = status.identityContext;
+      return actionToken + token + fingerprint;
+    }
+    case "anonymous":
+    case "authenticationRequired": {
+      const token: null = status.requestToken;
+      const fingerprint: null = status.identityContext;
+      return actionToken + String(token) + String(fingerprint);
+    }
+    default:
+      return assertNever(status);
+  }
+}
+
+export function catalogPresentationIdentity(
+  context: CatalogContext,
+): string | undefined {
+  switch (context.mode) {
+    case "session": {
+      const fingerprint: string = context.identityContext;
+      return fingerprint;
+    }
+    case "development":
+      return undefined;
+    default:
+      return assertNever(context);
+  }
+}
+
+export function developmentContextWithoutFingerprint(
+  context: SessionCatalogContext,
+): DevelopmentCatalogContext {
+  const { identityContext, ...common } = context;
+  void identityContext;
+  return { ...common, mode: "development" };
+}
+
+export function rejectOmittedSessionFingerprint(
+  context: SessionCatalogContext,
+): void {
+  const { identityContext, ...incomplete } = context;
+  void identityContext;
+  // @ts-expect-error A session catalog context must carry its presentation fingerprint.
+  const rejected: SessionCatalogContext = incomplete;
+  void rejected;
+}
+
+export const authReadHeaders = {
+  "X-Weft-Session": "1",
+} satisfies AuthRead["parameters"]["header"];
+export const authLoginHeaders = {
+  "X-Weft-Login": "1",
+  Origin: "https://weft.example",
+  "X-Weft-Auth-Token": "action-token",
+} satisfies AuthLogin["parameters"]["header"];
+export const authLogoutHeaders = {
+  "X-Weft-Logout": "1",
+  Origin: "https://weft.example",
+  "X-Weft-Auth-Token": "action-token",
+  "X-XSRF-TOKEN": "epoch-token",
+} satisfies AuthLogout["parameters"]["header"];
+export const authForgetHeaders = {
+  "X-Weft-Forget-Local": "1",
+  Origin: "https://weft.example",
+  "X-Weft-Auth-Token": "action-token",
+} satisfies AuthForgetPost["parameters"]["header"];
+export const authStatusResponse: AuthRead["responses"][200]["content"] = {
+  "application/json": authenticatedStatus,
+};
+export const authLoginResponse: AuthLogin["responses"][200]["content"] = {
+  "application/json": {
+    version: 1,
+    authorizationUrl: "https://login.example/authorize",
+  },
+};
+export const authForgetResponse: AuthForgetPost["responses"][200]["content"] = {
+  "application/json": { version: 1, outcome: "revocationUnconfirmed" },
+};
+export const callbackRefusal: AuthCallback["responses"][401]["content"] = {
+  "text/html": "<!doctype html><title>Weft sign-in</title>",
+};
+export const callbackUnavailable: AuthCallback["responses"][503]["content"] =
+  callbackRefusal;
+export const callbackMethodRefusal: AuthCallback["responses"][405]["content"] =
+  {
+    "application/json": { version: 1, code: "invalidRequest" },
+  };
+export const callbackReturn: AuthCallback["responses"][303]["headers"]["Location"] =
+  "/";
+
+// @ts-expect-error Auth wire versions remain the exact numeric literal 1.
+export const futureAuthVersion: AuthStatus["version"] = 2;
+// @ts-expect-error Supported auth modes are closed, not arbitrary provider labels.
+export const arbitraryAuthMode: AuthStatus["mode"] = "provider";
+// @ts-expect-error Session state is a closed union rather than a provider response.
+export const arbitraryAuthState: AuthSession["state"] = "pending";
+// @ts-expect-error Authenticated state requires a nonnull fingerprint.
+export const nullAuthenticatedFingerprint: AuthenticatedSession["identityContext"] =
+  null;
+// @ts-expect-error Authenticated state requires a present request token.
+export const missingAuthenticatedToken: AuthenticatedSession["requestToken"] =
+  undefined;
+// @ts-expect-error Anonymous request-token fields are present but exactly null.
+export const anonymousEpochToken: AnonymousSession["requestToken"] =
+  "epoch-token";
+// @ts-expect-error Required-authentication state carries no fingerprint authority.
+export const requiredFingerprint: AuthenticationRequired["identityContext"] =
+  "fingerprint";
+// @ts-expect-error Anonymous null fields must not become optional.
+export const omittedAnonymousFingerprint: AnonymousSession["identityContext"] =
+  undefined;
+// @ts-expect-error Non-session status has no session state.
+export const developmentSessionState: AuthModeStatus["state"] = "anonymous";
+// @ts-expect-error Non-session status has no action token.
+export const developmentActionToken: AuthModeStatus["authActionRequestToken"] =
+  "token";
+// @ts-expect-error Auth errors contain no provider diagnostic message.
+export const authProviderMessage: AuthError["message"] = "provider text";
+// @ts-expect-error Auth failures use closed categories.
+export const arbitraryAuthFailure: AuthError["code"] = "provider text";
+// @ts-expect-error Local forgetting does not claim server revocation acknowledgement.
+export const forgetRevoked: AuthForget["outcome"] = "revoked";
+// @ts-expect-error Development catalog context omits the fingerprint property entirely.
+export const developmentFingerprint: DevelopmentCatalogContext["identityContext"] =
+  null;
+// @ts-expect-error Session catalog context cannot omit its fingerprint value.
+export const omittedCatalogFingerprint: SessionCatalogContext["identityContext"] =
+  undefined;
+// @ts-expect-error Session catalog context cannot carry a null fingerprint.
+export const nullCatalogFingerprint: SessionCatalogContext["identityContext"] =
+  null;
+// @ts-expect-error Auth actions remain bodyless rather than accepting JSON envelopes.
+export const loginBody: AuthLogin["requestBody"] = {
+  content: { "application/json": {} },
+};
+// @ts-expect-error Logout 204 has no response representation.
+export const logoutBody: AuthLogout["responses"][204]["content"] = {
+  "application/json": {},
+};
+// @ts-expect-error Callback redirects have a fixed local return target.
+export const callbackExternalReturn: AuthCallback["responses"][303]["headers"]["Location"] =
+  "https://elsewhere.example";
+export const callbackJson: AuthCallback["responses"][401]["content"] = {
+  // @ts-expect-error Callback 401 failures contain readable HTML, not auth JSON.
+  "application/json": { version: 1, code: "authenticationRequired" },
+};

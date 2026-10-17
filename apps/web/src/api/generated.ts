@@ -3,6 +3,106 @@
  * Refresh with: npm run contracts:generate
  */
 export interface paths {
+  "/api/auth/callback/entra": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Complete the fixed Entra code flow.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. Success only303Location'/' after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
+     */
+    get: operations["CompleteEntraLogin"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/auth/forget-local": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Explicit browser authentication protocol.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     */
+    post: operations["ForgetDeniedLocalSession"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/auth/login": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Explicit browser authentication protocol.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     */
+    post: operations["BeginBrowserLogin"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/auth/logout": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Explicit browser authentication protocol.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     */
+    post: operations["LogoutBrowserSession"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/auth/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Explicit browser authentication protocol.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     */
+    get: operations["ReadBrowserAuthentication"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/catalog/context": {
     parameters: {
       query?: never;
@@ -390,6 +490,72 @@ export interface components {
       algorithm: string;
       value: string;
     };
+    AuthErrorV1: {
+      /** @enum {string} */
+      code:
+        | "invalidRequest"
+        | "authenticationRequired"
+        | "requestRejected"
+        | "forgetNotAvailable"
+        | "unavailable";
+      /** @enum {integer} */
+      version: 1;
+    };
+    AuthForgetLocalV1: {
+      /** @enum {string} */
+      outcome: "revocationUnconfirmed";
+      /** @enum {integer} */
+      version: 1;
+    };
+    AuthLoginV1: {
+      /** Format: uri */
+      authorizationUrl: string;
+      /** @enum {integer} */
+      version: 1;
+    };
+    AuthModeStatusV1: {
+      /** @enum {string} */
+      mode: "development" | "disabled";
+      /** @enum {integer} */
+      version: 1;
+    };
+    AuthSessionV1:
+      | {
+          authActionRequestToken: string;
+          identityContext: string;
+          /** @enum {string} */
+          mode: "session";
+          requestToken: string;
+          /** @enum {string} */
+          state: "authenticated";
+          /** @enum {integer} */
+          version: 1;
+        }
+      | {
+          authActionRequestToken: string;
+          identityContext: null;
+          /** @enum {string} */
+          mode: "session";
+          requestToken: null;
+          /** @enum {string} */
+          state: "anonymous";
+          /** @enum {integer} */
+          version: 1;
+        }
+      | {
+          authActionRequestToken: string;
+          identityContext: null;
+          /** @enum {string} */
+          mode: "session";
+          requestToken: null;
+          /** @enum {string} */
+          state: "authenticationRequired";
+          /** @enum {integer} */
+          version: 1;
+        };
+    AuthStatusV1:
+      | components["schemas"]["AuthSessionV1"]
+      | components["schemas"]["AuthModeStatusV1"];
     BackendIdentity: {
       buildId: string;
       id: string;
@@ -433,15 +599,28 @@ export interface components {
     };
     /** @enum {unknown} */
     CatalogAdmissionV1: "valid" | "decodedInvalid";
-    CatalogContextV1: {
-      actorPrincipalId: string;
-      allowedOrganizationId: string;
-      features: components["schemas"]["CatalogFeaturesV1"];
-      mode: string;
-      organizationActions: components["schemas"]["CatalogOrganizationActionsV1"];
-      organizationName: string;
-      requestToken: string;
-    };
+    CatalogContextV1:
+      | {
+          actorPrincipalId: string;
+          allowedOrganizationId: string;
+          features: components["schemas"]["CatalogFeaturesV1"];
+          /** @enum {string} */
+          mode: "development";
+          organizationActions: components["schemas"]["CatalogOrganizationActionsV1"];
+          organizationName: string;
+          requestToken: string;
+        }
+      | {
+          actorPrincipalId: string;
+          allowedOrganizationId: string;
+          features: components["schemas"]["CatalogFeaturesV1"];
+          identityContext: string;
+          /** @enum {string} */
+          mode: "session";
+          organizationActions: components["schemas"]["CatalogOrganizationActionsV1"];
+          organizationName: string;
+          requestToken: string;
+        };
     /** @enum {unknown} */
     CatalogErrorCodeV1:
       | "unavailable"
@@ -1293,6 +1472,426 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  CompleteEntraLogin: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Completed only after the fixed protocol acknowledges success. */
+      303: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          Location?: "/";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Fixed categorical readable HTML; no dynamic request/provider details. */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      405: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Fixed categorical readable HTML; no dynamic request/provider details. */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "text/html": string;
+        };
+      };
+    };
+  };
+  ForgetDeniedLocalSession: {
+    parameters: {
+      query?: never;
+      header: {
+        Origin: string;
+        "X-Weft-Auth-Token": string;
+        "X-Weft-Forget-Local": "1";
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Completed only after the fixed protocol acknowledges success. */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthForgetLocalV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      405: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+    };
+  };
+  BeginBrowserLogin: {
+    parameters: {
+      query?: never;
+      header: {
+        Origin: string;
+        "X-Weft-Auth-Token": string;
+        "X-Weft-Login": "1";
+        "X-XSRF-TOKEN"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Completed only after the fixed protocol acknowledges success. */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthLoginV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      405: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+    };
+  };
+  LogoutBrowserSession: {
+    parameters: {
+      query?: never;
+      header: {
+        Origin: string;
+        "X-Weft-Auth-Token": string;
+        "X-Weft-Logout": "1";
+        "X-XSRF-TOKEN"?: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Completed only after the fixed protocol acknowledges success. */
+      204: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      405: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+    };
+  };
+  ReadBrowserAuthentication: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Weft-Session": "1";
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Completed only after the fixed protocol acknowledges success. */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthStatusV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      405: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+      /** @description Closed categorical failure; no success or automatic retry. */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "Referrer-Policy"?: "no-referrer";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuthErrorV1"];
+        };
+      };
+    };
+  };
   GetCatalogContext: {
     parameters: {
       query?: never;

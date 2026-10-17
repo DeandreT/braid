@@ -22,6 +22,9 @@ internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAs
     private readonly ConcurrentDictionary<string, EntraProtocolCode> codes = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<EntraProtocolIssuerSend> sends = new();
     private readonly ConcurrentDictionary<int, TaskCompletionSource> work = new();
+    private readonly ConcurrentDictionary<int, Task> originalOperations = new();
+    internal TaskCompletionSource<Task>? NextTokenOperation;
+    internal IReadOnlyList<Task> SnapshotOperations() => originalOperations.OrderBy(pair => pair.Key).Select(pair => pair.Value).ToArray();
     private WebApplication? app;
     private Task? disposal, applicationStopOperation, applicationDisposeOperation;
     private int sequence, codeCount;
@@ -29,6 +32,7 @@ internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAs
     internal string Callback { get; set; } = "";
     internal EntraProtocolMetadataCase Metadata;
     internal EntraProtocolTokenCase TokenCase;
+    internal int TokenLifetimeSeconds = 300;
     internal EntraProtocolKeyCase KeyCase;
     internal bool PublishSecond, SignSecond, BreakPkce, CommonKeys, OnlySecond, MalformedTokenResponse;
     internal TaskCompletionSource? NextKeysResponse, NextMetadataResponse;
@@ -70,7 +74,10 @@ internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAs
                     string path = context.Request.Path.Value ?? ""; sends.Enqueue(new(context.Request.Method, path, context.Connection.Id));
                     EntraProtocolFixturePolicy.Check(context.Request.IsHttps && context.Request.Host.Host == "login.microsoftonline.com",
                         "An owned issuer request lost its logical HTTPS name.");
-                    await ProcessAsync(context, path);
+                    Task original = ProcessAsync(context, path);
+                    originalOperations.TryAdd(id, original);
+                    if (path == EntraProtocolFixturePolicy.Token) NextTokenOperation?.TrySetResult(original);
+                    await original;
                 }
                 catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { }
                 catch (Exception error)
@@ -204,7 +211,7 @@ internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAs
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync("{\"error_description\":\"" + EntraProtocolFixturePolicy.PrivateMarker + "\"", context.RequestAborted); return;
         }
-        string token = crypto.IdToken(record, TokenCase, SignSecond, out var expiry); lastToken = token; LastExpiry = expiry;
+        string token = crypto.IdToken(record, TokenCase, SignSecond, out var expiry, TokenLifetimeSeconds); lastToken = token; LastExpiry = expiry;
         if (TokenCase == EntraProtocolTokenCase.UnapprovedRsaAlgorithm) await crypto.AssertValidUnsupportedRsaVectorAsync(token, SignSecond);
         Interlocked.Increment(ref TokenResponses);
         await WriteJsonAsync(context, new

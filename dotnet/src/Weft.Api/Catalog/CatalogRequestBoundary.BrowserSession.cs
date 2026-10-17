@@ -66,7 +66,7 @@ public sealed partial class CatalogRequestBoundary
                 if (!ExpectedSessionIdentity(observed))
                     return SessionClosed(CatalogErrorCodeV1.Unavailable, StatusCodes.Status503ServiceUnavailable);
                 return CatalogRequestAdmission.AcceptedSession(new ActorContext(new PrincipalId(observed.Identity!.PrincipalId.Value)),
-                    _browserOptions!.OrganizationId);
+                    _browserOptions!.OrganizationId, observed.Identity);
             }
             return observed.Kind switch
             {

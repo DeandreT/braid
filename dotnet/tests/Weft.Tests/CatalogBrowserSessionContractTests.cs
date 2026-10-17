@@ -29,12 +29,13 @@ public sealed class CatalogBrowserSessionContractTests
     [Theory]
     [InlineData("development")]
     [InlineData("session")]
-    public void ExactIdentityModesRoundtripTheSameBoundedPublicShape(string mode)
+    public void ExactIdentityModesRoundtripTheirBoundedPublicShapes(string mode)
     {
         var value = Context(mode);
         var encoded = JsonSerializer.Serialize(value, Json);
         using var document = JsonDocument.Parse(encoded);
         string[] expected = ["actorPrincipalId", "allowedOrganizationId", "features", "mode", "organizationActions", "organizationName", "requestToken"];
+        if (mode == "session") expected = expected.Append("identityContext").Order(StringComparer.Ordinal).ToArray();
         Assert.True(document.RootElement.EnumerateObject().Select(item => item.Name).Order(StringComparer.Ordinal).SequenceEqual(expected),
             "Catalog context shape changed.");
         var roundtrip = JsonSerializer.Deserialize<CatalogContextV1>(encoded, Json);
@@ -245,7 +246,8 @@ public sealed class CatalogBrowserSessionContractTests
     }
 
     private static CatalogContextV1 Context(string mode, string token = Token) =>
-        new(mode, Principal.ToString("D"), Organization.ToString("D"), "Owned organization", CatalogFeaturesV1.ReadOnly, token);
+        new(mode, Principal.ToString("D"), Organization.ToString("D"), "Owned organization", CatalogFeaturesV1.ReadOnly,
+            CatalogOrganizationActionsV1.None, token, mode == "session" ? "v1." + new string('A', 43) : null);
 
     private static Exception? Capture(Action action)
     {

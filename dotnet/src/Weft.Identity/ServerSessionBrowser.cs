@@ -14,6 +14,7 @@ namespace Weft.Identity;
 public sealed partial class ServerSessionBrowser : IDisposable
 {
     private readonly ServerSessionBrowserOptions options;
+    private readonly DurableSessionKeyProfile borrowedProfile;
     private readonly Guid organization;
     private readonly IServerSessionReader reader;
     private readonly ServerSessionTicketCodec codec;
@@ -29,6 +30,7 @@ public sealed partial class ServerSessionBrowser : IDisposable
         if (options is null || profile is null || reader is null || writer is null || schedulingClock is null)
             throw Failure(ServerSessionIdentityFailureKind.ConfigurationFailure);
         this.options = options;
+        borrowedProfile = profile;
         organization = profile.OrganizationId;
         this.reader = reader;
         this.schedulingClock = schedulingClock;

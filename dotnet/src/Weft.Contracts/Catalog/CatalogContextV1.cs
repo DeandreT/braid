@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Weft.Contracts.Auth;
 
 namespace Weft.Contracts.Catalog;
 
@@ -144,10 +145,18 @@ public sealed record CatalogContextV1
     {
     }
 
-    [JsonConstructor]
     public CatalogContextV1(string mode, string actorPrincipalId, string allowedOrganizationId,
         string organizationName, CatalogFeaturesV1 features, CatalogOrganizationActionsV1 organizationActions,
         string requestToken)
+        : this(mode, actorPrincipalId, allowedOrganizationId, organizationName, features, organizationActions,
+            requestToken, null)
+    {
+    }
+
+    [JsonConstructor]
+    public CatalogContextV1(string mode, string actorPrincipalId, string allowedOrganizationId,
+        string organizationName, CatalogFeaturesV1 features, CatalogOrganizationActionsV1 organizationActions,
+        string requestToken, string? identityContext = null)
     {
         if (mode is not ("development" or "session"))
             throw new ArgumentException("The catalog identity mode is unsupported.", nameof(mode));
@@ -162,6 +171,9 @@ public sealed record CatalogContextV1
         Features = features;
         OrganizationActions = organizationActions;
         RequestToken = CatalogValueV1.RequireText(requestToken, 4096, nameof(requestToken));
+        if (mode == "session" ? !AuthValueV1.IsIdentityContext(identityContext) : identityContext is not null)
+            throw new ArgumentException("The catalog identity context is invalid.", nameof(identityContext));
+        IdentityContext = identityContext;
     }
 
     public string Mode { get; }
@@ -171,6 +183,8 @@ public sealed record CatalogContextV1
     public CatalogFeaturesV1 Features { get; }
     public CatalogOrganizationActionsV1 OrganizationActions { get; }
     public string RequestToken { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? IdentityContext { get; }
 
     public override string ToString() => $"CatalogContextV1 {{ Mode = {Mode}, ActorPrincipalId = {ActorPrincipalId}, AllowedOrganizationId = {AllowedOrganizationId} }}";
 }

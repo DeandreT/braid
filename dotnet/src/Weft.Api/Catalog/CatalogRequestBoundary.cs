@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Weft.Application;
 using Weft.Contracts.Catalog;
 using Weft.Domain;
+using Weft.Identity;
 
 namespace Weft.Api.Catalog;
 
@@ -12,13 +13,14 @@ namespace Weft.Api.Catalog;
 public sealed record CatalogRequestAdmission
 {
     private CatalogRequestAdmission(ActorContext? actor, Guid? organizationId,
-        CatalogErrorCodeV1? error, int statusCode, string? contextMode = null)
+        CatalogErrorCodeV1? error, int statusCode, string? contextMode = null, string? identityContext = null)
     {
         Actor = actor;
         AllowedOrganizationId = organizationId;
         Error = error;
         StatusCode = statusCode;
         ContextMode = contextMode;
+        IdentityContext = identityContext;
     }
 
     public bool IsAdmitted => Actor is not null;
@@ -27,10 +29,12 @@ public sealed record CatalogRequestAdmission
     public CatalogErrorCodeV1? Error { get; }
     public int StatusCode { get; }
     internal string? ContextMode { get; }
+    internal string? IdentityContext { get; }
     internal static CatalogRequestAdmission Accepted(ActorContext actor, Guid organizationId) =>
         new(actor, organizationId, null, StatusCodes.Status200OK, "development");
-    internal static CatalogRequestAdmission AcceptedSession(ActorContext actor, Guid organizationId) =>
-        new(actor, organizationId, null, StatusCodes.Status200OK, "session");
+    internal static CatalogRequestAdmission AcceptedSession(ActorContext actor, Guid organizationId,
+        ServerSessionRequestIdentity identity) =>
+        new(actor, organizationId, null, StatusCodes.Status200OK, "session", ServerSessionIdentityContext.Derive(identity));
     internal static CatalogRequestAdmission Closed(CatalogErrorCodeV1 error, int statusCode) =>
         new(null, null, error, statusCode);
 }

@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
+using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Contracts.Projections;
 
@@ -44,6 +45,7 @@ public static class ApiConfiguration
             }
             CatalogEndpoints.TransformRevisionIngestionSchemas(document);
             CatalogEndpoints.TransformRevisionReportSchemas(document);
+            AuthenticationOpenApi.Transform(document);
             return Task.CompletedTask;
         }));
         return services;

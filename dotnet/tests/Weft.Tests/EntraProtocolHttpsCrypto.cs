@@ -103,8 +103,10 @@ internal sealed class EntraProtocolCrypto : IDisposable
         return result;
     }
 
-    internal string IdToken(EntraProtocolCode code, EntraProtocolTokenCase variant, bool useSecond, out DateTimeOffset expiry)
+    internal string IdToken(EntraProtocolCode code, EntraProtocolTokenCase variant, bool useSecond,
+        out DateTimeOffset expiry, int lifetimeSeconds = 300)
     {
+        EntraProtocolFixturePolicy.Check(lifetimeSeconds is > 0 and <= 3600, "The owned token lifetime exceeded its fixture bound.");
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var claims = new Dictionary<string, object?>
         {
@@ -114,7 +116,7 @@ internal sealed class EntraProtocolCrypto : IDisposable
             ["sub"] = EntraProtocolFixturePolicy.Subject,
             ["iat"] = now - 1,
             ["nbf"] = now - 1,
-            ["exp"] = now + 300,
+            ["exp"] = now + lifetimeSeconds,
             ["nonce"] = code.Nonce,
             ["name"] = EntraProtocolFixturePolicy.PrivateMarker,
             ["email"] = EntraProtocolFixturePolicy.PrivateMarker + "@invalid.example",
