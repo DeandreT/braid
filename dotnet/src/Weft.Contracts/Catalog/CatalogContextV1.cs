@@ -149,7 +149,7 @@ public sealed record CatalogContextV1
         string organizationName, CatalogFeaturesV1 features, CatalogOrganizationActionsV1 organizationActions,
         string requestToken)
     {
-        if (mode != "development")
+        if (mode is not ("development" or "session"))
             throw new ArgumentException("The catalog identity mode is unsupported.", nameof(mode));
         ArgumentNullException.ThrowIfNull(features);
         ArgumentNullException.ThrowIfNull(organizationActions);

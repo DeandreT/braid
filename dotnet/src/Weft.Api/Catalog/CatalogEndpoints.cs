@@ -15,7 +15,7 @@ public static partial class CatalogEndpoints
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         Describe<CatalogContextV1>(endpoints.MapGet("/api/v1/catalog/context", GetContext),
-            "GetCatalogContext", "Read the explicitly configured development catalog context and request token.");
+            "GetCatalogContext", "Read the explicitly configured catalog identity context and request token.");
         const string organization = "/api/v1/organizations/{organizationId}";
         const string project = organization + "/projects/{projectId}";
         const string mapping = project + "/mappings/{mappingId}";
@@ -46,9 +46,11 @@ public static partial class CatalogEndpoints
         route.WithName(name).WithTags("Catalog").WithSummary(summary)
             .Produces<T>(StatusCodes.Status200OK)
             .Produces<CatalogErrorV1>(StatusCodes.Status400BadRequest)
+            .Produces<CatalogErrorV1>(StatusCodes.Status401Unauthorized)
             .Produces<CatalogErrorV1>(StatusCodes.Status403Forbidden)
             .Produces<CatalogErrorV1>(StatusCodes.Status404NotFound)
-            .Produces<CatalogErrorV1>(StatusCodes.Status500InternalServerError);
+            .Produces<CatalogErrorV1>(StatusCodes.Status500InternalServerError)
+            .Produces<CatalogErrorV1>(StatusCodes.Status503ServiceUnavailable);
 
     private static Task<IResult> GetContext(HttpContext context, CatalogRequestBoundary boundary,
         CatalogMetadataEditOptions metadataEditOptions, CatalogRevisionIngestionOptions ingestionOptions,
@@ -69,8 +71,8 @@ public static partial class CatalogEndpoints
                     return NotFound();
                 canCreateProjects = creation.CanCreateProjects;
             }
-            var token = boundary.IssueRequestToken(context, admission.Actor!);
-            return Results.Ok(CatalogPublicMapper.Context(organization, token, metadataEditOptions.Enabled,
+            var token = await boundary.IssueRequestTokenAsync(context, admission.Actor!, context.RequestAborted);
+            return Results.Ok(CatalogPublicMapper.Context(organization, token, admission.ContextMode!, metadataEditOptions.Enabled,
                 ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
                 revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled));
         });
@@ -215,13 +217,28 @@ public static partial class CatalogEndpoints
     private static async Task<IResult> WithAdmission(HttpContext context, CatalogRequestBoundary boundary,
         Func<CatalogRequestAdmission, Task<IResult>> action, bool unsafeRequest = false)
     {
+        context.Response.OnStarting(static state =>
+        {
+            var response = (HttpResponse)state;
+            if (response.StatusCode >= StatusCodes.Status400BadRequest)
+                response.Headers.Remove("ETag");
+            return Task.CompletedTask;
+        }, context.Response);
         context.Response.Headers.CacheControl = "no-store";
         try
         {
             var admission = await boundary.AuthenticateAsync(context, unsafeRequest, context.RequestAborted);
             if (!admission.IsAdmitted)
+            {
+                context.Response.Headers.Remove("ETag");
                 return Error(admission.Error!.Value, admission.StatusCode);
+            }
             return await action(admission);
+        }
+        catch (CatalogSessionBoundaryUnavailableException)
+        {
+            context.Response.Headers.Remove("ETag");
+            return Error(CatalogErrorCodeV1.Unavailable, StatusCodes.Status503ServiceUnavailable);
         }
         catch (CatalogRevisionPersistenceException)
         {

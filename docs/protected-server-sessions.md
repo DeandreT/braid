@@ -14,7 +14,9 @@ The preceding PostgreSQL foundation is qualified and merged in
 [session contracts](server-sessions.md) and the separate
 [PostgreSQL store](postgres-server-sessions.md). It references Application/Domain
 and the ASP.NET shared framework, with no PostgreSQL or mapping-engine dependency.
-The Server/API does not reference or register it. The separate
+The API library references it for the dormant
+[catalog session boundary](catalog-session-boundary.md); shipped Server startup
+does not register browser sessions. The separate
 [browser-session components](browser-server-sessions.md) implement cookie handlers
 and epoch-bound CSRF but remain unregistered. No public login/logout/status route,
 Entra callback, browser authentication or Angular sign-in is activated.

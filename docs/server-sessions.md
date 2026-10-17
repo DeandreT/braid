@@ -177,3 +177,8 @@ qualification evidence are tracked separately in
 [#107](https://github.com/DeandreT/weft/issues/107). Cookie-handler/CSRF work follows
 in [#112](https://github.com/DeandreT/weft/issues/112), before P4c4's dormant catalog
 identity seam and P4d/P4e sign-in activation.
+
+The dormant [catalog session boundary](catalog-session-boundary.md),
+[#114](https://github.com/DeandreT/weft/issues/114), follows qualified merged #112.
+It preserves fresh catalog authority and Development compatibility while keeping
+Server/Angular and public provider/sign-in activation separate.

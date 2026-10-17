@@ -10,7 +10,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Read the explicitly configured development catalog context and request token. */
+    /** Read the explicitly configured catalog identity context and request token. */
     get: operations["GetCatalogContext"];
     put?: never;
     post?: never;
@@ -1320,6 +1320,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -1340,6 +1349,15 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -1486,6 +1504,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -1506,6 +1533,15 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -1567,6 +1603,17 @@ export interface operations {
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
@@ -1685,6 +1732,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -1705,6 +1761,15 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -1747,6 +1812,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -1767,6 +1841,15 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -1841,6 +1924,17 @@ export interface operations {
           "application/json":
             | components["schemas"]["CatalogRevisionIngestionResultV1"]
             | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
       /** @description Forbidden */
@@ -1970,6 +2064,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -1990,6 +2093,15 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -2050,6 +2162,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -2079,6 +2200,15 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -2123,6 +2253,15 @@ export interface operations {
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
         headers: {
           [name: string]: unknown;
         };
@@ -2204,6 +2343,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
     };
   };
   GetCatalogRevisions: {
@@ -2240,6 +2388,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -2260,6 +2417,15 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -2333,6 +2499,17 @@ export interface operations {
           "application/json":
             | components["schemas"]["CatalogRevisionIngestionResultV1"]
             | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
       /** @description Forbidden */
@@ -2463,6 +2640,15 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -2483,6 +2669,15 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -2522,6 +2717,17 @@ export interface operations {
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
@@ -2630,6 +2836,17 @@ export interface operations {
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
@@ -2768,6 +2985,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -2889,6 +3117,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -2991,6 +3230,17 @@ export interface operations {
       };
       /** @description Bad Request */
       400: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
@@ -3129,6 +3379,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -3243,6 +3504,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Forbidden */
       403: {
         headers: {
@@ -3267,6 +3539,17 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
@@ -3326,6 +3609,17 @@ export interface operations {
           "application/json":
             | components["schemas"]["CatalogRevisionIngestionResultV1"]
             | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
       /** @description Forbidden */

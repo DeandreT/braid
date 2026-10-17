@@ -94,6 +94,7 @@ public static partial class CatalogEndpoints
         ArgumentNullException.ThrowIfNull(creationOptions);
         ArgumentNullException.ThrowIfNull(revisionReportOptions);
         options.Validate(environment);
+        RequireUnregisteredCatalog(services);
         if (metadataEditOptions.Enabled && !options.Enabled)
             throw new InvalidOperationException("Metadata edits require an enabled catalog.");
         if (ingestionOptions.Enabled && !options.Enabled)
@@ -103,12 +104,7 @@ public static partial class CatalogEndpoints
         if (revisionReportOptions.Enabled && !options.Enabled)
             throw new InvalidOperationException("Revision reports require an enabled catalog.");
         services.AddSingleton(options);
-        services.AddSingleton(metadataEditOptions);
-        services.AddSingleton(ingestionOptions);
-        services.AddSingleton(creationOptions);
-        services.AddSingleton(revisionReportOptions);
-        services.AddSingleton<CatalogRevisionIngestionGate>();
-        services.AddSingleton<CatalogProjectCreationGate>();
+        RegisterCatalogFeatures(services, metadataEditOptions, ingestionOptions, creationOptions, revisionReportOptions);
         services.AddAntiforgery(antiforgery =>
         {
             antiforgery.HeaderName = CatalogRequestBoundary.RequestTokenHeader;

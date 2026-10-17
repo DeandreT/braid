@@ -125,7 +125,7 @@
         "tags": [
           "Catalog"
         ],
-        "summary": "Read the explicitly configured development catalog context and request token.",
+        "summary": "Read the explicitly configured catalog identity context and request token.",
         "operationId": "GetCatalogContext",
         "responses": {
           "200": {
@@ -140,6 +140,16 @@
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -170,6 +180,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -233,6 +253,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -255,6 +285,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -378,6 +418,27 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -422,6 +483,27 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "headers": {
               "Cache-Control": {
                 "description": "Always no-store.",
@@ -530,27 +612,6 @@
                 }
               }
             }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogErrorV1"
-                }
-              }
-            }
           }
         }
       }
@@ -601,6 +662,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -623,6 +694,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -694,6 +775,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -716,6 +807,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -864,6 +965,27 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -930,6 +1052,34 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
                 }
               }
             }
@@ -1051,34 +1201,6 @@
                 }
               }
             }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store; receipts and operation results are not cacheable.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
-                    },
-                    {
-                      "$ref": "#/components/schemas/CatalogErrorV1"
-                    }
-                  ]
-                }
-              }
-            }
           }
         }
       }
@@ -1137,6 +1259,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1159,6 +1291,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -1254,6 +1396,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1276,6 +1428,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -1400,6 +1562,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1422,6 +1594,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -1559,6 +1741,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -1581,6 +1773,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -1732,6 +1934,27 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -1798,6 +2021,34 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
                 }
               }
             }
@@ -1919,34 +2170,6 @@
                 }
               }
             }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store; receipts and operation results are not cacheable.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
-                    },
-                    {
-                      "$ref": "#/components/schemas/CatalogErrorV1"
-                    }
-                  ]
-                }
-              }
-            }
           }
         }
       }
@@ -2013,6 +2236,16 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "content": {
@@ -2035,6 +2268,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -2141,6 +2384,28 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -2207,6 +2472,28 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "415": {
             "description": "Unsupported Media Type",
             "headers": {
@@ -2231,28 +2518,6 @@
           },
           "429": {
             "description": "Too Many Requests",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string",
-                  "readOnly": true
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogErrorV1"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
             "headers": {
               "Cache-Control": {
                 "description": "Always no-store.",
@@ -2380,6 +2645,28 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -2446,6 +2733,28 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "415": {
             "description": "Unsupported Media Type",
             "headers": {
@@ -2470,28 +2779,6 @@
           },
           "429": {
             "description": "Too Many Requests",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string",
-                  "readOnly": true
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogErrorV1"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
             "headers": {
               "Cache-Control": {
                 "description": "Always no-store.",
@@ -2618,6 +2905,28 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -2684,6 +2993,28 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "415": {
             "description": "Unsupported Media Type",
             "headers": {
@@ -2708,28 +3039,6 @@
           },
           "429": {
             "description": "Too Many Requests",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string",
-                  "readOnly": true
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogErrorV1"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
             "headers": {
               "Cache-Control": {
                 "description": "Always no-store.",
@@ -2865,6 +3174,28 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -2931,6 +3262,28 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "415": {
             "description": "Unsupported Media Type",
             "headers": {
@@ -2955,28 +3308,6 @@
           },
           "429": {
             "description": "Too Many Requests",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string",
-                  "readOnly": true
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogErrorV1"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
             "headers": {
               "Cache-Control": {
                 "description": "Always no-store.",
@@ -3123,6 +3454,28 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -3189,6 +3542,28 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "415": {
             "description": "Unsupported Media Type",
             "headers": {
@@ -3213,28 +3588,6 @@
           },
           "429": {
             "description": "Too Many Requests",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string",
-                  "readOnly": true
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogErrorV1"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
             "headers": {
               "Cache-Control": {
                 "description": "Always no-store.",
@@ -3438,6 +3791,28 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -3504,6 +3879,28 @@
               }
             }
           },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string",
+                  "readOnly": true
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "415": {
             "description": "Unsupported Media Type",
             "headers": {
@@ -3528,28 +3925,6 @@
           },
           "429": {
             "description": "Too Many Requests",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string",
-                  "readOnly": true
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogErrorV1"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
             "headers": {
               "Cache-Control": {
                 "description": "Always no-store.",
@@ -3707,6 +4082,27 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -3751,6 +4147,27 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "headers": {
               "Cache-Control": {
                 "description": "Always no-store; receipts and operation results are not cacheable.",
@@ -3857,6 +4274,27 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Forbidden",
             "headers": {
@@ -3923,6 +4361,34 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "description": "Always no-store; receipts and operation results are not cacheable.",
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    }
+                  ]
                 }
               }
             }
@@ -4041,34 +4507,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatalogErrorV1"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "headers": {
-              "Cache-Control": {
-                "description": "Always no-store; receipts and operation results are not cacheable.",
-                "schema": {
-                  "enum": [
-                    "no-store"
-                  ],
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
-                    },
-                    {
-                      "$ref": "#/components/schemas/CatalogErrorV1"
-                    }
-                  ]
                 }
               }
             }

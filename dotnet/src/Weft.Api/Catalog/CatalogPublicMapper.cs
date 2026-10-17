@@ -15,7 +15,13 @@ public static class CatalogPublicMapper
         bool metadataEditsEnabled = false, bool revisionIngestionEnabled = false,
         bool projectCreationEnabled = false, bool canCreateProjects = false,
         bool readReportsEnabled = false, bool deriveReportsEnabled = false) =>
-        new("development", Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name,
+        Context(admission, requestToken, "development", metadataEditsEnabled, revisionIngestionEnabled,
+            projectCreationEnabled, canCreateProjects, readReportsEnabled, deriveReportsEnabled);
+
+    internal static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string requestToken,
+        string mode, bool metadataEditsEnabled, bool revisionIngestionEnabled, bool projectCreationEnabled,
+        bool canCreateProjects, bool readReportsEnabled, bool deriveReportsEnabled) =>
+        new(mode, Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name,
             metadataEditsEnabled || revisionIngestionEnabled || projectCreationEnabled || readReportsEnabled || deriveReportsEnabled
                 ? new(true, projectCreationEnabled, revisionIngestionEnabled, metadataEditsEnabled, revisionIngestionEnabled,
                     readReportsEnabled, false, false, false, deriveReportsEnabled)

@@ -5,6 +5,7 @@
     <ProjectReference Include="../Weft.Contracts/Weft.Contracts.csproj" />
     <ProjectReference Include="../Weft.Application/Weft.Application.csproj" />
     <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
+    <ProjectReference Include="../Weft.Identity/Weft.Identity.csproj" />
     <ProjectReference Include="../Weft.MappingBackends/Weft.MappingBackends.csproj" />
   </ItemGroup>
   <ItemGroup>

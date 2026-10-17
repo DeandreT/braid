@@ -140,6 +140,7 @@
           "Weft.Application": "[1.0.0, )",
           "Weft.Contracts": "[1.0.0, )",
           "Weft.Domain": "[1.0.0, )",
+          "Weft.Identity": "[1.0.0, )",
           "Weft.MappingBackends": "[1.0.0, )"
         }
       },
