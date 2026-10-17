@@ -60,8 +60,12 @@ profile and the session-store adapter. Implementation review and qualification
 evidence are tracked separately in
 [#107](https://github.com/DeandreT/weft/issues/107).
 [Protected server sessions](docs/protected-server-sessions.md) describes the
-contract; cookie handling, hosted sign-in and Angular activation remain separate
-work.
+underlying contract. Cookie handlers and epoch-bound CSRF components are
+implemented but remain unregistered by the Server/API; qualification is tracked in
+[#112](https://github.com/DeandreT/weft/issues/112). See
+[Browser sessions](docs/browser-server-sessions.md) for their behavior and limits.
+The dormant catalog identity seam, hosted sign-in and Angular activation remain
+separate work.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from

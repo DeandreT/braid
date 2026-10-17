@@ -14,8 +14,10 @@ The preceding PostgreSQL foundation is qualified and merged in
 [session contracts](server-sessions.md) and the separate
 [PostgreSQL store](postgres-server-sessions.md). It references Application/Domain
 and the ASP.NET shared framework, with no PostgreSQL or mapping-engine dependency.
-The Server/API does not reference or register it. No cookie, login/logout/status
-route, Entra callback, CSRF handler or Angular sign-in is activated.
+The Server/API does not reference or register it. The separate
+[browser-session components](browser-server-sessions.md) implement cookie handlers
+and epoch-bound CSRF but remain unregistered. No public login/logout/status route,
+Entra callback, browser authentication or Angular sign-in is activated.
 
 A trusted server caller configures one organization, exact application name and
 existing private key directory. `DurableSessionKeyProfile.Open` admits an
@@ -111,9 +113,11 @@ ordinary output is copied to the test closure; it is not registered as a service
 Their presence is not a qualification claim; the source/run evidence belongs to
 the linked #107 implementation review.
 
-[#112](https://github.com/DeandreT/weft/issues/112) retains actual cookie-handler
-properties/carrier behavior, HTTPS delivery, old-cookie rotation, request renewal
-policy, pooled-host behavior and epoch-bound CSRF. P4c4 then owns the dormant
+[Browser-session components](browser-server-sessions.md) are implemented but
+unregistered. Their separate [#112](https://github.com/DeandreT/weft/issues/112)
+qualification covers cookie-handler/carrier behavior, HTTPS delivery, old-cookie
+rotation, request renewal policy, pooled-host behavior and epoch-bound CSRF;
+source presence does not report a passing result. P4c4 then owns the dormant
 catalog identity seam. Entra/provider ingress and hosted activation follow in
 P4d; Angular sign-in follows in P4e. Session metadata grants no organization
 admission, project role or

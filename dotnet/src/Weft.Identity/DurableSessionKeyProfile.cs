@@ -11,7 +11,7 @@ namespace Weft.Identity;
 /// An admitted, certificate-backed existing key ring. The caller owns the certificates and
 /// this profile's lifetime; ticket stores borrow it and must finish before it is disposed.
 /// </summary>
-public sealed class DurableSessionKeyProfile : IDisposable
+public sealed partial class DurableSessionKeyProfile : IDisposable
 {
     private readonly ServiceProvider services;
     private readonly SessionKeyDirectory directory;
@@ -133,7 +133,7 @@ public sealed class DurableSessionKeyProfile : IDisposable
 
     public override string ToString() => nameof(DurableSessionKeyProfile);
 
-    private byte[] Transform(byte[] input, bool unprotect)
+    private byte[] Transform(byte[] input, bool unprotect, IDataProtector? selectedProtector = null)
     {
         byte[]? output = null;
         try
@@ -141,7 +141,8 @@ public sealed class DurableSessionKeyProfile : IDisposable
             if (Volatile.Read(ref disposed) != 0)
                 throw ServerSessionIdentityErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
             directory.Revalidate();
-            output = unprotect ? protector.Unprotect(input) : protector.Protect(input);
+            var selected = selectedProtector ?? protector;
+            output = unprotect ? selected.Unprotect(input) : selected.Protect(input);
             directory.Revalidate();
             var result = output;
             output = null;

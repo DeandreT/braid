@@ -256,10 +256,14 @@ durable certificate-backed key admission, minimal tickets and a test-only proces
 probe. The module remains dormant and unregistered by the Server/API.
 Implementation review and qualification evidence are tracked separately in
 [#107](https://github.com/DeandreT/weft/issues/107).
-Cookie-handler/HTTPS/epoch-bound CSRF work follows in
-[#112](https://github.com/DeandreT/weft/issues/112), before the P4c4 dormant catalog
-identity seam and later P4d Entra/hosted activation and P4e Angular sign-in.
-See [Protected server sessions](docs/protected-server-sessions.md).
+Cookie handlers and epoch-bound CSRF components are implemented but remain
+unregistered by the Server/API. Their qualification is tracked in
+[#112](https://github.com/DeandreT/weft/issues/112); no runtime result is claimed
+by their source presence. The P4c4 dormant catalog identity seam in
+[#114](https://github.com/DeandreT/weft/issues/114), P4d Entra/hosted activation and
+P4e Angular sign-in remain separate increments. See
+[Protected server sessions](docs/protected-server-sessions.md) and
+[Browser sessions](docs/browser-server-sessions.md).
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
