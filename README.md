@@ -67,6 +67,12 @@ implemented but remain unregistered by the Server/API; qualification is tracked 
 The dormant catalog identity seam, hosted sign-in and Angular activation remain
 separate work.
 
+The dormant Entra protocol adapter and independent HTTPS test source are prepared
+for [#116](https://github.com/DeandreT/weft/issues/116), pending integration and
+runtime qualification. This increment adds no public sign-in routes or host
+activation. See [Entra browser client](docs/entra-browser-client.md) for its fixed
+organizational-tenant policy, ownership and remaining release gates.
+
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
 the C# API schema.
@@ -91,6 +97,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Project ownership](docs/project-ownership.md): qualified scoped PostgreSQL reads, migrations, and local setup.
 - [External identity bindings](docs/external-identity-bindings.md): explicit owner preparation, exact account bindings, and the restricted reader.
 - [Server sessions](docs/server-sessions.md): pure lifetime and conditional-operation contracts, privacy, and separate store/authentication qualification.
+- [Entra browser client](docs/entra-browser-client.md): dormant fixed-tenant OIDC adapter, certificate and key-profile ownership, and separate HTTP/host activation.
 - [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
 - [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
 - [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.

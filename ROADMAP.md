@@ -265,6 +265,14 @@ P4e Angular sign-in remain separate increments. See
 [Protected server sessions](docs/protected-server-sessions.md) and
 [Browser sessions](docs/browser-server-sessions.md).
 
+P4d follows three dependent focused PRs. The dormant Entra protocol adapter in
+[#116](https://github.com/DeandreT/weft/issues/116) has reviewed production and
+independent HTTPS test source; integration and runtime qualification remain
+pending after qualified P4c4. It adds no routes, binding/session orchestration or
+host activation. P4d2 will add the dormant HTTP protocol and fresh binding-to-session
+flow; P4d3 will explicitly select and qualify the hosted profile. P4e Angular
+sign-in remains separate. See [Entra browser client](docs/entra-browser-client.md).
+
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
 feature. Bound concurrent builds. Check disk space before substantial Ferrule engine-host
