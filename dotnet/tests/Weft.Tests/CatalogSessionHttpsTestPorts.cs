@@ -32,6 +32,7 @@ internal sealed class CatalogSessionObserveGate
 {
     internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    internal TaskCompletionSource<Task<CurrentServerSession?>> Observation { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal int Canceled;
     public override string ToString() => nameof(CatalogSessionObserveGate);
 }
@@ -128,11 +129,19 @@ internal sealed class CatalogSessionCreationObserver(PostgresProjectCreator actu
 [SupportedOSPlatform("linux")]
 internal sealed class CatalogSessionReaderObserver(IServerSessionReader actual, CatalogSessionHttpsFixture test) : IServerSessionReader
 {
-    public async Task<CurrentServerSession?> ObserveAsync(ServerSessionKey key, CancellationToken cancellationToken = default)
+    public Task<CurrentServerSession?> ObserveAsync(ServerSessionKey key, CancellationToken cancellationToken = default)
+    {
+        var gate = test.ObserveGate;
+        Task<CurrentServerSession?> original = ObserveCoreAsync(key, gate, cancellationToken);
+        gate?.Observation.TrySetResult(original);
+        return original;
+    }
+    private async Task<CurrentServerSession?> ObserveCoreAsync(ServerSessionKey key, CatalogSessionObserveGate? gate,
+        CancellationToken cancellationToken)
     {
         var record = test.Current; Interlocked.Increment(ref record.SessionReads);
         var result = await actual.ObserveAsync(key, cancellationToken);
-        if (test.ObserveGate is { } gate)
+        if (gate is not null)
         {
             gate.Entered.TrySetResult();
             try { await gate.Release.Task.WaitAsync(cancellationToken); }

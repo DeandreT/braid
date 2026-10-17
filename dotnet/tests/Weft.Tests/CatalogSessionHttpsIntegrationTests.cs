@@ -262,16 +262,28 @@ public sealed class CatalogSessionHttpsIntegrationTests(PostgresFixture fixture)
             var cookies = await test.IssueAsync(); var gate = new CatalogSessionObserveGate(); test.ObserveGate = gate;
             var record = test.NewObservation(); using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var pending = test.SendAsync(CatalogSessionHttpsFixture.ContextPath, cookies, cancellationToken: cancel.Token, observation: record);
+            Task<CurrentServerSession?>? observation = null;
             try
             {
-                await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); cancel.Cancel(); bool canceled = false;
+                await Task.WhenAll(gate.Entered.Task, gate.Observation.Task).WaitAsync(TimeSpan.FromSeconds(5));
+                observation = gate.Observation.Task.Result;
+                cancel.Cancel(); bool canceled = false;
                 try { await pending; } catch (OperationCanceledException) { canceled = true; }
-                await record.Ended.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                try { await Task.WhenAll(record.Ended.Task, observation).WaitAsync(TimeSpan.FromSeconds(5)); }
+                catch (OperationCanceledException) { }
+                CatalogSessionHttpsFixture.Check(observation.IsCanceled,
+                    "The original owned session observation did not reach a canceled terminal state.");
                 CatalogSessionHttpsFixture.Check(canceled && record.Canceled && Volatile.Read(ref gate.Canceled) == 1
                     && record.CatalogReads == 0 && record.SessionRenews == 0 && record.BodyReads == 0,
                     "The actual disconnected request did not cancel and settle before catalog/renewal/body work.");
             }
-            finally { gate.Release.TrySetResult(); test.ObserveGate = null; await DrainAsync(pending); }
+            finally
+            {
+                gate.Release.TrySetResult(); test.ObserveGate = null;
+                if (observation is null && gate.Observation.Task.IsCompletedSuccessfully)
+                    observation = gate.Observation.Task.Result;
+                await DrainAsync(observation is null ? pending : Task.WhenAll(pending, observation));
+            }
         });
 
     [PostgresFact]
