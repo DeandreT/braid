@@ -242,13 +242,24 @@ facts, pure lifetime/conditional-operation policy, and store ports in
 verification, Release build and all 41 new pure tests. Full discovery finds 2,985
 cases; the unchanged parent has its separate 2,944-case qualification, rather than
 a fresh full-suite run in this Application-only increment.
-The restricted PostgreSQL implementation and actual database/upgrade
-qualification follow in [#106](https://github.com/DeandreT/weft/issues/106).
+The restricted PostgreSQL foundation in
+[#106](https://github.com/DeandreT/weft/issues/106) is qualified and merged in
+[PR #109](https://github.com/DeandreT/weft/pull/109).
 Only the completed foundation precedes protected ticket/Data Protection adapters,
 cookie and epoch-bound CSRF components, then the dormant catalog identity seam.
 Entra/public-route activation and Angular sign-in remain later P4d/P4e increments.
 See [Server sessions](docs/server-sessions.md); pure vectors do not qualify a store
 or authenticate a browser.
+
+The protected-ticket/store-adapter implementation in `Weft.Identity` provides
+durable certificate-backed key admission, minimal tickets and a test-only process
+probe. The module remains dormant and unregistered by the Server/API.
+Implementation review and qualification evidence are tracked separately in
+[#107](https://github.com/DeandreT/weft/issues/107).
+Cookie-handler/HTTPS/epoch-bound CSRF work follows in
+[#112](https://github.com/DeandreT/weft/issues/112), before the P4c4 dormant catalog
+identity seam and later P4d Entra/hosted activation and P4e Angular sign-in.
+See [Protected server sessions](docs/protected-server-sessions.md).
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's

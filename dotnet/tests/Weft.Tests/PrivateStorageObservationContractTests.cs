@@ -119,7 +119,7 @@ public sealed class PrivateStorageObservationContractTests
     [Fact]
     public void TemporaryPositiveSlotAcceptsBothActualPublicationModesWithoutInventingObjectId()
     {
-        var slot = PrivateStorageSlotObservation.Temporary(0, Scope, PrivateObjectClass.NativeArtifact, Id(60), Identity());
+        var slot = PrivateStorageSlotObservation.Temporary(0, Scope, PrivateObjectClass.NativeArtifact, Id(60), MaintenanceObservationContractFacts.Identity());
         Assert.Null(slot.ObjectId);
         Assert.Equal(Id(60), slot.TempId);
         Assert.Equal(CleanupTargetKind.TrackedTemporary, slot.Kind);
@@ -141,8 +141,8 @@ public sealed class PrivateStorageObservationContractTests
         Assert.Throws<ArgumentException>(() => new PrivateStorageEntryObservation(0, slot.ObjectClass,
             PrivateStorageEntryLevel.Payload, Id(99), Scope.RevisionId, Parent, Candidate().CopyRawName(),
             PrivateStorageEntryKind.CandidateSlot, new(Child, 1000, 0x8100, 1, 3), slot, null));
-        Assert.Throws<ArgumentException>(() => StoragePage([Candidate(Final(identity: Identity(root: Id(99))))]));
-        Assert.Throws<ArgumentException>(() => StoragePage([Candidate(Final(identity: Identity(control: Id(99))))]));
+        Assert.Throws<ArgumentException>(() => StoragePage([Candidate(Final(identity: MaintenanceObservationContractFacts.Identity(root: Id(99))))]));
+        Assert.Throws<ArgumentException>(() => StoragePage([Candidate(Final(identity: MaintenanceObservationContractFacts.Identity(control: Id(99))))]));
         var foreign = new RevisionScope(Scope.OrganizationId, Id(99), Scope.MappingId, Scope.RevisionId);
         Assert.Throws<ArgumentException>(() => StoragePage([Candidate(Final(objectId: Object(scope: foreign)))]));
     }
@@ -160,7 +160,7 @@ public sealed class PrivateStorageObservationContractTests
         Assert.Throws<ArgumentException>(() => new PrivateStorageEntryObservation(0, PrivateObjectClass.NativeArtifact,
             PrivateStorageEntryLevel.Payload, Id(3), Id(4), Parent, "unknown"u8.ToArray(),
             PrivateStorageEntryKind.Unproved, null, null, null));
-        Assert.Throws<ArgumentOutOfRangeException>(() => PrivateStorageSlotObservation.Temporary(0, Scope, (PrivateObjectClass)99, Id(60), Identity()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => PrivateStorageSlotObservation.Temporary(0, Scope, (PrivateObjectClass)99, Id(60), MaintenanceObservationContractFacts.Identity()));
         Assert.Throws<ArgumentOutOfRangeException>(() => Unknown(100));
     }
 
@@ -179,7 +179,7 @@ public sealed class PrivateStorageObservationContractTests
         Assert.Throws<ArgumentOutOfRangeException>(() => Make(kind: (PrivateStorageEntryKind)unknown));
         var error = Assert.Throws<ArgumentOutOfRangeException>(() => Make(reason: (PrivateStorageUnprovedReason)unknown));
         Assert.DoesNotContain("private-name", error.Message);
-        Assert.Throws<ArgumentException>(() => PrivateStorageSlotObservation.Temporary(0, Scope, PrivateObjectClass.NativeArtifact, Guid.Empty, Identity()));
+        Assert.Throws<ArgumentException>(() => PrivateStorageSlotObservation.Temporary(0, Scope, PrivateObjectClass.NativeArtifact, Guid.Empty, MaintenanceObservationContractFacts.Identity()));
     }
 
     [Fact]

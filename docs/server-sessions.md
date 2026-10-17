@@ -166,6 +166,14 @@ or retention/pruning authority. Existing Development-only identity behavior
 remains separately qualified. See the [delivery plan](../ROADMAP.md) and
 [identity bindings](external-identity-bindings.md).
 
-The [PostgreSQL implementation](postgres-server-sessions.md) passes its 33 focused
-database checks. Clean-build, full backend and browser regression qualification
-remain separate prerequisites before that store increment merges.
+The [PostgreSQL foundation](postgres-server-sessions.md) is qualified and merged
+in [PR #109](https://github.com/DeandreT/weft/pull/109), completing
+[#106](https://github.com/DeandreT/weft/issues/106).
+
+The subsequent [protected ticket adapter](protected-server-sessions.md) uses the
+existing ports without changing their metadata policy or privileges. Its dormant
+`Weft.Identity` implementation remains unregistered; implementation review and
+qualification evidence are tracked separately in
+[#107](https://github.com/DeandreT/weft/issues/107). Cookie-handler/CSRF work follows
+in [#112](https://github.com/DeandreT/weft/issues/112), before P4c4's dormant catalog
+identity seam and P4d/P4e sign-in activation.

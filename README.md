@@ -53,6 +53,16 @@ They introduce no browser authentication or durable store implementation.
 See [Server sessions](docs/server-sessions.md) for the metadata contract and the
 separate PostgreSQL, cookie, Entra, and Angular increments.
 
+The PostgreSQL session foundation is qualified and merged in
+[PR #109](https://github.com/DeandreT/weft/pull/109). The dormant `Weft.Identity`
+module implements protected minimal tickets, a durable Data Protection key
+profile and the session-store adapter. Implementation review and qualification
+evidence are tracked separately in
+[#107](https://github.com/DeandreT/weft/issues/107).
+[Protected server sessions](docs/protected-server-sessions.md) describes the
+contract; cookie handling, hosted sign-in and Angular activation remain separate
+work.
+
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
 the C# API schema.

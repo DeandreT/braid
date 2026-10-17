@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../Weft.Application/Weft.Application.csproj" />
+    <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Weft.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

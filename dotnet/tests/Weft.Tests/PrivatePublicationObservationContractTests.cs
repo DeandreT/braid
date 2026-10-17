@@ -78,7 +78,7 @@ public sealed class PrivatePublicationObservationContractTests
         var finalRequest = new PublicationObservationRequest(Project, [Final()]);
         Assert.Throws<ArgumentException>(() => new PrivatePublicationObservationBatch(finalRequest, At,
             [new(0, PublicationObservationOutcome.ExactlyOne, [Witness(objectId: Object(99))])]));
-        var temporary = PrivateStorageSlotObservation.Temporary(0, Scope, PrivateObjectClass.NativeArtifact, Id(60), Identity());
+        var temporary = PrivateStorageSlotObservation.Temporary(0, Scope, PrivateObjectClass.NativeArtifact, Id(60), MaintenanceObservationContractFacts.Identity());
         var request = new PublicationObservationRequest(Project, [temporary]);
         var matches = new PublicationSlotObservation(0, PublicationObservationOutcome.Ambiguous,
             [Witness(objectId: Object(5)), Witness(51, objectId: Object(6))]);
@@ -93,12 +93,12 @@ public sealed class PrivatePublicationObservationContractTests
     {
         PrivatePublicationFileIdentity[] changes =
         [
-            Identity(root: Id(99)), Identity(control: Id(99)), Identity(boot: Id(99)),
-            Identity(namespaceDevice: 99), Identity(namespaceInode: 99), Identity(user: 99),
-            Identity(file: new(99, 7, 8, 9)), Identity(parent: new(99, 7, 8, 9)),
-            Identity(file: new(42, 99, 8, 9), parent: new(41, 99, 8, 9)),
-            Identity(file: new(42, 7, 99, 9), parent: new(41, 7, 99, 9)),
-            Identity(file: new(42, 7, 8, 99), parent: new(41, 7, 8, 99))
+            MaintenanceObservationContractFacts.Identity(root: Id(99)), MaintenanceObservationContractFacts.Identity(control: Id(99)), MaintenanceObservationContractFacts.Identity(boot: Id(99)),
+            MaintenanceObservationContractFacts.Identity(namespaceDevice: 99), MaintenanceObservationContractFacts.Identity(namespaceInode: 99), MaintenanceObservationContractFacts.Identity(user: 99),
+            MaintenanceObservationContractFacts.Identity(file: new(99, 7, 8, 9)), MaintenanceObservationContractFacts.Identity(parent: new(99, 7, 8, 9)),
+            MaintenanceObservationContractFacts.Identity(file: new(42, 99, 8, 9), parent: new(41, 99, 8, 9)),
+            MaintenanceObservationContractFacts.Identity(file: new(42, 7, 99, 9), parent: new(41, 7, 99, 9)),
+            MaintenanceObservationContractFacts.Identity(file: new(42, 7, 8, 99), parent: new(41, 7, 8, 99))
         ];
         var request = new PublicationObservationRequest(Project, [Final()]);
         Assert.All(changes, identity => Assert.Throws<ArgumentException>(() => new PrivatePublicationObservationBatch(request, At,
@@ -125,7 +125,7 @@ public sealed class PrivatePublicationObservationContractTests
         Assert.Throws<ArgumentException>(() => new PrivatePublicationObservationBatch(final, At,
             [new(0, PublicationObservationOutcome.Ambiguous, [second, first])]));
         var temp = new PublicationObservationRequest(Project,
-            [PrivateStorageSlotObservation.Temporary(0, Scope, PrivateObjectClass.NativeArtifact, Id(60), Identity())]);
+            [PrivateStorageSlotObservation.Temporary(0, Scope, PrivateObjectClass.NativeArtifact, Id(60), MaintenanceObservationContractFacts.Identity())]);
         Assert.Throws<ArgumentException>(() => new PrivatePublicationObservationBatch(temp, At,
             [new(0, PublicationObservationOutcome.Ambiguous, [Witness(51, objectId: Object(6)), Witness(objectId: Object(5))])]));
     }
@@ -148,10 +148,10 @@ public sealed class PrivatePublicationObservationContractTests
     public void FlatWitnessRefusesContradictoryOriginWithoutRichHistoricalClaim()
     {
         var key = new PrivatePublicationKey(Id(10), Object(), Id(60));
-        Assert.Throws<ArgumentException>(() => new ObservedPublicationWitness(Guid.Empty, key, Identity(), ObjectCleanupOrigin.ForIngestion(Scope, Id(70))));
-        Assert.Throws<ArgumentException>(() => new ObservedPublicationWitness(Id(50), key, Identity(root: Id(99)), ObjectCleanupOrigin.ForIngestion(Scope, Id(70))));
-        Assert.Throws<ArgumentException>(() => new ObservedPublicationWitness(Id(50), key, Identity(), ObjectCleanupOrigin.ForReport(Scope, Id(71), Id(72), 1)));
-        Assert.Throws<ArgumentException>(() => new ObservedPublicationWitness(Id(50), key, Identity(),
+        Assert.Throws<ArgumentException>(() => new ObservedPublicationWitness(Guid.Empty, key, MaintenanceObservationContractFacts.Identity(), ObjectCleanupOrigin.ForIngestion(Scope, Id(70))));
+        Assert.Throws<ArgumentException>(() => new ObservedPublicationWitness(Id(50), key, MaintenanceObservationContractFacts.Identity(root: Id(99)), ObjectCleanupOrigin.ForIngestion(Scope, Id(70))));
+        Assert.Throws<ArgumentException>(() => new ObservedPublicationWitness(Id(50), key, MaintenanceObservationContractFacts.Identity(), ObjectCleanupOrigin.ForReport(Scope, Id(71), Id(72), 1)));
+        Assert.Throws<ArgumentException>(() => new ObservedPublicationWitness(Id(50), key, MaintenanceObservationContractFacts.Identity(),
             ObjectCleanupOrigin.ForIngestion(new(Id(1), Id(2), Id(3), Id(99)), Id(70))));
     }
 
