@@ -131,6 +131,7 @@ compiler cannot replace Angular's pinned TypeScript 6 compiler.
 ## Verification
 
 ```sh
+export DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
 npm run check
 npm run build
 dotnet restore dotnet/Weft.slnx --locked-mode
@@ -138,9 +139,18 @@ dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore
 dotnet build dotnet/Weft.slnx --configuration Release --no-restore
 npm run contracts:check
 git diff --exit-code -- contracts/weft-v1.json apps/web/src/api/generated.ts
+weft_host_qualification="$(mktemp -d "${TMPDIR:-/tmp}/weft-host-qualification.XXXXXXXX")"
+dotnet publish dotnet/apps/Weft.Server/Weft.Server.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/server"
+dotnet publish dotnet/tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/probe"
+export WEFT_HOST_TEST_SERVER_PATH="$weft_host_qualification/server/Weft.Server.dll"
+export WEFT_HOST_PRIVACY_PROBE_PATH="$weft_host_qualification/probe/Weft.HostPrivacyProbe.dll"
 dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
 npm run test:browser
 ```
+
+Host process tests require these explicit absolute paths to fresh publications of
+the same Release build. The privacy probe is a qualification tool, not a deployed
+Server dependency; keep its publication separate from the shipped host.
 
 The browser harness owns API and Angular development processes on ports 4101
 and 5174, fails on occupied ports, and stops them when it exits. Build the Release

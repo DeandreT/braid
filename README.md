@@ -46,32 +46,20 @@ Explicit project payload-read permissions are qualified and merged in
 project membership. The owner contract is described in
 [Payload permissions](docs/project-payload-permissions.md).
 
-Provider-neutral session facts, pure lifetime policy, and restricted-store ports
-pass all 41 pure contract checks for [#97](https://github.com/DeandreT/weft/issues/97),
-alongside locked restore, formatting verification and a Release build.
-They introduce no browser authentication or durable store implementation.
-See [Server sessions](docs/server-sessions.md) for the metadata contract and the
-separate PostgreSQL, cookie, Entra, and Angular increments.
+Provider-neutral [session contracts](docs/server-sessions.md) separate lifetime
+policy and restricted PostgreSQL ports from the
+[protected ticket/key profile](docs/protected-server-sessions.md) and
+[browser cookie/epoch-CSRF boundary](docs/browser-server-sessions.md).
+The fixed organizational-tenant [Entra adapter](docs/entra-browser-client.md)
+supplies verified identity facts to the opt-in
+[authentication HTTP protocol](docs/browser-authentication-http.md).
 
-The PostgreSQL session foundation is qualified and merged in
-[PR #109](https://github.com/DeandreT/weft/pull/109). The dormant `Weft.Identity`
-module implements protected minimal tickets, a durable Data Protection key
-profile and the session-store adapter. Implementation review and qualification
-evidence are tracked separately in
-[#107](https://github.com/DeandreT/weft/issues/107).
-[Protected server sessions](docs/protected-server-sessions.md) describes the
-underlying contract. Cookie handlers and epoch-bound CSRF components are
-implemented but remain unregistered by the Server/API; qualification is tracked in
-[#112](https://github.com/DeandreT/weft/issues/112). See
-[Browser sessions](docs/browser-server-sessions.md) for their behavior and limits.
-The dormant catalog identity seam, hosted sign-in and Angular activation remain
-separate work.
-
-The dormant Entra protocol adapter and independent HTTPS test source are prepared
-for [#116](https://github.com/DeandreT/weft/issues/116), pending integration and
-runtime qualification. This increment adds no public sign-in routes or host
-activation. See [Entra browser client](docs/entra-browser-client.md) for its fixed
-organizational-tenant policy, ownership and remaining release gates.
+The Server explicitly selects disabled, local Development, or Session mode.
+[Session host operations](docs/session-host.md) describes private credential
+delivery, the admitted durable ring, direct HTTPS or one-hop proxy ingress,
+privacy and shutdown ownership. Host activation does not provision identities,
+keys, database grants, or an Entra application, and does not itself provide an
+Angular sign-in interface or establish live-provider/cloud support.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
@@ -98,6 +86,8 @@ See [Local development](docs/development.md) to run and verify the application.
 - [External identity bindings](docs/external-identity-bindings.md): explicit owner preparation, exact account bindings, and the restricted reader.
 - [Server sessions](docs/server-sessions.md): pure lifetime and conditional-operation contracts, privacy, and separate store/authentication qualification.
 - [Entra browser client](docs/entra-browser-client.md): dormant fixed-tenant OIDC adapter, certificate and key-profile ownership, and separate HTTP/host activation.
+- [Authentication HTTP](docs/browser-authentication-http.md): session inspection, login/callback, acknowledged local logout and explicit local forgetting.
+- [Session host operations](docs/session-host.md): explicit host modes, private configuration, offline TLS, ingress, privacy and shutdown.
 - [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
 - [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
 - [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.

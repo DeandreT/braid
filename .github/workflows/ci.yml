@@ -20,6 +20,7 @@ jobs:
       CARGO_BUILD_JOBS: 2
       CARGO_INCREMENTAL: 0
       CARGO_TARGET_DIR: target/ferrule-host
+      DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: 'false'
       WEFT_POSTGRES_IMAGE: docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -56,6 +57,14 @@ jobs:
         run: |
           npm run contracts:check
           git diff --exit-code -- contracts/weft-v1.json apps/web/src/api/generated.ts
+      - name: Publish exact host qualification artifacts
+        run: |
+          weft_host_qualification="$RUNNER_TEMP/weft-host-qualification"
+          test ! -e "$weft_host_qualification"
+          dotnet publish dotnet/apps/Weft.Server/Weft.Server.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/server"
+          dotnet publish dotnet/tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/probe"
+          printf 'WEFT_HOST_TEST_SERVER_PATH=%s\n' "$weft_host_qualification/server/Weft.Server.dll" >> "$GITHUB_ENV"
+          printf 'WEFT_HOST_PRIVACY_PROBE_PATH=%s\n' "$weft_host_qualification/probe/Weft.HostPrivacyProbe.dll" >> "$GITHUB_ENV"
       - run: dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
       - name: Install isolated browser dependencies
         run: npx playwright install-deps chromium

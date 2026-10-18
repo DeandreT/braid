@@ -27,4 +27,19 @@ public static class CatalogRequestLogging
         });
         return services;
     }
+
+    // Hosted session mode emits only the entrypoint's fixed categorical status lines.
+    // Provider overrides cannot reopen framework/auth/network exception or request logs.
+    internal static IServiceCollection SuppressSessionDiagnostics(this IServiceCollection services)
+    {
+        services.PostConfigure<LoggerFilterOptions>(options =>
+        {
+            var providers = options.Rules.Select(rule => rule.ProviderName).Append(null).Distinct().ToArray();
+            options.Rules.Clear();
+            options.MinLevel = LogLevel.None;
+            foreach (var provider in providers)
+                options.Rules.Add(new LoggerFilterRule(provider, null, LogLevel.None, (_, _, _) => false));
+        });
+        return services;
+    }
 }

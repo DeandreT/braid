@@ -257,6 +257,7 @@
         "dependencies": {
           "Weft.Api": "[1.0.0, )",
           "Weft.Application": "[1.0.0, )",
+          "Weft.Identity": "[1.0.0, )",
           "Weft.MappingBackends": "[1.0.0, )",
           "Weft.Persistence.Postgres": "[1.0.0, )",
           "Weft.Storage.FileSystem": "[1.0.0, )"

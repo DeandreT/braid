@@ -37,7 +37,7 @@ internal sealed partial class EntraProtocolHttpsFixture : IAsyncDisposable
     internal Uri Origin { get; private set; } = null!;
     internal EntraProtocolForbiddenPorts Ports { get; } = new();
     internal EntraProtocolMemoryLogs Logs { get; } = new();
-    internal bool PoisonAmbient;
+    internal bool PoisonAmbient = false;
     private readonly ConcurrentDictionary<int, EntraProtocolRequest> observations = new();
     private WebApplication? app;
     private HttpClient? browserClient, issuerClient;

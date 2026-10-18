@@ -251,27 +251,28 @@ Entra/public-route activation and Angular sign-in remain later P4d/P4e increment
 See [Server sessions](docs/server-sessions.md); pure vectors do not qualify a store
 or authenticate a browser.
 
-The protected-ticket/store-adapter implementation in `Weft.Identity` provides
-durable certificate-backed key admission, minimal tickets and a test-only process
-probe. The module remains dormant and unregistered by the Server/API.
-Implementation review and qualification evidence are tracked separately in
-[#107](https://github.com/DeandreT/weft/issues/107).
-Cookie handlers and epoch-bound CSRF components are implemented but remain
-unregistered by the Server/API. Their qualification is tracked in
-[#112](https://github.com/DeandreT/weft/issues/112); no runtime result is claimed
-by their source presence. The P4c4 dormant catalog identity seam in
-[#114](https://github.com/DeandreT/weft/issues/114), P4d Entra/hosted activation and
-P4e Angular sign-in remain separate increments. See
+The protected-ticket/store-adapter module in
+[#107](https://github.com/DeandreT/weft/issues/107) owns certificate-backed key
+admission and minimal tickets. Cookie and epoch-CSRF components in
+[#112](https://github.com/DeandreT/weft/issues/112) feed the catalog identity seam in
+[#114](https://github.com/DeandreT/weft/issues/114). These contracts remain separate
+from provider verification and Server activation. See
 [Protected server sessions](docs/protected-server-sessions.md) and
 [Browser sessions](docs/browser-server-sessions.md).
 
-P4d follows three dependent focused PRs. The dormant Entra protocol adapter in
-[#116](https://github.com/DeandreT/weft/issues/116) has reviewed production and
-independent HTTPS test source; integration and runtime qualification remain
-pending after qualified P4c4. It adds no routes, binding/session orchestration or
-host activation. P4d2 will add the dormant HTTP protocol and fresh binding-to-session
-flow; P4d3 will explicitly select and qualify the hosted profile. P4e Angular
-sign-in remains separate. See [Entra browser client](docs/entra-browser-client.md).
+P4d has three dependent focused increments. The fixed Entra protocol adapter in
+[#116](https://github.com/DeandreT/weft/issues/116) supplies request-bound verified
+facts; [#118](https://github.com/DeandreT/weft/issues/118) owns the opt-in HTTP
+protocol and fresh binding-to-session transition. P4d3
+[#120](https://github.com/DeandreT/weft/issues/120) composes explicit disabled,
+Development and Session host profiles, bounded ingress, private credential
+delivery, offline TLS, diagnostic privacy and request/provider shutdown ownership.
+Its acceptance uses actual published-host and restricted-database controls;
+live-tenant and deployment acceptance remain separate. P4e owns Angular
+session-safe presentation and sign-in controls. See
+[Entra browser client](docs/entra-browser-client.md),
+[Authentication HTTP](docs/browser-authentication-http.md) and
+[Session host operations](docs/session-host.md).
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's

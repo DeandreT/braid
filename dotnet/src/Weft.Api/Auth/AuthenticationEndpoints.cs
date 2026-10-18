@@ -51,6 +51,9 @@ public static class AuthenticationEndpoints
                 throw new InvalidOperationException("Disabled status cannot enable a catalog identity.");
         }
         services.AddSingleton(options);
+        if (options.DisabledListenerAddress is not null)
+            services.AddSingleton<IHostedService>(provider => new DisabledLoopbackBinding(options,
+                provider.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>()));
         return services;
     }
 
@@ -173,7 +176,10 @@ public static class AuthenticationEndpoints
 
     private static (string Code, int Status)? RequireModeRequest(HttpContext context, AuthenticationHttpOptions options)
     {
-        if (!options.ValidTransport(context)) return ("requestRejected", 403);
+        // Read the admitted immutable snapshot once for BOTH transport and Origin checks.
+        var admitted = options.AdmittedOrigin;
+        if (admitted is null) return ("unavailable", 503);
+        if (!AuthenticationHttpOptions.ValidTransport(context, admitted)) return ("requestRejected", 403);
         if (context.Request.QueryString.HasValue || context.Request.Headers.Authorization.Count != 0 ||
             context.Request.Headers["X-Weft-Session"].Count != 1 || context.Request.Headers["X-Weft-Session"][0] != "1")
             return ("invalidRequest", 400);
@@ -182,7 +188,7 @@ public static class AuthenticationEndpoints
         var site = context.Request.Headers["Sec-Fetch-Site"];
         if (site.Count > 1 || site.Count == 1 && site[0] == "cross-site") return ("requestRejected", 403);
         var origin = context.Request.Headers.Origin;
-        if (origin.Count != 0 && (origin.Count != 1 || origin[0] != options.ExpectedOrigin)) return ("requestRejected", 403);
+        if (origin.Count != 0 && (origin.Count != 1 || origin[0] != admitted.Value)) return ("requestRejected", 403);
         if (context.Request.Headers.ContentType.Count != 0 || context.Request.Headers.TransferEncoding.Count != 0 ||
             context.Request.ContentLength is > 0 || context.Request.Headers["Content-Length"].Count > 1)
             return ("invalidRequest", 400);

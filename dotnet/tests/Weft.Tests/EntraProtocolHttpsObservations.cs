@@ -66,7 +66,7 @@ internal sealed class EntraProtocolRequest
     internal EntraProtocolHandlerPolicy? Policy;
     internal Task? OwnedWork, ConfigurationObservation;
     internal HttpContext? Context;
-    internal bool Entered, Canceled, CancellationWasOriginal, UnexpectedFailure, UserChanged, TamperDefault;
+    internal bool Entered, Canceled, CancellationWasOriginal, UnexpectedFailure, UserChanged, TamperDefault = false;
     internal int EvidencePublished;
     internal readonly TaskCompletionSource OwnedStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal readonly TaskCompletionSource OverlapCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);

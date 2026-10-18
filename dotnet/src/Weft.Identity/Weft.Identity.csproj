@@ -8,5 +8,8 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Weft.Tests</_Parameter1>
     </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Weft.HostPrivacyProbe</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>

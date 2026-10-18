@@ -27,6 +27,7 @@
     <ProjectReference Include="../../tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.RevisionReportWorkflowProbe/Weft.RevisionReportWorkflowProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.SessionTicketProcessProbe/Weft.SessionTicketProcessProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
@@ -95,5 +96,11 @@
       <SessionTicketProcessProbeFiles Include="../../tools/Weft.SessionTicketProcessProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(SessionTicketProcessProbeFiles)" DestinationFiles="@(SessionTicketProcessProbeFiles->'$(OutDir)SessionTicketProcessProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyHostPrivacyProbe" AfterTargets="Build">
+    <ItemGroup>
+      <HostPrivacyProbeFiles Include="../../tools/Weft.HostPrivacyProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(HostPrivacyProbeFiles)" DestinationFiles="@(HostPrivacyProbeFiles->'$(OutDir)HostPrivacyProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 </Project>

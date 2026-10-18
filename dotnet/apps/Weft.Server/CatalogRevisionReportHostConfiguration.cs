@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Weft.Api.Catalog;
 using Weft.Application;
@@ -18,57 +19,65 @@ internal static class CatalogRevisionReportHostConfiguration
         Func<string, string?> readEnvironment)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        Configure(builder.Services, builder.Environment, options, readEnvironment);
+    }
+
+    internal static void Configure(IServiceCollection services, IWebHostEnvironment environment,
+        CatalogRevisionReportOptions options, Func<string, string?> readEnvironment, int? derivedReadByteLimit = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(readEnvironment);
         if (!options.Enabled)
             return;
 
         var instanceId = Guid.NewGuid();
-        builder.Services.AddSingleton(_ => ReadDatabase(readEnvironment));
-        builder.Services.AddSingleton(services =>
-            new PostgresRevisionReportMetadataReader(services.GetRequiredService<PostgresRevisionReportDatabase>()));
-        builder.Services.AddSingleton<IRevisionReportMetadataReader>(services =>
-            services.GetRequiredService<PostgresRevisionReportMetadataReader>());
-        builder.Services.AddSingleton(services => new RevisionReportStorageRegistration(
+        services.AddSingleton(_ => ReadDatabase(readEnvironment));
+        services.AddSingleton(provider =>
+            new PostgresRevisionReportMetadataReader(provider.GetRequiredService<PostgresRevisionReportDatabase>()));
+        services.AddSingleton<IRevisionReportMetadataReader>(provider =>
+            provider.GetRequiredService<PostgresRevisionReportMetadataReader>());
+        services.AddSingleton(provider => new RevisionReportStorageRegistration(
             checked((int)FileSystemStorageOptions.NativeHardMaximum), checked((int)FileSystemStorageOptions.DerivedHardMaximum),
-            DerivedReadLimit(readEnvironment("WEFT_DERIVED_READ_BYTE_LIMIT")),
-            () => services.GetRequiredService<IPrivateObjectStore>()));
-        builder.Services.AddSingleton<IRevisionReportProfileRegistry>(services => CreateRegistry(
+            derivedReadByteLimit ?? DerivedReadLimit(readEnvironment("WEFT_DERIVED_READ_BYTE_LIMIT")),
+            () => provider.GetRequiredService<IPrivateObjectStore>()));
+        services.AddSingleton<IRevisionReportProfileRegistry>(provider => CreateRegistry(
             readEnvironment("WEFT_FERRULE_WORKER_IMAGE"),
-            services.GetRequiredService<RevisionReportStorageRegistration>().ApplyTo(options.ActiveReadCaps),
-            () => SharedRunner(services)));
+            provider.GetRequiredService<RevisionReportStorageRegistration>().ApplyTo(options.ActiveReadCaps),
+            () => SharedRunner(provider)));
 
         if (options.DerivationEnabled)
         {
-            builder.Services.AddSingleton(_ => WriteDatabase(readEnvironment));
-            builder.Services.AddSingleton(services => new PostgresRevisionReportPublicationRegistry(
-                services.GetRequiredService<PostgresRevisionDerivationDatabase>()));
-            builder.Services.AddSingleton(services =>
-                new PostgresRevisionDerivationStore(services.GetRequiredService<PostgresRevisionDerivationDatabase>()));
-            builder.Services.AddSingleton<IRevisionReportMetadataStore>(services => new LazyRevisionReportMetadataStore(() =>
+            services.AddSingleton(_ => WriteDatabase(readEnvironment));
+            services.AddSingleton(provider => new PostgresRevisionReportPublicationRegistry(
+                provider.GetRequiredService<PostgresRevisionDerivationDatabase>()));
+            services.AddSingleton(provider =>
+                new PostgresRevisionDerivationStore(provider.GetRequiredService<PostgresRevisionDerivationDatabase>()));
+            services.AddSingleton<IRevisionReportMetadataStore>(provider => new LazyRevisionReportMetadataStore(() =>
             {
                 // Pure configuration checks precede the first claim. They neither open
                 // the root nor create a container, and never run for a cached Ensure.
-                _ = services.GetRequiredService<FileSystemStorageOptions>();
-                var registry = services.GetRequiredService<IRevisionReportProfileRegistry>();
+                _ = provider.GetRequiredService<FileSystemStorageOptions>();
+                var registry = provider.GetRequiredService<IRevisionReportProfileRegistry>();
                 if (registry.FindCurrent("ferrule", RevisionReportOperation.Projection) is null)
                     throw Unavailable(RevisionReportFailureCategory.ProfileUnavailable);
                 // Inspect registration metadata only. Resolving the runner remains
                 // behind the qualified service's native/header admission and dispatch.
-                if (!services.GetRequiredService<IServiceProviderIsService>().IsService(typeof(IInspectionWorkerRunner)))
+                if (!provider.GetRequiredService<IServiceProviderIsService>().IsService(typeof(IInspectionWorkerRunner)))
                     throw Unavailable(RevisionReportFailureCategory.BackendUnavailable);
-                return services.GetRequiredService<PostgresRevisionDerivationStore>();
+                return provider.GetRequiredService<PostgresRevisionDerivationStore>();
             }));
         }
         else
-            builder.Services.AddSingleton<IRevisionReportMetadataStore>(_ => new UnavailableRevisionReportMetadataStore());
+            services.AddSingleton<IRevisionReportMetadataStore>(_ => new UnavailableRevisionReportMetadataStore());
 
-        builder.Services.AddSingleton(services => new RevisionReportService(
-            services.GetRequiredService<IRevisionReportMetadataReader>(), services.GetRequiredService<IRevisionReportMetadataStore>(),
-            services.GetRequiredService<IRevisionReportProfileRegistry>(), services.GetRequiredService<RevisionReportStorageRegistration>(),
+        services.AddSingleton(provider => new RevisionReportService(
+            provider.GetRequiredService<IRevisionReportMetadataReader>(), provider.GetRequiredService<IRevisionReportMetadataStore>(),
+            provider.GetRequiredService<IRevisionReportProfileRegistry>(), provider.GetRequiredService<RevisionReportStorageRegistration>(),
             instanceId, options.ActiveReadCaps));
-        builder.Services.AddSingleton<IRevisionReportReader>(services => services.GetRequiredService<RevisionReportService>());
-        builder.Services.AddSingleton<IRevisionReportDeriver>(services => services.GetRequiredService<RevisionReportService>());
+        services.AddSingleton<IRevisionReportReader>(provider => provider.GetRequiredService<RevisionReportService>());
+        services.AddSingleton<IRevisionReportDeriver>(provider => provider.GetRequiredService<RevisionReportService>());
     }
 
     internal static IRevisionReportProfileRegistry CreateRegistry(string? workerImage, RevisionReportPolicy policy,
@@ -108,7 +117,7 @@ internal static class CatalogRevisionReportHostConfiguration
         catch (Exception) { throw Unavailable(RevisionReportFailureCategory.StorageIo); }
     }
 
-    private static int DerivedReadLimit(string? value)
+    internal static int DerivedReadLimit(string? value)
     {
         if (value is null)
             return RevisionReportPolicy.MaximumStoredObjectByteLimit;
