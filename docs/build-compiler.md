@@ -48,9 +48,12 @@ fixed by trusted host composition, not request input. The existing owned
 container lifecycle still verifies its identity and removes it after completion
 or cancellation.
 
-Build the native image first from `engines/ferrule-host`, then build
-`engines/build-worker/Dockerfile` from the repository root with
-`WEFT_NATIVE_IMAGE` set to that immutable image ID. Local metadata/protocol tests
+Build the native image first from `engines/ferrule-host`, then use
+`tools/build-worker/build_image.py --native-image sha256:<id> --tag <tag>
+--work-root <existing-work-directory>`. The launcher binds a temporary local
+reference to that exact image ID and independently checks the native binary's
+hash in the Docker build. Registry builds may use a native manifest digest with
+the corresponding verified binary hash. Local metadata/protocol tests
 do not establish actual Linux compilation/isolation. Qualify the exact combined
 image with real generation, compilation, preview/regression equivalence,
 cancellation and cleanup before enabling it in a deployment workflow.

@@ -1,5 +1,5 @@
 # Build from the repository root, after building the pinned native worker from this source.
-# WEFT_NATIVE_IMAGE must be the immutable sha256 image ID, never a mutable registry tag.
+# Use a registry digest, or the image-ID-bound local reference supplied by build_image.py.
 ARG WEFT_NATIVE_IMAGE
 FROM ${WEFT_NATIVE_IMAGE} AS native
 
@@ -20,10 +20,24 @@ COPY dotnet dotnet
 RUN /usr/share/dotnet/dotnet restore dotnet/apps/Weft.BuildWorker/Weft.BuildWorker.csproj --locked-mode \
     && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.BuildWorker/Weft.BuildWorker.csproj -c Release --no-restore --output /out -p:UseSharedCompilation=false
 
+# Optional qualification client; it is not shipped in the compiler image.
+FROM sdk AS qualification
+COPY migrations migrations
+COPY engines/ferrule-host/tests/fixtures engines/ferrule-host/tests/fixtures
+RUN /usr/share/dotnet/dotnet restore dotnet/tests/Weft.Tests/Weft.Tests.csproj --locked-mode --source https://api.nuget.org/v3/index.json -m:1 \
+    && /usr/share/dotnet/dotnet build dotnet/tests/Weft.Tests/Weft.Tests.csproj -c Release --no-restore -p:OpenApiGenerateDocuments=false -p:UseSharedCompilation=false -m:1
+
 # No inherited SDK-image environment, credentials, shell, network tools or writable host mounts.
 # The runner supplies one private bounded noexec tmpfs, and overrides the entrypoint for preview.
+FROM sdk AS checked-native
+ARG WEFT_NATIVE_BINARY_SHA256
+COPY --from=native /ferrule-host /verified-native/ferrule-host
+RUN test "${#WEFT_NATIVE_BINARY_SHA256}" = 64 \
+    && echo "${WEFT_NATIVE_BINARY_SHA256}  /verified-native/ferrule-host" | sha256sum --check --status
+
 FROM scratch
 COPY --from=native / /
+COPY --from=checked-native /verified-native/ferrule-host /ferrule-host
 COPY --from=sdk /usr/share/dotnet /usr/share/dotnet
 COPY --from=sdk /usr/lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu
 COPY --from=sdk /lib/x86_64-linux-gnu /lib/x86_64-linux-gnu
