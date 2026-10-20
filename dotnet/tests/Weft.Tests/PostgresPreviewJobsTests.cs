@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,7 +65,7 @@ public sealed class PostgresPreviewJobsTests(PostgresFixture fixture)
         var service = test.Service(store: new OutboxPreviewRunStore(test.Store, host.Services.GetRequiredService<IWolverineRuntime>()));
         var org = test.Revision.OrganizationId;
 
-        var first = WorkerProcess.Start(test, storage);
+        var first = PreviewWorkerProcess.Start(test, storage);
         try
         {
             var delivered = (await service.SubmitAsync(test.Alice, test.Submission())).RunId!.Value;
@@ -85,7 +84,7 @@ public sealed class PostgresPreviewJobsTests(PostgresFixture fixture)
         }
         finally { first.Kill(); }
 
-        var second = WorkerProcess.Start(test, storage);
+        var second = PreviewWorkerProcess.Start(test, storage);
         try
         {
             var runs = await test.Case.ScalarAsync<Guid[]>("SELECT array_agg(run_id ORDER BY created_at) FROM weft.preview_runs");
@@ -126,7 +125,7 @@ public sealed class PostgresPreviewJobsTests(PostgresFixture fixture)
         return count;
     }
 
-    private static async Task<PreviewRunSnapshot> FinishedAsync(PreviewRunService service, PreviewRunTestSupport test, Guid run, WorkerProcess worker)
+    private static async Task<PreviewRunSnapshot> FinishedAsync(PreviewRunService service, PreviewRunTestSupport test, Guid run, PreviewWorkerProcess worker)
     {
         PreviewRunSnapshot? snapshot = null;
         await UntilAsync(async () =>
@@ -137,7 +136,7 @@ public sealed class PostgresPreviewJobsTests(PostgresFixture fixture)
         return snapshot!;
     }
 
-    private static async Task UntilAsync(Func<Task<bool>> condition, TimeSpan limit, WorkerProcess worker)
+    private static async Task UntilAsync(Func<Task<bool>> condition, TimeSpan limit, PreviewWorkerProcess worker)
     {
         var deadline = DateTime.UtcNow + limit;
         while (!await condition())
@@ -157,70 +156,6 @@ public sealed class PostgresPreviewJobsTests(PostgresFixture fixture)
             if (!PostgresFixture.IsConfigured || !OperatingSystem.IsLinux()
                 || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")))
                 Skip = "Set WEFT_POSTGRES_IMAGE and WEFT_FERRULE_WORKER_IMAGE for the actual preview worker process.";
-        }
-    }
-
-    /// <summary>The ordinary Weft.Worker build, started with only its explicit configuration.</summary>
-    private sealed class WorkerProcess
-    {
-        private readonly Process process;
-        private readonly StringBuilder output = new();
-
-        private WorkerProcess(Process process) => this.process = process;
-
-        internal bool HasExited => process.HasExited;
-
-        internal static WorkerProcess Start(PreviewRunTestSupport test, PrivateStorageTestRoot storage)
-        {
-            var dll = Path.Combine(AppContext.BaseDirectory, "PreviewWorker", "Weft.Worker.dll");
-            if (!File.Exists(dll)) throw new InvalidOperationException("The preview worker build must be copied into the test output.");
-            var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
-            if (string.IsNullOrWhiteSpace(host))
-                host = Environment.ProcessPath is { } current && Path.GetFileName(current) == "dotnet" ? current : "dotnet";
-            var start = new ProcessStartInfo(host)
-            {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(dll)!
-            };
-            start.ArgumentList.Add(dll);
-            start.Environment["WEFT_PREVIEW_WRITER_CONNECTION_STRING"] = test.Case.PreviewWriterConnectionString;
-            start.Environment["WEFT_PRIVATE_STORAGE_ROOT"] = storage.RootPath;
-            start.Environment["WEFT_FERRULE_WORKER_IMAGE"] = Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE");
-            start.Environment["WEFT_PREVIEW_LEASE_SECONDS"] = "35";
-            start.Environment["DOTNET_ENVIRONMENT"] = "Production";
-            var started = Process.Start(start) ?? throw new InvalidOperationException("The preview worker did not start.");
-            var worker = new WorkerProcess(started);
-            started.OutputDataReceived += (_, line) => worker.Append(line.Data);
-            started.ErrorDataReceived += (_, line) => worker.Append(line.Data);
-            started.BeginOutputReadLine();
-            started.BeginErrorReadLine();
-            return worker;
-        }
-
-        private void Append(string? line)
-        {
-            if (line is null) return;
-            lock (output)
-            {
-                if (output.Length < 16 * 1024) output.AppendLine(line);
-            }
-        }
-
-        internal string Diagnostics()
-        {
-            lock (output) return output.ToString();
-        }
-
-        internal void Kill()
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                process.WaitForExit(10_000);
-            }
         }
     }
 }

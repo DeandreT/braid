@@ -21,36 +21,39 @@ public static class CatalogPublicMapper
     internal static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string requestToken,
         string mode, bool metadataEditsEnabled, bool revisionIngestionEnabled, bool projectCreationEnabled,
         bool canCreateProjects, bool readReportsEnabled, bool deriveReportsEnabled, string? identityContext = null,
-        bool chatEnabled = false) =>
+        bool chatEnabled = false, bool previewEnabled = false) =>
         new(mode, Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name,
             metadataEditsEnabled || revisionIngestionEnabled || projectCreationEnabled || readReportsEnabled || deriveReportsEnabled || chatEnabled
+                || previewEnabled
                 ? new(true, projectCreationEnabled, revisionIngestionEnabled, metadataEditsEnabled, revisionIngestionEnabled,
-                    readReportsEnabled, chatEnabled, false, false, deriveReportsEnabled)
+                    readReportsEnabled, chatEnabled, previewEnabled, false, deriveReportsEnabled)
                 : Features, new CatalogOrganizationActionsV1(projectCreationEnabled && canCreateProjects), requestToken, identityContext);
 
     public static CatalogProjectV1 Project(CatalogProject project, bool revisionIngestionEnabled = false,
-        bool readReportsEnabled = false, bool deriveReportsEnabled = false)
+        bool readReportsEnabled = false, bool deriveReportsEnabled = false, bool previewEnabled = false)
     {
         var summary = project.Summary;
         return new(ProjectScope(summary.Scope), summary.Name, summary.Description,
             Id(summary.CreatorPrincipalId.Value), summary.CreatedAtUtc, summary.UpdatedAtUtc,
             Decimal(summary.Version), Access(project.Access, createMappingsEnabled: revisionIngestionEnabled,
-                readReportsEnabled: readReportsEnabled, deriveReportsEnabled: deriveReportsEnabled));
+                readReportsEnabled: readReportsEnabled, deriveReportsEnabled: deriveReportsEnabled, previewEnabled: previewEnabled));
     }
 
     public static CatalogMappingV1 Mapping(CatalogMapping mapping, bool metadataEditsEnabled = false,
-        bool revisionIngestionEnabled = false, bool readReportsEnabled = false, bool deriveReportsEnabled = false) =>
-        Mapping(mapping.Summary, mapping.Access, metadataEditsEnabled, revisionIngestionEnabled, readReportsEnabled, deriveReportsEnabled);
+        bool revisionIngestionEnabled = false, bool readReportsEnabled = false, bool deriveReportsEnabled = false,
+        bool previewEnabled = false) =>
+        Mapping(mapping.Summary, mapping.Access, metadataEditsEnabled, revisionIngestionEnabled, readReportsEnabled, deriveReportsEnabled,
+            previewEnabled);
 
     public static CatalogMappingV1 Mapping(CatalogMappingSummary summary, ProjectAccess access,
         bool metadataEditsEnabled = false, bool revisionIngestionEnabled = false,
-        bool readReportsEnabled = false, bool deriveReportsEnabled = false) =>
+        bool readReportsEnabled = false, bool deriveReportsEnabled = false, bool previewEnabled = false) =>
         new(MappingScope(summary.Scope), summary.Name, summary.Description, summary.BackendId,
             Id(summary.Creator.Value), Id(summary.Owner.Value), summary.CreatedAtUtc, summary.UpdatedAtUtc,
             Decimal(summary.Version), new CatalogHeadV1(RevisionScope(summary.Head.Scope),
                 Decimal(summary.Head.Sequence), Admission(summary.Head.Admission)), Access(access, metadataEditsEnabled,
                     uploadRevisionsEnabled: revisionIngestionEnabled, readReportsEnabled: readReportsEnabled,
-                    deriveReportsEnabled: deriveReportsEnabled));
+                    deriveReportsEnabled: deriveReportsEnabled, previewEnabled: previewEnabled));
 
     public static CatalogMappingMetadataV1 Metadata(CatalogMappingMetadata metadata) =>
         new(MappingScope(metadata.Scope), metadata.Name, metadata.Description, Decimal(metadata.Version));
@@ -63,14 +66,16 @@ public static class CatalogPublicMapper
             new ArtifactDigest("sha256", summary.NativeDigest.Value), checked((int)summary.NativeByteCount), summary.BackendId);
 
     public static CatalogProjectPageV1 Projects(CatalogProjectPage page, bool revisionIngestionEnabled = false,
-        bool readReportsEnabled = false, bool deriveReportsEnabled = false) =>
-        new(page.Projects.Select(project => Project(project, revisionIngestionEnabled, readReportsEnabled, deriveReportsEnabled)),
+        bool readReportsEnabled = false, bool deriveReportsEnabled = false, bool previewEnabled = false) =>
+        new(page.Projects.Select(project => Project(project, revisionIngestionEnabled, readReportsEnabled, deriveReportsEnabled,
+                previewEnabled)),
             page.NextCursor is { } cursor ? CatalogCursorCodec.Encode(cursor) : null);
 
     public static CatalogMappingPageV1 Mappings(CatalogMappingPage page, bool metadataEditsEnabled = false,
-        bool revisionIngestionEnabled = false, bool readReportsEnabled = false, bool deriveReportsEnabled = false) =>
+        bool revisionIngestionEnabled = false, bool readReportsEnabled = false, bool deriveReportsEnabled = false,
+        bool previewEnabled = false) =>
         new(page.Mappings.Select(mapping => Mapping(mapping, page.Access, metadataEditsEnabled, revisionIngestionEnabled,
-                readReportsEnabled, deriveReportsEnabled)),
+                readReportsEnabled, deriveReportsEnabled, previewEnabled)),
             page.NextCursor is { } cursor ? CatalogCursorCodec.Encode(cursor) : null);
 
     public static CatalogRevisionPageV1 Revisions(CatalogRevisionPage page) =>
@@ -84,7 +89,7 @@ public static class CatalogPublicMapper
 
     private static CatalogAccessV1 Access(ProjectAccess access, bool metadataEditsEnabled = false,
         bool createMappingsEnabled = false, bool uploadRevisionsEnabled = false,
-        bool readReportsEnabled = false, bool deriveReportsEnabled = false) => new(access.Role switch
+        bool readReportsEnabled = false, bool deriveReportsEnabled = false, bool previewEnabled = false) => new(access.Role switch
         {
             ProjectRole.Viewer => CatalogRoleV1.Viewer,
             ProjectRole.Runner => CatalogRoleV1.Runner,
@@ -95,7 +100,7 @@ public static class CatalogPublicMapper
         createMappingsEnabled && access.Can(ProjectAction.UploadRevision),
         metadataEditsEnabled && access.Can(ProjectAction.EditMetadata),
         uploadRevisionsEnabled && access.Can(ProjectAction.UploadRevision), readReportsEnabled && access.Can(ProjectAction.ReadMetadata),
-        false, false, false, deriveReportsEnabled && access.Can(ProjectAction.ReadMetadata)));
+        false, previewEnabled && access.Can(ProjectAction.SubmitPreview), false, deriveReportsEnabled && access.Can(ProjectAction.ReadMetadata)));
 
     private static CatalogAdmissionV1 Admission(IngestionAdmissionClassification admission) => admission switch
     {
