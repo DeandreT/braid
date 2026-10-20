@@ -5,5 +5,7 @@
     <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
     <EmbeddedResource Include="../../../migrations/postgres/*.sql"
                       LogicalName="Weft.Persistence.Postgres.Migrations.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../../migrations/regression/0014_regression_cases.sql"
+                      LogicalName="Weft.Persistence.Postgres.Regression.0014_regression_cases.sql" />
   </ItemGroup>
 </Project>
