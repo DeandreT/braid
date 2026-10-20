@@ -282,6 +282,16 @@ remain required. P4e-b [#122](https://github.com/DeandreT/weft/issues/122) compo
 sign-in and acknowledged session controls separately. See
 [Session-safe browser state](docs/browser-session-state.md).
 
+P7 starts from the Ferrule consumer pin qualified in
+[#123](https://github.com/DeandreT/weft/issues/123) and follows five dependent
+increments: the bounded JSON preview worker operation and adapter
+([#140](https://github.com/DeandreT/weft/issues/140)), preview run persistence with
+exact inputs and idempotent outputs ([#141](https://github.com/DeandreT/weft/issues/141)),
+durable Wolverine execution ([#142](https://github.com/DeandreT/weft/issues/142)),
+the preview HTTP API and contracts ([#143](https://github.com/DeandreT/weft/issues/143)),
+and the Angular preview form ([#144](https://github.com/DeandreT/weft/issues/144)).
+See [Ferrule worker](docs/ferrule-worker.md#json-sample-preview).
+
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
 feature. Bound concurrent builds. Check disk space before substantial Ferrule engine-host

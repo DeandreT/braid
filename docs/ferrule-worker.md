@@ -81,6 +81,51 @@ before allocating its typed result. Unsupported input, structural/result limits,
 protocol failure, worker failure, cancellation, timeout, unavailable isolation,
 and cleanup failure remain distinct outcomes.
 
+## JSON sample preview
+
+`IMappingPreviewBackend` runs one bounded sample preview of an exact native
+revision. `FerrulePreviewBackend` (adapter `weft.ferrule-preview-adapter.v1`)
+sends a separate `weft.ferrule-preview.v1` request to the same worker image:
+
+1. The length-prefixed UTF-8 JSON header, bounded by the same 16 KiB.
+2. The exact native frame.
+3. One frame per declared input, primary first, each matching its declared
+   length and SHA-256.
+4. EOF.
+
+The header carries the revision context, target selection (all, primary or one
+named target), an explicit execution clock, typed runtime parameters (string,
+integer, float, boolean; numbers as exact decimal text) and service-selected
+limits. The worker answers with one JSON header frame followed by exactly the
+declared output frames, each with boundary ID, target name, media type, record
+count, byte length and SHA-256, in primary-then-named order.
+
+The worker calls Ferrule's public `cli::run_project_value_payloads` with
+`with_current_datetime`, the supplied parameters and target selection; it never
+substitutes ambient time or design-time preview values. Profile
+`weft.ferrule-json-preview.v1` admits only valid mappings whose reachable
+boundaries are static plain JSON: no format option other than JSON selection,
+any stored design-time path must name a `.json` document, and dynamic inputs
+or outputs are refused. Admission, required named inputs and declared parameter
+names are checked before any input is parsed. Missing, unexpected or invalid
+inputs and parameters, invalid clocks, unsupported capabilities, execution
+errors and limits are distinct bounded failures; no partial outputs are returned.
+
+| Preview boundary | Compiled ceiling |
+| --- | --- |
+| Input documents | 16, 8 MiB combined |
+| Output artifacts | 64, 8 MiB combined |
+| Runtime parameters | 32; names 256 bytes, text 4 KiB |
+| Response header | 1 MiB |
+| Container memory | 512 MiB, no swap |
+| CPU time and wall deadline | 30 seconds |
+
+Preview containers use the `DockerWorkerProfile.Preview` runner profile. It changes
+only memory, CPU time, wall deadline and frame bounds; network, filesystem, user,
+capability, process and cleanup policy are identical to inspection. Inspection
+results continue to report preview as `notQualified` until a product preview
+workflow is exposed.
+
 ## Local isolation and lifecycle
 
 The local runner requires Linux, a local Unix Docker socket, cgroup v2 with the

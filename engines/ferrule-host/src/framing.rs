@@ -1,5 +1,7 @@
 use std::io::{self, Read, Write};
 
+use serde::Serialize;
+
 use crate::protocol::{MAX_RESPONSE_BYTES, Response};
 
 pub fn read_frame(reader: &mut impl Read, maximum_bytes: usize) -> Result<Vec<u8>, &'static str> {
@@ -34,11 +36,19 @@ pub fn encode_response(
     response: &Response,
     maximum_bytes: usize,
 ) -> Result<Vec<u8>, serde_json::Error> {
+    encode_bounded(response, maximum_bytes.min(MAX_RESPONSE_BYTES))
+}
+
+/// Serializes without allocating beyond the supplied byte bound.
+pub fn encode_bounded(
+    value: &impl Serialize,
+    maximum_bytes: usize,
+) -> Result<Vec<u8>, serde_json::Error> {
     let mut writer = BoundedWriter {
         bytes: Vec::new(),
-        maximum_bytes: maximum_bytes.min(MAX_RESPONSE_BYTES),
+        maximum_bytes,
     };
-    serde_json::to_writer(&mut writer, response)?;
+    serde_json::to_writer(&mut writer, value)?;
     Ok(writer.bytes)
 }
 

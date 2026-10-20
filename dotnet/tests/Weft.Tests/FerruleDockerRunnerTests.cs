@@ -31,6 +31,9 @@ public sealed class FerruleDockerRunnerTests
           "DeviceRequests":null,"PortBindings":{},"RestartPolicy":{"Name":"no"},"LogConfig":{"Type":"none"},
           "Ulimits":[{"Name":"nofile","Soft":64,"Hard":64},{"Name":"cpu","Soft":10,"Hard":10},{"Name":"core","Soft":0,"Hard":0}]}}
         """;
+    private static readonly string PreviewContainerMetadata = ContainerMetadata
+        .Replace("\"Memory\":268435456,\"MemorySwap\":268435456", "\"Memory\":536870912,\"MemorySwap\":536870912", StringComparison.Ordinal)
+        .Replace("{\"Name\":\"cpu\",\"Soft\":10,\"Hard\":10}", "{\"Name\":\"cpu\",\"Soft\":30,\"Hard\":30}", StringComparison.Ordinal);
 
     [Fact]
     public async Task PolicyIsFixedAndBytesPassWithoutTextConversion()
@@ -78,6 +81,64 @@ public sealed class FerruleDockerRunnerTests
         }, create);
         Assert.Equal(["container", "start", "--attach", "--interactive", name], launcher.Commands.Single(command => Operation(command) == "start").ArgumentList.Skip(4));
         Assert.Equal(["container", "rm", "--force", "--volumes", name], launcher.Commands.Last().ArgumentList.Skip(4));
+    }
+
+    [Fact]
+    public async Task PreviewProfileChangesOnlyItsFixedMemoryCpuAndFrameBounds()
+    {
+        var request = new byte[DockerInspectionWorkerOptions.MaximumFrameBytes + 1];
+        var worker = new FakeProcess([7]);
+        var launcher = new FakeLauncher { Worker = worker, Container = TextProcess(PreviewContainerMetadata) };
+        var runner = new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker", ImageId, profile: DockerWorkerProfile.Preview), launcher);
+
+        var result = await runner.RunAsync(request, CancellationToken.None);
+
+        Assert.Equal(WorkerProcessFailure.None, result.Failure);
+        Assert.Equal(request.Length, worker.Input.Length);
+        Assert.Same(DockerWorkerProfile.Preview, runner.Profile);
+        var create = launcher.Commands.Single(command => Operation(command) == "create").ArgumentList.Skip(4).ToArray();
+        Assert.Equal(new[]
+        {
+            "container", "create", "--name", create[3], "--pull", "never", "--interactive",
+            "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
+            "--user", "65532:65532", "--cpus", "1", "--memory", "536870912", "--memory-swap", "536870912",
+            "--pids-limit", "16", "--ulimit", "nofile=64:64", "--ulimit", "cpu=30:30", "--ulimit", "core=0:0",
+            "--ipc", "none", "--cgroupns", "private", "--no-healthcheck", "--restart", "no", "--log-driver", "none",
+            "--workdir", "/", "--entrypoint", "/ferrule-host", ImageId
+        }, create);
+        await Assert.ThrowsAsync<ArgumentException>(() => runner.RunAsync(new byte[Weft.Application.PreviewPolicy.MaximumRequestBytes + 1], CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ContainerMetadataMustMatchTheSelectedProfile(bool preview)
+    {
+        var launcher = new FakeLauncher { Container = TextProcess(preview ? ContainerMetadata : PreviewContainerMetadata) };
+        var profile = preview ? DockerWorkerProfile.Preview : DockerWorkerProfile.Inspection;
+        var runner = new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker", ImageId, profile: profile), launcher);
+
+        var result = await runner.RunAsync(new byte[] { 1 }, CancellationToken.None);
+
+        Assert.Equal(WorkerProcessFailure.SandboxUnavailable, result.Failure);
+        Assert.DoesNotContain(launcher.Commands, command => Operation(command) == "start");
+        Assert.Equal("rm", Operation(launcher.Commands.Last()));
+    }
+
+    [Theory]
+    [InlineData(30000, true)]
+    [InlineData(30001, false)]
+    [InlineData(0, false)]
+    public void PreviewWallDeadlineIsBoundedByItsProfile(int milliseconds, bool accepted)
+    {
+        DockerInspectionWorkerOptions Create() =>
+            new("/usr/bin/docker", ImageId, TimeSpan.FromMilliseconds(milliseconds), profile: DockerWorkerProfile.Preview);
+        if (accepted)
+            Assert.Equal(TimeSpan.FromSeconds(30), Create().WallTimeout);
+        else
+            Assert.Throws<ArgumentOutOfRangeException>(Create);
+        Assert.Equal(TimeSpan.FromSeconds(30), new DockerInspectionWorkerOptions("/usr/bin/docker", ImageId, profile: DockerWorkerProfile.Preview).WallTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(10), new DockerInspectionWorkerOptions("/usr/bin/docker", ImageId).WallTimeout);
     }
 
     [Theory]

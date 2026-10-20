@@ -1,0 +1,270 @@
+{
+  "source": {
+    "name": "Order",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "id",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "lines",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "sku",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "qty",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "int"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        }
+      ]
+    }
+  },
+  "target": {
+    "name": "Shipment",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "orderId",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "region",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "generatedAt",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "currency",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "express",
+          "kind": {
+            "kind": "scalar",
+            "ty": "bool"
+          }
+        },
+        {
+          "name": "items",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "sku",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "quantity",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "int"
+                }
+              }
+            ]
+          },
+          "repeating": true
+        }
+      ]
+    }
+  },
+  "extra_sources": [
+    {
+      "name": "rates",
+      "path": "rates.json",
+      "schema": {
+        "name": "Rates",
+        "kind": {
+          "kind": "group",
+          "children": [
+            {
+              "name": "currency",
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "extra_targets": [
+    {
+      "name": "summary",
+      "path": "summary.json",
+      "schema": {
+        "name": "Summary",
+        "kind": {
+          "kind": "group",
+          "children": [
+            {
+              "name": "lineCount",
+              "kind": {
+                "kind": "scalar",
+                "ty": "int"
+              }
+            },
+            {
+              "name": "region",
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            }
+          ]
+        }
+      },
+      "root": {
+        "target_field": "",
+        "bindings": [
+          {
+            "target_field": "lineCount",
+            "node": 7
+          },
+          {
+            "target_field": "region",
+            "node": 2
+          }
+        ],
+        "children": []
+      }
+    }
+  ],
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "source_field",
+        "path": [
+          "id"
+        ]
+      },
+      "2": {
+        "kind": "runtime_parameter",
+        "name": "region",
+        "ty": "string"
+      },
+      "3": {
+        "kind": "runtime_value",
+        "value": "current_date_time"
+      },
+      "4": {
+        "kind": "source_field",
+        "path": [
+          "rates",
+          "currency"
+        ]
+      },
+      "5": {
+        "kind": "source_field",
+        "path": [
+          "sku"
+        ],
+        "frame": [
+          "lines"
+        ]
+      },
+      "6": {
+        "kind": "source_field",
+        "path": [
+          "qty"
+        ],
+        "frame": [
+          "lines"
+        ]
+      },
+      "7": {
+        "kind": "aggregate",
+        "function": "count",
+        "collection": [
+          "lines"
+        ],
+        "value": []
+      },
+      "8": {
+        "kind": "runtime_parameter",
+        "name": "express",
+        "ty": "bool"
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "bindings": [
+      {
+        "target_field": "orderId",
+        "node": 1
+      },
+      {
+        "target_field": "region",
+        "node": 2
+      },
+      {
+        "target_field": "generatedAt",
+        "node": 3
+      },
+      {
+        "target_field": "currency",
+        "node": 4
+      },
+      {
+        "target_field": "express",
+        "node": 8
+      }
+    ],
+    "children": [
+      {
+        "target_field": "items",
+        "bindings": [
+          {
+            "target_field": "sku",
+            "node": 5
+          },
+          {
+            "target_field": "quantity",
+            "node": 6
+          }
+        ],
+        "children": [],
+        "source": [
+          "lines"
+        ]
+      }
+    ]
+  }
+}

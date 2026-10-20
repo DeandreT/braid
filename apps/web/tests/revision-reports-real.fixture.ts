@@ -807,7 +807,7 @@ export function expectReport(
       "577359a991a7dd44172a3c4af91fdcab7592457c",
     );
     expect(provenance?.backend.buildId).toBe(
-      "sha256:70931e68f512527642bace618c4cb8be7264d00187d099e2544c14870188de4b",
+      "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184",
     );
     expect(provenance?.adapterVersion).toBe("weft.ferrule-adapter.v3");
     if (value.operation === "projection") {

@@ -28,10 +28,11 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
     }
 
     public string BuildIdentity => options.ImageId;
+    public DockerWorkerProfile Profile => options.Profile;
 
     public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
     {
-        if (requestFrame.Length > DockerInspectionWorkerOptions.MaximumFrameBytes)
+        if (requestFrame.Length > options.Profile.MaximumRequestBytes)
         {
             throw new ArgumentException("The request frame exceeds the fixed transport limit.", nameof(requestFrame));
         }
@@ -107,9 +108,9 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
                         var inspect = await CommandAsync(configDirectory, ["container", "inspect", "--format", "{{json .}}", containerName], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, deadline.Token).ConfigureAwait(false);
                         result = Failed(inspect.Failure == WorkerProcessFailure.None ? WorkerProcessFailure.SandboxUnavailable : inspect.Failure);
                         if (inspect.Failure == WorkerProcessFailure.None && inspect.ExitCode == 0
-                            && DockerSandboxMetadata.IsIsolatedContainer(inspect.Output, options.ImageId))
+                            && DockerSandboxMetadata.IsIsolatedContainer(inspect.Output, options.ImageId, options.Profile))
                         {
-                            var worker = await CommandAsync(configDirectory, ["container", "start", "--attach", "--interactive", containerName], requestFrame, DockerInspectionWorkerOptions.MaximumFrameBytes, deadline.Token, binaryOutput: true).ConfigureAwait(false);
+                            var worker = await CommandAsync(configDirectory, ["container", "start", "--attach", "--interactive", containerName], requestFrame, options.Profile.MaximumOutputBytes, deadline.Token, binaryOutput: true).ConfigureAwait(false);
                             result = worker.Failure != WorkerProcessFailure.None
                                 ? Failed(worker.Failure)
                                 : worker.ExitCode != 0
@@ -171,12 +172,15 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
             : result;
     }
 
+    private string Memory => options.Profile.MemoryBytes.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private string CpuLimit => FormattableString.Invariant($"cpu={options.Profile.CpuSeconds}:{options.Profile.CpuSeconds}");
+
     private string[] CreateArguments(string containerName) =>
     [
         "container", "create", "--name", containerName, "--pull", "never", "--interactive",
         "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
-        "--user", "65532:65532", "--cpus", "1", "--memory", "268435456", "--memory-swap", "268435456",
-        "--pids-limit", "16", "--ulimit", "nofile=64:64", "--ulimit", "cpu=10:10", "--ulimit", "core=0:0",
+        "--user", "65532:65532", "--cpus", "1", "--memory", Memory, "--memory-swap", Memory,
+        "--pids-limit", "16", "--ulimit", "nofile=64:64", "--ulimit", CpuLimit, "--ulimit", "core=0:0",
         "--ipc", "none", "--cgroupns", "private", "--no-healthcheck", "--restart", "no", "--log-driver", "none",
         "--workdir", "/", "--entrypoint", "/ferrule-host", options.ImageId
     ];

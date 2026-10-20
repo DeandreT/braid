@@ -12,7 +12,8 @@ public sealed class DockerInspectionWorkerOptions
         string dockerExecutable,
         string imageId,
         TimeSpan? wallTimeout = null,
-        string dockerSocketPath = "/var/run/docker.sock")
+        string dockerSocketPath = "/var/run/docker.sock",
+        DockerWorkerProfile? profile = null)
     {
         DockerExecutable = AbsoluteUnixPath(dockerExecutable, nameof(dockerExecutable));
         DockerSocketPath = AbsoluteUnixPath(dockerSocketPath, nameof(dockerSocketPath));
@@ -24,10 +25,11 @@ public sealed class DockerInspectionWorkerOptions
         }
 
         ImageId = imageId.ToLowerInvariant();
-        WallTimeout = wallTimeout ?? MaximumWallTimeout;
-        if (WallTimeout <= TimeSpan.Zero || WallTimeout > MaximumWallTimeout)
+        Profile = profile ?? DockerWorkerProfile.Inspection;
+        WallTimeout = wallTimeout ?? Profile.MaximumWallTimeout;
+        if (WallTimeout <= TimeSpan.Zero || WallTimeout > Profile.MaximumWallTimeout)
         {
-            throw new ArgumentOutOfRangeException(nameof(wallTimeout), "The wall deadline must be positive and at most ten seconds.");
+            throw new ArgumentOutOfRangeException(nameof(wallTimeout), "The wall deadline must be positive and within the selected profile bound.");
         }
     }
 
@@ -35,6 +37,7 @@ public sealed class DockerInspectionWorkerOptions
     public string DockerSocketPath { get; }
     public string ImageId { get; }
     public TimeSpan WallTimeout { get; }
+    public DockerWorkerProfile Profile { get; }
 
     private static string AbsoluteUnixPath(string path, string parameterName)
     {

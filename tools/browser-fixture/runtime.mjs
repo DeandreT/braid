@@ -252,7 +252,7 @@ export async function runBrowserFixture(definition) {
     );
     absolute(cfg.dotnet);
     const workerImage =
-      "sha256:70931e68f512527642bace618c4cb8be7264d00187d099e2544c14870188de4b";
+      "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184";
     const postgresImage =
       "postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc";
     check(

@@ -1,0 +1,125 @@
+{
+  "source": {
+    "name": "Source",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "code",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "a.b",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "nested",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "b",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "target": {
+    "name": "Target",
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "code",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "dotted",
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "nestedOutput",
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "b",
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "source_field",
+        "path": [
+          "code"
+        ]
+      },
+      "2": {
+        "kind": "source_field",
+        "path": [
+          "a.b"
+        ]
+      },
+      "3": {
+        "kind": "source_field",
+        "path": [
+          "nested",
+          "b"
+        ]
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "bindings": [
+      {
+        "target_field": "code",
+        "node": 1
+      },
+      {
+        "target_field": "dotted",
+        "node": 2
+      }
+    ],
+    "children": [
+      {
+        "target_field": "nestedOutput",
+        "bindings": [
+          {
+            "target_field": "b",
+            "node": 3
+          }
+        ],
+        "children": []
+      }
+    ]
+  },
+  "source_path": "orders.csv"
+}

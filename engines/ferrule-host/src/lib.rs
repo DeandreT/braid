@@ -8,14 +8,17 @@ use sha2::{Digest, Sha256};
 pub mod decode;
 pub mod framing;
 pub mod inspect;
+pub mod preview;
 pub mod projection;
 pub mod protocol;
 pub mod validation;
 
+use preview::protocol::PREVIEW_PROTOCOL_VERSION;
 use protocol::{
     Failure, MAX_DIAGNOSTICS, MAX_HEADER_BYTES, MAX_ITEMS, MAX_NATIVE_BYTES, MAX_TEXT_BYTES,
-    NativeLocator, PROTOCOL_VERSION, RequestHeader, Response, WorkerResult, bounded_text,
+    NativeLocator, PROTOCOL_VERSION, RequestHeader, Response, Revision, WorkerResult, bounded_text,
 };
+use serde::Deserialize;
 
 pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
     let header_bytes = match framing::read_frame(reader, MAX_HEADER_BYTES) {
@@ -27,6 +30,17 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
             );
         }
     };
+    // Only the preview protocol selects the separate multi-document request shape.
+    #[derive(Deserialize)]
+    struct ProtocolProbe {
+        #[serde(rename = "protocolVersion")]
+        protocol_version: Option<String>,
+    }
+    if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
+        .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(PREVIEW_PROTOCOL_VERSION))
+    {
+        return preview::handle_preview(&header_bytes, reader, writer);
+    }
     let header = serde_json::from_slice::<RequestHeader>(&header_bytes).ok();
     let native = match framing::read_frame(reader, MAX_NATIVE_BYTES) {
         Ok(bytes) => bytes,
@@ -164,21 +178,34 @@ pub fn process_request(header: &RequestHeader, native: &[u8]) -> Response {
 }
 
 fn valid_context(header: &RequestHeader) -> bool {
+    valid_context_parts(
+        &header.request_id,
+        &header.revision,
+        &header.native_digest,
+        &header.document_id,
+    )
+}
+
+pub(crate) fn valid_context_parts(
+    request_id: &str,
+    revision: &Revision,
+    native_digest: &str,
+    document_id: &str,
+) -> bool {
     [
-        header.request_id.as_str(),
-        &header.revision.organization_id,
-        &header.revision.project_id,
-        &header.revision.mapping_id,
-        &header.revision.revision_id,
+        request_id,
+        &revision.organization_id,
+        &revision.project_id,
+        &revision.mapping_id,
+        &revision.revision_id,
     ]
     .into_iter()
     .all(canonical_nonzero_guid)
-        && header.native_digest.len() == 64
-        && header
-            .native_digest
+        && native_digest.len() == 64
+        && native_digest
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        && valid_document_id(&header.document_id)
+        && valid_document_id(document_id)
 }
 
 fn canonical_nonzero_guid(value: &str) -> bool {

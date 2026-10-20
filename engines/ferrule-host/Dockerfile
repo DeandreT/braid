@@ -68,6 +68,7 @@ while IFS= read -r library; do
         /lib64/ld-linux-x86-64.so.2|/usr/lib64/ld-linux-x86-64.so.2|\
         /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2|/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2|\
         /lib/x86_64-linux-gnu/libc.so.6|/usr/lib/x86_64-linux-gnu/libc.so.6|\
+        /lib/x86_64-linux-gnu/libm.so.6|/usr/lib/x86_64-linux-gnu/libm.so.6|\
         /lib/x86_64-linux-gnu/libgcc_s.so.1|/usr/lib/x86_64-linux-gnu/libgcc_s.so.1)
             ;;
         *)
@@ -78,6 +79,7 @@ while IFS= read -r library; do
     case "$(readlink -f "$library")" in
         /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2|\
         /usr/lib/x86_64-linux-gnu/libc.so.6|\
+        /usr/lib/x86_64-linux-gnu/libm.so.6|\
         /usr/lib/x86_64-linux-gnu/libgcc_s.so.1)
             ;;
         *)
@@ -99,7 +101,7 @@ EOF
 
 FROM scratch
 ARG WEFT_REVISION=""
-LABEL org.opencontainers.image.title="Weft Ferrule inspection worker" \
+LABEL org.opencontainers.image.title="Weft Ferrule worker" \
       org.opencontainers.image.source="https://github.com/DeandreT/weft" \
       org.opencontainers.image.revision="$WEFT_REVISION" \
       io.weft.ferrule.revision="577359a991a7dd44172a3c4af91fdcab7592457c" \

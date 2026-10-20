@@ -28,7 +28,7 @@ internal static class DockerSandboxMetadata
         && Empty(config, "Volumes", JsonValueKind.Object)
         && Empty(config, "Cmd"));
 
-    internal static bool IsIsolatedContainer(byte[] bytes, string imageId) => Read(bytes, root =>
+    internal static bool IsIsolatedContainer(byte[] bytes, string imageId, DockerWorkerProfile profile) => Read(bytes, root =>
     {
         if (!Text(root, "Image", imageId) || !root.TryGetProperty("Mounts", out _) || !Empty(root, "Mounts")
             || !root.TryGetProperty("HostConfig", out var host)
@@ -52,8 +52,8 @@ internal static class DockerSandboxMetadata
             && Text(host, "PidMode", "")
             && Text(host, "UTSMode", "")
             && Integer(host, "NanoCpus", 1_000_000_000)
-            && Integer(host, "Memory", 268_435_456)
-            && Integer(host, "MemorySwap", 268_435_456)
+            && Integer(host, "Memory", profile.MemoryBytes)
+            && Integer(host, "MemorySwap", profile.MemoryBytes)
             && Integer(host, "PidsLimit", 16)
             && ArrayEquals(host, "CapDrop", ["ALL"])
             && Empty(host, "CapAdd")
@@ -67,7 +67,7 @@ internal static class DockerSandboxMetadata
             && Text(restart, "Name", "no")
             && host.TryGetProperty("LogConfig", out var log)
             && Text(log, "Type", "none")
-            && Limits(host);
+            && Limits(host, profile.CpuSeconds);
     });
 
     private static bool SafeEnvironment(JsonElement config)
@@ -99,14 +99,14 @@ internal static class DockerSandboxMetadata
             && environment.EnumerateArray().All(item => item.ValueKind == JsonValueKind.String && item.GetString() == DefaultPath);
     }
 
-    private static bool Limits(JsonElement host)
+    private static bool Limits(JsonElement host, int cpuSeconds)
     {
         if (!host.TryGetProperty("Ulimits", out var limits) || limits.ValueKind != JsonValueKind.Array || limits.GetArrayLength() != 3)
         {
             return false;
         }
 
-        return HasLimit(limits, "nofile", 64) && HasLimit(limits, "cpu", 10) && HasLimit(limits, "core", 0);
+        return HasLimit(limits, "nofile", 64) && HasLimit(limits, "cpu", cpuSeconds) && HasLimit(limits, "core", 0);
     }
 
     private static bool HasLimit(JsonElement limits, string name, long value) =>

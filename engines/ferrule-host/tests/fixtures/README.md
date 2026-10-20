@@ -7,3 +7,5 @@ These native Ferrule JSON documents were written specifically for Weft bridge qu
 - `resource-metadata.json`: local and remote sentinel instance/configuration references that inspection must preserve as unresolved design metadata without access.
 
 The worker and .NET process qualification suites consume the same retained bytes. Expected inspection counts and native paths are independently specified in the tests; validation expectations come directly from the pinned Ferrule engine.
+- `preview-orders.json`: a JSON preview mapping with a repeated child scope, a static named input, typed runtime parameters, the host clock and a static named output.
+- `preview-csv-source.json`: the basic mapping with a stored `.csv` primary input path, which the JSON preview profile must refuse before parsing.

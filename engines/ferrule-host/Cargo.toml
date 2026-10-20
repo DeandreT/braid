@@ -10,6 +10,8 @@ publish = false
 ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "577359a991a7dd44172a3c4af91fdcab7592457c" }
 ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "577359a991a7dd44172a3c4af91fdcab7592457c" }
 ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "577359a991a7dd44172a3c4af91fdcab7592457c" }
+ferrule-cli = { package = "cli", git = "https://github.com/DeandreT/ferrule", rev = "577359a991a7dd44172a3c4af91fdcab7592457c" }
+anyhow = "=1.0.103"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }
 sha2 = "=0.10.9"

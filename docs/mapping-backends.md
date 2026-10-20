@@ -105,12 +105,14 @@ external side effects in v1.
 
 ## Ferrule integration
 
-The inspection/validation worker pins:
+The restricted worker pins:
 [`577359a991a7dd44172a3c4af91fdcab7592457c`](https://github.com/DeandreT/ferrule/commit/577359a991a7dd44172a3c4af91fdcab7592457c).
-It consumes only `mapping`, `ir`, and `engine`, not the CLI, MFD importer or code
-generators. Native codec, validation, and local Linux/amd64 process isolation are
-qualified at that pin. Interpreter preview and generated deployment runtimes
-have separate gates.
+It consumes `mapping`, `ir`, and `engine` for inspection, validation and
+projection, and the `cli` library's in-memory payload API for bounded JSON
+preview. It never runs the Ferrule command-line program, MFD importer or code
+generators. Native codec, validation, JSON preview and local Linux/amd64 process
+isolation are qualified at that pin. Generated deployment runtimes have a
+separate gate. See [Ferrule worker](ferrule-worker.md#json-sample-preview).
 
 In the engine host, pin every Ferrule Git dependency to the same full commit and commit Cargo.lock
 when adding the workspace. Alias generic upstream package names (`mapping`,
@@ -119,26 +121,21 @@ an unpinned branch or local sibling path in CI/release manifests. Record the
 compiler toolchain used to qualify that dependency; Ferrule currently documents
 a nightly toolchain requirement.
 
-The current read-only worker uses these public boundaries:
+The worker uses these public boundaries:
 
 - `mapping::project_file::decode_bytes`: authoritative native file decoding.
 - `engine::validate`: mapping validation.
 - `engine::ValidationOwner`, `ValidationEndpoint`, `ValidationSchemaStep`, and
   `ValidationScopeStep`: exact typed validation ownership.
-
-Future execution support can use the following public library boundaries without
-parsing CLI diagnostic text. They are not dependencies or admitted operations of
-the inspection worker:
-
-- `cli::required_sources_for_target`: preview input preflight.
+- `engine::required_sources_for_target`: preview input preflight.
 - `cli::run_project_value_payloads`: execution of an already decoded project
   from host-owned documents, with returned in-memory artifacts.
-- `cli::PayloadRunOptions`: target selection, typed parameters, tracing, and the
-  validated `with_current_datetime` host-clock override.
+- `cli::PayloadRunOptions`: target selection, typed parameters and the
+  validated `with_current_datetime` host-clock override. Tracing is not admitted.
 
-The CLI crate's public host API is reusable despite its package name. An execution
-host should call it as a library and communicate bounded structured results to
-the C# adapter; never parse CLI diagnostic text as the public protocol. If a
+The CLI crate's public host API is reusable despite its package name. The worker
+calls it as a library and communicates bounded structured results to the C#
+adapter; never parse CLI diagnostic text as the public protocol. If a
 smaller reusable host crate becomes necessary, propose that focused change in
 Ferrule instead of copying or forking its format/execution implementation.
 
