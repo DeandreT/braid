@@ -46,6 +46,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string payloadPermissionPassword = Guid.NewGuid().ToString("N");
     private readonly string sessionReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string sessionWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string chatReaderPassword = Guid.NewGuid().ToString("N");
+    private readonly string chatWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string chatLifecyclePassword = Guid.NewGuid().ToString("N");
     private readonly bool provisionMetadataEditor;
     private readonly bool provisionProjectCreator;
     private readonly bool provisionReportReader;
@@ -55,6 +58,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly bool provisionPayloadPermissionReader;
     private readonly bool provisionSessionReader;
     private readonly bool provisionSessionWriter;
+    private readonly bool provisionChatReader;
+    private readonly bool provisionChatWriter;
+    private readonly bool provisionChatLifecycle;
     private readonly ConcurrentDictionary<string, byte> caseDatabases = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim caseRemoval = new(1, 1);
     private readonly string? client = Environment.GetEnvironmentVariable("WEFT_TEST_CLIENT_CONTAINER");
@@ -75,7 +81,8 @@ public sealed class PostgresFixture : IAsyncLifetime
     internal PostgresFixture(bool provisionMetadataEditor, bool provisionProjectCreator = true,
         bool provisionReportReader = true, bool provisionDeriver = true, bool provisionMaintenance = true,
         bool provisionIdentityReader = true, bool provisionPayloadPermissionReader = true,
-        bool provisionSessionReader = true, bool provisionSessionWriter = true)
+        bool provisionSessionReader = true, bool provisionSessionWriter = true,
+        bool provisionChatReader = true, bool provisionChatWriter = true, bool provisionChatLifecycle = true)
     {
         this.provisionMetadataEditor = provisionMetadataEditor;
         this.provisionProjectCreator = provisionProjectCreator;
@@ -86,6 +93,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         this.provisionPayloadPermissionReader = provisionPayloadPermissionReader;
         this.provisionSessionReader = provisionSessionReader;
         this.provisionSessionWriter = provisionSessionWriter;
+        this.provisionChatReader = provisionChatReader;
+        this.provisionChatWriter = provisionChatWriter;
+        this.provisionChatLifecycle = provisionChatLifecycle;
     }
 
     public async Task InitializeAsync()
@@ -152,6 +162,7 @@ public sealed class PostgresFixture : IAsyncLifetime
                   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
                 CREATE ROLE weft_catalog_reader LOGIN PASSWORD '{catalogPassword}'
                   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator;
                 """, bootstrap);
             await roles.ExecuteNonQueryAsync();
             if (provisionMetadataEditor)
@@ -226,6 +237,30 @@ public sealed class PostgresFixture : IAsyncLifetime
                     """, bootstrap);
                 await sessionWriterRole.ExecuteNonQueryAsync();
             }
+            if (provisionChatReader)
+            {
+                await using var role = new NpgsqlCommand($"""
+                    CREATE ROLE weft_chat_reader LOGIN PASSWORD '{chatReaderPassword}'
+                      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                    """, bootstrap);
+                await role.ExecuteNonQueryAsync();
+            }
+            if (provisionChatWriter)
+            {
+                await using var role = new NpgsqlCommand($"""
+                    CREATE ROLE weft_chat_writer LOGIN PASSWORD '{chatWriterPassword}'
+                      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                    """, bootstrap);
+                await role.ExecuteNonQueryAsync();
+            }
+            if (provisionChatLifecycle)
+            {
+                await using var role = new NpgsqlCommand($"""
+                    CREATE ROLE weft_chat_lifecycle LOGIN PASSWORD '{chatLifecyclePassword}'
+                      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                    """, bootstrap);
+                await role.ExecuteNonQueryAsync();
+            }
         }
         catch (Exception initialization)
         {
@@ -256,6 +291,9 @@ public sealed class PostgresFixture : IAsyncLifetime
             if (provisionPayloadPermissionReader) connectRoles.Add("weft_payload_permission_reader");
             if (provisionSessionReader) connectRoles.Add("weft_session_reader");
             if (provisionSessionWriter) connectRoles.Add("weft_session_writer");
+            if (provisionChatReader) connectRoles.Add("weft_chat_reader");
+            if (provisionChatWriter) connectRoles.Add("weft_chat_writer");
+            if (provisionChatLifecycle) connectRoles.Add("weft_chat_lifecycle");
             await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO {string.Join(", ", connectRoles)}", bootstrap))
                 await grants.ExecuteNonQueryAsync();
             test = new PostgresCase(this, database, ConnectionString(database, "weft_migrator", migratorPassword),
@@ -269,7 +307,10 @@ public sealed class PostgresFixture : IAsyncLifetime
                 ConnectionString(database, "weft_identity_reader", identityPassword),
                 ConnectionString(database, "weft_payload_permission_reader", payloadPermissionPassword),
                 ConnectionString(database, "weft_session_reader", sessionReaderPassword),
-                ConnectionString(database, "weft_session_writer", sessionWriterPassword));
+                ConnectionString(database, "weft_session_writer", sessionWriterPassword),
+                ConnectionString(database, "weft_chat_reader", chatReaderPassword),
+                ConnectionString(database, "weft_chat_writer", chatWriterPassword),
+                ConnectionString(database, "weft_chat_lifecycle", chatLifecyclePassword));
             await using var ownerConnection = await test.Owner.OpenConnectionAsync();
             await using var publicSchema = new NpgsqlCommand("REVOKE ALL ON SCHEMA public FROM PUBLIC", ownerConnection);
             await publicSchema.ExecuteNonQueryAsync();
@@ -491,7 +532,10 @@ public sealed class PostgresFixture : IAsyncLifetime
             .Replace(identityPassword, "[redacted]", StringComparison.Ordinal)
             .Replace(payloadPermissionPassword, "[redacted]", StringComparison.Ordinal)
             .Replace(sessionReaderPassword, "[redacted]", StringComparison.Ordinal)
-            .Replace(sessionWriterPassword, "[redacted]", StringComparison.Ordinal).Trim();
+            .Replace(sessionWriterPassword, "[redacted]", StringComparison.Ordinal)
+            .Replace(chatReaderPassword, "[redacted]", StringComparison.Ordinal)
+            .Replace(chatWriterPassword, "[redacted]", StringComparison.Ordinal)
+            .Replace(chatLifecyclePassword, "[redacted]", StringComparison.Ordinal).Trim();
         return safe.Length == 0 ? string.Empty : $" Docker reported: {safe[..Math.Min(safe.Length, 2000)]}";
     }
 
@@ -556,13 +600,17 @@ public sealed class PostgresCase : IAsyncDisposable
     public string PayloadPermissionConnectionString { get; }
     public string SessionReaderConnectionString { get; }
     public string SessionWriterConnectionString { get; }
+    public string ChatReaderConnectionString { get; }
+    public string ChatWriterConnectionString { get; }
+    public string ChatLifecycleConnectionString { get; }
     public NpgsqlDataSource Owner { get; }
 
     internal PostgresCase(PostgresFixture fixture, string name, string migrationConnectionString, string runtimeConnectionString,
         string ingestionConnectionString, string catalogConnectionString, string metadataConnectionString,
         string projectCreationConnectionString, string reportConnectionString, string derivationConnectionString,
         string maintenanceConnectionString, string identityConnectionString, string payloadPermissionConnectionString,
-        string sessionReaderConnectionString, string sessionWriterConnectionString)
+        string sessionReaderConnectionString, string sessionWriterConnectionString,
+        string chatReaderConnectionString, string chatWriterConnectionString, string chatLifecycleConnectionString)
     {
         this.fixture = fixture;
         Name = name;
@@ -579,6 +627,9 @@ public sealed class PostgresCase : IAsyncDisposable
         PayloadPermissionConnectionString = payloadPermissionConnectionString;
         SessionReaderConnectionString = sessionReaderConnectionString;
         SessionWriterConnectionString = sessionWriterConnectionString;
+        ChatReaderConnectionString = chatReaderConnectionString;
+        ChatWriterConnectionString = chatWriterConnectionString;
+        ChatLifecycleConnectionString = chatLifecycleConnectionString;
         Owner = NpgsqlDataSource.Create(migrationConnectionString);
     }
 

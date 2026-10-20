@@ -56,7 +56,7 @@ internal static class ServerSessionRoleGuard
             ), application_relations AS (
                 SELECT r.*,n.nspname FROM pg_catalog.pg_class r
                 JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
-                WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema'
+                WHERE pg_catalog.left(n.nspname,3)<>'pg_' AND n.nspname<>'information_schema'
                     AND r.relkind IN ('r','p','v','m','f')
             ), required(table_name,column_name,can_insert,can_update) AS (
                 VALUES
@@ -92,7 +92,7 @@ internal static class ServerSessionRoleGuard
                 AND NOT pg_catalog.has_parameter_privilege(role.oid,'session_replication_role','SET,ALTER SYSTEM')
                 AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=role.oid OR m.roleid=role.oid)
                 AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace n
-                    WHERE n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%'
+                    WHERE pg_catalog.left(n.nspname,8)<>'pg_temp_' AND pg_catalog.left(n.nspname,14)<>'pg_toast_temp_'
                         AND (n.nspowner=role.oid OR pg_catalog.has_schema_privilege(role.oid,n.oid,'CREATE')))
                 AND NOT EXISTS (SELECT 1 FROM application_relations r
                     WHERE r.relowner=role.oid
@@ -127,7 +127,7 @@ internal static class ServerSessionRoleGuard
                         OR pg_catalog.has_function_privilege(role.oid,f.oid,'EXECUTE')
                         OR pg_catalog.has_function_privilege('public',f.oid,'EXECUTE')))
                 AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_class s JOIN pg_catalog.pg_namespace n ON n.oid=s.relnamespace
-                    WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema' AND CASE WHEN s.relkind='S' THEN
+                    WHERE pg_catalog.left(n.nspname,3)<>'pg_' AND n.nspname<>'information_schema' AND CASE WHEN s.relkind='S' THEN
                         (s.relowner=role.oid OR pg_catalog.has_sequence_privilege(role.oid,s.oid,'USAGE,SELECT,UPDATE')
                             OR pg_catalog.has_sequence_privilege('public',s.oid,'USAGE,SELECT,UPDATE')) ELSE false END)
                 AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_default_acl d

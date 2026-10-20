@@ -118,7 +118,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
             finally { await test.ExecuteAsync("REVOKE USAGE ON SCHEMA weft FROM weft_session_writer"); }
             await MigrateConcurrentlyAsync(test);
             await AssertCurrentHistoryAsync(test);
-            await source.AssertSessionUpgradePreservedAsync(connection);
+            await source.AssertSessionUpgradePreservedAsync(connection, test);
             SameDigest(journal, await JournalDigestAsync(connection, PrefixVersion),
                 "Session upgrade changed a historical journal fact.");
             SameRows(rows, await RowDigestsAsync(connection, includeSessions: false));
@@ -145,7 +145,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
                 "Repeated session upgrade changed the complete journal.");
             SameRows(allRows, await RowDigestsAsync(connection, includeSessions: true));
             SameRows(rows, await RowDigestsAsync(connection, includeSessions: false));
-            await source.AssertSessionUpgradePreservedAsync(connection);
+            await source.AssertSessionUpgradePreservedAsync(connection, test);
             await AssertSessionStatesAsync(new PostgresServerSessionReader(readerPool), sessions);
             await AssertHistoricalReadersAsync(catalog, original, appended, reportKey, binding);
             SameRows(allRows, await RowDigestsAsync(connection, includeSessions: true));
@@ -452,13 +452,15 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
         var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.True(scripts.Count == PrefixVersion + 1
+        Assert.True(scripts.Count == PrefixVersion + 2
             && scripts.Take(PrefixVersion).Select(script => script.Checksum)
                 .SequenceEqual(PostgresServerSessionUpgradeConservation.PrefixChecksums, StringComparer.Ordinal)
             && scripts[PrefixVersion].Checksum == ServerSessionSchemaContract.MigrationChecksum
+            && scripts[PrefixVersion + 1].Version == 11 && scripts[PrefixVersion + 1].Checksum == ChatSchemaContract.MigrationChecksum
             && typeof(MigrationRunner).Assembly.GetManifestResourceNames().Contains(
                 "Weft.Persistence.Postgres.Migrations." + ServerSessionSchemaContract.MigrationName + ".sql", StringComparer.Ordinal),
-            "The embedded source is not the trusted prefix and one exact session migration.");
+            "The embedded source is not the trusted prefix, exact session migration and exact chat suffix.");
+        await PostgresServerSessionUpgradeConservation.AdmitChatSuffixAsync(test);
         Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
             .SequenceEqual(Enumerable.Range(1, scripts.Count)), "The complete journal versions changed.");
         Assert.True((await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"))

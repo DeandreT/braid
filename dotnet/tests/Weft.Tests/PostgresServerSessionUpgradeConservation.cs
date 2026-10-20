@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Npgsql;
+using Weft.Application;
+using Weft.Domain;
 using Weft.Persistence.Postgres;
 
 namespace Weft.Tests;
@@ -51,8 +53,9 @@ internal sealed class PostgresServerSessionUpgradeConservation
         CancellationToken cancellationToken = default) =>
         new(await ObserveAsync(connection, false, cancellationToken));
 
-    internal async Task AssertSessionUpgradePreservedAsync(NpgsqlConnection connection, CancellationToken cancellationToken = default)
+    internal async Task AssertSessionUpgradePreservedAsync(NpgsqlConnection connection, PostgresCase test, CancellationToken cancellationToken = default)
     {
+        await AdmitChatSuffixAsync(test, cancellationToken);
         var current = await ObserveAsync(connection, true, cancellationToken);
         foreach (var category in Categories)
             Assert.True(CryptographicOperations.FixedTimeEquals(_digests[category], current[category]), category switch
@@ -69,6 +72,16 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 "settings" => "The prior database and role settings changed during session upgrade.",
                 _ => "The prior effective privileges changed during session upgrade."
             });
+    }
+
+    // Only this precise suffix is projected out, after the complete combined
+    // function/role/column/FK/trigger contract has independently admitted it.
+    internal static async Task AdmitChatSuffixAsync(PostgresCase test, CancellationToken ct = default)
+    {
+        var principal = new PrincipalId(Guid.NewGuid());
+        var key = new ChatConversationKey(new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()), principal, Guid.NewGuid());
+        await using var database = new PostgresChatDatabase(test.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
+        await using var admitted = await database.BeginAsync(new(principal), key, false, ct);
     }
 
     // Rejected-install boundaries deliberately retain the actual partial or unsafe
@@ -103,6 +116,11 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(ServerSessionSchemaContract.MigrationChecksum);
             command.Parameters.AddWithValue(SessionColumns);
             command.Parameters.AddWithValue(captureUninstalledProfiles);
+            command.Parameters.AddWithValue(ChatSchemaContract.ChatTables);
+            command.Parameters.AddWithValue(ChatSchemaContract.FunctionNames);
+            command.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }
+                .SelectMany(p => ChatSchemaContract.ColumnGrants(p).Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
+            command.Parameters.AddWithValue(ChatSchemaContract.MigrationChecksum);
             var value = await command.ExecuteScalarAsync(cancellationToken);
             Assert.True(value is string, "The private session upgrade conservation observation is unavailable.");
             using var document = JsonDocument.Parse((string)value!);
@@ -129,12 +147,19 @@ internal sealed class PostgresServerSessionUpgradeConservation
         WITH old_relations AS (
             SELECT r.* FROM pg_catalog.pg_class r JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
             WHERE n.nspname='weft' AND r.relname=ANY($2::text[])
-        ), source_relations AS (
+        ), application_relations AS (
             SELECT r.* FROM pg_catalog.pg_class r JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
             WHERE n.nspname='weft' AND r.relkind IN ('r','p','v','m','f','S')
+        ), source_relations AS (
+            SELECT * FROM application_relations WHERE NOT ($1 AND relname=ANY($9::text[]))
         ), old_functions AS (
             SELECT p.* FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
-            WHERE n.nspname='weft' AND NOT p.proname=ANY($4::text[])
+            WHERE n.nspname='weft' AND NOT p.proname=ANY($4::text[]) AND NOT ($1 AND p.proname=ANY($10::text[]))
+        ), chat_roles AS (
+            SELECT oid,rolname FROM pg_roles WHERE rolname IN ('weft_chat_reader','weft_chat_writer','weft_chat_lifecycle')
+        ), chat_columns AS (
+            SELECT split_part(x,'|',1) tab,split_part(x,'|',2) col,split_part(x,'|',3) privilege,split_part(x,'|',4) role
+            FROM unnest($11::text[]) x
         ), session_profiles(role_name) AS (
             VALUES ('weft_session_reader'::text),('weft_session_writer'::text)
         ), session_roles AS (
@@ -144,10 +169,14 @@ internal sealed class PostgresServerSessionUpgradeConservation
         ), table_acls AS (
             SELECT r.relname::text relation_name,a.* FROM old_relations r
             CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(r.relacl,pg_catalog.acldefault('r',r.relowner))) a
-        ), column_acls AS (
+        ), unprojected_column_acls AS (
             SELECT r.relname::text relation_name,c.attname::text column_name,a.*
             FROM old_relations r JOIN pg_catalog.pg_attribute c ON c.attrelid=r.oid AND c.attnum>0 AND NOT c.attisdropped
             CROSS JOIN LATERAL pg_catalog.aclexplode(c.attacl) a
+        ), column_acls AS (
+            SELECT a.* FROM unprojected_column_acls a WHERE NOT ($1 AND EXISTS(SELECT 1 FROM chat_columns e
+                JOIN chat_roles role ON role.rolname=e.role WHERE a.relation_name=e.tab AND a.column_name=e.col
+                    AND a.privilege_type=e.privilege AND a.grantee=role.oid AND a.grantor=(SELECT oid FROM owner_role) AND NOT a.is_grantable))
         ), expected_session_columns(role_name,relation_name,column_name,privilege_type) AS (
             SELECT p.role_name,'server_sessions'::text,c.name,'SELECT'::text
             FROM session_profiles p CROSS JOIN unnest($7::text[]) c(name)
@@ -168,12 +197,13 @@ internal sealed class PostgresServerSessionUpgradeConservation
             WHERE a.grantor=(SELECT oid FROM owner_role) AND NOT a.is_grantable
         ), all_session_column_grants AS (
             SELECT role.rolname::text role_name,r.relname::text relation_name,c.attname::text column_name,a.*
-            FROM source_relations r JOIN pg_catalog.pg_attribute c ON c.attrelid=r.oid AND c.attnum>0 AND NOT c.attisdropped
+            FROM application_relations r JOIN pg_catalog.pg_attribute c ON c.attrelid=r.oid AND c.attnum>0 AND NOT c.attisdropped
             CROSS JOIN LATERAL pg_catalog.aclexplode(c.attacl) a JOIN session_roles role ON role.oid=a.grantee
         ), schema_acls AS (
             SELECT a.* FROM pg_catalog.pg_namespace n
             CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(n.nspacl,pg_catalog.acldefault('n',n.nspowner))) a
-            WHERE n.nspname='weft'
+            WHERE n.nspname='weft' AND NOT ($1 AND a.grantee IN (SELECT oid FROM chat_roles)
+                AND a.grantor=(SELECT oid FROM owner_role) AND NOT a.is_grantable AND a.privilege_type='USAGE')
         ), intended_schema_grants AS (
             SELECT * FROM schema_acls WHERE grantor=(SELECT oid FROM owner_role) AND grantee IN (SELECT oid FROM session_roles)
                 AND privilege_type='USAGE' AND NOT is_grantable
@@ -254,10 +284,10 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (SELECT count(*) FROM intended_database_grants)=2
                 AND NOT EXISTS (SELECT 1 FROM database_acls a WHERE a.grantee IN (SELECT oid FROM session_roles)
                     AND NOT EXISTS (SELECT 1 FROM intended_database_grants i WHERE to_jsonb(i)=to_jsonb(a)))
-                AND NOT EXISTS (SELECT 1 FROM source_relations r CROSS JOIN session_roles role
+                AND NOT EXISTS (SELECT 1 FROM application_relations r CROSS JOIN session_roles role
                     WHERE r.relowner=role.oid OR pg_catalog.has_table_privilege(role.oid,r.oid,
                         'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'))
-                AND NOT EXISTS (SELECT 1 FROM source_relations r JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid
+                AND NOT EXISTS (SELECT 1 FROM application_relations r JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid
                     CROSS JOIN session_roles role WHERE a.attnum>0 AND NOT a.attisdropped
                       AND (pg_catalog.has_column_privilege(role.oid,r.oid,a.attnum,
                             'REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION')
@@ -284,9 +314,10 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 1 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 2 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=9+1)=$6::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=11)=$12::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -326,7 +357,9 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 FROM old_relations r JOIN pg_catalog.pg_policy p ON p.polrelid=r.oid),
             'triggers',(SELECT jsonb_agg(jsonb_build_array(r.relname,to_jsonb(t)) ORDER BY r.relname,t.tgname)
                 FROM old_relations r JOIN pg_catalog.pg_trigger t ON t.tgrelid=r.oid
-                WHERE NOT ($1 AND t.oid IN (SELECT oid FROM intended_parent_triggers))),
+                WHERE NOT ($1 AND (t.oid IN (SELECT oid FROM intended_parent_triggers) OR EXISTS(
+                    SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND c.conrelid=to_regclass('weft.chat_conversations')
+                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey'))))),
             'functions',(SELECT jsonb_agg(to_jsonb(f) ORDER BY f.oid) FROM old_functions f),
             'grants',jsonb_build_object(
                 'table',(SELECT jsonb_agg(to_jsonb(a) ORDER BY relation_name,grantor,grantee,privilege_type,is_grantable) FROM table_acls a),

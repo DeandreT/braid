@@ -52,7 +52,7 @@ internal static class MaintenanceRoleGuard
               )
               AND NOT EXISTS (
                   SELECT 1 FROM pg_catalog.pg_namespace namespace CROSS JOIN reachable_roles role
-                  WHERE namespace.nspname NOT LIKE 'pg_temp_%' AND namespace.nspname NOT LIKE 'pg_toast_temp_%'
+                  WHERE pg_catalog.left(namespace.nspname,8)<>'pg_temp_' AND pg_catalog.left(namespace.nspname,14)<>'pg_toast_temp_'
                     AND (namespace.nspowner = role.oid OR pg_catalog.has_schema_privilege(role.oid, namespace.oid, 'CREATE')
                          OR pg_catalog.has_schema_privilege(role.oid, namespace.oid, 'USAGE WITH GRANT OPTION'))
               )

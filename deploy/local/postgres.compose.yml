@@ -21,6 +21,9 @@ services:
       WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD: ${WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD:?Set a separate payload permission reader password}
       WEFT_LOCAL_SESSION_READER_PASSWORD: ${WEFT_LOCAL_SESSION_READER_PASSWORD:?Set a separate session reader password}
       WEFT_LOCAL_SESSION_WRITER_PASSWORD: ${WEFT_LOCAL_SESSION_WRITER_PASSWORD:?Set a separate session writer password}
+      WEFT_LOCAL_CHAT_READER_PASSWORD: ${WEFT_LOCAL_CHAT_READER_PASSWORD:?Set a separate chat reader password}
+      WEFT_LOCAL_CHAT_WRITER_PASSWORD: ${WEFT_LOCAL_CHAT_WRITER_PASSWORD:?Set a separate chat writer password}
+      WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD: ${WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD:?Set a separate chat lifecycle password}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:

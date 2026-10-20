@@ -95,6 +95,9 @@
           "Microsoft.IdentityModel.Tokens": "8.19.2"
         }
       },
+      "weft.ai": {
+        "type": "Project"
+      },
       "weft.api": {
         "type": "Project",
         "dependencies": {
@@ -109,6 +112,7 @@
       "weft.application": {
         "type": "Project",
         "dependencies": {
+          "Weft.Ai": "[1.0.0, )",
           "Weft.Contracts": "[1.0.0, )",
           "Weft.Domain": "[1.0.0, )"
         }

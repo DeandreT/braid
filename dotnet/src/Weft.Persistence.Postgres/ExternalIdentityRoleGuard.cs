@@ -95,7 +95,7 @@ internal static class ExternalIdentityRoleGuard
                 AND NOT pg_catalog.has_parameter_privilege(role.oid,'session_replication_role','SET,ALTER SYSTEM')
                 AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=role.oid OR m.roleid=role.oid)
                 AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace n
-                    WHERE n.nspname NOT LIKE 'pg_temp_%' AND n.nspname NOT LIKE 'pg_toast_temp_%'
+                    WHERE pg_catalog.left(n.nspname,8)<>'pg_temp_' AND pg_catalog.left(n.nspname,14)<>'pg_toast_temp_'
                       AND (n.nspowner=role.oid OR pg_catalog.has_schema_privilege(role.oid,n.oid,'CREATE')))
                 AND NOT EXISTS (SELECT 1 FROM application_relations r
                     WHERE r.relowner=role.oid
