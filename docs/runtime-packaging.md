@@ -157,4 +157,4 @@ The Session host does not register a Docker worker runner. Native ingestion and
 report derivation therefore need a separately qualified hosted worker transport, and
 stay disabled in hosted configuration; examples remain a Development feature.
 Private storage and the session key ring support one API instance on a persistent
-local filesystem.
+local filesystem. [Azure deployment](azure-deployment.md) describes the hosted environment.

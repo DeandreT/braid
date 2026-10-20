@@ -26,3 +26,7 @@ Thumbs.db
 **/.angular/
 **/bin/
 **/obj/
+
+# Private Azure deployment parameters.
+deploy/azure/*.bicepparam
+!deploy/azure/main.example.bicepparam

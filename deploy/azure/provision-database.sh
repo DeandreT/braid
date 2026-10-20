@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Database administrator step for Azure Database for PostgreSQL Flexible Server: create the
+# `weft` database, the restricted logins, the migrator's database ownership and the parameter
+# grant required by the chat routines. Runs once, as the server administrator (a member of
+# azure_pg_admin, not a superuser), from the provisioning job. Passwords come from the
+# environment and are read by psql \getenv, never from arguments. The role transaction is
+# all-or-nothing and refuses existing roles; it never rotates a password or widens a grant.
+set -euo pipefail
+
+roles=(MIGRATOR RUNTIME INGEST CATALOG METADATA CREATOR REPORT DERIVATION MAINTENANCE IDENTITY
+  PAYLOAD_PERMISSION SESSION_READER SESSION_WRITER CHAT_READER CHAT_WRITER CHAT_LIFECYCLE
+  PREVIEW_READER PREVIEW_WRITER)
+for role in "${roles[@]}"; do
+  variable=WEFT_${role}_PASSWORD
+  [[ -n ${!variable:-} ]] || { echo "Set $variable." >&2; exit 2; }
+done
+[[ $WEFT_CHAT_READER_PASSWORD != "$WEFT_CHAT_WRITER_PASSWORD" &&
+  $WEFT_CHAT_LIFECYCLE_PASSWORD != "$WEFT_CHAT_READER_PASSWORD" &&
+  $WEFT_CHAT_LIFECYCLE_PASSWORD != "$WEFT_CHAT_WRITER_PASSWORD" ]] || {
+  echo 'All chat profile passwords must be independent.' >&2
+  exit 2
+}
+[[ $WEFT_PREVIEW_READER_PASSWORD != "$WEFT_PREVIEW_WRITER_PASSWORD" ]] || {
+  echo 'Preview profile passwords must be independent.' >&2
+  exit 2
+}
+
+if [[ -z $(psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=postgres --tuples-only --no-align \
+  --command="SELECT 1 FROM pg_database WHERE datname = 'weft'") ]]; then
+  psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=postgres --quiet \
+    --command='CREATE DATABASE weft TEMPLATE template0 ENCODING UTF8'
+fi
+
+psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=weft --quiet <<'SQL'
+\getenv migrator_password WEFT_MIGRATOR_PASSWORD
+\getenv runtime_password WEFT_RUNTIME_PASSWORD
+\getenv ingest_password WEFT_INGEST_PASSWORD
+\getenv catalog_password WEFT_CATALOG_PASSWORD
+\getenv metadata_password WEFT_METADATA_PASSWORD
+\getenv creator_password WEFT_CREATOR_PASSWORD
+\getenv report_password WEFT_REPORT_PASSWORD
+\getenv derivation_password WEFT_DERIVATION_PASSWORD
+\getenv maintenance_password WEFT_MAINTENANCE_PASSWORD
+\getenv identity_password WEFT_IDENTITY_PASSWORD
+\getenv payload_permission_password WEFT_PAYLOAD_PERMISSION_PASSWORD
+\getenv session_reader_password WEFT_SESSION_READER_PASSWORD
+\getenv session_writer_password WEFT_SESSION_WRITER_PASSWORD
+\getenv chat_reader_password WEFT_CHAT_READER_PASSWORD
+\getenv chat_writer_password WEFT_CHAT_WRITER_PASSWORD
+\getenv chat_lifecycle_password WEFT_CHAT_LIFECYCLE_PASSWORD
+\getenv preview_reader_password WEFT_PREVIEW_READER_PASSWORD
+\getenv preview_writer_password WEFT_PREVIEW_WRITER_PASSWORD
+BEGIN;
+-- PostgreSQL 16 records a non-superuser creator as an ADMIN member of every role it creates,
+-- and the migrations refuse any membership on the restricted profiles. A temporary creator
+-- carries those implicit memberships and is dropped, with them, before commit.
+CREATE ROLE weft_provisioner NOLOGIN NOINHERIT CREATEROLE CREATEDB;
+GRANT weft_provisioner TO CURRENT_USER WITH INHERIT FALSE, SET TRUE;
+REVOKE ALL ON DATABASE weft FROM PUBLIC;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+ALTER DATABASE weft OWNER TO weft_provisioner;
+SET ROLE weft_provisioner;
+CREATE ROLE weft_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
+  PASSWORD :'migrator_password';
+CREATE ROLE weft_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
+  PASSWORD :'runtime_password';
+CREATE ROLE weft_ingest LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'ingest_password';
+CREATE ROLE weft_catalog_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'catalog_password';
+CREATE ROLE weft_catalog_editor LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'metadata_password';
+CREATE ROLE weft_project_creator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'creator_password';
+CREATE ROLE weft_report_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'report_password';
+CREATE ROLE weft_deriver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'derivation_password';
+CREATE ROLE weft_maintenance LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'maintenance_password';
+CREATE ROLE weft_identity_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'identity_password';
+CREATE ROLE weft_payload_permission_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'payload_permission_password';
+CREATE ROLE weft_session_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'session_reader_password';
+CREATE ROLE weft_session_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'session_writer_password';
+CREATE ROLE weft_chat_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'chat_reader_password';
+CREATE ROLE weft_chat_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'chat_writer_password';
+CREATE ROLE weft_chat_lifecycle LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'chat_lifecycle_password';
+CREATE ROLE weft_preview_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'preview_reader_password';
+CREATE ROLE weft_preview_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'preview_writer_password';
+GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer;
+GRANT weft_migrator TO weft_provisioner WITH INHERIT FALSE, SET TRUE;
+ALTER DATABASE weft OWNER TO weft_migrator;
+REVOKE weft_migrator FROM weft_provisioner;
+RESET ROLE;
+DROP ROLE weft_provisioner;
+-- Chat routines pin these scope settings in function SET clauses (migration 0011).
+GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator;
+COMMIT;
+SQL
+echo 'The weft database, restricted logins and migrator ownership are provisioned.'

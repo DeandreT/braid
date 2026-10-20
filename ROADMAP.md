@@ -305,6 +305,9 @@ builds and reuse compatible artifacts.
 P8a [#137](https://github.com/DeandreT/weft/issues/137) packages the server, its
 operator tools and the same-replica edge as container images, with a hosted-shape
 local stack. See [Runtime packaging](docs/runtime-packaging.md).
+P8b [#146](https://github.com/DeandreT/weft/issues/146) describes the first Azure
+environment as Bicep templates with its operator procedure and open hosting questions.
+See [Azure deployment](docs/azure-deployment.md).
 
 The first hosted release is admitted only when P0-P8 are implemented and
 qualified. Local-only viewer prototypes can be demonstrated earlier. Entra or
