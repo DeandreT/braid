@@ -73,7 +73,9 @@ the readers.
   with no automatic retry. Only a fully valid `ToolCalls` terminal permits another
   round, under a new round ID, on the same turn; every other terminal closes it.
   History must end with a user message or completed tool results, and tool
-  results must match earlier call IDs and names in order.
+  results must match earlier call IDs and names in order. A round waits at most
+  60 seconds, within the turn deadline, for response headers: a local service can
+  withhold them until it has generated a complete tool call.
 - **Events.** A round stream yields `AiTextDelta`, `AiToolIntentReady`,
   `AiUsageObserved` and exactly one terminal: `AiRoundFinished` (`Stop`,
   `ToolCalls`, `OutputLimit`, `Refused`, `ContentFiltered`) or `AiRoundFailed`.
@@ -90,6 +92,25 @@ the readers.
 
 Tool execution, project permission checks, conversation persistence and browser
 streaming belong to the application layers above this module.
+
+### Live provider check
+
+Ordinary test runs use the owned HTTP fixtures only. `AiProviderLiveTests` runs a
+streamed text round and a tool round followed by an answer against a real local
+Ollama service when both variables are set:
+
+```sh
+docker run -d --name weft-ollama -p 127.0.0.1:11434:11434 \
+  -v weft-ollama-models:/root/.ollama docker.io/ollama/ollama
+docker exec weft-ollama ollama pull qwen2.5:1.5b
+WEFT_LIVE_OLLAMA_ENDPOINT=http://127.0.0.1:11434/api/chat \
+WEFT_LIVE_OLLAMA_MODEL=qwen2.5:1.5b \
+  dotnet test dotnet/Weft.slnx -c Release --filter "FullyQualifiedName~LiveOllama"
+```
+
+The endpoint must be a loopback IP literal, because only loopback profiles may use
+plain HTTP. CPU inference on a heavily loaded machine can exceed the header wait;
+a smaller model or an idle machine avoids that.
 
 ## Orchestration and context
 

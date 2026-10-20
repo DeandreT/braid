@@ -134,7 +134,7 @@ public sealed class AiRoundClient : IAsyncDisposable
             message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             if (secret is not null) message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret.HeaderValue());
             headerCancellation = new AiCancellation(turn.DisposalSettled);
-            headerCancellation.Arm(token, duration: Min(remaining, TimeSpan.FromSeconds(15)), clock: _clock);
+            headerCancellation.Arm(token, duration: Min(remaining, HeaderWait), clock: _clock);
             attempted = true;
             response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, headerCancellation.Token).ConfigureAwait(false);
             headersComplete = true;
@@ -194,6 +194,8 @@ public sealed class AiRoundClient : IAsyncDisposable
             if (!StringComparer.OrdinalIgnoreCase.Equals(encoding, "identity")) return false;
         return true;
     }
+    // Local services can withhold response headers until a complete tool call is generated.
+    internal static readonly TimeSpan HeaderWait = TimeSpan.FromSeconds(60);
     internal static TimeSpan Min(TimeSpan left, TimeSpan right) => left < right ? left : right;
     private static AiFailureCode StatusFailure(HttpStatusCode status)
     {

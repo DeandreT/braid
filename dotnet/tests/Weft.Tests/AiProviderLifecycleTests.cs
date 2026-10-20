@@ -929,7 +929,7 @@ public sealed partial class AiProviderTests
         public override long GetTimestamp() { Interlocked.Exchange(ref timestamp, null)?.Invoke(); return inner.GetTimestamp(); }
         public override DateTimeOffset GetUtcNow() => inner.GetUtcNow();
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
-            new LifetimeTimer(this, inner.CreateTimer(callback, state, dueTime, period), dueTime > TimeSpan.Zero && dueTime <= TimeSpan.FromSeconds(15));
+            new LifetimeTimer(this, inner.CreateTimer(callback, state, dueTime, period), dueTime > TimeSpan.FromSeconds(30) && dueTime <= AiRoundClient.HeaderWait);
         private sealed class LifetimeTimer(LifetimeClock owner, ITimer timer, bool header) : ITimer
         {
             public bool Change(TimeSpan dueTime, TimeSpan period) => timer.Change(dueTime, period);
