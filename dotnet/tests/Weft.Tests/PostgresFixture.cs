@@ -122,27 +122,27 @@ public sealed class PostgresFixture : IAsyncLifetime
             }
             else
             {
-            await DockerAsync(["pull", "--platform", "linux/amd64", image], timeoutSeconds: 180);
-            var platform = await DockerAsync(["image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image]);
-            if (platform.Trim() != "linux/amd64")
-                throw new InvalidOperationException("The qualified image did not resolve to linux/amd64.");
-            networkAttempted = true;
-            var networkArguments = new List<string> { "network", "create", "--driver", "bridge" };
-            if (client is not null)
-                networkArguments.Add("--internal");
-            networkArguments.AddRange(["--label", $"{OwnerLabel}={owner}", Network]);
-            await DockerAsync(networkArguments);
-            volumeAttempted = true;
-            await DockerAsync(["volume", "create", "--label", $"{OwnerLabel}={owner}", Volume]);
-            if (client is not null)
-            {
-                var running = await DockerAsync(["container", "inspect", "--format", "{{.State.Running}}", client]);
-                if (running.Trim() != "true")
-                    throw new InvalidOperationException("The configured isolated client is not running.");
-                await DockerAsync(["network", "connect", Network, client]);
-                clientAttached = true;
-            }
-            var arguments = new List<string>
+                await DockerAsync(["pull", "--platform", "linux/amd64", image!], timeoutSeconds: 180);
+                var platform = await DockerAsync(["image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image!]);
+                if (platform.Trim() != "linux/amd64")
+                    throw new InvalidOperationException("The qualified image did not resolve to linux/amd64.");
+                networkAttempted = true;
+                var networkArguments = new List<string> { "network", "create", "--driver", "bridge" };
+                if (client is not null)
+                    networkArguments.Add("--internal");
+                networkArguments.AddRange(["--label", $"{OwnerLabel}={owner}", Network]);
+                await DockerAsync(networkArguments);
+                volumeAttempted = true;
+                await DockerAsync(["volume", "create", "--label", $"{OwnerLabel}={owner}", Volume]);
+                if (client is not null)
+                {
+                    var running = await DockerAsync(["container", "inspect", "--format", "{{.State.Running}}", client]);
+                    if (running.Trim() != "true")
+                        throw new InvalidOperationException("The configured isolated client is not running.");
+                    await DockerAsync(["network", "connect", Network, client]);
+                    clientAttached = true;
+                }
+                var arguments = new List<string>
             {
                 "run", "--detach", "--platform", "linux/amd64", "--name", Container,
                 "--label", $"{OwnerLabel}={owner}", "--network", Network,
@@ -151,16 +151,16 @@ public sealed class PostgresFixture : IAsyncLifetime
                 "--env", "POSTGRES_PASSWORD", "--env", $"POSTGRES_USER={BootstrapUser}",
                 "--env", "POSTGRES_DB=postgres"
             };
-            containerAttempted = true;
-            await StartContainerAsync(arguments, image!);
-            if (client is null)
-            {
-                var binding = await DockerAsync(["container", "port", Container, "5432/tcp"]);
-                var address = binding.Trim().Split(':');
-                if (address.Length != 2 || address[0] != "127.0.0.1"
-                    || !int.TryParse(address[1], CultureInfo.InvariantCulture, out var actualPort) || actualPort != port)
-                    throw new InvalidOperationException("The disposable cluster must publish only its selected stable loopback port.");
-            }
+                containerAttempted = true;
+                await StartContainerAsync(arguments, image!);
+                if (client is null)
+                {
+                    var binding = await DockerAsync(["container", "port", Container, "5432/tcp"]);
+                    var address = binding.Trim().Split(':');
+                    if (address.Length != 2 || address[0] != "127.0.0.1"
+                        || !int.TryParse(address[1], CultureInfo.InvariantCulture, out var actualPort) || actualPort != port)
+                        throw new InvalidOperationException("The disposable cluster must publish only its selected stable loopback port.");
+                }
             }
             await WaitForServerAsync();
             await using var bootstrap = await OpenBootstrapAsync();
