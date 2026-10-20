@@ -142,7 +142,13 @@ public sealed class NativePostgresFixtureTests
 
     private static string ConnectionString(NativePostgresTestHost host, string username, string password) => new NpgsqlConnectionStringBuilder
     {
-        Host = "127.0.0.1", Port = host.Port, Database = "postgres", Username = username, Password = password,
-        Pooling = false, SslMode = SslMode.Disable, IncludeErrorDetail = false
+        Host = "127.0.0.1",
+        Port = host.Port,
+        Database = "postgres",
+        Username = username,
+        Password = password,
+        Pooling = false,
+        SslMode = SslMode.Disable,
+        IncludeErrorDetail = false
     }.ConnectionString;
 }

@@ -98,8 +98,15 @@ internal sealed class NativePostgresTestHost : IAsyncDisposable
         {
             var connectionString = new NpgsqlConnectionStringBuilder
             {
-                Host = "127.0.0.1", Port = Port, Database = "postgres", Username = username, Password = password,
-                Pooling = false, Timeout = 1, SslMode = SslMode.Disable, IncludeErrorDetail = false
+                Host = "127.0.0.1",
+                Port = Port,
+                Database = "postgres",
+                Username = username,
+                Password = password,
+                Pooling = false,
+                Timeout = 1,
+                SslMode = SslMode.Disable,
+                IncludeErrorDetail = false
             }.ConnectionString;
             while (true)
             {
@@ -189,8 +196,11 @@ internal sealed class NativePostgresTestHost : IAsyncDisposable
         if (!File.Exists(executable)) throw new InvalidOperationException("A required native PostgreSQL executable is absent.");
         var start = new ProcessStartInfo(executable)
         {
-            UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true,
-            CreateNoWindow = true, WorkingDirectory = binaryDirectory
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            WorkingDirectory = binaryDirectory
         };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         foreach (var variable in new[] { "PGDATA", "PGHOST", "PGHOSTADDR", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD",

@@ -38,5 +38,10 @@ delete a directory without its exact ownership marker and propagates stop or
 deletion failures. A failed cleanup may deliberately leave owned data for
 inspection rather than remove an unverifiable path.
 
+Forcibly terminating the test runner bypasses normal disposal. If that happens,
+inspect the exact marked cluster and its postmaster PID before stopping it with
+the same PostgreSQL installation. Never stop all `postgres.exe` processes or
+delete a broad temporary directory to recover one fixture.
+
 Generated test credentials, PostgreSQL output and data files are private local
 artifacts. Do not publish them as evidence or add them to the repository.
