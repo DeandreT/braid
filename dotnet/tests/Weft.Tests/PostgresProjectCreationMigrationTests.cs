@@ -191,7 +191,7 @@ public sealed class PostgresProjectCreationMigrationTests(PostgresFixture fixtur
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
         Assert.Equal(Enumerable.Range(1, MigrationRunner.EmbeddedMigrations.Count), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
-        Assert.Equal(HistoricalChecksums.Append(ProjectCreationTestSupport.MigrationChecksum).Append(RevisionDerivationSchemaContract.MigrationChecksum).Append(MaintenanceSchemaContract.MigrationChecksum).Append(ExternalIdentitySchemaContract.MigrationChecksum).Append(PayloadPermissionSchemaContract.MigrationChecksum).Append(ServerSessionSchemaContract.MigrationChecksum).Append(ChatSchemaContract.MigrationChecksum).Append(PreviewSchemaTestContract.MigrationChecksum),
+        Assert.Equal(HistoricalChecksums.Append(ProjectCreationTestSupport.MigrationChecksum).Append(RevisionDerivationSchemaContract.MigrationChecksum).Append(MaintenanceSchemaContract.MigrationChecksum).Append(ExternalIdentitySchemaContract.MigrationChecksum).Append(PayloadPermissionSchemaContract.MigrationChecksum).Append(ServerSessionSchemaContract.MigrationChecksum).Append(ChatSchemaContract.MigrationChecksum).Append(PreviewSchemaTestContract.MigrationChecksum).Append(PreviewSchemaTestContract.MessagesMigrationChecksum),
             await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
     }
 

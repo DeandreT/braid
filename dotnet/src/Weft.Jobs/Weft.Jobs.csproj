@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="WolverineFx.Postgresql" Version="6.51.1" />
+    <!-- Wolverine 6 compiles its generated handler and outbox code at startup only through this package. -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.51.1" />
+    <ProjectReference Include="../Weft.Application/Weft.Application.csproj" />
+    <ProjectReference Include="../Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Weft.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

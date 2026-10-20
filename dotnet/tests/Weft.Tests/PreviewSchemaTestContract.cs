@@ -1,8 +1,12 @@
 namespace Weft.Tests;
 
-/// <summary>The exact additive delta of migration 0012, projected out of older conservation snapshots.</summary>
+/// <summary>
+/// The exact additive delta of migration 0012, projected out of older conservation snapshots. Migration 0013
+/// only adds the separate message schema, which no older snapshot observes.
+/// </summary>
 internal static class PreviewSchemaTestContract
 {
+    internal const string MessagesMigrationChecksum = "0a258f8b711a42fed1f80366979cb1b5ea182e3545ac94289634184e5e21ad47";
     internal const string MigrationChecksum = "f11b094fbd09a42baa20473fca3d4ba6aa374da27550eee9da21a83827f588a9";
     internal static readonly string[] Tables = ["preview_documents", "preview_runs"];
     internal static readonly string[] FunctionNames =

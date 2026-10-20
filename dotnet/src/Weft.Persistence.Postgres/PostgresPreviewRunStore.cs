@@ -10,7 +10,15 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
 {
     private readonly PostgresPreviewDatabase _database = Writer(database);
 
-    public Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunRecord record, CancellationToken cancellationToken = default)
+    public Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunRecord record, CancellationToken cancellationToken = default) =>
+        SubmitAsync(actor, record, null, cancellationToken);
+
+    /// <summary>
+    /// Submits inside one transaction. The optional hook runs after the run is stored and before
+    /// commit, so a durable outbox can record the run's command atomically with it.
+    /// </summary>
+    public Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunRecord record,
+        Func<NpgsqlTransaction, PreviewSubmitResult, CancellationToken, Task>? beforeCommit, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(record);
@@ -46,7 +54,11 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             };
             Guid? run = reader.IsDBNull(1) ? null : reader.GetGuid(1);
             if ((run is null) != (outcome is PreviewSubmitOutcome.Conflict or PreviewSubmitOutcome.NotAuthorizedOrNotFound)) throw Inconsistent();
-            return new PreviewSubmitResult(outcome, run);
+            await reader.DisposeAsync();
+            var result = new PreviewSubmitResult(outcome, run);
+            if (beforeCommit is not null)
+                await beforeCommit(transaction, result, cancellationToken);
+            return result;
         }, cancellationToken);
     }
 

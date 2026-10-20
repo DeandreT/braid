@@ -3,8 +3,9 @@
 A preview run is an owned, replayable business operation: one bounded sample
 preview of an exact immutable revision, submitted by a project member. It records
 the submitted inputs, the admitted request, every attempt and the terminal result.
-Execution uses the [Ferrule preview worker](ferrule-worker.md#json-sample-preview);
-durable delivery, HTTP routes and the Angular form are separate increments.
+Execution uses the [Ferrule preview worker](ferrule-worker.md#json-sample-preview)
+and is delivered durably through Wolverine; HTTP routes and the Angular form are
+separate increments.
 
 ## Submission and idempotency
 
@@ -51,6 +52,41 @@ are bounded by `MaxAttempts` (three by default, at most eight).
 States are `Queued`, `Running`, `Completed` and `Canceled`. Completed outcomes are
 the preview statuses plus `AuthorityRevoked` and `AttemptsExhausted`. Failure
 code, message and subject are bounded worker or adapter text.
+
+## Durable delivery
+
+Wolverine delivers a typed `RunPreview` command (organization and run IDs only)
+through a PostgreSQL queue. `OutboxPreviewRunStore` enlists Wolverine's outbox in
+the submission transaction, so a newly created run and its command commit
+together or not at all; replays and refusals publish nothing. A submitting host
+configures `PreviewJobRole.Submitter` (`ServerlessWithOutbox`: outbox only, no
+listeners or node agents).
+
+Wolverine generates its handler and outbox code and compiles it when a host
+starts (`WolverineFx.RuntimeCompilation`).
+
+`dotnet/apps/Weft.Worker` is the preview worker host (`PreviewJobRole.Worker`,
+Wolverine `Solo` durability). It listens with a durable inbox and one message at
+a time, because the restricted runner admits one container. A delivery calls
+`PreviewRunExecutor.ExecuteAsync`; a released attempt or a busy run is rescheduled
+after the retry delay. Redelivery and duplicate delivery are safe because the run
+lease fences every attempt and a finished run is never executed again. On restart
+the worker reclaims every persisted envelope; an attempt interrupted by a process
+kill is claimed again after its lease expires. P7 runs a single worker host;
+several hosts need Wolverine's balanced durability mode.
+
+The worker reads its configuration from the environment:
+`WEFT_PREVIEW_WRITER_CONNECTION_STRING`,
+`WEFT_PRIVATE_STORAGE_ROOT` (an existing v2 root, opened read-only),
+`WEFT_FERRULE_WORKER_IMAGE`, optional `WEFT_DOCKER_EXECUTABLE` and optional
+`WEFT_PREVIEW_LEASE_SECONDS` (35–600). It runs as the same operating-system user
+that owns the private storage root.
+
+Migration `0013_preview_messages.sql` creates the `weft_messages` schema and grants
+the preview writer `USAGE` and `CREATE` on it only. Wolverine creates and owns its
+envelope, queue and node tables there on startup; Weft tables and grants are not
+affected. The writer connection must be direct or session pooled, because
+Wolverine's durability agent uses session advisory locks.
 
 ## Reads and cancellation
 
