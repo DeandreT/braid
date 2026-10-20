@@ -5,6 +5,7 @@ using Weft.Application.Regression;
 using Weft.Contracts.Operations;
 using Weft.Domain;
 using Weft.Persistence.Postgres;
+using Context = Weft.Tests.RegressionRunPostgresTestSupport;
 
 namespace Weft.Tests;
 
@@ -152,8 +153,10 @@ public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
         await using var test = await Context.CreateAsync(fixture);
         await test.SubmitAsync();
         var first = await test.ClaimAsync();
+        Assert.Empty(await test.Queue.ListReadyAsync(16));
         // Exercise real database-clock expiry, without rewriting lease data or replacing the clock.
         await Task.Delay(TimeSpan.FromSeconds(91));
+        Assert.Equal(test.RunId, Assert.Single(await test.Queue.ListReadyAsync(16)).RunId);
         var second = await test.ClaimAsync();
         Assert.Equal(2, second.Attempt);
         Assert.NotEqual(first.Token, second.Token);
@@ -360,50 +363,4 @@ public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
         }
     }
 
-    private sealed class Context : IAsyncDisposable
-    {
-        internal RegressionCasePostgresTestSupport Cases { get; }
-        internal RegressionCaseVersion Value { get; }
-        internal RegressionCaseReference Reference { get; }
-        internal ActorContext Actor => Cases.Actor;
-        internal Guid Organization => Value.Revision.OrganizationId;
-        internal Guid RunId { get; } = Guid.NewGuid();
-        internal string ReaderConnection { get; }
-        internal string WriterConnection { get; }
-        internal PostgresRegressionRunStore Reader { get; }
-        internal PostgresRegressionRunStore Writer { get; }
-        private Context(PostgresFixture fixture, RegressionCasePostgresTestSupport cases, RegressionCaseVersion value)
-        {
-            Cases = cases; Value = value;
-            Reference = new RegressionCaseEnvelopeCodec().Encode(value).Reference;
-            ReaderConnection = fixture.RegressionConnectionString(cases.Case, "weft_run_reader");
-            WriterConnection = fixture.RegressionConnectionString(cases.Case, "weft_run_writer");
-            Reader = new(ReaderConnection, writer: false);
-            Writer = new(WriterConnection, writer: true);
-        }
-        internal static async Task<Context> CreateAsync(PostgresFixture fixture)
-        {
-            var cases = await RegressionCasePostgresTestSupport.CreateAsync(fixture);
-            try
-            {
-                var value = cases.Version(1);
-                await cases.Writer.SaveAsync(cases.Actor, value);
-                return new(fixture, cases, value);
-            }
-            catch { await cases.DisposeAsync(); throw; }
-        }
-        internal Task<RegressionRunSubmitOutcome> SubmitAsync() => Writer.SubmitAsync(new(Actor, RunId, Reference));
-        internal async Task<RegressionRunClaim> ClaimAsync() => (await Writer.ClaimAsync(Organization, RunId, Guid.NewGuid())).Claim
-            ?? throw new InvalidOperationException("Expected a claim.");
-        internal RegressionCaseExecution Success()
-        {
-            var outputs = Value.Expected;
-            return RegressionCaseExecution.Complete(MappingPreviewStatus.Succeeded, outputs,
-                new RegressionComparisonService().Compare(Value.Expected, new(OperationStatusV1.Succeeded, outputs)));
-        }
-        public async ValueTask DisposeAsync()
-        {
-            await Reader.DisposeAsync(); await Writer.DisposeAsync(); await Cases.DisposeAsync();
-        }
-    }
 }

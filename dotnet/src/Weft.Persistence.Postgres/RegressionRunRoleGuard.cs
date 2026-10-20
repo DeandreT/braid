@@ -6,10 +6,10 @@ namespace Weft.Persistence.Postgres;
 
 internal static partial class RegressionRunRoleGuard
 {
-    internal const string Fingerprint = "27be79073d54759ea8ea61fa602b6a22d599e53b534a6e6e1588bf0f2aa3b94a";
+    internal const string Fingerprint = "ef7f87a1a7cf12c9bb6b497729d4d4140c8ddfa30bf715a39be950f9d09bca90";
     private static readonly Lazy<Dictionary<string, Match>> Functions = new(Load);
     private static readonly string[] WriterFunctions = ["submit_regression_run", "claim_regression_run", "observe_regression_run",
-        "finish_regression_run", "release_regression_run", "cancel_regression_run", "read_regression_run"];
+        "finish_regression_run", "release_regression_run", "cancel_regression_run", "read_regression_run", "list_ready_regression_runs"];
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool writer, CancellationToken token)
     {
@@ -81,14 +81,19 @@ internal static partial class RegressionRunRoleGuard
         ["finish_regression_run"] = "boolean",
         ["release_regression_run"] = "boolean",
         ["cancel_regression_run"] = "boolean",
-        ["read_regression_run"] = "SETOF weft.regression_runs"
+        ["read_regression_run"] = "SETOF weft.regression_runs",
+        ["list_ready_regression_runs"] = "TABLE(organization_id uuid, run_id uuid)"
     };
 
     private static Dictionary<string, Match> Load()
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations.0015_regression_runs.sql") ?? throw Invalid();
-        using var reader = new StreamReader(stream);
-        var functions = FunctionPattern().Matches(reader.ReadToEnd()).ToDictionary(match => match.Groups[1].Value, StringComparer.Ordinal);
+        var text = string.Concat(new[] { "0015_regression_runs", "0016_regression_dispatch" }.Select(name =>
+        {
+            using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Weft.Persistence.Postgres.Migrations.{name}.sql") ?? throw Invalid();
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }));
+        var functions = FunctionPattern().Matches(text).ToDictionary(match => match.Groups[1].Value, StringComparer.Ordinal);
         if (functions.Count != ResultTypes.Count) throw Invalid();
         return functions;
     }

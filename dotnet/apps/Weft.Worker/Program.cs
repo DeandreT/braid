@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Weft.Application;
+using Weft.Application.Regression;
 using Weft.Jobs;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
@@ -25,4 +26,7 @@ builder.Services.AddSingleton(provider => new PreviewRunExecutor(provider.GetReq
     provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(),
     provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<PreviewRunOptions>()));
 builder.Services.AddWolverine(options => PreviewJobs.Configure(options, settings.WriterConnectionString, PreviewJobRole.Worker));
+builder.Services.AddWeftRegressionWorker(Environment.GetEnvironmentVariable, () =>
+    new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, settings.WorkerImage.ToLowerInvariant(),
+        FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile));
 await builder.Build().RunAsync();

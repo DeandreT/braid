@@ -3,7 +3,7 @@ namespace Weft.Application.Regression;
 public enum RegressionRunDispatchOutcome { Completed, Deferred, Finished, Missing, ClaimLost }
 
 /// <summary>Executes at most one leased case; a failed case never gates another run.</summary>
-public sealed class RegressionRunExecutor(IRegressionRunStore runs, IRegressionCaseExecutor execution)
+public sealed class RegressionRunExecutor(IRegressionRunStore runs, IRegressionCaseExecutor execution) : IRegressionRunDispatcher
 {
     public async Task<RegressionRunDispatchOutcome> ExecuteAsync(Guid organizationId, Guid runId, Guid worker,
         CancellationToken token = default)

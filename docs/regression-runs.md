@@ -75,14 +75,41 @@ role attributes, function bodies/signatures and the schema fingerprint before
 binding the current organization/actor. Unexpected grants, triggers, columns,
 constraints or functions are refusals, not an implicit schema upgrade.
 
-## Remaining integration boundary
+## Durable dispatch and host activation
 
-The store is the durable run ledger, not a message transport. Submission does
-not yet atomically enqueue a Wolverine message, and no background discovery
-loop is started here. A host must wire reliable scheduling/redelivery to
-`RegressionRunExecutor`, preserve the per-case boundary, and expose separately
-qualified request/status/result UI and HTTP operations. Preview cleanup does not
-expire these saved-case results; retention changes require an explicit policy.
+The committed run row is its own durable queue entry. Migration 0016 adds an
+indexed, machine-only query returning at most 16 eligible organization/run ID
+pairs. No separate message needs to commit alongside a submission, and an
+uncommitted or rolled-back run is never discoverable. Live claims and terminal
+runs are excluded; expired claims become eligible for the existing fenced
+recovery path.
+
+`RegressionRunPump` processes each discovered ID independently.
+`RegressionWorkerService` repeats discovery once per second in the existing
+worker host. Discovery does not grant access to samples: execution still reloads
+the exact case and checks its submitter's current authority, native source and
+runtime. Failures leave the durable row available for the appropriate retry;
+they do not acknowledge another case or block the rest of the page.
+
+The worker is off by default. Set `WEFT_REGRESSION_WORKER_ENABLED=true` and
+provide four explicit restricted connection strings:
+
+- `WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING`: `weft_run_writer`.
+- `WEFT_REGRESSION_CASE_READER_CONNECTION_STRING`: `weft_case_reader`.
+- `WEFT_REGRESSION_ACCESS_CONNECTION_STRING`: the existing `weft_runtime`
+  project-access reader.
+- `WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING`: `weft_report_reader`, for
+  trusted native-object references.
+
+The worker reuses its configured private storage and serialized preview
+backend. Its exact runtime selection comes from that backend's image, engine
+and adapter identities, not the submitted case. Disabled mode reads none of
+the extra credentials and starts no regression pool or background service.
+Logs contain bounded failure counts, never payload-derived exception text.
+
+Request/status/result UI and HTTP composition remain separate host concerns.
+Preview cleanup does not expire these saved-case results; retention changes
+require an explicit policy.
 
 ## Database installation
 
