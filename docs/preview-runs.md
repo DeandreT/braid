@@ -128,6 +128,24 @@ host executes them. When enabled, the catalog context advertises the `preview`
 feature, and project and mapping access report the `preview` action for callers
 whose role can submit previews.
 
+## Revision page
+
+When the catalog advertises the `preview` feature, the revision page shows a
+sample preview form to callers whose mapping access includes the `preview`
+action; other roles see that their role cannot run previews. The form takes the
+primary JSON document and named inputs as pasted text (sent as UTF-8) or as
+chosen files (sent as their exact bytes), typed parameters and the output target.
+It checks the policy's input, name and parameter bounds before submitting.
+
+Each submission uses a new idempotency key. The tab keeps only that key and the
+returned run ID in session storage for the revision. After a reload it reads the
+recorded run again; when the earlier submission was never confirmed it reuses
+the same key, so resubmitting identical inputs returns the original run, and the
+user can discard the earlier submission to submit different inputs. While a run
+is queued or running the page polls it with a growing delay and offers
+cancellation. Output downloads and inline views are verified against the run's
+recorded byte count and SHA-256 before use.
+
 ## Storage and retention
 
 Interactive preview payloads are bounded (8 MiB of inputs and 8 MiB of outputs)

@@ -156,6 +156,17 @@
       </button>
     </section>
     <weft-revision-reports [reports]="reports" [revision]="view.revision" />
+    @if (context(); as current) {
+      @if (current.features.preview) {
+        @defer (on immediate) {
+          <weft-revision-preview
+            [context]="current"
+            [mapping]="view.mapping"
+            [revision]="view.revision"
+          />
+        }
+      }
+    }
   } @else {
     <weft-catalog-status
       [kind]="kind()"
