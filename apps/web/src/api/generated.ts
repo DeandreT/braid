@@ -187,6 +187,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/previews/{runId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one of the caller's own preview runs. */
+    get: operations["GetCatalogPreview"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/previews/{runId}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Cancel a queued preview run or request cancellation of a running one. */
+    post: operations["CancelCatalogPreview"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/previews/{runId}/outputs/{ordinal}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the exact bytes of one output of a succeeded preview run. */
+    get: operations["GetCatalogPreviewOutput"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects": {
     parameters: {
       query?: never;
@@ -439,6 +490,23 @@ export interface paths {
     get: operations["StreamChatTurnEvents"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/previews": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Submit an idempotent bounded JSON sample preview of this exact revision. */
+    post: operations["SubmitCatalogPreview"];
     delete?: never;
     options?: never;
     head?: never;
@@ -823,6 +891,80 @@ export interface components {
     };
     CatalogOrganizationActionsV1: {
       createProjects: boolean;
+    };
+    CatalogPreviewCancelResultV1: {
+      outcome: string;
+      run: components["schemas"]["CatalogPreviewRunV1"];
+    };
+    CatalogPreviewFailureV1: {
+      code: string;
+      message: string;
+      messageTruncated: boolean;
+      subject: null | string;
+      subjectTruncated: boolean;
+    };
+    CatalogPreviewOutputV1: {
+      boundaryId: string;
+      /** Format: int32 */
+      byteCount: number;
+      mediaType: string;
+      /** Format: int32 */
+      ordinal: number;
+      recordsWritten: string;
+      sha256: string;
+      targetName: string;
+      targetNameTruncated: boolean;
+    };
+    CatalogPreviewProvenanceV1: {
+      adapterBuild: string;
+      backendBuild: string;
+      confirmed: boolean;
+      engineRevision: string;
+      profile: string;
+    };
+    CatalogPreviewRunV1: {
+      /** Format: int32 */
+      attempt: number;
+      cancelRequested: boolean;
+      /** Format: date-time */
+      createdAtUtc: string;
+      currentDateTime: string;
+      /** Format: date-time */
+      expiresAtUtc: string;
+      failure: null | components["schemas"]["CatalogPreviewFailureV1"];
+      /** Format: date-time */
+      finishedAtUtc: null | string;
+      /** Format: int32 */
+      maxAttempts: number;
+      outcome: null | string;
+      outputs: components["schemas"]["CatalogPreviewOutputV1"][];
+      provenance: null | components["schemas"]["CatalogPreviewProvenanceV1"];
+      recordsWritten: null | string;
+      requestFingerprint: string;
+      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      runId: string;
+      /** Format: date-time */
+      startedAtUtc: null | string;
+      state: string;
+    };
+    CatalogPreviewSubmissionV1: {
+      inputs: {
+        content: string;
+        name?: null | string;
+      }[];
+      parameters: {
+        kind: string;
+        name: string;
+        value: string;
+      }[];
+      target: {
+        kind: string;
+        name?: null | string;
+      };
+    };
+    CatalogPreviewSubmitResultV1: {
+      outcome: string;
+      run: components["schemas"]["CatalogPreviewRunV1"];
     };
     CatalogProjectCreateV1: {
       description: string;
@@ -2551,6 +2693,218 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HealthResponseV1"];
+        };
+      };
+    };
+  };
+  GetCatalogPreview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        runId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogPreviewRunV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  CancelCatalogPreview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        runId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogPreviewCancelResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogPreviewOutput: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ordinal: string;
+        organizationId: string;
+        runId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
     };
@@ -4652,6 +5006,125 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  SubmitCatalogPreview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CatalogPreviewSubmissionV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogPreviewSubmitResultV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogPreviewSubmitResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
     };

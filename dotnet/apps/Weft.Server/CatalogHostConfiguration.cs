@@ -23,8 +23,11 @@ public static class CatalogHostConfiguration
         var creationOptions = new CatalogProjectCreationOptions(Flag("WEFT_PROJECT_CREATION_ENABLED"));
         var reportOptions = new CatalogRevisionReportOptions(Flag("WEFT_REVISION_REPORTS_ENABLED"),
             Flag("WEFT_REVISION_REPORT_DERIVATION_ENABLED"));
+        var previewOptions = new CatalogPreviewOptions(Flag("WEFT_PREVIEWS_ENABLED"));
         builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions, creationOptions, reportOptions);
         var chat = Flag("WEFT_CHAT_ENABLED");
+        if (previewOptions.Enabled && !options.Enabled)
+            throw new InvalidOperationException("Previews require an enabled catalog.");
         if (!options.Enabled)
         {
             ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, false, reportOptions);
@@ -37,6 +40,7 @@ public static class CatalogHostConfiguration
         CatalogBusinessServices.Configure(builder.Services, builder.Environment, metadataOptions, ingestionOptions,
             creationOptions, reportOptions, readEnvironment);
         ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, true, reportOptions);
+        CatalogPreviewHostConfiguration.Configure(builder.Services, previewOptions, readEnvironment);
 
         bool Flag(string variable) => readEnvironment(variable) switch
         {

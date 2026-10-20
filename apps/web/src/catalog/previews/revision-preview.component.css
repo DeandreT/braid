@@ -1,0 +1,154 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.preview-form {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0 0;
+}
+.preview-group {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #dfe7da;
+  border-radius: 10px;
+}
+.preview-group legend {
+  color: #284c3c;
+  font-weight: 600;
+  padding: 0 6px;
+}
+.preview-input {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.preview-input label,
+.preview-row label {
+  color: #3f5d4b;
+  font-size: 13px;
+  font-weight: 600;
+}
+.preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+.preview-row label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.preview-json,
+.preview-text,
+.preview-row select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #ccdcca;
+  border-radius: 8px;
+  font:
+    13px ui-monospace,
+    "SFMono-Regular",
+    monospace;
+}
+.preview-json {
+  resize: vertical;
+}
+.preview-file-label input[type="file"] {
+  font-size: 12px;
+}
+.preview-file,
+.preview-hint,
+.preview-note,
+.preview-message {
+  color: #536e5e;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.preview-note {
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #f5f8f1;
+}
+.preview-primary {
+  background: #345d45;
+  border-color: #345d45;
+  color: #fff;
+}
+.preview-primary:hover {
+  background: #284c3c;
+}
+.preview-error {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.preview-run {
+  margin: 20px 0 0;
+  padding: 16px 0 0;
+  border-top: 1px solid #dfe7da;
+}
+.preview-run h3 {
+  color: #284c3c;
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+.preview-status {
+  font-weight: 600;
+  color: #345d45;
+}
+.preview-failure {
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #fbf3ef;
+  color: #6d3b2a;
+}
+.preview-table {
+  overflow-x: auto;
+  margin: 12px 0;
+}
+.preview-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.preview-table th,
+.preview-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px;
+  border-bottom: 1px solid #e6ece2;
+}
+.preview-digest {
+  word-break: break-all;
+}
+.preview-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.preview-output pre {
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 9px;
+  background: #f6f8f4;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .preview-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

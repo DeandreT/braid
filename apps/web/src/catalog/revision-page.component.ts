@@ -32,6 +32,7 @@ import {
   type RevisionReportSelectors,
 } from "./reports/revision-report-state";
 import { RevisionReportsComponent } from "./reports/revision-reports.component";
+import { RevisionPreviewComponent } from "./previews/revision-preview.component";
 
 interface RevisionScreen {
   project: CatalogProject;
@@ -46,6 +47,7 @@ interface RevisionScreen {
     RouterLink,
     CatalogStatusComponent,
     RevisionReportsComponent,
+    RevisionPreviewComponent,
   ],
   templateUrl: "./revision-page.component.html",
 })

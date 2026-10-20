@@ -1,0 +1,410 @@
+<section class="catalog-summary preview" aria-labelledby="sample-preview-title">
+  <h2 id="sample-preview-title">Sample preview</h2>
+  <p class="catalog-intro">
+    Run this saved revision on sample JSON documents. Results are kept for a
+    limited time and only you can read them.
+  </p>
+  @if (!allowed()) {
+    <p class="preview-note" role="note">
+      Your project role ({{ mapping().access.role }}) cannot run previews.
+    </p>
+  } @else {
+    @switch (preview.notice()) {
+      @case ("recovered") {
+        <p class="preview-note" role="status">
+          Showing your last preview of this revision from this tab.
+        </p>
+      }
+      @case ("unconfirmed") {
+        <div class="preview-note" role="status">
+          <p>
+            An earlier submission from this tab was not confirmed. Submitting
+            the same inputs again returns it instead of starting another run.
+          </p>
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="preview.discard()"
+          >
+            Discard earlier submission
+          </button>
+        </div>
+      }
+      @case ("replayed") {
+        <p class="preview-note" role="status">
+          This preview was already submitted; showing the original run.
+        </p>
+      }
+    }
+    <form
+      class="preview-form"
+      (submit)="$event.preventDefault(); preview.submit()"
+    >
+      <fieldset class="preview-group">
+        <legend>Input documents</legend>
+        @for (
+          item of preview.inputs();
+          track item.id;
+          let first = $first;
+          let index = $index
+        ) {
+          <div class="preview-input">
+            @if (first) {
+              <label [for]="'preview-input-' + item.id"
+                >Primary input (JSON)</label
+              >
+            } @else {
+              <label [for]="'preview-input-name-' + item.id">Source name</label>
+              <input
+                class="preview-text"
+                type="text"
+                [id]="'preview-input-name-' + item.id"
+                [value]="item.name"
+                maxlength="256"
+                (input)="
+                  preview.updateInput(item.id, {
+                    name: $any($event.target).value,
+                  })
+                "
+              />
+              <label [for]="'preview-input-' + item.id"
+                >Named input {{ index }} (JSON)</label
+              >
+            }
+            @if (item.file; as file) {
+              <p class="preview-file">
+                <span>{{ file.name }}</span> · {{ file.bytes.length }} bytes
+              </p>
+            } @else {
+              <textarea
+                class="preview-json"
+                [id]="'preview-input-' + item.id"
+                rows="6"
+                spellcheck="false"
+                [value]="item.text"
+                (input)="
+                  preview.updateInput(item.id, {
+                    text: $any($event.target).value,
+                  })
+                "
+              ></textarea>
+            }
+            <div class="preview-row">
+              <label class="preview-file-label">
+                {{ item.file ? "Replace file" : "Or choose a file" }}
+                <input
+                  #fileInput
+                  type="file"
+                  accept="application/json,.json"
+                  (change)="chooseFile(item.id, $event)"
+                />
+              </label>
+              @if (item.file) {
+                <button
+                  class="catalog-button"
+                  type="button"
+                  (click)="clearFile(item.id, fileInput)"
+                >
+                  Use text instead
+                </button>
+              }
+              @if (!first) {
+                <button
+                  class="catalog-button"
+                  type="button"
+                  (click)="preview.removeInput(item.id)"
+                >
+                  Remove input
+                </button>
+              }
+            </div>
+          </div>
+        }
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="preview.addInput()"
+          [disabled]="preview.inputs().length >= limits.inputDocuments"
+        >
+          Add named input
+        </button>
+      </fieldset>
+      <fieldset class="preview-group">
+        <legend>Parameters</legend>
+        @for (item of preview.parameters(); track item.id) {
+          <div class="preview-row preview-parameter">
+            <label>
+              Name
+              <input
+                class="preview-text"
+                type="text"
+                [value]="item.name"
+                maxlength="256"
+                (input)="
+                  preview.updateParameter(item.id, {
+                    name: $any($event.target).value,
+                  })
+                "
+              />
+            </label>
+            <label>
+              Type
+              <select
+                [value]="item.kind"
+                (change)="setParameterKind(item.id, $any($event.target).value)"
+              >
+                <option value="string">Text</option>
+                <option value="integer">Integer</option>
+                <option value="float">Decimal</option>
+                <option value="boolean">Boolean</option>
+              </select>
+            </label>
+            <label>
+              Value
+              <input
+                class="preview-text"
+                type="text"
+                [value]="item.value"
+                (input)="
+                  preview.updateParameter(item.id, {
+                    value: $any($event.target).value,
+                  })
+                "
+              />
+            </label>
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="preview.removeParameter(item.id)"
+            >
+              Remove parameter
+            </button>
+          </div>
+        } @empty {
+          <p class="preview-hint">No parameters. Mapping defaults apply.</p>
+        }
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="preview.addParameter()"
+          [disabled]="preview.parameters().length >= limits.parameters"
+        >
+          Add parameter
+        </button>
+      </fieldset>
+      <fieldset class="preview-group preview-row">
+        <legend>Outputs</legend>
+        <label>
+          Target
+          <select
+            [value]="preview.targetKind()"
+            (change)="setTarget($any($event.target).value)"
+          >
+            <option value="all">All outputs</option>
+            <option value="primary">Primary output only</option>
+            <option value="named">One named output</option>
+          </select>
+        </label>
+        @if (preview.targetKind() === "named") {
+          <label>
+            Output name
+            <input
+              class="preview-text"
+              type="text"
+              maxlength="256"
+              [value]="preview.targetName()"
+              (input)="preview.targetName.set($any($event.target).value)"
+            />
+          </label>
+        }
+      </fieldset>
+      @if (preview.formError(); as message) {
+        <p class="catalog-inline-error" role="alert">{{ message }}</p>
+      }
+      <div class="preview-row">
+        <button
+          class="catalog-button preview-primary"
+          type="submit"
+          [disabled]="preview.busy() !== null || preview.active()"
+        >
+          {{ preview.busy() === "submitting" ? "Submitting…" : "Run preview" }}
+        </button>
+        @if (preview.active()) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="preview.cancel()"
+            [disabled]="
+              preview.busy() !== null || preview.run()?.cancelRequested
+            "
+          >
+            Cancel preview
+          </button>
+        }
+      </div>
+    </form>
+    @if (preview.error(); as kind) {
+      <div class="preview-error" role="alert">
+        <p class="catalog-inline-error">{{ errorText(kind) }}</p>
+        @if (kind === "conflict") {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="preview.discard()"
+          >
+            Discard earlier submission
+          </button>
+        } @else if (kind === "timedOut" || kind === "unavailable") {
+          @if (preview.run() || preview.notice() === "recovered") {
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="preview.refresh()"
+            >
+              Check again
+            </button>
+          }
+        }
+      </div>
+    }
+    @if (preview.run(); as run) {
+      <section class="preview-run" aria-labelledby="preview-run-title">
+        <h3 id="preview-run-title">Preview run</h3>
+        <p class="preview-status" role="status" aria-live="polite">
+          {{ stateLabel(run.state) }}
+          @if (run.state === "completed") {
+            · {{ outcomeLabel(run.outcome) }}
+          }
+          @if (
+            preview.notice() === "cancelRequested" && run.state === "running"
+          ) {
+            · Cancellation requested
+          }
+        </p>
+        <dl class="catalog-facts">
+          <dt>Run ID</dt>
+          <dd>
+            <code class="catalog-code">{{ run.runId }}</code>
+          </dd>
+          <dt>Attempt</dt>
+          <dd>{{ run.attempt }} of {{ run.maxAttempts }}</dd>
+          <dt>Evaluation time</dt>
+          <dd>
+            <code class="catalog-code">{{ run.currentDateTime }}</code>
+          </dd>
+          @if (run.recordsWritten !== null) {
+            <dt>Records written</dt>
+            <dd>{{ run.recordsWritten }}</dd>
+          }
+          @if (run.provenance; as provenance) {
+            <dt>Engine</dt>
+            <dd>
+              <code class="catalog-code">{{ provenance.engineRevision }}</code>
+            </dd>
+          }
+          <dt>Kept until</dt>
+          <dd>
+            <time [attr.datetime]="run.expiresAtUtc">{{
+              run.expiresAtUtc
+            }}</time>
+          </dd>
+        </dl>
+        @if (run.failure; as failure) {
+          <div class="preview-failure" role="alert">
+            <p>
+              <strong>{{ outcomeLabel(run.outcome) }}</strong>
+              @if (failure.subject) {
+                ·
+                <code class="catalog-code"
+                  >{{ failure.subject
+                  }}{{ failure.subjectTruncated ? "…" : "" }}</code
+                >
+              }
+            </p>
+            <p class="preview-message">
+              {{ failure.message }}{{ failure.messageTruncated ? "…" : "" }}
+            </p>
+            <p class="preview-hint">
+              Code: <code class="catalog-code">{{ failure.code }}</code>
+            </p>
+          </div>
+        }
+        @if (run.outputs.length > 0) {
+          <div
+            class="preview-table"
+            role="region"
+            aria-label="Preview outputs"
+            tabindex="0"
+          >
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Output</th>
+                  <th scope="col">Records</th>
+                  <th scope="col">Bytes</th>
+                  <th scope="col">SHA-256</th>
+                  <th scope="col">
+                    <span class="preview-hidden">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (output of run.outputs; track output.ordinal) {
+                  <tr>
+                    <th scope="row">{{ targetLabel(output) }}</th>
+                    <td>{{ output.recordsWritten }}</td>
+                    <td>{{ output.byteCount }}</td>
+                    <td>
+                      <code class="catalog-code preview-digest">{{
+                        output.sha256
+                      }}</code>
+                    </td>
+                    <td class="preview-row">
+                      <button
+                        class="catalog-button"
+                        type="button"
+                        (click)="show(output)"
+                      >
+                        Show {{ targetLabel(output) }}
+                      </button>
+                      <button
+                        class="catalog-button"
+                        type="button"
+                        (click)="download(output)"
+                      >
+                        Download {{ targetLabel(output) }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        @if (outputError(); as kind) {
+          <p class="catalog-inline-error" role="alert">{{ errorText(kind) }}</p>
+        }
+        @if (shown(); as view) {
+          <figure class="preview-output">
+            <figcaption>
+              Output {{ view.ordinal + 1 }}
+              @if (view.truncated) {
+                (first 256 KiB; download for the complete document)
+              }
+            </figcaption>
+            <pre tabindex="0">{{ view.text }}</pre>
+          </figure>
+        }
+        @if (!preview.active()) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="preview.discard()"
+          >
+            Start a new preview
+          </button>
+        }
+      </section>
+    }
+  }
+</section>

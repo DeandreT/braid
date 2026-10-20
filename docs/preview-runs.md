@@ -4,8 +4,7 @@ A preview run is an owned, replayable business operation: one bounded sample
 preview of an exact immutable revision, submitted by a project member. It records
 the submitted inputs, the admitted request, every attempt and the terminal result.
 Execution uses the [Ferrule preview worker](ferrule-worker.md#json-sample-preview)
-and is delivered durably through Wolverine; HTTP routes and the Angular form are
-separate increments.
+and is delivered durably through Wolverine.
 
 ## Submission and idempotency
 
@@ -96,6 +95,56 @@ contains the state, attempts, outcome, failure, provenance (engine revision,
 worker image, adapter and profile) and output descriptors. Output bytes are read
 individually by ordinal with their digest verified. The submitter can cancel a
 queued run immediately or request cancellation of a running one.
+
+## HTTP API
+
+Preview routes are default-off and require an enabled catalog. Every response is
+`no-store`; unsafe requests use the catalog's request-token and origin checks.
+
+- `POST /api/v1/organizations/{org}/projects/{project}/mappings/{mapping}/revisions/{revision}/previews`
+  submits a run. It requires an `Idempotency-Key` header (a UUID) and an
+  `application/json` body (UTF-8 only, no content encoding) of at most 12 MiB:
+  `target` (`kind` `all`, `primary` or `named` with a `name`), `parameters`
+  (`name`, `kind` `string`, `integer`, `float` or `boolean`, and the value as
+  text) and `inputs` (base64 `content`; the first input has no name and every
+  later input names its source). Unknown or duplicate members are refused. A new
+  run returns `201` with its location; an identical resubmission returns `200`
+  with outcome `replayed`; a changed request under the same key returns `409`
+  `idempotencyConflict`. A caller who cannot submit previews for the revision
+  receives `404`.
+- `GET /api/v1/organizations/{org}/previews/{run}` returns the submitter's run.
+- `GET /api/v1/organizations/{org}/previews/{run}/outputs/{ordinal}` returns the
+  exact bytes of one output of a succeeded run as an `application/json`
+  attachment with a `Content-Digest` (`sha-256`) header.
+- `POST /api/v1/organizations/{org}/previews/{run}/cancel` (empty body) returns
+  outcome `canceled`, `requested` (the run is executing) or `finished`, with the
+  current run.
+
+The Development host enables the routes with `WEFT_PREVIEWS_ENABLED=true` and the
+two preview database logins in `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING`
+and `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING`. The web host only submits:
+it records runs and their commands through the outbox, and the separate worker
+host executes them. When enabled, the catalog context advertises the `preview`
+feature, and project and mapping access report the `preview` action for callers
+whose role can submit previews.
+
+## Revision page
+
+When the catalog advertises the `preview` feature, the revision page shows a
+sample preview form to callers whose mapping access includes the `preview`
+action; other roles see that their role cannot run previews. The form takes the
+primary JSON document and named inputs as pasted text (sent as UTF-8) or as
+chosen files (sent as their exact bytes), typed parameters and the output target.
+It checks the policy's input, name and parameter bounds before submitting.
+
+Each submission uses a new idempotency key. The tab keeps only that key and the
+returned run ID in session storage for the revision. After a reload it reads the
+recorded run again; when the earlier submission was never confirmed it reuses
+the same key, so resubmitting identical inputs returns the original run, and the
+user can discard the earlier submission to submit different inputs. While a run
+is queued or running the page polls it with a growing delay and offers
+cancellation. Output downloads and inline views are verified against the run's
+recorded byte count and SHA-256 before use.
 
 ## Storage and retention
 
