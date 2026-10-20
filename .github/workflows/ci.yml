@@ -67,9 +67,10 @@ jobs:
           dotnet publish dotnet/tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/probe"
           printf 'WEFT_HOST_TEST_SERVER_PATH=%s\n' "$weft_host_qualification/server/Weft.Server.dll" >> "$GITHUB_ENV"
           printf 'WEFT_HOST_PRIVACY_PROBE_PATH=%s\n' "$weft_host_qualification/probe/Weft.HostPrivacyProbe.dll" >> "$GITHUB_ENV"
-      - run: dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
       - name: Install isolated browser dependencies
-        run: npx playwright install-deps chromium
+        run: |
+          npx playwright install-deps chromium
+          sudo apt-get install --yes --no-install-recommends libnss3-tools
       - name: Install the pinned Chrome for Testing build
         run: |
           weft_browser_archive="$RUNNER_TEMP/weft-chromium-157.0.8090.0.zip"
@@ -80,5 +81,9 @@ jobs:
           mkdir "$weft_browser_directory"
           unzip -q "$weft_browser_archive" -d "$weft_browser_directory"
           printf 'WEFT_CHROMIUM_EXECUTABLE=%s\n' "$weft_browser_directory/chrome-linux64/chrome" >> "$GITHUB_ENV"
+      - run: npm run test:auth-https-source
+      - name: Prepare owned HTTPS browser admission
+        run: node tools/auth-browser-https/admit.mjs --approved
+      - run: ulimit -c 0 && dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
       - name: Browser verification on a virtual display
         run: npm run test:browser

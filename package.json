@@ -21,6 +21,8 @@
     "format": "prettier --write \"apps/web/**/*.{ts,html,css,json}\" \"tools/**/*.{mjs,json}\" package.json global.json",
     "test:browser": "env -u WAYLAND_DISPLAY xvfb-run -a -w 10 npm --workspace @weft/web run test:e2e",
     "test:browser-session": "env -u WAYLAND_DISPLAY xvfb-run -a -w 10 npm --workspace @weft/web run test:e2e -- --config playwright.browser-session.config.ts",
+    "test:auth-https-source": "npm --workspace @weft/web run test:e2e -- --config playwright.auth-https-source.config.ts",
+    "test:auth-https-browser": "ulimit -c 0 && env -u WAYLAND_DISPLAY xvfb-run ${WEFT_XVFB_SERVER_NUM:+--server-num=}${WEFT_XVFB_SERVER_NUM:--a} -w 10 npm --workspace @weft/web run test:e2e -- --config playwright.auth-https.config.ts",
     "test:catalog-browser": "env -u WAYLAND_DISPLAY xvfb-run -a -w 10 npm --workspace @weft/web run test:e2e -- --config playwright.catalog.config.ts",
     "test:reports-browser": "env -u WAYLAND_DISPLAY xvfb-run -a -w 10 npm --workspace @weft/web run test:e2e -- --config playwright.reports.config.ts",
     "test:project-creation-browser": "env -u WAYLAND_DISPLAY xvfb-run -a -w 10 npm --workspace @weft/web run test:e2e -- --config playwright.project-creation.config.ts",

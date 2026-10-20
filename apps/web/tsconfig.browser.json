@@ -2,6 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
   "include": [
+    "playwright.auth-https.config.ts",
+    "playwright.auth-https-source.config.ts",
+    "tests/auth-https/*.ts",
     "playwright.catalog.config.ts",
     "playwright.reports.config.ts",
     "playwright.project-creation.config.ts",

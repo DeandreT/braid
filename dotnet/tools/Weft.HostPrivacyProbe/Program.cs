@@ -29,6 +29,8 @@ internal static class Program
 
     public static async Task<int> Main()
     {
+        if (Environment.GetEnvironmentVariable("WEFT_HOST_PROBE_OPERATION") == "browserQualification")
+            return await BrowserQualificationHost.RunAsync();
         var report = new HostPrivacyReport();
         using var observation = new HostPrivacyObservation(Marker);
         using var output = new HostMarkerWriter(Console.Out, Marker);

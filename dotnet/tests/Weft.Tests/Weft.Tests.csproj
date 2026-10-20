@@ -3,6 +3,16 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationAdmissionWire.cs" Link="BrowserQualificationAdmissionWire.cs" />
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationAdmission.cs" Link="BrowserQualificationAdmission.cs" />
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationNetwork.cs" Link="BrowserQualificationNetwork.cs" />
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationNetworkWire.cs" Link="BrowserQualificationNetworkWire.cs" />
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationSettlement.cs" Link="BrowserQualificationSettlement.cs" />
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationSettlementWire.cs" Link="BrowserQualificationSettlementWire.cs" />
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationParentSettlementWire.cs" Link="BrowserQualificationParentSettlementWire.cs" />
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationControlSettlement.cs" Link="BrowserQualificationControlSettlement.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -32,6 +42,10 @@
     <ProjectReference Include="../../tools/Weft.WorkerShutdownProbe/Weft.WorkerShutdownProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../tools/Weft.HostPrivacyProbe/BrowserQualificationWire.cs"
+             Link="AuthBrowserQualification/BrowserQualificationWire.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../../engines/ferrule-host/tests/fixtures/*.json"

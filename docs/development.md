@@ -152,6 +152,24 @@ Host process tests require these explicit absolute paths to fresh publications o
 the same Release build. The privacy probe is a qualification tool, not a deployed
 Server dependency; keep its publication separate from the shipped host.
 
+The owned HTTPS sign-in qualification drives the pinned Chrome for Testing through
+real TLS, a mock OIDC issuer and the actual session modules hosted by the probe
+(see [transport admission](browser-https-network-admission.md)). It also needs
+`certutil`, `xvfb-run`, `Xvfb`, `xauth` and an explicit admission record that hashes
+the publications, Node, npm, Chromium and `certutil`. Prepare a fresh record after
+every publication, in a private directory short enough for its Unix sockets:
+
+```sh
+weft_admission="$(mktemp -d "${TMPDIR:-/tmp}/weft-ah.XXXXXXXX")"
+export WEFT_AUTH_BROWSER_ADMISSION_ROOT="$weft_admission"
+export WEFT_AUTH_BROWSER_ADMISSION_FILE="$weft_admission/admission.json"
+node tools/auth-browser-https/admit.mjs --approved
+```
+
+Without a record the real-browser cases are skipped locally. CI always prepares
+one, so they fail rather than skip there. The browser runs on the first free
+virtual display unless `WEFT_XVFB_SERVER_NUM` selects one.
+
 The browser harness owns API and Angular development processes on ports 4101
 and 5174, fails on occupied ports, and stops them when it exits. Build the Release
 server before invoking it. The root browser-test command always uses a fresh

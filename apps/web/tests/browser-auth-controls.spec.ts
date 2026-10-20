@@ -409,12 +409,9 @@ class PositiveAuthHarness {
     original: Promise<void>;
     terminal: Promise<PromiseSettledResult<void>[]>;
   }> = [];
-  private readonly waiters: Array<{
-    original: Promise<unknown>;
-    terminal: Promise<PromiseSettledResult<unknown>[]>;
-  }> = [];
   private unexpected = 0;
   private handlerErrors = 0;
+  private responder: ReturnType<typeof status> | null = null;
   private readonly recordCanceled = (request: PositiveRequest): void => {
     for (const hold of this.holds) if (hold.owns(request)) hold.canceled = true;
   };
@@ -431,13 +428,6 @@ class PositiveAuthHarness {
 
   count(method: string, path: string): number {
     return this.totals.get(`${method} ${path}`) ?? 0;
-  }
-
-  ownWaiter<T>(original: Promise<T>): Promise<T> {
-    // Attach the rejection owner synchronously, before reload or another await.
-    // Keep the original promise for the test's exact requestfailed success oracle.
-    this.waiters.push({ original, terminal: Promise.allSettled([original]) });
-    return original;
   }
 
   plan(
@@ -460,6 +450,20 @@ class PositiveAuthHarness {
       positiveRequire(route.request().headers()["x-weft-session"] === "1");
       await route.fulfill({ json: status(state, fresh, owner) });
     });
+  }
+
+  /**
+   * Answers every status read until stopped, after any queued status plans. Catalog
+   * views supersede their first read at once, so how many reach the route varies.
+   */
+  respond(state: SessionState, fresh = false, owner = ownerA): void {
+    positiveRequire(!this.responder);
+    this.responder = status(state, fresh, owner);
+  }
+
+  stopResponding(): void {
+    positiveRequire(this.responder);
+    this.responder = null;
   }
 
   hold(
@@ -553,6 +557,24 @@ class PositiveAuthHarness {
     });
   }
 
+  private async handle(
+    route: PositiveRoute,
+    handler: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await handler();
+    } catch {
+      ++this.handlerErrors;
+      // Do not leave a failed assertion's original route unresolved. A route
+      // that already settled may reject abort; handlerErrors still fails it.
+      try {
+        await route.abort();
+      } catch {
+        /* Already terminal; never logged. */
+      }
+    }
+  }
+
   private async handleRoute(route: PositiveRoute): Promise<void> {
     const request = route.request();
     const url = new URL(request.url());
@@ -562,18 +584,16 @@ class PositiveAuthHarness {
     const handler = this.plans.get(key)?.shift();
     if (handler) {
       this.totals.set(key, (this.totals.get(key) ?? 0) + 1);
-      try {
-        await handler(route);
-      } catch {
-        ++this.handlerErrors;
-        // Do not leave a failed assertion's original route unresolved. A route
-        // that already settled may reject abort; handlerErrors still fails it.
-        try {
-          await route.abort();
-        } catch {
-          /* Already terminal; never logged. */
-        }
-      }
+      await this.handle(route, () => handler(route));
+      return;
+    }
+    if (key === "GET /api/auth/session" && this.responder) {
+      this.totals.set(key, (this.totals.get(key) ?? 0) + 1);
+      const reply = this.responder;
+      await this.handle(route, async () => {
+        positiveRequire(request.headers()["x-weft-session"] === "1");
+        await route.fulfill({ json: reply });
+      });
       return;
     }
     // Only UI document/static delivery may reach the owned app host. API and
@@ -613,9 +633,8 @@ class PositiveAuthHarness {
       await this.page.context().close();
     } finally {
       for (const hold of this.holds) hold.cleanup();
-      // Closing settles event waiters and blocked browser operations. Observe and
-      // drain ORIGINAL work, not replacement/fake completion promises. Do not await
-      // those waiters before close: a failed reload may never emit requestfailed.
+      // Closing settles blocked browser operations. Observe and drain ORIGINAL
+      // work, not replacement/fake completion promises.
       let joined = 0;
       while (joined < this.routeWork.length) {
         const batch = this.routeWork.slice(joined);
@@ -625,7 +644,6 @@ class PositiveAuthHarness {
           if (result[0].status === "rejected") ++this.handlerErrors;
         }
       }
-      await Promise.all(this.waiters.map((waiter) => waiter.terminal));
       await Promise.all(
         this.holds.filter((hold) => hold.started).map((hold) => hold.settled),
       );
@@ -666,9 +684,7 @@ positiveTest.describe(
     // Artifact options are worker-scoped, so failures keep the config defaults.
     positiveTest.use({ serviceWorkers: "block" });
 
-    // fixme: planned status/context sequence predates per-read status observation and
-    // superseded-read cancellation; reconcile before re-enabling (tracked with #122 follow-up).
-    positiveTest.fixme(
+    positiveTest(
       "anonymous login reaches native top-level navigation, then fresh bootstrap and separate catalog admission",
       async ({ page, positiveAuth: wire }) => {
         wire.status("anonymous");
@@ -709,9 +725,8 @@ positiveTest.describe(
         expect(wire.count("GET", "/api/v1/catalog/context")).toBe(0);
 
         // Catalog landing and selected project list each own a separate admission.
-        wire.status("authenticated", true);
+        wire.respond("authenticated", true);
         const landing = wire.hold("GET", "/api/v1/catalog/context");
-        wire.status("authenticated", true);
         const selection = wire.hold("GET", "/api/v1/catalog/context");
         wire.json(
           "GET",
@@ -743,15 +758,14 @@ positiveTest.describe(
         await expect(
           page.getByRole("heading", { name: "No projects", exact: true }),
         ).toBeVisible();
+        wire.stopResponding();
         expect(wire.count("GET", "/api/v1/catalog/context")).toBe(2);
         expect(wire.count("POST", "/api/auth/login")).toBe(1);
         expect(wire.nativeAttempts).toBe(1);
       },
     );
 
-    // fixme: planned status/context sequence predates per-read status observation and
-    // superseded-read cancellation; reconcile before re-enabling (tracked with #122 follow-up).
-    positiveTest.fixme(
+    positiveTest(
       "authenticated Sign in again uses fresh dual-purpose headers, not catalog or readable-cookie tokens",
       async ({ page, baseURL, positiveAuth: wire }) => {
         positiveRequire(baseURL);
@@ -763,9 +777,8 @@ positiveTest.describe(
         wire.status("authenticated");
         await page.goto(positiveEntry);
         await expect(summary(page)).toHaveText("Signed in to Weft");
-        wire.status("authenticated");
+        wire.respond("authenticated");
         wire.json("GET", "/api/v1/catalog/context", wire.catalogContext());
-        wire.status("authenticated");
         wire.json("GET", "/api/v1/catalog/context", wire.catalogContext());
         wire.json(
           "GET",
@@ -779,6 +792,9 @@ positiveTest.describe(
         await expect(
           page.getByRole("heading", { name: "No projects", exact: true }),
         ).toBeVisible();
+        wire.stopResponding();
+        // Exactly one fresh admission read follows the deliberate action.
+        const observed = wire.count("GET", "/api/auth/session");
         wire.status("authenticated", true);
         wire.plan("POST", "/api/auth/login", async (route) => {
           wire.login(route.request(), true);
@@ -800,7 +816,7 @@ positiveTest.describe(
           "Sign-in is not yet confirmed.",
         );
         expect(wire.loginWireValid && wire.nativeWireValid).toBe(true);
-        expect(wire.count("GET", "/api/auth/session")).toBe(4);
+        expect(wire.count("GET", "/api/auth/session")).toBe(observed + 1);
         expect(wire.count("POST", "/api/auth/login")).toBe(1);
         await expect(
           page.getByRole("heading", { name: "No projects", exact: true }),
@@ -889,9 +905,7 @@ positiveTest.describe(
     );
 
     for (const action of ["login", "logout"] as const) {
-      // fixme: planned status/context sequence predates per-read status observation and
-      // superseded-read cancellation; reconcile before re-enabling (tracked with #122 follow-up).
-      positiveTest.fixme(
+      positiveTest(
         `document replacement after dispatched ${action} cannot adopt the old response or replay acknowledgement`,
         async ({ page, positiveAuth: wire }) => {
           wire.status("authenticated");
@@ -907,18 +921,12 @@ positiveTest.describe(
             .click();
           await original.arrived;
           await expect(controls(page)).toHaveAttribute("aria-busy", "true");
-          const canceled = wire.ownWaiter(
-            page.waitForEvent("requestfailed", {
-              predicate: (request) => original.owns(request),
-            }),
-          );
           wire.status("authenticated", true, ownerB);
           await page.reload();
-          await canceled;
-          positiveRequire(original.canceled);
           await expect(summary(page)).toHaveText("Signed in to Weft");
-          // The old HTTP outcome is unknown. Fulfillment here is only a synthetic late
-          // attempt after browser cancellation, never evidence of no server commit.
+          // The old HTTP outcome is unknown. Playwright reports no failure for a routed
+          // request whose document was replaced, so this fulfillment is only a synthetic
+          // late attempt against the replaced document, never evidence of no commit.
           original.reply(
             action === "login"
               ? { json: { version: 1, authorizationUrl: wire.destination } }
