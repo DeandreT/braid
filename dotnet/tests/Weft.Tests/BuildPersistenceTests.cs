@@ -270,7 +270,15 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         var cases = test.Runs.Cases;
         var project = cases.Seed.HiddenProjectA;
         await cases.Seed.AddMembershipAsync(cases.Case, test.Runs.Organization, project, test.Actor.PrincipalId.Value, "administrator");
-        var source = await HistoricalIngestionSeed.CommitCreateAsync(cases.Case, test.Actor, new(test.Runs.Organization, project));
+        await using var ingestionDatabase = new PostgresIngestionDatabase(cases.Case.IngestionConnectionString);
+        var ingestion = new PostgresRevisionIngestionStore(ingestionDatabase);
+        var reservation = await ingestion.ReserveAsync(test.Actor, new(test.Runs.Organization, project), Guid.NewGuid(),
+            PostgresIngestionTestSupport.CreateIntent(), PostgresIngestionTestSupport.Profile, PostgresIngestionTestSupport.Policy);
+        var sourceFacts = reservation.Receipt!.Facts;
+        var ingestionClaim = (await ingestion.ClaimAsync(test.Actor, sourceFacts.Project, sourceFacts.OperationId, Guid.NewGuid())).Claim!;
+        await ingestion.MarkStagedAsync(test.Actor, ingestionClaim, sourceFacts.NativeObject);
+        await ingestion.CompleteAttemptAsync(test.Actor, ingestionClaim, PostgresIngestionTestSupport.SyntheticCompletion(sourceFacts));
+        var source = (await ingestion.FinalizeAsync(test.Actor, ingestionClaim)).Receipt!;
         var value = new Weft.Application.Regression.RegressionCaseVersion(Guid.NewGuid(), 1, test.Actor.PrincipalId, "other-project",
             source.Facts.FutureRevision, source.Facts.NativeObject.Digest, cases.Runtime, test.Runs.Value.Replay,
             test.Runs.Value.ComparisonPolicy, test.Runs.Value.Expected);
