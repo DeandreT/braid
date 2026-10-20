@@ -302,6 +302,10 @@ shared API contracts explicitly; neither branch should accumulate the other's
 feature. Bound concurrent builds. Check disk space before substantial Ferrule engine-host
 builds and reuse compatible artifacts.
 
+P8a [#137](https://github.com/DeandreT/weft/issues/137) packages the server, its
+operator tools and the same-replica edge as container images, with a hosted-shape
+local stack. See [Runtime packaging](docs/runtime-packaging.md).
+
 The first hosted release is admitted only when P0-P8 are implemented and
 qualified. Local-only viewer prototypes can be demonstrated earlier. Entra or
 model credentials and Azure resources are not provisioned by this planning work.

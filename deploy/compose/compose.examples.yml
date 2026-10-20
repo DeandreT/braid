@@ -1,0 +1,44 @@
+# Local-only override for native Ferrule examples: a Development server in the Disabled
+# profile drives the host Docker daemon through its worker runner. Docker socket access is
+# equivalent to host root access; this file is never part of a hosted deployment.
+# Use with: docker compose -f compose.yml -f compose.examples.yml
+services:
+  examples:
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /run/weft/secrets:uid=1654,gid=1654,mode=0700,size=1m
+    image: ${WEFT_LOCAL_DOCKER_IMAGE:-weft-local-docker:local}
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      WEFT_CATALOG_AUTH_MODE: disabled
+      WEFT_CATALOG_ENABLED: "false"
+      WEFT_DEV_LISTEN_ADDR: 127.0.0.1:8081
+      WEFT_FERRULE_WORKER_IMAGE: ${WEFT_FERRULE_WORKER_IMAGE:?Set the immutable worker image ID}
+    group_add: ["${WEFT_DOCKER_GID:?Set the group ID of the Docker socket}"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 127.0.0.1:${WEFT_COMPOSE_EXAMPLES_PORT:-8481}:8080
+    networks: [egress]
+
+  examples-edge:
+    image: ${WEFT_EDGE_IMAGE:-weft-edge:local}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    network_mode: service:examples
+    environment:
+      # Disabled mode admits its own loopback authority.
+      WEFT_PUBLIC_HOST: 127.0.0.1:8081
+      WEFT_EDGE_TRUSTED_PROXIES: ""
+    depends_on: [examples]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30

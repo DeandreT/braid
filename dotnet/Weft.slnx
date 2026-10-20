@@ -24,6 +24,7 @@
     <Project Path="tools/Weft.MaintenanceTool/Weft.MaintenanceTool.csproj" />
     <Project Path="tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" />
     <Project Path="tools/Weft.RevisionReportWorkflowProbe/Weft.RevisionReportWorkflowProbe.csproj" />
+    <Project Path="tools/Weft.SessionKeyTool/Weft.SessionKeyTool.csproj" />
     <Project Path="tools/Weft.SessionTicketProcessProbe/Weft.SessionTicketProcessProbe.csproj" />
     <Project Path="tools/Weft.StorageProbe/Weft.StorageProbe.csproj" />
     <Project Path="tools/Weft.StorageProtocolProbe/Weft.StorageProtocolProbe.csproj" />

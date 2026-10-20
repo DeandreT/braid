@@ -41,6 +41,9 @@ bindings. Run `npm run test:native-mapping-upload-browser` through the alternate
 display; controlled frontend checks and actual packaged-host results retain their
 separate qualification scopes. Appending a revision follows separately.
 
+The packaged container images, their private configuration delivery and a local
+stack in the hosted shape are described in [Runtime packaging](runtime-packaging.md).
+
 ## Prerequisites
 
 - .NET SDK 10.0.112, pinned in the root `global.json`.

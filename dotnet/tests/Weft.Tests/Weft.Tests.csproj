@@ -37,6 +37,7 @@
     <ProjectReference Include="../../tools/Weft.MaintenanceTool/Weft.MaintenanceTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.RevisionReportWorkflowProbe/Weft.RevisionReportWorkflowProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.SessionKeyTool/Weft.SessionKeyTool.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.SessionTicketProcessProbe/Weft.SessionTicketProcessProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.WorkerShutdownProbe/Weft.WorkerShutdownProbe.csproj" ReferenceOutputAssembly="false" />
@@ -106,6 +107,12 @@
       <MaintenanceToolFiles Include="../../tools/Weft.MaintenanceTool/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(MaintenanceToolFiles)" DestinationFiles="@(MaintenanceToolFiles->'$(OutDir)MaintenanceTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopySessionKeyTool" AfterTargets="Build">
+    <ItemGroup>
+      <SessionKeyToolFiles Include="../../tools/Weft.SessionKeyTool/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SessionKeyToolFiles)" DestinationFiles="@(SessionKeyToolFiles->'$(OutDir)SessionKeyTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopySessionTicketProcessProbe" AfterTargets="Build">
     <ItemGroup>
