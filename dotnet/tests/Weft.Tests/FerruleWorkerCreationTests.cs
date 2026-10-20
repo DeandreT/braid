@@ -35,6 +35,7 @@ public sealed class FerruleWorkerCreationTests
         try
         {
             var name = await SignalAsync(proxy.CapturedCreate.Task, proxy, TimeSpan.FromSeconds(8));
+            Assert.Equal(launcher.OwnerFor(name), await SignalAsync(proxy.CapturedOwner.Task, proxy, TimeSpan.FromSeconds(1)));
             await launcher.CreateWaitRegistered.Task.WaitAsync(TimeSpan.FromSeconds(1));
             Assert.DoesNotContain(launcher.Commands, command => command.Operation is "container-inspect" or "start" or "rm");
             Assert.Equal(0, launcher.InputByteCount);
@@ -59,8 +60,12 @@ public sealed class FerruleWorkerCreationTests
             var canceled = await operation.WaitAsync(TimeSpan.FromSeconds(12));
             Assert.Equal(MappingOperationStatus.Canceled, canceled.Status);
             Assert.False(canceled.Provenance.Confirmed);
+            // Cancellation still forbids policy inspection/start/native input. The new
+            // ownership-only read is necessary to authorize exact-ID cleanup.
             Assert.DoesNotContain(launcher.Commands, command => command.Operation is "container-inspect" or "start");
             Assert.Equal(0, launcher.InputByteCount);
+            Assert.Equal(publication.ContainerId, Assert.Single(launcher.Commands, command => command.Operation == "ownership-inspect").Target);
+            Assert.Equal(publication.ContainerId, Assert.Single(launcher.Commands, command => command.Operation == "rm").Target);
             await AssertAbsentAsync(proxy.DirectoryPath, publication.Name);
             await AssertAbsentAsync(proxy.DirectoryPath, publication.ContainerId);
 
@@ -111,7 +116,7 @@ public sealed class FerruleWorkerCreationTests
                 if (proxy.CapturedCreate.Task.IsCompletedSuccessfully)
                     names.Add(proxy.CapturedCreate.Task.Result);
                 foreach (var ownedName in names)
-                    await CollectAsync(() => RemoveOwnedIfPresentAsync(proxy.DirectoryPath, ownedName,
+                    await CollectAsync(() => RemoveOwnedIfPresentAsync(proxy.DirectoryPath, ownedName, launcher.OwnerFor(ownedName),
                         publication is { } created && created.Name == ownedName ? created.ContainerId : null));
                 if (publication is not null)
                     await CollectAsync(() => AssertAbsentAsync(proxy.DirectoryPath, publication.ContainerId));
@@ -129,21 +134,37 @@ public sealed class FerruleWorkerCreationTests
     }
 
     [FerruleWorkerIntegrationTests.WorkerFact]
-    public async Task ActualForcedRemovalOfAnAlreadyMissingExactNameCanReturnQuietSuccessWithoutAcknowledgement()
+    public async Task ActualForcedRemovalOfAnAlreadyRemovedVerifiedIdCanReturnQuietSuccessWithoutAcknowledgement()
     {
         var directory = Directory.CreateTempSubdirectory("weft-missing-rm-").FullName;
         File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        var name = "weft-inspect-" + Guid.NewGuid().ToString("N");
+        var launcher = new ObservedRealLauncher();
+        var runner = new DockerInspectionWorkerRunner(new("/usr/bin/docker",
+            Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!), launcher);
         try
         {
-            await AssertAbsentAsync(directory, name);
-            var removal = await DockerAsync(directory, "rm", "--force", "--volumes", name);
+            var completed = await new FerruleInspectionBackend(runner).InspectAsync(Artifact());
+            Assert.Equal(MappingOperationStatus.Succeeded, completed.Status);
+            // Successful runner completion required label/name/ID verification before its
+            // first removal. Repeat ONLY that immutable ID, never an absent random name.
+            var id = Assert.Single(launcher.Commands, command => command.Operation == "rm").Target!;
+            Assert.Matches("^[a-f0-9]{64}$", id);
+            await AssertAbsentAsync(directory, id);
+            var removal = await DockerAsync(directory, "rm", "--force", "--volumes", id);
             Assert.Equal(0, removal.ExitCode);
             Assert.Equal("", removal.Output);
             Assert.Equal("", removal.Error);
-            await AssertAbsentAsync(directory, name);
+            await AssertAbsentAsync(directory, id);
         }
-        finally { Directory.Delete(directory); }
+        finally
+        {
+            try
+            {
+                foreach (var name in launcher.CreatedNames)
+                    await RemoveOwnedIfPresentAsync(directory, name, launcher.OwnerFor(name), null);
+            }
+            finally { Directory.Delete(directory); }
+        }
     }
 
     private static NativeArtifact Artifact() => NativeArtifact.Admit(Scope,
@@ -169,21 +190,19 @@ public sealed class FerruleWorkerCreationTests
         (text == $"Error: No such object: {nameOrId}" || text == $"Error: No such container: {nameOrId}" ||
             text == $"Error response from daemon: No such container: {nameOrId}");
 
-    private static async Task RemoveOwnedIfPresentAsync(string directory, string name, string? expectedId)
+    private static async Task RemoveOwnedIfPresentAsync(string directory, string name, string owner, string? expectedId)
     {
-        var state = await DockerAsync(directory, "inspect", "--format", "{{.Id}}", name);
+        var target = expectedId ?? name;
+        var state = await DockerAsync(directory, "inspect", "--format", DockerWorkerOwnershipTestSupport.InspectFormat, target);
         if (state.ExitCode != 0)
         {
-            Assert.True(IsMissing(state.Error, name), "Owned cleanup could not establish exact-name absence.");
+            Assert.Equal("", state.Output.Trim());
+            Assert.True(IsMissing(state.Error, target), "Owned cleanup could not establish exact-target absence.");
             return;
         }
-        var id = state.Output.Trim();
-        Assert.Equal(64, id.Length);
-        Assert.All(id, character => Assert.True(char.IsAsciiHexDigit(character)));
-        if (expectedId is not null) Assert.Equal(expectedId, id);
-        var removal = await DockerAsync(directory, "rm", "--force", "--volumes", name);
+        var id = DockerWorkerOwnershipTestSupport.VerifiedId(state.Output, name, owner, expectedId);
+        var removal = await DockerAsync(directory, "rm", "--force", "--volumes", id);
         Assert.Equal(0, removal.ExitCode);
-        await AssertAbsentAsync(directory, name);
         await AssertAbsentAsync(directory, id);
     }
 
@@ -236,7 +255,7 @@ public sealed class FerruleWorkerCreationTests
     }
 
     private sealed record DockerObservation(int ExitCode, string Output, string Error);
-    private sealed record ObservedCommand(string Operation, string? ContainerName);
+    private sealed record ObservedCommand(string Operation, string? ContainerName, string? OperationOwner, string? Target);
 
     /// <summary>Observes real process waits and byte counts; it changes no process/stream/cancellation outcome.</summary>
     private sealed class ObservedRealLauncher : IWorkerProcessLauncher
@@ -246,6 +265,7 @@ public sealed class FerruleWorkerCreationTests
         private int firstCreate;
         internal IReadOnlyList<ObservedCommand> Commands => commands.ToArray();
         internal IEnumerable<string> CreatedNames => commands.Where(command => command.Operation == "create").Select(command => command.ContainerName!).Distinct();
+        internal string OwnerFor(string name) => commands.Single(command => command.Operation == "create" && command.ContainerName == name).OperationOwner!;
         internal long InputByteCount => Interlocked.Read(ref inputByteCount);
         internal TaskCompletionSource CreateWaitRegistered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource CreateWaitCanceled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -258,13 +278,19 @@ public sealed class FerruleWorkerCreationTests
                 ["info", ..] => "info",
                 ["image", "inspect", ..] => "image-inspect",
                 ["container", "create", ..] => "create",
-                ["container", "inspect", ..] => "container-inspect",
+                ["container", "inspect", "--format", "{{json .}}", ..] => "container-inspect",
+                ["container", "inspect", ..] => "ownership-inspect",
                 ["container", "start", ..] => "start",
                 ["container", "rm", ..] => "rm",
                 _ => throw new InvalidOperationException("The observed runner launched an unexpected command.")
             };
             var index = Array.IndexOf(arguments, "--name");
-            commands.Enqueue(new(operation, index < 0 ? null : arguments[index + 1]));
+            var label = operation == "create"
+                ? arguments.Single(argument => argument.StartsWith(DockerWorkerOwnershipTestSupport.OperationLabel + "=", StringComparison.Ordinal))
+                : null;
+            commands.Enqueue(new(operation, index < 0 ? null : arguments[index + 1],
+                label?[(DockerWorkerOwnershipTestSupport.OperationLabel.Length + 1)..],
+                operation is "container-inspect" or "ownership-inspect" or "start" or "rm" ? arguments[^1] : null));
             var observeCreate = operation == "create" && Interlocked.Exchange(ref firstCreate, 1) == 0;
             var process = new Process { StartInfo = startInfo };
             try

@@ -447,18 +447,16 @@ internal sealed class IngestionProcessProbe : IAsyncDisposable
             if (name.Length != 45 || !name.StartsWith("weft-inspect-", StringComparison.Ordinal) ||
                 name.AsSpan(13).ContainsAnyExcept("0123456789abcdef") || await File.ReadAllTextAsync(record) != "owned")
                 throw new InvalidOperationException("The owned ingestion worker record was invalid.");
-            if (remove)
-            {
-                var removed = await OwnedWorkerCommandAsync("rm", "--force", "--volumes", name);
-                if (removed.ExitCode != 0 && !IsExactMissingContainer(removed.Error, name))
-                    throw new InvalidOperationException("The owned ingestion worker could not be reaped.");
-            }
-            // Force removal can succeed for an already absent container. Only a
-            // read-only inspect with the exact missing-object response proves absence.
+            // This probe's legacy "owned" record contains only a random name, not the
+            // runner's independent operation marker or an acknowledged immutable ID.
+            // It therefore authorizes read-only absence observation, never removal.
+            // An orphan must remain a failed gate for the attributed qualification owner.
             var inspected = await OwnedWorkerCommandAsync("inspect", "--format", "{{json .}}", name);
             if (inspected.ExitCode != 1 || !string.IsNullOrWhiteSpace(inspected.Output) ||
                 !IsExactMissingContainer(inspected.Error, name))
-                throw new InvalidOperationException("The owned ingestion worker absence was not confirmed.");
+                throw new InvalidOperationException(remove
+                    ? "Worker cleanup was refused: the name-only probe record cannot establish operation ownership."
+                    : "The owned ingestion worker absence was not confirmed.");
         }
     }
 

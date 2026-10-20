@@ -137,16 +137,38 @@ mounts or ports, one CPU, 256 MiB memory without swap, 16 PIDs, and fixed CPU/fi
 descriptor limits. Application credentials and user Docker configuration are
 excluded. Known Docker default environment values are admitted explicitly.
 
-Creation, attachment, and removal are separate operations. A caller cancellation
-before creation starts no container. Once creation begins, the runner waits for
-that side effect within the original ten-second wall budget, then rechecks
-cancellation before inspection, worker startup or native input. Running-worker
-cancellation and wall expiry stop the CLI; exact owned removal has a separate
-two-second bound. Forced removal can silently succeed on absence, so an
-unconfirmed create requires acknowledgement of the exact removed name. A quiet
-absence is accepted only after creation was confirmed. Unconfirmed cleanup blocks
-further admission on that singleton runner; an unresponsive daemon or abrupt host
-kill does not produce a fabricated cleanup guarantee.
+Creation, attachment, and removal are separate operations. Each admission generates
+a fresh random name and an independent random operation marker. The container label
+`io.weft.inspection.operation.v1` holds the marker as 32 lowercase hexadecimal
+characters; it contains no credentials or mapping data. Neither the name prefix,
+image, nor a previous operation's marker establishes ownership. Before startup,
+the runner verifies the acknowledged full container ID, exact name, current marker
+and isolation policy; attachment addresses only that immutable ID.
+
+A caller cancellation before creation starts no container. Once creation begins,
+the runner waits for that side effect within the operation's original wall budget,
+then rechecks cancellation before policy inspection, worker startup or native
+input. Running-worker cancellation and wall expiry stop the CLI. Cleanup shares
+one separate two-second bound across ownership inspection and removal. It inspects
+the acknowledged ID, or uses the exact name for read-only discovery if the create
+response was lost. Only a matching name, current marker and complete container ID
+authorize removal, and removal addresses that ID, never the mutable name. A
+collision, mismatched marker, malformed metadata or failed ownership observation
+causes no removal and blocks further admission on that singleton runner.
+
+Forced removal can silently succeed on absence. An unacknowledged create therefore
+still requires the exact verified ID in the removal acknowledgement; finding no
+object by name cannot prove that an in-flight daemon request settled. Exact-ID
+absence is accepted only after creation was acknowledged. Cleanup does not retry,
+adopt other containers, list by label or prune by prefix/image. An unresponsive
+daemon or abrupt host kill does not produce a fabricated cleanup guarantee. The
+label is local attribution, not authentication against a malicious daemon or an
+actor with Docker control-plane access.
+
+Qualification teardown follows the same marker/name/full-ID rule before removal.
+Legacy probe records that retain only a generated name authorize read-only absence
+checks; they do not authorize deleting a live object. A live object under such a
+record remains a failed qualification requiring separately attributed settlement.
 
 The server host owns the shared runner's shutdown. When the host begins stopping,
 the runner closes admission, cancels queued and running work through the normal

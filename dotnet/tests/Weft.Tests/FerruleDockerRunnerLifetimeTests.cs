@@ -11,7 +11,7 @@ public sealed partial class FerruleDockerRunnerTests
     public async Task ShutdownClosesAdmissionButJoinsTheOriginalCreateAndExactRemoval()
     {
         var creation = FakeProcess.GatedCreation();
-        var removal = FakeProcess.GatedCreation();
+        var removal = FakeProcess.GatedControlOutput(OtherContainerId + "\n");
         var launcher = new FakeLauncher { Create = creation, Remove = removal };
         var runner = Runner(launcher);
         var work = runner.RunAsync("native"u8.ToArray(), CancellationToken.None);
@@ -37,8 +37,8 @@ public sealed partial class FerruleDockerRunnerTests
         {
             creation.Settle();
             removal.Settle();
-            // This intentionally synthetic removal returns an ID instead of the required
-            // name: settlement must be joined but must NOT be reported as safe cleanup.
+            // This intentionally synthetic removal returns the wrong immutable ID:
+            // settlement must be joined but must NOT be reported as safe cleanup.
             await work.WaitAsync(TimeSpan.FromSeconds(2));
         }
         Assert.Equal(WorkerProcessFailure.CleanupFailed, (await work).Failure);
@@ -67,7 +67,7 @@ public sealed partial class FerruleDockerRunnerTests
         finally { creation.Settle(); }
         Assert.Equal(WorkerProcessFailure.Canceled, (await first.WaitAsync(TimeSpan.FromSeconds(1))).Failure);
         await stop.WaitAsync(TimeSpan.FromSeconds(1));
-        Assert.Equal(["info", "image", "create", "rm"], launcher.Commands.Select(Operation));
+        Assert.Equal(["info", "image", "create", "ownership-inspect", "rm"], launcher.Commands.Select(Operation));
         Assert.Empty(launcher.Worker.Input.ToArray());
         await runner.DisposeAsync();
         await runner.DisposeAsync();

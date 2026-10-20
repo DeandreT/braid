@@ -81,7 +81,12 @@ public sealed class WorkerShutdownProcessTests
                 var disposed = Assert.Single(child.Rows, row => row.Kind == "provider-disposed");
                 Assert.True(remove.Sequence < disposed.Sequence);
                 Assert.Equal(0, remove.ExitCode);
-                Assert.DoesNotContain(child.Rows, row => row.Kind == "command-start" && row.Operation is "inspect" or "start");
+                Assert.DoesNotContain(child.Rows, row => row.Kind == "command-start" && row.Operation == "start");
+                // The trace tool calls both inspect formats "inspect". In this
+                // canceled branch only the ownership-only exact-ID read may run.
+                var ownership = Assert.Single(child.Rows, row => row.Kind == "command-start" && row.Operation == "inspect");
+                Assert.Equal(publication.ContainerId, ownership.ContainerName);
+                Assert.Equal(publication.ContainerId, remove.ContainerName);
                 Assert.DoesNotContain(events.Rows(publication.ContainerId), row => row.Action == "start");
                 await AssertAbsentAsync(publication.ContainerId, deadline.Token);
             }
@@ -96,7 +101,8 @@ public sealed class WorkerShutdownProcessTests
                 if (groupSignal)
                 {
                     WorkerShutdownProbeGuards.RequireSigtermCreateExit(create, signalBoundary, child.Rows);
-                    Assert.Contains(child.Rows, row => row.Kind == "command-exit" && row.Operation == "rm");
+                    Assert.Contains(child.Rows, row => row.Kind == "command-exit" && row.Operation == "inspect");
+                    Assert.DoesNotContain(child.Rows, row => row.Kind == "command-start" && row.Operation == "rm");
                     Assert.Contains(child.Rows, row => row.Kind == "host-failed");
                     Assert.Contains(child.Rows, row => row.Kind == "provider-disposal-failed");
                 }
@@ -134,11 +140,14 @@ public sealed class WorkerShutdownProcessTests
                 await Clean(async () =>
                 {
                     using var bound = new CancellationTokenSource(SettlementTimeout);
-                    var inspected = await DockerAsync(["container", "inspect", "--format", "{{.Id}} {{.Name}}", publication.ContainerId], bound.Token);
+                    Assert.True(proxy.CapturedOwner.Task.IsCompletedSuccessfully);
+                    var owner = await proxy.CapturedOwner.Task;
+                    var inspected = await DockerAsync(["container", "inspect", "--format", DockerWorkerOwnershipTestSupport.InspectFormat, publication.ContainerId], bound.Token);
                     var removedByParent = false;
                     if (inspected.Code == 0)
                     {
-                        Assert.Equal(publication.ContainerId + " /" + publication.Name, inspected.Output.Trim());
+                        Assert.Equal(publication.ContainerId,
+                            DockerWorkerOwnershipTestSupport.VerifiedId(inspected.Output, publication.Name, owner, publication.ContainerId));
                         var removal = await DockerAsync(["rm", "--force", "--volumes", publication.ContainerId], bound.Token);
                         Assert.Equal(0, removal.Code);
                         Assert.Equal(publication.ContainerId, removal.Output.Trim());
