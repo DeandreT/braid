@@ -12,8 +12,19 @@ public sealed class NativePostgresFactAttribute : FactAttribute
 }
 
 [Collection(PostgresCollection.Name)]
-public sealed class NativePostgresFixtureTests
+public sealed class NativePostgresFixtureTests(PostgresFixture fixture)
 {
+    [NativePostgresFact]
+    public async Task Native_connection_setup_has_its_own_budget_without_changing_command_deadlines()
+    {
+        await using var test = await fixture.CreateCaseAsync(migrate: false);
+        var connection = new NpgsqlConnectionStringBuilder(test.RuntimeConnectionString);
+        Assert.Equal(15, connection.Timeout);
+        Assert.Equal(15, connection.CommandTimeout);
+        Assert.Equal(SslMode.Disable, connection.SslMode);
+        Assert.Equal("127.0.0.1", connection.Host);
+    }
+
     [NativePostgresFact]
     public async Task Native_cluster_is_loopback_only_survives_graceful_restart_and_removes_its_owned_data()
     {

@@ -447,7 +447,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         Pooling = pooling,
         MinPoolSize = 0,
         MaxPoolSize = 1,
-        Timeout = 3,
+        // Windows creates a backend process for each connection; keep this setup
+        // allowance separate from query/lock deadlines and the Docker transport.
+        Timeout = native is null ? 3 : 15,
         CommandTimeout = 15,
         Enlist = false,
         Multiplexing = false,

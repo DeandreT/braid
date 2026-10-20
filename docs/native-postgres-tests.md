@@ -30,6 +30,10 @@ listen address and exact data directory. The short-lived init password file is
 removed after initialization. Existing restricted application roles, migrations
 and per-case databases are reused unchanged.
 
+Native connection setup has a 15-second allowance for Windows to create each
+backend process. This does not retry failed operations or change the independent
+query/lock deadlines; the Docker transport retains its shorter connection budget.
+
 Restart uses fast shutdown and the same data and port. Before asking `pg_ctl`
 to stop anything, the host verifies the directory marker, live child handle and
 postmaster PID/data path. On failure it can terminate only the process tree it
