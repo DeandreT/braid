@@ -1,0 +1,82 @@
+:host {
+  display: block;
+}
+
+.session-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  padding: 20px 0;
+  border-bottom: 1px solid #e0e7de;
+}
+
+.session-copy {
+  flex: 1 1 340px;
+  min-width: 0;
+}
+
+.session-copy h2 {
+  margin: 0 0 4px;
+  color: #69786f;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.session-summary {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.session-detail,
+.session-notice,
+.forget-review p {
+  margin: 6px 0 0;
+  color: #69786f;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.session-actions .secondary-button {
+  margin-left: 0;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+
+.session-notice {
+  flex-basis: 100%;
+  margin: 0;
+  color: #45614c;
+}
+
+.forget-review {
+  flex-basis: 100%;
+  min-width: 0;
+  border-radius: 12px;
+  padding: 18px;
+  background: #faf1e6;
+}
+
+.forget-review:focus-visible {
+  outline: 3px solid #287a60;
+  outline-offset: 3px;
+}
+
+.forget-review h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.forget-review .session-actions {
+  margin-top: 14px;
+}

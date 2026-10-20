@@ -10,10 +10,16 @@ import {
 } from "@angular/router";
 import { filter } from "rxjs";
 import { BrowserSessionState } from "./auth/browser-session-state";
+import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.component";
 
 @Component({
   selector: "weft-root",
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [
+    RouterLink,
+    RouterLinkActive,
+    RouterOutlet,
+    BrowserAuthControlsComponent,
+  ],
   templateUrl: "./app.component.html",
 })
 export class AppComponent {

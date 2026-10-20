@@ -2,7 +2,11 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["**/shell.spec.ts", "**/mapping-viewer.spec.ts"],
+  testMatch: [
+    "**/shell.spec.ts",
+    "**/mapping-viewer.spec.ts",
+    "**/browser-auth-controls.spec.ts",
+  ],
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
@@ -29,7 +33,8 @@ export default defineConfig({
       timeout: 120000,
     },
     {
-      command: "npm run dev -- --port 5174 --proxy-config proxy.e2e.conf.json",
+      command:
+        "npm run dev -- --port 5174 --proxy-config proxy.e2e.conf.json --no-hmr",
       url: "http://127.0.0.1:5174",
       reuseExistingServer: false,
       gracefulShutdown: { signal: "SIGTERM", timeout: 15000 },

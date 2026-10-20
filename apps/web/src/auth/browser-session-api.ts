@@ -1,4 +1,4 @@
-import { HttpClient, HttpHeaders } from "@angular/common/http";
+import { HttpBackend, HttpClient, HttpHeaders } from "@angular/common/http";
 import { Injectable, inject } from "@angular/core";
 import {
   catchError,
@@ -10,14 +10,21 @@ import {
 } from "rxjs";
 import {
   BrowserSessionError,
+  isAuthForgetLocal,
+  isAuthLogin,
   isAuthStatus,
+  type AuthForgetLocal,
+  type AuthLogin,
   type AuthStatus,
+  type SessionAuthStatus,
 } from "./browser-session-types";
 
-/** Only trusted host discovery/observation; no auth action or provider protocol runs here. */
+/** Same-origin observation and bodyless auth actions; no provider protocol or token cache. */
 @Injectable({ providedIn: "root" })
 export class BrowserSessionApi {
   private readonly http = inject(HttpClient);
+  // Mutations cannot inherit cookie-to-header XSRF fallback or interceptor retries.
+  private readonly actions = new HttpClient(inject(HttpBackend));
 
   observe(): Observable<AuthStatus> {
     return defer(() =>
@@ -36,4 +43,74 @@ export class BrowserSessionApi {
       catchError(() => throwError(() => new BrowserSessionError())),
     );
   }
+
+  login(status: SessionAuthStatus): Observable<AuthLogin> {
+    return defer(() =>
+      this.actions.post<unknown>("/api/auth/login", null, {
+        observe: "response",
+        headers: actionHeaders(status, "X-Weft-Login", true),
+      }),
+    ).pipe(
+      timeout(8000),
+      map((response) => {
+        if (response.status !== 200 || !isAuthLogin(response.body))
+          throw new BrowserSessionError();
+        return Object.freeze({ ...response.body });
+      }),
+      catchError(() => throwError(() => new BrowserSessionError())),
+    );
+  }
+
+  logout(status: SessionAuthStatus): Observable<void> {
+    return defer(() =>
+      this.actions.post<unknown>("/api/auth/logout", null, {
+        observe: "response",
+        headers: actionHeaders(status, "X-Weft-Logout", true),
+      }),
+    ).pipe(
+      timeout(8000),
+      map((response) => {
+        if (response.status !== 204 || response.body !== null)
+          throw new BrowserSessionError();
+      }),
+      catchError(() => throwError(() => new BrowserSessionError())),
+    );
+  }
+
+  forgetLocal(status: SessionAuthStatus): Observable<AuthForgetLocal> {
+    return defer(() => {
+      if (status.state !== "authenticationRequired")
+        throw new BrowserSessionError();
+      return this.actions.post<unknown>("/api/auth/forget-local", null, {
+        observe: "response",
+        headers: actionHeaders(status, "X-Weft-Forget-Local", false),
+      });
+    }).pipe(
+      timeout(8000),
+      map((response) => {
+        if (response.status !== 200 || !isAuthForgetLocal(response.body))
+          throw new BrowserSessionError();
+        return Object.freeze({ ...response.body });
+      }),
+      catchError(() => throwError(() => new BrowserSessionError())),
+    );
+  }
+}
+
+function actionHeaders(
+  status: SessionAuthStatus,
+  action: "X-Weft-Login" | "X-Weft-Logout" | "X-Weft-Forget-Local",
+  sessionToken: boolean,
+): HttpHeaders {
+  // Only fresh auth status supplies these distinct-purpose tokens, never catalog context.
+  if (!isAuthStatus(status) || status.mode !== "session")
+    throw new BrowserSessionError();
+  let headers = new HttpHeaders({
+    [action]: "1",
+    "X-Weft-Auth-Token": status.authActionRequestToken,
+  });
+  if (sessionToken && status.state === "authenticated")
+    headers = headers.set("X-XSRF-TOKEN", status.requestToken);
+  // The browser supplies Origin on this same-origin POST. It is never caller-selected.
+  return headers;
 }

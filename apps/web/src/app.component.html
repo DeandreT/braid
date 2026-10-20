@@ -32,6 +32,12 @@
         : "Workspace"
     }}</span>
   </header>
+  @if (
+    session.state().kind !== "disabled" &&
+    session.state().kind !== "development"
+  ) {
+    <weft-browser-auth-controls />
+  }
   <main id="main-content" tabindex="-1">
     <router-outlet />
   </main>

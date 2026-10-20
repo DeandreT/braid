@@ -13,16 +13,22 @@ import {
   finalize,
   map,
   shareReplay,
+  switchMap,
+  takeUntil,
   tap,
   throwError,
   type Observable,
 } from "rxjs";
 import type { CatalogContext } from "../catalog/catalog-types";
 import { BrowserSessionApi } from "./browser-session-api";
+import { BrowserAuthNavigation } from "./browser-auth-navigation";
 import {
   BrowserSessionError,
   type AuthStatus,
+  type BrowserAuthAction,
+  type BrowserAuthActionView,
   type BrowserSessionView,
+  type SessionAuthStatus,
 } from "./browser-session-types";
 
 type ProtectedObservation = {
@@ -35,6 +41,7 @@ type ProtectedObservation = {
 @Injectable({ providedIn: "root" })
 export class BrowserSessionState {
   private readonly api = inject(BrowserSessionApi);
+  private readonly navigation = inject(BrowserAuthNavigation);
   private readonly status = signal<AuthStatus | null>(null);
   private readonly view = signal<BrowserSessionView>({ kind: "checking" });
   private readonly revision = signal(0);
@@ -43,9 +50,16 @@ export class BrowserSessionState {
   private observation = 0;
   private protectedObservation: ProtectedObservation | null = null;
   private destroyed = false;
+  private readonly actionView = signal<BrowserAuthActionView>({ kind: "idle" });
+  private readonly actionPending = signal(false);
+  private readonly actionLifetime = new Subject<void>();
+  private actionOperation = 0;
+  private mutating = false;
   readonly state = this.view.asReadonly();
   readonly generation = this.revision.asReadonly();
   readonly invalidated = this.changes.asObservable();
+  readonly action = this.actionView.asReadonly();
+  readonly busy = this.actionPending.asReadonly();
   readonly visible = computed(() => {
     const kind = this.view().kind;
     return kind === "development" || kind === "authenticated";
@@ -57,6 +71,10 @@ export class BrowserSessionState {
       ++this.observation;
       this.pending = null;
       this.cancelProtectedObservation();
+      // Auth callers own their cold subscription; service teardown also ends it.
+      // Classifier retirement must never cancel a current auth action instead.
+      this.actionLifetime.next();
+      this.actionLifetime.complete();
     });
   }
 
@@ -64,6 +82,9 @@ export class BrowserSessionState {
   observe(): Observable<void> {
     return defer(() => {
       if (this.destroyed) throw new BrowserSessionError();
+      // No safe check may publish pre-mutation identity while a POST is unresolved.
+      if (this.mutating) throw new BrowserSessionError();
+      if (!this.actionPending()) this.actionView.set({ kind: "idle" });
       if (this.pending) return this.pending;
       this.cancelProtectedObservation();
       return this.startObservation();
@@ -133,6 +154,149 @@ export class BrowserSessionState {
     return this.visible() && this.accepts(context);
   }
 
+  canPresent(action: BrowserAuthAction): boolean {
+    const status = this.status();
+    return (
+      !this.destroyed &&
+      !this.busy() &&
+      allows(action, status) &&
+      this.view().kind === status.state
+    );
+  }
+
+  signIn(): Observable<void> {
+    return this.perform("login");
+  }
+
+  logout(): Observable<void> {
+    return this.perform("logout");
+  }
+
+  /** Only an explicit confirmed choice in the authenticationRequired UI calls this. */
+  forgetLocal(): Observable<void> {
+    return this.perform("forgetLocal");
+  }
+
+  private perform(action: BrowserAuthAction): Observable<void> {
+    return defer(() => {
+      const selected = this.status();
+      if (!this.canPresent(action) || !allows(action, selected))
+        throw new BrowserSessionError();
+
+      const operation = ++this.actionOperation;
+      const owner = identity(selected);
+      const generation = this.generation();
+      let dispatched = false;
+      let settled = false;
+      this.actionPending.set(true);
+      this.actionView.set({ kind: "admitting", action });
+      return this.observe().pipe(
+        switchMap(() => {
+          const status = this.status();
+          // State and identityContext are part of owner; a new epoch cannot inherit intent.
+          if (
+            this.destroyed ||
+            operation !== this.actionOperation ||
+            generation !== this.generation() ||
+            !allows(action, status) ||
+            identity(status) !== owner ||
+            this.view().kind !== status.state
+          )
+            throw new BrowserSessionError();
+
+          this.mutating = true;
+          const fence = this.generation() + 1;
+          const observation = this.observation + 1;
+          this.invalidate();
+          // Synchronous invalidation listeners cannot replace this selected owner's fence.
+          if (
+            this.destroyed ||
+            fence !== this.generation() ||
+            observation !== this.observation
+          )
+            throw new BrowserSessionError();
+          dispatched = true;
+          this.actionView.set({ kind: "pending", action });
+          return this.dispatch(action, status).pipe(
+            map((result) => {
+              if (
+                this.destroyed ||
+                operation !== this.actionOperation ||
+                fence !== this.generation() ||
+                observation !== this.observation
+              )
+                throw new BrowserSessionError();
+              if (result.kind === "login") {
+                this.navigation.go(result.authorizationUrl);
+                if (
+                  this.destroyed ||
+                  operation !== this.actionOperation ||
+                  fence !== this.generation() ||
+                  observation !== this.observation
+                )
+                  throw new BrowserSessionError();
+                this.actionView.set({ kind: "redirecting" });
+              } else {
+                this.actionView.set({
+                  kind:
+                    result.kind === "logout"
+                      ? "logoutAcknowledged"
+                      : "revocationUnconfirmed",
+                });
+              }
+              settled = true;
+            }),
+          );
+        }),
+        catchError(() => {
+          settled = true;
+          if (operation === this.actionOperation)
+            this.actionView.set(
+              dispatched
+                ? { kind: "unconfirmed", action }
+                : { kind: "notAdmitted" },
+            );
+          return throwError(() => new BrowserSessionError());
+        }),
+        takeUntil(this.actionLifetime),
+        finalize(() => {
+          if (operation !== this.actionOperation) return;
+          if (!settled)
+            this.actionView.set(
+              dispatched
+                ? { kind: "unconfirmed", action }
+                : { kind: "notAdmitted" },
+            );
+          this.mutating = false;
+          this.actionPending.set(false);
+        }),
+      );
+    });
+  }
+
+  private dispatch(
+    action: BrowserAuthAction,
+    status: SessionAuthStatus,
+  ): Observable<AuthActionResult> {
+    switch (action) {
+      case "login":
+        return this.api.login(status).pipe(
+          map((result) => ({
+            kind: "login" as const,
+            authorizationUrl: result.authorizationUrl,
+          })),
+        );
+      case "logout":
+        return this.api
+          .logout(status)
+          .pipe(map(() => ({ kind: "logout" as const })));
+      case "forgetLocal":
+        return this.api
+          .forgetLocal(status)
+          .pipe(map(() => ({ kind: "forgetLocal" as const })));
+    }
+  }
+
   private startObservation(
     protectedObservation: ProtectedObservation | null = null,
   ): Observable<void> {
@@ -199,6 +363,21 @@ export class BrowserSessionState {
     // Synchronous subscribers remove protected DTOs/requests before replacement publication.
     this.changes.next();
   }
+}
+
+type AuthActionResult =
+  | { readonly kind: "login"; readonly authorizationUrl: string }
+  | { readonly kind: "logout" | "forgetLocal" };
+
+function allows(
+  action: BrowserAuthAction,
+  status: AuthStatus | null,
+): status is SessionAuthStatus {
+  if (status?.mode !== "session") return false;
+  if (action === "forgetLocal")
+    return status.state === "authenticationRequired";
+  if (action === "logout") return status.state === "authenticated";
+  return true;
 }
 
 function identity(status: AuthStatus): string {
