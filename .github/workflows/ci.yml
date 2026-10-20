@@ -35,6 +35,8 @@ jobs:
       - run: npm ci --prefix tools/contracts-generator
       - run: npm run check
       - run: npm run build
+      - run: npm run build:browser-session-probe
+      - run: node --check tools/browser-session-controlled/owner.mjs
       - name: Install pinned worker toolchain
         run: rustup toolchain install nightly-2026-07-21 --profile minimal --component rustfmt --component clippy
       - name: Verify the native worker

@@ -26,6 +26,7 @@ import {
 } from "./project-creation-types";
 
 type Owner = {
+  readonly mode: CatalogContext["mode"];
   readonly organizationId: string;
   readonly actorPrincipalId: string;
 };
@@ -68,6 +69,10 @@ export class ProjectCreationState {
   private readonly active = signal(false);
   private readonly organizationId = signal<string | null>(null);
   private readonly admitted = signal<CatalogContext | null>(null);
+  private readonly presentation = signal<{
+    readonly context: CatalogContext;
+    readonly identityVersion: number;
+  } | null>(null);
   private readonly storedDraft = signal<Draft | null>(null);
   private readonly pending = signal<Attempt | null>(null);
   private readonly acknowledged = signal<Confirmation | null>(null);
@@ -92,12 +97,36 @@ export class ProjectCreationState {
   readonly submitting = computed(() => this.operation() === "submitting");
   readonly error = this.actionError.asReadonly();
   readonly fieldErrors = this.inputErrors.asReadonly();
-  readonly context = computed(() => {
+  private readonly currentContext = computed(() => {
     const context = this.admitted();
     return this.active() &&
       context !== null &&
       this.contexts.context() === context &&
       context.allowedOrganizationId === this.organizationId()
+      ? context
+      : null;
+  });
+  /** Mount-only original-owner display; no action obtains authority from this fallback. */
+  readonly context = computed(() => {
+    const current = this.currentContext();
+    if (current) return current;
+    const presentation = this.presentation(),
+      observed = this.contexts.context();
+    if (
+      !this.active() ||
+      this.operation() !== "admitting" ||
+      !presentation ||
+      presentation.identityVersion !== this.contexts.identityVersion() ||
+      presentation.context.allowedOrganizationId !== this.organizationId()
+    )
+      return null;
+    const context = presentation.context;
+    return !observed ||
+      (observed.mode === context.mode &&
+        observed.actorPrincipalId === context.actorPrincipalId &&
+        observed.allowedOrganizationId === context.allowedOrganizationId &&
+        (observed.mode === "session" ? observed.identityContext : null) ===
+          (context.mode === "session" ? context.identityContext : null))
       ? context
       : null;
   });
@@ -161,23 +190,35 @@ export class ProjectCreationState {
   );
   readonly canEdit = computed(
     () =>
-      this.context() !== null &&
+      this.currentContext() !== null &&
+      this.contexts.canPresent(this.currentContext()) &&
       !this.quarantined() &&
       !this.pending() &&
       !this.confirmation() &&
       !this.busy(),
   );
   readonly canCreate = computed(
-    () => this.canEdit() && capability(this.context()),
+    () => this.canEdit() && capability(this.currentContext()),
   );
   readonly canRecover = computed(
     () =>
       this.attemptSummary() !== null &&
-      capability(this.context()) &&
+      this.contexts.canPresent(this.currentContext()) &&
+      capability(this.currentContext()) &&
       !this.busy(),
   );
 
   constructor() {
+    const invalidation = this.contexts.invalidated.subscribe(() => {
+      this.cancelActive();
+      this.admitted.set(null);
+      this.presentation.set(null);
+      this.accessState.set({ kind: "idle" });
+      this.receiptOwnerMismatch.set(true);
+      this.inputErrors.set(emptyErrors);
+      this.actionError.set(null);
+      this.admissionState.set("unavailable");
+    });
     const window = this.document.defaultView;
     const warn = (event: BeforeUnloadEvent) => {
       if (!this.pending()) return;
@@ -186,6 +227,7 @@ export class ProjectCreationState {
     };
     window?.addEventListener("beforeunload", warn);
     inject(DestroyRef).onDestroy(() => {
+      invalidation.unsubscribe();
       this.leave();
       window?.removeEventListener("beforeunload", warn);
     });
@@ -196,6 +238,7 @@ export class ProjectCreationState {
     this.active.set(true);
     this.organizationId.set(organizationId);
     this.admitted.set(null);
+    this.presentation.set(null);
     this.actionError.set(null);
     this.inputErrors.set(emptyErrors);
     if (!isCatalogId(organizationId)) {
@@ -210,6 +253,7 @@ export class ProjectCreationState {
     this.cancelActive();
     this.active.set(false);
     this.admitted.set(null);
+    this.presentation.set(null);
     this.admissionState.set("idle");
     this.accessState.set({ kind: "idle" });
   }
@@ -226,6 +270,7 @@ export class ProjectCreationState {
     const context = this.context();
     if (!context || !this.canEdit()) return;
     this.storedDraft.set({
+      mode: context.mode,
       organizationId: context.allowedOrganizationId,
       actorPrincipalId: context.actorPrincipalId,
       name,
@@ -246,6 +291,7 @@ export class ProjectCreationState {
     }
     this.inputErrors.set(emptyErrors);
     const owner = {
+      mode: context.mode,
       organizationId: context.allowedOrganizationId,
       actorPrincipalId: context.actorPrincipalId,
     };
@@ -289,6 +335,7 @@ export class ProjectCreationState {
     const receipt = this.acknowledged();
     if (
       !receipt ||
+      !this.contexts.visible() ||
       (!this.confirmation() && !this.retainedConfirmation()) ||
       this.busy()
     )
@@ -300,6 +347,7 @@ export class ProjectCreationState {
     const pending = this.pending();
     if (
       !pending ||
+      !this.contexts.canPresent(this.currentContext()) ||
       !this.attemptSummary() ||
       this.busy() ||
       pending.uncertain ||
@@ -312,14 +360,26 @@ export class ProjectCreationState {
   }
 
   abandonOriginal(confirmed: boolean): void {
-    if (!confirmed || !this.attemptSummary() || this.busy()) return;
+    if (
+      !confirmed ||
+      !this.contexts.canPresent(this.currentContext()) ||
+      !this.attemptSummary() ||
+      this.busy()
+    )
+      return;
     this.pending.set(null);
     this.actionError.set(null);
     this.inputErrors.set(emptyErrors);
   }
 
   startAnother(): void {
-    if (!this.confirmation() || this.busy() || this.pending()) return;
+    if (
+      !this.contexts.canPresent(this.currentContext()) ||
+      !this.confirmation() ||
+      this.busy() ||
+      this.pending()
+    )
+      return;
     this.acknowledged.set(null);
     this.storedDraft.set(null);
     this.accessState.set({ kind: "idle" });
@@ -333,6 +393,15 @@ export class ProjectCreationState {
   ): void {
     const organizationId = this.organizationId();
     if (!this.active() || !isCatalogId(organizationId) || this.busy()) return;
+    const presented = this.currentContext();
+    this.presentation.set(
+      presented
+        ? {
+            context: presented,
+            identityVersion: this.contexts.identityVersion(),
+          }
+        : null,
+    );
     this.cancelActive();
     const generation = this.generation;
     this.operation.set("admitting");
@@ -347,6 +416,7 @@ export class ProjectCreationState {
         next: (context) => {
           emitted = true;
           if (!this.selected(generation, organizationId)) return;
+          this.presentation.set(null);
           this.operation.set("idle");
           const receipt = this.acknowledged();
           if (receipt) this.receiptOwnerMismatch.set(!owns(context, receipt));
@@ -363,10 +433,11 @@ export class ProjectCreationState {
             this.actionError.set(new ProjectCreationError("identityChanged"));
             return;
           }
-          next(context);
+          if (this.contexts.canPresent(context)) next(context);
         },
         error: (error: unknown) => {
           if (!this.selected(generation, organizationId)) return;
+          this.presentation.set(null);
           this.operation.set("idle");
           this.admissionState.set(
             error instanceof CatalogReadError ? error.kind : "unavailable",
@@ -375,6 +446,7 @@ export class ProjectCreationState {
         },
         complete: () => {
           if (!emitted && this.selected(generation, organizationId)) {
+            this.presentation.set(null);
             this.operation.set("idle");
             this.admissionState.set("unavailable");
           }
@@ -402,6 +474,7 @@ export class ProjectCreationState {
             return;
           this.operation.set("idle");
           this.acknowledged.set({
+            mode: intent.mode,
             organizationId: intent.organizationId,
             actorPrincipalId: intent.actorPrincipalId,
             response,
@@ -498,6 +571,7 @@ export class ProjectCreationState {
       stopped: false,
     });
     this.actionError.set(error);
+    this.contexts.reject(error.status);
   }
 
   private cancelActive(): void {
@@ -533,6 +607,7 @@ export class ProjectCreationState {
 
 function owns(context: CatalogContext, owner: Owner): boolean {
   return (
+    context.mode === owner.mode &&
     context.allowedOrganizationId === owner.organizationId &&
     context.actorPrincipalId === owner.actorPrincipalId
   );

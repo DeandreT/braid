@@ -4,6 +4,7 @@ import {
   HttpHeaders,
 } from "@angular/common/http";
 import { Injectable, inject } from "@angular/core";
+import { BrowserSessionState } from "../../auth/browser-session-state";
 import {
   TimeoutError,
   catchError,
@@ -27,6 +28,7 @@ import {
 @Injectable({ providedIn: "root" })
 export class NativeRevisionAppendApi {
   private readonly http = inject(HttpClient);
+  private readonly sessions = inject(BrowserSessionState);
 
   /** One deliberate original-byte send/resend; no current-head check or lookup by key. */
   append(
@@ -35,6 +37,7 @@ export class NativeRevisionAppendApi {
     previous: NativeRevisionAppendOperation | null = null,
   ): Observable<NativeRevisionAppendResponse> {
     try {
+      this.requireCurrent(admission);
       captureNativeRevisionAppendAdmission(
         admission,
         intent,
@@ -54,17 +57,24 @@ export class NativeRevisionAppendApi {
           })
           .pipe(
             timeout(30000),
-            map((response) =>
-              readNativeRevisionAppendResponse(
+            map((response) => {
+              if (!this.sessions.accepts(admission.context))
+                throw new NativeRevisionAppendError("unavailable", null, true);
+              return readNativeRevisionAppendResponse(
                 response.status,
                 response.body,
                 response.headers.get("Location"),
                 intent,
                 previous,
-              ),
-            ),
+              );
+            }),
             catchError((error: unknown) =>
-              mutationFailure(error, intent, previous),
+              this.sessions.accepts(admission.context)
+                ? mutationFailure(error, intent, previous)
+                : throwError(
+                    () =>
+                      new NativeRevisionAppendError("unavailable", null, true),
+                  ),
             ),
           ),
       );
@@ -79,11 +89,14 @@ export class NativeRevisionAppendApi {
     operation: NativeRevisionAppendOperation,
   ): Observable<NativeRevisionAppendOperation> {
     try {
+      this.requireCurrent(admission);
       captureNativeRevisionAppendAdmission(admission, operation);
       const url = nativeRevisionAppendReceiptPath(operation);
       return this.http.get<unknown>(url, { observe: "response" }).pipe(
         timeout(8000),
         map((response) => {
+          if (!this.sessions.accepts(admission.context))
+            throw new NativeRevisionAppendError("unavailable");
           if (
             response.status !== 200 ||
             response.headers.get("Location") !== null
@@ -119,6 +132,7 @@ export class NativeRevisionAppendApi {
     operation: NativeRevisionAppendOperation,
   ): Observable<NativeRevisionAppendResponse> {
     try {
+      this.requireCurrent(admission);
       captureNativeRevisionAppendAdmission(admission, operation);
       const token = requestToken(admission),
         url = nativeRevisionAppendReceiptPath(operation) + "/resume";
@@ -129,19 +143,32 @@ export class NativeRevisionAppendApi {
         })
         .pipe(
           timeout(30000),
-          map((response) =>
-            readNativeRevisionAppendResponse(
+          map((response) => {
+            if (!this.sessions.accepts(admission.context))
+              throw new NativeRevisionAppendError("unavailable", null, true);
+            return readNativeRevisionAppendResponse(
               response.status,
               response.body,
               response.headers.get("Location"),
               operation,
-            ),
+            );
+          }),
+          catchError((error: unknown) =>
+            this.sessions.accepts(admission.context)
+              ? mutationFailure(error, operation)
+              : throwError(
+                  () =>
+                    new NativeRevisionAppendError("unavailable", null, true),
+                ),
           ),
-          catchError((error: unknown) => mutationFailure(error, operation)),
         );
     } catch (error: unknown) {
       return throwError(() => localFailure(error));
     }
+  }
+  private requireCurrent(admission: NativeRevisionAppendAdmission): void {
+    if (!admission?.context || !this.sessions.canDispatch(admission.context))
+      throw new NativeRevisionAppendError("identityRejected");
   }
 }
 
@@ -206,7 +233,7 @@ function httpFailure(
   const code: unknown = error.error["code"];
   if (status === 400 && code === "invalidRequest")
     return new NativeRevisionAppendError("invalidRequest", status);
-  if (status === 403 && code === "identityRejected")
+  if ((status === 401 || status === 403) && code === "identityRejected")
     return new NativeRevisionAppendError("identityRejected", status);
   if (status === 404 && (code === "notFound" || code === "unavailable"))
     return new NativeRevisionAppendError("notFound", status);

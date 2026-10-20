@@ -274,6 +274,14 @@ session-safe presentation and sign-in controls. See
 [Authentication HTTP](docs/browser-authentication-http.md) and
 [Session host operations](docs/session-host.md).
 
+P4e-a [#119](https://github.com/DeandreT/weft/issues/119) applies explicit status
+bootstrap, identity-generation fencing and private original-operation recovery to
+the Angular catalog. It preserves same-owner uncertainty without granting a new
+owner access to retained work; fresh resource authority and explicit recovery
+remain required. P4e-b [#122](https://github.com/DeandreT/weft/issues/122) composes
+sign-in and acknowledged session controls separately. See
+[Session-safe browser state](docs/browser-session-state.md).
+
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
 feature. Bound concurrent builds. Check disk space before substantial Ferrule engine-host

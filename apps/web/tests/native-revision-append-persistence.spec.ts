@@ -10,6 +10,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import type { components } from "../src/api/generated";
+import { isSessionStatusRequest } from "./browser-session-status.fixture";
 import {
   test,
   expect,
@@ -487,7 +488,7 @@ class AppendWire {
       const url = new URL(request.url());
       if (
         url.origin === this.ledger.owner.manifest.readOrigin &&
-        this.allowedGet(url)
+        this.allowedGet(request)
       )
         this.remember(null, "actual GET failed without its capture");
     }
@@ -633,7 +634,8 @@ class AppendWire {
     });
     await this.page.route("**/api/**", (route) => this.observe(route));
   }
-  private allowedGet(url: URL): boolean {
+  private allowedGet(request: Request): boolean {
+    const url = new URL(request.url());
     const fixture = this.ledger.owner.manifest,
       paths = new Set([
         "/api/v1/catalog/context",
@@ -649,7 +651,10 @@ class AppendWire {
         if (original.receipt.phase === "committed")
           paths.add(catalogApi(revisionPath(original.receipt.futureRevision)));
       }
-    return !url.search && paths.has(url.pathname);
+    return (
+      isSessionStatusRequest(request, fixture.readOrigin) ||
+      (!url.search && paths.has(url.pathname))
+    );
   }
   private diagnosticPathKind(request: Request): string {
     const url = new URL(request.url()),
@@ -755,7 +760,7 @@ class AppendWire {
       );
       if (request.method() === "GET") {
         requireAppend(
-          this.allowedGet(url),
+          this.allowedGet(request),
           "unexpected catalog or operation GET",
         );
         requireAppend(

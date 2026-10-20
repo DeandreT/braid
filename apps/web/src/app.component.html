@@ -26,7 +26,11 @@
         >Catalog</a
       >
     </nav>
-    <span class="environment-label">Development workspace</span>
+    <span class="environment-label">{{
+      session.state().kind === "development"
+        ? "Development workspace"
+        : "Workspace"
+    }}</span>
   </header>
   <main id="main-content" tabindex="-1">
     <router-outlet />

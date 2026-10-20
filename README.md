@@ -61,6 +61,11 @@ privacy and shutdown ownership. Host activation does not provision identities,
 keys, database grants, or an Entra application, and does not itself provide an
 Angular sign-in interface or establish live-provider/cloud support.
 
+The Angular catalog uses [session-safe browser state](docs/browser-session-state.md)
+to observe the explicit host mode, fence stale identity callbacks, and preserve
+private uncertain requests across same-owner reauthentication. Status observation
+does not replace fresh catalog authority or add sign-in controls.
+
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
 the C# API schema.
@@ -88,6 +93,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Entra browser client](docs/entra-browser-client.md): dormant fixed-tenant OIDC adapter, certificate and key-profile ownership, and separate HTTP/host activation.
 - [Authentication HTTP](docs/browser-authentication-http.md): session inspection, login/callback, acknowledged local logout and explicit local forgetting.
 - [Session host operations](docs/session-host.md): explicit host modes, private configuration, offline TLS, ingress, privacy and shutdown.
+- [Session-safe browser state](docs/browser-session-state.md): fresh identity observation, protected-view invalidation and private original-operation recovery.
 - [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
 - [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.
 - [Private storage](docs/private-storage.md): exact-byte publication, verified reads, and the local filesystem profile.

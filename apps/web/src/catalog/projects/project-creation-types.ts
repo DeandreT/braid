@@ -171,6 +171,7 @@ function unicode(value: string): {
 
 /** One immutable memory-only original request. JSON/diagnostic text never exports its values. */
 export class ProjectCreationIntent {
+  readonly #mode: CatalogContext["mode"];
   readonly #organizationId: string;
   readonly #actorPrincipalId: string;
   readonly #key: string;
@@ -179,11 +180,13 @@ export class ProjectCreationIntent {
   readonly #description: string;
 
   private constructor(
+    mode: CatalogContext["mode"],
     organizationId: string,
     actorPrincipalId: string,
     key: string,
     accepted: Extract<ProjectCreationInputValidation, { valid: true }>,
   ) {
+    this.#mode = mode;
     this.#organizationId = organizationId;
     this.#actorPrincipalId = actorPrincipalId;
     this.#key = key;
@@ -202,6 +205,7 @@ export class ProjectCreationIntent {
       actorPrincipalId = context?.actorPrincipalId;
     if (
       !isCatalogId(organizationId) ||
+      (context.mode !== "development" && context.mode !== "session") ||
       !isCatalogId(actorPrincipalId) ||
       !isCatalogId(key)
     )
@@ -212,6 +216,7 @@ export class ProjectCreationIntent {
     );
     if (!accepted.valid) throw new ProjectCreationError("invalidInput");
     return new ProjectCreationIntent(
+      context.mode,
       organizationId,
       actorPrincipalId,
       key,
@@ -221,6 +226,9 @@ export class ProjectCreationIntent {
 
   get organizationId(): string {
     return this.#organizationId;
+  }
+  get mode(): CatalogContext["mode"] {
+    return this.#mode;
   }
   get actorPrincipalId(): string {
     return this.#actorPrincipalId;

@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": { "outDir": "./out-tsc/browser-session-probe" },
+  "files": ["tests/browser-session/probe-main.ts"],
+  "include": []
+}

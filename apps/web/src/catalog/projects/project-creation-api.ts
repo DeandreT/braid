@@ -14,6 +14,7 @@ import {
   type Observable,
 } from "rxjs";
 import { isCatalogId, type CatalogContext } from "../catalog-types";
+import { BrowserSessionState } from "../../auth/browser-session-state";
 import {
   ProjectCreationError,
   ProjectCreationIntent,
@@ -27,6 +28,7 @@ const mediaType = "application/vnd.weft.project-create.v1+json";
 @Injectable({ providedIn: "root" })
 export class ProjectCreationApi {
   private readonly http = inject(HttpClient);
+  private readonly sessions = inject(BrowserSessionState);
 
   /** One deliberate send or original-request recovery. Fresh admission is the caller's responsibility. */
   create(
@@ -37,12 +39,14 @@ export class ProjectCreationApi {
       if (!(intent instanceof ProjectCreationIntent))
         throw new ProjectCreationError("invalidInput");
       if (
-        context?.mode !== "development" ||
+        !context ||
+        !this.sessions.canDispatch(context) ||
         !isCatalogId(context.actorPrincipalId) ||
         !isCatalogId(context.allowedOrganizationId)
       )
         throw new ProjectCreationError("identityRejected");
       if (
+        context.mode !== intent.mode ||
         context.actorPrincipalId !== intent.actorPrincipalId ||
         context.allowedOrganizationId !== intent.organizationId
       )
@@ -76,7 +80,11 @@ export class ProjectCreationApi {
         )
         .pipe(
           timeout(30000),
-          map((response) => admitted(response, intent)),
+          map((response) => {
+            if (!this.sessions.accepts(context))
+              throw new ProjectCreationError("unavailable");
+            return admitted(response, intent);
+          }),
           catchError((error: unknown) =>
             throwError(() => creationFailure(error)),
           ),
@@ -178,7 +186,7 @@ function creationFailure(error: unknown): ProjectCreationError {
   const code: unknown = error.error["code"];
   if (status === 400 && code === "invalidRequest")
     return new ProjectCreationError("invalidRequest", status);
-  if (status === 403 && code === "identityRejected")
+  if ((status === 401 || status === 403) && code === "identityRejected")
     return new ProjectCreationError("identityRejected", status);
   if (status === 403 && code === "permissionDenied")
     return new ProjectCreationError("permissionDenied", status);

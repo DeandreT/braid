@@ -15,6 +15,7 @@ import {
   CatalogReadError,
   isCatalogId,
   type CatalogFailureKind,
+  type CatalogContext,
   type CatalogMappingScope,
 } from "../catalog-types";
 import { MappingMetadataApi } from "./mapping-metadata-api";
@@ -63,6 +64,7 @@ export class MappingMetadataState {
   private readonly document = inject(DOCUMENT);
   private readonly selectedScope = signal<CatalogMappingScope | null>(null);
   private readonly owner = signal<string | null>(null);
+  private readonly ownerMode = signal<CatalogContext["mode"] | null>(null);
   private readonly admitted = signal<MappingMetadataAdmission | null>(null);
   private readonly presentingEditor = signal(false);
   private readonly admissionState = signal<AdmissionState>("idle");
@@ -99,7 +101,8 @@ export class MappingMetadataState {
       scope &&
       this.contexts.context() === admission.context &&
       sameScope(admission.mapping.scope, scope) &&
-      this.owner() === admission.context.actorPrincipalId
+      this.owner() === admission.context.actorPrincipalId &&
+      this.ownerMode() === admission.context.mode
       ? admission
       : null;
   });
@@ -114,6 +117,7 @@ export class MappingMetadataState {
       owner &&
       (!context ||
         (context.actorPrincipalId === owner &&
+          context.mode === this.ownerMode() &&
           context.allowedOrganizationId === scope.organizationId));
     return (
       !!ownerUnchanged &&
@@ -141,8 +145,12 @@ export class MappingMetadataState {
         draft.description !== base.metadata.description)
     );
   });
-  readonly outcomeUnknown = this.unknown.asReadonly();
-  readonly priorUnknown = this.earlierUnknown.asReadonly();
+  readonly outcomeUnknown = computed(
+    () => this.editorVisible() && this.unknown(),
+  );
+  readonly priorUnknown = computed(
+    () => this.editorVisible() && this.earlierUnknown(),
+  );
   readonly conflict = computed(
     () => this.editorVisible() && this.needsReview(),
   );
@@ -165,6 +173,7 @@ export class MappingMetadataState {
   readonly canEdit = computed(
     () =>
       this.view() !== null &&
+      this.contexts.canPresent(this.context()) &&
       this.editorVisible() &&
       this.base() !== null &&
       !this.busy(),
@@ -176,6 +185,18 @@ export class MappingMetadataState {
   readonly hasRetainedWork = computed(() => this.dirty() || this.unknown());
 
   constructor() {
+    const invalidation = this.contexts.invalidated.subscribe(() => {
+      this.cancelActive();
+      this.presentingEditor.set(false);
+      this.admitted.set(null);
+      this.review.set(null);
+      this.checked.set({ kind: "idle" });
+      this.acknowledged.set(null);
+      this.failure.set(null);
+      this.errors.set(emptyErrors);
+      if (this.base()) this.needsReview.set(true);
+      this.admissionState.set("unavailable");
+    });
     // Another admitted identity must never inherit this editor's private draft or validator.
     effect(() => {
       const context = this.contexts.context(),
@@ -186,12 +207,17 @@ export class MappingMetadataState {
         owner &&
         scope &&
         (context.actorPrincipalId !== owner ||
+          context.mode !== this.ownerMode() ||
           context.allowedOrganizationId !== scope.organizationId)
       ) {
         untracked(() => {
           this.cancelActive();
-          this.clearPrivate();
-          this.owner.set(null);
+          this.clearUnsentPrivate();
+          this.presentingEditor.set(false);
+          this.review.set(null);
+          this.checked.set({ kind: "idle" });
+          this.acknowledged.set(null);
+          if (this.base()) this.needsReview.set(true);
           this.admitted.set(null);
           this.admissionState.set("unavailable");
           this.failure.set(new MappingMetadataError("identityChanged"));
@@ -205,6 +231,7 @@ export class MappingMetadataState {
     };
     this.document.defaultView?.addEventListener("beforeunload", warn);
     inject(DestroyRef).onDestroy(() => {
+      invalidation.unsubscribe();
       this.leave();
       this.document.defaultView?.removeEventListener("beforeunload", warn);
     });
@@ -220,6 +247,7 @@ export class MappingMetadataState {
     this.cancelActive();
     this.clearPrivate();
     this.owner.set(null);
+    this.ownerMode.set(null);
     this.admitted.set(null);
     if (
       !scope ||
@@ -287,7 +315,12 @@ export class MappingMetadataState {
   }
 
   reviewLatest(): void {
-    if (!this.base() || this.busy()) return;
+    if (
+      !this.base() ||
+      !this.contexts.canPresent(this.context()) ||
+      this.busy()
+    )
+      return;
     this.admit(false, (admission) => this.read(admission, "review"));
   }
 
@@ -323,7 +356,12 @@ export class MappingMetadataState {
   }
 
   checkCurrent(): void {
-    if (!this.attempt() || this.busy()) return;
+    if (
+      !this.attempt() ||
+      !this.contexts.canPresent(this.context()) ||
+      this.busy()
+    )
+      return;
     this.admit(false, (admission) => this.read(admission, "check"));
   }
 
@@ -343,6 +381,7 @@ export class MappingMetadataState {
     this.discard();
     this.selectedScope.set(null);
     this.owner.set(null);
+    this.ownerMode.set(null);
     this.admitted.set(null);
     this.admissionState.set("idle");
   }
@@ -356,6 +395,7 @@ export class MappingMetadataState {
     this.cancelActive();
     const generation = this.generation;
     const originalOwner = this.owner();
+    const originalMode = this.ownerMode();
     this.operation.set("admitting");
     this.admitted.set(null);
     this.admissionState.set("loading");
@@ -374,10 +414,12 @@ export class MappingMetadataState {
           if (
             context.allowedOrganizationId !== scope.organizationId ||
             (originalOwner !== null &&
-              context.actorPrincipalId !== originalOwner)
+              (context.actorPrincipalId !== originalOwner ||
+                context.mode !== originalMode))
           ) {
-            this.clearPrivate();
-            this.owner.set(null);
+            this.clearUnsentPrivate();
+            this.presentingEditor.set(false);
+            if (this.base()) this.needsReview.set(true);
             throw new MappingMetadataError(
               context.allowedOrganizationId !== scope.organizationId
                 ? "notFound"
@@ -385,6 +427,7 @@ export class MappingMetadataState {
             );
           }
           this.owner.set(context.actorPrincipalId);
+          this.ownerMode.set(context.mode);
           return this.catalog.mapping(scope).pipe(
             take(1),
             map((mapping): MappingMetadataAdmission => ({ context, mapping })),
@@ -418,7 +461,7 @@ export class MappingMetadataState {
             );
             return;
           }
-          next(admission);
+          if (this.contexts.canPresent(admission.context)) next(admission);
         },
         error: (error: unknown) => {
           if (!this.current(generation, scope)) return;
@@ -568,6 +611,7 @@ export class MappingMetadataState {
         error.kind === "notFound" ? "notFound" : "rejected",
       );
     }
+    this.contexts.reject(error.status);
   }
 
   private cancelActive(): void {
@@ -580,6 +624,15 @@ export class MappingMetadataState {
     this.requestSubscription?.unsubscribe();
     this.admissionSubscription = this.requestSubscription = null;
     this.operation.set("idle");
+  }
+
+  private clearUnsentPrivate(): void {
+    // A confirmed new owner may start a fresh editor, but cannot discard a
+    // retained dispatch or uncertainty belonging to the original owner.
+    if (this.attempt() || this.unknown() || this.earlierUnknown()) return;
+    this.clearPrivate();
+    this.owner.set(null);
+    this.ownerMode.set(null);
   }
 
   private clearPrivate(): void {
@@ -608,6 +661,7 @@ export class MappingMetadataState {
       (!context ||
         !owner ||
         (context.actorPrincipalId === owner &&
+          context.mode === this.ownerMode() &&
           context.allowedOrganizationId === scope.organizationId))
     );
   }

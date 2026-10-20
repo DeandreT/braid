@@ -1206,6 +1206,7 @@ export async function runBrowserFixture(definition) {
         DOTNET_GCHeapHardLimit: "40000000",
         DOTNET_CLI_TELEMETRY_OPTOUT: "1",
         DOTNET_NOLOGO: "1",
+        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false",
         TMPDIR: ownScratch,
         DOTNET_CLI_HOME: ownScratch,
         XDG_DATA_HOME: ownScratch,

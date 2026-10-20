@@ -12,6 +12,7 @@ import { writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import type { components } from "../src/api/generated";
+import { isSessionStatusRequest } from "./browser-session-status.fixture";
 import {
   catalogApi,
   editPath,
@@ -784,6 +785,7 @@ class MetadataWire {
           url.searchParams.get("limit") === "10" &&
           url.searchParams.getAll("cursor").length <= 1;
       const allowedGet =
+        isSessionStatusRequest(request, origin) ||
         ((url.pathname === "/api/v1/catalog/context" ||
           exactGets.has(url.pathname) ||
           revisionGet.test(url.pathname)) &&

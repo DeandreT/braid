@@ -798,6 +798,7 @@ function selectionIdentity(
     context.mode,
     context.actorPrincipalId,
     context.allowedOrganizationId,
+    context.mode === "session" ? context.identityContext : "",
     scope.organizationId,
     scope.projectId,
     scope.mappingId,

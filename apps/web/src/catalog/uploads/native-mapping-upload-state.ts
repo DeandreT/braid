@@ -33,6 +33,7 @@ import {
 } from "./native-mapping-upload-types";
 
 type Owner = {
+  readonly mode: "development" | "session";
   readonly scope: CatalogProjectScope;
   readonly actorPrincipalId: string;
 };
@@ -127,9 +128,14 @@ export class NativeMappingUploadState {
     const intent = this.original(),
       operation = this.known();
     if (intent)
-      return { scope: intent.scope, actorPrincipalId: intent.actorPrincipalId };
+      return {
+        mode: intent.mode,
+        scope: intent.scope,
+        actorPrincipalId: intent.actorPrincipalId,
+      };
     if (operation)
       return {
+        mode: operation.mode,
         scope: operation.scope,
         actorPrincipalId: operation.actorPrincipalId,
       };
@@ -202,6 +208,7 @@ export class NativeMappingUploadState {
     () =>
       this.presentUpload() &&
       this.view() !== null &&
+      this.contexts.canPresent(this.context()) &&
       !this.locked() &&
       !this.busy(),
   );
@@ -212,18 +219,26 @@ export class NativeMappingUploadState {
   readonly canResend = computed(
     () =>
       this.uploadAdmitted() &&
+      this.contexts.canPresent(this.context()) &&
       this.original() !== null &&
       (this.known() === null ||
         this.known()?.receipt.latestFailure === "needsSource") &&
       !this.busy(),
   );
   readonly canCheckStatus = computed(
-    () => this.uploadAdmitted() && this.known() !== null && !this.busy(),
+    () =>
+      this.uploadAdmitted() &&
+      this.contexts.canPresent(this.context()) &&
+      this.known() !== null &&
+      !this.busy(),
   );
   readonly canResume = this.canCheckStatus;
   readonly canStartAnother = computed(
     () =>
-      this.uploadAdmitted() && this.known()?.terminal === true && !this.busy(),
+      this.uploadAdmitted() &&
+      this.contexts.canPresent(this.context()) &&
+      this.known()?.terminal === true &&
+      !this.busy(),
   );
   readonly canAbandon = computed(() => {
     const context = this.contexts.context(),
@@ -232,6 +247,7 @@ export class NativeMappingUploadState {
       this.active() &&
       owner !== null &&
       context !== null &&
+      this.contexts.canPresent(context) &&
       owns(context, owner) &&
       (this.original() !== null || this.known() !== null) &&
       !this.busy()
@@ -280,7 +296,10 @@ export class NativeMappingUploadState {
     this.acknowledgement()?.detailed ? this.access() : { kind: "idle" },
   );
   readonly canRetryRevisionAccess = computed(
-    () => this.acknowledgement() !== null && !this.busy(),
+    () =>
+      this.contexts.visible() &&
+      this.acknowledgement() !== null &&
+      !this.busy(),
   );
   readonly dirtyDraft = computed(
     () =>
@@ -301,6 +320,17 @@ export class NativeMappingUploadState {
   });
 
   constructor() {
+    const invalidation = this.contexts.invalidated.subscribe(() => {
+      this.cancelNetwork();
+      this.invalidateFile();
+      if (!this.locked()) this.clearDraft();
+      this.foreignOwner.set(true);
+      this.presenting.set(false);
+      this.admitted.set(null);
+      this.access.set({ kind: "idle" });
+      this.failure.set(null);
+      if (this.active()) this.admissionState.set("unavailable");
+    });
     effect(() => {
       const context = this.contexts.context(),
         owner = this.slotOwner();
@@ -322,6 +352,7 @@ export class NativeMappingUploadState {
     };
     this.document.defaultView?.addEventListener("beforeunload", warn);
     inject(DestroyRef).onDestroy(() => {
+      invalidation.unsubscribe();
       this.deactivate();
       this.clearSlot();
       this.document.defaultView?.removeEventListener("beforeunload", warn);
@@ -460,7 +491,11 @@ export class NativeMappingUploadState {
     if (!intent || !this.canResend()) return;
     this.admit(
       true,
-      { scope: intent.scope, actorPrincipalId: intent.actorPrincipalId },
+      {
+        mode: intent.mode,
+        scope: intent.scope,
+        actorPrincipalId: intent.actorPrincipalId,
+      },
       (admission) => this.sendOriginal(admission, intent),
     );
   }
@@ -648,7 +683,7 @@ export class NativeMappingUploadState {
             );
             return;
           }
-          next(admission);
+          if (this.contexts.canPresent(admission.context)) next(admission);
         },
         error: (error: unknown) => {
           if (!this.current(generation, scope)) return;
@@ -819,6 +854,7 @@ export class NativeMappingUploadState {
         error.kind === "notFound" ? "notFound" : "rejected",
       );
     }
+    this.contexts.reject(error.status);
   }
 
   private uploadAdmitted(): boolean {
@@ -923,19 +959,24 @@ function sameScope(
 }
 function owns(context: CatalogContext, owner: Owner): boolean {
   return (
-    context.mode === "development" &&
+    context.mode === owner.mode &&
     context.actorPrincipalId === owner.actorPrincipalId &&
     context.allowedOrganizationId === owner.scope.organizationId
   );
 }
 function ownerOf(admission: NativeMappingUploadAdmission): Owner {
+  const mode = admission.context.mode;
+  if (mode !== "development" && mode !== "session")
+    throw new NativeMappingUploadError("identityRejected");
   return {
+    mode,
     scope: Object.freeze({ ...admission.project.scope }),
     actorPrincipalId: admission.context.actorPrincipalId,
   };
 }
 function ownerOfOperation(operation: NativeMappingUploadOperation): Owner {
   return {
+    mode: operation.mode,
     scope: operation.scope,
     actorPrincipalId: operation.actorPrincipalId,
   };

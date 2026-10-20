@@ -4,6 +4,7 @@ import {
   HttpHeaders,
 } from "@angular/common/http";
 import { Injectable, inject } from "@angular/core";
+import { BrowserSessionState } from "../../auth/browser-session-state";
 import {
   TimeoutError,
   catchError,
@@ -27,6 +28,7 @@ import {
 @Injectable({ providedIn: "root" })
 export class NativeMappingUploadApi {
   private readonly http = inject(HttpClient);
+  private readonly sessions = inject(BrowserSessionState);
 
   /** One explicit original-byte send or resend. No receipt is searched for or adopted by key. */
   create(
@@ -35,6 +37,7 @@ export class NativeMappingUploadApi {
     previous: NativeMappingUploadOperation | null = null,
   ): Observable<NativeMappingUploadResponse> {
     try {
+      this.requireCurrent(admission);
       captureNativeMappingUploadAdmission(
         admission,
         intent,
@@ -56,17 +59,24 @@ export class NativeMappingUploadApi {
           })
           .pipe(
             timeout(30000),
-            map((response) =>
-              readNativeMappingUploadResponse(
+            map((response) => {
+              if (!this.sessions.accepts(admission.context))
+                throw new NativeMappingUploadError("unavailable", null, true);
+              return readNativeMappingUploadResponse(
                 response.status,
                 response.body,
                 response.headers.get("Location"),
                 intent,
                 previous,
-              ),
-            ),
+              );
+            }),
             catchError((error: unknown) =>
-              mutationFailure(error, intent, previous),
+              this.sessions.accepts(admission.context)
+                ? mutationFailure(error, intent, previous)
+                : throwError(
+                    () =>
+                      new NativeMappingUploadError("unavailable", null, true),
+                  ),
             ),
           ),
       );
@@ -81,11 +91,14 @@ export class NativeMappingUploadApi {
     operation: NativeMappingUploadOperation,
   ): Observable<NativeMappingUploadOperation> {
     try {
+      this.requireCurrent(admission);
       captureNativeMappingUploadAdmission(admission, operation);
       const url = nativeMappingUploadReceiptPath(operation);
       return this.http.get<unknown>(url, { observe: "response" }).pipe(
         timeout(8000),
         map((response) => {
+          if (!this.sessions.accepts(admission.context))
+            throw new NativeMappingUploadError("unavailable");
           if (response.status !== 200)
             throw new NativeMappingUploadError("incompatible", response.status);
           try {
@@ -112,6 +125,7 @@ export class NativeMappingUploadApi {
     operation: NativeMappingUploadOperation,
   ): Observable<NativeMappingUploadResponse> {
     try {
+      this.requireCurrent(admission);
       captureNativeMappingUploadAdmission(admission, operation);
       const token = requestToken(admission),
         url = nativeMappingUploadReceiptPath(operation) + "/resume";
@@ -122,19 +136,31 @@ export class NativeMappingUploadApi {
         })
         .pipe(
           timeout(30000),
-          map((response) =>
-            readNativeMappingUploadResponse(
+          map((response) => {
+            if (!this.sessions.accepts(admission.context))
+              throw new NativeMappingUploadError("unavailable", null, true);
+            return readNativeMappingUploadResponse(
               response.status,
               response.body,
               response.headers.get("Location"),
               operation,
-            ),
+            );
+          }),
+          catchError((error: unknown) =>
+            this.sessions.accepts(admission.context)
+              ? mutationFailure(error, operation)
+              : throwError(
+                  () => new NativeMappingUploadError("unavailable", null, true),
+                ),
           ),
-          catchError((error: unknown) => mutationFailure(error, operation)),
         );
     } catch (error: unknown) {
       return throwError(() => localFailure(error));
     }
+  }
+  private requireCurrent(admission: NativeMappingUploadAdmission): void {
+    if (!admission?.context || !this.sessions.canDispatch(admission.context))
+      throw new NativeMappingUploadError("identityRejected");
   }
 }
 
@@ -199,7 +225,7 @@ function httpFailure(
   const code: unknown = error.error["code"];
   if (status === 400 && code === "invalidRequest")
     return new NativeMappingUploadError("invalidRequest", status);
-  if (status === 403 && code === "identityRejected")
+  if ((status === 401 || status === 403) && code === "identityRejected")
     return new NativeMappingUploadError("identityRejected", status);
   if (status === 404 && (code === "notFound" || code === "unavailable"))
     return new NativeMappingUploadError("notFound", status);

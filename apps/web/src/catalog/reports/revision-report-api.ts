@@ -6,6 +6,7 @@ import {
   type HttpResponse,
 } from "@angular/common/http";
 import { Injectable, inject } from "@angular/core";
+import { BrowserSessionState } from "../../auth/browser-session-state";
 import {
   TimeoutError,
   catchError,
@@ -92,6 +93,7 @@ type Expected = {
 @Injectable({ providedIn: "root" })
 export class RevisionReportApi {
   private readonly http = inject(HttpClient);
+  private readonly sessions = inject(BrowserSessionState);
 
   projection(
     expected: CatalogRevision,
@@ -151,6 +153,9 @@ export class RevisionReportApi {
     projectionId: string | null,
   ): Observable<RevisionReportResponse<T>> {
     return captured(revision, (expected) => {
+      if (!this.sessions.visible()) throw new RevisionReportError("rejected");
+      const generation = this.sessions.generation();
+      const sessionMode = this.sessions.state().kind === "authenticated";
       selector(retainedId);
       selector(projectionId);
       let params = new HttpParams();
@@ -161,17 +166,21 @@ export class RevisionReportApi {
         (retainedId === null ? "" : `/${retainedId}`);
       return this.http.get<unknown>(path, { params, observe: "response" }).pipe(
         timeout(8000),
-        map((response) =>
-          admitted<T>(
+        map((response) => {
+          if (generation !== this.sessions.generation())
+            throw new RevisionReportError("unavailable");
+          return admitted<T>(
             response,
             expected,
             operation,
             retainedId,
             projectionId,
             false,
-          ),
+          );
+        }),
+        catchError((error: unknown) =>
+          this.failure(error, generation, sessionMode),
         ),
-        catchError((error: unknown) => throwError(() => reportFailure(error))),
       );
     });
   }
@@ -183,6 +192,9 @@ export class RevisionReportApi {
     repairId: string | null,
   ): Observable<RevisionReportResponse<T>> {
     return captured(revision, (expected) => {
+      if (!this.sessions.visible()) throw new RevisionReportError("rejected");
+      const generation = this.sessions.generation();
+      const sessionMode = this.sessions.state().kind === "authenticated";
       selector(repairId);
       if (
         typeof requestToken !== "string" ||
@@ -207,14 +219,30 @@ export class RevisionReportApi {
         )
         .pipe(
           timeout(45000),
-          map((response) =>
-            admitted<T>(response, expected, operation, null, null, true),
-          ),
+          map((response) => {
+            if (generation !== this.sessions.generation())
+              throw new RevisionReportError("unavailable");
+            return admitted<T>(response, expected, operation, null, null, true);
+          }),
           catchError((error: unknown) =>
-            throwError(() => reportFailure(error)),
+            this.failure(error, generation, sessionMode),
           ),
         );
     });
+  }
+  private failure(
+    error: unknown,
+    generation: number,
+    sessionMode: boolean,
+  ): Observable<never> {
+    if (
+      generation === this.sessions.generation() &&
+      sessionMode &&
+      error instanceof HttpErrorResponse &&
+      (error.status === 401 || error.status === 403)
+    )
+      this.sessions.rejectProtectedRequest(generation);
+    return throwError(() => reportFailure(error));
   }
 }
 
@@ -665,7 +693,7 @@ function reportFailure(error: unknown): RevisionReportError {
   if (status === 0) return new RevisionReportError("unavailable", status);
   if (status === 404 && (code === "notFound" || code === "unavailable"))
     return new RevisionReportError("notFound", status);
-  if (status === 403 && code === "identityRejected")
+  if ((status === 401 || status === 403) && code === "identityRejected")
     return new RevisionReportError("rejected", status);
   if (status === 400 && code === "invalidRequest")
     return new RevisionReportError("invalidLink", status);

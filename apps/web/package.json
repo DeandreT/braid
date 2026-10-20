@@ -8,7 +8,9 @@
     "check": "ng build --configuration development",
     "check:contracts": "tsc -p tsconfig.contracts.json",
     "check:browser": "tsc -p tsconfig.browser.json",
+    "check:browser-session-probe": "ng run weft:browser-session-probe:development",
     "build": "ng build",
+    "build:browser-session-probe": "ng run weft:browser-session-probe:production",
     "test:e2e": "playwright test"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 import { DOCUMENT } from "@angular/common";
-import { DestroyRef, inject, signal } from "@angular/core";
+import { DestroyRef, computed, inject, signal } from "@angular/core";
 import {
   EMPTY,
   defer,
@@ -30,15 +30,25 @@ type Selection<T> = {
 /** A controller belongs to one routed screen; every attempt replaces its previous selection. */
 export class CatalogRead<T> {
   private readonly current = signal<CatalogReadState<T>>({ kind: "idle" });
-  readonly state = this.current.asReadonly();
+  readonly state = computed<CatalogReadState<T>>(() => {
+    const state = this.current();
+    return state.kind === "ready" && this.contexts.context() !== state.context
+      ? { kind: "unavailable" }
+      : state;
+  });
   private selection: Selection<T> | null = null;
   private subscription: Subscription | null = null;
   private generation = 0;
   private destroyed = false;
   private identityVersion: number;
+  private readonly invalidation: Subscription;
 
   constructor(private readonly contexts: CatalogContextStore) {
     this.identityVersion = contexts.identityVersion();
+    this.invalidation = contexts.invalidated.subscribe(() => {
+      this.cancel();
+      this.current.set({ kind: "unavailable" });
+    });
   }
 
   select(
@@ -83,6 +93,7 @@ export class CatalogRead<T> {
   }
 
   destroy(): void {
+    this.invalidation.unsubscribe();
     this.destroyed = true;
     this.clear();
   }
@@ -153,11 +164,16 @@ export class CatalogRead<T> {
 export function createCatalogRead<T>(
   options: { refreshOnFocus?: boolean } = {},
 ): CatalogRead<T> {
-  const read = new CatalogRead<T>(inject(CatalogContextStore));
+  const contexts = inject(CatalogContextStore);
+  const read = new CatalogRead<T>(contexts);
   const destroyRef = inject(DestroyRef);
   const document = inject(DOCUMENT);
   const window = document.defaultView;
   let focusTimer: ReturnType<typeof setTimeout> | null = null;
+  const invalidation = contexts.invalidated.subscribe(() => {
+    if (focusTimer !== null) clearTimeout(focusTimer);
+    focusTimer = null;
+  });
   const refresh = () => {
     if (document.visibilityState !== "visible" || focusTimer !== null) return;
     focusTimer = setTimeout(() => {
@@ -170,6 +186,7 @@ export function createCatalogRead<T>(
     document.addEventListener("visibilitychange", refresh);
   }
   destroyRef.onDestroy(() => {
+    invalidation.unsubscribe();
     window?.removeEventListener("focus", refresh);
     document.removeEventListener("visibilitychange", refresh);
     if (focusTimer !== null) clearTimeout(focusTimer);

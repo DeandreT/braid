@@ -15,6 +15,7 @@ import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { combineLatest, type Observable } from "rxjs";
 import { catalogRoutes, isCatalogId } from "../catalog-types";
+import { CatalogContextStore } from "../catalog-context";
 import type { NativeIngestionSourceErrorKind } from "./native-ingestion-leaves";
 import { NativeRevisionAppendState } from "./native-revision-append-state";
 import type {
@@ -43,6 +44,7 @@ export class AppendRevisionPageComponent {
   });
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
+  private readonly contexts = inject(CatalogContextStore);
   private focusGeneration = 0;
   private lastStateFocus = -1;
   private returnFocusId = "append-title";
@@ -51,6 +53,14 @@ export class AppendRevisionPageComponent {
   constructor() {
     const route = inject(ActivatedRoute),
       destroyRef = inject(DestroyRef);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const invalidation = this.contexts.invalidated.subscribe(() => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      ++this.focusGeneration;
+      this.abandonDecision.set(false);
+      this.abandonAcknowledged.set(false);
+    });
     combineLatest([route.paramMap, route.queryParamMap])
       .pipe(takeUntilDestroyed())
       .subscribe(([params, query]) => {
@@ -89,6 +99,7 @@ export class AppendRevisionPageComponent {
     effect(() => {
       const prompt = this.state.leavePrompt(),
         request = this.state.focusRequest();
+      if (!this.contexts.visible()) return;
       if (prompt) {
         this.queueFocus("append-leave");
         return;
@@ -98,7 +109,6 @@ export class AppendRevisionPageComponent {
         request &&
         request.sequence !== this.lastStateFocus
       ) {
-        this.lastStateFocus = request.sequence;
         const target = {
           summary: "append-errors",
           status: "append-status",
@@ -109,7 +119,6 @@ export class AppendRevisionPageComponent {
       }
     });
     const window = this.document.defaultView;
-    let timer: ReturnType<typeof setTimeout> | null = null;
     const canRefresh = () => {
       const view = this.state.view();
       return (
@@ -130,6 +139,7 @@ export class AppendRevisionPageComponent {
     window?.addEventListener("focus", refresh);
     this.document.addEventListener("visibilitychange", refresh);
     destroyRef.onDestroy(() => {
+      invalidation.unsubscribe();
       this.destroyed = true;
       ++this.focusGeneration;
       window?.removeEventListener("focus", refresh);
@@ -310,6 +320,7 @@ export class AppendRevisionPageComponent {
         if (
           !this.destroyed &&
           generation === this.focusGeneration &&
+          this.contexts.visible() &&
           (stateSequence === undefined ||
             this.state.focusRequest()?.sequence === stateSequence) &&
           (target === "append-leave"
@@ -317,8 +328,16 @@ export class AppendRevisionPageComponent {
             : target === "append-abandon"
               ? this.abandonDecision() && this.state.leavePrompt() === null
               : !this.uiBlocked())
-        )
-          this.document.getElementById(target)?.focus();
+        ) {
+          const element = this.document.getElementById(target);
+          element?.focus();
+          if (
+            element &&
+            this.document.activeElement === element &&
+            stateSequence !== undefined
+          )
+            this.lastStateFocus = stateSequence;
+        }
       },
       { injector: this.injector },
     );

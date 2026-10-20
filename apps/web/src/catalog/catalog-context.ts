@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from "@angular/core";
+import { DestroyRef, Injectable, inject, signal } from "@angular/core";
 import {
   catchError,
   defer,
@@ -7,6 +7,7 @@ import {
   tap,
   throwError,
   type Observable,
+  Subject,
 } from "rxjs";
 import { CatalogApi, catalogFailure } from "./catalog-api";
 import {
@@ -14,19 +15,43 @@ import {
   type CatalogContext,
   type CatalogContextState,
 } from "./catalog-types";
+import { BrowserSessionState } from "../auth/browser-session-state";
 
 /** Admission is fetched for every read selection; neither identity nor tokens are persisted. */
 @Injectable({ providedIn: "root" })
 export class CatalogContextStore {
   private readonly api = inject(CatalogApi);
+  private readonly sessions = inject(BrowserSessionState);
   private readonly current = signal<CatalogContext | null>(null);
   private readonly currentState = signal<CatalogContextState>({ kind: "idle" });
   private readonly identityRevision = signal(0);
   private lastIdentity: string | null = null;
   private generation = 0;
+  private readonly changes = new Subject<void>();
+  readonly invalidated = this.changes.asObservable();
+  readonly visible = this.sessions.visible;
   readonly context = this.current.asReadonly();
   readonly state = this.currentState.asReadonly();
   readonly identityVersion = this.identityRevision.asReadonly();
+
+  constructor() {
+    const subscription = this.sessions.invalidated.subscribe(() => {
+      this.clear();
+      this.identityRevision.update((value) => value + 1);
+      this.changes.next();
+    });
+    inject(DestroyRef).onDestroy(() => subscription.unsubscribe());
+  }
+
+  canPresent(context: CatalogContext | null): boolean {
+    return context !== null && this.sessions.canDispatch(context);
+  }
+
+  reject(status: number | null): void {
+    const context = this.current();
+    if ((status === 401 || status === 403) && context?.mode === "session")
+      this.sessions.rejectProtectedRequest(this.sessions.generation(), context);
+  }
 
   clear(): void {
     ++this.generation;
@@ -49,7 +74,9 @@ export class CatalogContextStore {
         tap((context) => {
           settled = true;
           if (generation !== this.generation) return;
-          const identity = `${context.mode}/${context.actorPrincipalId}/${context.allowedOrganizationId}`;
+          const identityContext =
+            context.mode === "session" ? context.identityContext : "";
+          const identity = `${context.mode}/${context.actorPrincipalId}/${context.allowedOrganizationId}/${identityContext}`;
           if (this.lastIdentity !== null && identity !== this.lastIdentity)
             this.identityRevision.update((revision) => revision + 1);
           this.lastIdentity = identity;

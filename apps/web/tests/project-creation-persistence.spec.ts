@@ -7,6 +7,7 @@ import type {
 } from "@playwright/test";
 import { isDeepStrictEqual } from "node:util";
 import type { components } from "../src/api/generated";
+import { isSessionStatusRequest } from "./browser-session-status.fixture";
 import {
   canonicalId,
   catalogApi,
@@ -55,6 +56,7 @@ class ActualCreationWire {
   private readonly readTasks: Promise<void>[] = [];
   private readonly reads: Read[] = [];
   private readonly requestContexts: Request[] = [];
+  private readonly answeredContexts = new Set<Request>();
   private readonly projectRequests = new Map<Request, number>();
   private readonly contexts = new Map<Request, Context>();
   private readonly pending = new Map<Request, PrivatePost>();
@@ -151,11 +153,11 @@ class ActualCreationWire {
               status: reply.status(),
               body,
             });
-            if (
-              url.pathname === "/api/v1/catalog/context" &&
-              reply.status() === 200
-            )
-              this.contexts.set(request, body as Context);
+            if (url.pathname === "/api/v1/catalog/context") {
+              if (reply.status() === 200)
+                this.contexts.set(request, body as Context);
+              this.answeredContexts.add(request);
+            }
           } catch {
             this.failure ??= new Error(
               "Project creation browser fixture: actual GET JSON or admission failed",
@@ -183,6 +185,7 @@ class ActualCreationWire {
       const context =
         url.pathname === "/api/v1/catalog/context" && keys.length === 0;
       const allowedRead =
+        isSessionStatusRequest(request, origin) ||
         context ||
         (projectGet.test(url.pathname) && keys.length === 0) ||
         ((url.pathname === projects || mappingList.test(url.pathname)) &&
@@ -442,6 +445,22 @@ class ActualCreationWire {
       "actual categorical server refusal differs",
     );
   }
+  /** Busy controls render asynchronously, so admission completion is observed on the wire. */
+  async admitted(before: number): Promise<void> {
+    await expect
+      .poll(
+        () =>
+          this.failure !== null ||
+          (this.requestContexts.length === before + 1 &&
+            this.answeredContexts.has(this.requestContexts[before]!)),
+        {
+          message: "Expected exactly one answered actual admission read",
+          timeout: 10000,
+        },
+      )
+      .toBe(true);
+    await this.settle();
+  }
   async latestContext(): Promise<Context> {
     await this.settle();
     const value = this.contexts.get(this.requestContexts.at(-1)!);
@@ -555,8 +574,10 @@ async function fill(page: Page, draft: Draft): Promise<void> {
     .getByLabel("Description (optional)", { exact: true })
     .fill(draft.description);
 }
-async function refresh(page: Page): Promise<void> {
+async function refresh(page: Page, wire: ActualCreationWire): Promise<void> {
+  const before = wire.contextCount;
   await named(page, "Refresh admission").click();
+  await wire.admitted(before);
   await expect(named(page, "Refresh admission")).toBeEnabled();
 }
 async function confirmed(page: Page): Promise<void> {
@@ -700,7 +721,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
         action: "restart-profile",
         profile: "projectAdministrator",
       });
-      await refresh(page);
+      await refresh(page, wire);
       await expect(named(page, "Create project")).toBeDisabled();
       const context = await wire.latestContext();
       requireCreation(
@@ -746,7 +767,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       await expect(named(page, "Create project")).toBeDisabled();
       expect(wire.postCount).toBe(1);
       await owner.control({ action: "restart-profile", profile: "creator" });
-      await refresh(page);
+      await refresh(page, wire);
       await expect(named(page, "Create project")).toBeEnabled();
     });
 
@@ -779,11 +800,11 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       await expect(page.getByLabel("Name", { exact: true })).toHaveCount(0);
       await expect(named(page, "Recover creation")).toHaveCount(0);
       held.release();
-      await refresh(page);
+      await refresh(page, wire);
       await expect(heading(page, "Project creation confirmed")).toHaveCount(0);
       expect(wire.postCount).toBe(2);
       await owner.control({ action: "restart-profile", profile: "creator" });
-      await refresh(page);
+      await refresh(page, wire);
       await unknown(page);
       await expect(named(page, "Recover creation")).toBeEnabled();
       requireCreation(
@@ -799,13 +820,14 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       await owner.control({ action: "revoke-capability" });
       const refusedContexts = wire.contextCount;
       await named(page, "Recover creation").click();
+      await wire.admitted(refusedContexts);
       await unknown(page);
       await expect(named(page, "Recover creation")).toBeDisabled();
       expect(wire.postCount).toBe(before);
       expect(wire.contextCount).toBe(refusedContexts + 1);
       expect(await owner.counts()).toEqual(baseline);
       await owner.control({ action: "restore-capability" });
-      await refresh(page);
+      await refresh(page, wire);
       await expect(named(page, "Recover creation")).toBeEnabled();
       expect(wire.postCount).toBe(before);
       const held = wire.arm("hold-forward");
@@ -821,7 +843,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       expect(wire.postCount).toBe(before + 1);
       expect(await owner.counts()).toEqual(baseline);
       await owner.control({ action: "restore-capability" });
-      await refresh(page);
+      await refresh(page, wire);
       await expect(named(page, "Recover creation")).toBeEnabled();
       expect(wire.postCount).toBe(before + 1);
     });
@@ -831,7 +853,7 @@ test("real packaged project creation: exact Unicode, same-request recovery, curr
       await owner.control({ action: "api-stop" });
       await owner.control({ action: "api-start", profile: "creator" });
       await owner.control({ action: "pg-normal-restart" });
-      await refresh(page);
+      await refresh(page, wire);
       await unknown(page);
       expect(wire.postCount).toBe(before);
       await owner.control({

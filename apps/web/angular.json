@@ -33,6 +33,37 @@
           },
           "defaultConfiguration": "production"
         },
+        "browser-session-probe": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "tests/browser-session/probe-main.ts",
+            "index": {
+              "input": "tests/browser-session/probe-index.html",
+              "output": "index.html"
+            },
+            "tsConfig": "tsconfig.browser-session-probe.json",
+            "styles": ["src/style.css"],
+            "baseHref": "/__weft119_probe/",
+            "outputPath": {
+              "base": "dist/browser-session-probe",
+              "browser": "browser"
+            }
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "750kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": { "optimization": false, "sourceMap": true }
+          },
+          "defaultConfiguration": "production"
+        },
         "serve": {
           "builder": "@angular/build:dev-server",
           "defaultConfiguration": "development",

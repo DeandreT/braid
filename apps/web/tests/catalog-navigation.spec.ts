@@ -210,8 +210,8 @@ test("controlled UI: viewing the already-current head refreshes the same concret
   await page
     .getByRole("button", { name: "View current head", exact: true })
     .click();
+  await expect.poll(() => mappingReads).toBeGreaterThan(before);
   await expectRevision(page, synthetic.revision);
-  expect(mappingReads).toBeGreaterThan(before);
   await expect(
     page.getByRole("button", { name: "Refresh catalog", exact: true }),
   ).toBeEnabled();

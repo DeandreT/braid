@@ -9,6 +9,7 @@ import {
   RouterOutlet,
 } from "@angular/router";
 import { filter } from "rxjs";
+import { BrowserSessionState } from "./auth/browser-session-state";
 
 @Component({
   selector: "weft-root",
@@ -17,8 +18,13 @@ import { filter } from "rxjs";
 })
 export class AppComponent {
   private readonly document = inject(DOCUMENT);
+  readonly session = inject(BrowserSessionState);
 
   constructor() {
+    this.session
+      .observe()
+      .pipe(takeUntilDestroyed())
+      .subscribe({ error: () => {} });
     let initialNavigation = true;
     inject(Router)
       .events.pipe(

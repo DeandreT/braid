@@ -1,31 +1,59 @@
 <section class="catalog-shell" aria-label="Catalog workspace">
-  @if (contextStore.context(); as context) {
-    <div class="catalog-context">
-      <p>
-        <strong>{{ context.organizationName }}</strong>
-      </p>
-      <details class="catalog-identity">
-        <summary>Development identity</summary>
-        <p>
-          Principal
-          <code class="catalog-code">{{ context.actorPrincipalId }}</code>
-        </p>
-        <p>
-          Organization
-          <code class="catalog-code">{{ context.allowedOrganizationId }}</code>
-        </p>
-      </details>
-    </div>
+  @if (sessions.state().kind === "checking") {
+    <p class="catalog-state" role="status">Checking workspace access…</p>
+  } @else if (!contextStore.visible()) {
+    <section class="catalog-state catalog-state-error" role="alert">
+      <h2>Workspace access unavailable</h2>
+      <p>Access could not be confirmed. Retry before refreshing this view.</p>
+      <button class="catalog-button" type="button" (click)="retryAccess()">
+        Retry
+      </button>
+    </section>
   }
-  @if (landing()) {
-    <div class="catalog-heading">
-      <div>
-        <p class="catalog-eyebrow">Your workspace</p>
-        <h1>Catalog</h1>
+  <div
+    [hidden]="!contextStore.visible()"
+    [attr.inert]="!contextStore.visible() ? '' : null"
+    [attr.aria-hidden]="!contextStore.visible() ? 'true' : null"
+  >
+    @if (contextStore.visible() && contextStore.context(); as context) {
+      <div class="catalog-context">
+        <p>
+          <strong>{{ context.organizationName }}</strong>
+        </p>
+        <details class="catalog-identity">
+          <summary>
+            {{
+              context.mode === "development"
+                ? "Development identity"
+                : "Workspace identity"
+            }}
+          </summary>
+          <p>
+            Principal
+            <code class="catalog-code">{{ context.actorPrincipalId }}</code>
+          </p>
+          <p>
+            Organization
+            <code class="catalog-code">{{
+              context.allowedOrganizationId
+            }}</code>
+          </p>
+        </details>
       </div>
-    </div>
-    <weft-catalog-status [kind]="landingRead.state().kind" (retry)="retry()" />
-  } @else {
-    <router-outlet />
-  }
+    }
+    @if (landing()) {
+      <div class="catalog-heading">
+        <div>
+          <p class="catalog-eyebrow">Your workspace</p>
+          <h1>Catalog</h1>
+        </div>
+      </div>
+      <weft-catalog-status
+        [kind]="landingRead.state().kind"
+        (retry)="retry()"
+      />
+    } @else {
+      <router-outlet />
+    }
+  </div>
 </section>

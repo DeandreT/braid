@@ -8,6 +8,7 @@ import {
   catchError,
   defer,
   map,
+  switchMap,
   throwError,
   timeout,
   type Observable,
@@ -30,6 +31,11 @@ import {
   type CatalogScope,
 } from "./catalog-types";
 import { trimCatalogName } from "./catalog-text";
+import { BrowserSessionState } from "../auth/browser-session-state";
+import {
+  isIdentityContext,
+  isSessionRequestToken,
+} from "../auth/browser-session-types";
 
 const pageSize = 10;
 const actionKeys = [
@@ -52,9 +58,23 @@ const featureKeys = [
 @Injectable({ providedIn: "root" })
 export class CatalogApi {
   private readonly http = inject(HttpClient);
+  private readonly sessions = inject(BrowserSessionState);
 
   context(): Observable<CatalogContext> {
-    return this.get("/api/v1/catalog/context", isContext);
+    return this.sessions.observe().pipe(
+      switchMap(() => {
+        if (!this.sessions.visible()) throw new CatalogReadError("rejected");
+        return this.get("/api/v1/catalog/context", isContext);
+      }),
+      map((context) => {
+        if (!this.sessions.accepts(context)) {
+          this.sessions.invalidate();
+          throw new CatalogReadError("unavailable");
+        }
+        return context;
+      }),
+      catchError((error: unknown) => throwError(() => catalogFailure(error))),
+    );
   }
 
   projects(
@@ -146,14 +166,29 @@ export class CatalogApi {
     guard: (value: unknown) => value is T,
     params?: HttpParams,
   ): Observable<T> {
-    return this.http.get<unknown>(url, { params }).pipe(
-      timeout(8000),
-      map((value) => {
-        if (!guard(value)) throw new CatalogReadError("unavailable");
-        return value;
-      }),
-      catchError((error: unknown) => throwError(() => catalogFailure(error))),
-    );
+    return defer(() => {
+      if (!this.sessions.visible()) throw new CatalogReadError("rejected");
+      const generation = this.sessions.generation();
+      const sessionMode = this.sessions.state().kind === "authenticated";
+      return this.http.get<unknown>(url, { params }).pipe(
+        timeout(8000),
+        map((value) => {
+          if (generation !== this.sessions.generation() || !guard(value))
+            throw new CatalogReadError("unavailable");
+          return value;
+        }),
+        catchError((error: unknown) => {
+          if (
+            generation === this.sessions.generation() &&
+            sessionMode &&
+            error instanceof HttpErrorResponse &&
+            (error.status === 401 || error.status === 403)
+          )
+            this.sessions.rejectProtectedRequest(generation);
+          return throwError(() => catalogFailure(error));
+        }),
+      );
+    });
   }
 }
 
@@ -173,7 +208,8 @@ export function catalogFailure(error: unknown): CatalogReadError {
   if (error instanceof CatalogReadError) return error;
   if (error instanceof HttpErrorResponse) {
     if (error.status === 404) return new CatalogReadError("notFound");
-    if (error.status === 403) return new CatalogReadError("rejected");
+    if (error.status === 401 || error.status === 403)
+      return new CatalogReadError("rejected");
     if (error.status === 400) return new CatalogReadError("invalidLink");
   }
   return new CatalogReadError("unavailable");
@@ -232,7 +268,10 @@ function booleanFields(
 function isContext(value: unknown): value is CatalogContext {
   return (
     object(value) &&
-    value["mode"] === "development" &&
+    ((value["mode"] === "development" && value["identityContext"] == null) ||
+      (value["mode"] === "session" &&
+        isIdentityContext(value["identityContext"]) &&
+        isSessionRequestToken(value["requestToken"]))) &&
     isCatalogId(value["actorPrincipalId"]) &&
     isCatalogId(value["allowedOrganizationId"]) &&
     text(value["organizationName"], 200, true) &&

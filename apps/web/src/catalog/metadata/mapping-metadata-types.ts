@@ -168,15 +168,18 @@ function unicode(value: string): {
 
 /** Owns an actual response representation and its received validator; never a mapping-head snapshot. */
 export class MappingMetadataBaseline {
+  readonly #mode: CatalogContext["mode"];
   readonly #actorPrincipalId: string;
   readonly #metadata: CatalogMappingMetadata;
   readonly #etag: string;
 
   private constructor(
+    mode: CatalogContext["mode"],
     actorPrincipalId: string,
     metadata: CatalogMappingMetadata,
     etag: string,
   ) {
+    this.#mode = mode;
     this.#actorPrincipalId = actorPrincipalId;
     this.#metadata = metadata;
     this.#etag = etag;
@@ -188,9 +191,11 @@ export class MappingMetadataBaseline {
     actorPrincipalId: string,
     value: unknown,
     receivedEtag: unknown,
+    mode: CatalogContext["mode"] = "development",
   ): MappingMetadataBaseline {
     if (
       !isCatalogId(actorPrincipalId) ||
+      (mode !== "development" && mode !== "session") ||
       !object(value) ||
       !keys(value, ["scope", "name", "description", "version"]) ||
       !object(value["scope"]) ||
@@ -226,6 +231,7 @@ export class MappingMetadataBaseline {
       version: value["version"],
     });
     return new MappingMetadataBaseline(
+      mode,
       actorPrincipalId,
       metadata,
       receivedEtag,
@@ -234,6 +240,9 @@ export class MappingMetadataBaseline {
 
   get scope(): CatalogMappingScope {
     return this.#metadata.scope;
+  }
+  get mode(): CatalogContext["mode"] {
+    return this.#mode;
   }
   get actorPrincipalId(): string {
     return this.#actorPrincipalId;

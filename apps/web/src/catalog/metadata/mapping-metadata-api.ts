@@ -13,7 +13,12 @@ import {
   timeout,
   type Observable,
 } from "rxjs";
-import { isCatalogId, type CatalogMappingScope } from "../catalog-types";
+import {
+  isCatalogId,
+  type CatalogContext,
+  type CatalogMappingScope,
+} from "../catalog-types";
+import { BrowserSessionState } from "../../auth/browser-session-state";
 import {
   MappingMetadataAttempt,
   MappingMetadataBaseline,
@@ -24,6 +29,7 @@ import {
 
 const mediaType = "application/vnd.weft.mapping-metadata-edit.v1+json";
 type Admitted = {
+  readonly mode: CatalogContext["mode"];
   readonly scope: CatalogMappingScope;
   readonly actorPrincipalId: string;
   readonly editEnabled: boolean;
@@ -34,18 +40,23 @@ type Admitted = {
 @Injectable({ providedIn: "root" })
 export class MappingMetadataApi {
   private readonly http = inject(HttpClient);
+  private readonly sessions = inject(BrowserSessionState);
 
   /** An unconditional view read; neither Accept-Patch nor edit capability authorizes this read. */
   read(
     admission: MappingMetadataAdmission,
   ): Observable<MappingMetadataBaseline> {
     try {
-      const admitted = capture(admission);
+      const admitted = this.capture(admission);
       return this.http
         .get<unknown>(path(admitted.scope), { observe: "response" })
         .pipe(
           timeout(8000),
-          map((response) => baseline(response, admitted, false)),
+          map((response) => {
+            if (!this.sessions.accepts(admission.context))
+              throw new MappingMetadataError("unavailable");
+            return baseline(response, admitted, false);
+          }),
           catchError((error: unknown) =>
             throwError(() => metadataFailure(error, false)),
           ),
@@ -61,11 +72,12 @@ export class MappingMetadataApi {
     attempt: MappingMetadataAttempt,
   ): Observable<MappingMetadataPatchResponse> {
     try {
-      const admitted = capture(admission);
+      const admitted = this.capture(admission);
       if (!(attempt instanceof MappingMetadataAttempt))
         throw new MappingMetadataError("invalidInput");
       const original = attempt.baseline;
       if (
+        admitted.mode !== original.mode ||
         admitted.actorPrincipalId !== original.actorPrincipalId ||
         !sameScope(admitted.scope, original.scope)
       )
@@ -93,6 +105,8 @@ export class MappingMetadataApi {
         .pipe(
           timeout(30000),
           map((response) => {
+            if (!this.sessions.accepts(admission.context))
+              throw new MappingMetadataError("unavailable", null, true);
             const updated = baseline(response, admitted, true);
             const changed =
               attempt.acceptedName !== original.metadata.name ||
@@ -124,6 +138,12 @@ export class MappingMetadataApi {
       return throwError(() => metadataFailure(error, false));
     }
   }
+
+  private capture(admission: MappingMetadataAdmission): Admitted {
+    if (!admission?.context || !this.sessions.canDispatch(admission.context))
+      throw new MappingMetadataError("identityRejected");
+    return capture(admission);
+  }
 }
 
 function capture(admission: MappingMetadataAdmission): Admitted {
@@ -131,7 +151,7 @@ function capture(admission: MappingMetadataAdmission): Admitted {
     mapping = admission?.mapping;
   const scope = mapping?.scope;
   if (
-    context?.mode !== "development" ||
+    (context?.mode !== "development" && context?.mode !== "session") ||
     !isCatalogId(context.actorPrincipalId) ||
     !isCatalogId(context.allowedOrganizationId)
   )
@@ -150,6 +170,7 @@ function capture(admission: MappingMetadataAdmission): Admitted {
   )
     throw new MappingMetadataError("notFound");
   return {
+    mode: context.mode,
     scope: {
       organizationId: scope.organizationId,
       projectId: scope.projectId,
@@ -174,6 +195,7 @@ function baseline(
       admitted.actorPrincipalId,
       response.body,
       response.headers.get("ETag"),
+      admitted.mode,
     );
     if (!sameScope(received.scope, admitted.scope))
       throw new MappingMetadataError("incompatible");
@@ -200,7 +222,7 @@ function metadataFailure(
   const code: unknown = error.error["code"];
   if (status === 400 && code === "invalidRequest")
     return new MappingMetadataError("invalidRequest", status);
-  if (status === 403 && code === "identityRejected")
+  if ((status === 401 || status === 403) && code === "identityRejected")
     return new MappingMetadataError("identityRejected", status);
   if (status === 404 && (code === "notFound" || code === "unavailable"))
     return new MappingMetadataError("notFound", status);

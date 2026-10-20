@@ -1,5 +1,6 @@
 import type { Locator, Page, Request, Response } from "@playwright/test";
 import type { components } from "../src/api/generated";
+import { isSessionStatusRequest } from "./browser-session-status.fixture";
 import {
   catalogApi,
   expect,
@@ -210,6 +211,7 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
   page.context().on("request", (request) => {
     const path = new URL(request.url()).pathname;
     if (path.startsWith("/api/v1/organizations/")) scopedReads.push(path);
+    if (isSessionStatusRequest(request, fixture.readOrigin)) return;
     if (
       request.method() !== "GET" ||
       (path.startsWith("/api/") &&
@@ -476,11 +478,28 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
     await page
       .getByRole("button", { name: "Refresh catalog", exact: true })
       .click();
+    // A stopped host cannot confirm session status, so the shell withholds the workspace.
+    const workspaceAccess = page.getByRole("alert").filter({
+      has: page.getByRole("heading", {
+        name: "Workspace access unavailable",
+        exact: true,
+      }),
+    });
+    await expect(workspaceAccess).toBeVisible();
+    await expect(metadataValue(page, "Revision ID")).toHaveCount(0);
+    await catalogOwner.control("api-start", "viewer");
+    const restoredAdmission = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/catalog/context",
+    );
+    await workspaceAccess
+      .getByRole("button", { name: "Retry", exact: true })
+      .click();
+    expect((await restoredAdmission).status()).toBe(200);
+    // Workspace Retry restores status and context only; the revision read stays explicit.
     await expect(
       page.getByRole("heading", { name: "Catalog unavailable", exact: true }),
     ).toBeVisible();
-    await expect(metadataValue(page, "Revision ID")).toHaveCount(0);
-    await catalogOwner.control("api-start", "viewer");
     const apiRestarted = await capture<Revision>(
       page,
       catalogApi(revisionPath(original.scope)),
@@ -525,9 +544,14 @@ test("real packaged catalog: roles, all page boundaries, immutable history, rest
       page.getByText(original.nativeDigest.value, { exact: false }),
     ).toHaveCount(0);
     await catalogOwner.control("revoke-org");
+    const revokedAdmission = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/catalog/context",
+    );
     await page
       .getByRole("button", { name: "Refresh catalog", exact: true })
       .click();
+    await (await revokedAdmission).finished();
     await expect(
       page.getByRole("heading", { name: "Not found", exact: true }),
     ).toBeVisible();

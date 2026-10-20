@@ -14,6 +14,7 @@ import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { Observable, combineLatest, of, type Subscriber } from "rxjs";
 import { catalogRoutes, isCatalogId } from "../catalog-types";
+import { CatalogContextStore } from "../catalog-context";
 import { MappingMetadataState } from "./mapping-metadata-state";
 import type {
   MappingMetadataErrorKind,
@@ -47,6 +48,15 @@ export class EditMappingPageComponent {
   constructor() {
     const route = inject(ActivatedRoute);
     const destroyRef = inject(DestroyRef);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const invalidation = inject(CatalogContextStore).invalidated.subscribe(
+      () => {
+        if (timer !== null) clearTimeout(timer);
+        timer = null;
+        ++this.focusRequest;
+        this.resolveLeave(false);
+      },
+    );
     combineLatest([route.paramMap, route.queryParamMap])
       .pipe(takeUntilDestroyed())
       .subscribe(([params, query]) => {
@@ -109,7 +119,6 @@ export class EditMappingPageComponent {
       }
     });
     const window = this.document.defaultView;
-    let timer: ReturnType<typeof setTimeout> | null = null;
     const refresh = () => {
       if (
         this.document.visibilityState !== "visible" ||
@@ -131,6 +140,7 @@ export class EditMappingPageComponent {
     window?.addEventListener("focus", refresh);
     this.document.addEventListener("visibilitychange", refresh);
     destroyRef.onDestroy(() => {
+      invalidation.unsubscribe();
       this.destroyed = true;
       window?.removeEventListener("focus", refresh);
       this.document.removeEventListener("visibilitychange", refresh);
@@ -216,7 +226,7 @@ export class EditMappingPageComponent {
     return {
       invalidInput: "Check the metadata fields before saving.",
       identityChanged:
-        "Your identity or organization changed. The previous editor information was cleared; refresh admission to start a new edit.",
+        "Your identity or organization changed. Previous editor information is retained privately. Return with the original identity, refresh admission and review latest before saving.",
       identityRejected:
         "Your identity could not access this mapping. Private editor details are hidden.",
       featureDisabled: "Metadata editing is not enabled for this workspace.",

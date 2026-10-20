@@ -259,6 +259,9 @@ export class NativeRevisionAppendIntent {
   get actorPrincipalId(): string {
     return intentFacts(this).expectation.actorPrincipalId;
   }
+  get mode(): "development" | "session" {
+    return intentFacts(this).expectation.mode;
+  }
   get backendId(): "ferrule" {
     return intentFacts(this).expectation.backendId;
   }
@@ -341,6 +344,9 @@ export class NativeRevisionAppendOperation {
   get actorPrincipalId(): string {
     return operationFacts(this).expectation.actorPrincipalId;
   }
+  get mode(): "development" | "session" {
+    return operationFacts(this).expectation.mode;
+  }
   get backendId(): "ferrule" {
     return operationFacts(this).expectation.backendId;
   }
@@ -399,7 +405,7 @@ export interface NativeRevisionAppendResponse {
   readonly receiptLocation: string | null;
 }
 export interface NativeRevisionAppendOwner {
-  readonly mode: "development";
+  readonly mode: "development" | "session";
   readonly actorPrincipalId: string;
   readonly scope: Readonly<CatalogMappingScope>;
   readonly backendId: "ferrule";
@@ -787,7 +793,7 @@ function followsReviewedHead(
   );
 }
 function requireViewAdmission(admission: NativeRevisionAppendAdmission): {
-  readonly mode: "development";
+  readonly mode: "development" | "session";
   readonly actorPrincipalId: string;
   readonly scope: Readonly<CatalogMappingScope>;
   readonly backendId: string;
@@ -795,7 +801,7 @@ function requireViewAdmission(admission: NativeRevisionAppendAdmission): {
   const context = admission?.context,
     mapping = admission?.mapping;
   if (
-    context?.mode !== "development" ||
+    (context?.mode !== "development" && context?.mode !== "session") ||
     !isCatalogId(context.actorPrincipalId) ||
     !isCatalogId(context.allowedOrganizationId)
   )
@@ -809,7 +815,7 @@ function requireViewAdmission(admission: NativeRevisionAppendAdmission): {
     throw new NativeRevisionAppendError("notFound");
   if (!readMappingHead(mapping)) throw invalidInput();
   return Object.freeze({
-    mode: "development",
+    mode: context.mode,
     actorPrincipalId: context.actorPrincipalId,
     scope: ownMapping(mapping.scope),
     backendId: mapping.backendId,

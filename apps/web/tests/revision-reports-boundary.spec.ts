@@ -772,10 +772,15 @@ test("controlled transport: explicit empty ensure uses only the fresh memory tok
   await panel(page, "projection")
     .getByRole("button", { name: "Read again", exact: true })
     .click();
+  // The graph is already shown, so the refreshed admission is observed on the wire.
+  await expect
+    .poll(
+      () =>
+        reports.requests.filter((r) => r.path === "/api/v1/catalog/context")
+          .length,
+    )
+    .toBe(before + 1);
   await expect(graph(page)).toBeVisible();
-  expect(
-    reports.requests.filter((r) => r.path === "/api/v1/catalog/context").length,
-  ).toBe(before + 1);
   expect(reports.posts("projection")).toHaveLength(1);
   expect(reports.posts("validation")).toHaveLength(1);
   for (const request of reports.requests.filter(

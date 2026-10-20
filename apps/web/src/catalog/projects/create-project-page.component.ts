@@ -2,6 +2,8 @@ import { DatePipe, DOCUMENT } from "@angular/common";
 import {
   Component,
   DestroyRef,
+  Injector,
+  afterNextRender,
   effect,
   inject,
   signal,
@@ -12,6 +14,7 @@ import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { combineLatest } from "rxjs";
 import { catalogRoutes, isCatalogId } from "../catalog-types";
+import { CatalogContextStore } from "../catalog-context";
 import { ProjectCreationState } from "./project-creation-state";
 import type {
   ProjectCreationErrorKind,
@@ -34,13 +37,24 @@ export class CreateProjectPageComponent {
     description: new FormControl("", { nonNullable: true }),
   });
   private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
+  private readonly contexts = inject(CatalogContextStore);
   private lastFocus = "";
   private lastEditingOwner = "";
   private destroyed = false;
+  private focusGeneration = 0;
 
   constructor() {
     const route = inject(ActivatedRoute);
     const destroyRef = inject(DestroyRef);
+    let focusTimer: ReturnType<typeof setTimeout> | null = null;
+    const invalidation = this.contexts.invalidated.subscribe(() => {
+      if (focusTimer !== null) clearTimeout(focusTimer);
+      focusTimer = null;
+      ++this.focusGeneration;
+      this.abandonDecision.set(false);
+      this.abandonAcknowledged.set(false);
+    });
     combineLatest([route.paramMap, route.queryParamMap])
       .pipe(takeUntilDestroyed())
       .subscribe(([params, query]) => {
@@ -76,8 +90,10 @@ export class CreateProjectPageComponent {
       const errors = this.state.fieldErrors();
       const attempt = this.state.attemptSummary();
       const confirmation = this.state.confirmation();
+      if (!this.contexts.visible()) return;
       let focus = "";
       let target = "";
+      let editingOwner = "";
       if (errors.name || errors.description || errors.body) {
         focus = `errors/${errors.name}/${errors.description}/${errors.body}`;
         target = "creation-errors";
@@ -93,18 +109,19 @@ export class CreateProjectPageComponent {
       } else if (context && this.state.canEdit()) {
         const owner = `${context.allowedOrganizationId}/${context.actorPrincipalId}`;
         if (owner !== this.lastEditingOwner) {
-          this.lastEditingOwner = owner;
+          editingOwner = owner;
           focus = `editing/${owner}`;
           target = "project-name";
         }
       }
       if (focus && focus !== this.lastFocus) {
-        this.lastFocus = focus;
-        this.queueFocus(target);
+        this.queueFocus(target, () => {
+          this.lastFocus = focus;
+          if (editingOwner) this.lastEditingOwner = editingOwner;
+        });
       }
     });
     const window = this.document.defaultView;
-    let focusTimer: ReturnType<typeof setTimeout> | null = null;
     const refresh = () => {
       if (
         this.document.visibilityState !== "visible" ||
@@ -121,6 +138,7 @@ export class CreateProjectPageComponent {
     window?.addEventListener("focus", refresh);
     this.document.addEventListener("visibilitychange", refresh);
     destroyRef.onDestroy(() => {
+      invalidation.unsubscribe();
       this.destroyed = true;
       window?.removeEventListener("focus", refresh);
       this.document.removeEventListener("visibilitychange", refresh);
@@ -158,10 +176,22 @@ export class CreateProjectPageComponent {
       ?.focus();
   }
 
-  private queueFocus(target: string): void {
-    queueMicrotask(() => {
-      if (!this.destroyed) this.document.getElementById(target)?.focus();
-    });
+  private queueFocus(target: string, focused?: () => void): void {
+    const generation = ++this.focusGeneration;
+    afterNextRender(
+      () => {
+        if (
+          this.destroyed ||
+          generation !== this.focusGeneration ||
+          !this.contexts.visible()
+        )
+          return;
+        const element = this.document.getElementById(target);
+        element?.focus();
+        if (element && this.document.activeElement === element) focused?.();
+      },
+      { injector: this.injector },
+    );
   }
 
   fieldError(

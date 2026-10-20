@@ -1,4 +1,8 @@
+import { DOCUMENT } from "@angular/common";
+import { inject } from "@angular/core";
 import { type CanDeactivateFn, type Routes } from "@angular/router";
+import type { Observable } from "rxjs";
+import { BrowserSessionState } from "./auth/browser-session-state";
 import { CatalogShellComponent } from "./catalog/catalog-shell.component";
 import { MappingPageComponent } from "./catalog/mapping-page.component";
 import { ProjectPageComponent } from "./catalog/project-page.component";
@@ -13,15 +17,32 @@ import { NotFoundComponent } from "./not-found.component";
 
 const leaveMappingEditor: CanDeactivateFn<EditMappingPageComponent> = (
   component,
-) => component.requestLeave();
+) => requestWorkspaceLeave(component);
 
 const leaveMappingUpload: CanDeactivateFn<UploadMappingPageComponent> = (
   component,
-) => component.requestLeave();
+) => requestWorkspaceLeave(component);
 
 const leaveRevisionAppend: CanDeactivateFn<AppendRevisionPageComponent> = (
   component,
-) => component.requestLeave();
+) => requestWorkspaceLeave(component);
+
+function requestWorkspaceLeave(component: {
+  requestLeave(): Observable<boolean>;
+}): boolean | Observable<boolean> {
+  if (inject(BrowserSessionState).visible()) return component.requestLeave();
+  // The ordinary page decision is inside the hidden/inert workspace. This fixed
+  // browser-owned decision reveals no owner, draft, receipt or recovery status.
+  try {
+    return (
+      inject(DOCUMENT).defaultView?.confirm(
+        "Leave this workspace view? Private in-tab work and recovery information may be lost. A previously sent request may already have committed.",
+      ) ?? false
+    );
+  } catch {
+    return false;
+  }
+}
 
 export const routes: Routes = [
   { path: "", pathMatch: "full", redirectTo: "examples" },

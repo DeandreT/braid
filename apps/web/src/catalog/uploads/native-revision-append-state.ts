@@ -88,6 +88,8 @@ export interface NativeRevisionAppendView {
   readonly waitingStopped: boolean;
   readonly locked: boolean;
   readonly canEdit: boolean;
+  /** Mount-only presentation; this flag grants no edit or upload action. */
+  readonly formVisible: boolean;
   readonly canChooseFile: boolean;
   readonly canAppend: boolean;
   readonly canReviewHead: boolean;
@@ -121,6 +123,7 @@ export interface NativeRevisionAppendView {
   readonly currentAccess: NativeRevisionAppendRevisionAccess;
 }
 type Owner = {
+  readonly mode: "development" | "session";
   readonly scope: Readonly<CatalogMappingScope>;
   readonly actorPrincipalId: string;
 };
@@ -145,6 +148,10 @@ export class NativeRevisionAppendState {
   private readonly admitted = signal<NativeRevisionAppendAdmission | null>(
     null,
   );
+  private readonly presentation = signal<{
+    readonly admission: NativeRevisionAppendAdmission;
+    readonly identityVersion: number;
+  } | null>(null);
   private readonly admissionState = signal<AdmissionState>("idle");
   private readonly work = signal<NativeRevisionAppendWork>("idle");
   private readonly filename = signal("");
@@ -201,6 +208,22 @@ export class NativeRevisionAppendState {
   readonly focusRequest = this.focus.asReadonly();
 
   constructor() {
+    const invalidation = this.contexts.invalidated.subscribe(() => {
+      this.observedIdentityVersion = this.contexts.identityVersion();
+      this.cancelNetwork();
+      this.invalidateFile();
+      if (!this.locked()) this.clearDraft();
+      this.foreign.set(true);
+      this.ownerReadStamp.set(null);
+      this.admitted.set(null);
+      this.presentation.set(null);
+      this.access.set({ kind: "idle" });
+      this.focus.set(null);
+      this.failure.set(null);
+      this.resolveLeave(false);
+      if (this.active()) this.admissionState.set("unavailable");
+    });
+    inject(DestroyRef).onDestroy(() => invalidation.unsubscribe());
     effect(() => {
       const version = this.contexts.identityVersion();
       const owner = this.owner();
@@ -214,6 +237,7 @@ export class NativeRevisionAppendState {
           if (!this.locked()) this.clearDraft();
           this.foreign.set(true);
           this.admitted.set(null);
+          this.presentation.set(null);
           this.access.set({ kind: "idle" });
           this.resolveLeave(false);
           if (this.active()) this.admissionState.set("unavailable");
@@ -252,6 +276,7 @@ export class NativeRevisionAppendState {
     if (!this.locked()) this.clearDraft();
     this.active.set(true);
     this.admitted.set(null);
+    this.presentation.set(null);
     this.failure.set(null);
     this.access.set({ kind: "idle" });
     this.focus.set(null);
@@ -278,6 +303,7 @@ export class NativeRevisionAppendState {
     this.active.set(false);
     this.resolveLeave(false);
     this.admitted.set(null);
+    this.presentation.set(null);
     this.admissionState.set("idle");
     this.access.set({ kind: "idle" });
     this.focus.set(null);
@@ -568,11 +594,40 @@ export class NativeRevisionAppendState {
       (!owner || (owns(context, owner) && this.hasOwnerReadStamp(owner)))
     );
   }
+  /** Only the already displayed original-owner graph survives a safe admission. */
+  private presentedAdmission(): NativeRevisionAppendAdmission | null {
+    const presentation = this.presentation(),
+      scope = this.target(),
+      owner = this.owner(),
+      observed = this.contexts.context();
+    if (
+      !this.active() ||
+      this.work() !== "admitting" ||
+      !presentation ||
+      !scope ||
+      !owner ||
+      this.foreign() ||
+      presentation.identityVersion !== this.contexts.identityVersion() ||
+      !sameScope(presentation.admission.mapping.scope, scope) ||
+      !sameScope(owner.scope, scope) ||
+      !owns(presentation.admission.context, owner) ||
+      !this.hasOwnerReadStamp(owner)
+    )
+      return null;
+    const context = presentation.admission.context;
+    return !observed ||
+      (owns(observed, owner) &&
+        (observed.mode === "session" ? observed.identityContext : null) ===
+          (context.mode === "session" ? context.identityContext : null))
+      ? presentation.admission
+      : null;
+  }
   private hasOwnerReadStamp(owner: Owner): boolean {
     const stamp = this.ownerReadStamp();
     return (
       stamp !== null &&
       stamp.identityVersion === this.contexts.identityVersion() &&
+      stamp.owner.mode === owner.mode &&
       stamp.owner.actorPrincipalId === owner.actorPrincipalId &&
       sameScope(stamp.owner.scope, owner.scope)
     );
@@ -602,15 +657,19 @@ export class NativeRevisionAppendState {
   }
   private projectView(): NativeRevisionAppendView {
     const admission = this.readAdmission(),
+      presentation = this.presentedAdmission(),
+      displayed = admission ?? presentation,
       safe = this.safeSlot(),
       operation = this.known();
     const read = admission !== null && safe,
-      upload = this.uploadAdmitted();
+      upload = this.uploadAdmitted(),
+      available = this.contexts.canPresent(admission?.context ?? null);
     const busy = this.busy(),
       blocked = busy || this.pendingLeave() !== null;
     const locked = this.locked(),
-      privateDraft = read && upload;
-    const canEdit = privateDraft && !locked && !blocked;
+      privateDraft =
+        (read && upload) || (presentation !== null && canUpload(presentation));
+    const canEdit = read && upload && available && !locked && !blocked;
     const original = this.original(),
       response = this.latest();
     const head = locked
@@ -622,10 +681,13 @@ export class NativeRevisionAppendState {
       admission: this.admissionState(),
       work: this.work(),
       preparingFile: this.preparing(),
-      quarantined: this.active() && locked && !safe && !retainedCommit,
-      mapping: admission ? mappingView(admission.mapping) : null,
-      reviewedHead: read && head ? headView(head) : null,
-      headReviewRequired: read && !locked && this.reviewRequired(),
+      quarantined:
+        this.active() && locked && !safe && !presentation && !retainedCommit,
+      mapping: displayed ? mappingView(displayed.mapping) : null,
+      reviewedHead:
+        (read || presentation !== null) && head ? headView(head) : null,
+      headReviewRequired:
+        (read || presentation !== null) && !locked && this.reviewRequired(),
       draft: privateDraft
         ? Object.freeze({
             originalFilename: original?.originalFilename ?? this.filename(),
@@ -646,6 +708,7 @@ export class NativeRevisionAppendState {
       waitingStopped: read && this.unknown() && this.stopped() && !busy,
       locked,
       canEdit,
+      formVisible: (read || presentation !== null) && (privateDraft || locked),
       canChooseFile: canEdit,
       canAppend:
         canEdit &&
@@ -655,25 +718,30 @@ export class NativeRevisionAppendState {
         !this.reviewRequired(),
       canReviewHead:
         read &&
+        available &&
         !blocked &&
         !this.preparing() &&
         (!locked || operation?.headConflict === true),
       canResend:
         upload &&
+        available &&
         !blocked &&
         original !== null &&
         !operation?.terminal &&
         (!operation || operation.receipt.latestFailure === "needsSource"),
-      canCheckStatus: upload && !blocked && operation !== null,
+      canCheckStatus: upload && available && !blocked && operation !== null,
       canResume:
         upload &&
+        available &&
         !blocked &&
         operation !== null &&
         !operation.terminal &&
         operation.receipt.latestFailure !== "needsSource",
-      canRetryRevisionAccess: (committed || retainedCommit) && !blocked,
-      canStartNew: upload && !blocked && operation?.terminal === true,
-      canAbandon: read && !blocked && locked,
+      canRetryRevisionAccess:
+        this.contexts.visible() && (committed || retainedCommit) && !blocked,
+      canStartNew:
+        upload && available && !blocked && operation?.terminal === true,
+      canAbandon: read && available && !blocked && locked,
       canStopWaiting: busy || this.preparing(),
       response: upload && response ? Object.freeze({ ...response }) : null,
       operationStatus:
@@ -767,6 +835,15 @@ export class NativeRevisionAppendState {
   ): void {
     const scope = this.target();
     if (!this.active() || !scope || this.busy()) return;
+    const presented = this.readAdmission();
+    this.presentation.set(
+      presented && this.safeSlot()
+        ? {
+            admission: presented,
+            identityVersion: this.contexts.identityVersion(),
+          }
+        : null,
+    );
     this.cancelNetwork();
     const generation = this.networkGeneration;
     const subscription = new Subscription();
@@ -798,7 +875,7 @@ export class NativeRevisionAppendState {
             this.observedIdentityVersion = this.contexts.identityVersion();
             admissionIdentityVersion = this.observedIdentityVersion;
             if (
-              context.mode !== "development" ||
+              (context.mode !== "development" && context.mode !== "session") ||
               !isCatalogId(context.actorPrincipalId)
             )
               throw new NativeRevisionAppendError("identityChanged");
@@ -823,6 +900,7 @@ export class NativeRevisionAppendState {
           next: (admission) => {
             emitted = true;
             if (!this.current(generation, scope)) return;
+            this.presentation.set(null);
             this.work.set("idle");
             try {
               const identityVersion = this.contexts.identityVersion();
@@ -871,7 +949,7 @@ export class NativeRevisionAppendState {
                   this.known() ?? undefined,
                 );
               }
-              next(admission);
+              if (this.contexts.canPresent(admission.context)) next(admission);
             } catch (error: unknown) {
               this.recordFailure(appendError(error));
               this.requestFocus("summary");
@@ -879,6 +957,7 @@ export class NativeRevisionAppendState {
           },
           error: (error: unknown) => {
             if (!this.current(generation, scope)) return;
+            this.presentation.set(null);
             this.work.set("idle");
             this.admitted.set(null);
             const failure = appendError(error);
@@ -894,6 +973,7 @@ export class NativeRevisionAppendState {
           },
           complete: () => {
             if (!emitted && this.current(generation, scope)) {
+              this.presentation.set(null);
               this.work.set("idle");
               this.admitted.set(null);
               this.admissionState.set("unavailable");
@@ -1148,6 +1228,7 @@ export class NativeRevisionAppendState {
       );
       if (error.kind === "identityChanged") this.foreign.set(true);
     }
+    this.contexts.reject(error.status);
   }
   private clearDraft(): void {
     this.filename.set("");
@@ -1217,13 +1298,17 @@ function copyRevisionScope(
 }
 function owns(context: CatalogContext, owner: Owner): boolean {
   return (
-    context.mode === "development" &&
+    context.mode === owner.mode &&
     context.actorPrincipalId === owner.actorPrincipalId &&
     context.allowedOrganizationId === owner.scope.organizationId
   );
 }
 function admissionOwner(admission: NativeRevisionAppendAdmission): Owner {
+  const mode = admission.context.mode;
+  if (mode !== "development" && mode !== "session")
+    throw new NativeRevisionAppendError("identityRejected");
   return Object.freeze({
+    mode,
     scope: copyScope(admission.mapping.scope),
     actorPrincipalId: admission.context.actorPrincipalId,
   });
@@ -1232,6 +1317,7 @@ function boundOwner(
   binding: NativeRevisionAppendIntent | NativeRevisionAppendOperation,
 ): Owner {
   return Object.freeze({
+    mode: binding.mode,
     scope: copyScope(binding.scope),
     actorPrincipalId: binding.actorPrincipalId,
   });

@@ -136,6 +136,40 @@ class ControlledCreation {
       const request = route.request();
       const url = new URL(request.url());
       const method = request.method();
+      // Explicit bootstrap does not consume any existing context/resource/write plan.
+      if (url.pathname === "/api/auth/session") {
+        const headers = request.headers();
+        const admitted =
+          url.origin === new URL(this.page.url()).origin &&
+          method === "GET" &&
+          !url.search &&
+          (request.postDataBuffer()?.length ?? 0) === 0 &&
+          headers["x-weft-session"] === "1" &&
+          ![
+            "content-type",
+            "authorization",
+            "x-xsrf-token",
+            "x-weft-auth-token",
+            "idempotency-key",
+            "if-match",
+            "if-none-match",
+            "identitycontext",
+            "identity-context",
+            "x-weft-identity-context",
+            "x-weft-actor",
+            "x-weft-role",
+            "x-weft-login",
+            "x-weft-logout",
+            "x-weft-forget-local",
+          ].some((name) => name in headers);
+        if (!admitted) ++this.unexpectedRequests;
+        await route.fulfill(
+          admitted
+            ? { json: { version: 1, mode: "development" } }
+            : { status: 404, json: { code: "notFound" } },
+        );
+        return;
+      }
       let reply: Reply;
       if (method === "GET" && url.pathname === contextPath && !url.search) {
         ++this.contextReads;

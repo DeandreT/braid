@@ -68,6 +68,10 @@ export class RevisionPageComponent extends CatalogRoutePage<
 
   constructor() {
     super();
+    const invalidation = this.contexts.invalidated.subscribe(() =>
+      this.reports.unbind(),
+    );
+    this.reportDestroyRef.onDestroy(() => invalidation.unsubscribe());
     this.bind("revision", (scope) =>
       forkJoin({
         project: this.api.project({

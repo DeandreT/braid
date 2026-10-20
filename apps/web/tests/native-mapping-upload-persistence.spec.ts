@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import type { components } from "../src/api/generated";
+import { isSessionStatusRequest } from "./browser-session-status.fixture";
 import {
   test,
   expect,
@@ -600,7 +601,8 @@ class UploadWire {
     });
     await this.page.route("**/api/**", (route) => this.observe(route));
   }
-  private allowedGet(url: URL): boolean {
+  private allowedGet(request: Request): boolean {
+    const url = new URL(request.url());
     const protectedScope = this.owner.manifest.protected.revision;
     const fixedPaths = new Set([
       "/api/v1/catalog/context",
@@ -621,7 +623,10 @@ class UploadWire {
           );
         }
       }
-    return !url.search && fixedPaths.has(url.pathname);
+    return (
+      isSessionStatusRequest(request, this.owner.manifest.readOrigin) ||
+      (!url.search && fixedPaths.has(url.pathname))
+    );
   }
   private async observe(route: Route): Promise<void> {
     const request = route.request(),
@@ -635,7 +640,7 @@ class UploadWire {
       );
       if (request.method() === "GET") {
         requireUpload(
-          this.allowedGet(url),
+          this.allowedGet(request),
           "unexpected catalog or operation GET",
         );
         requireUpload(

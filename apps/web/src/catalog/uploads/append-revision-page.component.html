@@ -532,7 +532,7 @@
   @if (
     !view.quarantined &&
     view.mapping?.backendId === "ferrule" &&
-    (view.canEdit || view.locked)
+    view.formVisible
   ) {
     <form
       class="append-card append-form"

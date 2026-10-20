@@ -17,8 +17,16 @@ import {
   RouterOutlet,
   type ParamMap,
 } from "@angular/router";
-import { combineLatest, filter, of, startWith, type Observable } from "rxjs";
+import {
+  combineLatest,
+  filter,
+  of,
+  startWith,
+  take,
+  type Observable,
+} from "rxjs";
 import { CatalogApi } from "./catalog-api";
+import { BrowserSessionState } from "../auth/browser-session-state";
 import { CatalogContextStore } from "./catalog-context";
 import { createCatalogRead } from "./catalog-state";
 import { revisionReportSelectors } from "./reports/revision-report-selection";
@@ -68,8 +76,11 @@ type CatalogPageKind = "projects" | "project" | "mapping" | "revision";
         <section class="catalog-state catalog-state-error" role="alert">
           <h2>Access rejected</h2>
           <p>
-            Your Development identity could not access this workspace. Check
-            your local workspace access, then retry.
+            {{
+              sessions.state().kind === "development"
+                ? "Your Development identity could not access this workspace. Check your local workspace access, then retry."
+                : "Your workspace access could not be confirmed. Retry to check access."
+            }}
           </p>
           <button class="catalog-button" type="button" (click)="retry.emit()">
             Retry
@@ -110,6 +121,7 @@ type CatalogPageKind = "projects" | "project" | "mapping" | "revision";
   `,
 })
 export class CatalogStatusComponent {
+  readonly sessions = inject(BrowserSessionState);
   readonly kind = input.required<CatalogStatusKind>();
   readonly firstPage = input<string | null>(null);
   readonly retry = output<void>();
@@ -298,11 +310,13 @@ function routeSelection(
   templateUrl: "./catalog-shell.component.html",
 })
 export class CatalogShellComponent {
+  readonly sessions = inject(BrowserSessionState);
   readonly contextStore = inject(CatalogContextStore);
   readonly landingRead = createCatalogRead<CatalogContext>();
   readonly landing = signal(false);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
     this.router.events
@@ -330,5 +344,15 @@ export class CatalogShellComponent {
   retry(): void {
     if (!this.landing()) return;
     this.landingRead.retry();
+  }
+
+  retryAccess(): void {
+    if (this.sessions.state().kind === "checking") return;
+    // First reobserve identity and organization only. The mounted child still owns
+    // its separate explicit complete resource admission, with no automatic write.
+    this.contextStore
+      .refresh()
+      .pipe(take(1), takeUntilDestroyed(this.destroyRef))
+      .subscribe({ error: () => {} });
   }
 }

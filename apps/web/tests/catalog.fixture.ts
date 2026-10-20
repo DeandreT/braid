@@ -690,6 +690,41 @@ export async function syntheticCatalog(
     [catalogApi(revisionPath(synthetic.revision.scope))]: synthetic.revision,
     ...overrides,
   };
+  // Explicit Development bootstrap only; catalog route replies below are unchanged.
+  await page.route("**/api/auth/session*", async (route: Route) => {
+    const request = route.request(),
+      url = new URL(request.url());
+    const headers = request.headers();
+    const admitted =
+      url.origin === new URL(page.url()).origin &&
+      request.method() === "GET" &&
+      url.pathname === "/api/auth/session" &&
+      !url.search &&
+      (request.postDataBuffer()?.length ?? 0) === 0 &&
+      headers["x-weft-session"] === "1" &&
+      ![
+        "content-type",
+        "authorization",
+        "x-xsrf-token",
+        "x-weft-auth-token",
+        "idempotency-key",
+        "if-match",
+        "if-none-match",
+        "identitycontext",
+        "identity-context",
+        "x-weft-identity-context",
+        "x-weft-actor",
+        "x-weft-role",
+        "x-weft-login",
+        "x-weft-logout",
+        "x-weft-forget-local",
+      ].some((name) => name in headers);
+    await route.fulfill(
+      admitted
+        ? { json: { version: 1, mode: "development" } }
+        : { status: 404, json: { code: "notFound" } },
+    );
+  });
   await page.route("**/api/v1/**", async (route: Route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;

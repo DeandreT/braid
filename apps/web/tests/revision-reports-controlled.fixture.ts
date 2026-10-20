@@ -353,6 +353,39 @@ export class ControlledReports {
       const request = route.request();
       const url = new URL(request.url());
       const headers = request.headers();
+      // Explicit bootstrap is outside the unchanged protected-report observation census.
+      if (url.pathname === "/api/auth/session") {
+        const admitted =
+          url.origin === this.origin &&
+          request.method() === "GET" &&
+          !url.search &&
+          (request.postDataBuffer()?.length ?? 0) === 0 &&
+          headers["x-weft-session"] === "1" &&
+          ![
+            "content-type",
+            "authorization",
+            "x-xsrf-token",
+            "x-weft-auth-token",
+            "idempotency-key",
+            "if-match",
+            "if-none-match",
+            "identitycontext",
+            "identity-context",
+            "x-weft-identity-context",
+            "x-weft-actor",
+            "x-weft-role",
+            "x-weft-login",
+            "x-weft-logout",
+            "x-weft-forget-local",
+          ].some((name) => name in headers);
+        if (!admitted) this.unexpected.push("Refused auth bootstrap");
+        await route.fulfill(
+          admitted
+            ? { json: { version: 1, mode: "development" } }
+            : { status: 404, json: { code: "notFound" } },
+        );
+        return;
+      }
       const observation: Observation = {
         method: request.method(),
         path: url.pathname,

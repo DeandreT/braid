@@ -102,7 +102,7 @@ type SourceFacts = {
   readonly byteCount: number;
 };
 type Owner = {
-  readonly mode: "development";
+  readonly mode: "development" | "session";
   readonly actorPrincipalId: string;
   readonly scope: CatalogProjectScope;
 };
@@ -285,6 +285,9 @@ export class NativeMappingUploadIntent {
   get actorPrincipalId(): string {
     return intentFacts(this).expectation.actorPrincipalId;
   }
+  get mode(): "development" | "session" {
+    return intentFacts(this).expectation.mode;
+  }
   get acceptedName(): string {
     return intentFacts(this).acceptedName;
   }
@@ -346,6 +349,9 @@ export class NativeMappingUploadOperation {
   get actorPrincipalId(): string {
     return operationFacts(this).expectation.actorPrincipalId;
   }
+  get mode(): "development" | "session" {
+    return operationFacts(this).expectation.mode;
+  }
   get committed(): boolean {
     return this.receipt.phase === "committed";
   }
@@ -402,7 +408,7 @@ export function captureNativeMappingUploadAdmission(
   const context = admission?.context,
     project = admission?.project;
   if (
-    context?.mode !== "development" ||
+    (context?.mode !== "development" && context?.mode !== "session") ||
     !isCatalogId(context.actorPrincipalId) ||
     !isCatalogId(context.allowedOrganizationId)
   )
@@ -432,7 +438,7 @@ export function captureNativeMappingUploadAdmission(
   if (project.access.actions.createMappings !== true)
     throw new NativeMappingUploadError("uploadUnavailable");
   return Object.freeze({
-    mode: "development",
+    mode: context.mode,
     actorPrincipalId: context.actorPrincipalId,
     scope,
   });

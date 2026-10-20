@@ -14,6 +14,7 @@ import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { Observable, combineLatest, of, type Subscriber } from "rxjs";
 import { catalogRoutes, isCatalogId } from "../catalog-types";
+import { CatalogContextStore } from "../catalog-context";
 import {
   NativeMappingUploadState,
   type NativeMappingUploadLeaveRisk,
@@ -43,6 +44,7 @@ export class UploadMappingPageComponent {
   });
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
+  private readonly contexts = inject(CatalogContextStore);
   private focusRequest = 0;
   private leaveChoice: Subscriber<boolean> | null = null;
   private returnFocusId = "upload-title";
@@ -53,6 +55,15 @@ export class UploadMappingPageComponent {
   constructor() {
     const route = inject(ActivatedRoute),
       destroyRef = inject(DestroyRef);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const invalidation = this.contexts.invalidated.subscribe(() => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      ++this.focusRequest;
+      this.resolveLeave(false);
+      this.abandonDecision.set(false);
+      this.abandonAcknowledged.set(false);
+    });
     combineLatest([route.paramMap, route.queryParamMap])
       .pipe(takeUntilDestroyed())
       .subscribe(([params, query]) => {
@@ -103,9 +114,10 @@ export class UploadMappingPageComponent {
         operation = this.state.operationStatus();
       const context = this.state.context(),
         project = this.state.project();
-      if (this.leaveDecision()) return;
+      if (!this.contexts.visible() || this.leaveDecision()) return;
       let focus = "",
-        target = "";
+        target = "",
+        editingOwner = "";
       if (
         errors.name ||
         errors.description ||
@@ -130,18 +142,19 @@ export class UploadMappingPageComponent {
       } else if (context && project && this.state.canEdit()) {
         const owner = `${context.actorPrincipalId}/${project.scope.organizationId}/${project.scope.projectId}`;
         if (owner !== this.lastEditingOwner) {
-          this.lastEditingOwner = owner;
+          editingOwner = owner;
           focus = `editing/${owner}`;
           target = "upload-name";
         }
       }
       if (focus && focus !== this.lastFocus) {
-        this.lastFocus = focus;
-        this.queueFocus(target);
+        this.queueFocus(target, () => {
+          this.lastFocus = focus;
+          if (editingOwner) this.lastEditingOwner = editingOwner;
+        });
       }
     });
     const window = this.document.defaultView;
-    let timer: ReturnType<typeof setTimeout> | null = null;
     const refresh = () => {
       if (
         this.document.visibilityState !== "visible" ||
@@ -165,6 +178,7 @@ export class UploadMappingPageComponent {
     window?.addEventListener("focus", refresh);
     this.document.addEventListener("visibilitychange", refresh);
     destroyRef.onDestroy(() => {
+      invalidation.unsubscribe();
       this.destroyed = true;
       window?.removeEventListener("focus", refresh);
       this.document.removeEventListener("visibilitychange", refresh);
@@ -363,7 +377,7 @@ export class UploadMappingPageComponent {
     subscriber?.next(leave);
     subscriber?.complete();
   }
-  private queueFocus(target: string): void {
+  private queueFocus(target: string, focused?: () => void): void {
     const request = ++this.focusRequest;
     // Conditional notices must be in the rendered view before they receive focus.
     afterNextRender(
@@ -371,11 +385,15 @@ export class UploadMappingPageComponent {
         if (
           !this.destroyed &&
           request === this.focusRequest &&
+          this.contexts.visible() &&
           (target === "upload-leave"
             ? this.leaveDecision() !== null
             : this.leaveDecision() === null && !this.abandonDecision())
-        )
-          this.document.getElementById(target)?.focus();
+        ) {
+          const element = this.document.getElementById(target);
+          element?.focus();
+          if (element && this.document.activeElement === element) focused?.();
+        }
       },
       { injector: this.injector },
     );

@@ -297,6 +297,12 @@ for (const kind of ["project", "mapping", "revision", "page"] as const) {
         .click();
     } else {
       await page.goto(projectsPath(synthetic.org));
+      // The initial page read must settle so the hold captures only the refresh read.
+      await expect(
+        page
+          .getByRole("list", { name: "Projects", exact: true })
+          .getByRole("link", { name: synthetic.project.name, exact: true }),
+      ).toBeVisible();
       armed = true;
       await page
         .getByRole("button", { name: "Refresh catalog", exact: true })

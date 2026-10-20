@@ -1,4 +1,5 @@
 import type { Locator, Page, Request, Response } from "@playwright/test";
+import { isSessionStatusRequest } from "./browser-session-status.fixture";
 import {
   expect,
   expectReport,
@@ -355,6 +356,7 @@ test("real packaged saved reports: explicit derivation, exact native explanation
     const url = new URL(request.url());
     if (url.origin !== fixture.readOrigin || !url.pathname.startsWith("/api/"))
       return;
+    if (isSessionStatusRequest(request, fixture.readOrigin)) return;
     const isReport = reportPath.test(url.pathname);
     if (request.method() === "POST") {
       posts.push(url.pathname + url.search);
