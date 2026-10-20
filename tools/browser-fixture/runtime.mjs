@@ -291,6 +291,7 @@ export async function runBrowserFixture(definition) {
       "0015_regression_runs.sql",
       "0016_regression_dispatch.sql",
       "0017_regression_run_history.sql",
+      "0018_build_publication.sql",
     ];
     check(
       equivalent(
@@ -467,6 +468,8 @@ export async function runBrowserFixture(definition) {
       ["weft_case_writer", "CASE_WRITER"],
       ["weft_run_reader", "RUN_READER"],
       ["weft_run_writer", "RUN_WRITER"],
+      ["weft_build_reader", "BUILD_READER"],
+      ["weft_build_writer", "BUILD_WRITER"],
     ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))

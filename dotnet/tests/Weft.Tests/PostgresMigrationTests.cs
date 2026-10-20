@@ -24,7 +24,7 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
     private static string[] CurrentChecksums => [OwnershipChecksum, IngestionChecksum, CatalogChecksum, MetadataChecksum,
         ProjectCreationChecksum, RevisionDerivationChecksum, MaintenanceChecksum, ExternalIdentityChecksum, PayloadPermissionChecksum,
         ServerSessionChecksum, ChatChecksum, PreviewChecksum, PreviewMessagesChecksum, RegressionCasesChecksum, RegressionRunsChecksum,
-        RegressionSchemaTestContract.DispatchChecksum, RegressionSchemaTestContract.HistoryChecksum];
+        RegressionSchemaTestContract.DispatchChecksum, RegressionSchemaTestContract.HistoryChecksum, RegressionSchemaTestContract.BuildChecksum];
     [PostgresFact]
     public async Task EmptyInstallationAndRepeatedMigrationPreserveOriginalFactsAndJournal()
     {

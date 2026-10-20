@@ -55,6 +55,8 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string caseWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string runReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string runWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string buildReaderPassword = Guid.NewGuid().ToString("N");
+    private readonly string buildWriterPassword = Guid.NewGuid().ToString("N");
     private readonly bool provisionMetadataEditor;
     private readonly bool provisionProjectCreator;
     private readonly bool provisionReportReader;
@@ -69,6 +71,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly bool provisionChatLifecycle;
     private readonly bool provisionPreviewProfiles;
     private readonly bool provisionRegressionProfiles;
+    private readonly bool provisionBuildProfiles;
     private readonly ConcurrentDictionary<string, byte> caseDatabases = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim caseRemoval = new(1, 1);
     private readonly string? client = Environment.GetEnvironmentVariable("WEFT_TEST_CLIENT_CONTAINER");
@@ -92,7 +95,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         bool provisionIdentityReader = true, bool provisionPayloadPermissionReader = true,
         bool provisionSessionReader = true, bool provisionSessionWriter = true,
         bool provisionChatReader = true, bool provisionChatWriter = true, bool provisionChatLifecycle = true,
-        bool provisionPreviewProfiles = true, bool provisionRegressionProfiles = true)
+        bool provisionPreviewProfiles = true, bool provisionRegressionProfiles = true, bool provisionBuildProfiles = true)
     {
         this.provisionMetadataEditor = provisionMetadataEditor;
         this.provisionProjectCreator = provisionProjectCreator;
@@ -108,6 +111,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         this.provisionChatLifecycle = provisionChatLifecycle;
         this.provisionPreviewProfiles = provisionPreviewProfiles;
         this.provisionRegressionProfiles = provisionRegressionProfiles;
+        this.provisionBuildProfiles = provisionBuildProfiles;
     }
 
     public async Task InitializeAsync()
@@ -384,7 +388,8 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private (string Name, string Password)[] RegressionRoles() =>
         [("weft_case_reader", caseReaderPassword), ("weft_case_writer", caseWriterPassword),
-         ("weft_run_reader", runReaderPassword), ("weft_run_writer", runWriterPassword)];
+         ("weft_run_reader", runReaderPassword), ("weft_run_writer", runWriterPassword),
+         .. (provisionBuildProfiles ? new (string Name, string Password)[] { ("weft_build_reader", buildReaderPassword), ("weft_build_writer", buildWriterPassword) } : [])];
 
     internal string RegressionConnectionString(PostgresCase test, string role)
     {

@@ -73,7 +73,7 @@ public sealed class RegressionRunExecutor(IRegressionRunStore runs, IRegressionC
     }
 }
 
-public sealed record RegressionRunView(RegressionRunSnapshot Run, RegressionCaseExecution? Result);
+public sealed record RegressionRunView(RegressionRunSnapshot Run, RegressionCaseExecution? Result, RegressionRuntimeIdentity? Runtime = null);
 
 /// <summary>Reopens retained exact outputs against the original baseline, then rechecks current authority.</summary>
 public sealed class RegressionRunReadService(IRegressionRunReader runs, IRegressionCaseReader cases)
@@ -98,6 +98,6 @@ public sealed class RegressionRunReadService(IRegressionRunReader runs, IRegress
         if (fresh.RunId != run.RunId || fresh.Submitter != actor.PrincipalId || fresh.State != run.State ||
             fresh.Case != run.Case || fresh.CompletionDigest != run.CompletionDigest)
             throw new InvalidOperationException("Regression run changed while reading.");
-        return new(fresh, result);
+        return new(fresh, result, value.Runtime);
     }
 }

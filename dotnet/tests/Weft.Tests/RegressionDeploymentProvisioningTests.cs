@@ -40,7 +40,7 @@ public sealed class RegressionDeploymentProvisioningTests
         var passwords = new Dictionary<string, string>();
         foreach (var role in new[] { "MIGRATOR", "RUNTIME", "INGEST", "CATALOG", "METADATA", "CREATOR", "REPORT", "DERIVATION",
             "MAINTENANCE", "IDENTITY", "PAYLOAD_PERMISSION", "SESSION_READER", "SESSION_WRITER", "CHAT_READER", "CHAT_WRITER",
-            "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER" })
+            "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "BUILD_READER", "BUILD_WRITER" })
             passwords[role] = Guid.NewGuid().ToString("N");
         var text = await File.ReadAllTextAsync(Path.Combine(Repository(), script));
         var match = Regex.Match(text, "<<'SQL'\\r?\\n(.*?)\\r?\\nSQL", RegexOptions.Singleline | RegexOptions.CultureInvariant);
@@ -94,7 +94,7 @@ public sealed class RegressionDeploymentProvisioningTests
     public void Deployment_inputs_supply_all_regression_passwords_without_enabling_runtime_features()
     {
         var root = Repository();
-        foreach (var role in new[] { "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER" })
+        foreach (var role in new[] { "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "BUILD_READER", "BUILD_WRITER" })
         {
             foreach (var path in new[] { "deploy/local/.env.example", "deploy/local/postgres.compose.yml", "deploy/compose/compose.yml" })
                 Assert.Contains("WEFT_LOCAL_" + role + "_PASSWORD", File.ReadAllText(Path.Combine(root, path)), StringComparison.Ordinal);
