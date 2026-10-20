@@ -26,6 +26,10 @@ services:
       WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD: ${WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD:?Set a separate chat lifecycle password}
       WEFT_LOCAL_PREVIEW_READER_PASSWORD: ${WEFT_LOCAL_PREVIEW_READER_PASSWORD:?Set a separate preview reader password}
       WEFT_LOCAL_PREVIEW_WRITER_PASSWORD: ${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?Set a separate preview writer password}
+      WEFT_LOCAL_CASE_READER_PASSWORD: ${WEFT_LOCAL_CASE_READER_PASSWORD:?Set a separate case reader password}
+      WEFT_LOCAL_CASE_WRITER_PASSWORD: ${WEFT_LOCAL_CASE_WRITER_PASSWORD:?Set a separate case writer password}
+      WEFT_LOCAL_RUN_READER_PASSWORD: ${WEFT_LOCAL_RUN_READER_PASSWORD:?Set a separate run reader password}
+      WEFT_LOCAL_RUN_WRITER_PASSWORD: ${WEFT_LOCAL_RUN_WRITER_PASSWORD:?Set a separate run writer password}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:

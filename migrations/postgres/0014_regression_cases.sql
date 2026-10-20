@@ -1,5 +1,4 @@
--- Prepared schema, not part of the active ordered migration manifest.
--- Integrate after the qualified preview persistence/job migrations 0012 and 0013.
+-- Saved project fixtures after the preview persistence/job migrations 0012 and 0013.
 -- Both case roles must be separately provisioned CONNECT-only logins before migration.
 DO $case_roles$
 DECLARE role_name text; r record;

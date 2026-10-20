@@ -284,6 +284,11 @@ export async function runBrowserFixture(definition) {
       "0008_external_identity_bindings.sql",
       "0009_project_payload_read_grants.sql",
       "0010_server_sessions.sql",
+      "0011_private_chat.sql",
+      "0012_preview_runs.sql",
+      "0013_preview_messages.sql",
+      "0014_regression_cases.sql",
+      "0015_regression_runs.sql",
     ];
     check(
       equivalent(
@@ -451,6 +456,15 @@ export async function runBrowserFixture(definition) {
       ["weft_payload_permission_reader", "PAYLOAD_PERMISSION"],
       ["weft_session_reader", "SESSION_READER"],
       ["weft_session_writer", "SESSION_WRITER"],
+      ["weft_chat_reader", "CHAT_READER"],
+      ["weft_chat_writer", "CHAT_WRITER"],
+      ["weft_chat_lifecycle", "CHAT_LIFECYCLE"],
+      ["weft_preview_reader", "PREVIEW_READER"],
+      ["weft_preview_writer", "PREVIEW_WRITER"],
+      ["weft_case_reader", "CASE_READER"],
+      ["weft_case_writer", "CASE_WRITER"],
+      ["weft_run_reader", "RUN_READER"],
+      ["weft_run_writer", "RUN_WRITER"],
     ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))

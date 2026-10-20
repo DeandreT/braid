@@ -362,8 +362,6 @@ public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
 
     private sealed class Context : IAsyncDisposable
     {
-        private static readonly string ReaderPassword = Guid.NewGuid().ToString("N");
-        private static readonly string WriterPassword = Guid.NewGuid().ToString("N");
         internal RegressionCasePostgresTestSupport Cases { get; }
         internal RegressionCaseVersion Value { get; }
         internal RegressionCaseReference Reference { get; }
@@ -374,12 +372,12 @@ public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
         internal string WriterConnection { get; }
         internal PostgresRegressionRunStore Reader { get; }
         internal PostgresRegressionRunStore Writer { get; }
-        private Context(RegressionCasePostgresTestSupport cases, RegressionCaseVersion value)
+        private Context(PostgresFixture fixture, RegressionCasePostgresTestSupport cases, RegressionCaseVersion value)
         {
             Cases = cases; Value = value;
             Reference = new RegressionCaseEnvelopeCodec().Encode(value).Reference;
-            ReaderConnection = new NpgsqlConnectionStringBuilder(cases.Case.RuntimeConnectionString) { Username = "weft_run_reader", Password = ReaderPassword }.ConnectionString;
-            WriterConnection = new NpgsqlConnectionStringBuilder(cases.Case.RuntimeConnectionString) { Username = "weft_run_writer", Password = WriterPassword }.ConnectionString;
+            ReaderConnection = fixture.RegressionConnectionString(cases.Case, "weft_run_reader");
+            WriterConnection = fixture.RegressionConnectionString(cases.Case, "weft_run_writer");
             Reader = new(ReaderConnection, writer: false);
             Writer = new(WriterConnection, writer: true);
         }
@@ -388,21 +386,9 @@ public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
             var cases = await RegressionCasePostgresTestSupport.CreateAsync(fixture);
             try
             {
-                await cases.Case.BootstrapAsync($"""
-                    DO $roles$ BEGIN
-                        IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='weft_run_reader') THEN
-                            CREATE ROLE weft_run_reader LOGIN PASSWORD '{ReaderPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-                            CREATE ROLE weft_run_writer LOGIN PASSWORD '{WriterPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-                        END IF;
-                    END $roles$;
-                    GRANT CONNECT ON DATABASE "{cases.Case.Name}" TO weft_run_reader,weft_run_writer;
-                    """);
-                using var stream = typeof(PostgresRegressionRunStore).Assembly.GetManifestResourceStream("Weft.Persistence.Postgres.Regression.0015_regression_runs.sql")!;
-                using var sql = new StreamReader(stream);
-                await cases.Case.ExecuteAsync(await sql.ReadToEndAsync());
                 var value = cases.Version(1);
                 await cases.Writer.SaveAsync(cases.Actor, value);
-                return new(cases, value);
+                return new(fixture, cases, value);
             }
             catch { await cases.DisposeAsync(); throw; }
         }

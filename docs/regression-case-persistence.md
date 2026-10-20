@@ -56,7 +56,8 @@ authorized retirement workflow is supplied. That future workflow must preserve
 the references needed by retained regression runs and deployment evidence.
 
 The schema is applied only by the migration owner after its declared
-prerequisites. Application hosts must never install it, grant roles or elevate
+prerequisites. Migration `0014_regression_cases.sql` follows preview migrations
+0012/0013; migration 0015 adds the durable run ledger. Application hosts must never install them, grant roles or elevate
 their own credentials on demand. Source preparation, isolated schema checks,
 the complete ordered upgrade, and public API/worker activation are distinct
 qualification boundaries.

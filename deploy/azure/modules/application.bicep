@@ -68,6 +68,10 @@ var roles = [
   { key: 'chat-lifecycle', env: 'CHAT_LIFECYCLE' }
   { key: 'preview-reader', env: 'PREVIEW_READER' }
   { key: 'preview-writer', env: 'PREVIEW_WRITER' }
+  { key: 'case-reader', env: 'CASE_READER' }
+  { key: 'case-writer', env: 'CASE_WRITER' }
+  { key: 'run-reader', env: 'RUN_READER' }
+  { key: 'run-writer', env: 'RUN_WRITER' }
 ]
 
 var serverSecretNames = concat([

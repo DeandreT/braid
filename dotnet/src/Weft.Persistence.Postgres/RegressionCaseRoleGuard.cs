@@ -89,7 +89,7 @@ internal static partial class RegressionCaseRoleGuard
 
     private static IReadOnlyDictionary<string, string> LoadBodies()
     {
-        using var resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Regression.0014_regression_cases.sql")
+        using var resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations.0014_regression_cases.sql")
             ?? throw Refused();
         using var reader = new StreamReader(resource);
         var text = reader.ReadToEnd();

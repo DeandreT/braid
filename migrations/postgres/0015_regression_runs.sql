@@ -1,4 +1,4 @@
--- Prepared independently; activate only after the ordered P7 and saved-case migrations qualify.
+-- Durable per-case runs after the saved-case schema.
 DO $roles$
 DECLARE r record; role_name text;
 BEGIN

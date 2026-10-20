@@ -86,7 +86,7 @@ internal static partial class RegressionRunRoleGuard
 
     private static Dictionary<string, Match> Load()
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Regression.0015_regression_runs.sql") ?? throw Invalid();
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations.0015_regression_runs.sql") ?? throw Invalid();
         using var reader = new StreamReader(stream);
         var functions = FunctionPattern().Matches(reader.ReadToEnd()).ToDictionary(match => match.Groups[1].Value, StringComparer.Ordinal);
         if (functions.Count != ResultTypes.Count) throw Invalid();

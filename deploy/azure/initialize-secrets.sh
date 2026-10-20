@@ -36,6 +36,8 @@ declare -A logins=(
   [session-reader]=weft_session_reader [session-writer]=weft_session_writer
   [chat-reader]=weft_chat_reader [chat-writer]=weft_chat_writer [chat-lifecycle]=weft_chat_lifecycle
   [preview-reader]=weft_preview_reader [preview-writer]=weft_preview_writer
+  [case-reader]=weft_case_reader [case-writer]=weft_case_writer
+  [run-reader]=weft_run_reader [run-writer]=weft_run_writer
 )
 
 for key in "${!logins[@]}"; do

@@ -18,6 +18,25 @@ internal static class RegressionCaseSchemaContract
 
     internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string[] tables, CancellationToken token)
     {
+        await using (var foreignKeys = new NpgsqlCommand("""
+            SELECT NOT EXISTS (
+                SELECT 1 FROM pg_catalog.pg_constraint c
+                JOIN pg_catalog.pg_class r ON r.oid=c.conrelid
+                JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
+                WHERE n.nspname='weft' AND r.relname=ANY(@tables) AND c.contype='f'
+                    AND (SELECT count(*)=4 AND bool_and(t.tgisinternal AND t.tgenabled='O'
+                        AND t.tgrelid IN (c.conrelid,c.confrelid)
+                        AND t.tgconstrrelid=CASE WHEN t.tgrelid=c.conrelid THEN c.confrelid ELSE c.conrelid END)
+                        AND (c.conrelid=c.confrelid OR (count(*) FILTER(WHERE t.tgrelid=c.conrelid)=2
+                            AND count(*) FILTER(WHERE t.tgrelid=c.confrelid)=2))
+                        FROM pg_catalog.pg_trigger t WHERE t.tgconstraint=c.oid) IS NOT TRUE
+            )
+            """, connection, transaction))
+        {
+            foreignKeys.Parameters.AddWithValue("tables", tables);
+            if (await foreignKeys.ExecuteScalarAsync(token) is not true)
+                throw new InvalidOperationException("Regression foreign-key enforcement is incomplete.");
+        }
         await using var command = new NpgsqlCommand(CaptureSql, connection, transaction);
         command.Parameters.AddWithValue("tables", tables);
         return await command.ExecuteScalarAsync(token) as string ?? throw new InvalidOperationException("Regression case schema is unavailable.");

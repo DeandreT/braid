@@ -5,8 +5,8 @@ immutable saved case. `RegressionRunExecutor` applies the existing exact-case
 execution workflow to a leased run. `RegressionRunReadService` reopens the
 retained output and recomputes comparison against the original saved baseline.
 
-The prepared `0015_regression_runs.sql` is separate from the active migration
-manifest. It requires the saved-case schema and explicit CONNECT-only
+Migration `0015_regression_runs.sql` follows the saved-case schema in the ordered
+manifest. It requires explicit CONNECT-only
 `weft_run_reader` / `weft_run_writer` logins. It does not provision its own roles,
 activate an HTTP endpoint, or start a worker.
 
@@ -83,3 +83,20 @@ loop is started here. A host must wire reliable scheduling/redelivery to
 `RegressionRunExecutor`, preserve the per-case boundary, and expose separately
 qualified request/status/result UI and HTTP operations. Preview cleanup does not
 expire these saved-case results; retention changes require an explicit policy.
+
+## Database installation
+
+Fresh local and Azure provisioning creates the four regression logins before
+running the ordered manifest. Local deployments require distinct
+`WEFT_LOCAL_CASE_READER_PASSWORD`, `WEFT_LOCAL_CASE_WRITER_PASSWORD`,
+`WEFT_LOCAL_RUN_READER_PASSWORD` and `WEFT_LOCAL_RUN_WRITER_PASSWORD` inputs.
+Azure's provisioning job receives the corresponding `WEFT_*` inputs through
+its Key Vault-backed role list. Application containers receive none of these
+credentials until their regression features are explicitly composed.
+
+For an existing local database volume, use the administrator-only
+`deploy/local/postgres-add-regression-roles.sh` before migration. It creates all
+four roles and CONNECT grants atomically, refuses existing roles, and does not
+rotate credentials or widen an application role. Do not rerun the fresh-install
+script against an existing Azure database; use its authorized administrator
+workflow for the additional roles before migrating.
