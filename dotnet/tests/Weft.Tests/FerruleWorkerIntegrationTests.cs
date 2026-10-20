@@ -116,6 +116,7 @@ public sealed class FerruleWorkerIntegrationTests
             Assert.NotNull(launcher.ContainerName);
             var state = await WaitForRunningContainer(launcher.ContainerName);
             Assert.Equal(0, state.ExitCode);
+            var ownedId = DockerWorkerOwnershipTestSupport.VerifiedId(state.Output, launcher.ContainerName, launcher.ContainerOwner!);
             using var container = JsonDocument.Parse(state.Output);
             var root = container.RootElement;
             Assert.True(root.GetProperty("State").GetProperty("Running").GetBoolean());
@@ -138,7 +139,7 @@ public sealed class FerruleWorkerIntegrationTests
             if (termination == Termination.Cancellation)
                 cancellation.Cancel();
             else if (termination == Termination.WorkerDeath)
-                Assert.Equal(0, (await ContainerCommand("kill", "--signal", "KILL", launcher.ContainerName)).ExitCode);
+                Assert.Equal(0, (await ContainerCommand("kill", "--signal", "KILL", ownedId)).ExitCode);
             var result = await operation.WaitAsync(TimeSpan.FromSeconds(12));
             var expected = termination switch
             {
@@ -156,9 +157,25 @@ public sealed class FerruleWorkerIntegrationTests
         finally
         {
             cancellation.Cancel();
-            if (launcher.ContainerName is { } name)
-                await ContainerCommand("rm", "--force", name);
-            await operation.WaitAsync(TimeSpan.FromSeconds(12));
+            try { await operation.WaitAsync(TimeSpan.FromSeconds(12)); }
+            finally
+            {
+                foreach (var worker in launcher.CreatedWorkers)
+                {
+                    var state = await ContainerCommand("inspect", "--format", DockerWorkerOwnershipTestSupport.InspectFormat, worker.Name);
+                    if (state.ExitCode != 0)
+                    {
+                        Assert.Equal("", state.Output.Trim());
+                        Assert.True(DockerWorkerOwnershipTestSupport.IsMissing(state.Error, worker.Name));
+                        continue;
+                    }
+                    var id = DockerWorkerOwnershipTestSupport.VerifiedId(state.Output, worker.Name, worker.Owner);
+                    Assert.Equal(0, (await ContainerCommand("rm", "--force", "--volumes", id)).ExitCode);
+                    var absent = await ContainerCommand("inspect", id);
+                    Assert.Equal("", absent.Output.Trim());
+                    Assert.True(DockerWorkerOwnershipTestSupport.IsMissing(absent.Error, id));
+                }
+            }
         }
     }
 
@@ -168,7 +185,7 @@ public sealed class FerruleWorkerIntegrationTests
     private static DockerInspectionWorkerOptions Options(TimeSpan? deadline = null) => new("/usr/bin/docker",
         Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!, deadline);
 
-    private static async Task<(int ExitCode, string Output)> WaitForRunningContainer(string name)
+    private static async Task<(int ExitCode, string Output, string Error)> WaitForRunningContainer(string name)
     {
         for (var attempt = 0; attempt < 40; attempt++)
         {
@@ -184,7 +201,7 @@ public sealed class FerruleWorkerIntegrationTests
         throw new TimeoutException("The owned test worker did not reach its running state.");
     }
 
-    private static async Task<(int ExitCode, string Output)> ContainerCommand(params string[] arguments)
+    private static async Task<(int ExitCode, string Output, string Error)> ContainerCommand(params string[] arguments)
     {
         using var process = new Process
         {
@@ -201,8 +218,7 @@ public sealed class FerruleWorkerIntegrationTests
         try
         {
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
-            await error;
-            return (process.ExitCode, await output);
+            return (process.ExitCode, await output, await error);
         }
         finally
         {
@@ -218,13 +234,20 @@ public sealed class FerruleWorkerIntegrationTests
         private int held;
         public TaskCompletionSource InputWritten { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public string? ContainerName { get; private set; }
+        public string? ContainerOwner { get; private set; }
+        public List<(string Name, string Owner)> CreatedWorkers { get; } = [];
 
         public IWorkerProcess Start(ProcessStartInfo startInfo)
         {
             var arguments = startInfo.ArgumentList.ToArray();
             var name = Array.IndexOf(arguments, "--name");
             if (name >= 0)
+            {
                 ContainerName = arguments[name + 1];
+                var label = arguments.Single(argument => argument.StartsWith(DockerWorkerOwnershipTestSupport.OperationLabel + "=", StringComparison.Ordinal));
+                ContainerOwner = label[(DockerWorkerOwnershipTestSupport.OperationLabel.Length + 1)..];
+                CreatedWorkers.Add((ContainerName, ContainerOwner));
+            }
             var hold = arguments.Contains("--attach", StringComparer.Ordinal) && Interlocked.Exchange(ref held, 1) == 0;
             var process = new Process { StartInfo = startInfo };
             process.Start();

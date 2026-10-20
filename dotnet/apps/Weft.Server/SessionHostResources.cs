@@ -98,6 +98,7 @@ internal sealed class SessionHostResources
         services.AddWeftSessionCatalog(new(options.OrganizationId), options.Metadata, options.Ingestion, options.Creation, options.Reports);
         CatalogBusinessServices.Configure(services, environment, options.Metadata, options.Ingestion, options.Creation, options.Reports, read,
             options.NativeByteLimit, options.DerivedReadByteLimit);
+        ChatHostConfiguration.Configure(services, read, options.Chat, true, options.Reports);
         SessionHostDataProtectionPolicy.Apply(services);
     }
 

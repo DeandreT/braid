@@ -52,12 +52,12 @@ internal sealed class PostgresCatalogTestSupport : IAsyncDisposable
 
     internal async Task<IngestionReceipt> CommitCreateAsync(string name = "Synthetic catalog mapping",
         string description = "Synthetic C1 admission evidence only", bool valid = true, string? filename = null,
-        ProjectScope? project = null, ActorContext? actor = null)
+        ProjectScope? project = null, ActorContext? actor = null, byte[]? body = null)
     {
         if (historicalSeed)
             return await HistoricalIngestionSeed.CommitCreateAsync(Case, actor ?? Actor, project ?? Project,
                 name, description, valid, filename);
-        var intent = PostgresIngestionTestSupport.CreateIntent(name, description, filename);
+        var intent = PostgresIngestionTestSupport.CreateIntent(name, description, filename, body);
         return await CommitAsync(actor ?? Actor, project ?? Project, intent, valid);
     }
 

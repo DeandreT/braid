@@ -26,6 +26,7 @@ public sealed class ChatTurnExecution
     private int _reason, _releaseSafe, _clientJoinUnproven;
     private AiTurnLease? _turn;
     private Task<ChatOrchestrationResult> _completion = null!;
+    private readonly TaskCompletionSource<ChatTurnFacts?> _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     internal ChatTurnExecution(ChatTurnOrchestrator owner, ActorContext actor, ChatConversationKey key,
         ChatTurnIntent intent, Guid[] history, CancellationToken caller)
@@ -33,6 +34,9 @@ public sealed class ChatTurnExecution
 
     internal void Start() => _completion = RunAsync();
     public Task<ChatOrchestrationResult> Completion => _completion;
+    /// <summary>The original acknowledged start facts, or null once execution ends without them.
+    /// It grants nothing; Completion and ReleaseSafe remain the lifetime boundary.</summary>
+    public Task<ChatTurnFacts?> Started => _started.Task;
     public bool ReleaseSafe => Volatile.Read(ref _releaseSafe) != 0;
     internal CancellationToken Token => _source.Token;
     internal bool Cancelled => Volatile.Read(ref _reason) != 0;
@@ -45,6 +49,7 @@ public sealed class ChatTurnExecution
         if (failure.Code != AiFailureCode.Cancelled) _clientJoinUnproven = 0;
     }
     internal void Own(AiTurnLease turn) { _turn = turn; _clientJoinUnproven = 0; }
+    internal void Admitted(ChatTurnFacts facts) => _started.TrySetResult(facts);
     /// <summary>Joins the cancellation request/callback task, not the whole execution.
     /// Completion and ReleaseSafe remain the lifetime/release boundary.</summary>
     public Task CancelAsync() => RequestCancellation(1);
@@ -104,6 +109,7 @@ public sealed class ChatTurnExecution
         }
         catch (Exception e) when (Recoverable(e))
         { result = new(ChatOrchestrationOutcome.PersistenceUncertain); }
+        _started.TrySetResult(null);
 
         // No timeout wraps cleanup. Join every original owner even if another one failed.
         bool clean = _clientJoinUnproven == 0;

@@ -7,10 +7,12 @@ using Weft.MappingBackends.Workers;
 namespace Weft.Tests;
 
 /// <summary>Process-seam tests qualify orchestration; they do not demonstrate container isolation.</summary>
-public sealed class FerruleDockerRunnerTests
+public sealed partial class FerruleDockerRunnerTests
 {
     private const string ImageId = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string ContainerId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    private const string OtherContainerId = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    private const string OperationLabel = "io.weft.inspection.operation.v1";
     private const string DaemonMetadata = """
         {"OSType":"linux","CgroupVersion":"2","MemoryLimit":true,"SwapLimit":true,
          "CpuCfsPeriod":true,"CpuCfsQuota":true,"PidsLimit":true,
@@ -51,7 +53,7 @@ public sealed class FerruleDockerRunnerTests
         Assert.Equal(request, worker.Input.ToArray());
         Assert.True(worker.InputClosed);
         Assert.True(worker.InputOwnerClosed);
-        Assert.Equal(["info", "image", "create", "inspect", "start", "rm"], launcher.Commands.Select(Operation));
+        Assert.Equal(["info", "image", "create", "inspect", "start", "ownership-inspect", "rm"], launcher.Commands.Select(Operation));
         foreach (var command in launcher.Commands)
         {
             Assert.Equal("/usr/bin/docker", command.FileName);
@@ -70,17 +72,22 @@ public sealed class FerruleDockerRunnerTests
         var create = launcher.Commands.Single(command => Operation(command) == "create").ArgumentList.Skip(4).ToArray();
         var name = create[3];
         Assert.Matches("^weft-inspect-[a-f0-9]{32}$", name);
+        var owner = create[8];
+        Assert.Matches("^io[.]weft[.]inspection[.]operation[.]v1=[a-f0-9]{32}$", owner);
+        Assert.NotEqual(name["weft-inspect-".Length..], owner[(OperationLabel.Length + 1)..]);
         Assert.Equal(new[]
         {
             "container", "create", "--name", name, "--pull", "never", "--interactive",
+            "--label", owner,
             "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
             "--user", "65532:65532", "--cpus", "1", "--memory", "268435456", "--memory-swap", "268435456",
             "--pids-limit", "16", "--ulimit", "nofile=64:64", "--ulimit", "cpu=10:10", "--ulimit", "core=0:0",
             "--ipc", "none", "--cgroupns", "private", "--no-healthcheck", "--restart", "no", "--log-driver", "none",
             "--workdir", "/", "--entrypoint", "/ferrule-host", ImageId
         }, create);
-        Assert.Equal(["container", "start", "--attach", "--interactive", name], launcher.Commands.Single(command => Operation(command) == "start").ArgumentList.Skip(4));
-        Assert.Equal(["container", "rm", "--force", "--volumes", name], launcher.Commands.Last().ArgumentList.Skip(4));
+        Assert.Equal(ContainerId, launcher.Commands.Single(command => Operation(command) == "inspect").ArgumentList.Last());
+        Assert.Equal(["container", "start", "--attach", "--interactive", ContainerId], launcher.Commands.Single(command => Operation(command) == "start").ArgumentList.Skip(4));
+        Assert.Equal(["container", "rm", "--force", "--volumes", ContainerId], launcher.Commands.Last().ArgumentList.Skip(4));
     }
 
     [Fact]
@@ -97,9 +104,11 @@ public sealed class FerruleDockerRunnerTests
         Assert.Equal(request.Length, worker.Input.Length);
         Assert.Same(DockerWorkerProfile.Preview, runner.Profile);
         var create = launcher.Commands.Single(command => Operation(command) == "create").ArgumentList.Skip(4).ToArray();
+        Assert.Matches("^io[.]weft[.]inspection[.]operation[.]v1=[a-f0-9]{32}$", create[8]);
         Assert.Equal(new[]
         {
             "container", "create", "--name", create[3], "--pull", "never", "--interactive",
+            "--label", create[8],
             "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
             "--user", "65532:65532", "--cpus", "1", "--memory", "536870912", "--memory-swap", "536870912",
             "--pids-limit", "16", "--ulimit", "nofile=64:64", "--ulimit", "cpu=30:30", "--ulimit", "core=0:0",
@@ -391,7 +400,8 @@ public sealed class FerruleDockerRunnerTests
         Assert.Equal(WorkerProcessFailure.TimedOut, result.Failure);
         Assert.True(creation.Killed);
         var create = launcher.Commands.Single(command => Operation(command) == "create");
-        Assert.Equal(create.ArgumentList[7], launcher.Commands.Last().ArgumentList.Last());
+        Assert.Equal(create.ArgumentList[7], launcher.Commands.Single(command => Operation(command) == "ownership-inspect").ArgumentList.Last());
+        Assert.Equal(ContainerId, launcher.Commands.Last().ArgumentList.Last());
         Assert.DoesNotContain(launcher.Commands, command => Operation(command) == "start");
         launcher.Create = null;
         Assert.Equal(WorkerProcessFailure.None, (await runner.RunAsync(ReadOnlyMemory<byte>.Empty, CancellationToken.None)).Failure);
@@ -444,16 +454,18 @@ public sealed class FerruleDockerRunnerTests
         Assert.True(creation.Disposed);
         Assert.Equal(WorkerProcessFailure.None, next.Failure);
         Assert.Equal(queuedRequest, launcher.Worker.Input.ToArray());
-        Assert.Equal(["info", "image", "create", "rm", "info", "image", "create", "inspect", "start", "rm"],
+        Assert.Equal(["info", "image", "create", "ownership-inspect", "rm", "info", "image", "create", "inspect", "start", "ownership-inspect", "rm"],
             launcher.Commands.Select(Operation));
-        Assert.Equal(ownedName, launcher.Commands[3].ArgumentList.Last());
+        Assert.Equal(ownedName, launcher.CreatedNames[0]);
+        Assert.Equal(ContainerId, launcher.Commands[3].ArgumentList.Last());
+        Assert.Equal(ContainerId, launcher.Commands[4].ArgumentList.Last());
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("another-container\n")]
-    [InlineData(ContainerId + "\n")]
-    public async Task UncertainCreateRequiresExactOwnedNameAcknowledgmentEvenWhenRemovalExitsZero(string removalOutput)
+    [InlineData(OtherContainerId + "\n")]
+    public async Task UncertainCreateRequiresExactOwnedIdAcknowledgmentEvenWhenRemovalExitsZero(string removalOutput)
     {
         var creation = FakeProcess.Hanging();
         var launcher = new FakeLauncher { Create = creation, Remove = TextProcess(removalOutput) };
@@ -625,8 +637,21 @@ public sealed class FerruleDockerRunnerTests
 
     private static FakeProcess TextProcess(string text) => new(Encoding.UTF8.GetBytes(text));
 
-    private static string Operation(ProcessStartInfo command) =>
-        command.ArgumentList[4] == "container" ? command.ArgumentList[5] : command.ArgumentList[4];
+    private static string Operation(ProcessStartInfo command)
+    {
+        if (command.ArgumentList[4] != "container") return command.ArgumentList[4];
+        return command.ArgumentList[5] == "inspect" && command.ArgumentList[7] != "{{json .}}"
+            ? "ownership-inspect" : command.ArgumentList[5];
+    }
+
+    private static string OwnedMetadata(string name, string owner, string id = ContainerId, string metadata = ContainerMetadata)
+    {
+        var node = JsonNode.Parse(metadata)!;
+        node["Id"] = id;
+        node["Name"] = "/" + name;
+        node["Config"]!["Labels"] = new JsonObject { [OperationLabel] = owner };
+        return node.ToJsonString();
+    }
 
     private sealed class FakeLauncher : IWorkerProcessLauncher
     {
@@ -639,6 +664,11 @@ public sealed class FerruleDockerRunnerTests
         public FakeProcess Worker { get; set; } = new([]);
         public FakeProcess? Remove { get; init; }
         public bool RemovalReportsMissing { get; init; }
+        public Func<string, string, string, FakeProcess>? OwnershipInspection { get; init; }
+        public Func<string, string, string, FakeProcess>? PolicyInspection { get; init; }
+        public Action<string>? RemoveObserved { get; init; }
+        public List<string> CreatedNames { get; } = [];
+        public List<string> CreatedOwners { get; } = [];
         public string? ThrowOnOperation { get; set; }
 
         public IWorkerProcess Start(ProcessStartInfo startInfo)
@@ -654,10 +684,27 @@ public sealed class FerruleDockerRunnerTests
             {
                 case "info": return Daemon ?? TextProcess(DaemonMetadata);
                 case "image": return Image ?? TextProcess(ImageMetadata);
-                case "create": return Create ?? TextProcess(ContainerId + "\n");
-                case "inspect": return Container ?? TextProcess(ContainerMetadata);
+                case "create":
+                    CreatedNames.Add(startInfo.ArgumentList[7]);
+                    var label = startInfo.ArgumentList.Single(argument => argument.StartsWith(OperationLabel + "=", StringComparison.Ordinal));
+                    CreatedOwners.Add(label[(OperationLabel.Length + 1)..]);
+                    return Create ?? TextProcess(ContainerId + "\n");
+                case "inspect":
+                    if (PolicyInspection is not null)
+                        return PolicyInspection(startInfo.ArgumentList.Last(), CreatedNames[^1], CreatedOwners[^1]);
+                    if (Container is not null)
+                    {
+                        var metadata = Encoding.UTF8.GetString(((MemoryStream)Container.Output).ToArray());
+                        Container.Output = new MemoryStream(Encoding.UTF8.GetBytes(OwnedMetadata(CreatedNames[^1], CreatedOwners[^1], metadata: metadata)));
+                        return Container;
+                    }
+                    return TextProcess(OwnedMetadata(CreatedNames[^1], CreatedOwners[^1]));
+                case "ownership-inspect":
+                    return OwnershipInspection?.Invoke(startInfo.ArgumentList.Last(), CreatedNames[^1], CreatedOwners[^1])
+                        ?? TextProcess(OwnedMetadata(CreatedNames[^1], CreatedOwners[^1]));
                 case "start": WorkerStarted.TrySetResult(); return Worker;
                 case "rm":
+                    RemoveObserved?.Invoke(startInfo.ArgumentList.Last());
                     return RemovalReportsMissing
                         ? new FakeProcess([], exitCode: 1) { Error = new MemoryStream(Encoding.UTF8.GetBytes($"Error response from daemon: No such container: {startInfo.ArgumentList.Last()}\n")) }
                         : Remove ?? TextProcess(startInfo.ArgumentList.Last() + "\n");
@@ -706,6 +753,7 @@ public sealed class FerruleDockerRunnerTests
 
         public static FakeProcess Hanging(bool blockInput = false) => new(blockInput);
         public static FakeProcess GatedCreation() => new(Encoding.UTF8.GetBytes(ContainerId + "\n"), waitForRelease: true);
+        public static FakeProcess GatedControlOutput(string value) => new(Encoding.UTF8.GetBytes(value), waitForRelease: true);
         public Task WaitForExitAsync(CancellationToken cancellationToken)
         {
             if (!ExitWaitStarted.Task.IsCompleted)

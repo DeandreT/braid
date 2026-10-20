@@ -93,6 +93,8 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Entra browser client](docs/entra-browser-client.md): dormant fixed-tenant OIDC adapter, certificate and key-profile ownership, and separate HTTP/host activation.
 - [Authentication HTTP](docs/browser-authentication-http.md): session inspection, login/callback, acknowledged local logout and explicit local forgetting.
 - [Session host operations](docs/session-host.md): explicit host modes, private configuration, offline TLS, ingress, privacy and shutdown.
+- [Runtime packaging](docs/runtime-packaging.md): container images, private delivery, the same-replica edge and the hosted-shape local stack.
+- [Azure deployment](docs/azure-deployment.md): Bicep templates, operator inputs, the deployment procedure and open hosting questions.
 - [Session-safe browser state](docs/browser-session-state.md): fresh identity observation, protected-view invalidation and private original-operation recovery.
 - [Project creation](docs/project-creation.md): explicit capability, atomic creation, and immutable replay history.
 - [Project creation HTTP](docs/project-creation-http.md): request admission, organization actions, and separate host composition.

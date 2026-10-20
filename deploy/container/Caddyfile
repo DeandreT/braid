@@ -1,0 +1,30 @@
+# Same-replica edge for Weft's trustedProxyOneHop host transport. The platform ingress
+# terminates TLS and reaches this listener; the server listens only on loopback.
+#
+# WEFT_PUBLIC_HOST            Exact public authority, for example weft.example.com.
+# WEFT_EDGE_TRUSTED_PROXIES   Space-separated CIDRs of the ingress that appends X-Forwarded-For.
+{
+	admin off
+	persist_config off
+	auto_https off
+	servers {
+		protocols h1
+		trusted_proxies static {$WEFT_EDGE_TRUSTED_PROXIES}
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+:8080 {
+	# The server refuses any forwarding field other than the three exact values set below.
+	# Deletion runs as its own handler first; header_up applies deletions after its sets.
+	request_header -Forwarded
+	request_header -X-Forwarded-*
+	request_header -X-Original-*
+	reverse_proxy 127.0.0.1:8081 {
+		header_up Host {$WEFT_PUBLIC_HOST}
+		header_up X-Forwarded-For {client_ip}
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {$WEFT_PUBLIC_HOST}
+	}
+}

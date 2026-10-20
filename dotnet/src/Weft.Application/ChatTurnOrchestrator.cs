@@ -99,6 +99,7 @@ public sealed partial class ChatTurnOrchestrator
             if (facts is null || facts.Intent != intent || facts.Phase != ChatTurnPhase.Active ||
                 facts.Version != 1 || facts.RoundCount != 0 || facts.EventCount != 1 || facts.EventBytes != 0)
                 return new(ChatOrchestrationOutcome.PersistenceUncertain);
+            execution.Admitted(facts);
             state = new(execution, actor, conversation, facts);
             state.Messages.Add(AiSystemMessage.Create(_instructions));
             await AddHistoryAsync(state, history).ConfigureAwait(false);

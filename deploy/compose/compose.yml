@@ -1,0 +1,168 @@
+# Local stack in the hosted shape: PostgreSQL, a separate migration step with the migrator
+# credential, private storage and session key-ring volumes, and the Session-profile server
+# behind its same-replica edge. compose.examples.yml adds the local-only examples server.
+# Values come from the caller's private environment; see docs/runtime-packaging.md.
+name: weft-hosted-shape
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+    - /run/weft/secrets:uid=1654,gid=1654,mode=0700,size=1m
+
+services:
+  postgres:
+    image: docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: weft
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${WEFT_LOCAL_POSTGRES_ADMIN_PASSWORD:?Set a local database admin password}
+      WEFT_LOCAL_MIGRATOR_PASSWORD: ${WEFT_LOCAL_MIGRATOR_PASSWORD:?}
+      WEFT_LOCAL_RUNTIME_PASSWORD: ${WEFT_LOCAL_RUNTIME_PASSWORD:?}
+      WEFT_LOCAL_INGEST_PASSWORD: ${WEFT_LOCAL_INGEST_PASSWORD:?}
+      WEFT_LOCAL_CATALOG_PASSWORD: ${WEFT_LOCAL_CATALOG_PASSWORD:?}
+      WEFT_LOCAL_METADATA_PASSWORD: ${WEFT_LOCAL_METADATA_PASSWORD:?}
+      WEFT_LOCAL_CREATOR_PASSWORD: ${WEFT_LOCAL_CREATOR_PASSWORD:?}
+      WEFT_LOCAL_REPORT_PASSWORD: ${WEFT_LOCAL_REPORT_PASSWORD:?}
+      WEFT_LOCAL_DERIVATION_PASSWORD: ${WEFT_LOCAL_DERIVATION_PASSWORD:?}
+      WEFT_LOCAL_MAINTENANCE_PASSWORD: ${WEFT_LOCAL_MAINTENANCE_PASSWORD:?}
+      WEFT_LOCAL_IDENTITY_PASSWORD: ${WEFT_LOCAL_IDENTITY_PASSWORD:?}
+      WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD: ${WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD:?}
+      WEFT_LOCAL_SESSION_READER_PASSWORD: ${WEFT_LOCAL_SESSION_READER_PASSWORD:?}
+      WEFT_LOCAL_SESSION_WRITER_PASSWORD: ${WEFT_LOCAL_SESSION_WRITER_PASSWORD:?}
+      WEFT_LOCAL_CHAT_READER_PASSWORD: ${WEFT_LOCAL_CHAT_READER_PASSWORD:?}
+      WEFT_LOCAL_CHAT_WRITER_PASSWORD: ${WEFT_LOCAL_CHAT_WRITER_PASSWORD:?}
+      WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD: ${WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD:?}
+      WEFT_LOCAL_PREVIEW_READER_PASSWORD: ${WEFT_LOCAL_PREVIEW_READER_PASSWORD:?}
+      WEFT_LOCAL_PREVIEW_WRITER_PASSWORD: ${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../local/postgres-init.sh:/docker-entrypoint-initdb.d/01-weft-roles.sh:ro
+    networks: [database]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d weft"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  # One-shot owner step; the server never receives the migrator credential. The runtime image
+  # has no Kerberos library, so connection strings disable GSS encryption explicitly.
+  migrate:
+    <<: *hardened
+    image: ${WEFT_IMAGE:-weft:local}
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      WEFT_MIGRATION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_migrator;Password=${WEFT_LOCAL_MIGRATOR_PASSWORD:?};GSS Encryption Mode=Disable
+    networks: [database]
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  storage-init:
+    <<: *hardened
+    image: ${WEFT_IMAGE:-weft:local}
+    command: ["initialize-storage", "/var/lib/weft/storage/root"]
+    restart: "no"
+    network_mode: none
+    volumes:
+      - private-storage:/var/lib/weft/storage
+
+  session-keys:
+    <<: *hardened
+    image: ${WEFT_IMAGE:-weft:local}
+    command: ["bootstrap-session-keys"]
+    restart: "no"
+    network_mode: none
+    environment:
+      WEFT_SESSION_ORGANIZATION_ID: ${WEFT_SESSION_ORGANIZATION_ID:?}
+      WEFT_SESSION_APPLICATION_NAME: ${WEFT_SESSION_APPLICATION_NAME:-Weft.Session}
+      WEFT_SESSION_KEY_DIRECTORY: /var/lib/weft/keys/ring
+      WEFT_DELIVER_SESSION_KEY_PEM: ${WEFT_SESSION_KEY_PEM:?}
+    volumes:
+      - session-keys:/var/lib/weft/keys
+
+  server:
+    <<: *hardened
+    image: ${WEFT_IMAGE:-weft:local}
+    restart: unless-stopped
+    environment:
+      WEFT_CATALOG_AUTH_MODE: session
+      WEFT_CATALOG_ENABLED: "true"
+      WEFT_PUBLIC_ORIGIN: https://${WEFT_PUBLIC_HOST:?}
+      WEFT_HOST_TRANSPORT: trustedProxyOneHop
+      WEFT_LISTEN_ADDR: 127.0.0.1:8081
+      WEFT_KNOWN_PROXY_IP: 127.0.0.1
+      WEFT_SESSION_ORGANIZATION_ID: ${WEFT_SESSION_ORGANIZATION_ID:?}
+      WEFT_SESSION_APPLICATION_NAME: ${WEFT_SESSION_APPLICATION_NAME:-Weft.Session}
+      WEFT_SESSION_KEY_DIRECTORY: /var/lib/weft/keys/ring
+      WEFT_ENTRA_TENANT_ID: ${WEFT_ENTRA_TENANT_ID:?}
+      WEFT_ENTRA_CLIENT_ID: ${WEFT_ENTRA_CLIENT_ID:?}
+      WEFT_DELIVER_SESSION_KEY_PEM: ${WEFT_SESSION_KEY_PEM:?}
+      WEFT_DELIVER_ENTRA_CLIENT_PEM: ${WEFT_ENTRA_CLIENT_PEM:?}
+      WEFT_DELIVER_SESSION_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_session_reader;Password=${WEFT_LOCAL_SESSION_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_DELIVER_SESSION_WRITER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_session_writer;Password=${WEFT_LOCAL_SESSION_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_DELIVER_IDENTITY_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_identity_reader;Password=${WEFT_LOCAL_IDENTITY_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_CATALOG_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_catalog_reader;Password=${WEFT_LOCAL_CATALOG_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_METADATA_EDITS_ENABLED: "true"
+      WEFT_POSTGRES_METADATA_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_catalog_editor;Password=${WEFT_LOCAL_METADATA_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_PROJECT_CREATION_ENABLED: "true"
+      WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_project_creator;Password=${WEFT_LOCAL_CREATOR_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_REVISION_REPORTS_ENABLED: "true"
+      WEFT_POSTGRES_REPORT_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_PRIVATE_STORAGE_ROOT: /var/lib/weft/storage/root
+    volumes:
+      - private-storage:/var/lib/weft/storage
+      - session-keys:/var/lib/weft/keys
+    # The edge shares this network namespace; only its listener is published.
+    ports:
+      - 127.0.0.1:${WEFT_COMPOSE_PORT:-8480}:8080
+    networks: [database, egress]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      storage-init: {condition: service_completed_successfully}
+      session-keys: {condition: service_completed_successfully}
+
+  edge:
+    image: ${WEFT_EDGE_IMAGE:-weft-edge:local}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    network_mode: service:server
+    environment:
+      WEFT_PUBLIC_HOST: ${WEFT_PUBLIC_HOST:?}
+      WEFT_EDGE_TRUSTED_PROXIES: ${WEFT_EDGE_TRUSTED_PROXIES:-}
+    depends_on: [server]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  # One-shot maintenance run from a separate container against the shared storage volume.
+  maintenance:
+    <<: *hardened
+    image: ${WEFT_IMAGE:-weft:local}
+    profiles: [operator]
+    restart: "no"
+    environment:
+      WEFT_MAINTENANCE_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_maintenance;Password=${WEFT_LOCAL_MAINTENANCE_PASSWORD:?};GSS Encryption Mode=Disable
+    entrypoint: ["/app/bin/weft-entrypoint", "maintenance"]
+    volumes:
+      - private-storage:/var/lib/weft/storage
+    networks: [database]
+
+networks:
+  database:
+    internal: true
+  egress: {}
+
+volumes:
+  postgres-data:
+  private-storage:
+  session-keys:

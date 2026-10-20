@@ -282,6 +282,11 @@ remain required. P4e-b [#122](https://github.com/DeandreT/weft/issues/122) compo
 sign-in and acknowledged session controls separately. See
 [Session-safe browser state](docs/browser-session-state.md).
 
+P5's remaining increment, [#136](https://github.com/DeandreT/weft/issues/136), adds
+authenticated revision-pinned chat routes, a resumable SSE event stream and
+server-owned model-profile host composition over the private chat ledger and
+orchestrator. See [Chat turn HTTP API](docs/chat-http.md).
+
 P7 starts from the Ferrule consumer pin qualified in
 [#123](https://github.com/DeandreT/weft/issues/123) and follows five dependent
 increments: the bounded JSON preview worker operation and adapter
@@ -296,6 +301,13 @@ P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
 feature. Bound concurrent builds. Check disk space before substantial Ferrule engine-host
 builds and reuse compatible artifacts.
+
+P8a [#137](https://github.com/DeandreT/weft/issues/137) packages the server, its
+operator tools and the same-replica edge as container images, with a hosted-shape
+local stack. See [Runtime packaging](docs/runtime-packaging.md).
+P8b [#146](https://github.com/DeandreT/weft/issues/146) describes the first Azure
+environment as Bicep templates with its operator procedure and open hosting questions.
+See [Azure deployment](docs/azure-deployment.md).
 
 The first hosted release is admitted only when P0-P8 are implemented and
 qualified. Local-only viewer prototypes can be demonstrated earlier. Entra or

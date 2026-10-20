@@ -28,7 +28,10 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
     }
     internal NpgsqlDataSource DataSource => Source;
 
-    internal async Task<PostgresTransaction> BeginAsync(ActorContext actor, ChatConversationKey key, bool write, CancellationToken ct)
+    internal Task<PostgresTransaction> BeginAsync(ActorContext actor, ChatConversationKey key, bool write, CancellationToken ct) =>
+        BeginAsync(actor, key.Revision.OrganizationId, write, ct);
+
+    internal async Task<PostgresTransaction> BeginAsync(ActorContext actor, Guid organizationId, bool write, CancellationToken ct)
     {
         if (write && Profile != ChatDatabaseProfile.Writer) throw new InvalidOperationException("Chat mutation requires its separate writer profile.");
         var connection = await Source.OpenConnectionAsync(ct);
@@ -70,8 +73,8 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
                 settings.Parameters.AddWithValue("creator", actor.PrincipalId.Value.ToString("D"));
                 await settings.ExecuteNonQueryAsync(ct);
             }
-            var result = new PostgresTransaction(connection, transaction, key.Revision.OrganizationId);
-            await result.BindOrganizationAsync(key.Revision.OrganizationId, ct);
+            var result = new PostgresTransaction(connection, transaction, organizationId);
+            await result.BindOrganizationAsync(organizationId, ct);
             await ChatRoleGuard.ValidateAsync(connection, transaction, Profile, !write, ct);
             return result;
         }

@@ -29,6 +29,10 @@ and Wolverine-backed execution follow separate increments. The separate
 [project creation HTTP](project-creation-http.md) increment adds explicit
 organization actions and its dedicated creator configuration.
 
+Revision-pinned chat is off unless configured; its server-owned model profiles,
+credentials and routes are described in [Chat turn HTTP API](chat-http.md). A
+local OpenAI-compatible or Ollama endpoint can be configured as a profile.
+
 The [native mapping upload page](native-mapping-upload-ui.md) creates a mapping
 and its first immutable revision from the original file. Its separate
 [browser fixture](../tools/native-mapping-upload-browser/README.md) exercises
@@ -36,6 +40,9 @@ explicit replay, source-free recovery and permission changes with private fixtur
 bindings. Run `npm run test:native-mapping-upload-browser` through the alternate
 display; controlled frontend checks and actual packaged-host results retain their
 separate qualification scopes. Appending a revision follows separately.
+
+The packaged container images, their private configuration delivery and a local
+stack in the hosted shape are described in [Runtime packaging](runtime-packaging.md).
 
 ## Prerequisites
 
@@ -151,6 +158,24 @@ npm run test:browser
 Host process tests require these explicit absolute paths to fresh publications of
 the same Release build. The privacy probe is a qualification tool, not a deployed
 Server dependency; keep its publication separate from the shipped host.
+
+The owned HTTPS sign-in qualification drives the pinned Chrome for Testing through
+real TLS, a mock OIDC issuer and the actual session modules hosted by the probe
+(see [transport admission](browser-https-network-admission.md)). It also needs
+`certutil`, `xvfb-run`, `Xvfb`, `xauth` and an explicit admission record that hashes
+the publications, Node, npm, Chromium and `certutil`. Prepare a fresh record after
+every publication, in a private directory short enough for its Unix sockets:
+
+```sh
+weft_admission="$(mktemp -d "${TMPDIR:-/tmp}/weft-ah.XXXXXXXX")"
+export WEFT_AUTH_BROWSER_ADMISSION_ROOT="$weft_admission"
+export WEFT_AUTH_BROWSER_ADMISSION_FILE="$weft_admission/admission.json"
+node tools/auth-browser-https/admit.mjs --approved
+```
+
+Without a record the real-browser cases are skipped locally. CI always prepares
+one, so they fail rather than skip there. The browser runs on the first free
+virtual display unless `WEFT_XVFB_SERVER_NUM` selects one.
 
 The browser harness owns API and Angular development processes on ports 4101
 and 5174, fails on occupied ports, and stops them when it exits. Build the Release

@@ -269,6 +269,11 @@ instances can scale to zero where latency requirements allow; stored jobs,
 sessions, and conversation state must survive instance loss. Queued work has
 leases, recovery, and bounded attempts rather than relying on one HTTP request.
 
+The first Azure environment, in [Azure deployment](azure-deployment.md), runs the
+API container on Container Apps and serves the built frontend from the same origin,
+with private PostgreSQL Flexible Server, Key Vault and a managed identity. It runs one
+instance; scale-out needs the session key ring and private storage qualified for it.
+
 Publishing an individual mapping is a later workflow: validate the exact
 revision, preflight runtime/format capability, build an immutable artifact,
 associate environment-specific connection references, then deploy through a
@@ -288,7 +293,7 @@ support. No Azure resources are created by this planning increment.
 - Whether organizations permit native mapping text to leave their network;
   model-profile policy must support an explicit allowed destination.
 - Measured preview limits and whether longer jobs need a separate service class.
-- Initial Azure region, tenant, static hosting service, and operational budget.
+- Initial Azure region, tenant, and operational budget.
 - Whether browser-local WASM preview merits an additional runtime after the
   hosted viewer and worker path are qualified.
 

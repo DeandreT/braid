@@ -29,6 +29,7 @@ internal sealed class DockerCreationGateProxy : IAsyncDisposable
     internal string DirectoryPath { get; }
     internal string SocketPath { get; }
     internal TaskCompletionSource<string> CapturedCreate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    internal TaskCompletionSource<string> CapturedOwner { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal TaskCompletionSource<PublishedCreation> PublishedCreate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal TaskCompletionSource CreateForwardCompleted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal TaskCompletionSource<Exception> Failure { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -149,8 +150,19 @@ internal sealed class DockerCreationGateProxy : IAsyncDisposable
                     Volatile.Write(ref gatedConnection, state);
                     name = CreateName(first[1]);
                     using var body = new MemoryStream();
-                    await TransferBodyAsync(client, message, ReadBodyBytes, shutdown.Token);
+                    using var configuration = new MemoryStream();
+                    await TransferBodyAsync(client, message, ReadBodyBytes, shutdown.Token, decodedBody: configuration);
                     captured = body.ToArray();
+                    // Keep captured wire bytes unchanged for forwarding, including chunk
+                    // framing. The marker is read only from the separately decoded body.
+                    using (var document = JsonDocument.Parse(configuration.ToArray(), new JsonDocumentOptions { MaxDepth = 32 }))
+                    {
+                        var labels = document.RootElement.GetProperty("Labels");
+                        var owner = labels.GetProperty(DockerWorkerOwnershipTestSupport.OperationLabel).GetString();
+                        if (owner is not { Length: 32 } || owner.Any(character => character is not (>= 'a' and <= 'f' or >= '0' and <= '9')))
+                            throw new InvalidOperationException("The test proxy refused a create without an operation owner marker.");
+                        CapturedOwner.TrySetResult(owner);
+                    }
                     CapturedCreate.TrySetResult(name);
                     // Publication is independent of CLI disconnect/caller cancellation. Failure
                     // cleanup must release and await this request before removing its exact name.

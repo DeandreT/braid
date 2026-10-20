@@ -104,6 +104,9 @@ or joins one private cancellation operation. The caller token and trusted timer
 only request this operation; callbacks never execute under application gates.
 Returning from CancelAsync is not proof the original work settled; callers still
 join Completion and require ReleaseSafe before releasing borrowed scopes.
+`Started` completes with the original acknowledged start facts, or null once the
+original work ends without them; it lets a caller answer after durable admission
+and grants nothing else.
 `WaitAsync` bounds an observer's wait only. A timed-out observer must retain the
 execution and its borrowed dependency scope; it cannot release or recreate the
 provider client, profile or tool ports while original work remains pending.
@@ -132,8 +135,9 @@ prompts, results, raw provider bodies, exception messages, endpoint or credentia
 values enter routine diagnostics through this module.
 
 [Mapping explanation tools](mapping-ai-tools.md) supply the registered tool
-manifest, read port and citation check. Registration and final validated
-citation-snapshot delivery are a separate composition boundary. Completing
-orchestration does not validate an answer's citations. HTTP/SSE, UI, payloads,
-edits, preview/execution, deployment and live model activation are outside this
-module.
+manifest, read port and citation check. The [chat HTTP API](chat-http.md)
+composes this orchestrator with the stores, shared provider client and
+registered tools. Final validated citation-snapshot delivery is a separate
+boundary; completing orchestration does not validate an answer's citations.
+HTTP/SSE, UI, payloads, edits, preview/execution, deployment and live model
+activation are outside this module.

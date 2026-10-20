@@ -55,8 +55,9 @@ source of application authority.
 
 ## Provider adapters (`Weft.Ai`)
 
-`dotnet/src/Weft.Ai` is a dormant, BCL-only module with no host registration.
-It speaks two fixed wire dialects over HTTP: Chat Completions SSE
+`dotnet/src/Weft.Ai` is a BCL-only module without its own host registration;
+the Server composes one shared client when chat is configured (see
+[Chat turn HTTP API](chat-http.md)). It speaks two fixed wire dialects over HTTP: Chat Completions SSE
 (`ChatCompletionsSseV1`) and Ollama `/api/chat` NDJSON (`OllamaChatNdjsonV1`).
 Callers see only Weft-owned types; vendor event names and raw bodies stay inside
 the readers.
@@ -91,7 +92,9 @@ the readers.
   the slot quarantined rather than releasing it.
 
 Tool execution, project permission checks, conversation persistence and browser
-streaming belong to the application layers above this module.
+streaming belong to the application layers above this module. The routes, server
+profile configuration and SSE event stream are described in
+[Chat turn HTTP API](chat-http.md).
 
 ### Live provider check
 

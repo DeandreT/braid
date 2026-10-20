@@ -1,13 +1,16 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
+using System.Text.Json;
 
 namespace Weft.MappingBackends.Workers;
 
 /// <summary>Runs a locally provisioned inspection image under a fixed Linux Docker policy.</summary>
-public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
+public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunner, IAsyncDisposable
 {
     private const int ControlOutputLimit = 64 * 1024;
+    private const string OperationLabel = "io.weft.inspection.operation.v1";
+    private const string OwnershipInspectFormat = """{"Id":{{json .Id}},"Name":{{json .Name}},"Config":{"Labels":{{json .Config.Labels}}}}""";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private readonly DockerInspectionWorkerOptions options;
     private readonly IWorkerProcessLauncher launcher;
@@ -30,7 +33,7 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
     public string BuildIdentity => options.ImageId;
     public DockerWorkerProfile Profile => options.Profile;
 
-    public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
+    private async Task<WorkerProcessResult> RunOwnedAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
     {
         if (requestFrame.Length > options.Profile.MaximumRequestBytes)
         {
@@ -72,9 +75,11 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
         using var wallDeadline = new CancellationTokenSource(options.WallTimeout);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, wallDeadline.Token);
         var containerName = $"weft-inspect-{Guid.NewGuid():N}";
+        // Independent of the discoverable name; this is an attribution marker, not a credential.
+        var operationOwner = Guid.NewGuid().ToString("N");
         string? configDirectory = null;
         var cleanupRequired = false;
-        var createConfirmed = false;
+        string? createdContainerId = null;
         var result = Failed(WorkerProcessFailure.SandboxUnavailable);
         try
         {
@@ -98,19 +103,21 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
                     // The daemon may create the named container even when the CLI loses its response.
                     // Settle this side effect within the original wall budget even if the caller leaves.
                     cleanupRequired = true;
-                    var create = await CommandAsync(configDirectory, CreateArguments(containerName), ReadOnlyMemory<byte>.Empty, ControlOutputLimit, wallDeadline.Token).ConfigureAwait(false);
+                    var create = await CommandAsync(configDirectory, CreateArguments(containerName, operationOwner), ReadOnlyMemory<byte>.Empty, ControlOutputLimit, wallDeadline.Token).ConfigureAwait(false);
                     cleanupRequired = create.Started;
                     result = Failed(create.Failure == WorkerProcessFailure.None ? WorkerProcessFailure.WorkerFailed : create.Failure);
-                    createConfirmed = create.Failure == WorkerProcessFailure.None && create.ExitCode == 0 && IsContainerId(create.Output);
+                    createdContainerId = create.Failure == WorkerProcessFailure.None && create.ExitCode == 0
+                        ? ReadContainerId(create.Output) : null;
                     deadline.Token.ThrowIfCancellationRequested();
-                    if (createConfirmed)
+                    if (createdContainerId is not null)
                     {
-                        var inspect = await CommandAsync(configDirectory, ["container", "inspect", "--format", "{{json .}}", containerName], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, deadline.Token).ConfigureAwait(false);
+                        var inspect = await CommandAsync(configDirectory, ["container", "inspect", "--format", "{{json .}}", createdContainerId], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, deadline.Token).ConfigureAwait(false);
                         result = Failed(inspect.Failure == WorkerProcessFailure.None ? WorkerProcessFailure.SandboxUnavailable : inspect.Failure);
                         if (inspect.Failure == WorkerProcessFailure.None && inspect.ExitCode == 0
+                            && ReadOwnedContainerId(inspect.Output, containerName, operationOwner, createdContainerId) is not null
                             && DockerSandboxMetadata.IsIsolatedContainer(inspect.Output, options.ImageId, options.Profile))
                         {
-                            var worker = await CommandAsync(configDirectory, ["container", "start", "--attach", "--interactive", containerName], requestFrame, options.Profile.MaximumOutputBytes, deadline.Token, binaryOutput: true).ConfigureAwait(false);
+                            var worker = await CommandAsync(configDirectory, ["container", "start", "--attach", "--interactive", createdContainerId], requestFrame, options.Profile.MaximumOutputBytes, deadline.Token, binaryOutput: true).ConfigureAwait(false);
                             result = worker.Failure != WorkerProcessFailure.None
                                 ? Failed(worker.Failure)
                                 : worker.ExitCode != 0
@@ -134,14 +141,7 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
             if (cleanupRequired && configDirectory is not null)
             {
                 using var cleanupDeadline = new CancellationTokenSource(DockerInspectionWorkerOptions.CleanupTimeout);
-                var cleanup = await CommandAsync(configDirectory, ["container", "rm", "--force", "--volumes", containerName], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, cleanupDeadline.Token).ConfigureAwait(false);
-                // Forced removal silently succeeds on absence in Docker 29. A missing
-                // uncertain create can still be an in-flight daemon request, so require
-                // its exact removal acknowledgement before releasing admission.
-                var removed = cleanup.ExitCode == 0 && IsRemovedContainer(cleanup.Output, containerName);
-                var absent = createConfirmed && cleanup.Output.Length == 0
-                    && ((cleanup.ExitCode == 0 && cleanup.Error.Length == 0) || IsMissingContainer(cleanup.Error, containerName));
-                if (cleanup.Failure != WorkerProcessFailure.None || (!removed && !absent))
+                if (!await RemoveOwnedContainerAsync(configDirectory, containerName, operationOwner, createdContainerId, cleanupDeadline.Token).ConfigureAwait(false))
                 {
                     Interlocked.Exchange(ref unavailable, 1);
                     result = Failed(WorkerProcessFailure.CleanupFailed);
@@ -175,15 +175,52 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
     private string Memory => options.Profile.MemoryBytes.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private string CpuLimit => FormattableString.Invariant($"cpu={options.Profile.CpuSeconds}:{options.Profile.CpuSeconds}");
 
-    private string[] CreateArguments(string containerName) =>
+    private string[] CreateArguments(string containerName, string operationOwner) =>
     [
         "container", "create", "--name", containerName, "--pull", "never", "--interactive",
+        "--label", $"{OperationLabel}={operationOwner}",
         "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
         "--user", "65532:65532", "--cpus", "1", "--memory", Memory, "--memory-swap", Memory,
         "--pids-limit", "16", "--ulimit", "nofile=64:64", "--ulimit", CpuLimit, "--ulimit", "core=0:0",
         "--ipc", "none", "--cgroupns", "private", "--no-healthcheck", "--restart", "no", "--log-driver", "none",
         "--workdir", "/", "--entrypoint", "/ferrule-host", options.ImageId
     ];
+
+    private async Task<bool> RemoveOwnedContainerAsync(
+        string configDirectory, string containerName, string operationOwner, string? createdContainerId, CancellationToken cancellationToken)
+    {
+        // A name is only a read-only discovery key when the create response was lost.
+        // A failed/conflicting create never authorizes adopting or removing that name.
+        var target = createdContainerId ?? containerName;
+        var inspect = await CommandAsync(configDirectory, ["container", "inspect", "--format", OwnershipInspectFormat, target], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, cancellationToken).ConfigureAwait(false);
+        if (inspect.Failure != WorkerProcessFailure.None)
+        {
+            return false;
+        }
+
+        if (inspect.ExitCode != 0)
+        {
+            // Only an acknowledged create has settled publication. Missing by name after
+            // an interrupted create cannot rule out a daemon request still in flight.
+            return createdContainerId is not null && inspect.Output.Length == 0 && IsMissingContainer(inspect.Error, createdContainerId);
+        }
+
+        var ownedId = ReadOwnedContainerId(inspect.Output, containerName, operationOwner, createdContainerId);
+        if (ownedId is null)
+        {
+            return false;
+        }
+
+        // Never re-resolve the mutable name for a destructive operation. Name reuse or
+        // reassignment after verification cannot redirect removal to a different ID.
+        var cleanup = await CommandAsync(configDirectory, ["container", "rm", "--force", "--volumes", ownedId], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, cancellationToken).ConfigureAwait(false);
+        var removed = cleanup.ExitCode == 0 && cleanup.Error.Length == 0 && IsRemovedContainer(cleanup.Output, ownedId);
+        var absent = createdContainerId is not null && cleanup.Output.Length == 0
+            && ((cleanup.ExitCode == 0 && cleanup.Error.Length == 0) || IsMissingContainer(cleanup.Error, ownedId));
+        // Finding a marked object permits exact-ID cleanup, but does not fabricate the
+        // lost create acknowledgement: uncertain creation still requires removal's ID.
+        return cleanup.Failure == WorkerProcessFailure.None && (removed || absent);
+    }
 
     private async Task<CommandResult> CommandAsync(
         string configDirectory,
@@ -344,17 +381,71 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
         }
     }
 
-    private static bool IsContainerId(byte[] bytes)
+    private static string? ReadContainerId(byte[] bytes)
     {
         var id = StrictUtf8.GetString(bytes).TrimEnd('\n', '\r');
-        return id.Length == 64 && id.AsSpan().ContainsOnlyHexadecimal();
+        return id.Length == 64 && id.AsSpan().ContainsOnlyHexadecimal() ? id : null;
     }
 
-    private static bool IsMissingContainer(byte[] bytes, string containerName) =>
-        string.Equals(StrictUtf8.GetString(bytes).Trim(), $"Error response from daemon: No such container: {containerName}", StringComparison.Ordinal);
+    private static string? ReadOwnedContainerId(byte[] bytes, string containerName, string operationOwner, string? expectedId)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 32 });
+            var root = document.RootElement;
+            if (!UniqueProperty(root, "Id", out var id) || id.ValueKind != JsonValueKind.String
+                || !UniqueProperty(root, "Name", out var name) || name.ValueKind != JsonValueKind.String
+                || name.GetString() != "/" + containerName
+                || !UniqueProperty(root, "Config", out var config)
+                || !UniqueProperty(config, "Labels", out var labels)
+                || !UniqueProperty(labels, OperationLabel, out var owner) || owner.ValueKind != JsonValueKind.String
+                || owner.GetString() != operationOwner)
+            {
+                return null;
+            }
 
-    private static bool IsRemovedContainer(byte[] bytes, string containerName) =>
-        string.Equals(StrictUtf8.GetString(bytes).TrimEnd('\n', '\r'), containerName, StringComparison.Ordinal);
+            var value = id.GetString()!;
+            return value.Length == 64 && value.AsSpan().ContainsOnlyHexadecimal()
+                && (expectedId is null || value == expectedId) ? value : null;
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static bool UniqueProperty(JsonElement parent, string name, out JsonElement value)
+    {
+        value = default;
+        if (parent.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var found = false;
+        foreach (var property in parent.EnumerateObject())
+        {
+            if (property.NameEquals(name))
+            {
+                if (found) return false;
+                value = property.Value;
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
+    private static bool IsMissingContainer(byte[] bytes, string containerId)
+    {
+        var error = StrictUtf8.GetString(bytes).Trim();
+        return error == $"Error response from daemon: No such container: {containerId}"
+            || error == $"Error: No such container: {containerId}"
+            || error == $"Error: No such object: {containerId}";
+    }
+
+    private static bool IsRemovedContainer(byte[] bytes, string containerId) =>
+        string.Equals(StrictUtf8.GetString(bytes).TrimEnd('\n', '\r'), containerId, StringComparison.Ordinal);
 
     private static WorkerProcessResult Failed(WorkerProcessFailure failure) => new([], failure);
     private sealed class OutputLimitException : Exception { }
