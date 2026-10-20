@@ -148,6 +148,15 @@ absence is accepted only after creation was confirmed. Unconfirmed cleanup block
 further admission on that singleton runner; an unresponsive daemon or abrupt host
 kill does not produce a fabricated cleanup guarantee.
 
+The server host owns the shared runner's shutdown. When the host begins stopping,
+the runner closes admission, cancels queued and running work through the normal
+cancellation path, and joins every original operation, including its creation
+settlement and cleanup, before its own dependencies are released. A host shutdown
+timeout ends only the host's wait; service-provider disposal joins the same drain.
+Unconfirmed cleanup faults shutdown instead of reporting a clean stop. A signal sent
+to the whole process group can also terminate an in-flight Docker CLI directly;
+that is reported as uncertain cleanup, never as an acknowledged removal.
+
 Browser qualification gives its API and frontend processes bounded SIGTERM
 shutdown and audits every owned worker ID after teardown. The tests retain page
 closure with pending requests so ordinary cancellation remains exercised.

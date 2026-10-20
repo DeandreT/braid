@@ -1,7 +1,6 @@
 using Weft.Api;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
-using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.Server;
 
@@ -29,11 +28,8 @@ CatalogHostConfiguration.Configure(builder, address);
 builder.Services.AddWeftAuthenticationHttp(new(hostOptions.Mode, hostOptions.Origin), builder.Environment);
 if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE") is { Length: > 0 } workerImage)
 {
-    builder.Services.AddSingleton<IInspectionWorkerRunner>(_ => new DockerInspectionWorkerRunner(
-        new DockerInspectionWorkerOptions("/usr/bin/docker", workerImage)));
-    builder.Services.AddSingleton<FerruleInspectionBackend>();
-    builder.Services.AddSingleton<IMappingInspectionBackend>(services => services.GetRequiredService<FerruleInspectionBackend>());
-    builder.Services.AddSingleton<IMappingProjectionBackend>(services => services.GetRequiredService<FerruleInspectionBackend>());
+    InspectionWorkerHostConfiguration.Configure(builder.Services,
+        new DockerInspectionWorkerOptions("/usr/bin/docker", workerImage));
 }
 builder.Services.AddWeftNativeExamples();
 var app = builder.Build();

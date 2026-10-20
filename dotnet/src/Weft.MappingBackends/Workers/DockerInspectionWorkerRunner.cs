@@ -5,7 +5,7 @@ using System.Text;
 namespace Weft.MappingBackends.Workers;
 
 /// <summary>Runs a locally provisioned inspection image under a fixed Linux Docker policy.</summary>
-public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
+public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunner, IAsyncDisposable
 {
     private const int ControlOutputLimit = 64 * 1024;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -30,7 +30,7 @@ public sealed class DockerInspectionWorkerRunner : IInspectionWorkerRunner
     public string BuildIdentity => options.ImageId;
     public DockerWorkerProfile Profile => options.Profile;
 
-    public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
+    private async Task<WorkerProcessResult> RunOwnedAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
     {
         if (requestFrame.Length > options.Profile.MaximumRequestBytes)
         {

@@ -7,7 +7,7 @@ using Weft.MappingBackends.Workers;
 namespace Weft.Tests;
 
 /// <summary>Process-seam tests qualify orchestration; they do not demonstrate container isolation.</summary>
-public sealed class FerruleDockerRunnerTests
+public sealed partial class FerruleDockerRunnerTests
 {
     private const string ImageId = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string ContainerId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
