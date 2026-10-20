@@ -139,7 +139,7 @@ public sealed class PostgresRegressionCaseStore : IRegressionCaseReader, IRegres
         try
         {
             transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
-            await using (var path = new NpgsqlCommand("SET LOCAL search_path=pg_catalog", connection, transaction))
+            await using (var path = new NpgsqlCommand("SET LOCAL search_path=pg_catalog; SET LOCAL TimeZone='UTC'; SET LOCAL DateStyle='ISO, MDY'", connection, transaction))
                 await path.ExecuteNonQueryAsync(token);
             if (!write)
             {

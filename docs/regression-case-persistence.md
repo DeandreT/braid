@@ -36,6 +36,10 @@ envelope before returning any private data. Metadata and bytes therefore
 cannot commit separately or leave an unreferenced object after a failed save.
 The PostgreSQL store uses dedicated reader/writer logins with function-only
 access; neither can query the payload table directly or modify retained rows.
+Each operation verifies both those role privileges and the exact function and
+schema contract, including table ownership, columns, constraints, triggers,
+policies and table/column grants. Unexpected schema changes refuse the operation rather
+than silently adopting a weakened data boundary.
 
 Each save has its own transaction. A conflict, invalid case or denied project
 cannot roll back an unrelated successful case. Callers processing multiple

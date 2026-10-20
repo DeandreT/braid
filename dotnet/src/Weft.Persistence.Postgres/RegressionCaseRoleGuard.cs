@@ -69,6 +69,8 @@ internal static partial class RegressionCaseRoleGuard
                 throw Refused();
         }
         if (seen.Count != Bodies.Value.Count) throw Refused();
+        await reader.DisposeAsync();
+        await RegressionCaseSchemaContract.ValidateAsync(connection, transaction, token);
     }
 
     private static readonly IReadOnlyDictionary<string, (string Types, string[] Names, string Result)> Signatures =
