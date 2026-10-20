@@ -20,7 +20,7 @@ public sealed class PostgresFactAttribute : FactAttribute
     public PostgresFactAttribute()
     {
         if (!PostgresFixture.IsConfigured)
-            Skip = "Set WEFT_POSTGRES_IMAGE to the qualified immutable PostgreSQL image to execute actual database gates.";
+            Skip = "Set WEFT_POSTGRES_IMAGE or WEFT_POSTGRES_BIN to execute actual database gates.";
     }
 }
 
@@ -28,7 +28,7 @@ public sealed class PostgresFactAttribute : FactAttribute
 public sealed class PostgresFixture : IAsyncLifetime
 {
     public const string QualifiedImage = "docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc";
-    internal static bool IsConfigured => new[] { "WEFT_POSTGRES_IMAGE", "WEFT_TEST_CLIENT_CONTAINER", "WEFT_DOCKER_EXECUTABLE" }
+    internal static bool IsConfigured => new[] { "WEFT_POSTGRES_IMAGE", "WEFT_TEST_CLIENT_CONTAINER", "WEFT_DOCKER_EXECUTABLE", "WEFT_POSTGRES_BIN" }
         .Any(name => Environment.GetEnvironmentVariable(name) is not null);
     private const string OwnerLabel = "weft.postgres-test-owner";
     private readonly string owner = Guid.NewGuid().ToString("N");
@@ -75,6 +75,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private bool volumeAttempted;
     private bool containerAttempted;
     private bool clientAttached;
+    private NativePostgresTestHost? native;
 
     public PostgresFixture() : this(provisionMetadataEditor: true, provisionProjectCreator: true) { }
 
@@ -103,12 +104,24 @@ public sealed class PostgresFixture : IAsyncLifetime
         var image = Environment.GetEnvironmentVariable("WEFT_POSTGRES_IMAGE");
         if (!IsConfigured)
             return;
-        if (image != QualifiedImage)
+        var nativeBin = Environment.GetEnvironmentVariable("WEFT_POSTGRES_BIN");
+        if (nativeBin is not null && new[] { image, client, Environment.GetEnvironmentVariable("WEFT_DOCKER_EXECUTABLE") }.Any(value => value is not null))
+            throw new InvalidOperationException("Native and Docker PostgreSQL fixture modes cannot be combined.");
+        if (nativeBin is null && image != QualifiedImage)
             throw new InvalidOperationException("WEFT_POSTGRES_IMAGE must exactly equal the qualified immutable linux/amd64 manifest.");
         if (client is not null && (string.IsNullOrWhiteSpace(client) || client.StartsWith('-')))
             throw new InvalidOperationException("WEFT_TEST_CLIENT_CONTAINER must name the explicitly owned, running qualification client.");
         try
         {
+            if (nativeBin is not null)
+            {
+                native = new NativePostgresTestHost(nativeBin,
+                    Environment.GetEnvironmentVariable("WEFT_POSTGRES_WORK_ROOT") ?? Path.GetTempPath(), BootstrapUser, bootstrapPassword);
+                await native.InitializeAsync();
+                port = native.Port;
+            }
+            else
+            {
             await DockerAsync(["pull", "--platform", "linux/amd64", image], timeoutSeconds: 180);
             var platform = await DockerAsync(["image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image]);
             if (platform.Trim() != "linux/amd64")
@@ -147,6 +160,7 @@ public sealed class PostgresFixture : IAsyncLifetime
                 if (address.Length != 2 || address[0] != "127.0.0.1"
                     || !int.TryParse(address[1], CultureInfo.InvariantCulture, out var actualPort) || actualPort != port)
                     throw new InvalidOperationException("The disposable cluster must publish only its selected stable loopback port.");
+            }
             }
             await WaitForServerAsync();
             await using var bootstrap = await OpenBootstrapAsync();
@@ -375,8 +389,12 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     public async Task RestartAsync()
     {
-        await DockerAsync(["container", "stop", "--time", "15", Container]);
-        await DockerAsync(["container", "start", Container]);
+        if (native is not null) await native.RestartAsync();
+        else
+        {
+            await DockerAsync(["container", "stop", "--time", "15", Container]);
+            await DockerAsync(["container", "start", Container]);
+        }
         await WaitForServerAsync();
     }
 
@@ -463,6 +481,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             try { await Task.Delay(TimeSpan.FromMilliseconds(250), deadline.Token); }
             catch (OperationCanceledException) when (deadline.IsCancellationRequested) { break; }
         }
+        if (native is not null) throw new InvalidOperationException("The owned native PostgreSQL endpoint did not become ready.");
         var state = await RunDockerAsync(["container", "inspect", "--format", "{{.State.Status}} exit={{.State.ExitCode}} {{json .NetworkSettings.Ports}}", Container], timeoutSeconds: 5);
         var evidence = state.ExitCode == 0 ? SafeDockerError(state.Output) : SafeDockerError(state.Error);
         throw new InvalidOperationException($"Owned PostgreSQL did not become ready within 60 seconds at {Host}:{port} ({last?.GetType().Name}).{evidence}");
@@ -476,6 +495,8 @@ public sealed class PostgresFixture : IAsyncLifetime
             try { await action(); }
             catch (Exception exception) { failures.Add(exception); }
         }
+        if (native is not null)
+            await Clean(async () => await native.DisposeAsync());
         if (clientAttached)
             await Clean(async () => { await DockerAsync(["network", "disconnect", Network, client!]); clientAttached = false; });
         if (containerAttempted)
