@@ -804,12 +804,12 @@ export function expectReport(
     expect(provenance?.confirmed).toBe(true);
     expect(provenance?.backend.id).toBe("ferrule");
     expect(provenance?.backend.revision).toBe(
-      "0495822e102bba3f97d9bffd3c665adfb6138bec",
+      "577359a991a7dd44172a3c4af91fdcab7592457c",
     );
     expect(provenance?.backend.buildId).toBe(
-      "sha256:247f7e82f965ced7f6dcde5970d3dc3c584c6f648c9d4f359a9bb5b6ed3985a3",
+      "sha256:70931e68f512527642bace618c4cb8be7264d00187d099e2544c14870188de4b",
     );
-    expect(provenance?.adapterVersion).toBe("weft.ferrule-adapter.v2");
+    expect(provenance?.adapterVersion).toBe("weft.ferrule-adapter.v3");
     if (value.operation === "projection") {
       expect(value.report.document).not.toBeNull();
       expect(value.report.document?.provenance.revision).toEqual(
@@ -822,7 +822,7 @@ export function expectReport(
         provenance?.backend,
       );
       expect(value.report.document?.provenance.adapterVersion).toBe(
-        "weft.ferrule-adapter.v2",
+        "weft.ferrule-adapter.v3",
       );
       expect(value.report.document?.provenance.projectionVersion).toBe(
         "weft.ferrule-projection.v1",

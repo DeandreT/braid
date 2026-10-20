@@ -106,10 +106,11 @@ external side effects in v1.
 ## Ferrule integration
 
 The inspection/validation worker pins:
-[`0495822e102bba3f97d9bffd3c665adfb6138bec`](https://github.com/DeandreT/ferrule/commit/0495822e102bba3f97d9bffd3c665adfb6138bec),
-the upstream `main` revision inspected on 2026-10-12. Native codec, validation,
-and local Linux/amd64 process isolation are qualified at that pin. Interpreter
-preview and generated deployment runtimes are not qualified by those checks.
+[`577359a991a7dd44172a3c4af91fdcab7592457c`](https://github.com/DeandreT/ferrule/commit/577359a991a7dd44172a3c4af91fdcab7592457c).
+It consumes only `mapping`, `ir`, and `engine`, not the CLI, MFD importer or code
+generators. Native codec, validation, and local Linux/amd64 process isolation are
+qualified at that pin. Interpreter preview and generated deployment runtimes
+have separate gates.
 
 In the engine host, pin every Ferrule Git dependency to the same full commit and commit Cargo.lock
 when adding the workspace. Alias generic upstream package names (`mapping`,
@@ -118,18 +119,26 @@ an unpinned branch or local sibling path in CI/release manifests. Record the
 compiler toolchain used to qualify that dependency; Ferrule currently documents
 a nightly toolchain requirement.
 
-Use these public boundaries at the inspected revision:
+The current read-only worker uses these public boundaries:
 
 - `mapping::project_file::decode_bytes`: authoritative native file decoding.
 - `engine::validate`: mapping validation.
+- `engine::ValidationOwner`, `ValidationEndpoint`, `ValidationSchemaStep`, and
+  `ValidationScopeStep`: exact typed validation ownership.
+
+Future execution support can use the following public library boundaries without
+parsing CLI diagnostic text. They are not dependencies or admitted operations of
+the inspection worker:
+
 - `cli::required_sources_for_target`: preview input preflight.
 - `cli::run_project_value_payloads`: execution of an already decoded project
   from host-owned documents, with returned in-memory artifacts.
-- `cli::PayloadRunOptions`: target selection, typed parameters, and tracing.
+- `cli::PayloadRunOptions`: target selection, typed parameters, tracing, and the
+  validated `with_current_datetime` host-clock override.
 
-The CLI crate's public host API is reusable despite its package name. The restricted
-engine host should call it as a library and communicate bounded structured
-results to the C# adapter; never parse CLI diagnostic text as the public protocol. If a
+The CLI crate's public host API is reusable despite its package name. An execution
+host should call it as a library and communicate bounded structured results to
+the C# adapter; never parse CLI diagnostic text as the public protocol. If a
 smaller reusable host crate becomes necessary, propose that focused change in
 Ferrule instead of copying or forking its format/execution implementation.
 
@@ -152,9 +161,9 @@ inspection input rather than a complete host-resource permission inventory.
 
 If reproducible replay or diagnostic normalization needs an additional public
 Ferrule API, open a focused upstream issue and PR, qualify that increment, and
-pin its resulting commit in the dependent Weft PR. Injectable execution time and
-logical mapping identity are candidate gaps; source inspection alone does not
-establish that either change is required for an admitted workload.
+pin its resulting commit in the dependent Weft PR. Ferrule's selected revision
+includes the payload-clock override merged in [#728](https://github.com/DeandreT/ferrule/pull/728).
+Its presence does not activate or qualify a Weft execution profile.
 
 Generation, `.mfd` interoperability, and browser WASM execution are optional
 backend capabilities with separate acceptance gates. Do not infer any of them
@@ -177,7 +186,7 @@ from interpreter validation alone.
 
 ## Source references
 
-- [Ferrule project codec at the inspected revision](https://github.com/DeandreT/ferrule/blob/0495822e102bba3f97d9bffd3c665adfb6138bec/crates/mapping/src/project_file.rs).
-- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/0495822e102bba3f97d9bffd3c665adfb6138bec/crates/cli/src/lib.rs).
-- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/0495822e102bba3f97d9bffd3c665adfb6138bec/crates/cli/src/payload.rs).
-- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/0495822e102bba3f97d9bffd3c665adfb6138bec/docs/architecture.md).
+- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/577359a991a7dd44172a3c4af91fdcab7592457c/crates/mapping/src/project_file.rs).
+- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/577359a991a7dd44172a3c4af91fdcab7592457c/crates/cli/src/lib.rs).
+- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/577359a991a7dd44172a3c4af91fdcab7592457c/crates/cli/src/payload.rs).
+- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/577359a991a7dd44172a3c4af91fdcab7592457c/docs/architecture.md).

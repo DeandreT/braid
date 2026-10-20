@@ -45,6 +45,50 @@ fn input_field<'a>(projection: &'a Value, name: &str) -> &'a Value {
 }
 
 #[test]
+fn owned_iteration_explanation_keeps_weft_execution_unqualified_without_claiming_native_refusal() {
+    let bytes = serde_json::to_vec(&base()).unwrap();
+    let mut decoded = weft_ferrule_host::decode::decode_native(&bytes).unwrap();
+    decoded.project.source.repeating = true;
+    decoded.project.target.repeating = true;
+    decoded.project.root.iteration = ferrule_mapping::ScopeIteration::OwnedSource {
+        source: ferrule_mapping::OwnedSourceRef {
+            owner: ferrule_mapping::SourceOwner::Primary,
+            path: vec![],
+        },
+        output_path: None,
+    };
+    let projected = serde_json::to_value(
+        weft_ferrule_host::projection::project(
+            &decoded.project,
+            "entry.native.json",
+            &decoded.document_prefix,
+            &Limits {
+                maximum_diagnostics: 128,
+                maximum_items: 8192,
+                maximum_text_bytes: 2048,
+            },
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let controls = projected["controls"].to_string();
+    assert!(controls.contains("Explicitly owned source iteration"));
+    assert!(controls.contains("This read-only worker does not execute owned-source iteration"));
+    assert!(
+        !controls.contains("Native evaluation of this ownership form remains capability closed")
+    );
+    for operation in ["preview", "build"] {
+        let capability = projected["capabilities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|capability| capability["operation"] == operation)
+            .unwrap();
+        assert_eq!(capability["status"], "notQualified");
+    }
+}
+
+#[test]
 fn explicit_json_ignores_retained_xml_attribute_and_namespace_path_flags() {
     let mut native = base();
     native["source_options"] = json!({"json_document":true});

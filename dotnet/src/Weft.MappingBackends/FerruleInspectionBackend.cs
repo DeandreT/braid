@@ -13,8 +13,8 @@ namespace Weft.MappingBackends;
 public sealed partial class FerruleInspectionBackend(IInspectionWorkerRunner runner) : IMappingInspectionBackend, IMappingProjectionBackend
 {
     public const string ProtocolVersion = "weft.ferrule-host.v1";
-    public const string EngineRevision = "0495822e102bba3f97d9bffd3c665adfb6138bec";
-    public const string AdapterBuild = "weft.ferrule-adapter.v2";
+    public const string EngineRevision = "577359a991a7dd44172a3c4af91fdcab7592457c";
+    public const string AdapterBuild = "weft.ferrule-adapter.v3";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
     private readonly IInspectionWorkerRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));

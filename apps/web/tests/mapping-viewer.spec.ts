@@ -250,7 +250,7 @@ test("the browser follows actual Ferrule fields with exact revision evidence and
   const result = await openNative(page);
   const document = documentOf(result);
   expect(document.provenance.backend.revision).toBe(
-    "0495822e102bba3f97d9bffd3c665adfb6138bec",
+    "577359a991a7dd44172a3c4af91fdcab7592457c",
   );
   const mapping = page.getByRole("region", {
     name: "Source → rule → target",

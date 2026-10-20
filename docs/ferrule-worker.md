@@ -14,7 +14,7 @@ Inspection and validation were qualified in
 
 ## Native authority and results
 
-Ferrule libraries are pinned to `0495822e102bba3f97d9bffd3c665adfb6138bec`.
+Ferrule libraries are pinned to `577359a991a7dd44172a3c4af91fdcab7592457c`.
 `mapping::project_file::decode_bytes` admits the file;
 `engine::validate` supplies validation issues and typed owners. The worker never
 evaluates mappings or resolves design-time resources. Inspection returns boundary
@@ -26,6 +26,12 @@ C# and JavaScript never parse and reserialize the native document. Provenance
 records the full immutable revision scope, native digest, engine revision,
 trusted worker image identity, and adapter build. `Confirmed` means the adapter
 accepted matching bounded worker output; it does not imply execution admission.
+
+The current adapter identity is `weft.ferrule-adapter.v3`. Current report keys
+include this identity, the full Ferrule commit and the server-selected immutable
+image. A changed engine selects a different key without rewriting native bytes,
+ingestion facts or retained report provenance. Stored-format readers compare a
+retained report with its own complete key and do not resolve a current worker.
 
 Validation validity and total issue count are separate from the emitted bounded
 diagnostics. Exact typed owners identify graph/function nodes, endpoints,

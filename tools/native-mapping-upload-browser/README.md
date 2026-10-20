@@ -31,8 +31,8 @@ Spawn with Node `[operator, '--config', configuration]`. Root/browser env is:
 - `WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL`: exact concrete read origin.
 
 The source-only candidate has no actual config/release/client/runtime binding.
-The unchanged worker image is
-`sha256:247f7e82f965ced7f6dcde5970d3dc3c584c6f648c9d4f359a9bb5b6ed3985a3`;
+The worker image is
+`sha256:70931e68f512527642bace618c4cb8be7264d00187d099e2544c14870188de4b`;
 the PostgreSQL16.15 reference is
 `postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc`.
 The runtime pins the actual images, daemon, profiles, loopback origin/PG port,

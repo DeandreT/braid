@@ -179,6 +179,7 @@ internal static class FerruleReportTestData
         internal int Calls { get; private set; }
         internal byte[]? LastRequest { get; private set; }
         internal bool Valid { get; set; } = true;
+        internal string EngineRevision { get; set; } = FerruleInspectionBackend.EngineRevision;
         internal string? FailureCode { get; set; }
         internal WorkerProcessFailure ProcessFailure { get; set; }
         internal CancellationTokenSource? CancelDuringRun { get; set; }
@@ -224,7 +225,7 @@ internal static class FerruleReportTestData
                 ["revision"] = header["revision"]!.DeepClone(),
                 ["nativeDigest"] = header["nativeDigest"]!.DeepClone(),
                 ["documentId"] = header["documentId"]!.DeepClone(),
-                ["engineRevision"] = FerruleInspectionBackend.EngineRevision,
+                ["engineRevision"] = EngineRevision,
                 ["result"] = payload,
                 ["failure"] = FailureCode is null ? null : new JsonObject
                 {

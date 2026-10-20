@@ -259,6 +259,18 @@ public sealed class FerruleBackendTests
     }
 
     [Theory]
+    [InlineData("0495822e102bba3f97d9bffd3c665adfb6138bec")]
+    [InlineData("ffffffffffffffffffffffffffffffffffffffff")]
+    public async Task OldAndForgedLiveEngineRevisionsCannotConfirmInspectionOrValidation(string revision)
+    {
+        var runner = ReplyRunner(response => response["engineRevision"] = revision);
+        var backend = new FerruleInspectionBackend(runner);
+        AssertLocalFailure(await backend.InspectAsync(Artifact()), MappingOperationStatus.ProtocolFailure);
+        AssertLocalFailure(await backend.ValidateAsync(Artifact()), MappingOperationStatus.ProtocolFailure);
+        Assert.Equal(2, runner.Calls);
+    }
+
+    [Theory]
     [InlineData("protocolVersion")]
     [InlineData("requestId")]
     [InlineData("operation")]

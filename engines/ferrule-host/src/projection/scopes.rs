@@ -236,7 +236,7 @@ impl Builder<'_> {
                     details: vec![
                         output_detail(scope.iteration_output),
                         text_detail(
-                            "Native evaluation of this ownership form remains capability closed.",
+                            "This read-only worker does not execute owned-source iteration; preview and build remain unqualified.",
                         ),
                     ],
                     native_locator: self.pointer(suffix)?,

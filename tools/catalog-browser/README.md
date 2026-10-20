@@ -57,7 +57,7 @@ image pins. Set `runtimeReleased` only after the inputs have been reviewed.
   "dotnet": null,
   "docker": "/usr/bin/docker",
   "daemonSocket": "/var/run/docker.sock",
-  "workerImage": "sha256:247f7e82f965ced7f6dcde5970d3dc3c584c6f648c9d4f359a9bb5b6ed3985a3",
+  "workerImage": "sha256:70931e68f512527642bace618c4cb8be7264d00187d099e2544c14870188de4b",
   "postgresImage": "postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc",
   "outerObserverAdmission": { "path": null, "sha256": null },
   "source": {
