@@ -13,7 +13,7 @@ public sealed class PostgresRegressionHistoryTests(PostgresFixture fixture)
         await using var test = await RegressionRunPostgresTestSupport.CreateAsync(fixture);
         var ids = new[] { Guid.Parse("10000000-0000-0000-0000-000000000001"),
             Guid.Parse("10000000-0000-0000-0000-000000000002"), Guid.Parse("10000000-0000-0000-0000-000000000003") };
-        await using (var connection = new NpgsqlConnection(test.WriterConnection))
+        await using (var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(test.WriterConnection) { Pooling = false }.ConnectionString))
         {
             await connection.OpenAsync();
             await using var transaction = await connection.BeginTransactionAsync();
