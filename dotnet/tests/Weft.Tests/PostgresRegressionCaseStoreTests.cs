@@ -103,7 +103,7 @@ public sealed class PostgresRegressionCaseStoreTests(PostgresFixture fixture)
         Assert.Equal(RegressionCaseSaveOutcome.Created, (await test.Writer.SaveAsync(test.Actor, test.Version(1))).Outcome);
         foreach (var connectionString in new[] { test.ReaderConnection, test.WriterConnection })
         {
-            await using var connection = new NpgsqlConnection(connectionString);
+            await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString);
             await connection.OpenAsync();
             await using var query = new NpgsqlCommand("SELECT envelope FROM weft.regression_case_versions", connection);
             var denied = await Assert.ThrowsAsync<PostgresException>(() => query.ExecuteNonQueryAsync());
