@@ -19,7 +19,8 @@ public sealed class PostgresMappingMetadataPersistenceTests(PostgresFixture fixt
         ExternalIdentitySchemaContract.MigrationChecksum,
         PayloadPermissionSchemaContract.MigrationChecksum,
         ServerSessionSchemaContract.MigrationChecksum,
-        ChatSchemaContract.MigrationChecksum
+        ChatSchemaContract.MigrationChecksum,
+        PreviewSchemaTestContract.MigrationChecksum
     ];
 
     [PostgresFact]

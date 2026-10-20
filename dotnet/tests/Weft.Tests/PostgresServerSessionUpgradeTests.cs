@@ -452,14 +452,15 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
         var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.True(scripts.Count == PrefixVersion + 2
+        Assert.True(scripts.Count == PrefixVersion + 3
             && scripts.Take(PrefixVersion).Select(script => script.Checksum)
                 .SequenceEqual(PostgresServerSessionUpgradeConservation.PrefixChecksums, StringComparer.Ordinal)
             && scripts[PrefixVersion].Checksum == ServerSessionSchemaContract.MigrationChecksum
             && scripts[PrefixVersion + 1].Version == 11 && scripts[PrefixVersion + 1].Checksum == ChatSchemaContract.MigrationChecksum
+            && scripts[PrefixVersion + 2].Version == 12 && scripts[PrefixVersion + 2].Checksum == PreviewSchemaTestContract.MigrationChecksum
             && typeof(MigrationRunner).Assembly.GetManifestResourceNames().Contains(
                 "Weft.Persistence.Postgres.Migrations." + ServerSessionSchemaContract.MigrationName + ".sql", StringComparer.Ordinal),
-            "The embedded source is not the trusted prefix, exact session migration and exact chat suffix.");
+            "The embedded source is not the trusted prefix, exact session migration and exact chat and preview suffix.");
         await PostgresServerSessionUpgradeConservation.AdmitChatSuffixAsync(test);
         Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
             .SequenceEqual(Enumerable.Range(1, scripts.Count)), "The complete journal versions changed.");

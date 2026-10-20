@@ -248,6 +248,9 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         schema.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }.SelectMany(p => ChatSchemaContract.ColumnGrants(p)
             .Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
         schema.Parameters.AddWithValue(ChatSchemaContract.FunctionNames);
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames);
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles);
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
         text.Append(Assert.IsType<string>(await schema.ExecuteScalarAsync()));
         return SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()));
     }
@@ -264,10 +267,12 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             WHERE a.relname=e.tab AND a.attname=e.col AND a.privilege_type=e.privilege AND a.grantee=nr.oid AND a.grantor=r.relowner AND NOT a.is_grantable))),
         retained_triggers AS (SELECT t.* FROM pg_catalog.pg_trigger t JOIN old_relations r ON r.oid=t.tgrelid
             WHERE NOT ($2 AND t.tgisinternal AND EXISTS(SELECT 1 FROM pg_catalog.pg_constraint c
-                WHERE c.oid=t.tgconstraint AND c.contype='f' AND c.conrelid=pg_catalog.to_regclass('weft.chat_conversations')
-                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey')))),
+                WHERE c.oid=t.tgconstraint AND c.contype='f' AND (c.conrelid=pg_catalog.to_regclass('weft.chat_conversations')
+                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey')
+                    OR c.conrelid=pg_catalog.to_regclass('weft.preview_runs') AND c.conname=ANY($7::text[]))))),
         namespace_acls AS (SELECT a.* FROM pg_catalog.pg_namespace n CROSS JOIN LATERAL pg_catalog.aclexplode(n.nspacl) a
-            WHERE n.nspname='weft' AND NOT ($2 AND a.grantee IN (SELECT oid FROM new_roles) AND a.grantor=n.nspowner AND a.privilege_type='USAGE' AND NOT a.is_grantable))
+            WHERE n.nspname='weft' AND NOT ($2 AND a.grantee IN (SELECT oid FROM new_roles UNION ALL SELECT oid FROM pg_catalog.pg_roles WHERE rolname=ANY($6::text[]))
+                AND a.grantor=n.nspowner AND a.privilege_type='USAGE' AND NOT a.is_grantable))
         SELECT jsonb_build_object(
             'relations',(SELECT coalesce(jsonb_agg(jsonb_build_array(oid,relname,relkind,relpersistence,relowner,relnatts,relacl,relrowsecurity,relforcerowsecurity,reloptions,relreplident) ORDER BY relname),'[]'::jsonb) FROM old_relations),
             'columns',(SELECT coalesce(jsonb_agg(to_jsonb(c)-'attacl' ORDER BY relname,attnum),'[]'::jsonb) FROM columns c),
@@ -281,7 +286,7 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             'rules',(SELECT coalesce(jsonb_agg(to_jsonb(w) ORDER BY w.oid),'[]'::jsonb) FROM pg_catalog.pg_rewrite w WHERE w.ev_class IN (SELECT oid FROM old_relations)),
             'inherits',(SELECT coalesce(jsonb_agg(to_jsonb(h) ORDER BY inhrelid,inhseqno),'[]'::jsonb) FROM pg_catalog.pg_inherits h WHERE h.inhrelid IN (SELECT oid FROM old_relations) OR h.inhparent IN (SELECT oid FROM old_relations)),
             'policies',(SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY p.oid),'[]'::jsonb) FROM pg_catalog.pg_policy p WHERE p.polrelid IN (SELECT oid FROM old_relations)),
-            'functions',(SELECT coalesce(jsonb_agg(to_jsonb(f) ORDER BY f.oid),'[]'::jsonb) FROM pg_catalog.pg_proc f WHERE f.pronamespace='weft'::regnamespace AND NOT ($2 AND f.proname=ANY($4::text[]))),
+            'functions',(SELECT coalesce(jsonb_agg(to_jsonb(f) ORDER BY f.oid),'[]'::jsonb) FROM pg_catalog.pg_proc f WHERE f.pronamespace='weft'::regnamespace AND NOT ($2 AND (f.proname=ANY($4::text[]) OR f.proname=ANY($5::text[])))),
             'namespaceAcls',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY grantor,grantee,privilege_type),'[]'::jsonb) FROM namespace_acls a),
             'roles',(SELECT coalesce(jsonb_agg(to_jsonb(r)-'rolpassword' ORDER BY r.oid),'[]'::jsonb) FROM pg_catalog.pg_roles r WHERE r.rolname LIKE 'weft_%'),
             'memberships',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY roleid,member,grantor),'[]'::jsonb) FROM pg_catalog.pg_auth_members m),
