@@ -16,6 +16,14 @@
       "weft.contracts": {
         "type": "Project"
       },
+      "weft.deployment": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Application": "[1.0.0, )",
+          "Weft.Contracts": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
+      },
       "weft.domain": {
         "type": "Project"
       }

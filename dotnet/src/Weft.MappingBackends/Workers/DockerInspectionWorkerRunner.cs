@@ -181,9 +181,11 @@ public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunn
         "--label", $"{OperationLabel}={operationOwner}",
         "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
         "--user", "65532:65532", "--cpus", "1", "--memory", Memory, "--memory-swap", Memory,
-        "--pids-limit", "16", "--ulimit", "nofile=64:64", "--ulimit", CpuLimit, "--ulimit", "core=0:0",
+        "--pids-limit", options.Profile.ProcessLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        "--ulimit", $"nofile={options.Profile.FileLimit}:{options.Profile.FileLimit}", "--ulimit", CpuLimit, "--ulimit", "core=0:0",
         "--ipc", "none", "--cgroupns", "private", "--no-healthcheck", "--restart", "no", "--log-driver", "none",
-        "--workdir", "/", "--entrypoint", "/ferrule-host", options.ImageId
+        .. (options.Profile == DockerWorkerProfile.Build ? new[] { "--tmpfs", "/tmp:" + DockerWorkerProfile.BuildTemporaryMount } : []),
+        "--workdir", "/", "--entrypoint", options.Profile.Entrypoint, options.ImageId
     ];
 
     private async Task<bool> RemoveOwnedContainerAsync(
