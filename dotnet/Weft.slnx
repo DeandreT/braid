@@ -8,6 +8,7 @@
     <Project Path="src/Weft.Api/Weft.Api.csproj" />
     <Project Path="src/Weft.Application/Weft.Application.csproj" />
     <Project Path="src/Weft.Contracts/Weft.Contracts.csproj" />
+    <Project Path="src/Weft.Deployment/Weft.Deployment.csproj" />
     <Project Path="src/Weft.Domain/Weft.Domain.csproj" />
     <Project Path="src/Weft.Identity/Weft.Identity.csproj" />
     <Project Path="src/Weft.Jobs/Weft.Jobs.csproj" />
