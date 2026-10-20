@@ -35,6 +35,7 @@ public static partial class CatalogEndpoints
         Describe<CatalogRevisionV1>(endpoints.MapGet(mapping + "/revisions/{revisionId}", GetRevision),
             "GetCatalogRevision", "Read one scoped immutable revision's catalog metadata.");
         MapRevisionReports(endpoints, mapping + "/revisions/{revisionId}");
+        MapRevisionComparisons(endpoints, mapping);
         DescribeRevisionUpload(endpoints.MapPost(project + "/mappings", CreateCatalogMapping), create: true);
         DescribeRevisionUpload(endpoints.MapPost(mapping + "/revisions", AppendCatalogRevision), create: false);
         DescribeIngestionReceipt(endpoints.MapGet(project + "/revision-ingestions/{operationId}", GetCatalogIngestionReceipt));

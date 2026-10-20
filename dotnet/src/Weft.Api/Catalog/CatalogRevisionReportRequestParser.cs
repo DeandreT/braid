@@ -8,17 +8,26 @@ namespace Weft.Api.Catalog;
 
 internal readonly record struct CatalogRevisionReportReadSelector(Guid? ProjectionDerivationId);
 internal readonly record struct CatalogRevisionReportEnsureSelector(Guid? RepairDerivationId);
+internal readonly record struct CatalogRevisionComparisonSideSelector(Guid Revision, Guid Projection, Guid? Validation);
+internal readonly record struct CatalogRevisionComparisonSelector(
+    CatalogRevisionComparisonSideSelector Left, CatalogRevisionComparisonSideSelector Right);
 
 /// <summary>Strict selectors and proven empty framing; this parser never consumes an entity.</summary>
 internal static class CatalogRevisionReportRequestParser
 {
     private const int MaximumQueryCharacters = 256;
+    private const int MaximumComparisonQueryCharacters = 1024;
+    private static readonly string[] ComparisonNames =
+        ["leftRevision", "leftProjection", "leftValidation", "rightRevision", "rightProjection", "rightValidation"];
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly string[] ForbiddenHeaders =
         ["If-Match", "If-None-Match", "If-Modified-Since", "If-Unmodified-Since", "If-Range", "Idempotency-Key"];
 
     internal static RevisionScope Scope(string organizationId, string projectId, string mappingId, string revisionId) =>
         new(Id(organizationId), Id(projectId), Id(mappingId), Id(revisionId));
+
+    internal static (Guid OrganizationId, Guid ProjectId, Guid MappingId) Mapping(string organizationId,
+        string projectId, string mappingId) => (Id(organizationId), Id(projectId), Id(mappingId));
 
     internal static Guid RetainedId(string derivationId) => Id(derivationId);
 
@@ -36,6 +45,31 @@ internal static class CatalogRevisionReportRequestParser
         ArgumentNullException.ThrowIfNull(request);
         RequireEmptyRequest(request);
         return new(Selector(request, "repairDerivationId"));
+    }
+
+    internal static CatalogRevisionComparisonSelector ParseComparison(HttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        RequireEmptyRequest(request);
+        var query = request.QueryString.Value;
+        if (string.IsNullOrEmpty(query) || query.Length > MaximumComparisonQueryCharacters || query[0] != '?')
+            throw Invalid();
+        var values = new Guid?[ComparisonNames.Length];
+        foreach (var part in query[1..].Split('&'))
+        {
+            var equals = part.IndexOf('=');
+            if (equals <= 0 || part.LastIndexOf('=') != equals || part.Length > MaximumQueryCharacters)
+                throw Invalid();
+            var index = Array.IndexOf(ComparisonNames, Decode(part.AsSpan(0, equals)));
+            // Each name is accepted once, including names escaped differently.
+            if (index < 0 || values[index] is not null)
+                throw Invalid();
+            values[index] = Id(Decode(part.AsSpan(equals + 1)));
+        }
+        if (values[0] is not { } leftRevision || values[1] is not { } leftProjection ||
+            values[3] is not { } rightRevision || values[4] is not { } rightProjection)
+            throw Invalid();
+        return new(new(leftRevision, leftProjection, values[2]), new(rightRevision, rightProjection, values[5]));
     }
 
     private static void RequireEmptyRequest(HttpRequest request)

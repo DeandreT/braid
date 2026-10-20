@@ -32,6 +32,24 @@ reported as uncertainty: it never implies absence, equality, resolved
 diagnostics or a complete "no changes" result. A comparison of explanations is
 not evidence that the two revisions execute equivalently.
 
+## HTTP read
+
+`GET /api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/comparisons`
+compares two exact retained reports. `leftRevision`, `leftProjection`,
+`rightRevision` and `rightProjection` are required; `leftValidation` and
+`rightValidation` are optional and are linked through their side's projection.
+Every value is a canonical lowercase UUID naming an immutable successful
+derivation. Each name may appear once and no other query is accepted.
+
+The route uses the persisted-report read feature, admission and request framing
+(see [Persisted revision-report API](persisted-report-api.md)). It requires fresh
+`ReadMetadata` authority for both revisions and never derives, repairs or starts a
+worker. Missing revisions, foreign scopes and unavailable derivations are opaque
+404s; busy report reads return 429 and unavailable report storage returns 503. A
+comparison that exceeds its limits returns the categorical 503 resource-limit
+error. Both revisions are checked again immediately before the response, which is
+`no-store` and has no ETag.
+
 ## Limits
 
 `RevisionComparisonLimits` bounds input items, charged work units, emitted items,

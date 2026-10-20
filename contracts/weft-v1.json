@@ -4005,6 +4005,200 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/comparisons": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Compare the retained explanations of two exact revisions of one mapping.",
+        "description": "Requires the revision report read feature and fresh project ReadMetadata authority for both revisions. leftRevision, leftProjection, rightRevision and rightProjection are required; leftValidation and rightValidation are optional. Each names an exact retained successful derivation, never a pending or failed attempt; each name may appear once and no other query is accepted. All UUIDs are canonical nonzero lowercase D strings. Reads never derive, claim, repair or start a worker. Missing revisions or reports are opaque 404s; unavailable report storage is 503. Facts pair only through unique structural anchors, never node IDs; partial or truncated evidence is reported as uncertainty, not equality. The comparison is bounded before response bytes and followed by fresh authority and source validation. No body or Content-Type is supported. Responses are no-store and carry no ETag.",
+        "operationId": "GetCatalogRevisionComparison",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "leftRevision",
+            "in": "query",
+            "description": "Exact left revision of this mapping.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "leftProjection",
+            "in": "query",
+            "description": "Exact retained successful projection derivation of the left revision.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "leftValidation",
+            "in": "query",
+            "description": "Exact retained validation derivation of the left revision, linked through its projection.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rightRevision",
+            "in": "query",
+            "description": "Exact right revision of this mapping.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rightProjection",
+            "in": "query",
+            "description": "Exact retained successful projection derivation of the right revision.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rightValidation",
+            "in": "query",
+            "description": "Exact retained validation derivation of the right revision, linked through its projection.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Content-Encoding",
+            "in": "header",
+            "description": "Absent or a single identity token; no other coding or request body is accepted.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionComparisonV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/revision-ingestions/{operationId}": {
       "get": {
         "tags": [
@@ -7057,6 +7251,248 @@
         },
         "additionalProperties": false
       },
+      "ComparisonAspectV1": {
+        "enum": [
+          "shape",
+          "dataType",
+          "cardinality",
+          "requirement",
+          "nullability",
+          "value",
+          "condition",
+          "default",
+          "details",
+          "control",
+          "relationship",
+          "presentation",
+          "validationValidity",
+          "validationCounts"
+        ]
+      },
+      "ComparisonCandidateV1": {
+        "required": [
+          "node",
+          "relationshipId"
+        ],
+        "type": "object",
+        "properties": {
+          "node": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProjectionNodeReference"
+              }
+            ]
+          },
+          "relationshipId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ComparisonEntityV1": {
+        "enum": [
+          "boundary",
+          "field",
+          "parameter",
+          "rule",
+          "control",
+          "relationship",
+          "validation"
+        ]
+      },
+      "ComparisonFacetV1": {
+        "required": [
+          "aspect",
+          "hasObservedDifference",
+          "hasUncertainty",
+          "reasons"
+        ],
+        "type": "object",
+        "properties": {
+          "aspect": {
+            "$ref": "#/components/schemas/ComparisonAspectV1"
+          },
+          "hasObservedDifference": {
+            "type": "boolean"
+          },
+          "hasUncertainty": {
+            "type": "boolean"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonReasonV1"
+            }
+          }
+        }
+      },
+      "ComparisonItemV1": {
+        "required": [
+          "entity",
+          "match",
+          "leftCandidateCount",
+          "rightCandidateCount",
+          "candidatesTruncated",
+          "left",
+          "right",
+          "facets"
+        ],
+        "type": "object",
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/ComparisonEntityV1"
+          },
+          "match": {
+            "$ref": "#/components/schemas/ComparisonMatchV1"
+          },
+          "leftCandidateCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rightCandidateCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "candidatesTruncated": {
+            "type": "boolean"
+          },
+          "left": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonCandidateV1"
+            }
+          },
+          "right": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonCandidateV1"
+            }
+          },
+          "facets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonFacetV1"
+            }
+          }
+        }
+      },
+      "ComparisonMatchV1": {
+        "enum": [
+          "matched",
+          "onlyLeft",
+          "onlyRight",
+          "ambiguous"
+        ]
+      },
+      "ComparisonReasonV1": {
+        "enum": [
+          "incompleteCoverage",
+          "unknownFact",
+          "unsupportedDetail",
+          "incompatibleProfile",
+          "ambiguousMatch",
+          "unresolvedReference",
+          "missingValidation",
+          "truncatedValidation",
+          "candidatesOmitted",
+          "itemsOmitted"
+        ]
+      },
+      "ComparisonReportCitationV1": {
+        "required": [
+          "derivationId",
+          "generation",
+          "keyFingerprint"
+        ],
+        "type": "object",
+        "properties": {
+          "derivationId": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "string"
+          },
+          "keyFingerprint": {
+            "type": "string"
+          }
+        }
+      },
+      "ComparisonSideCitationV1": {
+        "required": [
+          "revision",
+          "sequence",
+          "nativeDigest",
+          "nativeByteCount",
+          "projectionProvenance",
+          "projection",
+          "validation"
+        ],
+        "type": "object",
+        "properties": {
+          "revision": {
+            "$ref": "#/components/schemas/ScopedRevisionId"
+          },
+          "sequence": {
+            "type": "string"
+          },
+          "nativeDigest": {
+            "$ref": "#/components/schemas/ArtifactDigest"
+          },
+          "nativeByteCount": {
+            "type": "string"
+          },
+          "projectionProvenance": {
+            "$ref": "#/components/schemas/ProjectionProvenance"
+          },
+          "projection": {
+            "$ref": "#/components/schemas/ComparisonReportCitationV1"
+          },
+          "validation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComparisonReportCitationV1"
+              }
+            ]
+          }
+        }
+      },
+      "ComparisonValidationSummaryV1": {
+        "required": [
+          "isValid",
+          "totalIssueCount",
+          "emittedIssueCount",
+          "truncated",
+          "hasTruncatedDiagnosticText"
+        ],
+        "type": "object",
+        "properties": {
+          "isValid": {
+            "type": "boolean"
+          },
+          "totalIssueCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "emittedIssueCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "hasTruncatedDiagnosticText": {
+            "type": "boolean"
+          }
+        }
+      },
       "ControlKind": {
         "enum": [
           "unknown",
@@ -8708,6 +9144,92 @@
           "produces",
           "boundaryMember"
         ]
+      },
+      "RevisionComparisonV1": {
+        "required": [
+          "schemaVersion",
+          "policyVersion",
+          "left",
+          "right",
+          "leftCoverage",
+          "rightCoverage",
+          "validationIncluded",
+          "leftValidation",
+          "rightValidation",
+          "hasObservedDifferences",
+          "hasUncertainty",
+          "totalItemCount",
+          "emittedItemCount",
+          "truncated",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "left": {
+            "$ref": "#/components/schemas/ComparisonSideCitationV1"
+          },
+          "right": {
+            "$ref": "#/components/schemas/ComparisonSideCitationV1"
+          },
+          "leftCoverage": {
+            "$ref": "#/components/schemas/ProjectionCoverage"
+          },
+          "rightCoverage": {
+            "$ref": "#/components/schemas/ProjectionCoverage"
+          },
+          "validationIncluded": {
+            "type": "boolean"
+          },
+          "leftValidation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComparisonValidationSummaryV1"
+              }
+            ]
+          },
+          "rightValidation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComparisonValidationSummaryV1"
+              }
+            ]
+          },
+          "hasObservedDifferences": {
+            "type": "boolean"
+          },
+          "hasUncertainty": {
+            "type": "boolean"
+          },
+          "totalItemCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "emittedItemCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonItemV1"
+            }
+          }
+        }
       },
       "RuleDependency": {
         "required": [

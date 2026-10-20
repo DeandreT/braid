@@ -263,6 +263,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/comparisons": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Compare the retained explanations of two exact revisions of one mapping.
+     * @description Requires the revision report read feature and fresh project ReadMetadata authority for both revisions. leftRevision, leftProjection, rightRevision and rightProjection are required; leftValidation and rightValidation are optional. Each names an exact retained successful derivation, never a pending or failed attempt; each name may appear once and no other query is accepted. All UUIDs are canonical nonzero lowercase D strings. Reads never derive, claim, repair or start a worker. Missing revisions or reports are opaque 404s; unavailable report storage is 503. Facts pair only through unique structural anchors, never node IDs; partial or truncated evidence is reported as uncertainty, not equality. The comparison is bounded before response bytes and followed by fresh authority and source validation. No body or Content-Type is supported. Responses are no-store and carry no ETag.
+     */
+    get: operations["GetCatalogRevisionComparison"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/metadata": {
     parameters: {
       query?: never;
@@ -929,6 +949,90 @@ export interface components {
       status: null | components["schemas"]["OperationStatusV1"];
     };
     /** @enum {unknown} */
+    ComparisonAspectV1:
+      | "shape"
+      | "dataType"
+      | "cardinality"
+      | "requirement"
+      | "nullability"
+      | "value"
+      | "condition"
+      | "default"
+      | "details"
+      | "control"
+      | "relationship"
+      | "presentation"
+      | "validationValidity"
+      | "validationCounts";
+    ComparisonCandidateV1: {
+      node: null | components["schemas"]["ProjectionNodeReference"];
+      relationshipId: null | string;
+    };
+    /** @enum {unknown} */
+    ComparisonEntityV1:
+      | "boundary"
+      | "field"
+      | "parameter"
+      | "rule"
+      | "control"
+      | "relationship"
+      | "validation";
+    ComparisonFacetV1: {
+      aspect: components["schemas"]["ComparisonAspectV1"];
+      hasObservedDifference: boolean;
+      hasUncertainty: boolean;
+      reasons: components["schemas"]["ComparisonReasonV1"][];
+    };
+    ComparisonItemV1: {
+      candidatesTruncated: boolean;
+      entity: components["schemas"]["ComparisonEntityV1"];
+      facets: components["schemas"]["ComparisonFacetV1"][];
+      left: components["schemas"]["ComparisonCandidateV1"][];
+      /** Format: int32 */
+      leftCandidateCount: number;
+      match: components["schemas"]["ComparisonMatchV1"];
+      right: components["schemas"]["ComparisonCandidateV1"][];
+      /** Format: int32 */
+      rightCandidateCount: number;
+    };
+    /** @enum {unknown} */
+    ComparisonMatchV1: "matched" | "onlyLeft" | "onlyRight" | "ambiguous";
+    /** @enum {unknown} */
+    ComparisonReasonV1:
+      | "incompleteCoverage"
+      | "unknownFact"
+      | "unsupportedDetail"
+      | "incompatibleProfile"
+      | "ambiguousMatch"
+      | "unresolvedReference"
+      | "missingValidation"
+      | "truncatedValidation"
+      | "candidatesOmitted"
+      | "itemsOmitted";
+    ComparisonReportCitationV1: {
+      derivationId: string;
+      generation: string;
+      keyFingerprint: string;
+    };
+    ComparisonSideCitationV1: {
+      nativeByteCount: string;
+      nativeDigest: components["schemas"]["ArtifactDigest"];
+      projection: components["schemas"]["ComparisonReportCitationV1"];
+      projectionProvenance: components["schemas"]["ProjectionProvenance"];
+      revision: components["schemas"]["ScopedRevisionId"];
+      sequence: string;
+      validation: null | components["schemas"]["ComparisonReportCitationV1"];
+    };
+    ComparisonValidationSummaryV1: {
+      /** Format: int32 */
+      emittedIssueCount: number;
+      hasTruncatedDiagnosticText: boolean;
+      isValid: boolean;
+      /** Format: int32 */
+      totalIssueCount: number;
+      truncated: boolean;
+    };
+    /** @enum {unknown} */
     ControlKind:
       | "unknown"
       | "iteration"
@@ -1353,6 +1457,27 @@ export interface components {
       | "dependsOn"
       | "produces"
       | "boundaryMember";
+    RevisionComparisonV1: {
+      /** Format: int32 */
+      emittedItemCount: number;
+      hasObservedDifferences: boolean;
+      hasUncertainty: boolean;
+      items: components["schemas"]["ComparisonItemV1"][];
+      left: components["schemas"]["ComparisonSideCitationV1"];
+      leftCoverage: components["schemas"]["ProjectionCoverage"];
+      leftValidation:
+        null | components["schemas"]["ComparisonValidationSummaryV1"];
+      policyVersion: string;
+      right: components["schemas"]["ComparisonSideCitationV1"];
+      rightCoverage: components["schemas"]["ProjectionCoverage"];
+      rightValidation:
+        null | components["schemas"]["ComparisonValidationSummaryV1"];
+      schemaVersion: string;
+      /** Format: int32 */
+      totalItemCount: number;
+      truncated: boolean;
+      validationIncluded: boolean;
+    };
     RuleDependency:
       | components["schemas"]["RuleDependencyFieldDependency"]
       | components["schemas"]["RuleDependencyParameterDependency"]
@@ -2683,6 +2808,118 @@ export interface operations {
       };
       /** @description Not Found */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCatalogRevisionComparison: {
+    parameters: {
+      query: {
+        /** @description Exact retained successful projection derivation of the left revision. */
+        leftProjection: string;
+        /** @description Exact left revision of this mapping. */
+        leftRevision: string;
+        /** @description Exact retained validation derivation of the left revision, linked through its projection. */
+        leftValidation?: string;
+        /** @description Exact retained successful projection derivation of the right revision. */
+        rightProjection: string;
+        /** @description Exact right revision of this mapping. */
+        rightRevision: string;
+        /** @description Exact retained validation derivation of the right revision, linked through its projection. */
+        rightValidation?: string;
+      };
+      header?: {
+        /** @description Absent or a single identity token; no other coding or request body is accepted. */
+        "Content-Encoding"?: string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RevisionComparisonV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
         headers: {
           [name: string]: unknown;
         };
