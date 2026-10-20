@@ -1,6 +1,7 @@
 using Weft.Api;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
+using Weft.Api.Chat;
 using Weft.MappingBackends.Workers;
 using Weft.Server;
 
@@ -39,6 +40,7 @@ app.MapWeftHealth();
 app.MapWeftProjectionFixtures();
 app.MapWeftNativeExamples();
 app.MapWeftCatalog();
+app.MapWeftChat();
 app.MapWeftAuthentication();
 if (app.Environment.IsDevelopment())
 {

@@ -282,6 +282,11 @@ remain required. P4e-b [#122](https://github.com/DeandreT/weft/issues/122) compo
 sign-in and acknowledged session controls separately. See
 [Session-safe browser state](docs/browser-session-state.md).
 
+P5's remaining increment, [#136](https://github.com/DeandreT/weft/issues/136), adds
+authenticated revision-pinned chat routes, a resumable SSE event stream and
+server-owned model-profile host composition over the private chat ledger and
+orchestrator. See [Chat turn HTTP API](docs/chat-http.md).
+
 P7 starts from the Ferrule consumer pin qualified in
 [#123](https://github.com/DeandreT/weft/issues/123) and follows five dependent
 increments: the bounded JSON preview worker operation and adapter

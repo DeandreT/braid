@@ -342,6 +342,109 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the configured model profiles and limits for an authorized revision. */
+    get: operations["GetChatAvailability"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the caller's most recent private conversations about this revision. */
+    get: operations["GetChatConversations"];
+    put?: never;
+    /** Create or replay a private conversation pinned to the revision's current verified reports. */
+    post: operations["CreateChatConversation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations/{conversationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one private conversation and its most recent turns. */
+    get: operations["GetChatConversation"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations/{conversationId}/turns": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start or replay a turn identified by its client-generated turn ID. */
+    post: operations["CreateChatTurn"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations/{conversationId}/turns/{turnId}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Cancel an active turn; a terminal turn is returned unchanged. */
+    post: operations["CancelChatTurn"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations/{conversationId}/turns/{turnId}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Stream the turn's durable events after a sequence number using SSE framing. */
+    get: operations["StreamChatTurnEvents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/reports/projection": {
     parameters: {
       query?: never;
@@ -948,6 +1051,262 @@ export interface components {
       state: components["schemas"]["CatalogRevisionReportStateV1"];
       status: null | components["schemas"]["OperationStatusV1"];
     };
+    ChatAvailabilityV1: {
+      limits: components["schemas"]["ChatLimitsV1"];
+      profiles: components["schemas"]["ChatProfileV1"][];
+      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      /** @enum {string} */
+      readonly schemaVersion: "weft.chat.v1";
+      toolsEnabled: boolean;
+    };
+    ChatConversationCreateV1: {
+      conversationId: string;
+    };
+    ChatConversationDetailV1: {
+      conversation: components["schemas"]["ChatConversationV1"];
+      hasEarlierTurns: boolean;
+      turns: components["schemas"]["ChatTurnV1"][];
+    };
+    ChatConversationPageV1: {
+      conversations: components["schemas"]["ChatConversationV1"][];
+      hasMore: boolean;
+    };
+    ChatConversationV1: {
+      conversationId: string;
+      /** Format: date-time */
+      createdAtUtc: string;
+      /** Format: date-time */
+      lastTurnAtUtc: null | string;
+      projectionDerivationId: string;
+      /** Format: date-time */
+      retainUntilUtc: string;
+      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      title: null | string;
+      /** Format: int32 */
+      turnCount: number;
+      validationDerivationId: string;
+    };
+    /** @enum {unknown} */
+    ChatErrorCodeV1:
+      | "unavailable"
+      | "invalidRequest"
+      | "notFound"
+      | "identityRejected"
+      | "persistenceFailure"
+      | "internalFailure"
+      | "unsupportedMediaType"
+      | "bodyLimit"
+      | "reportsUnavailable"
+      | "profileUnavailable"
+      | "turnActive"
+      | "idempotencyConflict"
+      | "turnNotStarted";
+    ChatErrorV1: {
+      code: components["schemas"]["ChatErrorCodeV1"];
+    };
+    ChatLimitsV1: {
+      /** Format: int32 */
+      maxSelectors: number;
+      /** Format: int32 */
+      maxTextBytes: number;
+      /** Format: int32 */
+      turnSeconds: number;
+    };
+    ChatProfileV1: {
+      displayName: string;
+      modelId: string;
+      profileId: string;
+      providerId: string;
+      supportsTools: boolean;
+      /** Format: int32 */
+      version: number;
+    };
+    /** @enum {string} */
+    ChatProviderFailureV1:
+      | "invalidRequest"
+      | "profileUnavailable"
+      | "metadataDisallowed"
+      | "capabilityUnavailable"
+      | "credentialUnavailable"
+      | "busy"
+      | "budgetExceeded"
+      | "cancelled"
+      | "deadlineExceeded"
+      | "transportFailure"
+      | "providerAuthentication"
+      | "providerRateLimited"
+      | "providerRejected"
+      | "providerUnavailable"
+      | "unsupportedResponse"
+      | "malformedResponse"
+      | "truncatedResponse";
+    /** @enum {unknown} */
+    ChatSelectorKindV1:
+      | "boundary"
+      | "field"
+      | "parameter"
+      | "rule"
+      | "control"
+      | "projectionDiagnostic"
+      | "validationDiagnostic"
+      | "projectionReport"
+      | "validationReport";
+    ChatSelectorV1: {
+      /** Format: int32 */
+      diagnosticOrdinal: null | number;
+      kind: components["schemas"]["ChatSelectorKindV1"];
+      resourceId: null | string;
+    };
+    ChatTurnCreateV1: {
+      profileId: string;
+      /** Format: int32 */
+      profileVersion: number;
+      selectors: {
+        /** Format: int32 */
+        diagnosticOrdinal: null | number;
+        /** @enum {unknown} */
+        kind:
+          | "boundary"
+          | "field"
+          | "parameter"
+          | "rule"
+          | "control"
+          | "projectionDiagnostic"
+          | "validationDiagnostic"
+          | "projectionReport"
+          | "validationReport";
+        resourceId: null | string;
+      }[];
+      text: string;
+      turnId: string;
+    };
+    ChatTurnEventV1:
+      | components["schemas"]["ChatTurnEventV1ChatTurnStartedEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatTextDeltaEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatToolStartedEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatToolCompletedEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatUsageEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatCitationEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatTurnCompletedEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatTurnFailedEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatTurnCancelledEventV1"];
+    ChatTurnEventV1ChatCitationEventV1: {
+      reportDerivationId: string;
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      target: components["schemas"]["ChatSelectorV1"];
+      /** @enum {string} */
+      type: "citation";
+    };
+    ChatTurnEventV1ChatTextDeltaEventV1: {
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      text: string;
+      /** @enum {string} */
+      type: "text.delta";
+    };
+    ChatTurnEventV1ChatToolCompletedEventV1: {
+      name: string;
+      /** Format: int32 */
+      ordinal: number;
+      /** Format: int32 */
+      resultBytes: number;
+      /** Format: int32 */
+      retrievedNodes: number;
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "tool.completed";
+    };
+    ChatTurnEventV1ChatToolStartedEventV1: {
+      name: string;
+      /** Format: int32 */
+      ordinal: number;
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "tool.started";
+    };
+    ChatTurnEventV1ChatTurnCancelledEventV1: {
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "turn.cancelled";
+    };
+    ChatTurnEventV1ChatTurnCompletedEventV1: {
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "turn.completed";
+    };
+    ChatTurnEventV1ChatTurnFailedEventV1: {
+      providerFailure: null | components["schemas"]["ChatProviderFailureV1"];
+      reason: components["schemas"]["ChatTurnFailureV1"];
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "turn.failed";
+    };
+    ChatTurnEventV1ChatTurnStartedEventV1: {
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "turn.started";
+    };
+    ChatTurnEventV1ChatUsageEventV1: {
+      /** Format: int64 */
+      inputTokens: null | number;
+      origin: components["schemas"]["ChatUsageOriginV1"];
+      /** Format: int64 */
+      outputTokens: null | number;
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      /** Format: int64 */
+      totalTokens: null | number;
+      /** @enum {string} */
+      type: "usage";
+    };
+    /** @enum {unknown} */
+    ChatTurnFailureV1:
+      | "provider"
+      | "outputLimit"
+      | "refused"
+      | "contentFiltered"
+      | "interrupted"
+      | "stopped";
+    /** @enum {unknown} */
+    ChatTurnPhaseV1:
+      "active" | "completed" | "failed" | "cancelled" | "interrupted";
+    ChatTurnProfileV1: {
+      modelId: string;
+      profileId: string;
+      providerId: string;
+      /** Format: int32 */
+      version: number;
+    };
+    ChatTurnV1: {
+      conversationId: string;
+      /** Format: date-time */
+      createdAtUtc: string;
+      /** Format: date-time */
+      deadlineUtc: string;
+      /** Format: date-time */
+      finishedAtUtc: null | string;
+      /** Format: int32 */
+      lastSequence: number;
+      phase: components["schemas"]["ChatTurnPhaseV1"];
+      profile: components["schemas"]["ChatTurnProfileV1"];
+      selectors: components["schemas"]["ChatSelectorV1"][];
+      text: string;
+      turnId: string;
+    };
+    /** @enum {unknown} */
+    ChatUsageOriginV1: "observation" | "roundTerminal" | "openRejection";
     /** @enum {unknown} */
     ComparisonAspectV1:
       | "shape"
@@ -3519,6 +3878,780 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetChatAvailability: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatAvailabilityV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetChatConversations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatConversationPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CreateChatConversation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatConversationCreateV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatConversationV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatConversationV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetChatConversation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversationId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatConversationDetailV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CreateChatTurn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversationId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatTurnCreateV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CancelChatTurn: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversationId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  StreamChatTurnEvents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversationId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/event-stream": components["schemas"]["ChatTurnEventV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
     };

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
+using Weft.Api.Chat;
 using Weft.Contracts.Projections;
 
 namespace Weft.Api;
@@ -45,6 +46,7 @@ public static class ApiConfiguration
             }
             CatalogEndpoints.TransformRevisionIngestionSchemas(document);
             CatalogEndpoints.TransformRevisionReportSchemas(document);
+            ChatEndpoints.TransformSchemas(document);
             AuthenticationOpenApi.Transform(document);
             return Task.CompletedTask;
         }));

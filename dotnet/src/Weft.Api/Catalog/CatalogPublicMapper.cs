@@ -20,11 +20,12 @@ public static class CatalogPublicMapper
 
     internal static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string requestToken,
         string mode, bool metadataEditsEnabled, bool revisionIngestionEnabled, bool projectCreationEnabled,
-        bool canCreateProjects, bool readReportsEnabled, bool deriveReportsEnabled, string? identityContext = null) =>
+        bool canCreateProjects, bool readReportsEnabled, bool deriveReportsEnabled, string? identityContext = null,
+        bool chatEnabled = false) =>
         new(mode, Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name,
-            metadataEditsEnabled || revisionIngestionEnabled || projectCreationEnabled || readReportsEnabled || deriveReportsEnabled
+            metadataEditsEnabled || revisionIngestionEnabled || projectCreationEnabled || readReportsEnabled || deriveReportsEnabled || chatEnabled
                 ? new(true, projectCreationEnabled, revisionIngestionEnabled, metadataEditsEnabled, revisionIngestionEnabled,
-                    readReportsEnabled, false, false, false, deriveReportsEnabled)
+                    readReportsEnabled, chatEnabled, false, false, deriveReportsEnabled)
                 : Features, new CatalogOrganizationActionsV1(projectCreationEnabled && canCreateProjects), requestToken, identityContext);
 
     public static CatalogProjectV1 Project(CatalogProject project, bool revisionIngestionEnabled = false,

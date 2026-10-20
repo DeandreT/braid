@@ -49,6 +49,8 @@ public sealed class ServerHostConfigurationBoundaryTests
     [InlineData("WEFT_REVISION_REPORT_DERIVATION_ENABLED", "true")]
     [InlineData("WEFT_NATIVE_BYTE_LIMIT", "01")]
     [InlineData("WEFT_DERIVED_READ_BYTE_LIMIT", "0")]
+    [InlineData("WEFT_CHAT_ENABLED", "True")]
+    [InlineData("WEFT_CHAT_ENABLED", "")]
     public void SessionFeatureScalarsAreRejectedBeforeAnySensitiveDeliveryIsRequested(string name, string value)
     {
         var values = SessionScalars();

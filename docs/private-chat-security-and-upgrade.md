@@ -2,8 +2,9 @@
 
 Chat metadata uses independent `weft_chat_reader`, `weft_chat_writer` and
 `weft_chat_lifecycle` logins and resetting pools. No login is an API, model-provider or authentication
-session credential. The host does not register these stores; activating them
-is a separate change.
+session credential. The Server registers the reader and writer stores only when
+chat is configured ([Chat turn HTTP API](chat-http.md)); it does not use the
+lifecycle login.
 These are trusted server credentials, never end-user logins; transaction-local
 organization/creator settings narrow scope but do not authenticate a caller.
 

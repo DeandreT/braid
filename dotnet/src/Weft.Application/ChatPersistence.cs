@@ -103,6 +103,49 @@ public interface IChatTurnStore
         long expectedVersion, ChatTurnPhase phase, ChatTerminalMetadata? metadata, CancellationToken ct = default);
 }
 
+/// <summary>Visible conversation with bounded nonauthoritative presentation facts read in the same transaction.</summary>
+public sealed record ChatConversationSummary
+{
+    public ChatConversationSummary(ChatConversationIntent conversation, DateTimeOffset createdAtUtc, string? title,
+        int turnCount, DateTimeOffset? lastTurnAtUtc)
+    {
+        ArgumentNullException.ThrowIfNull(conversation);
+        ChatBounds.Instant(createdAtUtc);
+        if (title is not null && ChatBounds.Text(title, 1024, true).Length == 0) throw ChatBounds.Invalid();
+        if (turnCount < 0 || (turnCount == 0) != (lastTurnAtUtc is null) || (turnCount == 0) != (title is null)) throw ChatBounds.Invalid();
+        if (lastTurnAtUtc is { } last) ChatBounds.Instant(last);
+        Conversation = conversation; CreatedAtUtc = createdAtUtc; Title = title; TurnCount = turnCount; LastTurnAtUtc = lastTurnAtUtc;
+    }
+    public ChatConversationIntent Conversation { get; }
+    public DateTimeOffset CreatedAtUtc { get; }
+    /// <summary>A prefix of the first turn's private original text, at most 160 characters.</summary>
+    public string? Title { get; }
+    public int TurnCount { get; }
+    public DateTimeOffset? LastTurnAtUtc { get; }
+    public override string ToString() => nameof(ChatConversationSummary);
+}
+
+public sealed record ChatConversationPage(IReadOnlyList<ChatConversationSummary> Conversations, bool HasMore)
+{
+    public override string ToString() => nameof(ChatConversationPage);
+}
+
+/// <summary>Most recent turns in oldest-first order; HasEarlier reports omitted older turns.</summary>
+public sealed record ChatTurnPage(IReadOnlyList<ChatTurnFacts> Turns, bool HasEarlier)
+{
+    public override string ToString() => nameof(ChatTurnPage);
+}
+
+/// <summary>Creator-private bounded listings under the same fresh owner/project admission as other reads.</summary>
+public interface IChatConversationReader
+{
+    /// <summary>Newest first; expired or unauthorized conversations are absent.</summary>
+    Task<ChatConversationPage> ListConversationsAsync(ActorContext actor, RevisionScope revision, int limit, CancellationToken ct = default);
+    Task<ChatConversationSummary?> GetConversationAsync(ActorContext actor, ChatConversationKey key, CancellationToken ct = default);
+    /// <summary>Null when the conversation is not visible to its creator.</summary>
+    Task<ChatTurnPage?> ListTurnsAsync(ActorContext actor, ChatConversationKey key, int limit, CancellationToken ct = default);
+}
+
 /// <summary>Separate trusted lifecycle credential. No owner ACL bypass is exposed through ordinary stores;
 /// no operation returns message, request, profile, report, event or round content.</summary>
 public interface IChatLifecycleStore

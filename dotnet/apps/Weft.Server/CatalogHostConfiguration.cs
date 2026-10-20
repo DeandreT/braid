@@ -24,14 +24,19 @@ public static class CatalogHostConfiguration
         var reportOptions = new CatalogRevisionReportOptions(Flag("WEFT_REVISION_REPORTS_ENABLED"),
             Flag("WEFT_REVISION_REPORT_DERIVATION_ENABLED"));
         builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions, creationOptions, reportOptions);
+        var chat = Flag("WEFT_CHAT_ENABLED");
         if (!options.Enabled)
+        {
+            ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, false, reportOptions);
             return;
+        }
         var origin = new Uri(options.BrowserOrigin!, UriKind.Absolute);
         if (!IPAddress.IsLoopback(listener.Address) || origin.Port != listener.Port ||
             !IPAddress.Parse(origin.Host.Trim('[', ']')).Equals(listener.Address))
             throw new InvalidOperationException("The catalog browser origin must match the concrete configured loopback listener.");
         CatalogBusinessServices.Configure(builder.Services, builder.Environment, metadataOptions, ingestionOptions,
             creationOptions, reportOptions, readEnvironment);
+        ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, true, reportOptions);
 
         bool Flag(string variable) => readEnvironment(variable) switch
         {

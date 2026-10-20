@@ -4708,6 +4708,1107 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Read the configured model profiles and limits for an authorized revision.",
+        "operationId": "GetChatAvailability",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAvailabilityV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Read the caller's most recent private conversations about this revision.",
+        "operationId": "GetChatConversations",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatConversationPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Create or replay a private conversation pinned to the revision's current verified reports.",
+        "operationId": "CreateChatConversation",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatConversationCreateV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatConversationV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatConversationV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations/{conversationId}": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Read one private conversation and its most recent turns.",
+        "operationId": "GetChatConversation",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatConversationDetailV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations/{conversationId}/turns": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Start or replay a turn identified by its client-generated turn ID.",
+        "operationId": "CreateChatTurn",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatTurnCreateV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations/{conversationId}/turns/{turnId}/cancel": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Cancel an active turn; a terminal turn is returned unchanged.",
+        "operationId": "CancelChatTurn",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "turnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat/conversations/{conversationId}/turns/{turnId}/events": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Stream the turn's durable events after a sequence number using SSE framing.",
+        "operationId": "StreamChatTurnEvents",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "turnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnEventV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/session": {
       "get": {
         "summary": "Explicit browser authentication protocol.",
@@ -7251,6 +8352,774 @@
         },
         "additionalProperties": false
       },
+      "ChatAvailabilityV1": {
+        "required": [
+          "revision",
+          "profiles",
+          "limits",
+          "toolsEnabled",
+          "schemaVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "enum": [
+              "weft.chat.v1"
+            ],
+            "type": "string",
+            "readOnly": true
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatProfileV1"
+            }
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ChatLimitsV1"
+          },
+          "toolsEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChatConversationCreateV1": {
+        "required": [
+          "conversationId"
+        ],
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChatConversationDetailV1": {
+        "required": [
+          "conversation",
+          "turns",
+          "hasEarlierTurns"
+        ],
+        "type": "object",
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/ChatConversationV1"
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatTurnV1"
+            }
+          },
+          "hasEarlierTurns": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChatConversationPageV1": {
+        "required": [
+          "conversations",
+          "hasMore"
+        ],
+        "type": "object",
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatConversationV1"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChatConversationV1": {
+        "required": [
+          "conversationId",
+          "revision",
+          "createdAtUtc",
+          "retainUntilUtc",
+          "projectionDerivationId",
+          "validationDerivationId",
+          "title",
+          "turnCount",
+          "lastTurnAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "retainUntilUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "projectionDerivationId": {
+            "type": "string"
+          },
+          "validationDerivationId": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "turnCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastTurnAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatErrorCodeV1": {
+        "enum": [
+          "unavailable",
+          "invalidRequest",
+          "notFound",
+          "identityRejected",
+          "persistenceFailure",
+          "internalFailure",
+          "unsupportedMediaType",
+          "bodyLimit",
+          "reportsUnavailable",
+          "profileUnavailable",
+          "turnActive",
+          "idempotencyConflict",
+          "turnNotStarted"
+        ]
+      },
+      "ChatErrorV1": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ChatErrorCodeV1"
+          }
+        }
+      },
+      "ChatLimitsV1": {
+        "required": [
+          "maxTextBytes",
+          "maxSelectors",
+          "turnSeconds"
+        ],
+        "type": "object",
+        "properties": {
+          "maxTextBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxSelectors": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "turnSeconds": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatProfileV1": {
+        "required": [
+          "profileId",
+          "version",
+          "displayName",
+          "providerId",
+          "modelId",
+          "supportsTools"
+        ],
+        "type": "object",
+        "properties": {
+          "profileId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "supportsTools": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChatProviderFailureV1": {
+        "enum": [
+          "invalidRequest",
+          "profileUnavailable",
+          "metadataDisallowed",
+          "capabilityUnavailable",
+          "credentialUnavailable",
+          "busy",
+          "budgetExceeded",
+          "cancelled",
+          "deadlineExceeded",
+          "transportFailure",
+          "providerAuthentication",
+          "providerRateLimited",
+          "providerRejected",
+          "providerUnavailable",
+          "unsupportedResponse",
+          "malformedResponse",
+          "truncatedResponse"
+        ],
+        "type": "string"
+      },
+      "ChatSelectorKindV1": {
+        "enum": [
+          "boundary",
+          "field",
+          "parameter",
+          "rule",
+          "control",
+          "projectionDiagnostic",
+          "validationDiagnostic",
+          "projectionReport",
+          "validationReport"
+        ]
+      },
+      "ChatSelectorV1": {
+        "required": [
+          "kind",
+          "resourceId",
+          "diagnosticOrdinal"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ChatSelectorKindV1"
+          },
+          "resourceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "diagnosticOrdinal": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnCreateV1": {
+        "required": [
+          "turnId",
+          "text",
+          "profileId",
+          "profileVersion",
+          "selectors"
+        ],
+        "type": "object",
+        "properties": {
+          "turnId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "profileId": {
+            "type": "string"
+          },
+          "profileVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "required": [
+                "kind",
+                "resourceId",
+                "diagnosticOrdinal"
+              ],
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "boundary",
+                    "field",
+                    "parameter",
+                    "rule",
+                    "control",
+                    "projectionDiagnostic",
+                    "validationDiagnostic",
+                    "projectionReport",
+                    "validationReport"
+                  ]
+                },
+                "resourceId": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "diagnosticOrdinal": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ],
+                  "format": "int32"
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChatTurnEventV1": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatTurnStartedEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatTextDeltaEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatToolStartedEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatToolCompletedEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatUsageEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatCitationEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatTurnCompletedEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatTurnFailedEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatTurnCancelledEventV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "turn.started": "#/components/schemas/ChatTurnEventV1ChatTurnStartedEventV1",
+            "text.delta": "#/components/schemas/ChatTurnEventV1ChatTextDeltaEventV1",
+            "tool.started": "#/components/schemas/ChatTurnEventV1ChatToolStartedEventV1",
+            "tool.completed": "#/components/schemas/ChatTurnEventV1ChatToolCompletedEventV1",
+            "usage": "#/components/schemas/ChatTurnEventV1ChatUsageEventV1",
+            "citation": "#/components/schemas/ChatTurnEventV1ChatCitationEventV1",
+            "turn.completed": "#/components/schemas/ChatTurnEventV1ChatTurnCompletedEventV1",
+            "turn.failed": "#/components/schemas/ChatTurnEventV1ChatTurnFailedEventV1",
+            "turn.cancelled": "#/components/schemas/ChatTurnEventV1ChatTurnCancelledEventV1"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatCitationEventV1": {
+        "required": [
+          "roundId",
+          "target",
+          "reportDerivationId",
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "citation"
+            ],
+            "type": "string"
+          },
+          "roundId": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ChatSelectorV1"
+          },
+          "reportDerivationId": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatTextDeltaEventV1": {
+        "required": [
+          "roundId",
+          "text",
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "text.delta"
+            ],
+            "type": "string"
+          },
+          "roundId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatToolCompletedEventV1": {
+        "required": [
+          "roundId",
+          "ordinal",
+          "name",
+          "resultBytes",
+          "retrievedNodes",
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "tool.completed"
+            ],
+            "type": "string"
+          },
+          "roundId": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resultBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "retrievedNodes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatToolStartedEventV1": {
+        "required": [
+          "roundId",
+          "ordinal",
+          "name",
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "tool.started"
+            ],
+            "type": "string"
+          },
+          "roundId": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatTurnCancelledEventV1": {
+        "required": [
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "turn.cancelled"
+            ],
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatTurnCompletedEventV1": {
+        "required": [
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "turn.completed"
+            ],
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatTurnFailedEventV1": {
+        "required": [
+          "reason",
+          "providerFailure",
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "turn.failed"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ChatTurnFailureV1"
+          },
+          "providerFailure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatProviderFailureV1"
+              }
+            ]
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatTurnStartedEventV1": {
+        "required": [
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "turn.started"
+            ],
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatUsageEventV1": {
+        "required": [
+          "roundId",
+          "origin",
+          "inputTokens",
+          "outputTokens",
+          "totalTokens",
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "usage"
+            ],
+            "type": "string"
+          },
+          "roundId": {
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ChatUsageOriginV1"
+          },
+          "inputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "outputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "totalTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnFailureV1": {
+        "enum": [
+          "provider",
+          "outputLimit",
+          "refused",
+          "contentFiltered",
+          "interrupted",
+          "stopped"
+        ]
+      },
+      "ChatTurnPhaseV1": {
+        "enum": [
+          "active",
+          "completed",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ]
+      },
+      "ChatTurnProfileV1": {
+        "required": [
+          "profileId",
+          "version",
+          "providerId",
+          "modelId"
+        ],
+        "type": "object",
+        "properties": {
+          "profileId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          }
+        }
+      },
+      "ChatTurnV1": {
+        "required": [
+          "turnId",
+          "conversationId",
+          "phase",
+          "text",
+          "selectors",
+          "profile",
+          "createdAtUtc",
+          "deadlineUtc",
+          "finishedAtUtc",
+          "lastSequence"
+        ],
+        "type": "object",
+        "properties": {
+          "turnId": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/ChatTurnPhaseV1"
+          },
+          "text": {
+            "type": "string"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatSelectorV1"
+            }
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ChatTurnProfileV1"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deadlineUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastSequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatUsageOriginV1": {
+        "enum": [
+          "observation",
+          "roundTerminal",
+          "openRejection"
+        ]
+      },
       "ComparisonAspectV1": {
         "enum": [
           "shape",
@@ -9676,6 +11545,9 @@
     },
     {
       "name": "Catalog"
+    },
+    {
+      "name": "Chat"
     }
   ]
 }

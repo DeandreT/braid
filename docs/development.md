@@ -29,6 +29,10 @@ and Wolverine-backed execution follow separate increments. The separate
 [project creation HTTP](project-creation-http.md) increment adds explicit
 organization actions and its dedicated creator configuration.
 
+Revision-pinned chat is off unless configured; its server-owned model profiles,
+credentials and routes are described in [Chat turn HTTP API](chat-http.md). A
+local OpenAI-compatible or Ollama endpoint can be configured as a profile.
+
 The [native mapping upload page](native-mapping-upload-ui.md) creates a mapping
 and its first immutable revision from the original file. Its separate
 [browser fixture](../tools/native-mapping-upload-browser/README.md) exercises

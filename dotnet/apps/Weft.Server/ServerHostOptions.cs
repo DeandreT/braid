@@ -33,6 +33,7 @@ internal sealed class ServerHostOptions
     internal CatalogRevisionIngestionOptions Ingestion { get; private init; } = new(false);
     internal CatalogProjectCreationOptions Creation { get; private init; } = new(false);
     internal CatalogRevisionReportOptions Reports { get; private init; } = new(false);
+    internal bool Chat { get; private init; }
     internal long? NativeByteLimit { get; private init; }
     internal int? DerivedReadByteLimit { get; private init; }
 
@@ -52,7 +53,10 @@ internal sealed class ServerHostOptions
             var listener = DevelopmentListenAddress.Parse(read("WEFT_DEV_LISTEN_ADDR"));
             var origin = mode == AuthenticationHttpMode.Development
                 ? Required(read, "WEFT_DEV_BROWSER_ORIGIN") : LoopbackOrigin(listener);
-            return new(mode, listener, origin, false, null, default, default, default, null, null);
+            return new(mode, listener, origin, false, null, default, default, default, null, null)
+            {
+                Chat = Flag(read, "WEFT_CHAT_ENABLED")
+            };
         }
         if (Flag(read, "WEFT_DEV_IDENTITY_ENABLED") || new[]
             { "WEFT_DEV_PRINCIPAL_ID", "WEFT_DEV_ORGANIZATION_ID", "WEFT_DEV_BROWSER_ORIGIN", "WEFT_DEV_LISTEN_ADDR" }
@@ -96,12 +100,14 @@ internal sealed class ServerHostOptions
             Flag(read, "WEFT_REVISION_REPORT_DERIVATION_ENABLED"));
         long? nativeLimit = ingestion.Enabled ? CatalogBusinessServices.NativeLimit(read("WEFT_NATIVE_BYTE_LIMIT")) : null;
         int? derivedLimit = reports.Enabled ? CatalogRevisionReportHostConfiguration.DerivedReadLimit(read("WEFT_DERIVED_READ_BYTE_LIMIT")) : null;
+        var chat = Flag(read, "WEFT_CHAT_ENABLED");
         return new(mode, address, publicOrigin, proxy, knownProxy, organization, tenant, client, application, directory)
         {
             Metadata = metadata,
             Ingestion = ingestion,
             Creation = creation,
             Reports = reports,
+            Chat = chat,
             NativeByteLimit = nativeLimit,
             DerivedReadByteLimit = derivedLimit
         };
