@@ -157,6 +157,13 @@
     </section>
     <weft-revision-reports [reports]="reports" [revision]="view.revision" />
     @if (context(); as current) {
+      @defer (on immediate) {
+        <weft-revision-regression
+          [context]="current"
+          [mapping]="view.mapping"
+          [revision]="view.revision"
+        />
+      }
       @if (current.features.preview) {
         @defer (on immediate) {
           <weft-revision-preview

@@ -13,6 +13,8 @@
     "playwright.native-revision-append.config.ts",
     "playwright.browser-session.config.ts",
     "tests/browser-auth-controls.spec.ts",
+    "playwright.regression.config.ts",
+    "tests/regression.spec.ts",
     "tests/catalog*.ts",
     "tests/revision-reports*.ts",
     "tests/project-creation*.ts",
