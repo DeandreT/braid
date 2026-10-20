@@ -131,7 +131,9 @@ introduced fact/result types have categorical `ToString` implementations. No
 prompts, results, raw provider bodies, exception messages, endpoint or credential
 values enter routine diagnostics through this module.
 
-Mapping-tool registration and final validated citation-snapshot delivery are a
-separate composition boundary. Completing orchestration does not validate an
-answer's citations. HTTP/SSE, UI, payloads, edits, preview/execution, deployment
-and live model activation are outside this module.
+[Mapping explanation tools](mapping-ai-tools.md) supply the registered tool
+manifest, read port and citation check. Registration and final validated
+citation-snapshot delivery are a separate composition boundary. Completing
+orchestration does not validate an answer's citations. HTTP/SSE, UI, payloads,
+edits, preview/execution, deployment and live model activation are outside this
+module.

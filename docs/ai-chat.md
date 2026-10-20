@@ -151,7 +151,9 @@ First-version read tools:
 Every tool is scoped to the already authorized conversation/revision. Cross-
 project search, raw filesystem/network access, shell/SQL execution, and payload
 retrieval are absent from this initial tool registry. Revision comparison becomes
-a tool only after the comparison API is independently qualified.
+a tool only after the comparison API is independently qualified. The registry,
+read port and citation check are described in
+[Mapping explanation tools](mapping-ai-tools.md).
 
 Citations prove which resources an answer references; they do not guarantee the
 model's interpretation is correct. Keep original rules inspectable. Never label

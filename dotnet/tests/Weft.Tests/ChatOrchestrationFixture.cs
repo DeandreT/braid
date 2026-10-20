@@ -25,8 +25,10 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
     internal readonly Resolver Credentials;
     internal readonly Clock ApplicationClock;
     internal readonly Guid InstanceId = Guid.NewGuid();
-    internal ActorContext Actor { get; } = new(new PrincipalId(Guid.Parse("12900000-0000-4000-8000-000000000001")));
+    internal ActorContext Actor { get; }
     internal ChatConversationIntent Conversation { get; }
+    private readonly IReadOnlyList<AiToolDefinition> tools;
+    private readonly IChatReadOnlyToolPort toolPort;
     private readonly List<ChatTurnExecution> executions = [];
     private readonly List<Action> releases = [];
     private readonly List<AiTurnLease> idle = [];
@@ -35,7 +37,8 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
 
     internal ChatOrchestrationFixture(Func<AiHttpFixture.Exchange, CancellationToken, Task>? script = null,
         Resolver? credentials = null, TimeProvider? providerClock = null, Clock? applicationClock = null,
-        bool metadataAllowed = true)
+        bool metadataAllowed = true, ActorContext? actor = null, ChatConversationIntent? conversation = null,
+        IReadOnlyList<AiToolDefinition>? tools = null, IChatReadOnlyToolPort? toolPort = null)
     {
         Server = new(async (exchange, ct) =>
         {
@@ -49,13 +52,16 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
             AiCapability.Text | AiCapability.FunctionTools, "mapping-metadata", 1, metadataAllowed, false);
         Credentials = credentials ?? new Resolver();
         Client = new(AiProfileCatalog.Create([Profile]), Credentials, providerClock ?? new Clock());
+        Actor = actor ?? new(new PrincipalId(Guid.Parse("12900000-0000-4000-8000-000000000001")));
         var scope = new RevisionScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var digest = Sha256Digest.FromBytes([1, 2, 9]);
-        Conversation = new(new(scope, Actor.PrincipalId, Guid.NewGuid()),
+        Conversation = conversation ?? new(new(scope, Actor.PrincipalId, Guid.NewGuid()),
             new(Guid.NewGuid(), Guid.NewGuid(), digest, digest), new(Guid.NewGuid(), Guid.NewGuid(), digest, digest), Now.AddDays(1));
         Store = new(Conversation, Actor, Profile, Trace);
         ProfilePolicy = new(Trace);
         Port = new(Trace);
+        this.tools = tools ?? Tools;
+        this.toolPort = toolPort ?? Port;
     }
 
     internal ChatTurnIntent Intent(string text = "PRIVATE question", int rounds = 3, long outputBytes = 131072,
@@ -63,7 +69,7 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
         int eventBytes = 262144, long requestBytes = 1048576, long durationTicks = 600_000_000)
     {
         var budget = new ChatProviderBudget(durationTicks, rounds, requestBytes, 4194304, outputBytes, calls, 128);
-        var grounding = ChatAiBridge.PinGroundingPolicy("fixture-grounding", 1, Instructions, Tools, nodes, resultBytes, iterations);
+        var grounding = ChatAiBridge.PinGroundingPolicy("fixture-grounding", 1, Instructions, tools, nodes, resultBytes, iterations);
         return new(Guid.NewGuid(), new(Guid.NewGuid(), text, [], budget, grounding), ChatAiBridge.PinProfile("fixture", Profile),
             new(events, eventBytes, rounds), Now.AddTicks(durationTicks));
     }
@@ -71,7 +77,7 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
     internal ChatTurnExecution Begin(ChatTurnIntent? intent = null, IEnumerable<Guid>? history = null,
         CancellationToken ct = default, ChatOrchestrationLimits? limits = null, ActorContext? actor = null)
     {
-        var orchestrator = new ChatTurnOrchestrator(Store, Store, Client, Profile, Instructions, Tools, ProfilePolicy, Port,
+        var orchestrator = new ChatTurnOrchestrator(Store, Store, Client, Profile, Instructions, tools, ProfilePolicy, toolPort,
             ApplicationClock, InstanceId, limits ?? new(8, 4096, 65536, 131072));
         var result = orchestrator.Begin(actor ?? Actor, Conversation.Key, intent ?? Intent(), history ?? [], ct);
         executions.Add(result);
