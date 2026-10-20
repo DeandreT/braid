@@ -273,7 +273,7 @@ BEGIN
             IF jsonb_typeof(j->n) IS DISTINCT FROM 'string' OR length(j->>n)=0 THEN RETURN 3; END IF;
         END LOOP;
         FOREACH n IN ARRAY ARRAY['backendId','engineRevision','engineBuild','adapterVersion','profileId','runtime','runtimeVersion','artifactFormat'] LOOP
-            IF octet_length(j->>n)>CASE WHEN n IN ('engineRevision','engineBuild') THEN 256 ELSE 128 END THEN RETURN 3; END IF;
+            IF octet_length(j->>n)>(CASE WHEN n IN ('engineRevision','engineBuild') THEN 256 ELSE 128 END) THEN RETURN 3; END IF;
         END LOOP;
         IF jsonb_typeof(j->'boundaries') IS DISTINCT FROM 'array' OR jsonb_typeof(j->'profileVersion') IS DISTINCT FROM 'number'
             OR jsonb_typeof(j->'environmentVersion') IS DISTINCT FROM 'number' OR jsonb_typeof(j->'maximumArtifactBytes') IS DISTINCT FROM 'number' THEN RETURN 3; END IF;

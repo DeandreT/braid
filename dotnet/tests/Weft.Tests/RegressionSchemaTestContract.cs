@@ -12,7 +12,7 @@ internal static class RegressionSchemaTestContract
     internal const string RunsChecksum = "943b1df0d034568fc0eba4f26c8a7c06c2936fad60e9c6a322054efc83925efc";
     internal const string DispatchChecksum = "51d8fdab1a338cc2c903223f0c45c0469f193638462dfc10f828762262510539";
     internal const string HistoryChecksum = "0ce99a72cc4822ec9b09710becf297436d36d966c23d88cb8212e0d04b0bc89a";
-    internal const string BuildChecksum = "1d2da5b2dfbbbb6e18c9e9dd88bf456833dffb298094d251c4eaa6fbfe8b8448";
+    internal const string BuildChecksum = "5c4f348a577ac36d7d4e2410318e26cee11521bcfb879e620af54705e39d03d2";
     internal static readonly string[] Tables = ["regression_cases", "regression_case_versions", "regression_runs", .. BuildRoleGuard.Tables];
     internal static readonly string[] Functions = ["case_authorized", "guard_regression_case", "guard_regression_version",
         "save_regression_case", "read_regression_case", "list_regression_cases", "regression_run_authorized", "guard_regression_run",
