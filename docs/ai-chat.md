@@ -53,6 +53,44 @@ tools or the browser chat protocol. Record the selected profile version and
 model identity for every turn. Provider output is text/tool intent, never a
 source of application authority.
 
+## Provider adapters (`Weft.Ai`)
+
+`dotnet/src/Weft.Ai` is a dormant, BCL-only module with no host registration.
+It speaks two fixed wire dialects over HTTP: Chat Completions SSE
+(`ChatCompletionsSseV1`) and Ollama `/api/chat` NDJSON (`OllamaChatNdjsonV1`).
+Callers see only Weft-owned types; vendor event names and raw bodies stay inside
+the readers.
+
+- **Profiles.** `AiProfileSpec` is immutable server configuration: profile key and
+  version, dialect, model, fixed endpoint, `None` or `Bearer` authentication by
+  credential reference, capabilities (`Text`, `FunctionTools`) and metadata
+  policy. `AiProfileCatalog` admits them once. Callers never supply a URL.
+  Credentials come from an `IAiCredentialResolver` and stay in a disposable
+  `AiBearerSecret`; redirects are not followed, so they cannot forward them.
+- **Turns and rounds.** `AiRoundClient.OpenTurn` admits a profile under
+  `AiTurnLimits` (duration, rounds, request/wire/text bytes, tool calls) and a
+  fixed concurrent-turn capacity. `OpenRoundAsync` sends one round exactly once,
+  with no automatic retry. Only a fully valid `ToolCalls` terminal permits another
+  round, under a new round ID, on the same turn; every other terminal closes it.
+  History must end with a user message or completed tool results, and tool
+  results must match earlier call IDs and names in order.
+- **Events.** A round stream yields `AiTextDelta`, `AiToolIntentReady`,
+  `AiUsageObserved` and exactly one terminal: `AiRoundFinished` (`Stop`,
+  `ToolCalls`, `OutputLimit`, `Refused`, `ContentFiltered`) or `AiRoundFailed`.
+  Tool intents are complete, validated JSON objects; read the whole stream before
+  executing any. Unknown usage stays unknown rather than zero.
+- **Failures.** `AiFailure` has a closed code and records whether dispatch was
+  attempted. Disallowed profiles, metadata policy, missing capabilities or
+  credentials, busy capacity and over-budget requests fail with `NotAttempted`
+  and make no request. Malformed, truncated, unsupported or over-limit responses
+  fail closed with categorical, redacted text.
+- **Cleanup.** A turn holds its capacity slot until its full cleanup succeeds.
+  Native completion or a closed connection is not enough. Failed cleanup keeps
+  the slot quarantined rather than releasing it.
+
+Tool execution, project permission checks, conversation persistence and browser
+streaming belong to the application layers above this module.
+
 ## Orchestration and context
 
 1. Authenticate the user, authorize conversation/revision access, and resolve

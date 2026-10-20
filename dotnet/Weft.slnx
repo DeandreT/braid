@@ -3,6 +3,7 @@
     <Project Path="apps/Weft.Server/Weft.Server.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Weft.Ai/Weft.Ai.csproj" />
     <Project Path="src/Weft.Api/Weft.Api.csproj" />
     <Project Path="src/Weft.Application/Weft.Application.csproj" />
     <Project Path="src/Weft.Contracts/Weft.Contracts.csproj" />

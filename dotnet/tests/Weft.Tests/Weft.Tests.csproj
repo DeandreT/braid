@@ -9,6 +9,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <ProjectReference Include="../../src/Weft.Ai/Weft.Ai.csproj" />
     <ProjectReference Include="../../src/Weft.Api/Weft.Api.csproj" />
     <ProjectReference Include="../../src/Weft.Application/Weft.Application.csproj" />
     <ProjectReference Include="../../src/Weft.Domain/Weft.Domain.csproj" />

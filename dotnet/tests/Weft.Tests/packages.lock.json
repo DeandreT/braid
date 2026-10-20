@@ -203,6 +203,9 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "weft.ai": {
+        "type": "Project"
+      },
       "weft.api": {
         "type": "Project",
         "dependencies": {
