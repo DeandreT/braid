@@ -14,8 +14,12 @@ internal static class RegressionCaseSchemaContract
     }
 
     internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+        => await CaptureAsync(connection, transaction, ["regression_cases", "regression_case_versions"], token);
+
+    internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string[] tables, CancellationToken token)
     {
         await using var command = new NpgsqlCommand(CaptureSql, connection, transaction);
+        command.Parameters.AddWithValue("tables", tables);
         return await command.ExecuteScalarAsync(token) as string ?? throw new InvalidOperationException("Regression case schema is unavailable.");
     }
 
@@ -62,6 +66,6 @@ internal static class RegressionCaseSchemaContract
                 'inheritance', (SELECT count(*) FROM pg_catalog.pg_inherits i WHERE i.inhrelid=c.oid OR i.inhparent=c.oid)
             ) ORDER BY c.relname),'[]'::jsonb)::text,'UTF8')),'hex')
         FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
-        WHERE n.nspname='weft' AND c.relname IN ('regression_cases','regression_case_versions')
+        WHERE n.nspname='weft' AND c.relname = ANY(@tables)
         """;
 }

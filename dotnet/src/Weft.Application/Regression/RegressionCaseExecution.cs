@@ -42,7 +42,12 @@ public sealed class RegressionCaseExecution
 /// Replays one pinned private case through the existing preview boundary. Each invocation is an
 /// independent failure boundary; no batch state, automatic retry, queue or history is implied.
 /// </summary>
-public sealed class RegressionCaseExecutionService
+public interface IRegressionCaseExecutor
+{
+    Task<RegressionCaseExecution> ExecuteAsync(ActorContext actor, RegressionCaseReference expected, CancellationToken cancellationToken = default);
+}
+
+public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor
 {
     private readonly IRegressionCaseReader cases;
     private readonly IProjectReader projects;
