@@ -2,5 +2,6 @@
   <ItemGroup>
     <ProjectReference Include="../Weft.Contracts/Weft.Contracts.csproj" />
     <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
+    <ProjectReference Include="../Weft.Application/Weft.Application.csproj" />
   </ItemGroup>
 </Project>
