@@ -91,6 +91,7 @@ internal static class CatalogBusinessServices
             services.AddSingleton<IPrivateObjectPublicationStore>(provider => provider.GetRequiredService<LazyPrivateObjectStore>());
         }
         CatalogRevisionReportHostConfiguration.Configure(services, environment, reportOptions, readEnvironment, derivedReadByteLimit);
+        CatalogRegressionHostConfiguration.Configure(services, readEnvironment, catalogEnabled: true);
     }
 
     private static PostgresProjectCreationDatabase CreateProjectCreationDatabase(string connectionString)

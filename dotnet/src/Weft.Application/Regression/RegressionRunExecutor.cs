@@ -76,7 +76,7 @@ public sealed class RegressionRunExecutor(IRegressionRunStore runs, IRegressionC
 public sealed record RegressionRunView(RegressionRunSnapshot Run, RegressionCaseExecution? Result);
 
 /// <summary>Reopens retained exact outputs against the original baseline, then rechecks current authority.</summary>
-public sealed class RegressionRunReadService(IRegressionRunStore runs, IRegressionCaseReader cases)
+public sealed class RegressionRunReadService(IRegressionRunReader runs, IRegressionCaseReader cases)
 {
     public async Task<RegressionRunView?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default)
     {

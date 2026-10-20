@@ -153,5 +153,6 @@ public sealed class RegressionRunWorkflowTests
         public Task<RegressionRunSubmitOutcome> SubmitAsync(RegressionRunSubmission submission, CancellationToken token = default) => throw new NotSupportedException();
         public Task<bool> CancelAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default) => throw new NotSupportedException();
         public Task<RegressionRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default) => throw new NotSupportedException();
+        public Task<RegressionRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null, CancellationToken token = default) => throw new NotSupportedException();
     }
 }

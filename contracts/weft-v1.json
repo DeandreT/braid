@@ -5151,6 +5151,1044 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-cases/capabilities": {
+      "get": {
+        "tags": [
+          "Regression cases"
+        ],
+        "summary": "Read the active regression-case profile and current sample permissions.",
+        "operationId": "GetRegressionCaseCapabilities",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionCaseCapabilitiesV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-cases": {
+      "get": {
+        "tags": [
+          "Regression cases"
+        ],
+        "summary": "Read a bounded metadata page of saved regression cases.",
+        "operationId": "GetRegressionCases",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionCasePageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-cases/{caseId}/versions/{version}": {
+      "get": {
+        "tags": [
+          "Regression cases"
+        ],
+        "summary": "Read an exact saved case version under fresh sample permission.",
+        "operationId": "GetRegressionCaseVersion",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionCaseDetailV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Regression cases"
+        ],
+        "summary": "Publish an immutable case version or replay the identical original request.",
+        "operationId": "PutRegressionCaseVersion",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/vnd.weft.regression-case.v1+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegressionCasePutV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionCaseSavedV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionCaseSavedV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-runs": {
+      "get": {
+        "tags": [
+          "Regression cases"
+        ],
+        "summary": "Read the caller's bounded regression run history.",
+        "operationId": "GetRegressionRuns",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionRunPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-runs/{runId}": {
+      "get": {
+        "tags": [
+          "Regression cases"
+        ],
+        "summary": "Read a retained exact-case result under fresh sample authority.",
+        "operationId": "GetRegressionRun",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionRunV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Regression cases"
+        ],
+        "summary": "Queue one exact saved-case version or recover the original request.",
+        "operationId": "PutRegressionRun",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/vnd.weft.regression-run.v1+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegressionRunPutV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionRunReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionRunReceiptV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "Regression cases"
+        ],
+        "summary": "Request cancellation without replacing a retained terminal result.",
+        "operationId": "CancelRegressionRun",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegressionRunV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat": {
       "get": {
         "tags": [
@@ -11758,6 +12796,530 @@
           }
         }
       },
+      "RegressionCaseCapabilitiesV1": {
+        "required": [
+          "runtime",
+          "limits",
+          "comparisonPolicy",
+          "readSamples",
+          "publishCases"
+        ],
+        "type": "object",
+        "properties": {
+          "runtime": {
+            "$ref": "#/components/schemas/RegressionRuntimeV1"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/RegressionLimitsV1"
+          },
+          "comparisonPolicy": {
+            "type": "string"
+          },
+          "readSamples": {
+            "type": "boolean"
+          },
+          "publishCases": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RegressionCaseDetailV1": {
+        "required": [
+          "caseId",
+          "version",
+          "revision",
+          "definition"
+        ],
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/RegressionCasePutV1"
+          }
+        }
+      },
+      "RegressionCaseMetadataV1": {
+        "required": [
+          "caseId",
+          "version",
+          "revision",
+          "name",
+          "createdAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "string"
+          }
+        }
+      },
+      "RegressionCasePageV1": {
+        "required": [
+          "cases",
+          "nextCaseId"
+        ],
+        "type": "object",
+        "properties": {
+          "cases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegressionCaseMetadataV1"
+            }
+          },
+          "nextCaseId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RegressionCasePutV1": {
+        "required": [
+          "name",
+          "revisionId",
+          "runtime",
+          "currentDateTime",
+          "target",
+          "limits",
+          "primaryBase64Url",
+          "namedInputs",
+          "parameters",
+          "comparisonPolicy",
+          "expected"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/RegressionRuntimeV1"
+          },
+          "currentDateTime": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/RegressionTargetV1"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/RegressionLimitsV1"
+          },
+          "primaryBase64Url": {
+            "type": "string"
+          },
+          "namedInputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegressionDocumentV1"
+            }
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegressionParameterV1"
+            }
+          },
+          "comparisonPolicy": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegressionDocumentV1"
+            }
+          }
+        }
+      },
+      "RegressionCaseSavedV1": {
+        "required": [
+          "caseId",
+          "version",
+          "revision",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        }
+      },
+      "RegressionComparisonV1": {
+        "required": [
+          "policy",
+          "outcome",
+          "notEvaluatedReason",
+          "expectedOutputs",
+          "actualOutputs",
+          "totalDifferences",
+          "truncated",
+          "differences"
+        ],
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "notEvaluatedReason": {
+            "type": "string"
+          },
+          "expectedOutputs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "actualOutputs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalDifferences": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "differences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegressionDifferenceV1"
+            }
+          }
+        }
+      },
+      "RegressionDifferenceV1": {
+        "required": [
+          "name",
+          "kind",
+          "expectedBytes",
+          "actualBytes",
+          "expectedDigest",
+          "actualDigest",
+          "firstDifferentByte"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "expectedBytes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "actualBytes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "expectedDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actualDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "firstDifferentByte": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "RegressionDocumentV1": {
+        "required": [
+          "name",
+          "bytesBase64Url"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bytesBase64Url": {
+            "type": "string"
+          }
+        }
+      },
+      "RegressionLimitsV1": {
+        "required": [
+          "maximumInputBytes",
+          "maximumOutputBytes",
+          "maximumArtifacts",
+          "maximumTextBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "maximumInputBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maximumOutputBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maximumArtifacts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maximumTextBytes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RegressionParameterV1": {
+        "required": [
+          "name",
+          "kind",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "RegressionRunPageV1": {
+        "required": [
+          "runs",
+          "nextRunId"
+        ],
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegressionRunSummaryV1"
+            }
+          },
+          "nextRunId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RegressionRunPutV1": {
+        "required": [
+          "caseId",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "RegressionRunReceiptV1": {
+        "required": [
+          "runId",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        }
+      },
+      "RegressionRunSummaryV1": {
+        "required": [
+          "runId",
+          "caseId",
+          "version",
+          "revision",
+          "state",
+          "attempt",
+          "createdAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "caseId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "state": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "string"
+          }
+        }
+      },
+      "RegressionRuntimeV1": {
+        "required": [
+          "backendId",
+          "engineRevision",
+          "backendBuild",
+          "adapterBuild",
+          "profile"
+        ],
+        "type": "object",
+        "properties": {
+          "backendId": {
+            "type": "string"
+          },
+          "engineRevision": {
+            "type": "string"
+          },
+          "backendBuild": {
+            "type": "string"
+          },
+          "adapterBuild": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          }
+        }
+      },
+      "RegressionRunV1": {
+        "required": [
+          "run",
+          "executionOutcome",
+          "previewStatus",
+          "comparison",
+          "outputs"
+        ],
+        "type": "object",
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/RegressionRunSummaryV1"
+          },
+          "executionOutcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "previewStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "comparison": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionComparisonV1"
+              }
+            ]
+          },
+          "outputs": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/RegressionDocumentV1"
+            }
+          }
+        }
+      },
+      "RegressionTargetV1": {
+        "required": [
+          "kind",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "RelationshipKind": {
         "enum": [
           "readsFrom",
@@ -12299,6 +13861,9 @@
     },
     {
       "name": "Catalog"
+    },
+    {
+      "name": "Regression cases"
     },
     {
       "name": "Chat"
