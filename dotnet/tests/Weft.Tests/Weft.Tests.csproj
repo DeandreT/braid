@@ -13,6 +13,7 @@
     <ProjectReference Include="../../src/Weft.Api/Weft.Api.csproj" />
     <ProjectReference Include="../../src/Weft.Application/Weft.Application.csproj" />
     <ProjectReference Include="../../src/Weft.Domain/Weft.Domain.csproj" />
+    <ProjectReference Include="../../src/Weft.Deployment/Weft.Deployment.csproj" />
     <ProjectReference Include="../../src/Weft.Identity/Weft.Identity.csproj" />
     <ProjectReference Include="../../src/Weft.Contracts/Weft.Contracts.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
