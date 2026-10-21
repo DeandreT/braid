@@ -83,3 +83,21 @@ code {
     flex-direction: column;
   }
 }
+.wb-build-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.8125rem;
+}
+.wb-build-table th,
+.wb-build-table td {
+  text-align: left;
+  padding: 3px 6px;
+  height: var(--wb-row-height, 28px);
+  border-bottom: 1px solid #d7e2d1;
+}
+.wb-build-table th {
+  font-size: 0.75rem;
+  background: #f1f6e9;
+  color: #607456;
+  font-weight: 500;
+}

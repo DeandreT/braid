@@ -47,7 +47,12 @@ await runBrowserFixture({
     const root = () => fx.mappingPath(revision);
     async function start(name) {
       profile = name;
-      await startHost("read", { profile, regression: true, builds: true });
+      await startHost("read", {
+        profile,
+        regression: true,
+        builds: true,
+        reportMode: "full",
+      });
       await startHost("mutation", {
         profile: "administrator",
         regressionWorker: true,
@@ -61,7 +66,13 @@ await runBrowserFixture({
     }
     function preserve(current) {
       for (const table of fx.tables.filter(
-        (name) => !name.startsWith("build_"),
+        (name) =>
+          ![
+            "build_environments",
+            "build_approvals",
+            "build_runs",
+            "build_publications",
+          ].includes(name),
       ))
         check(
           equivalent(current.rows[table], original.rows[table]),

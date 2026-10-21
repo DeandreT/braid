@@ -126,3 +126,43 @@ pre {
     flex-direction: column;
   }
 }
+.wb-case-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.8125rem;
+}
+.wb-case-table th,
+.wb-case-table td {
+  text-align: left;
+  padding: 3px 6px;
+  height: var(--wb-row-height, 28px);
+  border-bottom: 1px solid #d7e2d1;
+}
+.wb-case-table th {
+  font-size: 0.75rem;
+  background: #f1f6e9;
+  color: #607456;
+  font-weight: 500;
+}
+.wb-case-table th button {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.wb-case-table tr.selected td {
+  background: #e9f2e0;
+}
+.wb-case-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: 0.75rem;
+}
+.wb-case-filter input {
+  width: auto;
+  min-width: 150px;
+  padding: 3px 6px;
+  font: inherit;
+}

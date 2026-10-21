@@ -1,5 +1,6 @@
 @import "./mappings/mapping.css";
 @import "./catalog/catalog.css";
+@import "./workbench/workbench.css";
 
 :root {
   font-family: "DM Sans", system-ui, sans-serif;

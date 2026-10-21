@@ -2,6 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
   "include": [
+    "playwright.workbench.config.ts",
+    "playwright.workbench-model.config.ts",
+    "tests/workbench*.ts",
     "playwright.auth-https.config.ts",
     "playwright.auth-https-source.config.ts",
     "tests/auth-https/*.ts",

@@ -400,5 +400,6 @@ export async function buildFixture(page: Page): Promise<BuildFixture> {
     await missing(route);
   });
   await page.goto(revisionPath(synthetic.revision.scope));
+  await page.getByRole("tab", { name: "Builds", exact: true }).click();
   return state;
 }

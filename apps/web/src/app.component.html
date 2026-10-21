@@ -1,4 +1,4 @@
-<div class="app-shell">
+<div class="app-shell" [class.app-workbench]="workbench()">
   <a
     class="skip-link"
     [routerLink]="[]"
@@ -10,20 +10,28 @@
   <header class="app-header">
     <a class="brand" routerLink="/examples" aria-label="Weft home"
       ><span class="brand-mark" aria-hidden="true">w</span
-      ><span>weft<span class="brand-period">.</span></span></a
+      ><span class="brand-name"
+        >weft<span class="brand-period">.</span></span
+      ></a
     >
     <nav class="workspace-nav" aria-label="Workspace">
       <a
         routerLink="/examples"
         routerLinkActive="active"
         ariaCurrentWhenActive="page"
-        >Examples</a
+        aria-label="Examples"
+        title="Examples"
+        ><span class="rail-icon" aria-hidden="true">◈</span
+        ><span class="rail-label">Examples</span></a
       >
       <a
         routerLink="/catalog"
         routerLinkActive="active"
         ariaCurrentWhenActive="page"
-        >Catalog</a
+        aria-label="Catalog"
+        title="Catalog"
+        ><span class="rail-icon" aria-hidden="true">▦</span
+        ><span class="rail-label">Catalog</span></a
       >
     </nav>
     <span class="environment-label">{{

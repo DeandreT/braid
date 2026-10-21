@@ -4,14 +4,23 @@ import {
   DestroyRef,
   Injector,
   afterNextRender,
+  computed,
   effect,
   inject,
   signal,
   untracked,
+  viewChild,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
-import { RouterLink } from "@angular/router";
-import { Observable, combineLatest, forkJoin } from "rxjs";
+import { Router, RouterLink } from "@angular/router";
+import {
+  Observable,
+  Subscription,
+  catchError,
+  combineLatest,
+  forkJoin,
+  of,
+} from "rxjs";
 import { CatalogContextStore } from "./catalog-context";
 import {
   CatalogRoutePage,
@@ -22,6 +31,7 @@ import type {
   CatalogProject,
   CatalogRevision,
   CatalogRevisionScope,
+  CatalogRevisionPage,
 } from "./catalog-types";
 import { CatalogReadError, isCatalogId } from "./catalog-types";
 import { RevisionReportApi } from "./reports/revision-report-api";
@@ -37,6 +47,24 @@ import { RevisionPreviewComponent } from "./previews/revision-preview.component"
 import { RevisionRegressionComponent } from "./regression/revision-regression.component";
 import { RevisionBuildsComponent } from "./builds/revision-builds.component";
 import { BuildViewRecovery } from "./builds/build-view-recovery";
+import { BrowserSessionState } from "../auth/browser-session-state";
+import { WorkbenchState } from "../workbench/workbench-state";
+import { WorkbenchRecents } from "../workbench/workbench-recents";
+import {
+  WorkbenchFrameComponent,
+  type WorkbenchCommand,
+} from "../workbench/workbench-frame.component";
+import { WorkbenchEntityInspectorComponent } from "../workbench/entity-inspector.component";
+import { WorkbenchSample } from "../workbench/workbench-sample";
+import {
+  affectedFields,
+  compareDocuments,
+  displayDocument,
+  documentKey,
+} from "../workbench/workbench-documents";
+import type { NodeReference } from "../mappings/projection-view";
+import type { DockView } from "../workbench/workbench-model";
+import { NativeEvidenceComponent } from "../mappings/native-evidence.component";
 
 interface RevisionScreen {
   project: CatalogProject;
@@ -55,32 +83,184 @@ interface RevisionScreen {
     RevisionPreviewComponent,
     RevisionRegressionComponent,
     RevisionBuildsComponent,
+    WorkbenchFrameComponent,
+    WorkbenchEntityInspectorComponent,
+    NativeEvidenceComponent,
   ],
-  providers: [BuildViewRecovery],
+  providers: [BuildViewRecovery, WorkbenchState],
   templateUrl: "./revision-page.component.html",
-  styles: [
-    `
-      .revision-workspace {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 1.5rem;
-      }
-      .revision-workspace > * {
-        min-width: 0;
-      }
-      @media (min-width: 1100px) {
-        .revision-workspace {
-          grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
-          align-items: start;
-        }
-      }
-    `,
-  ],
+  styleUrl: "./revision-page.component.css",
 })
 export class RevisionPageComponent extends CatalogRoutePage<
   RevisionScreen,
   CatalogRevisionScope
 > {
+  readonly workbench = inject(WorkbenchState);
+  private readonly recents = inject(WorkbenchRecents);
+  readonly reportView = viewChild(RevisionReportsComponent);
+  readonly regressionView = viewChild(RevisionRegressionComponent);
+  readonly buildView = viewChild(RevisionBuildsComponent);
+  readonly previewView = viewChild(RevisionPreviewComponent);
+  readonly frame = viewChild(WorkbenchFrameComponent);
+  private readonly sessions = inject(BrowserSessionState);
+  private readonly workbenchRouter = inject(Router);
+  readonly selectedDocument = signal<string | null>(null);
+  readonly documentKey = documentKey;
+  readonly diagnostic = signal<{ validation: boolean; ordinal: number } | null>(
+    null,
+  );
+  readonly revisionHistory = signal<CatalogRevisionPage | null>(null);
+  readonly historyBusy = signal(false);
+  readonly historyError = signal<string | null>(null);
+  private historyRequest: Subscription | null = null;
+  private switcherRequest: Subscription | null = null;
+  readonly switcherChoices = signal<readonly WorkbenchCommand[]>([]);
+  readonly switcherPaths = new Map<string, string>();
+  readonly projection = computed(
+    () => this.reportView()?.workbenchView() ?? null,
+  );
+  readonly selectedCase = computed(() => {
+    const component = this.regressionView(),
+      value = component?.selected(),
+      view = this.data();
+    return component &&
+      view &&
+      value &&
+      this.context() &&
+      this.sessions.canDispatch(this.context()!) &&
+      component.context() === this.context() &&
+      component.capabilities()?.readSamples &&
+      sameRevision(value.revision, view.revision.scope)
+      ? value
+      : null;
+  });
+  readonly selectedRun = computed(() => {
+    const component = this.regressionView(),
+      value = component?.run(),
+      view = this.data();
+    return component &&
+      view &&
+      value &&
+      this.context() &&
+      this.sessions.canDispatch(this.context()!) &&
+      component.context() === this.context() &&
+      component.capabilities()?.readSamples &&
+      sameRevision(value.run.revision, view.revision.scope)
+      ? value
+      : null;
+  });
+  readonly sample = computed(() => {
+    const value = this.selectedCase(),
+      view = this.data();
+    if (!value || !view || this.regressionView()?.editing()) return null;
+    return WorkbenchSample.capture(
+      view.revision.scope,
+      value,
+      this.selectedRun(),
+      true,
+    );
+  });
+  readonly inputDocuments = computed(() => {
+    const value = this.selectedCase();
+    return value
+      ? [
+          { name: null, bytesBase64Url: value.definition.primaryBase64Url },
+          ...value.definition.namedInputs,
+        ].map(displayDocument)
+      : [];
+  });
+  readonly outputDocuments = computed(() =>
+    (this.selectedRun()?.outputs ?? []).map(displayDocument),
+  );
+  readonly differences = computed(() => {
+    const value = this.selectedCase(),
+      run = this.selectedRun();
+    return value &&
+      run &&
+      run.run.state === "completed" &&
+      run.executionOutcome === "completed" &&
+      run.previewStatus === "succeeded" &&
+      value.caseId === run.run.caseId &&
+      value.version === run.run.version
+      ? compareDocuments(value.definition.expected, run.outputs ?? [])
+      : [];
+  });
+  readonly commands = computed<readonly WorkbenchCommand[]>(() => {
+    const value = this.data();
+    if (!value) return [];
+    return [
+      { id: "project", label: value.project.name, detail: "Current project" },
+      { id: "mapping", label: value.mapping.name, detail: "Current mapping" },
+      ...(this.selectedCase()
+        ? [
+            {
+              id: "selected-case",
+              label: this.selectedCase()!.definition.name,
+              detail: "Selected saved case",
+              view: "tests" as const,
+            },
+          ]
+        : []),
+      ...(value.mapping.access.actions.uploadRevisions
+        ? [
+            {
+              id: "upload",
+              label: "Upload revision",
+              detail: "Preserve this immutable revision",
+            },
+          ]
+        : []),
+      ...this.switcherChoices(),
+    ];
+  });
+  readonly dockContext = computed(() => {
+    const value = this.selectedCase(),
+      run = this.selectedRun(),
+      revision = this.data()?.revision.sequence;
+    return [
+      value?.definition.name,
+      run ? "Selected run" : null,
+      revision ? `Revision ${revision}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  });
+  readonly diagnostics = computed(() => {
+    const projection = this.reports.projection().response?.body.report;
+    const validation = this.reports.validation().response?.body.report;
+    return [
+      ...(projection
+        ? [
+            {
+              kind: "projection",
+              label: "Explanation diagnostics",
+              total: projection.diagnostics.length,
+              truncated: false,
+              items: projection.diagnostics.map((item) => ({
+                ...item,
+                reference: null as NodeReference | null,
+              })),
+            },
+          ]
+        : []),
+      ...(validation
+        ? [
+            {
+              kind: "validation",
+              label: "Validation diagnostics",
+              total: validation.totalIssueCount,
+              truncated: validation.truncated,
+              items: validation.diagnostics.map((item) => ({
+                ...item,
+                reference: this.reports.linkedValidation()
+                  ? item.projectionLocator
+                  : null,
+              })),
+            },
+          ]
+        : []),
+    ];
+  });
   private readonly contexts = inject(CatalogContextStore);
   private readonly buildRecovery = inject(BuildViewRecovery);
   private readonly injector = inject(Injector);
@@ -97,6 +277,104 @@ export class RevisionPageComponent extends CatalogRoutePage<
 
   constructor() {
     super();
+    effect(() => {
+      const context = this.context(),
+        value = this.data(),
+        generation = this.sessions.generation();
+      untracked(() => {
+        if (context && value) {
+          this.workbench.bind(
+            context,
+            value.mapping,
+            value.revision.scope,
+            generation,
+          );
+          this.recents.remember(context, value.mapping.scope);
+        } else this.workbench.clear();
+      });
+    });
+    effect(() => {
+      const component = this.regressionView(),
+        value = this.selectedCase(),
+        run = this.selectedRun(),
+        cap = component?.capabilities();
+      untracked(() => {
+        const {
+          binding,
+          epoch,
+          case: oldCase,
+          run: oldRun,
+        } = this.workbench.selection();
+        if (!binding) return;
+        if (cap && !cap.readSamples) {
+          this.workbench.dispatch({
+            kind: "case",
+            binding,
+            epoch,
+            selection: null,
+          });
+          this.workbench.dispatch({
+            kind: "run",
+            binding,
+            epoch,
+            selection: null,
+          });
+        } else {
+          if (!value && oldCase)
+            this.workbench.dispatch({
+              kind: "case",
+              binding,
+              epoch,
+              selection: null,
+            });
+          if (!run && oldRun)
+            this.workbench.dispatch({
+              kind: "run",
+              binding,
+              epoch,
+              selection: null,
+            });
+          if (
+            value &&
+            (oldCase?.caseId !== value.caseId ||
+              oldCase.version !== value.version)
+          )
+            this.workbench.dispatch({
+              kind: "case",
+              binding,
+              epoch,
+              selection: { caseId: value.caseId, version: value.version },
+            });
+          if (run && oldRun?.runId !== run.run.runId)
+            this.workbench.dispatch({
+              kind: "run",
+              binding,
+              epoch,
+              selection: {
+                runId: run.run.runId,
+                caseId: run.run.caseId,
+                version: run.run.version,
+              },
+            });
+        }
+      });
+    });
+    effect(() => {
+      this.workbench.lifetime();
+      untracked(() => {
+        this.selectedDocument.set(null);
+        this.diagnostic.set(null);
+        this.historyRequest?.unsubscribe();
+        this.historyRequest = null;
+        this.revisionHistory.set(null);
+        this.historyBusy.set(false);
+        this.historyError.set(null);
+        this.switcherRequest?.unsubscribe();
+        this.switcherRequest = null;
+        this.switcherChoices.set([]);
+        this.switcherPaths.clear();
+      });
+    });
     const invalidation = this.contexts.invalidated.subscribe(() => {
       this.reports.unbind();
       this.buildRecovery.clear();
@@ -166,7 +444,202 @@ export class RevisionPageComponent extends CatalogRoutePage<
           this.reports.unbind();
       });
     });
-    this.reportDestroyRef.onDestroy(() => this.reports.destroy());
+    this.reportDestroyRef.onDestroy(() => {
+      this.reports.destroy();
+      this.historyRequest?.unsubscribe();
+      this.switcherRequest?.unsubscribe();
+    });
+  }
+
+  inspect(reference: NodeReference | null): void {
+    const value = this.projection(),
+      { binding, epoch } = this.workbench.selection();
+    if (!binding || !value) return;
+    if (reference) {
+      const present =
+        reference.kind === "field"
+          ? value.fields.has(reference.fieldId)
+          : reference.kind === "rule"
+            ? value.rules.has(reference.ruleId)
+            : reference.kind === "boundary"
+              ? value.boundaries.has(reference.boundaryId)
+              : reference.kind === "control"
+                ? value.controls.has(reference.controlId)
+                : value.parameters.has(reference.parameterId);
+      if (!present) return;
+    }
+    this.workbench.dispatch({
+      kind: "entity",
+      binding,
+      epoch,
+      entity: reference,
+    });
+    if (reference) {
+      this.workbench.dispatch({ kind: "view", view: "mapping" });
+      this.workbench.updateLayout({ inspectorCollapsed: false });
+      this.frame()?.mobileInspector.set(true);
+    }
+  }
+
+  showDiagnostic(value: { validation: boolean; ordinal: number }): void {
+    this.diagnostic.set(value);
+    this.workbench.dispatch({ kind: "dock", dock: "diagnostics" });
+    this.workbench.updateLayout({ dockCollapsed: false });
+    afterNextRender(
+      () =>
+        this.document
+          .getElementById(
+            `wb-diagnostic-${value.validation ? "validation" : "projection"}-${value.ordinal}`,
+          )
+          ?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  command(value: WorkbenchCommand): void {
+    const view = this.data();
+    if (!view) return;
+    const url =
+      value.id === "project"
+        ? this.routes.project(view.project.scope)
+        : value.id === "mapping"
+          ? this.routes.mapping(view.mapping.scope)
+          : value.id === "upload" && view.mapping.access.actions.uploadRevisions
+            ? this.routes.appendRevision(view.mapping.scope)
+            : (this.switcherPaths.get(value.id) ?? null);
+    if (url) void this.workbenchRouter.navigateByUrl(url);
+  }
+
+  displayedInput() {
+    return (
+      this.inputDocuments().find(
+        (value) => documentKey(value.name) === this.selectedDocument(),
+      ) ??
+      this.inputDocuments()[0] ??
+      null
+    );
+  }
+  displayedOutput() {
+    return (
+      this.outputDocuments().find(
+        (value) => documentKey(value.name) === this.selectedDocument(),
+      ) ??
+      this.outputDocuments()[0] ??
+      null
+    );
+  }
+  displayedDifference() {
+    return (
+      this.differences().find(
+        (value) => value.key === this.selectedDocument(),
+      ) ??
+      this.differences()[0] ??
+      null
+    );
+  }
+  affectedFields() {
+    return affectedFields(this.displayedDifference(), this.projection());
+  }
+
+  openDock(dock: DockView): void {
+    this.workbench.dispatch({ kind: "dock", dock });
+    this.workbench.updateLayout({ dockCollapsed: false });
+  }
+  sampleMode(enabled: boolean): void {
+    const { binding, epoch } = this.workbench.selection();
+    if (binding && (!enabled || this.sample()))
+      this.workbench.dispatch({ kind: "sample", binding, epoch, enabled });
+  }
+
+  loadSwitcher(): void {
+    const context = this.context(),
+      view = this.data(),
+      lifetime = this.workbench.lifetime();
+    if (!context || !view || !this.sessions.canDispatch(context)) return;
+    this.switcherRequest?.unsubscribe();
+    const recent = this.recents
+      .scopes(context)
+      .map((scope) => this.api.mapping(scope).pipe(catchError(() => of(null))));
+    this.switcherRequest = forkJoin({
+      projects: this.api.projects(context.allowedOrganizationId),
+      mappings: this.api.mappings(view.project.scope),
+      recent: recent.length ? forkJoin(recent) : of([]),
+    }).subscribe({
+      next: ({ projects, mappings, recent }) => {
+        if (this.workbench.lifetime() !== lifetime) return;
+        this.switcherPaths.clear();
+        const choices: WorkbenchCommand[] = [];
+        for (const project of projects.projects) {
+          const id = `project:${project.scope.projectId}`;
+          this.switcherPaths.set(id, this.routes.project(project.scope));
+          choices.push({ id, label: project.name, detail: "Project" });
+        }
+        for (const mapping of recent) {
+          if (!mapping) continue;
+          const id = `mapping:${mapping.scope.projectId}/${mapping.scope.mappingId}`;
+          this.switcherPaths.set(id, this.routes.mapping(mapping.scope));
+          choices.push({
+            id,
+            label: mapping.name,
+            detail: "Recent mapping · access refreshed",
+          });
+        }
+        for (const mapping of mappings.mappings) {
+          const id = `mapping:${mapping.scope.projectId}/${mapping.scope.mappingId}`;
+          if (this.switcherPaths.has(id)) continue;
+          this.switcherPaths.set(id, this.routes.mapping(mapping.scope));
+          choices.push({
+            id,
+            label: mapping.name,
+            detail: "Mapping in current project",
+          });
+        }
+        this.switcherChoices.set(choices);
+      },
+      error: () => {
+        if (this.workbench.lifetime() === lifetime) {
+          this.switcherChoices.set([]);
+          this.switcherPaths.clear();
+        }
+      },
+    });
+  }
+
+  loadRevisions(next = false): void {
+    const view = this.data(),
+      context = this.context(),
+      lifetime = this.workbench.lifetime();
+    if (
+      !view ||
+      !context ||
+      !this.sessions.canDispatch(context) ||
+      this.historyBusy()
+    )
+      return;
+    this.historyBusy.set(true);
+    this.historyError.set(null);
+    this.historyRequest = this.api
+      .revisions(
+        view.mapping.scope,
+        next ? (this.revisionHistory()?.nextCursor ?? null) : null,
+      )
+      .subscribe({
+        next: (value) => {
+          if (this.workbench.lifetime() === lifetime) {
+            this.revisionHistory.set(value);
+            this.historyBusy.set(false);
+          }
+        },
+        error: () => {
+          if (this.workbench.lifetime() === lifetime) {
+            this.revisionHistory.set(null);
+            this.historyBusy.set(false);
+            this.historyError.set(
+              "Revision history could not be read. Refresh current access before retrying.",
+            );
+          }
+        },
+      });
   }
 
   private isCurrentAdmission(admission: RevisionReportAdmission): boolean {
@@ -191,9 +664,16 @@ export class RevisionPageComponent extends CatalogRoutePage<
         return;
       }
       const previous = this.read.state();
-      const heading = this.document.activeElement
-        ?.closest(".report-panel")
-        ?.getAttribute("aria-labelledby");
+      const operation = this.document.activeElement
+        ?.closest("[data-report-operation]")
+        ?.getAttribute("data-report-operation");
+      const heading = operation
+        ? operation === "projection"
+          ? "saved-explanation-title"
+          : "saved-validation-title"
+        : this.document.activeElement
+            ?.closest(".report-panel")
+            ?.getAttribute("aria-labelledby");
       const watcher = effect(
         () => {
           const state = this.read.state();

@@ -1,0 +1,219 @@
+.rail-icon {
+  display: none;
+}
+.app-shell.app-workbench {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100%;
+  margin: 0;
+  padding-left: 44px;
+}
+.app-workbench .app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 44px;
+  height: auto;
+  min-height: 0;
+  padding: 6px 3px;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+  background: #153f33;
+  border: 0;
+  z-index: 10;
+}
+.app-workbench .brand {
+  display: block;
+}
+.app-workbench .brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+  font-size: 25px;
+  color: #dceccb;
+}
+.app-workbench .brand-name,
+.app-workbench .rail-label,
+.app-workbench .environment-label {
+  display: none;
+}
+.app-workbench .rail-icon {
+  display: block;
+  font-size: 22px;
+}
+.app-workbench .workspace-nav {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 6px;
+  order: 0;
+}
+.app-workbench .workspace-nav a {
+  display: grid;
+  place-items: center;
+  color: #c4d7be;
+  padding: 4px 0;
+  border-radius: 4px;
+}
+.app-workbench .workspace-nav a.active {
+  background: #325a42;
+  color: #f0f7e8;
+}
+.app-workbench main {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  overflow: auto;
+}
+.app-workbench > footer {
+  display: none;
+}
+.app-workbench .catalog-shell {
+  height: 100%;
+  padding: 0;
+}
+.app-workbench .catalog-shell > div:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.app-workbench .catalog-shell > div > weft-revision-page {
+  flex: 1;
+  min-height: 0;
+}
+.app-workbench weft-browser-auth-controls {
+  flex-shrink: 0;
+}
+.app-workbench .catalog-context {
+  min-height: 28px;
+  height: auto;
+  flex-shrink: 0;
+  gap: 4px 8px;
+  padding: 2px 6px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid #d7e2d1;
+  border-radius: 0;
+  background: #f2f6eb;
+  font-size: 0.75rem;
+}
+.app-workbench .catalog-context p {
+  min-width: 0;
+  margin: 0;
+}
+.app-workbench .catalog-identity {
+  font-size: 0.75rem;
+}
+.app-workbench .catalog-context details {
+  position: relative;
+}
+.app-workbench .catalog-context details[open] {
+  z-index: 12;
+  background: white;
+  border: 1px solid #d7e2d1;
+  padding: 4px;
+}
+.app-workbench weft-workbench-frame,
+.app-workbench weft-workbench-frame .wb-frame {
+  height: 100%;
+}
+.app-workbench .skip-link {
+  z-index: 30;
+}
+.app-workbench .catalog-summary {
+  padding: 6px;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+}
+.app-workbench .catalog-summary h2 {
+  font-size: 0.875rem;
+  margin: 0 0 4px;
+}
+.app-workbench .catalog-summary h3 {
+  font-size: 0.8125rem;
+  margin: 6px 0 3px;
+}
+.app-workbench .catalog-summary p {
+  font-size: 0.8125rem;
+  margin: 4px 0;
+}
+.app-workbench .catalog-button {
+  padding: 4px 7px;
+  min-height: 0;
+  font-size: 0.75rem;
+  border-radius: 3px;
+}
+.app-workbench .catalog-facts {
+  gap: 4px 8px;
+  font-size: 0.75rem;
+  margin: 5px 0;
+}
+.app-workbench .regression-list,
+.app-workbench .builds-list {
+  margin: 5px 0;
+  gap: 0;
+}
+.app-workbench .regression-list > li,
+.app-workbench .builds-list > li {
+  padding: 4px 6px;
+  border-radius: 0;
+  border-width: 0 0 1px;
+  min-height: var(--wb-row-height, 28px);
+  font-size: 0.8125rem;
+}
+.app-workbench .regression-detail,
+.app-workbench .regression-editor,
+.app-workbench .regression-recovery {
+  border-radius: 3px;
+  padding: 6px;
+  margin-top: 6px;
+}
+.app-workbench .wb-dock-body .chat-panel {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.8125rem;
+}
+.app-workbench .chat-panel > header {
+  display: none;
+}
+.app-workbench .chat-panel p {
+  margin: 3px 0;
+}
+.app-workbench .chat-panel button {
+  padding: 3px 6px;
+  font-size: 0.75rem;
+  border-radius: 3px;
+}
+.app-workbench .chat-panel textarea {
+  min-height: 50px;
+  font-size: 0.8125rem;
+}
+.app-workbench .chat-panel .chat-actions {
+  gap: 4px;
+  margin: 3px 0;
+}
+.app-workbench .chat-panel .chat-history {
+  margin: 4px 0;
+  max-height: 90px;
+  overflow: auto;
+}
+.app-workbench .chat-panel label {
+  font-size: 0.75rem;
+  margin: 4px 0;
+}
+.app-workbench :is(button, a, input, select, summary):focus-visible {
+  outline: 2px solid #287a60;
+  outline-offset: 1px;
+}
+.app-workbench .app-header a:focus-visible {
+  outline-color: #d4eec0;
+}

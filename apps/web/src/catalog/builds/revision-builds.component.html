@@ -371,31 +371,83 @@
         Load own build history
       </button>
       @if (history(); as page) {
-        <ul class="builds-list">
-          @for (item of page.runs; track item.buildId) {
-            <li>
-              <div>
-                <code>{{ item.buildId }}</code
-                ><br />{{ label(item.state) }} · Attempt {{ item.attempt }} of
-                3<br />
-                <time [attr.datetime]="item.createdAtUtc"
-                  >{{ item.createdAtUtc | date: "medium" : "UTC" }} UTC</time
-                ><br />
-                <a [routerLink]="routes.revision(item.revision)"
-                  >Revision {{ item.revision.revisionId }}</a
+        @if (workbench()) {
+          <table class="wb-build-table" aria-label="Own build history">
+            <thead>
+              <tr>
+                <th>Build</th>
+                <th>State</th>
+                <th>Artifact</th>
+                <th>Revision</th>
+                <th>Started (UTC)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of page.runs; track item.buildId) {
+                <tr>
+                  <td>
+                    <button
+                      class="catalog-button"
+                      type="button"
+                      (click)="openRun(item.buildId)"
+                      [disabled]="busy() || !!pending()"
+                    >
+                      Open build result
+                    </button>
+                    <details>
+                      <summary>Identity</summary>
+                      <code>{{ item.buildId }}</code>
+                    </details>
+                  </td>
+                  <td>
+                    {{ label(item.state) }} · {{ item.outcome ?? "Pending" }}
+                  </td>
+                  <td>
+                    {{
+                      item.artifact
+                        ? item.artifact.byteCount + " bytes"
+                        : "Not available"
+                    }}
+                  </td>
+                  <td>
+                    {{ isCurrent(item) ? "Pinned revision" : "Other revision" }}
+                  </td>
+                  <td>{{ item.createdAtUtc | date: "short" : "UTC" }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5">No own builds on this page.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <ul class="builds-list">
+            @for (item of page.runs; track item.buildId) {
+              <li>
+                <div>
+                  <code>{{ item.buildId }}</code
+                  ><br />{{ label(item.state) }} · Attempt {{ item.attempt }} of
+                  3<br />
+                  <time [attr.datetime]="item.createdAtUtc"
+                    >{{ item.createdAtUtc | date: "medium" : "UTC" }} UTC</time
+                  ><br />
+                  <a [routerLink]="routes.revision(item.revision)"
+                    >Revision {{ item.revision.revisionId }}</a
+                  >
+                </div>
+                <button
+                  class="catalog-button"
+                  type="button"
+                  (click)="openRun(item.buildId)"
+                  [disabled]="busy() || !!pending()"
                 >
-              </div>
-              <button
-                class="catalog-button"
-                type="button"
-                (click)="openRun(item.buildId)"
-                [disabled]="busy() || !!pending()"
-              >
-                Open build result
-              </button>
-            </li>
-          }
-        </ul>
+                  Open build result
+                </button>
+              </li>
+            }
+          </ul>
+        }
         @if (!page.runs.length) {
           <p>No own builds on this page.</p>
         }

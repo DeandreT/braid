@@ -5,12 +5,18 @@ import {
   computed,
   inject,
   input,
+  output,
   signal,
   viewChild,
 } from "@angular/core";
 import type { ChatCitation, ChatConversation } from "../../chat/chat-types";
 import { sameScope } from "../../chat/chat-types";
-import type { NodeReference } from "../../mappings/projection-view";
+import {
+  ProjectionView,
+  type NodeReference,
+} from "../../mappings/projection-view";
+import { WorkbenchMappingTableComponent } from "../../workbench/mapping-table.component";
+import type { WorkbenchSample } from "../../workbench/workbench-sample";
 import { RouterLink } from "@angular/router";
 import type { components } from "../../api/generated";
 import { NativeEvidenceComponent } from "../../mappings/native-evidence.component";
@@ -37,6 +43,7 @@ type Failure = components["schemas"]["CatalogRevisionReportFailureV1"];
     RouterLink,
     MappingProjectionComponent,
     NativeEvidenceComponent,
+    WorkbenchMappingTableComponent,
   ],
   templateUrl: "./revision-reports.component.html",
   styleUrl: "./revision-reports.component.css",
@@ -47,12 +54,26 @@ export class RevisionReportsComponent {
   readonly citationNotice = signal("");
   readonly reports = input.required<RevisionReportState>();
   readonly revision = input.required<CatalogRevision>();
+  readonly workbench = input(false);
+  readonly sample = input<WorkbenchSample | null>(null);
+  readonly sampleMode = input(false);
+  readonly sampleModeChange = output<boolean>();
+  readonly selectedEntity = input<NodeReference | null>(null);
+  readonly entitySelected = output<NodeReference | null>();
+  readonly diagnosticSelected = output<{
+    validation: boolean;
+    ordinal: number;
+  }>();
+  readonly operations = ["projection", "validation"] as const;
   readonly projection = computed(() => this.reports().projection());
   readonly validation = computed(() => this.reports().validation());
   readonly revisionPath = computed(() =>
     catalogRoutes.revision(this.revision().scope),
   );
   readonly document = computed(() => this.reports().projectionDocument());
+  readonly workbenchView = computed(() =>
+    this.document() ? new ProjectionView(this.document()!) : null,
+  );
   readonly linkedValidation = computed(() => this.reports().linkedValidation());
   readonly pinned = computed(
     () => this.projection().pinned || this.validation().pinned,
@@ -122,11 +143,31 @@ export class RevisionReportsComponent {
         target.diagnosticOrdinal >= 0
       )
         selector = `[data-chat-${validation ? "validation" : "projection"}-diagnostic="${target.diagnosticOrdinal}"]`;
+      if (
+        this.workbench() &&
+        target.diagnosticOrdinal !== null &&
+        Number.isInteger(target.diagnosticOrdinal) &&
+        target.diagnosticOrdinal >= 0
+      ) {
+        if (
+          target.diagnosticOrdinal <
+          pane.response.body.report.diagnostics.length
+        ) {
+          this.diagnosticSelected.emit({
+            validation,
+            ordinal: target.diagnosticOrdinal,
+          });
+          return;
+        }
+      }
     } else {
       const viewer = this.viewer(),
         id = target.resourceId;
-      if (viewer && id) {
-        const view = viewer.view();
+      const currentView = this.workbench()
+        ? this.workbenchView()
+        : viewer?.view();
+      if (currentView && id) {
+        const view = currentView;
         let reference: NodeReference | null = null;
         if (target.kind === "field" && view.fields.has(id))
           reference = { kind: "field", fieldId: id };
@@ -139,7 +180,8 @@ export class RevisionReportsComponent {
         if (target.kind === "control" && view.controls.has(id))
           reference = { kind: "control", controlId: id };
         if (reference) {
-          viewer.navigate(reference);
+          if (this.workbench()) this.entitySelected.emit(reference);
+          else viewer?.navigate(reference);
           return;
         }
       }

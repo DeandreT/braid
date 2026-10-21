@@ -88,7 +88,11 @@ await runBrowserFixture({
     }
     async function start(profileName) {
       profile = profileName;
-      await startHost("read", { profile, regression: true });
+      await startHost("read", {
+        profile,
+        regression: true,
+        reportMode: "full",
+      });
       await startHost("mutation", {
         profile: "administrator",
         regressionWorker: true,
@@ -223,7 +227,13 @@ await runBrowserFixture({
             host,
             "Actual regression browser fixture",
           );
-          revision = (await upload(host, project, fixtures[0])).scope;
+          const native = JSON.parse(fixtures[0].bytes.toString("utf8"));
+          native.source_options = { json_document: true };
+          native.target_options = { json_document: true };
+          const bytes = Buffer.from(JSON.stringify(native));
+          revision = (
+            await upload(host, project, { bytes, sha256: fx.sha(bytes) })
+          ).scope;
           for (const name of ["publisher", "runner", "viewer"])
             provision(ids[name], ids.organization, project.projectId, name);
         } finally {
@@ -232,6 +242,29 @@ await runBrowserFixture({
         }
         captureRegressionPublisher(project.projectId);
         await start("publisher");
+        for (const operation of ["projection", "validation"]) {
+          const path =
+            fx.mappingPath(revision) +
+            "/revisions/" +
+            revision.revisionId +
+            "/reports/" +
+            operation;
+          let response = await request(fx.readHost, path + "/ensure", {
+            method: "POST",
+            unsafe: true,
+          });
+          const end = Date.now() + fx.budget(60000);
+          while (response.body?.state === "pending" && Date.now() < end) {
+            await pause(100);
+            response = await request(fx.readHost, path);
+          }
+          check(
+            response.status === 200 &&
+              response.body?.state === "available" &&
+              response.body?.readOutcome === "observed",
+            "productFailure",
+          );
+        }
         original = snapshot();
         return {
           schemaVersion: "weft.regression-browser-fixture.v1",

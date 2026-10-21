@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import { ExecutionOwner } from "./browser-execution-owner";
+import { isAbsolute, join } from "node:path";
 type SavedCase = Pick<
   components["schemas"]["RegressionCaseSavedV1"],
   "caseId" | "version"
@@ -20,12 +21,19 @@ const expected = Buffer.from(
 );
 const region = (page: Page) =>
   page.getByRole("region", { name: "Regression tests", exact: true });
+async function captureWorkbench(page: Page, name: string): Promise<void> {
+  const directory = process.env.WEFT_WORKBENCH_CAPTURE_DIR;
+  if (!directory) return;
+  expect(isAbsolute(directory)).toBe(true);
+  await page.screenshot({ path: join(directory, name + ".png") });
+}
 function revisionPath(): string {
   const s = owner.manifest.revision;
   return `${owner.binding.readOrigin}/catalog/organizations/${s.organizationId}/projects/${s.projectId}/mappings/${s.mappingId}/revisions/${s.revisionId}`;
 }
 async function open(page: Page): Promise<void> {
   await page.goto(revisionPath());
+  await page.getByRole("tab", { name: "Tests", exact: true }).click();
   await region(page)
     .getByRole("button", { name: "Load regression cases", exact: true })
     .click();
@@ -242,4 +250,46 @@ test("actual saved cases execute independently, survive restart and respect acce
   expect(after["runs"]).toBe(6);
   expect(after["caseVersions"]).toBe(5);
   expect(after["workerCreates"]).toBe(before["workerCreates"]);
+
+  const semanticCase = await publish(
+    page,
+    "Wrong expected code",
+    input,
+    Buffer.from(expected.toString().replace('"code": "A1"', '"code": "B2"')),
+  );
+  await run(page, "failed", semanticCase);
+  await page.getByRole("tab", { name: "Diff", exact: true }).click();
+  await expect(page.locator(".wb-diff")).toContainText('"code": "B2"');
+  await expect(page.locator(".wb-diff")).toContainText('"code": "A1"');
+  await captureWorkbench(page, "workbench-real-tests");
+  const linked = page
+    .getByRole("navigation", { name: "Affected mapping fields" })
+    .getByRole("button")
+    .filter({ hasText: '["code"]' });
+  await expect(linked).toHaveCount(1);
+  await linked.click();
+  await expect(
+    page.getByRole("tab", { name: "Mapping", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(
+    page.getByRole("complementary", { name: "Context inspector" }),
+  ).toContainText("Field binding: Source field");
+  await page
+    .getByRole("button", { name: "Sample values", exact: true })
+    .click();
+  await expect(page.locator(".wb-sample-label")).toContainText(
+    "Wrong expected code",
+  );
+  await expect(
+    page.getByRole("table", { name: "Mapping field connections" }),
+  ).toContainText('"A1"');
+  await captureWorkbench(page, "workbench-real-mapping");
+  await page.getByRole("tab", { name: "Releases", exact: true }).click();
+  await captureWorkbench(page, "workbench-real-releases");
+  await page.getByRole("tab", { name: "Tests", exact: true }).click();
+  await run(page, "failed", semanticCase);
+  const linkedCheckpoint = await owner.control("checkpoint");
+  expect(linkedCheckpoint["runs"]).toBe(8);
+  expect(linkedCheckpoint["caseVersions"]).toBe(6);
+  expect(linkedCheckpoint["capturedRuns"]).toBe(8);
 });

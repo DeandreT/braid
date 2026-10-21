@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--scenario', choices=['regression', 'build'], default='regression')
     parser.add_argument('--read-port', type=int, default=4114)
     parser.add_argument('--mutation-port', type=int, default=4115)
+    parser.add_argument('--reuse-bindings', type=Path, help='Reuse verified publications only when every runtime input and emitted web byte is unchanged.')
     args = parser.parse_args()
     assert os.name == 'nt' and args.work_root.is_absolute() and args.work_root.is_dir()
     assert re.fullmatch(r'sha256:[a-f0-9]{64}', args.worker_image)
@@ -71,6 +72,9 @@ def main():
             'tree': subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], cwd=root, text=True).strip(),
             'workerImage': args.worker_image, 'readOrigin': f'http://127.0.0.1:{args.read_port}',
             'mutationOrigin': f'http://127.0.0.1:{args.mutation_port}', 'result': linux(result)}
+    if args.reuse_bindings:
+        previous = json.loads(args.reuse_bindings.read_text())
+        data['reuseConfig'] = previous['config']
     config = output / 'prepare-input.json'; config.write_text(json.dumps(data) + '\n')
     subprocess.run(['wsl.exe', '--distribution', 'Example-Build-Linux', '--user', 'root', '--exec', '/usr/bin/python3', '-I', '-B',
                     linux(root / 'tools/regression-browser/prepare_linux.py'), linux(config)], check=True)

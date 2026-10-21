@@ -23,12 +23,27 @@
   @if (notice(); as message) {
     <p role="status">{{ message }}</p>
   }
+  @if (otherRevision(); as scope) {
+    <p role="status">
+      This evidence belongs to another pinned revision and is not displayed
+      here.
+      <a [routerLink]="routes.revision(scope)">Open that revision</a>
+    </p>
+  }
   @if (capabilities(); as capability) {
     <p class="regression-policy">
       Comparison: exact bytes · Fixed runtime:
       <code>{{ capability.runtime.backendId }}</code>
     </p>
     <div class="regression-actions">
+      <button
+        class="catalog-button"
+        type="button"
+        (click)="load()"
+        [disabled]="busy()"
+      >
+        Refresh test access
+      </button>
       <button
         class="catalog-button"
         type="button"
@@ -59,31 +74,100 @@
       }
     </div>
     @if (cases(); as page) {
-      @if (!page.cases.length) {
-        <p>No saved test cases on this page.</p>
-      }
-      <ul class="regression-list">
-        @for (item of page.cases; track item.caseId) {
-          <li>
-            <div>
-              <strong>{{ item.name }}</strong> · Version {{ item.version
-              }}<br /><small>Revision {{ item.revision.revisionId }}</small>
-            </div>
-            @if (capability.readSamples) {
-              <button
-                class="catalog-button"
-                type="button"
-                (click)="openCase(item.caseId, item.version)"
-                [disabled]="busy() || !!pendingCase() || !!pendingRun()"
+      @if (workbench()) {
+        <label class="wb-case-filter"
+          >Filter cases
+          <input
+            type="search"
+            [value]="caseFilter()"
+            (input)="caseFilter.set($any($event.target).value)"
+        /></label>
+        <table class="wb-case-table" aria-label="Saved regression cases">
+          <thead>
+            <tr>
+              <th
+                [attr.aria-sort]="caseAscending() ? 'ascending' : 'descending'"
               >
-                Open {{ item.name }}
-              </button>
-            } @else {
-              <span>Metadata only</span>
+                <button
+                  type="button"
+                  (click)="caseAscending.set(!caseAscending())"
+                >
+                  Case {{ caseAscending() ? "↑" : "↓" }}
+                </button>
+              </th>
+              <th>Version</th>
+              <th>Revision</th>
+              <th>Saved (UTC)</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of visibleCases(); track item.caseId) {
+              <tr
+                [class.selected]="
+                  selected()?.caseId === item.caseId &&
+                  selected()?.version === item.version
+                "
+              >
+                <td>{{ item.name }}</td>
+                <td>{{ item.version }}</td>
+                <td>
+                  {{
+                    item.revision.revisionId === revision().scope.revisionId
+                      ? "Pinned revision"
+                      : "Other revision"
+                  }}
+                </td>
+                <td>{{ item.createdAtUtc | date: "short" : "UTC" }}</td>
+                <td>
+                  @if (capability.readSamples) {
+                    <button
+                      type="button"
+                      class="catalog-button"
+                      (click)="openCase(item.caseId, item.version)"
+                      [disabled]="busy() || !!pendingCase() || !!pendingRun()"
+                    >
+                      Open {{ item.name }}
+                    </button>
+                  } @else {
+                    Metadata only
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5">No matching saved cases on this page.</td>
+              </tr>
             }
-          </li>
+          </tbody>
+        </table>
+      } @else {
+        @if (!page.cases.length) {
+          <p>No saved test cases on this page.</p>
         }
-      </ul>
+        <ul class="regression-list">
+          @for (item of page.cases; track item.caseId) {
+            <li>
+              <div>
+                <strong>{{ item.name }}</strong> · Version {{ item.version
+                }}<br /><small>Revision {{ item.revision.revisionId }}</small>
+              </div>
+              @if (capability.readSamples) {
+                <button
+                  class="catalog-button"
+                  type="button"
+                  (click)="openCase(item.caseId, item.version)"
+                  [disabled]="busy() || !!pendingCase() || !!pendingRun()"
+                >
+                  Open {{ item.name }}
+                </button>
+              } @else {
+                <span>Metadata only</span>
+              }
+            </li>
+          }
+        </ul>
+      }
       @if (page.nextCaseId) {
         <button
           class="catalog-button"
@@ -439,29 +523,74 @@
     }
     @if (history(); as page) {
       <h3>Your run history</h3>
-      @if (!page.runs.length) {
-        <p>No runs on this page.</p>
-      }
-      <ul class="regression-list">
-        @for (item of page.runs; track item.runId) {
-          <li>
-            <div>
-              {{ label(item.state) }} · Case {{ item.caseId }} /
-              {{ item.version }}<br /><time
-                >{{ item.createdAtUtc | date: "medium" : "UTC" }} UTC</time
-              >
-            </div>
-            <button
-              class="catalog-button"
-              type="button"
-              (click)="openRun(item.runId)"
-              [disabled]="busy() || !!pendingRun()"
-            >
-              Open run {{ item.runId }}
-            </button>
-          </li>
+      @if (workbench()) {
+        <table class="wb-case-table" aria-label="Regression run history">
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>State</th>
+              <th>Case version</th>
+              <th>Revision</th>
+              <th>Started (UTC)</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of page.runs; track item.runId) {
+              <tr>
+                <td>
+                  <button
+                    type="button"
+                    class="catalog-button"
+                    (click)="openRun(item.runId)"
+                    [disabled]="busy() || !!pendingRun()"
+                    [attr.aria-label]="'Open run ' + item.runId"
+                  >
+                    Open run {{ item.runId.slice(0, 8) }}
+                  </button>
+                </td>
+                <td>{{ label(item.state) }}</td>
+                <td>{{ item.version }}</td>
+                <td>
+                  {{
+                    item.revision.revisionId === revision().scope.revisionId
+                      ? "Pinned revision"
+                      : "Other revision"
+                  }}
+                </td>
+                <td>{{ item.createdAtUtc | date: "short" : "UTC" }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5">No runs on this page.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        @if (!page.runs.length) {
+          <p>No runs on this page.</p>
         }
-      </ul>
+        <ul class="regression-list">
+          @for (item of page.runs; track item.runId) {
+            <li>
+              <div>
+                {{ label(item.state) }} · Case {{ item.caseId }} /
+                {{ item.version }}<br /><time
+                  >{{ item.createdAtUtc | date: "medium" : "UTC" }} UTC</time
+                >
+              </div>
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="openRun(item.runId)"
+                [disabled]="busy() || !!pendingRun()"
+              >
+                Open run {{ item.runId }}
+              </button>
+            </li>
+          }
+        </ul>
+      }
       @if (page.nextRunId) {
         <button
           class="catalog-button"

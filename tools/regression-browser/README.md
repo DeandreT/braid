@@ -19,6 +19,19 @@ API replies.
 The fixture is a local development operation with Docker administrator access.
 It never provisions Azure resources or grants production-payload permission.
 
+The default regression scenario uses the qualified native Ferrule image. For
+`--scenario build`, supply the qualified combined compiler image built from
+`engines/build-worker/Dockerfile`, which includes both `/ferrule-host` and
+`/weft-build-worker`. The fixture uses that same immutable image identity for
+inspection, preview evidence and compilation; a native-only image cannot qualify
+the build scenario. Use different free read/mutation ports for independent fixtures.
+
+The shared browser fixture pins the complete migration inventory in
+`tools/browser-fixture/schema.mjs` and conserves qualification/release tables.
+After adding a migration, review that inventory and run
+`node --test tools/browser-fixture/schema.test.mjs`; do not remove the admission
+check to make an old fixture start.
+
 ## Prepare and run
 
 Commit the fixture source first. The preparation launcher refuses a dirty source
@@ -39,6 +52,12 @@ py -3.12 -B tools/regression-browser/prepare.py `
 
 The launcher prints a native Windows `bindings.json` path. Pass it to the browser:
 
+For fixture-observer-only corrections, `--reuse-bindings <previous-bindings.json>`
+can retain the previous publications. It refuses changed runtime files, filenames,
+modes, package inputs or emitted browser bytes and verifies every retained product
+file. The new receipt records source-equivalent reuse instead of claiming a fresh
+publish. Every browser/worker scenario still runs again with a new isolated owner.
+
 ```powershell
 $env:WEFT_REGRESSION_BINDINGS = '<printed-bindings-path>'
 $env:WEFT_CHROMIUM_EXECUTABLE = '<chrome-for-testing>/chrome.exe'
@@ -55,8 +74,32 @@ ancestor ownership and Docker socket permissions are unchanged. The namespace
 launcher unmounts and removes the empty mountpoint after operator shutdown.
 Only bounded controls and scoped public metadata cross it; database passwords,
 cookies, antiforgery tokens, source payloads and result bytes are not pipe fields.
-Trace, screenshots and video are off for the actual-data scenario. The separate
+Trace, screenshots and video are off for the actual-data scenario. An explicit
+`WEFT_WORKBENCH_CAPTURE_DIR` enables only named workbench screenshots of this
+fixture's self-authored samples; point it at an existing absolute private output
+directory. The fixture derives its real saved reports before recording its
+conservation baseline, so field inspection and sample-value mode use actual
+worker output without changing that baseline during the browser session. The separate
 controlled browser suite remains useful but is not end-to-end evidence.
+
+## Disposable local workbench
+
+To review the real workbench without running a test, prepare a fresh `--scenario
+build` fixture on the desired loopback ports (for example `--read-port 4102
+--mutation-port 4110`). Then run:
+
+```powershell
+py -3.12 -B tools/regression-browser/local_viewer.py start --bindings '<absolute-bindings-path>'
+```
+
+This reuses the existing execution owner and its complete admission, provisioning
+and cleanup checks. It prints the concrete revision URL and writes
+`local-workbench-ready.json` beside the bindings. Only server-registered
+capabilities are available. It is a disposable review workspace, not a retained
+development database; do not put customer data or work you need to keep in it.
+Stop it with Ctrl+C or the same command using `stop` instead of `start`. Stopping
+disposes that fixture's database, network and volume. Use fresh bindings for a
+subsequent viewer, and never reuse a failed fixture to claim a successful run.
 
 ## Acceptance and cleanup
 

@@ -1,5 +1,5 @@
 import { DOCUMENT } from "@angular/common";
-import { Component, inject } from "@angular/core";
+import { Component, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import {
   NavigationEnd,
@@ -25,6 +25,7 @@ import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.compo
 export class AppComponent {
   private readonly document = inject(DOCUMENT);
   readonly session = inject(BrowserSessionState);
+  readonly workbench = signal(false);
 
   constructor() {
     this.session
@@ -37,7 +38,12 @@ export class AppComponent {
         filter((event) => event instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe(() => {
+      .subscribe((event) => {
+        this.workbench.set(
+          /\/mappings\/[^/]+\/revisions\/(?!new(?:[?#]|$))[^/?#]+(?:[?#]|$)/.test(
+            event.urlAfterRedirects,
+          ),
+        );
         if (initialNavigation) {
           initialNavigation = false;
           return;

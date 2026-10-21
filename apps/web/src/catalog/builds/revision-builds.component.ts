@@ -69,6 +69,7 @@ export class RevisionBuildsComponent {
   readonly context = input.required<CatalogContext>();
   readonly mapping = input.required<CatalogMapping>();
   readonly revision = input.required<CatalogRevision>();
+  readonly workbench = input(false);
   private readonly api = inject(BuildApi);
   private readonly regression = inject(RegressionApi);
   private readonly catalog = inject(CatalogApi);

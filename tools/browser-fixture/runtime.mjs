@@ -21,6 +21,12 @@ import http from "node:http";
 import net from "node:net";
 import { setTimeout as pause } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { failureSite } from "./failure-site.mjs";
+import {
+  browserFixtureMigrations,
+  browserFixtureProtectedTables,
+  regressionReadProfile,
+} from "./schema.mjs";
 
 export async function runBrowserFixture(definition) {
   try {
@@ -291,28 +297,7 @@ export async function runBrowserFixture(definition) {
       );
       return { path, bytes, sha256: digest };
     });
-    const migrations = [
-      "0001_project_ownership.sql",
-      "0002_catalog_ingestion.sql",
-      "0003_catalog_reads.sql",
-      "0004_mapping_metadata.sql",
-      "0005_project_creation.sql",
-      "0006_revision_derivations.sql",
-      "0007_private_object_maintenance.sql",
-      "0008_external_identity_bindings.sql",
-      "0009_project_payload_read_grants.sql",
-      "0010_server_sessions.sql",
-      "0011_private_chat.sql",
-      "0012_preview_runs.sql",
-      "0013_preview_messages.sql",
-      "0014_regression_cases.sql",
-      "0015_regression_runs.sql",
-      "0016_regression_dispatch.sql",
-      "0017_regression_run_history.sql",
-      "0018_build_publication.sql",
-      "0019_build_dispatch.sql",
-      "0020_build_metadata.sql",
-    ];
+    const migrations = browserFixtureMigrations;
     check(
       equivalent(
         Object.keys(sourceHashes)
@@ -425,6 +410,7 @@ export async function runBrowserFixture(definition) {
       }
       state.observations.push({
         kind: "command",
+        site: failureSite(new Error()),
         ordinal: state.observations.length,
         exitCode: code,
         stdoutBytes: Buffer.byteLength(stdout),
@@ -816,6 +802,7 @@ export async function runBrowserFixture(definition) {
       "external_identity_bindings",
       "project_payload_read_grants",
       "server_sessions",
+      ...browserFixtureProtectedTables,
       ...(regressionScenario
         ? ["regression_cases", "regression_case_versions", "regression_runs"]
         : []),
@@ -950,7 +937,9 @@ export async function runBrowserFixture(definition) {
       });
     }
     async function pgReady() {
-      const end = Date.now() + budget(30000);
+      // First boot includes initdb and role provisioning on the real data volume.
+      // This is fixture admission, not an application or worker execution budget.
+      const end = Date.now() + budget(120000);
       while (true) {
         const result = run(
           cfg.docker,
@@ -1206,19 +1195,19 @@ export async function runBrowserFixture(definition) {
         buildWorker = false,
       } = {},
     ) {
+      const regressionReader = regressionReadProfile({
+        regressionScenario,
+        kind,
+        writer,
+        uploadOnly,
+        metadataEdits,
+        creationOnly,
+        reportMode,
+      });
       check(kind === "read" ? readHost === null : mutationHost === null);
       check(!builds || (buildScenario && kind === "read" && regression));
       check(!buildWorker || (buildScenario && regressionWorker));
-      check(
-        !regression ||
-          (regressionScenario &&
-            kind === "read" &&
-            !writer &&
-            !uploadOnly &&
-            !metadataEdits &&
-            !creationOnly &&
-            reportMode === null),
-      );
+      check(!regression || regressionReader);
       check(
         !regressionWorker ||
           (regressionScenario &&
@@ -1245,7 +1234,8 @@ export async function runBrowserFixture(definition) {
             )) ||
           ((appendScenario || buildScenario) &&
             kind === "mutation" &&
-            reportMode === "full"),
+            reportMode === "full") ||
+          (regression && regressionReader && reportMode === "full"),
       );
       check(
         !creationOnly || (creationScenario && !writer && reportMode === null),
@@ -2971,7 +2961,11 @@ export async function runBrowserFixture(definition) {
           ? error.category
           : "productFailure";
         faulted = true;
-        state.primaryFailure ??= { phase: item.action, category };
+        state.primaryFailure ??= {
+          phase: item.action,
+          category,
+          site: failureSite(error),
+        };
         response = { ...base, outcome: "failed", failure: category };
       } finally {
         deadline = Infinity;
@@ -3113,6 +3107,7 @@ export async function runBrowserFixture(definition) {
       state.primaryFailure ??= {
         phase: manifest ? "owner-pipe" : "setup",
         category: error.category ?? "productFailure",
+        site: failureSite(error),
       };
       // Categorical only: never forward child/provider/SQL text or a JSON request body.
       process.stderr.write(

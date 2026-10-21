@@ -150,6 +150,7 @@ const panel = (page: Page) =>
 
 async function open(page: Page) {
   await page.goto(revisionPath(scope));
+  await page.getByRole("tab", { name: "Preview", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Revision 1",
   );
@@ -295,6 +296,7 @@ test("a reload recovers the submitted run and an unconfirmed key is reused", asy
   ).toBeVisible();
 
   await page.reload();
+  await page.getByRole("tab", { name: "Preview", exact: true }).click();
   await expect(
     panel(page).getByText("Showing your last preview of this revision"),
   ).toBeVisible();
@@ -314,6 +316,7 @@ test("a reload recovers the submitted run and an unconfirmed key is reused", asy
     "Previews are unavailable right now.",
   );
   await page.reload();
+  await page.getByRole("tab", { name: "Preview", exact: true }).click();
   await expect(
     panel(page).getByText(
       "An earlier submission from this tab was not confirmed",

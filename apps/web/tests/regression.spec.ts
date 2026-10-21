@@ -91,6 +91,8 @@ class RegressionFixture {
   publications: { id: string; version: string; body: Definition }[] = [];
   submissions: { id: string; body: { caseId: string; version: string } }[] = [];
   published: Definition = structuredClone(definition);
+  savedId = CASE;
+  savedVersion = "1";
   response = run();
   failPublication = false;
   failSubmission = false;
@@ -102,6 +104,7 @@ class RegressionFixture {
       this.route(route),
     );
     await page.goto(revisionPath(scope));
+    await page.getByRole("tab", { name: "Tests", exact: true }).click();
     await page
       .getByRole("button", { name: "Load regression cases", exact: true })
       .click();
@@ -119,10 +122,10 @@ class RegressionFixture {
         json: {
           cases: [
             {
-              caseId: CASE,
-              version: "1",
+              caseId: this.savedId,
+              version: this.savedVersion,
               revision: scope,
-              name: "Order fixture",
+              name: this.published.name,
               createdAtUtc: "2026-10-20T12:00:00Z",
             },
           ],
@@ -143,6 +146,8 @@ class RegressionFixture {
         const body = request.postDataJSON() as Definition;
         this.publications.push({ id, version, body });
         this.published = body;
+        this.savedId = id;
+        this.savedVersion = version;
         if (this.failPublication) {
           this.failPublication = false;
           return route.abort("failed");
@@ -195,7 +200,7 @@ class RegressionFixture {
         json: {
           caseId: path.split("/").at(-3),
           version: path.split("/").at(-1),
-          revision: scope,
+          revision: { ...scope, revisionId: definition.revisionId },
           definition,
         },
       });
@@ -219,6 +224,95 @@ async function openCase(page: Page) {
     .click();
 }
 
+test("another revision's case is linked rather than displayed under the pinned revision", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  const other = "40000000-0000-4000-8000-000000000099";
+  fixture.published.revisionId = other;
+  await fixture.install(page);
+  await openCase(page);
+  await expect(panel(page)).toContainText(
+    "This evidence belongs to another pinned revision",
+  );
+  await expect(
+    panel(page).getByRole("link", { name: "Open that revision" }),
+  ).toHaveAttribute("href", revisionPath({ ...scope, revisionId: other }));
+  await expect(
+    panel(page).getByRole("button", { name: "Run saved version", exact: true }),
+  ).toHaveCount(0);
+  await expect(panel(page)).not.toContainText("9007199254740993");
+  await panel(page)
+    .getByRole("button", { name: "New test case", exact: true })
+    .click();
+  await expect(panel(page)).not.toContainText(
+    "This evidence belongs to another pinned revision",
+  );
+});
+
+test("another revision's run cannot replace the selected case or expose its outputs", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  fixture.response.run.revision = {
+    ...scope,
+    revisionId: "40000000-0000-4000-8000-000000000099",
+  };
+  await fixture.install(page);
+  await openCase(page);
+  await panel(page)
+    .getByRole("button", { name: "Load run history", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("button", { name: `Open run ${RUN}`, exact: true })
+    .click();
+  await expect(panel(page)).toContainText(
+    "This evidence belongs to another pinned revision",
+  );
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Regression run result",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(fixture.reads).toBe(1);
+});
+
+test("a mismatched revision response retains the original uncertain run request", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  fixture.failSubmission = true;
+  await fixture.install(page);
+  await openCase(page);
+  await panel(page)
+    .getByRole("button", { name: "Run saved version", exact: true })
+    .click();
+  await expect(
+    panel(page).getByRole("button", {
+      name: "Check original run",
+      exact: true,
+    }),
+  ).toBeEnabled();
+  fixture.response.run.revision = {
+    ...scope,
+    revisionId: "40000000-0000-4000-8000-000000000099",
+  };
+  await panel(page)
+    .getByRole("button", { name: "Check original run", exact: true })
+    .click();
+  await expect(panel(page)).toContainText(
+    "The original request is retained for recovery.",
+  );
+  await expect(
+    panel(page).getByRole("button", {
+      name: "Retry original run request",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(fixture.submissions).toHaveLength(1);
+});
+
 test("saved fixture keeps lexical values and executes its exact version", async ({
   page,
 }) => {
@@ -236,6 +330,83 @@ test("saved fixture keeps lexical values and executes its exact version", async 
     .getByRole("button", { name: "View actual primary", exact: true })
     .click();
   await expect(panel(page).locator("pre")).toHaveText("{}");
+});
+
+test("a saved fixture refreshes the case table without a manual reload", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  await fixture.install(page);
+  await panel(page)
+    .getByRole("button", { name: "New test case", exact: true })
+    .click();
+  await panel(page)
+    .getByLabel("Fixture name", { exact: true })
+    .fill("Freshly saved case");
+  await panel(page)
+    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .click();
+  await expect(
+    panel(page).getByRole("table", { name: "Saved regression cases" }),
+  ).toContainText("Freshly saved case");
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Freshly saved case · Version 1",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(fixture.publications).toHaveLength(1);
+});
+
+test("recovering a new fixture clears a previously selected run from another case", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  await fixture.install(page);
+  await openCase(page);
+  await panel(page)
+    .getByRole("button", { name: "Load run history", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("button", { name: `Open run ${RUN}`, exact: true })
+    .click();
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Regression run result",
+      exact: true,
+    }),
+  ).toBeVisible();
+  fixture.failPublication = true;
+  await panel(page)
+    .getByRole("button", { name: "New test case", exact: true })
+    .click();
+  await panel(page)
+    .getByLabel("Fixture name", { exact: true })
+    .fill("Recovered new case");
+  await panel(page)
+    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .click();
+  await expect(
+    panel(page).getByRole("button", {
+      name: "Check saved version",
+      exact: true,
+    }),
+  ).toBeEnabled();
+  await panel(page)
+    .getByRole("button", { name: "Check saved version", exact: true })
+    .click();
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Recovered new case · Version 1",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Regression run result",
+      exact: true,
+    }),
+  ).toHaveCount(0);
 });
 
 test("viewer loads metadata without touching samples or run history", async ({

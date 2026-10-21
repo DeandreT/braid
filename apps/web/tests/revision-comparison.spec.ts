@@ -83,6 +83,7 @@ test("the mapping and revision pages open a comparison that pairs the chosen rev
   );
 
   await page.goto(fixture.revisionPage(1));
+  await page.getByRole("tab", { name: "Compare", exact: true }).click();
   await page
     .getByRole("link", { name: "Compare with another revision" })
     .click();

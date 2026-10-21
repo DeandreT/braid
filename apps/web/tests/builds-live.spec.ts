@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Response } from "@playwright/test";
+import { isAbsolute, join } from "node:path";
 import {
   ExecutionOwner,
   type ExecutionManifest,
@@ -20,6 +21,7 @@ function revisionPath(): string {
 }
 async function open(page: Page) {
   await page.goto(revisionPath());
+  await page.getByRole("tab", { name: "Builds", exact: true }).click();
   await panel(page)
     .getByRole("button", { name: "Load build controls", exact: true })
     .click();
@@ -108,7 +110,7 @@ async function openHistory(page: Page, buildId: string): Promise<void> {
     .getByRole("button", { name: "Load own build history", exact: true })
     .click();
   const row = panel(page)
-    .locator(".builds-list li")
+    .locator(".wb-build-table tbody tr")
     .filter({ hasText: buildId });
   await row
     .getByRole("button", { name: "Open build result", exact: true })
@@ -174,6 +176,15 @@ test("real environment approval compilation restart and revocation preserve exac
   await expect(
     panel(page).getByText(originalDigest, { exact: true }),
   ).toBeVisible();
+  if (process.env.WEFT_WORKBENCH_CAPTURE_DIR) {
+    expect(isAbsolute(process.env.WEFT_WORKBENCH_CAPTURE_DIR)).toBe(true);
+    await page.screenshot({
+      path: join(
+        process.env.WEFT_WORKBENCH_CAPTURE_DIR,
+        "workbench-real-builds.png",
+      ),
+    });
+  }
   await expect(
     panel(page).getByRole("button", { name: /download/i }),
   ).toHaveCount(0);
@@ -277,6 +288,7 @@ test("real environment approval compilation restart and revocation preserve exac
   await owner.control("restore-publisher");
   await owner.control("restart-profile", { profile: "viewer" });
   await page.goto(revisionPath());
+  await page.getByRole("tab", { name: "Builds", exact: true }).click();
   await panel(page)
     .getByRole("button", { name: "Load build controls", exact: true })
     .click();

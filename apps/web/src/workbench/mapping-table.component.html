@@ -1,0 +1,275 @@
+<div class="wb-table-toolbar">
+  <label class="wb-sr-only" for="workbench-field-search"
+    >Filter mapping fields</label
+  >
+  <input
+    id="workbench-field-search"
+    type="search"
+    placeholder="Filter source, rule or target…"
+    [value]="search()"
+    (input)="setSearch($any($event.target).value)"
+  />
+  <select
+    aria-label="Output boundary"
+    [value]="outputId()"
+    (change)="chooseOutput($any($event.target).value)"
+  >
+    <option value="">All outputs</option>
+    @for (boundary of view().outputs; track boundary.id) {
+      <option [value]="boundary.id">{{ boundary.name }}</option>
+    }
+  </select>
+  <select
+    aria-label="Group fields"
+    [value]="grouping()"
+    (change)="grouping.set($any($event.target).value)"
+  >
+    <option value="structure">By structure</option>
+    <option value="output">By output</option>
+  </select>
+  <button
+    type="button"
+    (click)="partialOnly.set(!partialOnly()); page.set(0)"
+    [attr.aria-pressed]="partialOnly()"
+  >
+    Partial
+  </button>
+  <button
+    type="button"
+    (click)="showLineage.set(!showLineage())"
+    [attr.aria-pressed]="showLineage()"
+  >
+    Lineage
+  </button>
+  <button
+    type="button"
+    [disabled]="!sample()"
+    (click)="sampleModeChange.emit(!showSamples())"
+    [attr.aria-pressed]="showSamples()"
+    [title]="
+      sample()
+        ? 'Show authorized observed sample values'
+        : 'Select an authorized case for this revision in Tests'
+    "
+  >
+    Sample values
+  </button>
+  <details
+    class="wb-columns"
+    (keydown.escape)="
+      $any($event.currentTarget).open = false;
+      $any($event.currentTarget).querySelector('summary').focus()
+    "
+  >
+    <summary>Columns</summary>
+    <div>
+      <label><input type="checkbox" checked disabled />Source</label>
+      <label
+        ><input
+          type="checkbox"
+          [checked]="!hiddenColumns().has('rule')"
+          (change)="toggleColumn('rule')"
+        />Transformation</label
+      >
+      <label><input type="checkbox" checked disabled />Target</label>
+      <label
+        ><input
+          type="checkbox"
+          [checked]="!hiddenColumns().has('type')"
+          (change)="toggleColumn('type')"
+        />Type</label
+      >
+    </div>
+  </details>
+</div>
+@if (showSamples() && sample(); as current) {
+  <div class="wb-sample-label" role="status">
+    Observed sample: {{ current.name }} · case version {{ current.version }} ·
+    <span [title]="current.runId ?? ''">{{
+      current.runId
+        ? "run " + current.runId.slice(0, 8)
+        : "saved input only; no observed output"
+    }}</span>
+    ·
+    <span [title]="current.scopeKey"
+      >revision {{ current.scopeKey.split("/").at(-1)?.slice(0, 8) }}</span
+    >. Not intermediate execution values.
+  </div>
+}
+@if (showLineage()) {
+  <div class="wb-inline-lineage">
+    @if (selectedRow(); as row) {
+      <span>{{ cell(row, "source") }}</span
+      ><span aria-hidden="true">→</span><strong>{{ cell(row, "rule") }}</strong
+      ><span aria-hidden="true">→</span><span>{{ path(row.field.path) }}</span>
+    } @else {
+      <span class="wb-muted"
+        >Select a field to show its declared source → rule → target
+        lineage.</span
+      >
+    }
+  </div>
+}
+<p class="wb-sr-only" id="workbench-row-help">
+  Use arrow keys to focus rows, Enter to inspect a field, and Escape to close
+  its inspector.
+</p>
+<div class="wb-table-scroll">
+  <table
+    class="wb-field-table"
+    [style.min-width.px]="minimumWidth()"
+    aria-label="Mapping field connections"
+    aria-describedby="workbench-row-help"
+  >
+    <colgroup>
+      @for (column of columns(); track column.id) {
+        <col [style.width.px]="widths()[column.id]" />
+      }
+    </colgroup>
+    <thead>
+      <tr>
+        @for (column of columns(); track column.id) {
+          <th
+            scope="col"
+            [attr.aria-sort]="
+              sort() === column.id
+                ? ascending()
+                  ? 'ascending'
+                  : 'descending'
+                : null
+            "
+          >
+            <button
+              type="button"
+              (click)="sortColumn(column.id)"
+              [disabled]="column.id === 'input' || column.id === 'output'"
+            >
+              {{ column.label
+              }}{{ sort() === column.id ? (ascending() ? " ↑" : " ↓") : "" }}
+            </button>
+            <weft-resize-handle
+              [label]="'Resize ' + column.label + ' column'"
+              [value]="widths()[column.id]!"
+              [minimum]="80"
+              [maximum]="720"
+              (resized)="resize(column.id, $event)"
+            />
+          </th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (group of groups(); track group.key) {
+        <tr class="wb-group-row">
+          <th scope="rowgroup" [attr.colspan]="columns().length">
+            <button
+              type="button"
+              (click)="toggleGroup(group.key)"
+              [attr.aria-expanded]="!isClosed(group.key)"
+            >
+              <span aria-hidden="true">{{
+                isClosed(group.key) ? "▸" : "▾"
+              }}</span>
+              {{ group.label }}
+              <span class="wb-muted"
+                >{{ group.rows.length }} fields on this page</span
+              >
+            </button>
+          </th>
+        </tr>
+        @if (!isClosed(group.key)) {
+          @for (row of group.rows; track row.key) {
+            <tr [class.wb-selected]="isSelected(row)" (click)="select(row)">
+              @for (column of columns(); track column.id) {
+                <td
+                  [class.wb-sample-cell]="
+                    column.id === 'input' || column.id === 'output'
+                  "
+                >
+                  @switch (column.id) {
+                    @case ("target") {
+                      <button
+                        class="wb-row-focus"
+                        type="button"
+                        [attr.data-row-key]="row.key"
+                        [tabIndex]="focused() === row.key ? 0 : -1"
+                        [attr.aria-pressed]="isSelected(row)"
+                        [attr.aria-label]="
+                          'Inspect field ' + path(row.field.path)
+                        "
+                        (keydown)="key($event, row)"
+                      >
+                        <code>{{ path(row.field.path) }}</code>
+                      </button>
+                    }
+                    @case ("input") {
+                      @for (
+                        source of sample()!.sources(row, view());
+                        track $index
+                      ) {
+                        <div class="wb-observed-source">
+                          <span>{{ source.name }}</span
+                          ><weft-sample-value [value]="source.value" />
+                        </div>
+                      } @empty {
+                        <span class="wb-muted">No direct observed input</span>
+                      }
+                    }
+                    @case ("output") {
+                      <weft-sample-value
+                        [value]="sample()!.output(row, view())"
+                      />
+                    }
+                    @case ("type") {
+                      <span>{{ type(row.field) }}</span>
+                    }
+                    @default {
+                      <span [class.wb-rule]="column.id === 'rule'">{{
+                        cell(row, column.id)
+                      }}</span>
+                      @if (column.id === "rule" && row.incomplete) {
+                        <span class="wb-partial"> · partial</span>
+                      }
+                    }
+                  }
+                </td>
+              }
+            </tr>
+          }
+        }
+      } @empty {
+        <tr>
+          <td [attr.colspan]="columns().length">
+            No fields match this selection.
+            <button
+              type="button"
+              (click)="setSearch(''); outputId.set(''); partialOnly.set(false)"
+            >
+              Clear filters
+            </button>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+<div class="wb-table-footer">
+  <span
+    >{{ filtered().length }} field connections ·
+    {{ view().document.coverage.status }} explanation</span
+  >
+  @if (pageCount() > 1) {
+    <nav aria-label="Mapping table pages">
+      <button type="button" [disabled]="page() === 0" (click)="nextPage(-1)">
+        Previous</button
+      ><span>{{ page() + 1 }} / {{ pageCount() }}</span
+      ><button
+        type="button"
+        [disabled]="page() + 1 >= pageCount()"
+        (click)="nextPage(1)"
+      >
+        Next
+      </button>
+    </nav>
+  }
+</div>

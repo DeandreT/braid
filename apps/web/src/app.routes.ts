@@ -4,10 +4,6 @@ import { type CanDeactivateFn, type Routes } from "@angular/router";
 import type { Observable } from "rxjs";
 import { BrowserSessionState } from "./auth/browser-session-state";
 import { CatalogShellComponent } from "./catalog/catalog-shell.component";
-import { MappingPageComponent } from "./catalog/mapping-page.component";
-import { ProjectPageComponent } from "./catalog/project-page.component";
-import { ProjectsPageComponent } from "./catalog/projects-page.component";
-import { RevisionPageComponent } from "./catalog/revision-page.component";
 import { CreateProjectPageComponent } from "./catalog/projects/create-project-page.component";
 import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-page.component";
 import type { UploadMappingPageComponent } from "./catalog/uploads/upload-mapping-page.component";
@@ -91,12 +87,18 @@ export const routes: Routes = [
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",
-        component: RevisionPageComponent,
+        loadComponent: () =>
+          import("./catalog/revision-page.component").then(
+            (module) => module.RevisionPageComponent,
+          ),
         title: "Revision · Weft",
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId",
-        component: MappingPageComponent,
+        loadComponent: () =>
+          import("./catalog/mapping-page.component").then(
+            (module) => module.MappingPageComponent,
+          ),
         title: "Mapping · Weft",
       },
       {
@@ -106,12 +108,18 @@ export const routes: Routes = [
       },
       {
         path: "organizations/:organizationId/projects/:projectId",
-        component: ProjectPageComponent,
+        loadComponent: () =>
+          import("./catalog/project-page.component").then(
+            (module) => module.ProjectPageComponent,
+          ),
         title: "Project · Weft",
       },
       {
         path: "organizations/:organizationId/projects",
-        component: ProjectsPageComponent,
+        loadComponent: () =>
+          import("./catalog/projects-page.component").then(
+            (module) => module.ProjectsPageComponent,
+          ),
         title: "Projects · Weft",
       },
     ],

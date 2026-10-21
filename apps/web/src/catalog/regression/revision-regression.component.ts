@@ -2,6 +2,7 @@ import { DOCUMENT, DatePipe } from "@angular/common";
 import {
   Component,
   DestroyRef,
+  computed,
   effect,
   inject,
   input,
@@ -9,13 +10,16 @@ import {
   untracked,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { RouterLink } from "@angular/router";
 import { Subscription, type Observable } from "rxjs";
 import { BrowserSessionState } from "../../auth/browser-session-state";
 import type {
   CatalogContext,
   CatalogMapping,
   CatalogRevision,
+  CatalogRevisionScope,
 } from "../catalog-types";
+import { catalogRoutes } from "../catalog-types";
 import {
   RegressionApi,
   RegressionError,
@@ -59,7 +63,7 @@ const maxBytes = 8 * 1024 * 1024;
 /** Private samples live only in this revision view; no local/session storage or HTML rendering. */
 @Component({
   selector: "weft-revision-regression",
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, RouterLink],
   templateUrl: "./revision-regression.component.html",
   styleUrl: "./revision-regression.component.css",
 })
@@ -67,6 +71,9 @@ export class RevisionRegressionComponent {
   readonly context = input.required<CatalogContext>();
   readonly mapping = input.required<CatalogMapping>();
   readonly revision = input.required<CatalogRevision>();
+  readonly routes = catalogRoutes;
+  readonly otherRevision = signal<CatalogRevisionScope | null>(null);
+  readonly workbench = input(false);
   private readonly api = inject(RegressionApi);
   private readonly sessions = inject(BrowserSessionState);
   private readonly document = inject(DOCUMENT);
@@ -79,6 +86,21 @@ export class RevisionRegressionComponent {
   private editId: { id: string; version: string } | null = null;
   readonly capabilities = signal<CaseCapabilities | null>(null);
   readonly cases = signal<CasePage | null>(null);
+  readonly caseFilter = signal("");
+  readonly caseAscending = signal(true);
+  readonly visibleCases = computed(() =>
+    (this.cases()?.cases ?? [])
+      .filter((item) =>
+        item.name
+          .toLocaleLowerCase()
+          .includes(this.caseFilter().toLocaleLowerCase()),
+      )
+      .slice()
+      .sort(
+        (a, b) =>
+          a.name.localeCompare(b.name) * (this.caseAscending() ? 1 : -1),
+      ),
+  );
   readonly history = signal<RunPage | null>(null);
   readonly selected = signal<CaseDetail | null>(null);
   readonly run = signal<RegressionRun | null>(null);
@@ -146,19 +168,24 @@ export class RevisionRegressionComponent {
       (page) => this.history.set(page),
     );
   }
-  openCase(id: string, version: string): void {
+  openCase(id: string, version: string, refreshCases = false): void {
     if (this.busy() || this.pendingCase() || this.pendingRun()) return;
     this.send(
       this.api.case(this.context(), this.mapping().scope, id, version),
       (value) => {
-        this.selected.set(value);
+        if (!this.isCurrentRevision(value.revision)) {
+          this.rejectDifferentRevision(value.revision);
+          return;
+        }
+        this.selectCase(value);
         this.editing.set(false);
-        this.shown.set(null);
+        if (refreshCases) this.loadCases();
       },
     );
   }
   newCase(): void {
     if (this.busy() || this.pendingCase()) return;
+    this.otherRevision.set(null);
     this.editId = null;
     this.name = "";
     this.clock = new Date().toISOString();
@@ -174,6 +201,7 @@ export class RevisionRegressionComponent {
     const value = this.selected();
     if (
       !value ||
+      !this.isCurrentRevision(value.revision) ||
       this.busy() ||
       this.pendingCase() ||
       BigInt(value.version) === 9223372036854775807n
@@ -315,7 +343,8 @@ export class RevisionRegressionComponent {
         this.pendingCase.set(null);
         this.editing.set(false);
         this.notice.set("The exact fixture version is saved.");
-        this.openCase(pending.id, pending.version);
+        if (this.pendingRun()) this.loadCases();
+        else this.openCase(pending.id, pending.version, true);
       },
     );
   }
@@ -340,17 +369,38 @@ export class RevisionRegressionComponent {
           );
           return;
         }
-        this.selected.set(value);
+        if (!this.isCurrentRevision(value.revision)) {
+          this.error.set(
+            "The saved version belongs to another revision. The original request is retained for recovery.",
+          );
+          return;
+        }
+        if (!this.pendingRun()) this.selectCase(value);
         this.pendingCase.set(null);
         this.editing.set(false);
         this.notice.set("The original saved fixture was recovered.");
+        this.loadCases();
       },
     );
+  }
+  private selectCase(value: CaseDetail): void {
+    this.otherRevision.set(null);
+    const run = this.run();
+    if (
+      run &&
+      (run.run.caseId !== value.caseId || run.run.version !== value.version)
+    ) {
+      this.stopTimer();
+      this.run.set(null);
+    }
+    this.selected.set(value);
+    this.shown.set(null);
   }
   submit(): void {
     const value = this.selected();
     if (
       !value ||
+      !this.isCurrentRevision(value.revision) ||
       this.busy() ||
       this.pendingRun() ||
       !this.capabilities()?.readSamples
@@ -399,10 +449,28 @@ export class RevisionRegressionComponent {
           );
           return;
         }
+        if (!this.isCurrentRevision(value.run.revision)) {
+          if (pending) {
+            this.error.set(
+              "The returned run belongs to another revision. The original request is retained for recovery.",
+            );
+          } else this.rejectDifferentRevision(value.run.revision);
+          return;
+        }
+        this.otherRevision.set(null);
         this.pendingRun.set(null);
         this.run.set(value);
         this.shown.set(null);
         if (active(value)) this.schedulePoll(id);
+        const selected = this.selected();
+        if (
+          !selected ||
+          selected.caseId !== value.run.caseId ||
+          selected.version !== value.run.version
+        ) {
+          this.selected.set(null);
+          this.openCase(value.run.caseId, value.run.version);
+        }
       },
     );
   }
@@ -444,6 +512,22 @@ export class RevisionRegressionComponent {
     return value
       .replace(/([A-Z])/g, " $1")
       .replace(/^./, (c) => c.toUpperCase());
+  }
+  private isCurrentRevision(scope: CatalogRevisionScope): boolean {
+    const current = this.revision().scope;
+    return (
+      scope.organizationId === current.organizationId &&
+      scope.projectId === current.projectId &&
+      scope.mappingId === current.mappingId &&
+      scope.revisionId === current.revisionId
+    );
+  }
+  private rejectDifferentRevision(scope: CatalogRevisionScope): void {
+    this.stopTimer();
+    this.selected.set(null);
+    this.run.set(null);
+    this.shown.set(null);
+    this.otherRevision.set({ ...scope });
   }
   abandon(): void {
     if (this.busy()) return;
@@ -593,6 +677,7 @@ export class RevisionRegressionComponent {
     }, 2000);
   }
   private clear(): void {
+    this.otherRevision.set(null);
     ++this.epoch;
     this.requests.unsubscribe();
     this.requests = new Subscription();
@@ -601,6 +686,7 @@ export class RevisionRegressionComponent {
     this.importing.set(0);
     this.capabilities.set(null);
     this.cases.set(null);
+    this.caseFilter.set("");
     this.history.set(null);
     this.selected.set(null);
     this.run.set(null);
@@ -620,6 +706,7 @@ export class RevisionRegressionComponent {
     this.editId = null;
   }
   private hidePrivate(): void {
+    this.otherRevision.set(null);
     this.stopTimer();
     this.selected.set(null);
     this.run.set(null);
