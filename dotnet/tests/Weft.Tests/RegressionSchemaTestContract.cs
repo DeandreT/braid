@@ -9,11 +9,12 @@ internal static class RegressionSchemaTestContract
 {
     internal const string CasesChecksum = "ec00cf3e9869eb59f89eec5d0e7d38d672112970e9cb2beae41c6a3a88f204a1";
     internal const string RunsChecksum = "943b1df0d034568fc0eba4f26c8a7c06c2936fad60e9c6a322054efc83925efc";
+    internal const string DispatchChecksum = "51d8fdab1a338cc2c903223f0c45c0469f193638462dfc10f828762262510539";
     internal static readonly string[] Tables = ["regression_cases", "regression_case_versions", "regression_runs"];
     internal static readonly string[] Functions = ["case_authorized", "guard_regression_case", "guard_regression_version",
         "save_regression_case", "read_regression_case", "list_regression_cases", "regression_run_authorized", "guard_regression_run",
         "submit_regression_run", "claim_regression_run", "observe_regression_run", "finish_regression_run", "release_regression_run",
-        "cancel_regression_run", "read_regression_run"];
+        "cancel_regression_run", "read_regression_run", "list_ready_regression_runs"];
     internal static readonly string[] Roles = ["weft_case_reader", "weft_case_writer", "weft_run_reader", "weft_run_writer"];
 
     internal static async Task AdmitAsync(PostgresCase test, CancellationToken token = default)
