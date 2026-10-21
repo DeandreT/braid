@@ -34,6 +34,7 @@ internal sealed class ServerHostOptions
     internal CatalogProjectCreationOptions Creation { get; private init; } = new(false);
     internal CatalogRevisionReportOptions Reports { get; private init; } = new(false);
     internal bool Chat { get; private init; }
+    internal CatalogPreviewOptions Previews { get; private init; } = new(false);
     internal BuildHostRuntime Builds { get; private init; } = new(false);
     internal long? NativeByteLimit { get; private init; }
     internal int? DerivedReadByteLimit { get; private init; }
@@ -102,6 +103,9 @@ internal sealed class ServerHostOptions
         long? nativeLimit = ingestion.Enabled ? CatalogBusinessServices.NativeLimit(read("WEFT_NATIVE_BYTE_LIMIT")) : null;
         int? derivedLimit = reports.Enabled ? CatalogRevisionReportHostConfiguration.DerivedReadLimit(read("WEFT_DERIVED_READ_BYTE_LIMIT")) : null;
         var chat = Flag(read, "WEFT_CHAT_ENABLED");
+        // Conversations pin verified reports; refuse the inconsistent profile before any delivery is opened.
+        if (chat && !reports.Enabled) throw Failure();
+        var previews = new CatalogPreviewOptions(Flag(read, "WEFT_PREVIEWS_ENABLED"));
         var builds = CatalogBuildHostConfiguration.ReadRuntime(read, catalogEnabled: true);
         return new(mode, address, publicOrigin, proxy, knownProxy, organization, tenant, client, application, directory)
         {
@@ -110,6 +114,7 @@ internal sealed class ServerHostOptions
             Creation = creation,
             Reports = reports,
             Chat = chat,
+            Previews = previews,
             Builds = builds,
             NativeByteLimit = nativeLimit,
             DerivedReadByteLimit = derivedLimit

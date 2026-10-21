@@ -23,14 +23,14 @@ public sealed record CatalogPreviewOptions
 public static partial class CatalogEndpoints
 {
     /// <summary>
-    /// Enables preview routes over an already registered catalog. The host supplies the
-    /// <see cref="PreviewRunService"/> composed with its durable submission store.
+    /// Enables preview routes over an already registered Development or session-backed catalog. The
+    /// host supplies the <see cref="PreviewRunService"/> composed with its durable submission store.
     /// </summary>
     public static IServiceCollection AddWeftPreviews(this IServiceCollection services, CatalogPreviewOptions options)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
-        if (!services.Any(service => service.ServiceType == typeof(CatalogApiOptions)))
+        if (!services.Any(service => service.ServiceType == typeof(CatalogRequestBoundary)))
             throw new InvalidOperationException("Preview routes require a registered catalog.");
         if (services.Any(service => service.ServiceType == typeof(CatalogPreviewOptions)))
             throw new InvalidOperationException("Preview routes are already registered.");

@@ -158,6 +158,9 @@ through the worker. The generated Entra values are placeholders, so sign-in is n
 
 The Session host does not register a Docker worker runner. Native ingestion and
 report derivation therefore need a separately qualified hosted worker transport, and
-stay disabled in hosted configuration; examples remain a Development feature.
+stay disabled in hosted configuration; examples remain a Development feature. Chat
+and preview submission are composed by the Session host with `_FILE` credential
+deliveries (see [feature composition](session-host.md#feature-composition)); preview
+execution additionally needs the separate `Weft.Worker` host.
 Private storage and the session key ring support one API instance on a persistent
 local filesystem. [Azure deployment](azure-deployment.md) describes the hosted environment.

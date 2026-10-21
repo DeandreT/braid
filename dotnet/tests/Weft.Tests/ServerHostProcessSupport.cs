@@ -260,9 +260,11 @@ internal static class ServerHostHttp
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         bounded.CancelAfter(TimeSpan.FromSeconds(15));
         using var message = new HttpRequestMessage(method ?? HttpMethod.Get, path);
-        if (headers is not null)
-            foreach (var pair in headers) message.Headers.TryAddWithoutValidation(pair.Key, pair.Value);
         if (body is not null) message.Content = new ByteArrayContent(body);
+        if (headers is not null)
+            foreach (var pair in headers)
+                if (!message.Headers.TryAddWithoutValidation(pair.Key, pair.Value))
+                    message.Content?.Headers.TryAddWithoutValidation(pair.Key, pair.Value);
         try
         {
             using var reply = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, bounded.Token);

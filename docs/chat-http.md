@@ -19,7 +19,7 @@ revision's verified reports; an inconsistent profile fails host startup.
 | --- | --- |
 | `WEFT_CHAT_ENABLED` | `true` or `false` (case-sensitive). |
 | `WEFT_CHAT_PROFILES_FILE` | Canonical absolute path of a private profile document (owned by the effective user, mode 0600, at most 64 KiB, protected ancestors). |
-| `WEFT_CHAT_READER_CONNECTION_STRING` / `WEFT_CHAT_WRITER_CONNECTION_STRING` | Distinct `weft_chat_reader` and `weft_chat_writer` logins (see [chat security](private-chat-security-and-upgrade.md)). Pools open lazily. |
+| `WEFT_CHAT_READER_CONNECTION_STRING` / `WEFT_CHAT_WRITER_CONNECTION_STRING` | Distinct `weft_chat_reader` and `weft_chat_writer` logins (see [chat security](private-chat-security-and-upgrade.md)). Pools open lazily. The Session host reads only the `_FILE` forms (`WEFT_CHAT_READER_CONNECTION_STRING_FILE` / `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE`) through its [protected connection delivery](session-host.md); a plain connection-string setting refuses Session startup. |
 
 The profile document is strict JSON; unknown or duplicate properties are refused:
 

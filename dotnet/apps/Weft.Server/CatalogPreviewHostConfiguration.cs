@@ -14,7 +14,11 @@ namespace Weft.Server;
 /// </summary>
 internal static class CatalogPreviewHostConfiguration
 {
-    internal static void Configure(IServiceCollection services, CatalogPreviewOptions options, Func<string, string?> readEnvironment)
+    internal const string WriterConnection = "WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING";
+    internal const string ReaderConnection = "WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING";
+
+    internal static void Configure(IServiceCollection services, CatalogPreviewOptions options, Func<string, string?> readEnvironment,
+        bool session = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
@@ -22,8 +26,12 @@ internal static class CatalogPreviewHostConfiguration
         services.AddWeftPreviews(options);
         if (!options.Enabled)
             return;
-        var writer = Required(readEnvironment, "WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING");
-        var reader = Required(readEnvironment, "WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING");
+        // Session admits both logins as protected files before any pool or message host is composed.
+        var writer = session ? SessionHostResources.ReadProtectedConnection(readEnvironment, WriterConnection)
+            : Required(readEnvironment, WriterConnection);
+        var reader = session ? SessionHostResources.ReadProtectedConnection(readEnvironment, ReaderConnection)
+            : Required(readEnvironment, ReaderConnection);
+        if (session && writer == reader) throw ServerHostOptions.Failure();
         services.AddKeyedSingleton(PreviewDatabaseProfile.Writer, (_, _) => new PostgresPreviewDatabase(writer, PreviewDatabaseProfile.Writer));
         services.AddKeyedSingleton(PreviewDatabaseProfile.Reader, (_, _) => new PostgresPreviewDatabase(reader, PreviewDatabaseProfile.Reader));
         services.AddWolverine(wolverine => PreviewJobs.Configure(wolverine, writer, PreviewJobRole.Submitter));

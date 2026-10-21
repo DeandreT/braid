@@ -20,7 +20,7 @@ internal static class ChatHostConfiguration
     internal const int CredentialFileBytes = 8_192;
 
     internal static void Configure(IServiceCollection services, Func<string, string?> read, bool enabled,
-        bool catalogEnabled, CatalogRevisionReportOptions reports)
+        bool catalogEnabled, CatalogRevisionReportOptions reports, bool session = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(read);
@@ -33,8 +33,8 @@ internal static class ChatHostConfiguration
         // Conversations pin verified reports; chat without catalog and report reads is an invalid profile.
         if (!catalogEnabled || !reports.Enabled) throw ServerHostOptions.Failure();
         var configuration = Parse(HostPrivateFiles.ReadText(ServerHostOptions.Required(read, "WEFT_CHAT_PROFILES_FILE"), ProfileFileBytes));
-        var readerConnection = ServerHostOptions.Required(read, "WEFT_CHAT_READER_CONNECTION_STRING");
-        var writerConnection = ServerHostOptions.Required(read, "WEFT_CHAT_WRITER_CONNECTION_STRING");
+        var readerConnection = Connection("WEFT_CHAT_READER_CONNECTION_STRING");
+        var writerConnection = Connection("WEFT_CHAT_WRITER_CONNECTION_STRING");
         if (readerConnection == writerConnection) throw ServerHostOptions.Failure();
         services.AddSingleton(_ => new ChatHostDatabases(readerConnection, writerConnection));
         services.AddSingleton(provider =>
@@ -49,6 +49,9 @@ internal static class ChatHostConfiguration
         services.AddSingleton(provider => new ChatToolRegistry(MappingToolRegistry.Definitions, new MappingToolService(
             provider.GetRequiredService<IRevisionReportMetadataReader>(), provider.GetRequiredService<IRevisionReportReader>())));
         services.AddWeftChat(configuration.Options);
+
+        string Connection(string name) => session
+            ? SessionHostResources.ReadProtectedConnection(read, name) : ServerHostOptions.Required(read, name);
     }
 
     internal static ChatHostProfiles Parse(string text)

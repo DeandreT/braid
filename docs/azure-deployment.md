@@ -200,10 +200,21 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
 - **Chat.** [Chat](chat-http.md) requires revision report reads, so it stays disabled until
   the storage and worker limits above are resolved. Enabling it then means
   `WEFT_CHAT_ENABLED=true`, the `pg-chat-reader-connection` and `pg-chat-writer-connection`
-  secrets as `WEFT_CHAT_READER_CONNECTION_STRING`/`WEFT_CHAT_WRITER_CONNECTION_STRING`, and
-  the profile document and model-provider credential stored in Key Vault and delivered with
+  secrets delivered with `WEFT_DELIVER_FILE_CHAT_READER_CONNECTION` and
+  `WEFT_DELIVER_FILE_CHAT_WRITER_CONNECTION` and named by
+  `WEFT_CHAT_READER_CONNECTION_STRING_FILE=/run/weft/secrets/chat-reader-connection` and
+  `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE=/run/weft/secrets/chat-writer-connection` (the
+  Session host refuses plain chat connection strings), and the profile document and
+  model-provider credential stored in Key Vault and delivered with
   `WEFT_DELIVER_FILE_CHAT_PROFILES` and `WEFT_DELIVER_FILE_MODEL_PROVIDER_CREDENTIAL`
   (the profile's credential entry then names `/run/weft/secrets/model-provider-credential`).
+- **Previews.** The Session host can record previews, but execution needs the separate
+  `Weft.Worker` host with a Ferrule worker transport, which this environment does not run, so
+  previews stay disabled. Enabling them later means `WEFT_PREVIEWS_ENABLED=true` and the
+  `pg-preview-writer-connection` and `pg-preview-reader-connection` secrets delivered with
+  `WEFT_DELIVER_FILE_PREVIEW_WRITER_CONNECTION` and `WEFT_DELIVER_FILE_PREVIEW_READER_CONNECTION`
+  and named by `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE` and
+  `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE`.
 - **Provisioning connection.** The provisioning job's PostgreSQL client image has no CA
   bundle, so it uses `sslmode=require` inside the virtual network. Application and migration
   connections use `SSL Mode=VerifyFull`.

@@ -98,8 +98,20 @@ internal sealed class SessionHostResources
         services.AddWeftSessionCatalog(new(options.OrganizationId), options.Metadata, options.Ingestion, options.Creation, options.Reports);
         CatalogBusinessServices.Configure(services, environment, options.Metadata, options.Ingestion, options.Creation, options.Reports, read,
             options.NativeByteLimit, options.DerivedReadByteLimit, options.Builds);
-        ChatHostConfiguration.Configure(services, read, options.Chat, true, options.Reports);
+        ChatHostConfiguration.Configure(services, read, options.Chat, true, options.Reports, session: true);
+        CatalogPreviewHostConfiguration.Configure(services, options.Previews, read, session: true);
         SessionHostDataProtectionPolicy.Apply(services);
+    }
+
+    /// <summary>
+    /// Admits a feature credential only through its protected <c>NAME_FILE</c> delivery. A plain
+    /// <c>NAME</c> environment credential is a second, unprotected delivery and refuses startup
+    /// instead of being ignored or preferred.
+    /// </summary>
+    internal static string ReadProtectedConnection(Func<string, string?> read, string name)
+    {
+        if (read(name) is not null) throw ServerHostOptions.Failure();
+        return ReadConnection(read, name + "_FILE");
     }
 
     internal static string ReadConnection(Func<string, string?> read, string name)

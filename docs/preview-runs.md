@@ -122,7 +122,12 @@ Preview routes are default-off and require an enabled catalog. Every response is
 
 The Development host enables the routes with `WEFT_PREVIEWS_ENABLED=true` and the
 two preview database logins in `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING`
-and `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING`. The web host only submits:
+and `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING`. The Session host takes the
+same flag and reads only the two `_FILE` forms of those settings through its
+[protected connection delivery](session-host.md); a plain connection-string setting,
+a missing or unprotected file, or one login delivered for both profiles refuses
+startup. In either host the submitter's Wolverine runtime opens the writer login at
+startup to verify its message storage. The web host only submits:
 it records runs and their commands through the outbox, and the separate worker
 host executes them. When enabled, the catalog context advertises the `preview`
 feature, and project and mapping access report the `preview` action for callers

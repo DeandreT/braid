@@ -24,7 +24,35 @@ Session requires the following explicit configuration. Deliver secrets through p
 | `WEFT_ENTRA_CLIENT_CERTIFICATE_FILE` / `WEFT_ENTRA_CLIENT_PRIVATE_KEY_FILE` | Separate usable RSA PEM client certificate/key. No client-secret or ambient-credential path. |
 | `WEFT_TLS_CERTIFICATE_FILE` / `WEFT_TLS_PRIVATE_KEY_FILE` | Direct HTTPS only: current matching server PEM certificate/key, with SAN matching the public host and server-auth EKU when EKU is present. Put the leaf first; append its public intermediate/issuer certificates to the same PEM when required by clients. Proxy mode rejects these settings. |
 
-Chat is configured separately with `WEFT_CHAT_ENABLED`, its private profile document and chat reader/writer connections; it is off by default and requires catalog report reads. See [Chat turn HTTP API](chat-http.md).
+## Feature composition
+
+Each business feature stays off until its own flag is `true`. The table lists what each profile composes; "Session `_FILE`" means Session admits those credentials only through the `_FILE` form of each connection-string setting, as protected private files (below).
+
+| Feature | Settings | Disabled | Development | Session |
+| --- | --- | --- | --- | --- |
+| Health, static application, unknown-API 404 | always | yes | yes | yes |
+| Authentication status | `WEFT_CATALOG_AUTH_MODE` | mode-only status | Development identity | Entra sign-in and browser sessions |
+| Native examples, projection fixtures | always (examples need the worker runner) | yes | yes | no |
+| OpenAPI document | `DOTNET_ENVIRONMENT=Development` | yes | yes | no |
+| Catalog reads | `WEFT_CATALOG_ENABLED`, `WEFT_CATALOG_CONNECTION_STRING` | no | yes | yes |
+| Metadata edits, project creation | `WEFT_METADATA_EDITS_ENABLED`, `WEFT_PROJECT_CREATION_ENABLED` and their connection strings | no | yes | yes |
+| Retained report reads and revision comparison | `WEFT_REVISION_REPORTS_ENABLED`, `WEFT_POSTGRES_REPORT_CONNECTION_STRING`, `WEFT_PRIVATE_STORAGE_ROOT` | no | yes | yes |
+| Native upload and report derivation | `WEFT_REVISION_INGESTION_ENABLED`, `WEFT_REVISION_REPORT_DERIVATION_ENABLED` and their connection strings | no | yes; native work needs the Development worker runner (`WEFT_FERRULE_WORKER_IMAGE` in the Development environment) | routes and stores only; no worker runner, so native admission and derivation refuse as backend unavailable |
+| Chat | `WEFT_CHAT_ENABLED`, `WEFT_CHAT_PROFILES_FILE`, chat reader/writer | no | connection strings | Session `_FILE` |
+| Previews (submission, reads, cancel) | `WEFT_PREVIEWS_ENABLED`, preview reader/writer | no | connection strings | Session `_FILE` |
+| Regression cases and runs | `WEFT_REGRESSIONS_ENABLED`, `WEFT_FERRULE_WORKER_IMAGE`, four regression logins | no | connection strings | Session `_FILE` |
+| Builds | `WEFT_BUILDS_ENABLED`, `WEFT_FERRULE_WORKER_IMAGE`, `WEFT_PRIVATE_STORAGE_ROOT`, eight build logins | no | connection strings | Session `_FILE` |
+
+Preview, regression and build execution always runs in the separate `Weft.Worker` host; the web host only records runs and their durable commands. Revision comparison has no setting of its own: it reads the two retained reports through the same admitted report reader.
+
+Session snapshots every feature flag before it opens any PEM, ring or credential. Chat additionally requires report reads, and that inconsistency is refused at the same scalar stage. Chat's private profile document is described in [Chat turn HTTP API](chat-http.md); previews in [Preview runs](preview-runs.md).
+
+| Session credential file | Login |
+| --- | --- |
+| `WEFT_CHAT_READER_CONNECTION_STRING_FILE` / `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE` | `weft_chat_reader` / `weft_chat_writer` |
+| `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE` / `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE` | `weft_preview_reader` / `weft_preview_writer` |
+
+A plain chat or preview connection-string setting refuses Session startup rather than being ignored, and each pair must name two different deliveries. The files use the same admission as the session/identity credentials: private-file checks, explicit username and password, no passfile, client certificate/key or ambient `PG*` credential, and password-only authentication.
 
 Session rejects a true `WEFT_DEV_IDENTITY_ENABLED` or any supplied Development principal, organization, browser-origin or listener setting. It also rejects conflicting URL/port/Kestrel/automatic-forwarding configuration. Remove ambient `ASPNETCORE_URLS`, `DOTNET_URLS`, HTTP/HTTPS port variables, endpoint/certificate configuration, and automatic forwarding before choosing this explicit profile. Supported host settings prevent hosting-startup loading. Configured startup hooks, profilers and automatic OpenTelemetry instrumentation are outside this closed process profile and are refused before private resources are opened; a process cannot undo privileged code already injected before its entrypoint.
 
@@ -32,7 +60,7 @@ Secret text/overlap JSON is bounded to 16 KiB, each PEM to 64 KiB. Paths must al
 
 The three identity/session deliveries reject passfiles, PostgreSQL client-certificate/key settings and ambient `PGUSER`, `PGPASSWORD`, `PGPASSFILE`, `PGSSLCERT`, `PGSSLKEY`, `PGREQUIREAUTH` and `PGGSSENCMODE`. TLS connections also refuse an implicit `$HOME/.postgresql/postgresql.crt` identity. GSS encryption is disabled; authentication is restricted to password, MD5 or SCRAM-SHA-256, retaining any explicitly selected narrower subset. Username/password text is not trimmed or normalized. The three files are admitted before any identity/session pool owner is constructed.
 
-The three identity/session pools are separate, lazy and borrowed by the modules. Startup does not open PostgreSQL or call the provider. Session parses and retains its feature flags, report/derivation consistency and enabled native/derived byte limits before opening PEMs, the ring or credentials. Disabled feature limits remain dormant. Existing catalog read/write/ingestion/report flags and their dedicated credentials remain separate and lazy, with the same business ACL checks. Session hosting does not register a Docker runner or map examples, projection fixtures, or Development OpenAPI, even if the environment is Development. Enabling an existing business flag does not create a worker deployment or a grant; unsupported dispatch still fails through the existing service. Run required native workers through a separately qualified deployment rather than assuming this host starts them.
+The three identity/session pools are separate, lazy and borrowed by the modules. Startup does not open PostgreSQL or call the provider, except that enabled previews start the Wolverine submitter, which verifies its message storage in `weft_messages` with the delivered preview writer login; an unreachable database then fails startup. Session parses and retains its feature flags, report/derivation consistency and enabled native/derived byte limits before opening PEMs, the ring or credentials. Disabled feature limits remain dormant. Existing catalog read/write/ingestion/report flags and their dedicated credentials remain separate and lazy, with the same business ACL checks. Session hosting does not register a Docker runner or map examples, projection fixtures, or Development OpenAPI, even if the environment is Development. Enabling an existing business flag does not create a worker deployment or a grant; unsupported dispatch still fails through the existing service. Run required native workers through a separately qualified deployment rather than assuming this host starts them.
 
 Direct TLS prebuilds one `SslStreamCertificateContext` with `offline: true` from the admitted leaf/key and supplied PEM chain, then passes that static context through Kestrel's supported TLS handshake callback. Startup and handshakes do not fetch AIA issuers or start background OCSP stapling downloads; supply a usable chain rather than relying on live issuer completion. Clients still validate the server's trust, name and lifetime. HTTP/1, system TLS protocol defaults, Kestrel's handshake timeout and the absence of requested client certificates are preserved. Certificates remain borrowed until the existing shutdown settlement boundary; there is no new TLS trust store, client-certificate bypass or hot reload.
 
