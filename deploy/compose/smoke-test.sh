@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds the runtime images, starts the hosted-shape stack from new volumes, checks it through
 # the edge, restarts it, and removes every container, network, volume and image tag it created.
-# With WEFT_FERRULE_WORKER_IMAGE set, it also checks native examples through the Docker worker.
+# With WEFT_FERRULE_WORKER_IMAGE set, it also checks native examples through the Docker worker and
+# the hosted inspection worker: mutual pinning and one exact native validation frame.
 # Generated passwords and certificates stay in a private temporary directory and are never printed.
 set -euo pipefail
 
@@ -14,7 +15,7 @@ examples=false
 [[ -n ${WEFT_FERRULE_WORKER_IMAGE:-} ]] && examples=true
 built_images=()
 files=(--file "$compose_directory/compose.yml")
-[[ $examples == true ]] && files+=(--file "$compose_directory/compose.examples.yml")
+[[ $examples == true ]] && files+=(--file "$compose_directory/compose.examples.yml" --file "$compose_directory/compose.worker.yml")
 
 compose() {
   docker compose --project-name "$project" "${files[@]}" --profile operator "$@"
@@ -52,13 +53,14 @@ fail() {
 }
 
 if [[ -z ${WEFT_IMAGE:-} ]]; then
-  for target in weft edge $([[ $examples == true ]] && echo weft-local-docker); do
+  for target in weft edge $([[ $examples == true ]] && echo weft-local-docker weft-worker); do
     echo "Building $target"
     docker build --quiet --file "$repository/deploy/container/Dockerfile" --target "$target" \
       --tag "$target:$project" "$repository" >/dev/null
     built_images+=("$target:$project")
   done
-  export WEFT_IMAGE=weft:$project WEFT_EDGE_IMAGE=edge:$project WEFT_LOCAL_DOCKER_IMAGE=weft-local-docker:$project
+  export WEFT_IMAGE=weft:$project WEFT_EDGE_IMAGE=edge:$project WEFT_LOCAL_DOCKER_IMAGE=weft-local-docker:$project \
+    WEFT_WORKER_IMAGE=weft-worker:$project
 fi
 
 for role in POSTGRES_ADMIN MIGRATOR RUNTIME INGEST CATALOG METADATA CREATOR REPORT DERIVATION MAINTENANCE \
@@ -84,6 +86,14 @@ export WEFT_COMPOSE_PORT=0 WEFT_COMPOSE_EXAMPLES_PORT=0
 if [[ $examples == true ]]; then
   WEFT_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
   export WEFT_DOCKER_GID
+  # Each side of the inspection transport pins the other's certificate (SHA-256 of its DER encoding).
+  pin() { openssl x509 -in "$work/$1.crt" -outform DER | openssl dgst -sha256 -r | cut -d' ' -f1; }
+  WEFT_INSPECTION_WORKER_PEM=$(new_pem weft-inspection-worker)
+  WEFT_INSPECTION_CLIENT_PEM=$(new_pem weft-inspection-client)
+  WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256=$(pin weft-inspection-worker)
+  WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256=$(pin weft-inspection-client)
+  export WEFT_INSPECTION_WORKER_PEM WEFT_INSPECTION_CLIENT_PEM WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256 \
+    WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256
 fi
 
 env -u WEFT_FERRULE_WORKER_IMAGE -u WEFT_DOCKER_GID docker compose --project-name "$project" \
@@ -91,9 +101,11 @@ env -u WEFT_FERRULE_WORKER_IMAGE -u WEFT_DOCKER_GID docker compose --project-nam
   fail 'base stack configuration without the examples settings'
 echo 'ok - base stack renders without the examples settings'
 
+runtime_services=(server edge)
+[[ $examples == true ]] && runtime_services+=(worker)
 echo "Starting $project from new volumes"
-compose up --detach --wait --wait-timeout 180 server edge >/dev/null 2>"$work/up.log" ||
-  { tail -n 20 "$work/up.log" >&2; compose logs --no-color migrate storage-init session-keys server edge 2>&1 | tail -n 40 >&2; fail 'stack start'; }
+compose up --detach --wait --wait-timeout 180 "${runtime_services[@]}" >/dev/null 2>"$work/up.log" ||
+  { tail -n 20 "$work/up.log" >&2; compose logs --no-color migrate storage-init session-keys "${runtime_services[@]}" 2>&1 | tail -n 40 >&2; fail 'stack start'; }
 base=http://$(compose port server 8080)
 
 # Prints the status code; the body goes to $work/body.
@@ -129,7 +141,47 @@ check_session_profile() {
     --header 'X-Forwarded-Port: 80' --header 'X-Original-URL: /admin' "$base/api/v1/health"
 }
 
+# Big-endian 32-bit frame length, written directly so NUL bytes survive.
+be32() { printf "$(printf '\\x%02x\\x%02x\\x%02x\\x%02x' $(($1 >> 24 & 255)) $(($1 >> 16 & 255)) $(($1 >> 8 & 255)) $(($1 & 255)))"; }
+
+# The Session server reaches the worker only on the internal network; the host checks the same listener.
+check_inspection_worker() {
+  local frame=$1 container ip url key pinned status native header uuid
+  container=$(compose ps --quiet worker)
+  [[ -n $container && $(docker inspect --format '{{.State.Running}} {{.RestartCount}}' "$container") == 'true 0' ]] ||
+    { compose logs --no-color worker 2>&1 | tail -n 20 >&2; fail 'hosted inspection worker running'; }
+  ip=$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_inspection\"}}{{.IPAddress}}{{end}}" "$container")
+  [[ -n $ip ]] || fail 'worker address on the inspection network'
+  url=https://$ip:8443
+  key=$(openssl x509 -in "$work/weft-inspection-worker.crt" -pubkey -noout | openssl pkey -pubin -outform DER |
+    openssl dgst -sha256 -binary | base64)
+  pinned=(--insecure --pinnedpubkey "sha256//$key")
+  local client=(--cert "$work/weft-inspection-client.crt" --key "$work/weft-inspection-client.key")
+  expect 204 'worker admits the pinned server client' "${pinned[@]}" "${client[@]}" "$url/v1/inspection/ready"
+  grep -qi "^weft-worker-image: $WEFT_FERRULE_WORKER_IMAGE" "$work/headers" || fail 'worker image identity'
+  for refused in none other; do
+    local identity=()
+    [[ $refused == other ]] && identity=(--cert "$work/weft-entra-client.crt" --key "$work/weft-entra-client.key")
+    if status=$(request "${pinned[@]}" "${identity[@]}" "$url/v1/inspection/ready" 2>/dev/null); then
+      [[ $status != 204 ]] || fail "worker admitted a client with $refused certificate"
+    fi
+  done
+  echo 'ok - worker refuses clients without the pinned certificate'
+  [[ $frame == frame ]] || return 0
+  native=$repository/engines/ferrule-host/tests/fixtures/valid-basic.json
+  uuid() { cat /proc/sys/kernel/random/uuid; }
+  header=$(printf '{"protocolVersion":"weft.ferrule-host.v1","requestId":"%s","operation":"validate","revision":{"organizationId":"%s","projectId":"%s","mappingId":"%s","revisionId":"%s"},"nativeDigest":"%s","documentId":"entry.native.json","limits":{"maximumDiagnostics":128,"maximumItems":8192,"maximumTextBytes":2048}}' \
+    "$(uuid)" "$(uuid)" "$(uuid)" "$(uuid)" "$(uuid)" "$(sha256sum "$native" | cut -d' ' -f1)")
+  { be32 "${#header}"; printf '%s' "$header"; be32 "$(stat -c %s "$native")"; cat "$native"; } >"$work/frame"
+  request_seconds=60 expect 200 'native validation frame through the hosted worker' "${pinned[@]}" "${client[@]}" \
+    --header 'Content-Type: application/octet-stream' --header "Weft-Worker-Image: $WEFT_FERRULE_WORKER_IMAGE" \
+    --data-binary "@$work/frame" "$url/v1/inspection/operations/$(openssl rand -hex 16)"
+  grep -qi '^weft-worker-result: none' "$work/headers" || fail "worker result $(grep -i '^weft-worker-result' "$work/headers")"
+  grep -q '"isValid":true' "$work/body" || fail 'worker validation result'
+}
+
 check_session_profile
+[[ $examples == true ]] && check_inspection_worker frame
 for service in migrate storage-init session-keys; do
   [[ $(docker inspect --format '{{.State.ExitCode}}' "$(compose ps --all --quiet "$service")") == 0 ]] ||
     fail "$service exit status"
@@ -153,6 +205,10 @@ compose up --detach --wait --wait-timeout 180 server edge >/dev/null 2>"$work/up
 base=http://$(compose port server 8080)
 check_session_profile
 echo 'ok - restart reopened the persistent key ring and storage configuration'
+if [[ $examples == true ]]; then
+  # The restarted server admitted its native settings again; the worker keeps its pinned admission.
+  check_inspection_worker admission
+fi
 
 if [[ $examples == true ]]; then
   compose up --detach --wait --wait-timeout 120 examples examples-edge >/dev/null 2>"$work/up.log" ||

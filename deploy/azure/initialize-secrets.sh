@@ -3,6 +3,8 @@
 # - one random password per restricted PostgreSQL login (kept when it already exists) and the
 #   matching TLS-verified connection string;
 # - the self-signed session key-protection and Entra client certificates (kept when present);
+# - the self-signed inspection client and worker certificates for a separately hosted inspection
+#   worker (kept when present), with each certificate's SHA-256 pin written to OUTPUT_DIRECTORY;
 # - the owner-job input placeholder.
 # Values travel only through private temporary files; the script prints secret names, never
 # values. Writes the Entra client's public certificate to OUTPUT_DIRECTORY for the app registration.
@@ -89,6 +91,16 @@ rm -f -- "$output/weft-entra-client.pem"
 az keyvault certificate download --vault-name "$vault" --name weft-entra-client --encoding PEM \
   --file "$output/weft-entra-client.pem"
 echo "Wrote $output/weft-entra-client.pem (public certificate for the app registration)"
+
+# The Session host and the inspection worker each admit only the other's pinned certificate.
+create_certificate weft-inspection-client 'CN=Weft inspection client'
+create_certificate weft-inspection-worker 'CN=Weft inspection worker'
+for certificate in weft-inspection-client weft-inspection-worker; do
+  rm -f -- "$work/$certificate.der"
+  az keyvault certificate download --vault-name "$vault" --name "$certificate" --encoding DER --file "$work/$certificate.der"
+  sha256sum "$work/$certificate.der" | cut -d' ' -f1 >"$output/$certificate.sha256"
+  echo "Wrote $output/$certificate.sha256 (certificate pin)"
+done
 
 if ! secret_exists weft-owner-input; then
   printf '{}' >"$work/owner-input"

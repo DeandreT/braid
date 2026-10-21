@@ -79,6 +79,8 @@ deliver_text WEFT_DELIVER_SESSION_WRITER_CONNECTION_STRING session-writer.connec
 deliver_text WEFT_DELIVER_IDENTITY_READER_CONNECTION_STRING identity-reader.connection WEFT_IDENTITY_READER_CONNECTION_STRING_FILE
 deliver_pem WEFT_DELIVER_SESSION_KEY_PEM session-key WEFT_SESSION_KEY_CERTIFICATE_FILE WEFT_SESSION_KEY_PRIVATE_KEY_FILE
 deliver_pem WEFT_DELIVER_ENTRA_CLIENT_PEM entra-client WEFT_ENTRA_CLIENT_CERTIFICATE_FILE WEFT_ENTRA_CLIENT_PRIVATE_KEY_FILE
+deliver_pem WEFT_DELIVER_INSPECTION_CLIENT_PEM inspection-client WEFT_INSPECTION_CLIENT_CERTIFICATE_FILE WEFT_INSPECTION_CLIENT_PRIVATE_KEY_FILE
+deliver_pem WEFT_DELIVER_INSPECTION_WORKER_PEM inspection-worker WEFT_INSPECTION_SERVER_CERTIFICATE_FILE WEFT_INSPECTION_SERVER_PRIVATE_KEY_FILE
 deliver_decrypt_overlap
 # Generic private files for settings that name their own path, for example
 # WEFT_DELIVER_FILE_CHAT_PROFILES becomes /run/weft/secrets/chat-profiles.
@@ -112,6 +114,13 @@ case $command in
     # profile refuses ambient listener settings.
     unset ASPNETCORE_HTTP_PORTS
     exec "$dotnet" /app/server/Weft.Server.dll
+    ;;
+  worker)
+    (($# == 0)) || refuse 'WeftWorkerTakesNoArguments'
+    # Only the worker image contains Weft.Worker. Its inspection listener is explicit configuration.
+    [[ -f /app/worker/Weft.Worker.dll ]] || refuse 'WeftWorkerUnavailable'
+    unset ASPNETCORE_HTTP_PORTS
+    exec "$dotnet" /app/worker/Weft.Worker.dll
     ;;
   migrate)
     (($# == 0)) || refuse 'WeftMigrateTakesNoArguments'
@@ -152,5 +161,5 @@ case $command in
       "$WEFT_SESSION_APPLICATION_NAME" "$ring" "$WEFT_SESSION_KEY_CERTIFICATE_FILE" \
       "$WEFT_SESSION_KEY_PRIVATE_KEY_FILE" "${WEFT_SESSION_KEY_LIFETIME_DAYS:-90}"
     ;;
-  *) refuse 'Usage: weft-entrypoint server|migrate|database|storage|maintenance|session-keys|initialize-storage|bootstrap-session-keys' ;;
+  *) refuse 'Usage: weft-entrypoint server|worker|migrate|database|storage|maintenance|session-keys|initialize-storage|bootstrap-session-keys' ;;
 esac

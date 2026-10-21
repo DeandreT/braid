@@ -48,6 +48,15 @@ param enableMetadataEdits bool = true
 @description('Enable explicit project creation.')
 param enableProjectCreation bool = true
 
+@description('HTTPS origin of a separately hosted Weft.Worker inspection service in the virtual network, such as https://10.40.4.4:8443. Container Apps cannot run its Docker runner, so this environment does not create it. Empty leaves the Session host without an inspection worker.')
+param inspectionWorkerUrl string = ''
+
+@description('Lowercase SHA-256 of the inspection worker certificate (DER). Required with inspectionWorkerUrl.')
+param inspectionWorkerCertificateSha256 string = ''
+
+@description('Immutable lowercase sha256 image ID of the Ferrule worker image that the inspection worker runs. Required with inspectionWorkerUrl.')
+param ferruleWorkerImage string = ''
+
 @description('PostgreSQL administrator login, used only by the database provisioning job.')
 param postgresAdministratorLogin string = 'weftadmin'
 
@@ -202,6 +211,9 @@ module application 'modules/application.bicep' = if (deployApplication) {
     trustedIngressRange: appsSubnetPrefix
     enableMetadataEdits: enableMetadataEdits
     enableProjectCreation: enableProjectCreation
+    inspectionWorkerUrl: inspectionWorkerUrl
+    inspectionWorkerCertificateSha256: inspectionWorkerCertificateSha256
+    ferruleWorkerImage: ferruleWorkerImage
     tags: tags
   }
 }

@@ -7,13 +7,15 @@ syntax, so the classic Docker builder also builds it. Tracking work is [#137](ht
 
 | Target | Contents |
 | --- | --- |
-| `weft` (default) | `Weft.Server` with the built Angular application in `wwwroot`, the operator tools and one entrypoint. |
+| `weft` | `Weft.Server` with the built Angular application in `wwwroot`, the operator tools and one entrypoint. |
 | `edge` | The same-replica reverse proxy for the `trustedProxyOneHop` host transport. |
 | `weft-local-docker` | `weft` plus the Docker CLI for the local Development worker runner only. |
+| `weft-worker` | `Weft.Worker`, the same entrypoint and the Docker CLI, for the hosted inspection service. |
 
 ```sh
 docker build -f deploy/container/Dockerfile --target weft -t weft:local .
 docker build -f deploy/container/Dockerfile --target edge -t weft-edge:local .
+docker build -f deploy/container/Dockerfile --target weft-worker -t weft-worker:local .
 ```
 
 ## Application image
@@ -46,6 +48,7 @@ loopback, so health is checked through the edge: `GET /api/v1/health` returns
 | Command | Effect |
 | --- | --- |
 | `server` | Delivers private files, removes the base image's default `ASPNETCORE_HTTP_PORTS`, then runs the server. |
+| `worker` | The same for `Weft.Worker`; only the `weft-worker` image contains it, and it is that image's default command. |
 | `migrate` | Applies migrations with `WEFT_MIGRATION_CONNECTION_STRING` (the migrator login). |
 | `database ARGS` | Runs `Weft.DatabaseTool` owner commands. A delivered `WEFT_DELIVER_OWNER_INPUT` becomes its standard input. |
 | `storage ARGS`, `maintenance ARGS`, `session-keys ARGS` | Run `Weft.StorageTool`, `Weft.MaintenanceTool` and `Weft.SessionKeyTool`. |
@@ -76,6 +79,8 @@ that can read the container definition can still read them.
 | `WEFT_DELIVER_IDENTITY_READER_CONNECTION_STRING` | `WEFT_IDENTITY_READER_CONNECTION_STRING_FILE` |
 | `WEFT_DELIVER_SESSION_KEY_PEM` | `WEFT_SESSION_KEY_CERTIFICATE_FILE` and `WEFT_SESSION_KEY_PRIVATE_KEY_FILE` |
 | `WEFT_DELIVER_ENTRA_CLIENT_PEM` | `WEFT_ENTRA_CLIENT_CERTIFICATE_FILE` and `WEFT_ENTRA_CLIENT_PRIVATE_KEY_FILE` |
+| `WEFT_DELIVER_INSPECTION_CLIENT_PEM` | `WEFT_INSPECTION_CLIENT_CERTIFICATE_FILE` and `WEFT_INSPECTION_CLIENT_PRIVATE_KEY_FILE` (server) |
+| `WEFT_DELIVER_INSPECTION_WORKER_PEM` | `WEFT_INSPECTION_SERVER_CERTIFICATE_FILE` and `WEFT_INSPECTION_SERVER_PRIVATE_KEY_FILE` (worker) |
 | `WEFT_DELIVER_SESSION_DECRYPT_PEM_1` … `_8` | Retained decryption pairs listed in `WEFT_SESSION_DECRYPT_CERTIFICATES_FILE` |
 | `WEFT_DELIVER_OWNER_INPUT` | Standard input for the `database` command |
 | `WEFT_DELIVER_FILE_<NAME>` | `/run/weft/secrets/<name>` (lowercase, `_` becomes `-`), for settings that take an explicit private file path |
@@ -121,6 +126,12 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   edge port is published, on loopback. The database network is internal.
 - Profile `operator` adds `maintenance`, which runs the maintenance tool against the
   shared storage volume from its own container.
+- The override file `deploy/compose/compose.worker.yml` adds the hosted inspection
+  worker and enables native upload and report derivation on the server, with the
+  ingestion and derivation logins. Only `worker` mounts the Docker socket, which is
+  equivalent to host root access; it has no database, storage or egress network and
+  no published port. The server reaches `https://worker:8443` over the internal
+  `inspection` network, each side pinning the other's certificate.
 - The override file `deploy/compose/compose.examples.yml` adds a Development server
   in the Disabled profile with the Docker socket, so its worker runner can explain
   native examples. Docker socket access is equivalent to host root access; this file
@@ -132,9 +143,14 @@ environment: the `WEFT_LOCAL_*_PASSWORD` values required by `postgres-init.sh` p
 `WEFT_LOCAL_POSTGRES_ADMIN_PASSWORD`, `WEFT_SESSION_ORGANIZATION_ID`,
 `WEFT_SESSION_KEY_PEM`, `WEFT_ENTRA_TENANT_ID`, `WEFT_ENTRA_CLIENT_ID`,
 `WEFT_ENTRA_CLIENT_PEM` and `WEFT_PUBLIC_HOST`; the examples override additionally
-requires `WEFT_FERRULE_WORKER_IMAGE` and `WEFT_DOCKER_GID`. Image names default to
-`weft:local`, `weft-edge:local` and `weft-local-docker:local`; `WEFT_COMPOSE_PORT`
-and `WEFT_COMPOSE_EXAMPLES_PORT` choose the loopback ports (`0` selects a free one).
+requires `WEFT_FERRULE_WORKER_IMAGE` and `WEFT_DOCKER_GID`. The worker override requires
+those two plus `WEFT_INSPECTION_WORKER_PEM` and `WEFT_INSPECTION_CLIENT_PEM` (separate
+PEM bundles) and each certificate's pin, `WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256` and
+`WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256`: the lowercase SHA-256 of the DER
+certificate, for example `openssl x509 -in worker.crt -outform DER | openssl dgst -sha256 -r`.
+Image names default to `weft:local`, `weft-edge:local`, `weft-local-docker:local` and
+`weft-worker:local`; `WEFT_COMPOSE_PORT` and `WEFT_COMPOSE_EXAMPLES_PORT` choose the
+loopback ports (`0` selects a free one).
 
 The smoke test builds uniquely tagged images, generates throwaway passwords and
 self-signed certificates in a private temporary directory, starts the stack from new
@@ -151,8 +167,12 @@ the Session status endpoint, anonymous catalog refusal, absence of the Developme
 examples API, replacement of client forwarding fields, completion of the one-shot
 steps, maintenance access to the shared storage root, and the same checks after the
 replica restarts with its retained volumes. With `WEFT_FERRULE_WORKER_IMAGE` set, it
-also applies the examples override and requires native projection and validation
-through the worker. The generated Entra values are placeholders, so sign-in is not exercised.
+also applies the examples and worker overrides and requires native projection and
+validation through the examples worker runner; the Session server to start with native
+upload and derivation enabled, also after the restart; and, on the worker's internal
+address, admission of only the pinned server certificate and one exact native validation
+frame through the hosted worker. The generated Entra values are placeholders, so
+sign-in and therefore browser upload are not exercised.
 
 ## Hosted boundaries
 

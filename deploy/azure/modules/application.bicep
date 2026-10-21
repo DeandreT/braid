@@ -19,6 +19,9 @@ param customDomainCertificateId string
 param trustedIngressRange string
 param enableMetadataEdits bool
 param enableProjectCreation bool
+param inspectionWorkerUrl string
+param inspectionWorkerCertificateSha256 string
+param ferruleWorkerImage string
 param tags object
 
 // The provisioning job uses the PostgreSQL client from the image whose major version the
@@ -82,6 +85,10 @@ var roles = [
   { key: 'qualification-writer', env: 'QUALIFICATION_WRITER' }
 ]
 
+// A separately hosted inspection worker; the settings stay dormant until native upload or
+// derivation is enabled, which also needs a private storage profile this environment lacks.
+var inspectionWorker = !empty(inspectionWorkerUrl)
+
 var serverSecretNames = concat([
   'session-key-pem'
   'entra-client-pem'
@@ -89,7 +96,8 @@ var serverSecretNames = concat([
   'session-reader-connection'
   'session-writer-connection'
   'identity-connection'
-], enableMetadataEdits ? ['metadata-connection'] : [], enableProjectCreation ? ['creator-connection'] : [])
+], enableMetadataEdits ? ['metadata-connection'] : [], enableProjectCreation ? ['creator-connection'] : [],
+  inspectionWorker ? ['inspection-client-pem'] : [])
 var vaultNames = {
   'session-key-pem': 'weft-session-key'
   'entra-client-pem': 'weft-entra-client'
@@ -99,6 +107,7 @@ var vaultNames = {
   'identity-connection': 'pg-identity-connection'
   'metadata-connection': 'pg-metadata-connection'
   'creator-connection': 'pg-creator-connection'
+  'inspection-client-pem': 'weft-inspection-client'
 }
 
 var serverEnvironment = concat([
@@ -126,6 +135,11 @@ var serverEnvironment = concat([
   { name: 'WEFT_POSTGRES_METADATA_CONNECTION_STRING', secretRef: 'metadata-connection' }
 ] : [], enableProjectCreation ? [
   { name: 'WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING', secretRef: 'creator-connection' }
+] : [], inspectionWorker ? [
+  { name: 'WEFT_INSPECTION_WORKER_URL', value: inspectionWorkerUrl }
+  { name: 'WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256', value: inspectionWorkerCertificateSha256 }
+  { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleWorkerImage }
+  { name: 'WEFT_DELIVER_INSPECTION_CLIENT_PEM', secretRef: 'inspection-client-pem' }
 ] : [])
 
 var healthProbe = {

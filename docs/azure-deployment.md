@@ -11,7 +11,7 @@ dependency privately. Tracking work is [#146](https://github.com/DeandreT/weft/i
 | Log Analytics | Container Apps console and system logs (30 days). |
 | Container registry | Basic SKU, no admin user; the application identity has only `AcrPull`. |
 | Managed identity | One user-assigned identity for the app and jobs: image pull and Key Vault secret reads. |
-| Key Vault | RBAC authorization, purge protection, private endpoint; optional operator IP allow-list. Holds every credential and both certificates. |
+| Key Vault | RBAC authorization, purge protection, private endpoint; optional operator IP allow-list. Holds every credential and certificate. |
 | Storage account | No public network access; private endpoint; SMB share `weft-session-keys` for the session key ring. |
 | PostgreSQL Flexible Server | Version 16, private VNet access only, password authentication, 14-day backups. |
 | Container Apps environment | Workload-profile (Consumption) environment in the VNet with public ingress. |
@@ -193,10 +193,19 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   is refused, use a persistent POSIX volume such as an Azure Files NFS share prepared with
   the same ownership.
 - **Private object storage and native work.** The private storage adapter admits only local
-  ext4, Btrfs, XFS, tmpfs and overlay filesystems; Azure Files (SMB or NFS) is refused. The
-  Session host also has no hosted Ferrule worker transport. Native upload, report reads and
-  report derivation therefore stay disabled here. Enabling them requires a Blob storage
-  adapter (or a qualified network-filesystem profile) and a hosted worker transport.
+  ext4, Btrfs, XFS, tmpfs and overlay filesystems; Azure Files (SMB or NFS) is refused, so
+  native upload, report reads and report derivation stay disabled here until a Blob storage
+  adapter (or a qualified network-filesystem profile) exists. Native work also needs the
+  [hosted inspection worker](ferrule-worker.md#hosted-inspection-transport): `Weft.Worker`
+  runs the Ferrule image with a Docker daemon, which Container Apps cannot provide, so it
+  must run on a Docker-capable Linux host inside the virtual network, reachable only from the
+  apps subnet on its inspection port. These templates do not create that host. They wire the
+  Session host to it with `inspectionWorkerUrl`, `inspectionWorkerCertificateSha256` (from
+  `weft-inspection-worker.sha256`) and `ferruleWorkerImage`, delivering the
+  `weft-inspection-client` certificate; the settings stay dormant until native upload or
+  derivation is enabled. `initialize-secrets.sh` creates both inspection certificates in Key
+  Vault and writes their pins; the worker host receives `weft-inspection-worker` as
+  `WEFT_DELIVER_INSPECTION_WORKER_PEM` and the client pin from `weft-inspection-client.sha256`.
 - **Chat.** [Chat](chat-http.md) requires revision report reads, so it stays disabled until
   the storage and worker limits above are resolved. Enabling it then means
   `WEFT_CHAT_ENABLED=true`, the `pg-chat-reader-connection` and `pg-chat-writer-connection`

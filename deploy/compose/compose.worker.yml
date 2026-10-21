@@ -1,0 +1,44 @@
+# Hosted inspection worker: native upload and report derivation for the Session server through a
+# separate Weft.Worker that runs the Ferrule image with the host Docker daemon. Only the worker gets
+# the Docker socket, which is equivalent to host root access; the internet-facing server and edge
+# never do. The server reaches the worker only over the internal inspection network, with each side
+# pinning the other's certificate. See docs/runtime-packaging.md.
+# Use with: docker compose -f compose.yml -f compose.worker.yml
+services:
+  server:
+    environment:
+      WEFT_REVISION_INGESTION_ENABLED: "true"
+      WEFT_POSTGRES_INGESTION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_ingest;Password=${WEFT_LOCAL_INGEST_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_REVISION_REPORT_DERIVATION_ENABLED: "true"
+      WEFT_POSTGRES_DERIVATION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_deriver;Password=${WEFT_LOCAL_DERIVATION_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_FERRULE_WORKER_IMAGE: ${WEFT_FERRULE_WORKER_IMAGE:?Set the immutable worker image ID}
+      WEFT_INSPECTION_WORKER_URL: https://worker:8443
+      WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256: ${WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256:?Set the worker certificate pin}
+      WEFT_DELIVER_INSPECTION_CLIENT_PEM: ${WEFT_INSPECTION_CLIENT_PEM:?Set the server inspection client PEM}
+    networks: [database, egress, inspection]
+
+  worker:
+    image: ${WEFT_WORKER_IMAGE:-weft-worker:local}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /run/weft/secrets:uid=1654,gid=1654,mode=0700,size=1m
+    environment:
+      WEFT_PREVIEW_WORKER_ENABLED: "false"
+      WEFT_INSPECTION_WORKER_ENABLED: "true"
+      WEFT_INSPECTION_LISTEN_ADDR: 0.0.0.0:8443
+      WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256: ${WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256:?Set the server client certificate pin}
+      WEFT_DELIVER_INSPECTION_WORKER_PEM: ${WEFT_INSPECTION_WORKER_PEM:?Set the worker inspection PEM}
+      WEFT_FERRULE_WORKER_IMAGE: ${WEFT_FERRULE_WORKER_IMAGE:?Set the immutable worker image ID}
+    group_add: ["${WEFT_DOCKER_GID:?Set the group ID of the Docker socket}"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # No database, storage, egress or published port: only the server can reach it.
+    networks: [inspection]
+
+networks:
+  inspection:
+    internal: true

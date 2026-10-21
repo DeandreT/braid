@@ -1,6 +1,7 @@
 # Weft runtime images. Build from the repository root with the classic builder or BuildKit:
 #   docker build -f deploy/container/Dockerfile --target weft -t weft:local .
 #   docker build -f deploy/container/Dockerfile --target edge -t weft-edge:local .
+#   docker build -f deploy/container/Dockerfile --target weft-worker -t weft-worker:local .
 # See docs/runtime-packaging.md. Every base image is pinned by digest.
 
 ARG NODE_IMAGE=docker.io/library/node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
@@ -76,3 +77,21 @@ FROM ${DOCKER_CLI_IMAGE} AS docker-cli
 # Local examples only: the Development worker runner drives the host Docker daemon.
 FROM weft AS weft-local-docker
 COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker
+
+# Hosted inspection worker: Weft.Worker with the Docker CLI. It runs the Ferrule image through a
+# Docker daemon for the Session server, which reaches it only over the pinned inspection transport.
+# These stages come last so the classic builder does not build them for the other targets.
+FROM build AS worker-build
+RUN dotnet restore dotnet/apps/Weft.Worker/Weft.Worker.csproj --locked-mode \
+    && dotnet publish dotnet/apps/Weft.Worker/Weft.Worker.csproj --configuration Release --no-restore \
+        --output /out/worker -p:UseAppHost=false
+
+FROM ${ASPNET_IMAGE} AS weft-worker
+COPY --from=worker-build /out/worker /app/worker
+COPY deploy/container/weft-entrypoint.sh /app/bin/weft-entrypoint
+COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker
+COPY --from=build --chown=1654:1654 /out/state/run /run/weft
+USER 1654:1654
+WORKDIR /app
+ENTRYPOINT ["/app/bin/weft-entrypoint"]
+CMD ["worker"]
