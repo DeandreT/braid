@@ -136,7 +136,7 @@ export async function runBrowserFixture(definition) {
     check(
       cfg.schemaVersion ===
         `weft.${definition.kind}-browser-operator-config.v1` &&
-        cfg.runtimeReleased === true,
+        (regressionScenario || cfg.runtimeReleased === true),
     );
     const fixtureId = guid(cfg.fixtureId),
       privateRoot = absolute(cfg.privateDirectory);
@@ -144,7 +144,8 @@ export async function runBrowserFixture(definition) {
     check(
       dirname(configPath) === privateRoot &&
         dirname(absolute(cfg.manifestPath)) === privateRoot &&
-        dirname(absolute(cfg.releasePath)) === privateRoot,
+        (regressionScenario ||
+          dirname(absolute(cfg.releasePath)) === privateRoot),
     );
     check(
       process.env[
@@ -180,17 +181,20 @@ export async function runBrowserFixture(definition) {
     );
     origin(cfg.mutationOrigin);
     check(cfg.readOrigin !== cfg.mutationOrigin);
-    const release = parse(privateFile(cfg.releasePath));
-    check(
-      release.schemaVersion === `weft.${definition.kind}-browser-release.v1` &&
-        release.released === true &&
-        release.configurationSha256 === sha(configBytes) &&
-        release.operatorSha256 ===
-          sha(readFileSync(fileURLToPath(definition.entrypoint))) &&
-        release.sourceAndPublicationsAccepted === true &&
-        release.outerObserversAccepted === true,
-    );
-    bound(cfg.outerObserverAdmission);
+    if (!regressionScenario) {
+      const release = parse(privateFile(cfg.releasePath));
+      check(
+        release.schemaVersion ===
+          `weft.${definition.kind}-browser-release.v1` &&
+          release.released === true &&
+          release.configurationSha256 === sha(configBytes) &&
+          release.operatorSha256 ===
+            sha(readFileSync(fileURLToPath(definition.entrypoint))) &&
+          release.sourceAndPublicationsAccepted === true &&
+          release.outerObserversAccepted === true,
+      );
+      bound(cfg.outerObserverAdmission);
+    }
     bound(cfg.source.admission);
     bound(cfg.publications.admission);
     check(
@@ -257,8 +261,10 @@ export async function runBrowserFixture(definition) {
         cfg.daemonSocket === "/var/run/docker.sock",
     );
     absolute(cfg.dotnet);
-    const workerImage =
-      "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184";
+    const workerImage = regressionScenario
+      ? cfg.workerImage
+      : "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184";
+    check(!regressionScenario || /^sha256:[a-f0-9]{64}$/.test(workerImage));
     const postgresImage =
       "postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc";
     check(
@@ -2139,7 +2145,10 @@ export async function runBrowserFixture(definition) {
         manifestSha256: sha(bytes),
         profile: creationScenario
           ? "creator"
-          : metadataScenario || uploadScenario || appendScenario
+          : metadataScenario ||
+              uploadScenario ||
+              appendScenario ||
+              regressionScenario
             ? "publisher"
             : "viewer",
       });
@@ -2471,7 +2480,10 @@ export async function runBrowserFixture(definition) {
     let metadataPublisher = null;
     function captureMetadataPublisher(projectId) {
       check(
-        (metadataScenario || uploadScenario || appendScenario) &&
+        (metadataScenario ||
+          uploadScenario ||
+          appendScenario ||
+          regressionScenario) &&
           metadataPublisher === null &&
           !mutationHost,
       );
@@ -2500,7 +2512,10 @@ export async function runBrowserFixture(definition) {
     }
     function changeMetadataPublisherRole(role) {
       check(
-        (metadataScenario || uploadScenario || appendScenario) &&
+        (metadataScenario ||
+          uploadScenario ||
+          appendScenario ||
+          regressionScenario) &&
           metadataPublisher !== null &&
           !mutationHost &&
           ["publisher", "viewer"].includes(role),
@@ -2933,6 +2948,12 @@ export async function runBrowserFixture(definition) {
         ? {
             captureAppendPublisher: captureMetadataPublisher,
             changeAppendPublisherRole: changeMetadataPublisherRole,
+          }
+        : {}),
+      ...(regressionScenario
+        ? {
+            captureRegressionPublisher: captureMetadataPublisher,
+            changeRegressionPublisherRole: changeMetadataPublisherRole,
           }
         : {}),
       verifyInputBodies,
