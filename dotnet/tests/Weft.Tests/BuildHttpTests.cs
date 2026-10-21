@@ -210,7 +210,7 @@ public sealed class BuildHttpTests(PostgresFixture fixture)
     private static async Task<JsonElement> Json(HttpResponseMessage response)
     { using var document = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync()); return document.RootElement.Clone(); }
 
-    private sealed class Host : IAsyncDisposable
+    internal sealed class Host : IAsyncDisposable
     {
         private readonly WebApplication app;
         private readonly PostgresCatalogDatabase catalog;
@@ -219,7 +219,8 @@ public sealed class BuildHttpTests(PostgresFixture fixture)
         private readonly PostgresRevisionReportDatabase reports;
         internal HttpClient Client { get; }
         internal string MappingPath { get; }
-        internal int BodyReads, MetadataResolutions, IntentResolutions, ActiveApprovalWrites, DropNextReply;
+        internal int BodyReads, MetadataResolutions, IntentResolutions, ActiveApprovalWrites, DropNextReply, AdministrationCommands;
+        internal Func<Task>? AfterBody;
         private Host(WebApplication app, PostgresCatalogDatabase catalog, PostgresBuildMetadataReader metadata, PostgresBuildRunStore reader,
             PostgresBuildRunStore writer, PostgresRevisionReportDatabase reports, Uri origin, BuildIntent intent)
         {
@@ -228,17 +229,18 @@ public sealed class BuildHttpTests(PostgresFixture fixture)
             { BaseAddress = origin, Timeout = TimeSpan.FromSeconds(45) };
             MappingPath = $"/api/v1/organizations/{intent.Revision.OrganizationId:D}/projects/{intent.Revision.ProjectId:D}/mappings/{intent.Revision.MappingId:D}";
         }
-        internal static async Task<Host> StartAsync(BuildPersistenceTests.Context data, bool enabled = true, bool changedRuntime = false)
+        internal static async Task<Host> StartAsync(BuildPersistenceTests.Context data, bool enabled = true, bool changedRuntime = false,
+            BuildRuntimeProfile? selectedProfile = null, Guid? principalOverride = null)
         {
             var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start();
             var origin = new Uri("http://127.0.0.1:" + ((IPEndPoint)reservation.LocalEndpoint).Port);
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
             builder.Logging.ClearProviders(); builder.WebHost.ConfigureKestrel(server => server.Listen(IPAddress.Loopback, origin.Port));
             builder.Services.AddWeftApi(); builder.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
-            builder.Services.AddWeftCatalog(new(true, true, data.Actor.PrincipalId.Value, data.Intent.Revision.OrganizationId,
+            builder.Services.AddWeftCatalog(new(true, true, principalOverride ?? data.Actor.PrincipalId.Value, data.Intent.Revision.OrganizationId,
                 origin.GetLeftPart(UriPartial.Authority)), builder.Environment);
             var backend = changedRuntime ? new BuildBackendIdentity(data.Intent.Backend.BackendId, data.Intent.Backend.EngineRevision, "different-current-image", data.Intent.Backend.AdapterVersion) : data.Intent.Backend;
-            builder.Services.AddWeftBuildApi(new(enabled, backend, data.Intent.Profile));
+            builder.Services.AddWeftBuildApi(new(enabled, backend, selectedProfile ?? data.Intent.Profile));
             var test = data.Runs.Cases.Case;
             var catalog = new PostgresCatalogDatabase(test.CatalogConnectionString);
             var catalogReader = new PostgresCatalogReader(catalog);
@@ -256,11 +258,17 @@ public sealed class BuildHttpTests(PostgresFixture fixture)
             builder.Services.AddSingleton(provider => new BuildApprovalRecoveryService(provider.GetRequiredService<IBuildMetadataReader>(), provider.GetRequiredService<IBuildIntentFactory>(),
                 provider.GetRequiredService<IBuildApprovalWriter>(), catalogReader));
             builder.Services.AddSingleton(provider => new BuildSubmissionService(provider.GetRequiredService<IBuildMetadataReader>(), reader, writer, controls, catalogReader, backend, data.Intent.Profile));
+            builder.Services.AddSingleton(provider =>
+            {
+                var commands = new CountedAdministration(data.Store, host!);
+                return new BuildAdministrationService(provider.GetRequiredService<IBuildMetadataReader>(),
+                    commands, commands, catalogReader, selectedProfile ?? data.Intent.Profile);
+            });
             var app = builder.Build();
             host = new(app, catalog, metadata, reader, writer, reports, origin, data.Intent);
             app.Use(async (context, next) =>
             {
-                if (HttpMethods.IsPut(context.Request.Method))
+                if (HttpMethods.IsPut(context.Request.Method) || HttpMethods.IsPost(context.Request.Method))
                 {
                     context.Request.Body = new Counted(context.Request.Body, host);
                     context.Response.OnStarting(() =>
@@ -303,12 +311,29 @@ public sealed class BuildHttpTests(PostgresFixture fixture)
             public Task<BuildControlOutcome> ApproveAsync(ActorContext actor, BuildIntent intent, CancellationToken token = default)
             { host.ActiveApprovalWrites++; throw new InvalidOperationException("Historical recovery must not renew approval."); }
         }
+        private sealed class CountedAdministration(IBuildControlStore inner, Host host) : IBuildEnvironmentCommands, IBuildApprovalRevocation
+        {
+            public Task<BuildControlOutcome> SaveEnvironmentAsync(ActorContext actor, BuildEnvironment environment, CancellationToken token = default)
+            { Interlocked.Increment(ref host.AdministrationCommands); return inner.SaveEnvironmentAsync(actor, environment, token); }
+            public Task<bool> RevokeAsync(ActorContext actor, Guid organizationId, Guid projectId, Guid approvalId, CancellationToken token = default)
+            { Interlocked.Increment(ref host.AdministrationCommands); return inner.RevokeAsync(actor, organizationId, projectId, approvalId, token); }
+        }
         private sealed class Counted(Stream inner, Host host) : Stream
         {
             public override bool CanRead => true; public override bool CanSeek => false; public override bool CanWrite => false;
             public override long Length => throw new NotSupportedException(); public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
             public override int Read(byte[] buffer, int offset, int count) { Interlocked.Increment(ref host.BodyReads); return inner.Read(buffer, offset, count); }
-            public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken token = default) { Interlocked.Increment(ref host.BodyReads); return inner.ReadAsync(buffer, token); }
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken token = default)
+            {
+                Interlocked.Increment(ref host.BodyReads);
+                var count = await inner.ReadAsync(buffer, token);
+                if (count == 0 && host.AfterBody is { } after)
+                {
+                    host.AfterBody = null;
+                    await after();
+                }
+                return count;
+            }
             public override void Flush() => throw new NotSupportedException(); public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
             public override void SetLength(long value) => throw new NotSupportedException(); public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         }

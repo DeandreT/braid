@@ -21,6 +21,7 @@ public static partial class CatalogEndpoints
         DescribeBuild<BuildCapabilitiesV1>(endpoints.MapGet(mapping + "/build-capabilities", GetBuildCapabilities), "GetBuildCapabilities", "Read current build-control capabilities without starting a worker.");
         BuildPageParameters(DescribeBuild<BuildEnvironmentPageV1>(endpoints.MapGet(project + "/build-environments", GetBuildEnvironments), "GetBuildEnvironments", "Read bounded retained environment versions."), "afterEnvironmentId", environmentVersion: true);
         DescribeBuild<BuildEnvironmentV1>(endpoints.MapGet(project + "/build-environments/{environmentId}/versions/{version}", GetBuildEnvironment), "GetBuildEnvironment", "Read one exact retained environment version.");
+        MapBuildAdministration(endpoints, project, mapping);
         MapBuildApprovals(endpoints, mapping);
         MapBuildRuns(endpoints, mapping);
         return endpoints;
@@ -63,14 +64,14 @@ public static partial class CatalogEndpoints
     }
     private static async Task<bool> BuildMappingAccess(HttpContext context, CatalogRequestAdmission admission, MappingScope mapping) =>
         await CaseCatalogMapping(context, admission.Actor!, mapping) is { } current && current.Access.Can(ProjectAction.UploadRevision);
-    private static async Task<bool> BuildProjectAccess(HttpContext context, CatalogRequestAdmission admission, ProjectScope project)
+    private static async Task<bool> BuildProjectAccess(HttpContext context, CatalogRequestAdmission admission, ProjectScope project, bool administrator = false)
     {
         if (project.OrganizationId != admission.AllowedOrganizationId) return false;
         var current = await context.RequestServices.GetRequiredService<ICatalogReader>().GetProjectAsync(admission.Actor!, project, context.RequestAborted);
         if (current is null) return false;
         RequireScope(current.Summary.Scope == project);
         RequireAccess(current.Access, admission.Actor!, project);
-        return current.Access.Can(ProjectAction.UploadRevision);
+        return administrator ? current.Access.Role == ProjectRole.Administrator : current.Access.Can(ProjectAction.UploadRevision);
     }
     private static byte[] PrepareBuild<T>(T value, CancellationToken token)
     {

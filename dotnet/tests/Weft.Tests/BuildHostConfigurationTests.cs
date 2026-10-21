@@ -57,6 +57,7 @@ public sealed class BuildHostConfigurationTests
         await using var provider = services.BuildServiceProvider();
         Assert.NotNull(provider.GetRequiredService<BuildApprovalRecoveryService>());
         Assert.NotNull(provider.GetRequiredService<BuildSubmissionService>());
+        Assert.NotNull(provider.GetRequiredService<BuildAdministrationService>());
     }
 
     private sealed class Environment : IWebHostEnvironment

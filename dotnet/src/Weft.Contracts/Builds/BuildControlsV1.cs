@@ -9,6 +9,9 @@ public sealed record BuildEnvironmentReferenceV1(string OrganizationId, string P
 public sealed record BuildEnvironmentV1(BuildEnvironmentReferenceV1 Reference, BuildRuntimeV1 Profile, bool Active,
     string CreatorPrincipalId, string CreatedAtUtc);
 public sealed record BuildEnvironmentPageV1(IReadOnlyList<BuildEnvironmentV1> Environments, string? NextEnvironmentId, string? NextVersion);
+public sealed record BuildEnvironmentPutV1(string ProfileId, string ProfileVersion);
+public sealed record BuildEnvironmentReceiptV1(string Outcome, BuildEnvironmentV1 Environment);
+public sealed record BuildEnvironmentCapabilitiesV1(BuildRuntimeV1 Profile, bool CanCreateVersions);
 public sealed record BuildApprovalPutV1(string BuildId, string RevisionId, string EnvironmentId, string EnvironmentVersion, string RegressionEvidenceId);
 public sealed record BuildApprovalV1(string ApprovalId, string BuildId, CatalogRevisionScopeV1 Revision, string NativeDigest,
     BuildBackendV1 Backend, BuildRuntimeV1 Profile, IReadOnlyList<BuildBoundaryV1> Boundaries, BuildEnvironmentReferenceV1 Environment,

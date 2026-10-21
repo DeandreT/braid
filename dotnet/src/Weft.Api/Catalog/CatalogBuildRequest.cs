@@ -18,6 +18,7 @@ internal static class CatalogBuildRequest
 {
     internal const string ApprovalMediaType = "application/vnd.weft.build-approval.v1+json";
     internal const string RunMediaType = "application/vnd.weft.build-run.v1+json";
+    internal const string EnvironmentMediaType = "application/vnd.weft.build-environment.v1+json";
     internal const int MaximumBytes = 2048;
     internal static Guid Id(string value) => Guid.TryParseExact(value, "D", out var result) && result != Guid.Empty && value == result.ToString("D") ? result : throw Invalid();
     internal static long Version(string value) => value.Length is > 0 and <= 19 &&
@@ -33,6 +34,14 @@ internal static class CatalogBuildRequest
     }
     internal static async Task<Guid> RunAsync(HttpRequest request, CancellationToken token) =>
         Id((await ReadAsync(request, RunMediaType, ["approvalId"], token))["approvalId"]);
+
+    internal static async Task<BuildEnvironmentSelection> EnvironmentAsync(HttpRequest request, CancellationToken token)
+    {
+        var values = await ReadAsync(request, EnvironmentMediaType, ["profileId", "profileVersion"], token);
+        var id = values["profileId"];
+        if (string.IsNullOrWhiteSpace(id) || id.Any(char.IsControl) || Encoding.UTF8.GetByteCount(id) > 128) throw Invalid();
+        return new(id, Version(values["profileVersion"]));
+    }
 
     private static async Task<Dictionary<string, string>> ReadAsync(HttpRequest request, string mediaType, string[] fields, CancellationToken token)
     {

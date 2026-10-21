@@ -8,12 +8,10 @@ public sealed record BuildEnvironment(BuildEnvironmentReference Reference, Build
 public sealed record BuildApproval(PrincipalId Actor, BuildIntent Intent, PrivateObjectReference Native, Sha256Digest EvidenceDigest);
 public enum BuildControlOutcome { Created, Replayed, Conflict, Refused }
 
-public interface IBuildControlStore
+public interface IBuildControlStore : IBuildEnvironmentCommands, IBuildApprovalRevocation
 {
-    Task<BuildControlOutcome> SaveEnvironmentAsync(ActorContext actor, BuildEnvironment environment, CancellationToken token = default);
     Task<BuildEnvironment?> ReadEnvironmentAsync(ActorContext actor, BuildEnvironmentReference environment, CancellationToken token = default);
     Task<BuildControlOutcome> ApproveAsync(ActorContext actor, BuildApproval approval, CancellationToken token = default);
-    Task<bool> RevokeAsync(ActorContext actor, Guid organizationId, Guid projectId, Guid approvalId, CancellationToken token = default);
     Task<BuildApproval?> ReadApprovalAsync(ActorContext actor, BuildIntent intent, CancellationToken token = default);
 }
 

@@ -107,3 +107,30 @@ and history indexes. Exact function/schema guards admit the new contract without
 changing earlier migration bodies. Existing local installations explicitly run
 `deploy/local/postgres-add-build-metadata-role.sh` as an administrator before
 migrating. Applications never install schema or credentials themselves.
+
+## Environment administration and approval revocation
+
+`GET /build-environment-capabilities` on a project returns the server's selectable
+runtime profile and current administrator capability. It does not test compilation
+or authorize a later mutation.
+
+Administrators create the next sequential version with
+`PUT /build-environments/{environmentId}/versions/{version}` and
+`application/vnd.weft.build-environment.v1+json`:
+
+```json
+{ "profileId": "<server-offered-profile-id>", "profileVersion": "1" }
+```
+
+The server supplies the runtime, runtime version, format and artifact limit. New
+version creation atomically supersedes the old version. An identical retained
+version request recovers its original full profile even when the configured
+profile changes. Recovery never reactivates a superseded version. Changed
+selectors conflict; an unavailable new profile selection fails the precondition.
+
+Publishers can explicitly revoke their own approvals using empty-body
+`POST /build-approvals/{approvalId}/revoke` on the mapping. Repeating the request
+returns retained revoked metadata; it cannot renew execution admission. The
+underlying administrative database privilege does not expose another actor's
+approval through this own-record HTTP route. Neither administration operation
+starts a worker, deploys a target or downloads an artifact.

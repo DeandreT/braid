@@ -100,6 +100,12 @@ public static class CatalogBuildHostConfiguration
         services.AddSingleton(provider => new BuildSubmissionService(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredService<IBuildRunReader>(), provider.GetRequiredService<IBuildRunCommands>(), provider.GetRequiredService<IBuildAdmissionReader>(),
             provider.GetRequiredKeyedService<IProjectReader>(Key), backend, profile));
+        services.AddSingleton(provider => new LazyAdministration(() => provider.GetRequiredKeyedService<PostgresBuildStore>(Key)));
+        services.AddSingleton<IBuildEnvironmentCommands>(provider => provider.GetRequiredService<LazyAdministration>());
+        services.AddSingleton<IBuildApprovalRevocation>(provider => provider.GetRequiredService<LazyAdministration>());
+        services.AddSingleton(provider => new BuildAdministrationService(provider.GetRequiredService<IBuildMetadataReader>(),
+            provider.GetRequiredService<IBuildEnvironmentCommands>(), provider.GetRequiredService<IBuildApprovalRevocation>(),
+            provider.GetRequiredKeyedService<IProjectReader>(Key), profile));
     }
 
     private sealed class LazyIntentFactory(Func<IBuildIntentFactory> factory) : IBuildIntentFactory
@@ -114,5 +120,12 @@ public static class CatalogBuildHostConfiguration
     private sealed class LazyAdmission(Func<IBuildAdmissionReader> factory) : IBuildAdmissionReader
     {
         public Task<BuildAdmission?> ReadAsync(ActorContext actor, BuildIntent intent, CancellationToken token = default) => factory().ReadAsync(actor, intent, token);
+    }
+    private sealed class LazyAdministration(Func<IBuildControlStore> factory) : IBuildEnvironmentCommands, IBuildApprovalRevocation
+    {
+        public Task<BuildControlOutcome> SaveEnvironmentAsync(ActorContext actor, BuildEnvironment environment, CancellationToken token = default) =>
+            factory().SaveEnvironmentAsync(actor, environment, token);
+        public Task<bool> RevokeAsync(ActorContext actor, Guid organizationId, Guid projectId, Guid approvalId, CancellationToken token = default) =>
+            factory().RevokeAsync(actor, organizationId, projectId, approvalId, token);
     }
 }

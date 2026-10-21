@@ -276,6 +276,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/build-environment-capabilities": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the trusted selectable runtime profile and current environment-administrator capability. */
+    get: operations["GetBuildEnvironmentCapabilities"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/build-environments": {
     parameters: {
       query?: never;
@@ -302,7 +319,8 @@ export interface paths {
     };
     /** Read one exact retained environment version. */
     get: operations["GetBuildEnvironment"];
-    put?: never;
+    /** Create a sequential environment version or recover its retained original profile without reactivation. */
+    put: operations["PutBuildEnvironment"];
     post?: never;
     delete?: never;
     options?: never;
@@ -377,6 +395,23 @@ export interface paths {
     /** Create or recover one original immutable build approval. */
     put: operations["PutBuildApproval"];
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-approvals/{approvalId}/revoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Explicitly revoke an own approval or recover its retained revoked status without renewing admission. */
+    post: operations["RevokeBuildApproval"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1052,10 +1087,22 @@ export interface components {
       readOwnMetadata: boolean;
       submitBuilds: boolean;
     };
+    BuildEnvironmentCapabilitiesV1: {
+      canCreateVersions: boolean;
+      profile: components["schemas"]["BuildRuntimeV1"];
+    };
     BuildEnvironmentPageV1: {
       environments: components["schemas"]["BuildEnvironmentV1"][];
       nextEnvironmentId: null | string;
       nextVersion: null | string;
+    };
+    BuildEnvironmentPutV1: {
+      profileId: string;
+      profileVersion: string;
+    };
+    BuildEnvironmentReceiptV1: {
+      environment: components["schemas"]["BuildEnvironmentV1"];
+      outcome: string;
     };
     BuildEnvironmentReferenceV1: {
       environmentId: string;
@@ -3687,6 +3734,56 @@ export interface operations {
       };
     };
   };
+  GetBuildEnvironmentCapabilities: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildEnvironmentCapabilitiesV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
   GetBuildEnvironments: {
     parameters: {
       query?: {
@@ -3778,6 +3875,107 @@ export interface operations {
       };
       /** @description Not Found */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  PutBuildEnvironment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        environmentId: string;
+        organizationId: string;
+        projectId: string;
+        version: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/vnd.weft.build-environment.v1+json": components["schemas"]["BuildEnvironmentPutV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildEnvironmentReceiptV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildEnvironmentReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
         headers: {
           [name: string]: unknown;
         };
@@ -4319,6 +4517,58 @@ export interface operations {
       };
       /** @description Unsupported Media Type */
       415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  RevokeBuildApproval: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        approvalId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildApprovalV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
         headers: {
           [name: string]: unknown;
         };
