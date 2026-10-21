@@ -6,6 +6,7 @@ use ferrule_mapping::FileCodecError;
 use sha2::{Digest, Sha256};
 
 pub mod decode;
+pub mod build;
 pub mod framing;
 pub mod inspect;
 pub mod preview;
@@ -35,6 +36,11 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
     struct ProtocolProbe {
         #[serde(rename = "protocolVersion")]
         protocol_version: Option<String>,
+    }
+    if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
+        .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(build::PROTOCOL))
+    {
+        return build::handle(&header_bytes, reader, writer);
     }
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
         .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(PREVIEW_PROTOCOL_VERSION))

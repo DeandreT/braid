@@ -99,6 +99,9 @@ install -D -m 0444 \
 cp -R /work/third-party /runtime/usr/share/weft-ferrule-host/third-party
 EOF
 
+FROM build AS qualification
+RUN cargo test --release --locked --package weft-ferrule-host --test build_qualification --test protocol_qualification --test preview_qualification
+
 FROM scratch
 ARG WEFT_REVISION=""
 LABEL org.opencontainers.image.title="Weft Ferrule worker" \

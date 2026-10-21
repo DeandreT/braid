@@ -2056,6 +2056,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cli",
+ "codegen",
+ "codegen-csharp",
  "engine",
  "ir",
  "mapping",

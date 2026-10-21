@@ -39,7 +39,7 @@ internal static class DockerSandboxMetadata
 
         return Text(config, "User", "65532:65532")
             && Text(config, "WorkingDir", "/")
-            && ArrayEquals(config, "Entrypoint", ["/ferrule-host"])
+            && ArrayEquals(config, "Entrypoint", [profile.Entrypoint])
             && Empty(config, "Cmd")
             && Enabled(config, "OpenStdin")
             && Disabled(config, "Tty")
@@ -54,7 +54,7 @@ internal static class DockerSandboxMetadata
             && Integer(host, "NanoCpus", 1_000_000_000)
             && Integer(host, "Memory", profile.MemoryBytes)
             && Integer(host, "MemorySwap", profile.MemoryBytes)
-            && Integer(host, "PidsLimit", 16)
+            && Integer(host, "PidsLimit", profile.ProcessLimit)
             && ArrayEquals(host, "CapDrop", ["ALL"])
             && Empty(host, "CapAdd")
             && ArrayEquals(host, "SecurityOpt", ["no-new-privileges=true"])
@@ -67,7 +67,8 @@ internal static class DockerSandboxMetadata
             && Text(restart, "Name", "no")
             && host.TryGetProperty("LogConfig", out var log)
             && Text(log, "Type", "none")
-            && Limits(host, profile.CpuSeconds);
+            && TemporaryMount(host, profile)
+            && Limits(host, profile.CpuSeconds, profile.FileLimit);
     });
 
     private static bool SafeEnvironment(JsonElement config)
@@ -99,14 +100,19 @@ internal static class DockerSandboxMetadata
             && environment.EnumerateArray().All(item => item.ValueKind == JsonValueKind.String && item.GetString() == DefaultPath);
     }
 
-    private static bool Limits(JsonElement host, int cpuSeconds)
+    private static bool TemporaryMount(JsonElement host, DockerWorkerProfile profile) => profile == DockerWorkerProfile.Build
+        ? host.TryGetProperty("Tmpfs", out var mounts) && mounts.ValueKind == JsonValueKind.Object && mounts.EnumerateObject().Count() == 1
+            && Text(mounts, "/tmp", DockerWorkerProfile.BuildTemporaryMount)
+        : Empty(host, "Tmpfs", JsonValueKind.Object);
+
+    private static bool Limits(JsonElement host, int cpuSeconds, int fileLimit)
     {
         if (!host.TryGetProperty("Ulimits", out var limits) || limits.ValueKind != JsonValueKind.Array || limits.GetArrayLength() != 3)
         {
             return false;
         }
 
-        return HasLimit(limits, "nofile", 64) && HasLimit(limits, "cpu", cpuSeconds) && HasLimit(limits, "core", 0);
+        return HasLimit(limits, "nofile", fileLimit) && HasLimit(limits, "cpu", cpuSeconds) && HasLimit(limits, "core", 0);
     }
 
     private static bool HasLimit(JsonElement limits, string name, long value) =>

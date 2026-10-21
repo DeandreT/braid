@@ -217,7 +217,7 @@ pub fn admit<'a>(
 
 /// A boundary is plain JSON when every non-JSON option is absent and any stored
 /// design-time path names a `.json` document unless JSON is explicitly selected.
-fn plain_json(options: &FormatOptions, stored_path: Option<&str>) -> bool {
+pub(crate) fn plain_json(options: &FormatOptions, stored_path: Option<&str>) -> bool {
     let comparable = FormatOptions {
         json_document: options.json_document,
         mfd_decimal_input_names: options.mfd_decimal_input_names.clone(),
