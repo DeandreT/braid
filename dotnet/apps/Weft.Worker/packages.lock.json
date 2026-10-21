@@ -716,6 +716,8 @@
         "type": "Project",
         "dependencies": {
           "Weft.Application": "[1.0.0, )",
+          "Weft.Deployment": "[1.0.0, )",
+          "Weft.MappingBackends": "[1.0.0, )",
           "Weft.Persistence.Postgres": "[1.0.0, )",
           "WolverineFx.Postgresql": "[6.51.1, )",
           "WolverineFx.RuntimeCompilation": "[6.51.1, )"

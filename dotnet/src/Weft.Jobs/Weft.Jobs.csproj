@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <ProjectReference Include="../Weft.Deployment/Weft.Deployment.csproj" />
+    <ProjectReference Include="../Weft.MappingBackends/Weft.MappingBackends.csproj" />
     <PackageReference Include="WolverineFx.Postgresql" Version="6.51.1" />
     <!-- Wolverine 6 compiles its generated handler and outbox code at startup only through this package. -->
     <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.51.1" />
