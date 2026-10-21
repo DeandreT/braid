@@ -1,6 +1,6 @@
 using Weft.Application;
-using Weft.Domain;
 using Weft.Deployment;
+using Weft.Domain;
 using Weft.Persistence.Postgres;
 
 namespace Weft.Tests;

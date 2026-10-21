@@ -1,7 +1,7 @@
-using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Jobs;
