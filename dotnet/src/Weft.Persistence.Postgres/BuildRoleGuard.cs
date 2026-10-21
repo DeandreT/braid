@@ -51,7 +51,8 @@ internal static partial class BuildRoleGuard
         var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token);
         if (await BuildRunRoleGuard.IsInstalledAsync(connection, transaction, token))
         {
-            if (fingerprint != BuildRunRoleGuard.PublicationFingerprint) throw Invalid();
+            var metadata = await BuildMetadataRoleGuard.IsInstalledAsync(connection, transaction, token);
+            if (fingerprint != (metadata ? BuildMetadataRoleGuard.PublicationFingerprint : BuildRunRoleGuard.PublicationFingerprint)) throw Invalid();
             await BuildRunRoleGuard.ValidateContractAsync(connection, transaction, token);
         }
         else if (fingerprint != Fingerprint) throw Invalid();

@@ -40,11 +40,19 @@ public sealed record BuildRunClaim
     public override string ToString() => nameof(BuildRunClaim);
 }
 
-public interface IBuildRunStore
+public interface IBuildRunCommands
 {
     Task<BuildRunSubmitOutcome> SubmitAsync(ActorContext actor, BuildIntent intent, CancellationToken token = default);
-    Task<BuildRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid buildId, CancellationToken token = default);
     Task<bool> CancelAsync(ActorContext actor, Guid organizationId, Guid buildId, CancellationToken token = default);
+}
+
+public interface IBuildRunReader
+{
+    Task<BuildRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid buildId, CancellationToken token = default);
+}
+
+public interface IBuildRunStore : IBuildRunCommands, IBuildRunReader
+{
     Task<BuildRunClaim?> ClaimAsync(Guid organizationId, Guid buildId, Guid workerId, CancellationToken token = default);
     Task<bool> RenewAsync(BuildRunClaim claim, CancellationToken token = default);
     Task<bool> ReleaseAsync(BuildRunClaim claim, CancellationToken token = default);

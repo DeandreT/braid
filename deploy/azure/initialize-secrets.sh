@@ -40,6 +40,7 @@ declare -A logins=(
   [run-reader]=weft_run_reader [run-writer]=weft_run_writer
   [build-reader]=weft_build_reader [build-writer]=weft_build_writer
   [build-run-reader]=weft_build_run_reader [build-run-writer]=weft_build_run_writer [build-dispatcher]=weft_build_dispatcher
+  [build-metadata]=weft_build_metadata_reader
 )
 
 for key in "${!logins[@]}"; do

@@ -14,6 +14,7 @@ public static class ApiConfiguration
     {
         services.AddWeftRegressionCases();
         services.AddWeftRegressionRuns();
+        services.AddWeftBuildApi();
         services.ConfigureHttpJsonOptions(options => ProjectionJson.Configure(options.SerializerOptions));
         services.AddOpenApi(options => options.AddDocumentTransformer((document, _, _) =>
         {

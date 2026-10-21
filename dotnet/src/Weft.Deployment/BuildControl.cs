@@ -17,9 +17,14 @@ public interface IBuildControlStore
     Task<BuildApproval?> ReadApprovalAsync(ActorContext actor, BuildIntent intent, CancellationToken token = default);
 }
 
+public interface IBuildApprovalWriter
+{
+    Task<BuildControlOutcome> ApproveAsync(ActorContext actor, BuildIntent intent, CancellationToken token = default);
+}
+
 /// <summary>Combines fresh persisted controls, current native identity and recomputed saved-case evidence.</summary>
 public sealed class BuildControlService(IBuildControlStore controls, IProjectReader projects,
-    IRevisionReportMetadataReader sources, RegressionRunReadService runs) : IBuildAdmissionReader
+    IRevisionReportMetadataReader sources, RegressionRunReadService runs) : IBuildAdmissionReader, IBuildApprovalWriter
 {
     public async Task<BuildControlOutcome> ApproveAsync(ActorContext actor, BuildIntent intent, CancellationToken token = default)
     {

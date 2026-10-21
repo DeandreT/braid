@@ -77,6 +77,7 @@ var roles = [
   { key: 'build-run-reader', env: 'BUILD_RUN_READER' }
   { key: 'build-run-writer', env: 'BUILD_RUN_WRITER' }
   { key: 'build-dispatcher', env: 'BUILD_DISPATCHER' }
+  { key: 'build-metadata', env: 'BUILD_METADATA' }
 ]
 
 var serverSecretNames = concat([

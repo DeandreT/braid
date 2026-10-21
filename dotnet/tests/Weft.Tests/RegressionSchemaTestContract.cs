@@ -14,13 +14,14 @@ internal static class RegressionSchemaTestContract
     internal const string HistoryChecksum = "0ce99a72cc4822ec9b09710becf297436d36d966c23d88cb8212e0d04b0bc89a";
     internal const string BuildChecksum = "5c4f348a577ac36d7d4e2410318e26cee11521bcfb879e620af54705e39d03d2";
     internal const string BuildDispatchChecksum = "3f1262c5b3e538e472b5e015b5fdb8e683983505faebc24a9057816f4aee3cfc";
+    internal const string BuildMetadataChecksum = "cfc43e570c53b8f2f830de4fcbe7b0e06ff0b8acc1a49c8eb7d7003d69110627";
     internal static readonly string[] Tables = ["regression_cases", "regression_case_versions", "regression_runs", .. BuildRoleGuard.Tables, .. BuildRunRoleGuard.Tables];
     internal static readonly string[] Functions = ["case_authorized", "guard_regression_case", "guard_regression_version",
         "save_regression_case", "read_regression_case", "list_regression_cases", "regression_run_authorized", "guard_regression_run",
         "submit_regression_run", "claim_regression_run", "observe_regression_run", "finish_regression_run", "release_regression_run",
-        "cancel_regression_run", "read_regression_run", "list_ready_regression_runs", "list_regression_run_history", .. BuildRoleGuard.Names, .. BuildRunRoleGuard.Names];
+        "cancel_regression_run", "read_regression_run", "list_ready_regression_runs", "list_regression_run_history", .. BuildRoleGuard.Names, .. BuildRunRoleGuard.Names, .. BuildMetadataRoleGuard.Names];
     internal static readonly string[] Roles = ["weft_case_reader", "weft_case_writer", "weft_run_reader", "weft_run_writer", "weft_build_reader", "weft_build_writer",
-        "weft_build_run_reader", "weft_build_run_writer", "weft_build_dispatcher"];
+        "weft_build_run_reader", "weft_build_run_writer", "weft_build_dispatcher", "weft_build_metadata_reader"];
 
     internal static async Task AdmitAsync(PostgresCase test, CancellationToken token = default)
     {
@@ -49,5 +50,7 @@ internal static class RegressionSchemaTestContract
         }
         await using var dispatcher = new PostgresBuildRunStore(test.RegressionConnectionString("weft_build_dispatcher"), BuildRunDatabaseProfile.Dispatcher);
         Assert.True((await dispatcher.DiscoverAsync(1, token)).Count <= 1);
+        await using var metadata = new PostgresBuildMetadataReader(test.RegressionConnectionString("weft_build_metadata_reader"));
+        Assert.Null(await metadata.ReadEnvironmentAsync(actor, new(new(mapping.OrganizationId, mapping.ProjectId), Guid.NewGuid(), 1), token));
     }
 }

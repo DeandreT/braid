@@ -42,6 +42,7 @@ app.MapWeftNativeExamples();
 app.MapWeftCatalog();
 app.MapWeftRegressionCases();
 app.MapWeftRegressionRuns();
+app.MapWeftBuilds();
 app.MapWeftChat();
 app.MapWeftAuthentication();
 if (app.Environment.IsDevelopment())

@@ -6189,6 +6189,1005 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-capabilities": {
+      "get": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Read current build-control capabilities without starting a worker.",
+        "operationId": "GetBuildCapabilities",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildCapabilitiesV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/build-environments": {
+      "get": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Read bounded retained environment versions.",
+        "operationId": "GetBuildEnvironments",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Canonical decimal page limit, default 50 and maximum 100.",
+            "schema": {
+              "maxLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterEnvironmentId",
+            "in": "query",
+            "description": "Exact cursor from the preceding actor/scope-bound page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "afterVersion",
+            "in": "query",
+            "description": "Canonical positive version paired with afterEnvironmentId.",
+            "schema": {
+              "maxLength": 19,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildEnvironmentPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/build-environments/{environmentId}/versions/{version}": {
+      "get": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Read one exact retained environment version.",
+        "operationId": "GetBuildEnvironment",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildEnvironmentV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-approvals": {
+      "get": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Read bounded own retained approvals without renewing admission.",
+        "operationId": "GetBuildApprovals",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Canonical decimal page limit, default 50 and maximum 100.",
+            "schema": {
+              "maxLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterApprovalId",
+            "in": "query",
+            "description": "Exact cursor from the preceding actor/scope-bound page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildApprovalPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-approvals/{approvalId}": {
+      "get": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Recover an exact own approval, including revoked/inactive metadata.",
+        "operationId": "GetBuildApproval",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "approvalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildApprovalV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Create or recover one original immutable build approval.",
+        "operationId": "PutBuildApproval",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "approvalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/vnd.weft.build-approval.v1+json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildApprovalPutV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildApprovalReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildApprovalReceiptV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-runs": {
+      "get": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Read bounded own build history without artifact bodies.",
+        "operationId": "GetBuildRuns",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Canonical decimal page limit, default 50 and maximum 100.",
+            "schema": {
+              "maxLength": 3,
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterBuildId",
+            "in": "query",
+            "description": "Exact cursor from the preceding actor/scope-bound page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRunPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-runs/{buildId}": {
+      "get": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Read one exact own retained build result.",
+        "operationId": "GetBuildRun",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "buildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRunV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Queue an exact stored approval or recover the original submission.",
+        "operationId": "PutBuildRun",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "buildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/vnd.weft.build-run.v1+json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildRunPutV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRunReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRunReceiptV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-runs/{buildId}/cancel": {
+      "post": {
+        "tags": [
+          "Builds"
+        ],
+        "summary": "Request cancellation without replacing a retained terminal result.",
+        "operationId": "CancelBuildRun",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "buildId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildRunV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat": {
       "get": {
         "tags": [
@@ -8653,6 +9652,426 @@
           "rows",
           "documentSet"
         ]
+      },
+      "BuildApprovalPageV1": {
+        "required": [
+          "approvals",
+          "nextApprovalId"
+        ],
+        "type": "object",
+        "properties": {
+          "approvals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuildApprovalV1"
+            }
+          },
+          "nextApprovalId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "BuildApprovalPutV1": {
+        "required": [
+          "buildId",
+          "revisionId",
+          "environmentId",
+          "environmentVersion",
+          "regressionEvidenceId"
+        ],
+        "type": "object",
+        "properties": {
+          "buildId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentVersion": {
+            "type": "string"
+          },
+          "regressionEvidenceId": {
+            "type": "string"
+          }
+        }
+      },
+      "BuildApprovalReceiptV1": {
+        "required": [
+          "outcome",
+          "approval"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/BuildApprovalV1"
+          }
+        }
+      },
+      "BuildApprovalV1": {
+        "required": [
+          "approvalId",
+          "buildId",
+          "revision",
+          "nativeDigest",
+          "backend",
+          "profile",
+          "boundaries",
+          "environment",
+          "regressionEvidenceId",
+          "revoked",
+          "environmentActive",
+          "createdAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "approvalId": {
+            "type": "string"
+          },
+          "buildId": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "nativeDigest": {
+            "type": "string"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/BuildBackendV1"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/BuildRuntimeV1"
+          },
+          "boundaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuildBoundaryV1"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/BuildEnvironmentReferenceV1"
+          },
+          "regressionEvidenceId": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "environmentActive": {
+            "type": "boolean"
+          },
+          "createdAtUtc": {
+            "type": "string"
+          }
+        }
+      },
+      "BuildArtifactMetadataV1": {
+        "required": [
+          "sha256",
+          "byteCount",
+          "format"
+        ],
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string"
+          },
+          "byteCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "format": {
+            "type": "string"
+          }
+        }
+      },
+      "BuildBackendV1": {
+        "required": [
+          "backendId",
+          "engineRevision",
+          "engineBuild",
+          "adapterVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "backendId": {
+            "type": "string"
+          },
+          "engineRevision": {
+            "type": "string"
+          },
+          "engineBuild": {
+            "type": "string"
+          },
+          "adapterVersion": {
+            "type": "string"
+          }
+        }
+      },
+      "BuildBoundaryV1": {
+        "required": [
+          "kind",
+          "name",
+          "format"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "format": {
+            "type": "string"
+          }
+        }
+      },
+      "BuildCapabilitiesV1": {
+        "required": [
+          "backend",
+          "profile",
+          "readOwnMetadata",
+          "approveBuilds",
+          "submitBuilds"
+        ],
+        "type": "object",
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/BuildBackendV1"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/BuildRuntimeV1"
+          },
+          "readOwnMetadata": {
+            "type": "boolean"
+          },
+          "approveBuilds": {
+            "type": "boolean"
+          },
+          "submitBuilds": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BuildEnvironmentPageV1": {
+        "required": [
+          "environments",
+          "nextEnvironmentId",
+          "nextVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "environments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuildEnvironmentV1"
+            }
+          },
+          "nextEnvironmentId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nextVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "BuildEnvironmentReferenceV1": {
+        "required": [
+          "organizationId",
+          "projectId",
+          "environmentId",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "BuildEnvironmentV1": {
+        "required": [
+          "reference",
+          "profile",
+          "active",
+          "creatorPrincipalId",
+          "createdAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "reference": {
+            "$ref": "#/components/schemas/BuildEnvironmentReferenceV1"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/BuildRuntimeV1"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "creatorPrincipalId": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "string"
+          }
+        }
+      },
+      "BuildRunPageV1": {
+        "required": [
+          "runs",
+          "nextBuildId"
+        ],
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BuildRunV1"
+            }
+          },
+          "nextBuildId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "BuildRunPutV1": {
+        "required": [
+          "approvalId"
+        ],
+        "type": "object",
+        "properties": {
+          "approvalId": {
+            "type": "string"
+          }
+        }
+      },
+      "BuildRunReceiptV1": {
+        "required": [
+          "outcome",
+          "run"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "run": {
+            "$ref": "#/components/schemas/BuildRunV1"
+          }
+        }
+      },
+      "BuildRuntimeV1": {
+        "required": [
+          "id",
+          "version",
+          "runtime",
+          "runtimeVersion",
+          "artifactFormat",
+          "maximumArtifactBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "runtimeVersion": {
+            "type": "string"
+          },
+          "artifactFormat": {
+            "type": "string"
+          },
+          "maximumArtifactBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BuildRunV1": {
+        "required": [
+          "buildId",
+          "approvalId",
+          "revision",
+          "state",
+          "attempt",
+          "createdAtUtc",
+          "outcome",
+          "artifact"
+        ],
+        "type": "object",
+        "properties": {
+          "buildId": {
+            "type": "string"
+          },
+          "approvalId": {
+            "type": "string"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "state": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "artifact": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildArtifactMetadataV1"
+              }
+            ]
+          }
+        }
       },
       "CapabilityCondition": {
         "required": [
@@ -13864,6 +15283,9 @@
     },
     {
       "name": "Regression cases"
+    },
+    {
+      "name": "Builds"
     },
     {
       "name": "Chat"

@@ -150,6 +150,13 @@ public sealed class BuildRunPersistenceTests(PostgresFixture fixture)
         var row = (await test.Reader.ReadAsync(test.Actor, test.Org, test.Intent.BuildId))!;
         Assert.Equal(BuildRunState.Uncertain, row.State); Assert.Equal(3, row.Attempt); Assert.Null(row.Outcome);
         Assert.Equal(publication.Bytes.Digest, row.Artifact!.ContentDigest);
+        await using var metadata = new PostgresBuildMetadataReader(test.Case.RegressionConnectionString("weft_build_metadata_reader"));
+        var page = await metadata.ListRunsAsync(test.Actor, new(test.Intent.Revision.OrganizationId, test.Intent.Revision.ProjectId, test.Intent.Revision.MappingId), 1);
+        var summary = Assert.Single(page!.Runs);
+        var response = Weft.Api.Catalog.CatalogBuildMapping.Run(summary);
+        Assert.Equal("uncertain", response.State); Assert.Null(response.Outcome);
+        Assert.Equal(publication.Bytes.Digest.Value, response.Artifact!.Sha256);
+        Assert.Equal(publication.Bytes.Length, response.Artifact.ByteCount);
         Assert.Empty(await test.Dispatcher.DiscoverAsync(4));
         Assert.Equal(BuildRunSubmitOutcome.Replayed, await test.Writer.SubmitAsync(test.Actor, test.Intent));
         Assert.NotNull(await test.Control.Store.ReadAsync(test.Actor, test.Org, test.Intent.BuildId));

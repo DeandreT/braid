@@ -276,6 +276,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/build-environments": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read bounded retained environment versions. */
+    get: operations["GetBuildEnvironments"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/build-environments/{environmentId}/versions/{version}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one exact retained environment version. */
+    get: operations["GetBuildEnvironment"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings": {
     parameters: {
       query?: never;
@@ -308,6 +342,110 @@ export interface paths {
     get: operations["GetCatalogMapping"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-approvals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read bounded own retained approvals without renewing admission. */
+    get: operations["GetBuildApprovals"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-approvals/{approvalId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Recover an exact own approval, including revoked/inactive metadata. */
+    get: operations["GetBuildApproval"];
+    /** Create or recover one original immutable build approval. */
+    put: operations["PutBuildApproval"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-capabilities": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read current build-control capabilities without starting a worker. */
+    get: operations["GetBuildCapabilities"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-runs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read bounded own build history without artifact bodies. */
+    get: operations["GetBuildRuns"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-runs/{buildId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one exact own retained build result. */
+    get: operations["GetBuildRun"];
+    /** Queue an exact stored approval or recover the original submission. */
+    put: operations["PutBuildRun"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/build-runs/{buildId}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Request cancellation without replacing a retained terminal result. */
+    post: operations["CancelBuildRun"];
     delete?: never;
     options?: never;
     head?: never;
@@ -861,6 +999,108 @@ export interface components {
       "primaryInput" | "namedInput" | "primaryOutput" | "namedOutput";
     /** @enum {unknown} */
     BoundaryShape: "unknown" | "scalar" | "object" | "rows" | "documentSet";
+    BuildApprovalPageV1: {
+      approvals: components["schemas"]["BuildApprovalV1"][];
+      nextApprovalId: null | string;
+    };
+    BuildApprovalPutV1: {
+      buildId: string;
+      environmentId: string;
+      environmentVersion: string;
+      regressionEvidenceId: string;
+      revisionId: string;
+    };
+    BuildApprovalReceiptV1: {
+      approval: components["schemas"]["BuildApprovalV1"];
+      outcome: string;
+    };
+    BuildApprovalV1: {
+      approvalId: string;
+      backend: components["schemas"]["BuildBackendV1"];
+      boundaries: components["schemas"]["BuildBoundaryV1"][];
+      buildId: string;
+      createdAtUtc: string;
+      environment: components["schemas"]["BuildEnvironmentReferenceV1"];
+      environmentActive: boolean;
+      nativeDigest: string;
+      profile: components["schemas"]["BuildRuntimeV1"];
+      regressionEvidenceId: string;
+      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      revoked: boolean;
+    };
+    BuildArtifactMetadataV1: {
+      /** Format: int64 */
+      byteCount: number;
+      format: string;
+      sha256: string;
+    };
+    BuildBackendV1: {
+      adapterVersion: string;
+      backendId: string;
+      engineBuild: string;
+      engineRevision: string;
+    };
+    BuildBoundaryV1: {
+      format: string;
+      kind: string;
+      name: null | string;
+    };
+    BuildCapabilitiesV1: {
+      approveBuilds: boolean;
+      backend: components["schemas"]["BuildBackendV1"];
+      profile: components["schemas"]["BuildRuntimeV1"];
+      readOwnMetadata: boolean;
+      submitBuilds: boolean;
+    };
+    BuildEnvironmentPageV1: {
+      environments: components["schemas"]["BuildEnvironmentV1"][];
+      nextEnvironmentId: null | string;
+      nextVersion: null | string;
+    };
+    BuildEnvironmentReferenceV1: {
+      environmentId: string;
+      organizationId: string;
+      projectId: string;
+      version: string;
+    };
+    BuildEnvironmentV1: {
+      active: boolean;
+      createdAtUtc: string;
+      creatorPrincipalId: string;
+      profile: components["schemas"]["BuildRuntimeV1"];
+      reference: components["schemas"]["BuildEnvironmentReferenceV1"];
+    };
+    BuildRunPageV1: {
+      nextBuildId: null | string;
+      runs: components["schemas"]["BuildRunV1"][];
+    };
+    BuildRunPutV1: {
+      approvalId: string;
+    };
+    BuildRunReceiptV1: {
+      outcome: string;
+      run: components["schemas"]["BuildRunV1"];
+    };
+    BuildRuntimeV1: {
+      artifactFormat: string;
+      id: string;
+      /** Format: int64 */
+      maximumArtifactBytes: number;
+      runtime: string;
+      runtimeVersion: string;
+      version: string;
+    };
+    BuildRunV1: {
+      approvalId: string;
+      artifact: null | components["schemas"]["BuildArtifactMetadataV1"];
+      /** Format: int32 */
+      attempt: number;
+      buildId: string;
+      createdAtUtc: string;
+      outcome: null | string;
+      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      state: string;
+    };
     CapabilityCondition: {
       code: string;
       description: string;
@@ -3447,6 +3687,115 @@ export interface operations {
       };
     };
   };
+  GetBuildEnvironments: {
+    parameters: {
+      query?: {
+        /** @description Exact cursor from the preceding actor/scope-bound page. */
+        afterEnvironmentId?: string;
+        /** @description Canonical positive version paired with afterEnvironmentId. */
+        afterVersion?: string;
+        /** @description Canonical decimal page limit, default 50 and maximum 100. */
+        limit?: string;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildEnvironmentPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetBuildEnvironment: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        environmentId: string;
+        organizationId: string;
+        projectId: string;
+        version: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildEnvironmentV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
   GetCatalogMappings: {
     parameters: {
       query?: {
@@ -3761,6 +4110,536 @@ export interface operations {
       };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetBuildApprovals: {
+    parameters: {
+      query?: {
+        /** @description Exact cursor from the preceding actor/scope-bound page. */
+        afterApprovalId?: string;
+        /** @description Canonical decimal page limit, default 50 and maximum 100. */
+        limit?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildApprovalPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetBuildApproval: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        approvalId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildApprovalV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  PutBuildApproval: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        approvalId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/vnd.weft.build-approval.v1+json": components["schemas"]["BuildApprovalPutV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildApprovalReceiptV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildApprovalReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetBuildCapabilities: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildCapabilitiesV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetBuildRuns: {
+    parameters: {
+      query?: {
+        /** @description Exact cursor from the preceding actor/scope-bound page. */
+        afterBuildId?: string;
+        /** @description Canonical decimal page limit, default 50 and maximum 100. */
+        limit?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildRunPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetBuildRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        buildId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildRunV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  PutBuildRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        buildId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/vnd.weft.build-run.v1+json": components["schemas"]["BuildRunPutV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildRunReceiptV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildRunReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  CancelBuildRun: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        buildId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BuildRunV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
         headers: {
           [name: string]: unknown;
         };

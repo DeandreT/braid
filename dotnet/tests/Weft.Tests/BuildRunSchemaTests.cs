@@ -9,7 +9,9 @@ public sealed class BuildRunSchemaTests(PostgresFixture fixture, ITestOutputHelp
     [PostgresFact]
     public async Task Fresh_build_dispatch_schema_has_the_exact_qualified_contract()
     {
-        await using var test = await fixture.CreateCaseAsync();
+        await using var test = await fixture.CreateCaseAsync(migrate: false);
+        await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(19).ToArray()))
+            await prefix.MigrateAsync();
         await using var connection = await test.Owner.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
         await using (var settings = new Npgsql.NpgsqlCommand("SET LOCAL search_path=pg_catalog; SET LOCAL TimeZone='UTC'; SET LOCAL DateStyle='ISO, MDY'", connection, transaction))

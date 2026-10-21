@@ -34,6 +34,7 @@ services:
       WEFT_LOCAL_BUILD_RUN_READER_PASSWORD: ${WEFT_LOCAL_BUILD_RUN_READER_PASSWORD:?Set a separate build run reader password}
       WEFT_LOCAL_BUILD_RUN_WRITER_PASSWORD: ${WEFT_LOCAL_BUILD_RUN_WRITER_PASSWORD:?Set a separate build run writer password}
       WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD: ${WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD:?Set a separate build dispatcher password}
+      WEFT_LOCAL_BUILD_METADATA_PASSWORD: ${WEFT_LOCAL_BUILD_METADATA_PASSWORD:?Set a separate build metadata reader password}
       WEFT_LOCAL_RUN_WRITER_PASSWORD: ${WEFT_LOCAL_RUN_WRITER_PASSWORD:?Set a separate run writer password}
     ports:
       - "127.0.0.1:54329:5432"

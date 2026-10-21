@@ -16,7 +16,7 @@ internal static class CatalogBusinessServices
     internal static void Configure(IServiceCollection services, IWebHostEnvironment environment,
         CatalogMetadataEditOptions metadataOptions, CatalogRevisionIngestionOptions ingestionOptions,
         CatalogProjectCreationOptions creationOptions, CatalogRevisionReportOptions reportOptions,
-        Func<string, string?> readEnvironment, long? nativeByteLimit = null, int? derivedReadByteLimit = null)
+        Func<string, string?> readEnvironment, long? nativeByteLimit = null, int? derivedReadByteLimit = null, BuildHostRuntime? buildRuntime = null)
     {
         var connectionString = readEnvironment("WEFT_CATALOG_CONNECTION_STRING");
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -92,6 +92,8 @@ internal static class CatalogBusinessServices
         }
         CatalogRevisionReportHostConfiguration.Configure(services, environment, reportOptions, readEnvironment, derivedReadByteLimit);
         CatalogRegressionHostConfiguration.Configure(services, readEnvironment, catalogEnabled: true);
+        CatalogBuildHostConfiguration.Configure(services, environment, readEnvironment,
+            buildRuntime ?? CatalogBuildHostConfiguration.ReadRuntime(readEnvironment, catalogEnabled: true));
     }
 
     private static PostgresProjectCreationDatabase CreateProjectCreationDatabase(string connectionString)

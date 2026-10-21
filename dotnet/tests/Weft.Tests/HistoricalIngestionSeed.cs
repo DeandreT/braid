@@ -21,8 +21,8 @@ internal static class HistoricalIngestionSeed
     private const string IngestionChecksum = "d61a8bc2d56b6a39607414cf0f14c58db511594369ac124fd270a08f77455ae5";
     private const long MigrationLock = 6287392987644524871;
     private const int MaximumTableRows = 64;
-    private const int MaximumJournalRows = 16;
-    private const int MaximumSchemaRows = 512;
+    private const int MaximumJournalRows = 32;
+    private const int MaximumSchemaRows = 1024;
     private const int MaximumSnapshotBytes = 1024 * 1024;
     private static readonly (string Name, string Order)[] Tables =
     [
@@ -537,7 +537,7 @@ internal static class HistoricalIngestionSeed
         while (await reader.ReadAsync(cancellationToken))
         {
             if (++count > maximumRows || reader.IsDBNull(0))
-                throw SnapshotLimit();
+                throw new InvalidOperationException($"The complete historical {name} snapshot exceeds its fixed row or UTF8 byte limit (row {count}, maximum {maximumRows}); no truncated snapshot is returned.");
             // PostgreSQL produced this complete JSON value through the fixed to_jsonb/
             // jsonb_build_object queries. Preserve nested evidence without a second parser's
             // smaller default depth limit; the SQL row and shared UTF8 budgets still apply.

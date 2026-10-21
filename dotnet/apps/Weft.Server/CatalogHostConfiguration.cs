@@ -31,6 +31,7 @@ public static class CatalogHostConfiguration
         if (!options.Enabled)
         {
             CatalogRegressionHostConfiguration.Configure(builder.Services, readEnvironment, catalogEnabled: false);
+            _ = CatalogBuildHostConfiguration.ReadRuntime(readEnvironment, catalogEnabled: false);
             ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, false, reportOptions);
             return;
         }

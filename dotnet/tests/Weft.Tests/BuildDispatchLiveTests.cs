@@ -1,8 +1,11 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Deployment;
@@ -34,7 +37,10 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
         var image = Environment.GetEnvironmentVariable("WEFT_BUILD_WORKER_IMAGE")!;
         Assert.Equal(image, Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE"));
         await using var native = await PostgresClaimAwareStorageIntegrationSupport.CreateAsync(fixture);
-        var created = await native.CreateNativeAsync(RevisionIngestionTestSupport.Fixture("valid-basic"));
+        var mapping = JsonNode.Parse(RevisionIngestionTestSupport.Fixture("valid-basic"))!;
+        mapping["source_options"] = new JsonObject { ["json_document"] = true };
+        mapping["target_options"] = new JsonObject { ["json_document"] = true };
+        var created = await native.CreateNativeAsync(JsonSerializer.SerializeToUtf8Bytes(mapping));
         Assert.Equal(RevisionIngestionOutcome.CommittedValid, created.Outcome);
         var receipt = await native.ReceiptAsync(created);
         var revision = receipt.Facts.FutureRevision;
@@ -67,15 +73,20 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
         await using var controls = new PostgresBuildStore(native.Case.RegressionConnectionString("weft_build_writer"), true);
         var environment = new BuildEnvironmentReference(new(revision.OrganizationId, revision.ProjectId), Guid.NewGuid(), 1);
         Assert.Equal(BuildControlOutcome.Created, await controls.SaveEnvironmentAsync(native.Actor, new(environment, FerruleBuildCompiler.Profile, true)));
-        var admissions = new BuildControlService(controls, new PostgresProjectReader(native.Native.ReaderDatabase), native.ReportReader, evidence);
+        const int reportLimit = 1024 * 1024;
+        var reportRegistry = FerruleRevisionReportBackendFactory.CreateRegistry(
+            FerruleRevisionReportBackendFactory.CreateProfile(image), new(storedObjectByteLimit: reportLimit), () => native.Native.Runner);
+        var reports = native.NewReports(registry: reportRegistry);
+        _ = RevisionReportTestSupport.Available(await reports.EnsureAsync(native.Actor, revision, RevisionReportOperation.Projection));
+        await using var api = await BuildApiLiveHost.StartAsync(native, image, reportLimit);
         BuildIntent Intent() => new(Guid.NewGuid(), revision, value.NativeDigest,
             new("ferrule", FerruleInspectionBackend.EngineRevision, image, FerrulePreviewBackend.AdapterBuild), FerruleBuildCompiler.Profile,
             [new(BuildBoundaryKind.PrimaryInput, null, "json"), new(BuildBoundaryKind.PrimaryOutput, null, "json")], environment, Guid.NewGuid(), runId);
         await using var submission = new PostgresBuildRunStore(native.Case.RegressionConnectionString("weft_build_run_writer"), BuildRunDatabaseProfile.Writer);
         await using var history = new PostgresBuildRunStore(native.Case.RegressionConnectionString("weft_build_run_reader"), BuildRunDatabaseProfile.Reader);
         var first = Intent();
-        Assert.Equal(BuildControlOutcome.Created, await admissions.ApproveAsync(native.Actor, first));
-        Assert.Equal(BuildRunSubmitOutcome.Created, await submission.SubmitAsync(native.Actor, first));
+        await api.ApproveAsync(first);
+        await api.SubmitAsync(first);
         BuildRunSnapshot retained;
         await using (var worker = Child.Start(native, image))
             retained = await UntilAsync(history, native.Actor, first, worker);
@@ -90,8 +101,8 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
             Assert.True(pe.HasMetadata && pe.PEHeaders.CorHeader is not null);
 
         var second = Intent();
-        Assert.Equal(BuildControlOutcome.Created, await admissions.ApproveAsync(native.Actor, second));
-        Assert.Equal(BuildRunSubmitOutcome.Created, await submission.SubmitAsync(native.Actor, second));
+        await api.ApproveAsync(second);
+        await api.SubmitAsync(second);
         await using (var restarted = Child.Start(native, image))
             Assert.Equal(1, (await UntilAsync(history, native.Actor, second, restarted)).Attempt);
         var reopened = (await history.ReadAsync(native.Actor, revision.OrganizationId, first.BuildId))!;
@@ -99,6 +110,7 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
         Assert.Equal(retained.Artifact.ContentDigest, reopened.Artifact!.ContentDigest);
         Assert.Equal(compiled, await objects.ReadVerifiedAsync(revision, artifact));
         Assert.Equal(BuildRunSubmitOutcome.Replayed, await submission.SubmitAsync(native.Actor, first));
+        await api.SubmitAsync(first, replay: true);
     }
 
     private static async Task<BuildRunSnapshot> UntilAsync(PostgresBuildRunStore history, ActorContext actor, BuildIntent intent, Child worker)
@@ -121,6 +133,7 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
         private readonly Process process;
         private readonly string startTicks;
         private readonly Task output, error;
+        private readonly ConcurrentDictionary<string, byte> diagnosticKinds = new(StringComparer.Ordinal);
         private long bytes;
         private Child(Process process)
         {
@@ -168,7 +181,17 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
         private async Task Drain(StreamReader stream)
         {
             var buffer = new char[4096]; int count;
-            while ((count = await stream.ReadAsync(buffer)) != 0) Interlocked.Add(ref bytes, count);
+            var previous = "";
+            while ((count = await stream.ReadAsync(buffer)) != 0)
+            {
+                Interlocked.Add(ref bytes, count);
+                var text = previous + new string(buffer, 0, count);
+                // Fixed classifications only: never expose a child log line or configuration value.
+                foreach (var kind in new[] { "Out of memory", "OutOfMemoryException", "TimeoutException", "PostgresException",
+                    "TaskCanceledException", "OperationCanceledException", "Unhandled exception", "Failed to create CoreCLR", "Failed to create a thread" })
+                    if (text.Contains(kind, StringComparison.OrdinalIgnoreCase)) diagnosticKinds.TryAdd(kind, 0);
+                previous = text[^Math.Min(text.Length, 256)..];
+            }
         }
         public async ValueTask DisposeAsync()
         {
@@ -182,7 +205,7 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
                     catch (TimeoutException) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); throw; }
                 }
                 await Task.WhenAll(output, error);
-                Assert.Equal(0, process.ExitCode);
+                Assert.True(process.ExitCode == 0, $"The ordinary build worker exited with code {process.ExitCode}; diagnostic classes: {string.Join(", ", diagnosticKinds.Keys.Order(StringComparer.Ordinal))}.");
                 Assert.True(Interlocked.Read(ref bytes) <= 2 * 1024 * 1024, "Worker diagnostics exceeded their bound.");
             }
             finally { process.Dispose(); }

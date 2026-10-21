@@ -28,7 +28,10 @@ internal static class BuildRunRoleGuard
     internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
         await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
-        if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != RunFingerprint) throw Invalid();
+        var metadata = await BuildMetadataRoleGuard.IsInstalledAsync(connection, transaction, token);
+        if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) !=
+            (metadata ? BuildMetadataRoleGuard.RunFingerprint : RunFingerprint)) throw Invalid();
+        if (metadata) await BuildMetadataRoleGuard.ValidateContractAsync(connection, transaction, token);
     }
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, BuildRunDatabaseProfile profile, CancellationToken token)
