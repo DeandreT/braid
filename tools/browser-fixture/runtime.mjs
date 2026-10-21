@@ -28,6 +28,7 @@ export async function runBrowserFixture(definition) {
     const metadataScenario = definition.kind === "mapping-metadata";
     const uploadScenario = definition.kind === "native-mapping-upload";
     const appendScenario = definition.kind === "native-revision-append";
+    const regressionScenario = definition.kind === "regression";
     class Failure extends Error {
       constructor(category) {
         super(category);
@@ -147,30 +148,34 @@ export async function runBrowserFixture(definition) {
     );
     check(
       process.env[
-        creationScenario
-          ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
-          : appendScenario
-            ? "WEFT_NATIVE_REVISION_APPEND_BROWSER_MANIFEST"
-            : uploadScenario
-              ? "WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
-              : metadataScenario
-                ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
-                : definition.kind === "catalog"
-                  ? "WEFT_CATALOG_BROWSER_MANIFEST"
-                  : "WEFT_REPORTS_BROWSER_MANIFEST"
+        regressionScenario
+          ? "WEFT_REGRESSION_BROWSER_MANIFEST"
+          : creationScenario
+            ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
+            : appendScenario
+              ? "WEFT_NATIVE_REVISION_APPEND_BROWSER_MANIFEST"
+              : uploadScenario
+                ? "WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
+                : metadataScenario
+                  ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
+                  : definition.kind === "catalog"
+                    ? "WEFT_CATALOG_BROWSER_MANIFEST"
+                    : "WEFT_REPORTS_BROWSER_MANIFEST"
       ] === cfg.manifestPath &&
         process.env[
-          creationScenario
-            ? "WEFT_PROJECT_CREATION_BASE_URL"
-            : appendScenario
-              ? "WEFT_NATIVE_REVISION_APPEND_BASE_URL"
-              : uploadScenario
-                ? "WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL"
-                : metadataScenario
-                  ? "WEFT_MAPPING_METADATA_BASE_URL"
-                  : definition.kind === "catalog"
-                    ? "WEFT_CATALOG_BASE_URL"
-                    : "WEFT_REPORTS_BASE_URL"
+          regressionScenario
+            ? "WEFT_REGRESSION_BASE_URL"
+            : creationScenario
+              ? "WEFT_PROJECT_CREATION_BASE_URL"
+              : appendScenario
+                ? "WEFT_NATIVE_REVISION_APPEND_BASE_URL"
+                : uploadScenario
+                  ? "WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL"
+                  : metadataScenario
+                    ? "WEFT_MAPPING_METADATA_BASE_URL"
+                    : definition.kind === "catalog"
+                      ? "WEFT_CATALOG_BASE_URL"
+                      : "WEFT_REPORTS_BASE_URL"
         ] === origin(cfg.readOrigin),
     );
     origin(cfg.mutationOrigin);
@@ -232,6 +237,7 @@ export async function runBrowserFixture(definition) {
     const publicationKinds = [
       ["server", "Weft.Server"],
       ["databaseTool", "Weft.DatabaseTool"],
+      ...(regressionScenario ? [["worker", "Weft.Worker"]] : []),
       ...(creationScenario ? [] : [["storageTool", "Weft.StorageTool"]]),
     ];
     for (const [kind, assembly] of publicationKinds) {
@@ -781,6 +787,9 @@ export async function runBrowserFixture(definition) {
       "external_identity_bindings",
       "project_payload_read_grants",
       "server_sessions",
+      ...(regressionScenario
+        ? ["regression_cases", "regression_case_versions", "regression_runs"]
+        : []),
     ];
     const rows = () =>
       jsonSql(
@@ -814,7 +823,8 @@ export async function runBrowserFixture(definition) {
         creationScenario ||
           metadataScenario ||
           uploadScenario ||
-          appendScenario,
+          appendScenario ||
+          regressionScenario,
       );
       return jsonSql(
         `SELECT json_build_object(
@@ -1150,9 +1160,32 @@ export async function runBrowserFixture(definition) {
         metadataEdits = false,
         uploadOnly = false,
         reportMode = null,
+        regression = false,
+        regressionWorker = false,
       } = {},
     ) {
       check(kind === "read" ? readHost === null : mutationHost === null);
+      check(
+        !regression ||
+          (regressionScenario &&
+            kind === "read" &&
+            !writer &&
+            !uploadOnly &&
+            !metadataEdits &&
+            !creationOnly &&
+            reportMode === null),
+      );
+      check(
+        !regressionWorker ||
+          (regressionScenario &&
+            kind === "mutation" &&
+            readHost?.regression &&
+            !writer &&
+            !uploadOnly &&
+            !metadataEdits &&
+            !creationOnly &&
+            reportMode === null),
+      );
       if (kind === "read")
         check(
           scenario.profiles.includes(profile) &&
@@ -1278,6 +1311,19 @@ export async function runBrowserFixture(definition) {
           WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
           WEFT_FERRULE_WORKER_IMAGE: workerImage,
         });
+      if (regression)
+        Object.assign(environment, {
+          WEFT_REGRESSIONS_ENABLED: "true",
+          WEFT_FERRULE_WORKER_IMAGE: workerImage,
+          WEFT_REGRESSION_CASE_READER_CONNECTION_STRING:
+            connections.weft_case_reader,
+          WEFT_REGRESSION_CASE_WRITER_CONNECTION_STRING:
+            connections.weft_case_writer,
+          WEFT_REGRESSION_RUN_READER_CONNECTION_STRING:
+            connections.weft_run_reader,
+          WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING:
+            connections.weft_run_writer,
+        });
       if (
         (uploadScenario || appendScenario) &&
         kind === "read" &&
@@ -1302,6 +1348,25 @@ export async function runBrowserFixture(definition) {
               connections.weft_deriver,
             WEFT_FERRULE_WORKER_IMAGE: workerImage,
           });
+      }
+      if (regressionWorker) {
+        for (const key of Object.keys(environment))
+          if (key.startsWith("WEFT_")) delete environment[key];
+        Object.assign(environment, {
+          WEFT_PREVIEW_WRITER_CONNECTION_STRING:
+            connections.weft_preview_writer,
+          WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
+          WEFT_FERRULE_WORKER_IMAGE: workerImage,
+          WEFT_DOCKER_EXECUTABLE: cfg.docker,
+          WEFT_REGRESSION_WORKER_ENABLED: "true",
+          WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING:
+            connections.weft_run_writer,
+          WEFT_REGRESSION_CASE_READER_CONNECTION_STRING:
+            connections.weft_case_reader,
+          WEFT_REGRESSION_ACCESS_CONNECTION_STRING: connections.weft_runtime,
+          WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING:
+            connections.weft_report_reader,
+        });
       }
       check(
         !Object.keys(environment).some((key) =>
@@ -1364,6 +1429,8 @@ export async function runBrowserFixture(definition) {
         !creationOnly &&
         !metadataEdits &&
         !uploadOnly &&
+        !regression &&
+        !regressionWorker &&
         reportMode === null
       )
         check(
@@ -1373,7 +1440,10 @@ export async function runBrowserFixture(definition) {
         );
       const end = Date.now() + budget(30000),
         product = cfg.publications.server.directory,
-        child = spawn(cfg.dotnet, [join(product, "Weft.Server.dll")], {
+        assembly = regressionWorker
+          ? join(cfg.publications.worker.directory, "Weft.Worker.dll")
+          : join(product, "Weft.Server.dll"),
+        child = spawn(cfg.dotnet, [assembly], {
           cwd: product,
           env: environment,
           stdio: ["ignore", "pipe", "pipe"],
@@ -1389,6 +1459,8 @@ export async function runBrowserFixture(definition) {
         metadataEdits,
         uploadOnly,
         reportMode,
+        regression,
+        regressionWorker,
         child,
         cookies: [],
         token: null,
@@ -1463,7 +1535,7 @@ export async function runBrowserFixture(definition) {
         admission.argvArityTwo = host.identity.command.length === 2;
         admission.expectedCommandMatch = equivalent(host.identity.command, [
           cfg.dotnet,
-          join(product, "Weft.Server.dll"),
+          assembly,
         ]);
         check(admission.expectedCommandMatch, "ownershipChanged");
         host.ledger = {
@@ -1479,63 +1551,83 @@ export async function runBrowserFixture(definition) {
             !creationOnly &&
             !metadataEdits &&
             !uploadOnly &&
+            !regression &&
+            !regressionWorker &&
             reportMode === null,
           ...(metadataScenario || appendScenario ? { metadataEdits } : {}),
           ...(uploadScenario || appendScenario ? { uploadOnly } : {}),
           ...(creationScenario ? { creationOnly } : {}),
           reportMode,
+          ...(regressionScenario ? { regression, regressionWorker } : {}),
           terminal: null,
         };
         state.children.push(host.ledger);
         save();
-        admission.stage = "health";
-        while (true) {
-          check(
-            !host.closeResult && !host.spawnFailure && !host.overflow,
-            "productFailure",
-          );
-          try {
-            const health = await request(host, "/api/v1/health", {
-              timeout: 1000,
-            });
+        if (!regressionWorker) {
+          admission.stage = "health";
+          while (true) {
             check(
-              health.status === 200 && health.body.status === "ok",
+              !host.closeResult && !host.spawnFailure && !host.overflow,
               "productFailure",
             );
-            break;
-          } catch (error) {
-            check(
-              error.code === "ECONNREFUSED" && Date.now() < end,
-              error.category ?? "productFailure",
-            );
-            await pause(100);
+            try {
+              const health = await request(host, "/api/v1/health", {
+                timeout: 1000,
+              });
+              check(
+                health.status === 200 && health.body.status === "ok",
+                "productFailure",
+              );
+              break;
+            } catch (error) {
+              check(
+                error.code === "ECONNREFUSED" && Date.now() < end,
+                error.category ?? "productFailure",
+              );
+              await pause(100);
+            }
           }
+          admission.stage = "context";
+          const expected =
+            profile === "readerUnavailable"
+              ? 500
+              : profile === "viewer" && orgRevoked
+                ? 404
+                : 200;
+          host.contextStatus = await captureContext(host, expected);
         }
-        admission.stage = "context";
-        const expected =
-          profile === "readerUnavailable"
-            ? 500
-            : profile === "viewer" && orgRevoked
-              ? 404
-              : 200;
-        host.contextStatus = await captureContext(host, expected);
         admission.stage = "mappedIdentity";
-        const mapped = readFileSync("/proc/" + child.pid + "/maps", "utf8");
+        let mapped = readFileSync("/proc/" + child.pid + "/maps", "utf8");
+        while (
+          regressionWorker &&
+          !mapped.split("\n").some((line) => line.endsWith(" " + assembly))
+        ) {
+          check(
+            Date.now() < end &&
+              !host.closeResult &&
+              !host.spawnFailure &&
+              !host.overflow,
+            "productFailure",
+          );
+          await pause(100);
+          mapped = readFileSync("/proc/" + child.pid + "/maps", "utf8");
+        }
         ownedChild(host);
         check(
-          mapped
-            .split("\n")
-            .some((line) =>
-              line.endsWith(" " + join(product, "Weft.Server.dll")),
-            ),
+          mapped.split("\n").some((line) => line.endsWith(" " + assembly)),
           "ownershipChanged",
         );
         check(
-          sha(readFileSync(join(product, "Weft.Server.dll"))) ===
-            cfg.publications.server.hashes["Weft.Server.dll"],
+          sha(readFileSync(assembly)) ===
+            (regressionWorker
+              ? cfg.publications.worker.hashes["Weft.Worker.dll"]
+              : cfg.publications.server.hashes["Weft.Server.dll"]),
         );
-        host.ledger.mappedServerSha256 =
-          cfg.publications.server.hashes["Weft.Server.dll"];
+        if (regressionWorker)
+          host.ledger.mappedWorkerSha256 = sha(readFileSync(assembly));
+        else
+          host.ledger.mappedServerSha256 =
+            cfg.publications.server.hashes["Weft.Server.dll"];
         save();
         return host;
       } catch (original) {
