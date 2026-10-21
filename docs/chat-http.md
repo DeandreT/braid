@@ -157,3 +157,33 @@ another provider request. The supported profile is one API instance; turns are
 not taken over by another instance.
 
 Default logs contain no prompts, answers, endpoints or credentials.
+
+## Local model check
+
+A complete turn can be exercised against a local Ollama model through the same
+server path as a hosted profile:
+
+1. Start the loopback Ollama service and pull a model that supports tool calls,
+   as in the [live provider check](ai-chat.md#live-provider-check).
+2. Configure an `ollamaChatNdjson` profile with endpoint
+   `http://127.0.0.1:11434/api/chat`, `"loopbackFixture": true`,
+   `"credentialReference": null` and capabilities `["text","functionTools"]`,
+   with an empty `credentials` list.
+3. Run the Server with Development identity, catalog reads, project creation,
+   revision ingestion with `WEFT_FERRULE_WORKER_IMAGE`, report reads and
+   derivation, and chat with its reader and writer logins.
+4. Through product HTTP or the browser, create a project, upload a native
+   mapping and ensure its projection and validation reports. Then ask a question
+   that needs a mapping tool (for example a `search_mapping` query) from the
+   revision page's chat panel, or create a conversation and turn through the
+   routes above.
+5. Follow the event stream: a tool round delivers `tool.started`,
+   `tool.completed` and that tool's `citation` events before the answer's
+   `text.delta` events and the terminal event.
+
+Each provider request must return response headers within 60 seconds, and the
+turn must finish within `turnSeconds`. CPU inference over large tool results on
+a loaded machine can exceed either limit and fail the turn with
+`providerFailure` `deadlineExceeded`; a smaller model or an idle machine avoids
+this. A model can describe a tool call in its answer without making one; that
+text produces no tool activity or citations.
