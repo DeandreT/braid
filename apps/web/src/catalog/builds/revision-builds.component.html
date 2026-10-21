@@ -1,0 +1,468 @@
+<section class="catalog-summary builds-panel" aria-labelledby="builds-title">
+  <h2 id="builds-title">Approved builds</h2>
+  <p>
+    Compile this exact saved revision using passing saved evidence. A build does
+    not deploy an endpoint. Artifact bodies are not downloaded here.
+  </p>
+  @if (!capabilities()) {
+    @if (pending()) {
+      <p role="status">
+        An original request is retained in this revision view. Load build access
+        to recover it before creating a replacement.
+      </p>
+    }
+    <button
+      class="catalog-button"
+      type="button"
+      (click)="load()"
+      [disabled]="busy()"
+    >
+      Load build controls
+    </button>
+  }
+  @if (error(); as value) {
+    <p class="builds-error" role="alert">{{ value }}</p>
+  }
+  @if (notice(); as value) {
+    <p role="status">{{ value }}</p>
+  }
+  @if (capabilities(); as cap) {
+    <p class="builds-runtime">
+      Server-selected runtime:
+      <strong
+        >{{ cap.profile.runtime }} {{ cap.profile.runtimeVersion }}</strong
+      >
+      · Profile {{ cap.profile.id }} v{{ cap.profile.version }}.
+    </p>
+    @if (!cap.approveBuilds) {
+      <p>
+        New builds are not supported for this backend. Retained own metadata can
+        still be recovered.
+      </p>
+    }
+    @if (pending(); as value) {
+      <section class="builds-recovery" aria-labelledby="builds-recovery-title">
+        <h3 id="builds-recovery-title">Original request recovery</h3>
+        <p>
+          {{ label(value.kind) }} · <code>{{ value.id }}</code>
+        </p>
+        <p>
+          The exact original IDs and body are retained. No replacement is
+          created automatically.
+        </p>
+        <div class="builds-actions">
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="recoverPending()"
+            [disabled]="busy()"
+          >
+            Read original result
+          </button>
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="retryPending()"
+            [disabled]="busy()"
+          >
+            Retry original request
+          </button>
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="abandon()"
+            [disabled]="busy()"
+          >
+            Forget recovery details
+          </button>
+        </div>
+      </section>
+    }
+    <section class="builds-section" aria-labelledby="builds-environment-title">
+      <h3 id="builds-environment-title">Environment version</h3>
+      <div class="builds-actions">
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="loadEnvironments()"
+          [disabled]="busy()"
+        >
+          Refresh environments
+        </button>
+        @if (canAdminister()) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="loadEnvironmentAdministration()"
+            [disabled]="busy()"
+          >
+            Environment administration
+          </button>
+        }
+      </div>
+      @if (environments(); as page) {
+        <label
+          >Exact retained environment version
+          <select
+            [ngModel]="
+              selectedEnvironment()
+                ? environmentKey(selectedEnvironment()!)
+                : ''
+            "
+            (ngModelChange)="selectEnvironment($event)"
+            [disabled]="busy() || !!pending()"
+          >
+            <option value="">Select a version</option>
+            @for (item of page.environments; track environmentKey(item)) {
+              <option [value]="environmentKey(item)">
+                {{ item.reference.environmentId }} · v{{
+                  item.reference.version
+                }}
+                · {{ item.active ? "Active" : "Inactive" }}
+              </option>
+            }
+          </select>
+        </label>
+        @if (!page.environments.length) {
+          <p>No environment versions on this page.</p>
+        }
+        @if (page.nextEnvironmentId) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="loadEnvironments(true)"
+            [disabled]="busy()"
+          >
+            Next environments
+          </button>
+        }
+      }
+      @if (selectedEnvironment(); as value) {
+        <p>
+          {{ value.active ? "Active" : "Retained, inactive" }} ·
+          {{ value.profile.runtime }} {{ value.profile.runtimeVersion }} · v{{
+            value.reference.version
+          }}.
+        </p>
+      }
+      @if (environmentCapabilities(); as administration) {
+        @if (administration.canCreateVersions) {
+          <p>
+            Administrators register only the server-offered profile. A new
+            version supersedes the old one.
+          </p>
+          <div class="builds-actions">
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="registerEnvironment()"
+              [disabled]="busy() || !!pending()"
+            >
+              Register new environment
+            </button>
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="registerEnvironment(true)"
+              [disabled]="
+                busy() || !!pending() || !selectedEnvironment()?.active
+              "
+            >
+              Register next version
+            </button>
+          </div>
+        } @else {
+          <p>Your current access cannot create environment versions.</p>
+        }
+      }
+    </section>
+    <section class="builds-section" aria-labelledby="builds-evidence-title">
+      <h3 id="builds-evidence-title">Passing saved evidence</h3>
+      <p>
+        A completed run is not assumed to pass. Selecting one reloads and
+        verifies its comparison for this revision.
+      </p>
+      <button
+        class="catalog-button"
+        type="button"
+        (click)="loadEvidence()"
+        [disabled]="busy()"
+      >
+        Load saved regression runs
+      </button>
+      @if (evidencePage(); as page) {
+        <ul class="builds-list">
+          @for (item of page.runs; track item.runId) {
+            @if (isCurrent(item)) {
+              <li>
+                <div>
+                  <code>{{ item.runId }}</code
+                  ><br />Case version {{ item.version }} ·
+                  {{ label(item.state) }}
+                </div>
+                <button
+                  class="catalog-button"
+                  type="button"
+                  (click)="selectEvidence(item.runId)"
+                  [disabled]="
+                    busy() || !!pending() || item.state !== 'completed'
+                  "
+                >
+                  Verify this evidence
+                </button>
+              </li>
+            }
+          }
+        </ul>
+        @if (page.nextRunId) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="loadEvidence(true)"
+            [disabled]="busy()"
+          >
+            Next regression runs
+          </button>
+        }
+      }
+      @if (evidence(); as value) {
+        <p role="status">
+          Exact-byte comparison passed for <code>{{ value.runId }}</code
+          >.
+        </p>
+      }
+      <div class="builds-actions">
+        <button
+          class="catalog-button builds-primary"
+          type="button"
+          (click)="approve()"
+          [disabled]="
+            busy() ||
+            !!pending() ||
+            !cap.approveBuilds ||
+            !selectedEnvironment()?.active ||
+            !evidence()
+          "
+        >
+          Approve immutable build
+        </button>
+      </div>
+    </section>
+    <section class="builds-section" aria-labelledby="builds-approvals-title">
+      <h3 id="builds-approvals-title">Own approvals</h3>
+      <button
+        class="catalog-button"
+        type="button"
+        (click)="loadApprovals()"
+        [disabled]="busy()"
+      >
+        Load own approvals
+      </button>
+      @if (approvals(); as page) {
+        <ul class="builds-list">
+          @for (item of page.approvals; track item.approvalId) {
+            <li>
+              <div>
+                <code>{{ item.approvalId }}</code
+                ><br />{{ item.revoked ? "Revoked" : "Retained" }} ·
+                {{
+                  item.environmentActive
+                    ? "Active environment"
+                    : "Inactive environment"
+                }}<br />
+                <a [routerLink]="routes.revision(item.revision)"
+                  >Revision {{ item.revision.revisionId }}</a
+                >
+              </div>
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="openApproval(item.approvalId)"
+                [disabled]="busy() || !!pending()"
+              >
+                Open approval
+              </button>
+            </li>
+          }
+        </ul>
+        @if (page.nextApprovalId) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="loadApprovals(true)"
+            [disabled]="busy()"
+          >
+            Next approvals
+          </button>
+        }
+      }
+      @if (selectedApproval(); as value) {
+        <dl class="catalog-facts">
+          <dt>Approval</dt>
+          <dd>
+            <code>{{ value.approvalId }}</code>
+          </dd>
+          <dt>Build ID</dt>
+          <dd>
+            <code>{{ value.buildId }}</code>
+          </dd>
+          <dt>Approved native digest</dt>
+          <dd>
+            <code>{{ value.nativeDigest }}</code>
+          </dd>
+          <dt>Original runtime</dt>
+          <dd>
+            {{ value.profile.runtime }} {{ value.profile.runtimeVersion }}
+          </dd>
+          <dt>Status</dt>
+          <dd>
+            {{ value.revoked ? "Revoked" : "Retained approval" }} ·
+            {{
+              value.environmentActive
+                ? "Active environment"
+                : "Inactive environment"
+            }}
+          </dd>
+        </dl>
+        @if (!isCurrent(value)) {
+          <p>
+            This approval belongs to another revision. Open that revision before
+            creating new work.
+          </p>
+        }
+        <div class="builds-actions">
+          <button
+            class="catalog-button builds-primary"
+            type="button"
+            (click)="submit()"
+            [disabled]="busy() || !!pending() || !canQueue()"
+          >
+            Queue approved build
+          </button>
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="recoverApprovalRun()"
+            [disabled]="busy() || !!pending()"
+          >
+            Recover original build
+          </button>
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="revoke()"
+            [disabled]="
+              busy() || !!pending() || value.revoked || !isCurrent(value)
+            "
+          >
+            Revoke own approval
+          </button>
+        </div>
+      }
+    </section>
+    <section class="builds-section" aria-labelledby="builds-history-title">
+      <h3 id="builds-history-title">Own build history</h3>
+      <button
+        class="catalog-button"
+        type="button"
+        (click)="loadHistory()"
+        [disabled]="busy()"
+      >
+        Load own build history
+      </button>
+      @if (history(); as page) {
+        <ul class="builds-list">
+          @for (item of page.runs; track item.buildId) {
+            <li>
+              <div>
+                <code>{{ item.buildId }}</code
+                ><br />{{ label(item.state) }} · Attempt {{ item.attempt }} of
+                3<br />
+                <time [attr.datetime]="item.createdAtUtc"
+                  >{{ item.createdAtUtc | date: "medium" : "UTC" }} UTC</time
+                ><br />
+                <a [routerLink]="routes.revision(item.revision)"
+                  >Revision {{ item.revision.revisionId }}</a
+                >
+              </div>
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="openRun(item.buildId)"
+                [disabled]="busy() || !!pending()"
+              >
+                Open build result
+              </button>
+            </li>
+          }
+        </ul>
+        @if (!page.runs.length) {
+          <p>No own builds on this page.</p>
+        }
+        @if (page.nextBuildId) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="loadHistory(true)"
+            [disabled]="busy()"
+          >
+            Next builds
+          </button>
+        }
+      }
+      @if (selectedRun(); as value) {
+        <section
+          class="builds-result"
+          [class.builds-uncertain]="value.state === 'uncertain'"
+          aria-labelledby="builds-result-title"
+        >
+          <h4 id="builds-result-title">
+            {{ label(value.state) }} · Attempt {{ value.attempt }} of 3
+          </h4>
+          <p>
+            <code>{{ value.buildId }}</code>
+          </p>
+          @if (value.state === "uncertain") {
+            <p>
+              <strong>Not confirmed as successful.</strong> Retained artifact
+              metadata does not establish completion. Do not automatically
+              create a replacement build.
+            </p>
+          }
+          @if (value.artifact; as artifact) {
+            <dl class="catalog-facts">
+              <dt>Private artifact digest</dt>
+              <dd>
+                <code>{{ artifact.sha256 }}</code>
+              </dd>
+              <dt>Bytes</dt>
+              <dd>{{ artifact.byteCount }}</dd>
+              <dt>Format</dt>
+              <dd>{{ artifact.format }}</dd>
+            </dl>
+          }
+          <div class="builds-actions">
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="openRun(value.buildId)"
+              [disabled]="busy() || !!pending()"
+            >
+              Refresh build result
+            </button>
+            @if (isActive() && isCurrent(value)) {
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="cancel()"
+                [disabled]="busy() || !!pending()"
+              >
+                Cancel build
+              </button>
+            }
+          </div>
+        </section>
+      }
+    </section>
+  }
+</section>

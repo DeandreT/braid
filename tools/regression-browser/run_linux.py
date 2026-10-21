@@ -13,7 +13,7 @@ class OperatorUnsettled(RuntimeError):
     pass
 
 
-def wait_for_operator(command):
+def wait_for_operator(command, shutdown_seconds=180):
     child = None
     interrupted = None
     received = None
@@ -36,7 +36,7 @@ def wait_for_operator(command):
             try:
                 return child.wait(timeout=1)
             except subprocess.TimeoutExpired:
-                if interrupted is not None and time.monotonic() - interrupted > 180:
+                if interrupted is not None and time.monotonic() - interrupted > shutdown_seconds:
                     # Leave the namespace alias intact for the live owner, never kill it mid-cleanup.
                     raise OperatorUnsettled('The regression operator did not settle after interruption.')
     finally:
@@ -73,7 +73,8 @@ def main():
         assert actual['fstype'] == 'btrfs' and actual['uuid'] == mount['uuid'] and 'rw' in actual['options'].split(',')
         assert alias.stat().st_ino == private.stat().st_ino and alias.stat().st_dev == private.stat().st_dev
         try:
-            code = wait_for_operator([node, operator, '--config', config])
+            code = wait_for_operator([node, operator, '--config', config],
+                                     shutdown_seconds=360 if data['schemaVersion'] == 'weft.build-browser-operator-config.v1' else 180)
         except OperatorUnsettled:
             settled = False
             raise

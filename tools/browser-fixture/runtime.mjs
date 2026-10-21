@@ -28,7 +28,9 @@ export async function runBrowserFixture(definition) {
     const metadataScenario = definition.kind === "mapping-metadata";
     const uploadScenario = definition.kind === "native-mapping-upload";
     const appendScenario = definition.kind === "native-revision-append";
-    const regressionScenario = definition.kind === "regression";
+    const buildScenario = definition.kind === "build";
+    const regressionScenario =
+      definition.kind === "regression" || buildScenario;
     class Failure extends Error {
       constructor(category) {
         super(category);
@@ -149,34 +151,38 @@ export async function runBrowserFixture(definition) {
     );
     check(
       process.env[
-        regressionScenario
-          ? "WEFT_REGRESSION_BROWSER_MANIFEST"
-          : creationScenario
-            ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
-            : appendScenario
-              ? "WEFT_NATIVE_REVISION_APPEND_BROWSER_MANIFEST"
-              : uploadScenario
-                ? "WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
-                : metadataScenario
-                  ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
-                  : definition.kind === "catalog"
-                    ? "WEFT_CATALOG_BROWSER_MANIFEST"
-                    : "WEFT_REPORTS_BROWSER_MANIFEST"
+        buildScenario
+          ? "WEFT_BUILD_BROWSER_MANIFEST"
+          : regressionScenario
+            ? "WEFT_REGRESSION_BROWSER_MANIFEST"
+            : creationScenario
+              ? "WEFT_PROJECT_CREATION_BROWSER_MANIFEST"
+              : appendScenario
+                ? "WEFT_NATIVE_REVISION_APPEND_BROWSER_MANIFEST"
+                : uploadScenario
+                  ? "WEFT_NATIVE_MAPPING_UPLOAD_BROWSER_MANIFEST"
+                  : metadataScenario
+                    ? "WEFT_MAPPING_METADATA_BROWSER_MANIFEST"
+                    : definition.kind === "catalog"
+                      ? "WEFT_CATALOG_BROWSER_MANIFEST"
+                      : "WEFT_REPORTS_BROWSER_MANIFEST"
       ] === cfg.manifestPath &&
         process.env[
-          regressionScenario
-            ? "WEFT_REGRESSION_BASE_URL"
-            : creationScenario
-              ? "WEFT_PROJECT_CREATION_BASE_URL"
-              : appendScenario
-                ? "WEFT_NATIVE_REVISION_APPEND_BASE_URL"
-                : uploadScenario
-                  ? "WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL"
-                  : metadataScenario
-                    ? "WEFT_MAPPING_METADATA_BASE_URL"
-                    : definition.kind === "catalog"
-                      ? "WEFT_CATALOG_BASE_URL"
-                      : "WEFT_REPORTS_BASE_URL"
+          buildScenario
+            ? "WEFT_BUILD_BASE_URL"
+            : regressionScenario
+              ? "WEFT_REGRESSION_BASE_URL"
+              : creationScenario
+                ? "WEFT_PROJECT_CREATION_BASE_URL"
+                : appendScenario
+                  ? "WEFT_NATIVE_REVISION_APPEND_BASE_URL"
+                  : uploadScenario
+                    ? "WEFT_NATIVE_MAPPING_UPLOAD_BASE_URL"
+                    : metadataScenario
+                      ? "WEFT_MAPPING_METADATA_BASE_URL"
+                      : definition.kind === "catalog"
+                        ? "WEFT_CATALOG_BASE_URL"
+                        : "WEFT_REPORTS_BASE_URL"
         ] === origin(cfg.readOrigin),
     );
     origin(cfg.mutationOrigin);
@@ -809,18 +815,27 @@ export async function runBrowserFixture(definition) {
       ...(regressionScenario
         ? ["regression_cases", "regression_case_versions", "regression_runs"]
         : []),
+      ...(buildScenario
+        ? [
+            "build_environments",
+            "build_approvals",
+            "build_runs",
+            "build_publications",
+          ]
+        : []),
     ];
     const rows = () =>
       jsonSql(
         "SELECT json_build_object(" +
           tables
-            .map(
-              (table) =>
-                "'" +
-                table +
-                "',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) FROM weft." +
-                table +
-                " r)",
+            .map((table) =>
+              table === "build_publications"
+                ? "'build_publications',(SELECT coalesce(jsonb_agg((to_jsonb(r)-'artifact_body')||jsonb_build_object('artifact_body_sha256',encode(sha256(r.artifact_body),'hex'),'artifact_body_bytes',octet_length(r.artifact_body)) ORDER BY r.organization_id,r.build_id),'[]'::jsonb) FROM weft.build_publications r)"
+                : "'" +
+                  table +
+                  "',(SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb) FROM weft." +
+                  table +
+                  " r)",
             )
             .join(",") +
           ")",
@@ -1183,9 +1198,13 @@ export async function runBrowserFixture(definition) {
         reportMode = null,
         regression = false,
         regressionWorker = false,
+        builds = false,
+        buildWorker = false,
       } = {},
     ) {
       check(kind === "read" ? readHost === null : mutationHost === null);
+      check(!builds || (buildScenario && kind === "read" && regression));
+      check(!buildWorker || (buildScenario && regressionWorker));
       check(
         !regression ||
           (regressionScenario &&
@@ -1220,7 +1239,9 @@ export async function runBrowserFixture(definition) {
             ["full", "readOnlyNoWorker", "profileUnavailable"].includes(
               reportMode,
             )) ||
-          (appendScenario && kind === "mutation" && reportMode === "full"),
+          ((appendScenario || buildScenario) &&
+            kind === "mutation" &&
+            reportMode === "full"),
       );
       check(
         !creationOnly || (creationScenario && !writer && reportMode === null),
@@ -1345,6 +1366,25 @@ export async function runBrowserFixture(definition) {
           WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING:
             connections.weft_run_writer,
         });
+      if (builds)
+        Object.assign(environment, {
+          WEFT_BUILDS_ENABLED: "true",
+          WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
+          WEFT_FERRULE_WORKER_IMAGE: workerImage,
+          WEFT_BUILD_METADATA_CONNECTION_STRING:
+            connections.weft_build_metadata_reader,
+          WEFT_BUILD_CONTROL_CONNECTION_STRING: connections.weft_build_writer,
+          WEFT_BUILD_ACCESS_CONNECTION_STRING: connections.weft_runtime,
+          WEFT_BUILD_REPORT_CONNECTION_STRING: connections.weft_report_reader,
+          WEFT_BUILD_CASE_READER_CONNECTION_STRING:
+            connections.weft_case_reader,
+          WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING:
+            connections.weft_run_reader,
+          WEFT_BUILD_RUN_READER_CONNECTION_STRING:
+            connections.weft_build_run_reader,
+          WEFT_BUILD_RUN_WRITER_CONNECTION_STRING:
+            connections.weft_build_run_writer,
+        });
       if (
         (uploadScenario || appendScenario) &&
         kind === "read" &&
@@ -1388,6 +1428,20 @@ export async function runBrowserFixture(definition) {
           WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING:
             connections.weft_report_reader,
         });
+        if (buildWorker)
+          Object.assign(environment, {
+            WEFT_BUILD_WORKER_ENABLED: "true",
+            WEFT_BUILD_DISPATCHER_CONNECTION_STRING:
+              connections.weft_build_dispatcher,
+            WEFT_BUILD_WRITER_CONNECTION_STRING: connections.weft_build_writer,
+            WEFT_BUILD_ACCESS_CONNECTION_STRING: connections.weft_runtime,
+            WEFT_BUILD_REPORT_READER_CONNECTION_STRING:
+              connections.weft_report_reader,
+            WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING:
+              connections.weft_run_reader,
+            WEFT_BUILD_CASE_READER_CONNECTION_STRING:
+              connections.weft_case_reader,
+          });
       }
       check(
         !Object.keys(environment).some((key) =>
@@ -1482,6 +1536,8 @@ export async function runBrowserFixture(definition) {
         reportMode,
         regression,
         regressionWorker,
+        builds,
+        buildWorker,
         child,
         cookies: [],
         token: null,
@@ -1580,6 +1636,7 @@ export async function runBrowserFixture(definition) {
           ...(creationScenario ? { creationOnly } : {}),
           reportMode,
           ...(regressionScenario ? { regression, regressionWorker } : {}),
+          ...(buildScenario ? { builds, buildWorker } : {}),
           terminal: null,
         };
         state.children.push(host.ledger);
@@ -1699,7 +1756,7 @@ export async function runBrowserFixture(definition) {
       if (!result) {
         ownedChild(host);
         check(host.child.kill("SIGTERM"), "ownershipChanged");
-        result = await waitClosed(host, 10000);
+        result = await waitClosed(host, host.buildWorker ? 240000 : 10000);
         if (!result) {
           forced = true;
           ownedChild(host);
@@ -2158,14 +2215,16 @@ export async function runBrowserFixture(definition) {
         schemaVersion: `weft.${definition.kind}-browser-ready.v1`,
         fixtureId,
         manifestSha256: sha(bytes),
-        profile: creationScenario
-          ? "creator"
-          : metadataScenario ||
-              uploadScenario ||
-              appendScenario ||
-              regressionScenario
-            ? "publisher"
-            : "viewer",
+        profile: buildScenario
+          ? manifest.initialReadProfile
+          : creationScenario
+            ? "creator"
+            : metadataScenario ||
+                uploadScenario ||
+                appendScenario ||
+                regressionScenario
+              ? "publisher"
+              : "viewer",
       });
     }
 
@@ -2691,7 +2750,7 @@ export async function runBrowserFixture(definition) {
       if (closed) return state.cleanupFailures.length === 0;
       closing = true;
       const oldDeadline = deadline;
-      deadline = Date.now() + 120000;
+      deadline = Date.now() + (buildScenario ? 360000 : 120000);
       const capture = async (phase, action) => {
         try {
           await action();
@@ -2882,7 +2941,11 @@ export async function runBrowserFixture(definition) {
       )
         return { ...base, outcome: "refused", failure: "stateMismatch" };
       const maximum =
-        item.action === "shutdown" ? 120000 : scenario.maximum(item.action);
+        item.action === "shutdown"
+          ? buildScenario
+            ? 360000
+            : 120000
+          : scenario.maximum(item.action);
       deadline = Date.now() + maximum;
       let response;
       try {

@@ -27,6 +27,8 @@ def bound(path):
 
 def main():
     data = json.loads(Path(sys.argv[1]).read_text())
+    scenario = data.get('scenario', 'regression')
+    assert scenario in ('regression', 'build')
     mount = json.loads(subprocess.check_output(['findmnt', '-J', '-T', '/srv/example-build', '-o', 'TARGET,FSTYPE,UUID,FSROOT,OPTIONS']))['filesystems'][0]
     assert mount['target'] == '/srv/example-build' and mount['fstype'] == 'btrfs' and mount['uuid'] == '00000000-0000-4000-8000-000000000001' and mount['fsroot'] == '/@example-build'
     assert 'rw' in mount['options'].split(',') and 'compress=zstd:3' in mount['options']
@@ -34,6 +36,9 @@ def main():
     assert host.f_bavail * host.f_frsize >= 25 * 2**30
     base = Path('/srv/example-build/work') / ('weft-regression-' + data['fixtureId'])
     private = Path('/srv/example-build/data') / ('weft-regression-' + data['fixtureId'])
+    for parent in (base.parent, private.parent, Path('/srv/example-build/cache/weft-tooling')):
+        actual = json.loads(subprocess.check_output(['findmnt', '-J', '-T', str(parent), '-o', 'TARGET,FSTYPE,UUID,FSROOT,OPTIONS']))['filesystems'][0]
+        assert actual == mount
     assert not base.exists() and not private.exists()
     base.mkdir(mode=0o700); private.mkdir(mode=0o700)
     source = base / 'source'; source.mkdir(mode=0o755)
@@ -85,7 +90,7 @@ def main():
     product_admission = private / 'publication-check.json'
     private_json(product_admission, {'sourceTree': data['tree'], 'sdk': '10.0.112', 'ordinaryPublishSucceeded': list(products), 'fileHashes': products})
     manifest_path = private / 'manifest.json'
-    config = {'schemaVersion': 'weft.regression-browser-operator-config.v1', 'fixtureId': data['fixtureId'],
+    config = {'schemaVersion': 'weft.' + scenario + '-browser-operator-config.v1', 'fixtureId': data['fixtureId'],
               'privateDirectory': str(private), 'manifestPath': str(manifest_path), 'readOrigin': data['readOrigin'],
               'mutationOrigin': data['mutationOrigin'], 'docker': '/usr/bin/docker', 'daemonSocket': '/var/run/docker.sock',
               'privateStorageRoot': '/run/weft-regression-' + data['fixtureId'] + '/objects',
@@ -96,7 +101,8 @@ def main():
     config_path = private / 'config.json'; private_json(config_path, config)
     result = {'fixtureId': data['fixtureId'], 'config': str(config_path), 'manifest': str(manifest_path),
               'readOrigin': data['readOrigin'], 'node': str(node), 'dotnet': str(dotnet),
-              'operator': str(source / 'tools/regression-browser/operator.mjs'), 'privateRoot': str(private)}
+              'operator': str(source / ('tools/' + ('build' if scenario == 'build' else 'regression') + '-browser/operator.mjs')),
+              'launcher': str(source / 'tools/regression-browser/run_linux.py'), 'privateRoot': str(private)}
     Path(data['result']).write_text(json.dumps(result) + '\n')
     print('Prepared regression fixture publications.')
 

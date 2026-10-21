@@ -177,6 +177,13 @@
           [revision]="view.revision"
         />
       }
+      @defer (on immediate) {
+        <weft-revision-builds
+          [context]="current"
+          [mapping]="view.mapping"
+          [revision]="view.revision"
+        />
+      }
       @if (current.features.preview) {
         @defer (on immediate) {
           <weft-revision-preview

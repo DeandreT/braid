@@ -34,6 +34,8 @@ import {
 import { RevisionReportsComponent } from "./reports/revision-reports.component";
 import { RevisionPreviewComponent } from "./previews/revision-preview.component";
 import { RevisionRegressionComponent } from "./regression/revision-regression.component";
+import { RevisionBuildsComponent } from "./builds/revision-builds.component";
+import { BuildViewRecovery } from "./builds/build-view-recovery";
 
 interface RevisionScreen {
   project: CatalogProject;
@@ -50,7 +52,9 @@ interface RevisionScreen {
     RevisionReportsComponent,
     RevisionPreviewComponent,
     RevisionRegressionComponent,
+    RevisionBuildsComponent,
   ],
+  providers: [BuildViewRecovery],
   templateUrl: "./revision-page.component.html",
 })
 export class RevisionPageComponent extends CatalogRoutePage<
@@ -58,6 +62,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
   CatalogRevisionScope
 > {
   private readonly contexts = inject(CatalogContextStore);
+  private readonly buildRecovery = inject(BuildViewRecovery);
   private readonly injector = inject(Injector);
   private readonly document = inject(DOCUMENT);
   private readonly reportDestroyRef = inject(DestroyRef);
@@ -72,9 +77,14 @@ export class RevisionPageComponent extends CatalogRoutePage<
 
   constructor() {
     super();
-    const invalidation = this.contexts.invalidated.subscribe(() =>
-      this.reports.unbind(),
-    );
+    const invalidation = this.contexts.invalidated.subscribe(() => {
+      this.reports.unbind();
+      this.buildRecovery.clear();
+    });
+    effect(() => {
+      this.contexts.identityVersion();
+      untracked(() => this.buildRecovery.clear());
+    });
     this.reportDestroyRef.onDestroy(() => invalidation.unsubscribe());
     this.bind("revision", (scope) =>
       forkJoin({
@@ -112,6 +122,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
               }
             : null,
         );
+        this.buildRecovery.routeScope(this.reportSelection()?.scope ?? null);
       });
     effect(() => {
       const selection = this.reportSelection();
