@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Weft.Ai;
 using Weft.Domain;
 
@@ -40,17 +41,33 @@ public sealed record ChatReadOnlyToolContext
     public override string ToString() => nameof(ChatReadOnlyToolContext);
 }
 
+/// <summary>Citations are unverified candidates; only <see cref="IChatCitationPort"/> can turn them into citations.</summary>
 public sealed record ChatReadOnlyToolResult
 {
-    public ChatReadOnlyToolResult(AiJsonObject result, int retrievedNodes)
+    public const int MaxCitationCandidates = 64;
+
+    public ChatReadOnlyToolResult(AiJsonObject result, int retrievedNodes, IEnumerable<ChatCitationTarget>? citations = null)
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.ByteCount > 32768 || retrievedNodes is < 0 or > 1024) throw ChatBounds.Invalid();
-        Result = result; RetrievedNodes = retrievedNodes;
+        var owned = (citations ?? []).ToImmutableArray();
+        if (owned.Length > MaxCitationCandidates || owned.Any(candidate => candidate is null)) throw ChatBounds.Invalid();
+        Result = result; RetrievedNodes = retrievedNodes; Citations = owned;
     }
     public AiJsonObject Result { get; }
     public int RetrievedNodes { get; }
+    public ImmutableArray<ChatCitationTarget> Citations { get; }
     public override string ToString() => nameof(ChatReadOnlyToolResult);
+}
+
+/// <summary>
+/// Trusted citation boundary. Freshly authorizes and checks candidates against the conversation's exact pinned
+/// reports, returning only verified citations; an unverifiable candidate is omitted, never repaired.
+/// </summary>
+public interface IChatCitationPort
+{
+    Task<IReadOnlyList<ChatValidatedCitation>> VerifyAsync(ActorContext actor, ChatConversationIntent conversation,
+        IReadOnlyList<ChatCitationTarget> candidates, CancellationToken ct);
 }
 
 public sealed record ChatOrchestrationLimits

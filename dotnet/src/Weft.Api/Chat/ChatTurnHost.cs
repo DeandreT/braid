@@ -113,7 +113,8 @@ public sealed class ChatTurnHost : IAsyncDisposable
             {
                 var tools = Tools(profile);
                 orchestrator = new ChatTurnOrchestrator(_stores.WriterConversations, _signalingTurns, _client, profile.Spec,
-                    ChatGrounding.Instructions, tools.Definitions, _policy, tools.Port, Clock, InstanceId, ChatGrounding.Limits);
+                    ChatGrounding.Instructions, tools.Definitions, _policy, tools.Port, Clock, InstanceId, ChatGrounding.Limits,
+                    tools.Citations);
                 _orchestrators.Add(profile.Spec.Key, orchestrator);
             }
             // Registration precedes any ledger write, so this process never mistakes its own turn for an abandoned one.

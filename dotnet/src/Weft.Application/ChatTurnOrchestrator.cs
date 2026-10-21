@@ -16,6 +16,7 @@ public sealed partial class ChatTurnOrchestrator
     private readonly ImmutableArray<AiToolDefinition> _tools;
     private readonly IChatProfilePolicy _profilePolicy;
     private readonly IChatReadOnlyToolPort _toolPort;
+    private readonly IChatCitationPort? _citationPort;
     private readonly Guid _instance;
     private readonly ChatOrchestrationLimits _limits;
     internal TimeProvider Clock { get; }
@@ -31,7 +32,8 @@ public sealed partial class ChatTurnOrchestrator
     public ChatTurnOrchestrator(IChatConversationStore conversations, IChatTurnStore turns,
         AiRoundClient provider, AiProfileSpec profile, string trustedInstructions,
         IEnumerable<AiToolDefinition> tools, IChatProfilePolicy profilePolicy,
-        IChatReadOnlyToolPort toolPort, TimeProvider time, Guid instanceId, ChatOrchestrationLimits limits)
+        IChatReadOnlyToolPort toolPort, TimeProvider time, Guid instanceId, ChatOrchestrationLimits limits,
+        IChatCitationPort? citationPort = null)
     {
         ArgumentNullException.ThrowIfNull(conversations); ArgumentNullException.ThrowIfNull(turns);
         ArgumentNullException.ThrowIfNull(provider); ArgumentNullException.ThrowIfNull(profile);
@@ -51,7 +53,7 @@ public sealed partial class ChatTurnOrchestrator
         catch (Exception e) when (ChatTurnExecution.Recoverable(e)) { throw ChatBounds.Invalid(); }
         _conversations = conversations; _turns = turns; _provider = provider; _profile = profile;
         _instructions = trustedInstructions; _tools = owned.ToImmutable(); _profilePolicy = profilePolicy;
-        _toolPort = toolPort; Clock = time; _instance = instanceId; _limits = limits;
+        _toolPort = toolPort; _citationPort = citationPort; Clock = time; _instance = instanceId; _limits = limits;
     }
 
     public ChatTurnExecution Begin(ActorContext actor, ChatConversationKey conversation, ChatTurnIntent intent,
@@ -245,6 +247,18 @@ public sealed partial class ChatTurnOrchestrator
         Adopt(s, before, result, 1, data.ByteCount);
     }
 
+    private async Task AppendCitationAsync(State s, ChatCitationEventData data)
+    {
+        var before = s.Facts;
+        var round = s.Round ?? throw Stop(ChatOrchestrationOutcome.Interrupted);
+        var bytes = Encoding.UTF8.GetByteCount(data.MetadataJson);
+        var policy = ChatTurnPolicy.AppendBytes(before, round, before.Version, round.Intent.Fence, bytes, Now);
+        if (policy != ChatStoreOutcome.Applied) throw Stop(StoreFailure(policy));
+        var result = await _turns.AppendCitationAsync(s.Actor, s.Conversation.Key, before.Intent.TurnId, before.Version,
+            round.Intent.RoundId, round.Intent.Fence, data, s.Execution.Token).ConfigureAwait(false);
+        Adopt(s, before, result, 1, bytes);
+    }
+
     private async Task CompleteAsync(State s, ChatRoundCompletion completion)
     {
         var before = s.Facts;
@@ -322,6 +336,7 @@ public sealed partial class ChatTurnOrchestrator
         internal AiTurnLease? Lease { get; set; }
         internal List<AiMessage> Messages { get; } = [];
         internal HashSet<string> CallIds { get; } = new(StringComparer.Ordinal);
+        internal HashSet<ChatCitationTarget> Cited { get; } = [];
         internal long OutputBytes { get; set; }
         internal int ToolCalls { get; set; }
         internal int ToolIterations { get; set; }

@@ -5,11 +5,11 @@ using Weft.Domain;
 namespace Weft.Application.MappingTools;
 
 /// <summary>
-/// Trusted read-only <see cref="IChatReadOnlyToolPort"/> over a conversation's exact retained reports.
-/// It intentionally has no derivation, payload, worker or provider port. Share one instance per host:
-/// its local capacity covers both tool reads and citation checks.
+/// Trusted read-only <see cref="IChatReadOnlyToolPort"/> and <see cref="IChatCitationPort"/> over a conversation's
+/// exact retained reports. It intentionally has no derivation, payload, worker or provider port. Share one instance
+/// per host: its local capacity covers both tool reads and citation checks.
 /// </summary>
-public sealed partial class MappingToolService : IChatReadOnlyToolPort
+public sealed partial class MappingToolService : IChatReadOnlyToolPort, IChatCitationPort
 {
     private const int MaximumRetrievedNodes = 1_024;
     private readonly IRevisionReportMetadataReader authority;
@@ -45,7 +45,8 @@ public sealed partial class MappingToolService : IChatReadOnlyToolPort
     public async Task<ChatReadOnlyToolResult> ExecuteAsync(ChatReadOnlyToolContext context, AiToolIntent intent, CancellationToken ct)
     {
         var reply = await InvokeAsync(context, intent, ct);
-        return new(reply.Result, reply.RetrievedNodes);
+        // Candidates stay unverified until the citation port checks them against the pinned reports.
+        return new(reply.Result, reply.RetrievedNodes, reply.Citations);
     }
 
     /// <summary>Typed form of <see cref="ExecuteAsync"/>. Caller cancellation throws; every other refusal is categorical.</summary>

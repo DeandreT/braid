@@ -29,6 +29,7 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
     internal ChatConversationIntent Conversation { get; }
     private readonly IReadOnlyList<AiToolDefinition> tools;
     private readonly IChatReadOnlyToolPort toolPort;
+    private readonly IChatCitationPort? citationPort;
     private readonly List<ChatTurnExecution> executions = [];
     private readonly List<Action> releases = [];
     private readonly List<AiTurnLease> idle = [];
@@ -38,7 +39,7 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
     internal ChatOrchestrationFixture(Func<AiHttpFixture.Exchange, CancellationToken, Task>? script = null,
         Resolver? credentials = null, TimeProvider? providerClock = null, Clock? applicationClock = null,
         bool metadataAllowed = true, ActorContext? actor = null, ChatConversationIntent? conversation = null,
-        IReadOnlyList<AiToolDefinition>? tools = null, IChatReadOnlyToolPort? toolPort = null)
+        IReadOnlyList<AiToolDefinition>? tools = null, IChatReadOnlyToolPort? toolPort = null, IChatCitationPort? citationPort = null)
     {
         Server = new(async (exchange, ct) =>
         {
@@ -62,6 +63,7 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
         Port = new(Trace);
         this.tools = tools ?? Tools;
         this.toolPort = toolPort ?? Port;
+        this.citationPort = citationPort;
     }
 
     internal ChatTurnIntent Intent(string text = "PRIVATE question", int rounds = 3, long outputBytes = 131072,
@@ -78,7 +80,7 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
         CancellationToken ct = default, ChatOrchestrationLimits? limits = null, ActorContext? actor = null)
     {
         var orchestrator = new ChatTurnOrchestrator(Store, Store, Client, Profile, Instructions, tools, ProfilePolicy, toolPort,
-            ApplicationClock, InstanceId, limits ?? new(8, 4096, 65536, 131072));
+            ApplicationClock, InstanceId, limits ?? new(8, 4096, 65536, 131072), citationPort);
         var result = orchestrator.Begin(actor ?? Actor, Conversation.Key, intent ?? Intent(), history ?? [], ct);
         executions.Add(result);
         return result;
@@ -449,8 +451,28 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
             }
             await Returned(call); return result;
         }
-        public Task<ChatTurnWriteResult> AppendCitationAsync(ActorContext actor, ChatConversationKey key, Guid turnId, long expectedVersion, Guid roundId, Guid fence, ChatCitationEventData data, CancellationToken ct = default) =>
-            throw new InvalidOperationException("Mapping citation composition is excluded.");
+        public async Task<ChatTurnWriteResult> AppendCitationAsync(ActorContext actor, ChatConversationKey key, Guid turnId, long expectedVersion, Guid roundId, Guid fence, ChatCitationEventData data, CancellationToken ct = default)
+        {
+            var call = new StoreCall("append-citation", turnId, expectedVersion, roundId, fence); Record(call); ChatTurnWriteResult result;
+            lock (sync)
+            {
+                var turn = turns[turnId]; var round = rounds[turnId].Last();
+                var bytes = Encoding.UTF8.GetByteCount(data.MetadataJson);
+                var outcome = Allowed(actor, key) ? ChatTurnPolicy.AppendBytes(turn, round, expectedVersion, fence, bytes, Now) : ChatStoreOutcome.NotAuthorizedOrNotFound;
+                if (round.Intent.RoundId != roundId) outcome = ChatStoreOutcome.InvalidState;
+                // The same pin admission as the PostgreSQL ledger: a citation binds this conversation's exact report.
+                var pin = data.Citation.Facts.Target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport ? conversation.Validation : conversation.Projection;
+                if (outcome == ChatStoreOutcome.Applied && (data.Citation.Facts.Revision != key.Revision || data.Citation.Facts.Report != pin)) outcome = ChatStoreOutcome.Conflict;
+                if (outcome != ChatStoreOutcome.Applied) result = new(outcome, turn);
+                else
+                {
+                    var next = Copy(turn, version: turn.Version + 1, eventCount: turn.EventCount + 1, eventBytes: turn.EventBytes + bytes);
+                    turns[turnId] = next; events[turnId].Add(new(next.EventCount, data.EventId, ChatEventKind.Citation, "", roundId, data.MetadataJson));
+                    trace.Add("event." + ChatEventKind.Citation); result = new(ChatStoreOutcome.Applied, next);
+                }
+            }
+            await Returned(call); return result;
+        }
         public Task<ChatTurnWriteResult> FinishAsync(ActorContext actor, ChatConversationKey key, Guid turnId, long expectedVersion, ChatTurnPhase phase, CancellationToken ct = default) =>
             FinishWithMetadataAsync(actor, key, turnId, expectedVersion, phase, null, ct);
         public async Task<ChatTurnWriteResult> FinishWithMetadataAsync(ActorContext actor, ChatConversationKey key, Guid turnId, long expectedVersion, ChatTurnPhase phase, ChatTerminalMetadata? metadata, CancellationToken ct = default)

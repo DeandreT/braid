@@ -45,9 +45,13 @@ internal static class ChatHostConfiguration
             return new ChatPersistencePorts(reader, reader, writer, writer);
         });
         services.AddSingleton<IAiCredentialResolver>(new ChatHostCredentialResolver(configuration.Credentials));
-        // One shared read-only tool service bounds its own concurrent report reads for the whole host.
-        services.AddSingleton(provider => new ChatToolRegistry(MappingToolRegistry.Definitions, new MappingToolService(
-            provider.GetRequiredService<IRevisionReportMetadataReader>(), provider.GetRequiredService<IRevisionReportReader>())));
+        // One shared read-only tool service bounds its own concurrent report reads and citation checks for the whole host.
+        services.AddSingleton(provider =>
+        {
+            var tools = new MappingToolService(provider.GetRequiredService<IRevisionReportMetadataReader>(),
+                provider.GetRequiredService<IRevisionReportReader>());
+            return new ChatToolRegistry(MappingToolRegistry.Definitions, tools, tools);
+        });
         services.AddWeftChat(configuration.Options);
 
         string Connection(string name) => session

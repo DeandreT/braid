@@ -25,6 +25,14 @@ public sealed class ChatHttpTests(PostgresFixture fixture)
         RunAsync(ChatHttpScenarios.MappingToolRound);
 
     [RevisionIngestionFact]
+    public Task Tool_results_stream_verified_citations_after_their_completion_once_per_turn() =>
+        RunAsync(ChatHttpScenarios.VerifiedToolCitations);
+
+    [RevisionIngestionFact]
+    public Task Forged_and_foreign_citation_candidates_are_dropped_before_streaming() =>
+        RunAsync(ChatHttpScenarios.ForgedCitationCandidatesDropped);
+
+    [RevisionIngestionFact]
     public Task Abandoned_active_turn_is_interrupted_by_a_new_process_without_a_provider_request() =>
         RunAsync(ChatHttpScenarios.AbandonedTurnInterrupted);
 
@@ -32,6 +40,6 @@ public sealed class ChatHttpTests(PostgresFixture fixture)
     {
         await using var test = await RevisionReportTestSupport.CreateAsync(fixture);
         await scenario(new(test.Case, test.Actor, test.Revision, test.Seed.Admitted, test.Service, test.Reader,
-            () => H.EnsureReportsAsync(test)));
+            () => H.EnsureReportsAsync(test), DerivedReports: true));
     }
 }

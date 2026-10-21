@@ -133,10 +133,11 @@ pointer or cross-revision interpretation is admitted.
 
 The mapping-tool seam represents whole reports as operation plus revision and
 retained derivation, nodes as a closed reference type and validation diagnostics
-as emitted ordinals. After its all-or-nothing fresh citation check, the turn
-controller maps whole reports to ProjectionReport/ValidationReport targets and
-node types to the corresponding resource kind; it obtains the exact verified
-report and constructs `ChatValidatedCitation` again before publication. Exact
+as emitted ordinals. Whole reports map to ProjectionReport/ValidationReport
+targets and node types to the corresponding resource kind. The fresh citation
+check obtains the exact verified report and constructs `ChatValidatedCitation`
+for each target it can verify; the turn controller publishes only those, after
+rechecking authority, and omits every other candidate. Exact
 report/ordinal addresses can reconstruct native/projection locators from that
 retained report under fresh authority; the controller must never infer a new
 locator, substitute a selected report or render an unvalidated model string.

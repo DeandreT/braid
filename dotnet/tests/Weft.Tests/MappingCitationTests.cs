@@ -59,6 +59,39 @@ public sealed class MappingCitationTests
     }
 
     [Fact]
+    public async Task Filtering_omits_only_unverifiable_targets_and_keeps_candidate_order()
+    {
+        var fixture = new MappingToolFixture();
+        var service = fixture.Service();
+        var targets = new[]
+        {
+            new ChatCitationTarget(ChatCitationKind.Rule, "absent"), new ChatCitationTarget(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 1),
+            new ChatCitationTarget(ChatCitationKind.Field, "rule.first"), new ChatCitationTarget(ChatCitationKind.Rule, "rule.first"),
+            new ChatCitationTarget(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 2), new ChatCitationTarget(ChatCitationKind.ProjectionReport)
+        };
+        var check = await service.FilterCitationsAsync(MappingToolFixture.Actor, fixture.Conversation, targets);
+        Assert.Equal(MappingCitationOutcome.Valid, check.Outcome);
+        Assert.Equal(new[] { targets[1], targets[3], targets[5] }, check.Citations.Select(citation => citation.Facts.Target));
+        Assert.Equal(2, fixture.AuthorityCalls);
+        // The port form returns the same verified subset and nothing for an unauthorized reader.
+        IChatCitationPort port = service;
+        Assert.Equal(check.Citations.Select(citation => citation.Facts),
+            (await port.VerifyAsync(MappingToolFixture.Actor, fixture.Conversation, targets, default)).Select(citation => citation.Facts));
+        Assert.Empty(await port.VerifyAsync(MappingToolFixture.Actor, fixture.Conversation, [], default));
+        Assert.Equal(MappingCitationOutcome.Invalid, (await service.FilterCitationsAsync(MappingToolFixture.Actor, fixture.Conversation,
+            Enumerable.Repeat(targets[5], 65).ToArray())).Outcome);
+        Assert.Equal(MappingCitationOutcome.Invalid, (await service.FilterCitationsAsync(MappingToolFixture.Actor, fixture.Conversation,
+            new ChatCitationTarget[] { targets[5], null! })).Outcome);
+        fixture.Role = null;
+        Assert.Empty(await port.VerifyAsync(MappingToolFixture.Actor, fixture.Conversation, targets, default));
+        var pin = fixture.Conversation.Validation;
+        var forged = fixture.ConversationWith(validation: new(pin.CacheEntryId, pin.DerivationId, pin.KeyFingerprint, Sha256Digest.FromBytes([7])));
+        fixture.Role = ProjectRole.Viewer;
+        Assert.Equal(MappingCitationOutcome.ReportUnavailable, (await service.FilterCitationsAsync(MappingToolFixture.Actor, forged,
+            new[] { new ChatCitationTarget(ChatCitationKind.ValidationReport) })).Outcome);
+    }
+
+    [Fact]
     public async Task Forged_pins_and_counts_fail_closed_and_delivery_requires_fresh_authority()
     {
         var fixture = new MappingToolFixture();

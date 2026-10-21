@@ -56,11 +56,32 @@ than being truncated. The same immutable call object supplies each corresponding
 `AiToolMessage`, in original order.
 
 The ledger allows event appends only while a round is Uncertain. Each ordered
-tool therefore publishes ToolStarted, executes, and publishes ToolCompleted
-before typed RoundCompleted(ToolCalls). Only then may the next exact request be
-reserved on the same provider lease. Tool activity contains call/name/ordinal
-and completion byte/node counts, not raw arguments or results. Exact provider
-history, including complete results, is private persisted round request content.
+tool therefore publishes ToolStarted, executes, publishes ToolCompleted and then
+its verified citations before typed RoundCompleted(ToolCalls). Only then may the
+next exact request be reserved on the same provider lease. Tool activity contains
+call/name/ordinal and completion byte/node counts, not raw arguments or results.
+Exact provider history, including complete results, is private persisted round
+request content.
+
+## Citation delivery
+
+A tool result may carry up to 64 unverified `ChatCitationTarget` candidates. They
+come only from the trusted tool port's result, never from model text or tool
+arguments. When the orchestrator has an `IChatCitationPort`, after each
+ToolCompleted it passes that result's candidates not yet cited in this turn, in
+order, to the port. The port freshly authorizes and checks them against the
+conversation's exact pinned reports and returns only verified
+`ChatValidatedCitation`s; an unverifiable candidate is omitted. Authority is
+rechecked after the port returns. The orchestrator then publishes, in candidate
+order, each returned citation whose target was offered and whose revision and
+report equal the conversation's pin, as one ledger Citation event in the same
+round. Anything else the port returns is omitted. Each target is published at
+most once per turn. Without a citation port no citation is published.
+
+Citation events use the ordinary append bounds and version/fence checks. A
+verification that cannot complete yields no citations, never a partial or
+repaired one. A port failure, cancellation or revocation stops the turn under
+the same rules as tool execution; no provider request or tool call is repeated.
 
 Native Stop publishes typed RoundCompleted then Completed. OutputLimit, refusal
 and filtering finish the turn as Failed, retaining the native reason. Provider
@@ -135,9 +156,9 @@ prompts, results, raw provider bodies, exception messages, endpoint or credentia
 values enter routine diagnostics through this module.
 
 [Mapping explanation tools](mapping-ai-tools.md) supply the registered tool
-manifest, read port and citation check. The [chat HTTP API](chat-http.md)
+manifest, read port and citation port. The [chat HTTP API](chat-http.md)
 composes this orchestrator with the stores, shared provider client and
-registered tools. Final validated citation-snapshot delivery is a separate
-boundary; completing orchestration does not validate an answer's citations.
+registered tools. A citation shows that a tool retrieved that resource from the
+pinned report; it does not check which resources the answer text relies on.
 HTTP/SSE, UI, payloads, edits, preview/execution, deployment and live model
 activation are outside this module.

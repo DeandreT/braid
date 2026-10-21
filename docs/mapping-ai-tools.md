@@ -11,7 +11,7 @@ transport dependency and registers no routes or services itself.
 | Type | Role |
 | --- | --- |
 | `MappingToolRegistry.Definitions` | The ordered `AiToolDefinition` manifest. Pass it as the orchestrator's `tools` and to `ChatAiBridge.PinGroundingPolicy`. |
-| `MappingToolService` | The `IChatReadOnlyToolPort` passed to `ChatTurnOrchestrator`, plus `ValidateCitationsAsync` for final delivery. |
+| `MappingToolService` | The `IChatReadOnlyToolPort` and `IChatCitationPort` passed to `ChatTurnOrchestrator`, plus `ValidateCitationsAsync` and `FilterCitationsAsync`. |
 | `MappingToolLimits` | Optional trusted limits; defaults apply when omitted. |
 
 Construct one shared instance per host:
@@ -69,7 +69,8 @@ faults concurrently. Every other refusal is a complete categorical result.
 `InvokeAsync` is the typed form of `ExecuteAsync`. Its `MappingToolReply` has
 the categorical `Outcome`, actual `Coverage`, typed `Data`, unverified citation
 `Citations`, the complete `Result` (`AiJsonObject`) and `RetrievedNodes`.
-Only `Result` and `RetrievedNodes` cross the port.
+`Result`, `RetrievedNodes` and the unverified candidates cross the port; only
+`Result` enters provider history.
 
 ## Closed registry
 
@@ -147,3 +148,11 @@ configured citation count fails the whole check. Only the owned `Citations` of a
 `Valid` `MappingCitationCheck` may be persisted with `ChatCitationEventData` or
 rendered. A valid citation proves the referenced resource exists in the pinned
 report, not that the model's interpretation is correct or that anything ran.
+
+`FilterCitationsAsync` performs the same check but omits a target that is
+missing from its pinned report, has the wrong kind or an out-of-range ordinal;
+its `Valid` result holds the verified subset in candidate order. Null entries,
+too many targets, authority, report, capacity and time failures still yield no
+citations. The `IChatCitationPort` implementation used for
+[chat turn delivery](chat-turn-orchestration.md#citation-delivery) returns that
+subset, or nothing when the check is not `Valid`.

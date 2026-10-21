@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Runtime.Versioning;
 using System.Text.Json;
+using Weft.Ai;
 using Weft.Api.Chat;
 using Weft.Application;
 using Weft.Domain;
@@ -13,10 +15,11 @@ namespace Weft.Tests;
 /// <summary>Actual PostgreSQL revision, catalog and chat ledger with the reports that conversations pin.</summary>
 [SupportedOSPlatform("linux")]
 internal sealed record ChatTestEnvironment(PostgresCase Case, ActorContext Actor, RevisionScope Revision, Guid OtherPrincipal,
-    IRevisionReportReader Reports, IRevisionReportMetadataReader Metadata, Func<Task> PublishReportsAsync)
+    IRevisionReportReader Reports, IRevisionReportMetadataReader Metadata, Func<Task> PublishReportsAsync, bool DerivedReports = false)
 {
-    internal Task<ChatHttpTestSupport> StartAsync(ChatApiOptions options, Guid? principal = null) =>
-        H.StartAsync(Case, new ActorContext(new PrincipalId(principal ?? Actor.PrincipalId.Value)), Revision, options, Reports, Metadata);
+    internal Task<ChatHttpTestSupport> StartAsync(ChatApiOptions options, Guid? principal = null,
+        Func<IChatReadOnlyToolPort, IChatReadOnlyToolPort>? tools = null) =>
+        H.StartAsync(Case, new ActorContext(new PrincipalId(principal ?? Actor.PrincipalId.Value)), Revision, options, Reports, Metadata, tools);
     public override string ToString() => nameof(ChatTestEnvironment);
 }
 
@@ -61,6 +64,7 @@ internal static class ChatHttpScenarios
         Assert.Equal("turn.completed", frames[^1].Name);
         Assert.Equal("Hello world", H.Answer(frames));
         Assert.Contains(frames, frame => frame.Name == "usage" && frame.Data.GetProperty("totalTokens").GetInt64() == 13);
+        Assert.DoesNotContain(frames, frame => frame.Name == "citation");
         Assert.Equal(frames.Select(frame => frame.Id).Order(), frames.Select(frame => frame.Id));
         Assert.Equal(1, provider.RequestCount);
         var request = Assert.Single(provider.Requests);
@@ -229,6 +233,140 @@ internal static class ChatHttpScenarios
             var messages = second.RootElement.GetProperty("messages").EnumerateArray().ToArray();
             Assert.Equal(["system", "user", "assistant", "tool"], messages.Select(message => message.GetProperty("role").GetString()));
             Assert.Equal("call-summary", messages[3].GetProperty("tool_call_id").GetString());
+        }
+    }
+
+    internal static async Task VerifiedToolCitations(ChatTestEnvironment env)
+    {
+        await env.PublishReportsAsync();
+        var projection = Assert.IsType<VerifiedProjectionReport>(RevisionReportTestSupport.Available(
+            await env.Reports.GetCurrentAsync(env.Actor, env.Revision, RevisionReportOperation.Projection)));
+        var field = projection.Report.Document?.Fields.FirstOrDefault()?.Id;
+        // Worker-derived reports project fields; the synthetic projection is deliberately empty.
+        Assert.Equal(env.DerivedReports, field is not null);
+        var third = field is null ? Call(2, "call-search", "{\"query\":\"field\"}", "search_mapping")
+            : Call(2, "call-lineage", JsonSerializer.Serialize(new { fieldId = field }), "get_field_lineage");
+        // Text that looks like a citation is only model output; it never becomes a citation event.
+        const string forgedText = "See {\"kind\":\"field\",\"resourceId\":\"forged.field\"} and weft:citation/rule/forged.rule.";
+        await using var provider = new AiHttpFixture((exchange, ct) => exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(
+            exchange.Ordinal == 1
+                ? Call(0, "call-summary", "{}", "get_mapping_summary") + Call(1, "call-issues", "{}", "get_validation_issues") + third +
+                    Finish("tool_calls") + Done
+                : Answer(forgedText)), ct));
+        RecordingTools? recorder = null;
+        await using var api = await env.StartAsync(H.Options(provider), tools: inner => recorder = new(inner));
+        var token = await api.TokenAsync();
+        var conversation = await api.CreateConversationAsync(token);
+        var pins = await PinsAsync(api, conversation);
+        var turn = Guid.NewGuid();
+        await api.StartTurnAsync(conversation, turn, "Which resources explain this mapping?", token);
+        var frames = await api.StreamAsync(conversation, turn);
+        Assert.Equal("turn.completed", frames[^1].Name);
+        Assert.Equal(forgedText, H.Answer(frames));
+        Assert.Equal(2, provider.RequestCount);
+
+        // The candidates the production tool port returned, in call order; each verified one is streamed once.
+        var results = recorder!.Results.ToArray();
+        Assert.Equal(3, results.Length);
+        var candidates = results.SelectMany(result => result.Citations).Distinct().ToArray();
+        Assert.Contains(new ChatCitationTarget(ChatCitationKind.ProjectionReport), candidates);
+        Assert.Contains(new ChatCitationTarget(ChatCitationKind.ValidationReport), candidates);
+        if (field is not null) Assert.Contains(new ChatCitationTarget(ChatCitationKind.Field, field), candidates);
+        var citations = frames.Where(frame => frame.Name == "citation").ToArray();
+        Assert.Equal(candidates.Select(Selector), citations.Select(frame => Selector(frame.Data.GetProperty("target"))));
+        foreach (var citation in citations)
+        {
+            var kind = citation.Data.GetProperty("target").GetProperty("kind").GetString();
+            Assert.Equal(kind is "validationReport" or "validationDiagnostic" ? pins.Validation : pins.Projection,
+                citation.Data.GetProperty("reportDerivationId").GetString());
+        }
+        Assert.DoesNotContain(citations, frame => frame.Data.GetRawText().Contains("forged", StringComparison.Ordinal));
+
+        // Each tool's citations follow its completion and precede the next tool and the answer round.
+        var completions = frames.Where(frame => frame.Name == "tool.completed").Select(frame => frame.Id).ToArray();
+        var starts = frames.Where(frame => frame.Name == "tool.started").Select(frame => frame.Id).ToArray();
+        Assert.Equal(3, completions.Length);
+        var firstText = frames.First(frame => frame.Name == "text.delta").Id;
+        for (var index = 0; index < results.Length; index++)
+        {
+            var end = index + 1 < starts.Length ? starts[index + 1] : firstText;
+            var expected = results[index].Citations.Where(candidate => !results.Take(index).SelectMany(prior => prior.Citations).Contains(candidate))
+                .Distinct().Select(Selector);
+            Assert.Equal(expected, citations.Where(frame => frame.Id > completions[index] && frame.Id < end)
+                .Select(frame => Selector(frame.Data.GetProperty("target"))));
+        }
+        var round = frames.First(frame => frame.Name == "tool.started").Data.GetProperty("roundId").GetString();
+        Assert.All(citations, frame => Assert.Equal(round, frame.Data.GetProperty("roundId").GetString()));
+
+        // Citations are durable ledger events: a resumed stream replays them without another provider request.
+        var resumed = await api.StreamAsync(conversation, turn, after: completions[0]);
+        Assert.Equal(frames.Where(frame => frame.Id > completions[0]).Select(frame => (frame.Id, frame.Name)),
+            resumed.Select(frame => (frame.Id, frame.Name)));
+        Assert.Equal(2, provider.RequestCount);
+    }
+
+    internal static async Task ForgedCitationCandidatesDropped(ChatTestEnvironment env)
+    {
+        await env.PublishReportsAsync();
+        // A tool port that adds candidates absent from the pinned reports: another mapping's field and rule,
+        // out-of-range diagnostic ordinals and a repeated genuine candidate. Only the real check decides.
+        ChatCitationTarget[] forged =
+        [
+            new(ChatCitationKind.Field, "foreign.mapping.field"), new(ChatCitationKind.Rule, "foreign.rule"),
+            new(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 32_767), new(ChatCitationKind.ProjectionDiagnostic, diagnosticOrdinal: 32_767),
+            new(ChatCitationKind.Control, "forged.control"), new(ChatCitationKind.ProjectionReport)
+        ];
+        await using var provider = new AiHttpFixture((exchange, ct) => exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(
+            exchange.Ordinal == 1
+                ? Call(0, "call-rule", "{\"ruleId\":\"foreign.rule\"}", "get_rule_details") + Finish("tool_calls") + Done
+                : Answer("foreign.rule is not part of this revision.")), ct));
+        RecordingTools? recorder = null;
+        await using var api = await env.StartAsync(H.Options(provider), tools: inner => recorder = new(inner, forged));
+        var token = await api.TokenAsync();
+        var conversation = await api.CreateConversationAsync(token);
+        var pins = await PinsAsync(api, conversation);
+        var turn = Guid.NewGuid();
+        await api.StartTurnAsync(conversation, turn, "Explain foreign.rule", token);
+        var frames = await api.StreamAsync(conversation, turn);
+        Assert.Equal("turn.completed", frames[^1].Name);
+        Assert.Equal(2, provider.RequestCount);
+
+        // The unknown rule returns no node candidates; only the genuinely read projection report is cited, once.
+        var result = Assert.Single(recorder!.Results);
+        Assert.Equal(new[] { new ChatCitationTarget(ChatCitationKind.ProjectionReport) }, result.Citations.ToArray());
+        var citation = Assert.Single(frames, frame => frame.Name == "citation");
+        Assert.Equal("projectionReport", citation.Data.GetProperty("target").GetProperty("kind").GetString());
+        Assert.Equal(pins.Projection, citation.Data.GetProperty("reportDerivationId").GetString());
+        Assert.True(citation.Id > Assert.Single(frames, frame => frame.Name == "tool.completed").Id);
+        foreach (var text in new[] { "foreign", "forged", "32767" })
+            Assert.DoesNotContain(frames, frame => frame.Data.GetRawText().Contains(text, StringComparison.Ordinal) && frame.Name != "text.delta");
+    }
+
+    private static async Task<(string Projection, string Validation)> PinsAsync(ChatHttpTestSupport api, Guid conversation)
+    {
+        using var detail = await api.Client.GetAsync(api.ConversationPath(conversation));
+        var pinned = (await CatalogHttpTestSupport.JsonAsync(detail)).GetProperty("conversation");
+        return (pinned.GetProperty("projectionDerivationId").GetString()!, pinned.GetProperty("validationDerivationId").GetString()!);
+    }
+
+    private static string Selector(ChatCitationTarget target) =>
+        JsonNamingPolicy.CamelCase.ConvertName(target.Kind.ToString()) + "|" + target.ResourceId + "|" + target.DiagnosticOrdinal;
+
+    private static string Selector(JsonElement target) =>
+        target.GetProperty("kind").GetString() + "|" + (target.TryGetProperty("resourceId", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null) +
+        "|" + (target.TryGetProperty("diagnosticOrdinal", out var ordinal) && ordinal.ValueKind == JsonValueKind.Number ? ordinal.GetInt32() : null);
+
+    /// <summary>Observes the production tool port's results; optionally appends forged candidates to them.</summary>
+    private sealed class RecordingTools(IChatReadOnlyToolPort inner, IReadOnlyList<ChatCitationTarget>? forged = null) : IChatReadOnlyToolPort
+    {
+        internal ConcurrentQueue<ChatReadOnlyToolResult> Results { get; } = new();
+        public Task<bool> ValidateAsync(ChatReadOnlyToolContext context, AiToolIntent intent, CancellationToken ct) =>
+            inner.ValidateAsync(context, intent, ct);
+        public async Task<ChatReadOnlyToolResult> ExecuteAsync(ChatReadOnlyToolContext context, AiToolIntent intent, CancellationToken ct)
+        {
+            var result = await inner.ExecuteAsync(context, intent, ct);
+            Results.Enqueue(result);
+            return forged is null ? result : new(result.Result, result.RetrievedNodes, result.Citations.Concat(forged));
         }
     }
 

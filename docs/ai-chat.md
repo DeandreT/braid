@@ -158,8 +158,9 @@ a tool only after the comparison API is independently qualified. The registry,
 read port and citation check are described in
 [Mapping explanation tools](mapping-ai-tools.md).
 
-Citations prove which resources an answer references; they do not guarantee the
-model's interpretation is correct. Keep original rules inspectable. Never label
+Citations identify pinned-report resources that a read-only tool retrieved in the
+turn, verified under fresh authority. They do not prove which resources the answer
+text relies on, and they do not guarantee the model's interpretation is correct. Keep original rules inspectable. Never label
 an explanation as execution evidence unless it is linked to an actual authorized
 run with the matching revision.
 

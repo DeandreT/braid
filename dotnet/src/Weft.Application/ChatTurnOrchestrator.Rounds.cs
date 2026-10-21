@@ -113,8 +113,36 @@ public sealed partial class ChatTurnOrchestrator
             CheckContext(s.Messages);
             await AppendAsync(s, new(Guid.NewGuid(), ChatEventKind.ToolCompleted,
                 ToolEvent(call, i + 1, result.Result.ByteCount, result.RetrievedNodes))).ConfigureAwait(false);
+            await DeliverCitationsAsync(s, result.Citations).ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    /// Publishes a tool result's verified citation candidates, each once per turn, in candidate order, while the
+    /// round still accepts appends. Only the trusted port verifies; model text and arguments never become citations.
+    /// </summary>
+    private async Task DeliverCitationsAsync(State s, IReadOnlyList<ChatCitationTarget> candidates)
+    {
+        if (_citationPort is null) return;
+        var fresh = candidates.Where(candidate => !s.Cited.Contains(candidate)).Distinct().ToArray();
+        if (fresh.Length == 0) return;
+        CheckTime(s.Execution, s.Facts.Intent);
+        var verified = await _citationPort.VerifyAsync(s.Actor, s.Conversation, fresh, s.Execution.Token).ConfigureAwait(false);
+        // A verification is not authority for publication; recheck after it returns.
+        await RecheckAsync(s).ConfigureAwait(false);
+        var accepted = new Dictionary<ChatCitationTarget, ChatValidatedCitation>();
+        foreach (var citation in verified ?? [])
+            if (citation?.Facts is { } facts && facts.Revision == s.Conversation.Key.Revision && facts.Report == Pin(s.Conversation, facts.Target))
+                accepted.TryAdd(facts.Target, citation);
+        // Unverified or unrequested results are omitted, never repaired or reported to the browser.
+        foreach (var candidate in fresh)
+            if (accepted.TryGetValue(candidate, out var citation) && s.Cited.Add(candidate))
+                await AppendCitationAsync(s, new(Guid.NewGuid(), citation)).ConfigureAwait(false);
+    }
+
+    private static ChatReportPin Pin(ChatConversationIntent conversation, ChatCitationTarget target) =>
+        target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport
+            ? conversation.Validation : conversation.Projection;
 
     private static ChatReadOnlyToolContext ToolContext(State s, int ordinal) => new(s.Actor, s.Conversation,
         s.Facts.Intent, s.Round!.Intent.RoundId, ordinal,

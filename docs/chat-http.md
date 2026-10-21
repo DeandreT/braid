@@ -115,8 +115,12 @@ exchanges that fit the orchestrator's history bounds). Nothing in the request
 selects instructions, tools, endpoints or history. When chat is enabled the Server
 registers one shared instance of the five read-only
 [mapping explanation tools](mapping-ai-tools.md) over the host's report metadata
-and report readers; tool calls are offered only to profiles with the
-`functionTools` capability. Execution belongs to the server
+and report readers, as both the tool port and the citation port; tool calls are
+offered only to profiles with the `functionTools` capability. A tool result's
+citation candidates are verified against the conversation's pinned reports
+under fresh authority and delivered as `citation` events after that tool's
+`tool.completed` (see [citation delivery](chat-turn-orchestration.md#citation-delivery)).
+Model text never produces a citation. Execution belongs to the server
 process, not to the request: disconnecting neither cancels nor repeats provider
 work, and a stopping server cancels its live turns.
 
@@ -131,7 +135,7 @@ the event name. Comment lines (`: keep-alive`) may appear while a turn is quiet.
 | `text.delta` | Answer text in order, with its application round ID. |
 | `tool.started` / `tool.completed` | Tool name and ordinal within the round; completion adds result bytes and retrieved nodes. Arguments and results are never streamed. |
 | `usage` | Per-round token snapshot (`observation`, `roundTerminal` or `openRejection`). Null counts are unknown, never zero; snapshots are not additive. |
-| `citation` | A target verified against the conversation's pinned report, with that report's derivation ID. |
+| `citation` | A tool-retrieved target verified against the conversation's pinned report, with that report's derivation ID and the tool's round ID. Each target appears at most once per turn; unverifiable candidates are never streamed. |
 | `turn.completed` | Terminal. |
 | `turn.failed` | Terminal. `reason` is `provider` (with `providerFailure`), `outputLimit`, `refused`, `contentFiltered`, `interrupted` or `stopped` (an application bound, authority change or persistence stop). |
 | `turn.cancelled` | Terminal. |

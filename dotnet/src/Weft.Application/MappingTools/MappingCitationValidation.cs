@@ -8,8 +8,29 @@ public sealed partial class MappingToolService
     /// All-or-nothing fresh verification of candidate targets against the conversation's exact pinned reports.
     /// Never interpret text containing a URL/ID as a verified citation; only a Valid check's citations may be persisted.
     /// </summary>
-    public async Task<MappingCitationCheck> ValidateCitationsAsync(ActorContext actor, ChatConversationIntent conversation,
-        IReadOnlyList<ChatCitationTarget> candidates, CancellationToken cancellationToken = default)
+    public Task<MappingCitationCheck> ValidateCitationsAsync(ActorContext actor, ChatConversationIntent conversation,
+        IReadOnlyList<ChatCitationTarget> candidates, CancellationToken cancellationToken = default) =>
+        CheckCitationsAsync(actor, conversation, candidates, omitUnverified: false, cancellationToken);
+
+    /// <summary>
+    /// The same fresh check, except that a target absent from its pinned report is omitted instead of failing the
+    /// whole check. A Valid result holds the verified subset in candidate order; authority, report and bound
+    /// failures still yield no citations.
+    /// </summary>
+    public Task<MappingCitationCheck> FilterCitationsAsync(ActorContext actor, ChatConversationIntent conversation,
+        IReadOnlyList<ChatCitationTarget> candidates, CancellationToken cancellationToken = default) =>
+        CheckCitationsAsync(actor, conversation, candidates, omitUnverified: true, cancellationToken);
+
+    /// <summary>Chat turn delivery: tool candidates that cannot be verified are dropped, never streamed.</summary>
+    async Task<IReadOnlyList<ChatValidatedCitation>> IChatCitationPort.VerifyAsync(ActorContext actor,
+        ChatConversationIntent conversation, IReadOnlyList<ChatCitationTarget> candidates, CancellationToken ct)
+    {
+        var check = await FilterCitationsAsync(actor, conversation, candidates, ct);
+        return check.Outcome == MappingCitationOutcome.Valid ? check.Citations : Array.Empty<ChatValidatedCitation>();
+    }
+
+    private async Task<MappingCitationCheck> CheckCitationsAsync(ActorContext actor, ChatConversationIntent conversation,
+        IReadOnlyList<ChatCitationTarget> candidates, bool omitUnverified, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(conversation);
@@ -34,20 +55,20 @@ public sealed partial class MappingToolService
             var work = new MappingToolWork(limits.WorkUnits, token);
             VerifiedProjectionReport? projection = null;
             VerifiedValidationReport? validation = null;
-            var validated = new ChatValidatedCitation[snapshot.Length];
-            for (var index = 0; index < snapshot.Length; index++)
+            var validated = new List<ChatValidatedCitation>(snapshot.Length);
+            foreach (var target in snapshot)
             {
-                var target = snapshot[index];
                 VerifiedRevisionReport report = target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport
                     ? validation ??= await ReadValidationAsync(actor, conversation, source, token)
                     : projection ??= await ReadProjectionAsync(actor, conversation, source, token);
                 work.Charge(Cost(report, target));
-                try { validated[index] = ChatValidatedCitation.Validate(conversation, report, target); }
+                try { validated.Add(ChatValidatedCitation.Validate(conversation, report, target)); }
+                catch (ArgumentException) when (omitUnverified) { }
                 catch (ArgumentException) { return new(MappingCitationOutcome.Invalid); }
             }
             await AuthorizeAsync(actor, conversation, source, token);
             token.ThrowIfCancellationRequested();
-            return new(MappingCitationOutcome.Valid, Array.AsReadOnly(validated));
+            return new(MappingCitationOutcome.Valid, Array.AsReadOnly(validated.ToArray()));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         { cancellationToken.ThrowIfCancellationRequested(); throw; }

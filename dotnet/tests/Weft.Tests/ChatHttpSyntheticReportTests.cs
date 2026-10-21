@@ -34,6 +34,14 @@ public sealed class ChatHttpSyntheticReportTests(PostgresFixture fixture)
         RunAsync(ChatHttpScenarios.MappingToolRound);
 
     [PostgresFact]
+    public Task Tool_results_stream_verified_citations_after_their_completion_once_per_turn() =>
+        RunAsync(ChatHttpScenarios.VerifiedToolCitations);
+
+    [PostgresFact]
+    public Task Forged_and_foreign_citation_candidates_are_dropped_before_streaming() =>
+        RunAsync(ChatHttpScenarios.ForgedCitationCandidatesDropped);
+
+    [PostgresFact]
     public Task Abandoned_active_turn_is_interrupted_by_a_new_process_without_a_provider_request() =>
         RunAsync(ChatHttpScenarios.AbandonedTurnInterrupted);
 

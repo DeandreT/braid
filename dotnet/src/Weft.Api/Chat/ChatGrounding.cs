@@ -5,10 +5,13 @@ using Weft.Domain;
 
 namespace Weft.Api.Chat;
 
-/// <summary>Trusted read-only tool definitions and their port. Model text never adds or selects a definition.</summary>
+/// <summary>
+/// Trusted read-only tool definitions, their port and the optional port that verifies their citation candidates.
+/// Model text never adds or selects a definition. Without a citation port, turns deliver no citations.
+/// </summary>
 public sealed class ChatToolRegistry
 {
-    public ChatToolRegistry(IEnumerable<AiToolDefinition> definitions, IChatReadOnlyToolPort port)
+    public ChatToolRegistry(IEnumerable<AiToolDefinition> definitions, IChatReadOnlyToolPort port, IChatCitationPort? citations = null)
     {
         ArgumentNullException.ThrowIfNull(definitions);
         ArgumentNullException.ThrowIfNull(port);
@@ -17,11 +20,13 @@ public sealed class ChatToolRegistry
             Definitions.Select(tool => tool.Name).Distinct(StringComparer.Ordinal).Count() != Definitions.Length)
             throw new ArgumentException("Chat tools must be at most 16 distinct definitions.", nameof(definitions));
         Port = port;
+        Citations = citations;
     }
 
     public static ChatToolRegistry Empty { get; } = new([], new NoChatTools());
     public ImmutableArray<AiToolDefinition> Definitions { get; }
     public IChatReadOnlyToolPort Port { get; }
+    public IChatCitationPort? Citations { get; }
     public override string ToString() => nameof(ChatToolRegistry);
 
     private sealed class NoChatTools : IChatReadOnlyToolPort

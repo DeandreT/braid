@@ -75,9 +75,13 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
         StartAsync(test.Case, new ActorContext(new PrincipalId(principal ?? test.Actor.PrincipalId.Value)), test.Revision, options,
             reportsEnabled ? test.Service : null, reportsEnabled ? test.Reader : null);
 
-    /// <summary>With both report ports, registers the mapping tools exactly as the Server host does.</summary>
+    /// <summary>
+    /// With both report ports, registers the mapping tools and their citation check exactly as the Server host does.
+    /// <paramref name="tools"/> may observe or alter the tool port only; citations are always checked by the real service.
+    /// </summary>
     internal static async Task<ChatHttpTestSupport> StartAsync(PostgresCase test, ActorContext actor, RevisionScope revision,
-        ChatApiOptions options, IRevisionReportReader? reports = null, IRevisionReportMetadataReader? metadata = null)
+        ChatApiOptions options, IRevisionReportReader? reports = null, IRevisionReportMetadataReader? metadata = null,
+        Func<IChatReadOnlyToolPort, IChatReadOnlyToolPort>? tools = null)
     {
         var reservation = new TcpListener(IPAddress.Loopback, 0);
         reservation.Start();
@@ -100,7 +104,10 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
             builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(catalog));
             if (reports is not null) builder.Services.AddSingleton(reports);
             if (reports is not null && metadata is not null)
-                builder.Services.AddSingleton(new ChatToolRegistry(MappingToolRegistry.Definitions, new MappingToolService(metadata, reports)));
+            {
+                var service = new MappingToolService(metadata, reports);
+                builder.Services.AddSingleton(new ChatToolRegistry(MappingToolRegistry.Definitions, tools?.Invoke(service) ?? service, service));
+            }
             var readerStore = new PostgresChatStore(reader);
             var writerStore = new PostgresChatStore(writer);
             builder.Services.AddSingleton(new ChatPersistencePorts(readerStore, readerStore, writerStore, writerStore));
