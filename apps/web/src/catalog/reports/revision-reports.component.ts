@@ -1,5 +1,16 @@
 import { DatePipe } from "@angular/common";
-import { Component, computed, input } from "@angular/core";
+import {
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  input,
+  signal,
+  viewChild,
+} from "@angular/core";
+import type { ChatCitation, ChatConversation } from "../../chat/chat-types";
+import { sameScope } from "../../chat/chat-types";
+import type { NodeReference } from "../../mappings/projection-view";
 import { RouterLink } from "@angular/router";
 import type { components } from "../../api/generated";
 import { NativeEvidenceComponent } from "../../mappings/native-evidence.component";
@@ -31,6 +42,9 @@ type Failure = components["schemas"]["CatalogRevisionReportFailureV1"];
   styleUrl: "./revision-reports.component.css",
 })
 export class RevisionReportsComponent {
+  private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly viewer = viewChild(MappingProjectionComponent);
+  readonly citationNotice = signal("");
   readonly reports = input.required<RevisionReportState>();
   readonly revision = input.required<CatalogRevision>();
   readonly projection = computed(() => this.reports().projection());
@@ -67,6 +81,80 @@ export class RevisionReportsComponent {
         }
       : null;
   });
+
+  showChatCitation(value: {
+    conversation: ChatConversation;
+    citation: ChatCitation;
+  }): void {
+    const { conversation, citation } = value;
+    const target = citation.target;
+    const validation =
+      target.kind === "validationDiagnostic" ||
+      target.kind === "validationReport";
+    const pin = validation
+      ? conversation.validationDerivationId
+      : conversation.projectionDerivationId;
+    const pane = validation ? this.validation() : this.projection();
+    this.citationNotice.set("");
+    if (
+      !sameScope(conversation.revision, this.revision().scope) ||
+      citation.reportDerivationId !== pin ||
+      pane.response?.body.result?.derivationId !== pin ||
+      !pane.response.body.report
+    ) {
+      this.citationNotice.set(
+        "This citation belongs to a saved report that is not displayed. No revision or report selection was changed.",
+      );
+      return;
+    }
+    let selector: string | null = null;
+    if (target.kind === "projectionReport")
+      selector = "#saved-explanation-title";
+    else if (target.kind === "validationReport")
+      selector = "#saved-validation-title";
+    else if (
+      target.kind === "projectionDiagnostic" ||
+      target.kind === "validationDiagnostic"
+    ) {
+      if (
+        target.diagnosticOrdinal !== null &&
+        Number.isInteger(target.diagnosticOrdinal) &&
+        target.diagnosticOrdinal >= 0
+      )
+        selector = `[data-chat-${validation ? "validation" : "projection"}-diagnostic="${target.diagnosticOrdinal}"]`;
+    } else {
+      const viewer = this.viewer(),
+        id = target.resourceId;
+      if (viewer && id) {
+        const view = viewer.view();
+        let reference: NodeReference | null = null;
+        if (target.kind === "field" && view.fields.has(id))
+          reference = { kind: "field", fieldId: id };
+        if (target.kind === "rule" && view.rules.has(id))
+          reference = { kind: "rule", ruleId: id };
+        if (target.kind === "boundary" && view.boundaries.has(id))
+          reference = { kind: "boundary", boundaryId: id };
+        if (target.kind === "parameter" && view.parameters.has(id))
+          reference = { kind: "parameter", parameterId: id };
+        if (target.kind === "control" && view.controls.has(id))
+          reference = { kind: "control", controlId: id };
+        if (reference) {
+          viewer.navigate(reference);
+          return;
+        }
+      }
+    }
+    const element = selector
+      ? this.element.nativeElement.querySelector<HTMLElement>(selector)
+      : null;
+    if (element) {
+      element.focus();
+      element.scrollIntoView({ block: "nearest" });
+    } else
+      this.citationNotice.set(
+        "The cited resource is not available in the displayed report.",
+      );
+  }
 
   operation(value: components["schemas"]["OperationStatusV1"]): string {
     return {

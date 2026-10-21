@@ -1,4 +1,7 @@
 <section class="revision-reports" aria-labelledby="revision-reports-title">
+  @if (citationNotice()) {
+    <p role="status">{{ citationNotice() }}</p>
+  }
   <header class="reports-heading">
     <div>
       <p class="reports-eyebrow">Understand this revision</p>
@@ -560,7 +563,7 @@
         </h3>
         <ul class="report-notice-list">
           @for (diagnostic of report.diagnostics; track $index) {
-            <li>
+            <li tabindex="-1" [attr.data-chat-projection-diagnostic]="$index">
               <span class="report-severity">{{ diagnostic.severity }}</span>
               <p>
                 {{ diagnostic.message
@@ -599,7 +602,7 @@
           </p>
           <ul class="report-notice-list">
             @for (diagnostic of report.diagnostics; track $index) {
-              <li>
+              <li tabindex="-1" [attr.data-chat-validation-diagnostic]="$index">
                 <span class="report-severity">{{ diagnostic.severity }}</span>
                 <p>
                   {{ diagnostic.message

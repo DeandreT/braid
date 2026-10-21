@@ -1,5 +1,11 @@
 import { computed, signal, type WritableSignal } from "@angular/core";
-import { take, timeout, type Observable, type Subscription } from "rxjs";
+import {
+  finalize,
+  take,
+  timeout,
+  type Observable,
+  type Subscription,
+} from "rxjs";
 import type { components } from "../../api/generated";
 import {
   isCatalogId,
@@ -61,6 +67,7 @@ type PaneValue<T extends RevisionReport> = Omit<
 type Pane<T extends RevisionReport> = {
   readonly operation: RevisionReportOperation;
   value: WritableSignal<PaneValue<T>>;
+  reading: WritableSignal<boolean>;
   subscription: Subscription | null;
   timer: ReturnType<typeof setTimeout> | null;
   generation: number;
@@ -85,6 +92,7 @@ export class RevisionReportState {
   private readonly validationPane = pane<CatalogValidationReport>("validation");
   private readonly refreshing = signal(false);
   private readonly working = signal(false);
+  private readonly hasSelection = signal(false);
   private selectors: RevisionReportSelectors = noSelectors;
   private selectionKey: string | null = null;
   private selectionGeneration = 0;
@@ -96,6 +104,15 @@ export class RevisionReportState {
 
   readonly refreshingAdmission = this.refreshing.asReadonly();
   readonly busy = this.working.asReadonly();
+  /** Includes cancellation/denial: an idle sibling pane may have no outstanding request. */
+  readonly readsSettled = computed(
+    () =>
+      this.hasSelection() &&
+      !this.refreshing() &&
+      !this.working() &&
+      !this.projectionPane.reading() &&
+      !this.validationPane.reading(),
+  );
   readonly canRead = computed(() => {
     const admitted = this.admitted();
     return admitted !== null && this.current(admitted) && readAllowed(admitted);
@@ -166,6 +183,7 @@ export class RevisionReportState {
         this.validationPane,
         new RevisionReportError("invalidLink"),
       );
+      this.hasSelection.set(true);
       return;
     }
     // The parent's own refresh emits a new admitted screen before its callback settles.
@@ -185,6 +203,7 @@ export class RevisionReportState {
       return;
     this.cancelAll();
     this.admitted.set(copy);
+    this.hasSelection.set(true);
     this.selectors = selected;
     this.selectionKey = key;
     if (!sameSelection) {
@@ -425,42 +444,51 @@ export class RevisionReportState {
       ...(observation ? { response: prior.response, pinId: prior.pinId } : {}),
     });
     let emitted = false;
-    controller.subscription = request.pipe(take(1)).subscribe({
-      next: (response) => {
-        emitted = true;
-        if (!this.accepts(controller, generation, paneGeneration, admitted))
-          return;
-        next(response);
-      },
-      error: (error: unknown) => {
-        if (!this.accepts(controller, generation, paneGeneration, admitted))
-          return;
-        if (observation && Date.now() >= observation.deadline) {
-          this.stopObservation(controller);
-          return;
-        }
-        const actual = failure(error);
-        const authorityRefused =
-          actual.kind === "notFound" || actual.kind === "rejected";
-        if (authorityRefused) {
-          this.cancelPane(this.projectionPane);
-          this.cancelPane(this.validationPane);
-          this.resetPanes();
-        }
-        this.failPane(controller, actual);
-        if (authorityRefused || phase === "ensuring" || observation)
-          this.finishAction();
-      },
-      complete: () => {
-        if (
-          !emitted &&
-          this.accepts(controller, generation, paneGeneration, admitted)
-        ) {
-          this.failPane(controller, new RevisionReportError("unavailable"));
-          if (phase === "ensuring" || observation) this.finishAction();
-        }
-      },
-    });
+    controller.reading.set(true);
+    controller.subscription = request
+      .pipe(
+        take(1),
+        finalize(() => {
+          if (controller.generation === paneGeneration)
+            controller.reading.set(false);
+        }),
+      )
+      .subscribe({
+        next: (response) => {
+          emitted = true;
+          if (!this.accepts(controller, generation, paneGeneration, admitted))
+            return;
+          next(response);
+        },
+        error: (error: unknown) => {
+          if (!this.accepts(controller, generation, paneGeneration, admitted))
+            return;
+          if (observation && Date.now() >= observation.deadline) {
+            this.stopObservation(controller);
+            return;
+          }
+          const actual = failure(error);
+          const authorityRefused =
+            actual.kind === "notFound" || actual.kind === "rejected";
+          if (authorityRefused) {
+            this.cancelPane(this.projectionPane);
+            this.cancelPane(this.validationPane);
+            this.resetPanes();
+          }
+          this.failPane(controller, actual);
+          if (authorityRefused || phase === "ensuring" || observation)
+            this.finishAction();
+        },
+        complete: () => {
+          if (
+            !emitted &&
+            this.accepts(controller, generation, paneGeneration, admitted)
+          ) {
+            this.failPane(controller, new RevisionReportError("unavailable"));
+            if (phase === "ensuring" || observation) this.finishAction();
+          }
+        },
+      });
   }
 
   private ensured<T extends RevisionReport>(
@@ -687,11 +715,13 @@ export class RevisionReportState {
     ++controller.generation;
     controller.subscription?.unsubscribe();
     controller.subscription = null;
+    controller.reading.set(false);
     if (controller.timer !== null) clearTimeout(controller.timer);
     controller.timer = null;
   }
 
   private cancelAll(): void {
+    this.hasSelection.set(false);
     ++this.selectionGeneration;
     this.refreshSubscription?.unsubscribe();
     this.refreshSubscription = null;
@@ -717,6 +747,7 @@ function pane<T extends RevisionReport>(
   return {
     operation,
     value: signal(empty<T>(false)),
+    reading: signal(false),
     subscription: null,
     timer: null,
     generation: 0,

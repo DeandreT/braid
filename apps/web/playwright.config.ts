@@ -6,6 +6,7 @@ export default defineConfig({
     "**/shell.spec.ts",
     "**/mapping-viewer.spec.ts",
     "**/browser-auth-controls.spec.ts",
+    "**/revision-chat.spec.ts",
     "**/revision-preview.spec.ts",
     "**/revision-comparison.spec.ts",
   ],

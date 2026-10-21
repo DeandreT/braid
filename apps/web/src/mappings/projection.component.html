@@ -350,7 +350,7 @@
       <h2 id="validation-locations-title">Validation locations</h2>
       <ul class="diagnostics-list">
         @for (diagnostic of report.diagnostics; track $index) {
-          <li>
+          <li tabindex="-1" [attr.data-chat-validation-diagnostic]="$index">
             <span class="diagnostic-severity">{{ diagnostic.severity }}</span>
             <p>
               {{ diagnostic.message

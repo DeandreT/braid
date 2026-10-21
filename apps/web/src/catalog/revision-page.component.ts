@@ -32,6 +32,7 @@ import {
   type RevisionReportSelectors,
 } from "./reports/revision-report-state";
 import { RevisionReportsComponent } from "./reports/revision-reports.component";
+import { RevisionChatComponent } from "../chat/revision-chat.component";
 import { RevisionPreviewComponent } from "./previews/revision-preview.component";
 import { RevisionRegressionComponent } from "./regression/revision-regression.component";
 import { RevisionBuildsComponent } from "./builds/revision-builds.component";
@@ -50,12 +51,31 @@ interface RevisionScreen {
     RouterLink,
     CatalogStatusComponent,
     RevisionReportsComponent,
+    RevisionChatComponent,
     RevisionPreviewComponent,
     RevisionRegressionComponent,
     RevisionBuildsComponent,
   ],
   providers: [BuildViewRecovery],
   templateUrl: "./revision-page.component.html",
+  styles: [
+    `
+      .revision-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.5rem;
+      }
+      .revision-workspace > * {
+        min-width: 0;
+      }
+      @media (min-width: 1100px) {
+        .revision-workspace {
+          grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+          align-items: start;
+        }
+      }
+    `,
+  ],
 })
 export class RevisionPageComponent extends CatalogRoutePage<
   RevisionScreen,

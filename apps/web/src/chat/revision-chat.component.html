@@ -1,0 +1,199 @@
+<aside class="chat-panel" aria-labelledby="revision-chat-title">
+  <header>
+    <p class="chat-eyebrow">Ask about this revision</p>
+    <h2 id="revision-chat-title">Mapping chat</h2>
+    <p>
+      Answers use saved mapping reports, not production payloads. Check
+      citations and coverage before relying on an answer.
+    </p>
+  </header>
+  @if (problem()) {
+    <p class="chat-error" role="alert">{{ problem() }}</p>
+  }
+  @if (!reportsReady()) {
+    <p role="status">
+      Waiting for the initial report reads before loading chat.
+    </p>
+  }
+  <div class="chat-actions">
+    <button
+      type="button"
+      (click)="load()"
+      [disabled]="busy() || streaming() || hasPending() || !reportsReady()"
+    >
+      Refresh chat
+    </button>
+    <button
+      type="button"
+      (click)="newConversation()"
+      [disabled]="busy() || !availability()?.profiles?.length || hasPending()"
+    >
+      New conversation
+    </button>
+  </div>
+  @if (availability(); as available) {
+    <p>
+      {{
+        available.toolsEnabled
+          ? "Read-only mapping tools available."
+          : "Mapping tools are not configured."
+      }}
+    </p>
+    <label
+      >Saved conversations
+      <select
+        [value]="current()?.conversationId ?? ''"
+        (change)="open($any($event.target).value)"
+        [disabled]="busy() || hasPending()"
+      >
+        <option value="" disabled>Select a conversation</option>
+        @for (
+          conversation of conversations();
+          track conversation.conversationId
+        ) {
+          <option [value]="conversation.conversationId">
+            {{ conversation.title || conversation.createdAtUtc }}
+          </option>
+        }
+      </select>
+    </label>
+    @if (hasMore()) {
+      <p>Showing the newest 50 conversations.</p>
+    }
+    @if (current(); as conversation) {
+      <p class="chat-pin">
+        Pinned to this revision and the reports selected when this conversation
+        was created. Citations never change the revision.
+      </p>
+      @if (hasEarlier()) {
+        <p>Only the most recent 100 questions are shown.</p>
+      }
+      <ol class="chat-history" aria-label="Questions">
+        @for (turn of turns(); track turn.turnId) {
+          <li>
+            <button
+              type="button"
+              (click)="selectTurn(turn)"
+              [disabled]="busy() || hasPending()"
+              [attr.aria-pressed]="selected()?.turnId === turn.turnId"
+            >
+              {{ turn.text }}</button
+            ><small>{{ turn.phase }}</small>
+          </li>
+        }
+      </ol>
+      @if (selected()) {
+        <section
+          class="chat-answer"
+          aria-label="Selected answer"
+          aria-live="polite"
+          aria-atomic="false"
+        >
+          <p class="chat-answer-text">{{ answer() }}</p>
+          <p role="status">{{ status() }}</p>
+        </section>
+        @if (tools().length) {
+          <details>
+            <summary>Read-only tool activity</summary>
+            <ul>
+              @for (tool of tools(); track tool.sequence) {
+                <li>
+                  {{ tool.name }} —
+                  {{ tool.type === "tool.started" ? "started" : "completed" }}
+                </li>
+              }
+            </ul>
+          </details>
+        }
+        @if (usage().length) {
+          <details>
+            <summary>Token usage (latest snapshot per round)</summary>
+            <ul>
+              @for (round of usage(); track round.roundId) {
+                <li>
+                  Input {{ round.inputTokens ?? "unknown" }} · Output
+                  {{ round.outputTokens ?? "unknown" }} · Total
+                  {{ round.totalTokens ?? "unknown" }}
+                </li>
+              }
+            </ul>
+          </details>
+        }
+        @if (citations().length) {
+          <ul class="chat-citations" aria-label="Answer citations">
+            @for (item of citations(); track item.sequence) {
+              <li>
+                <button type="button" (click)="follow(item)">
+                  Show {{ item.target.kind }}
+                  {{
+                    item.target.resourceId ??
+                      item.target.diagnosticOrdinal ??
+                      ""
+                  }}
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        <div class="chat-actions">
+          @if (disconnected()) {
+            <button type="button" (click)="reconnect()" [disabled]="busy()">
+              Reconnect answer
+            </button>
+          }
+          @if (selected()?.phase === "active" && !events().some(terminal)) {
+            <button type="button" (click)="cancel()" [disabled]="busy()">
+              Cancel answer
+            </button>
+          }
+        </div>
+      }
+      <form (submit)="$event.preventDefault(); send()">
+        <label
+          >Model profile<select
+            [value]="profile()"
+            (change)="profile.set($any($event.target).value)"
+            [disabled]="busy() || hasPending()"
+          >
+            @for (profile of available.profiles; track profile.profileId) {
+              <option [value]="profile.profileId">
+                {{ profile.displayName }} — {{ profile.modelId }}
+              </option>
+            }
+          </select></label
+        >
+        <label
+          >Question<textarea
+            data-chat-composer
+            rows="4"
+            [value]="draft()"
+            (input)="draft.set($any($event.target).value)"
+            [disabled]="busy() || hasPending()"
+            aria-describedby="chat-question-limit"
+          ></textarea>
+        </label>
+        <p id="chat-question-limit">
+          Up to {{ available.limits.maxTextBytes }} UTF-8 bytes. Your question
+          is sent only when you choose Send question.
+        </p>
+        <button type="submit" [disabled]="!canSend()">Send question</button>
+      </form>
+    } @else {
+      <p>Create or open a conversation to ask a question.</p>
+    }
+  }
+  @if (hasPending() && !busy()) {
+    <p>
+      The question request was not acknowledged. Its original ID and text remain
+      in this tab only.
+    </p>
+    <button
+      data-chat-recover
+      type="button"
+      (click)="retryQuestion()"
+      [disabled]="busy()"
+    >
+      Recover original question
+    </button>
+  }
+</aside>

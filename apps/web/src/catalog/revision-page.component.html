@@ -168,7 +168,21 @@
         View current head
       </button>
     </section>
-    <weft-revision-reports [reports]="reports" [revision]="view.revision" />
+    <div class="revision-workspace">
+      <weft-revision-reports
+        #savedReports
+        [reports]="reports"
+        [revision]="view.revision"
+      />
+      @if (context(); as admittedContext) {
+        <weft-revision-chat
+          [scope]="view.revision.scope"
+          [context]="admittedContext"
+          [reportsReady]="reports.readsSettled()"
+          (citation)="savedReports.showChatCitation($event)"
+        />
+      }
+    </div>
     @if (context(); as current) {
       @defer (on immediate) {
         <weft-revision-regression
