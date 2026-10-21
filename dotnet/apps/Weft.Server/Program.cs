@@ -40,6 +40,8 @@ app.MapWeftHealth();
 app.MapWeftProjectionFixtures();
 app.MapWeftNativeExamples();
 app.MapWeftCatalog();
+app.MapWeftRegressionCases();
+app.MapWeftRegressionRuns();
 app.MapWeftChat();
 app.MapWeftAuthentication();
 if (app.Environment.IsDevelopment())

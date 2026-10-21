@@ -30,6 +30,7 @@ public static class CatalogHostConfiguration
             throw new InvalidOperationException("Previews require an enabled catalog.");
         if (!options.Enabled)
         {
+            CatalogRegressionHostConfiguration.Configure(builder.Services, readEnvironment, catalogEnabled: false);
             ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, false, reportOptions);
             return;
         }

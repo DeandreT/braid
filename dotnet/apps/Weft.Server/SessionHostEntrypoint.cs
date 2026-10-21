@@ -63,6 +63,8 @@ internal static class SessionHostEntrypoint
                             endpoints.MapWeftHealth();
                             endpoints.MapWeftAuthentication();
                             endpoints.MapWeftCatalog();
+                            endpoints.MapWeftRegressionCases();
+                            endpoints.MapWeftRegressionRuns();
                             endpoints.MapWeftChat();
                             endpoints.Map("/api/{**path}", () => Results.NotFound());
                             endpoints.MapFallbackToFile("index.html");

@@ -159,6 +159,45 @@ public sealed class PostgresRegressionRunStore : IRegressionRunStore, IAsyncDisp
         return result;
     }
 
+    public async Task<RegressionRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null, CancellationToken token = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(mapping);
+        if (limit is < 1 or > 100 || afterRunId == Guid.Empty) throw new ArgumentException("Run history page refused.");
+        await using var tx = await BeginAsync(mapping.OrganizationId, actor, write: false, token);
+        await using var command = tx.CreateCommand("SELECT * FROM weft.list_regression_run_history(@org,@project,@mapping,@after,@maximum)");
+        Add(command, "org", mapping.OrganizationId);
+        Add(command, "project", mapping.ProjectId);
+        Add(command, "mapping", mapping.MappingId);
+        command.Parameters.AddWithValue("after", NpgsqlDbType.Uuid, (object?)afterRunId ?? DBNull.Value);
+        command.Parameters.AddWithValue("maximum", limit + 1);
+        var values = new List<RegressionRunSummary>();
+        await using (var rows = await command.ExecuteReaderAsync(token))
+        {
+            while (await rows.ReadAsync(token))
+            {
+                if (values.Count > limit) throw Integrity();
+                var id = rows.GetGuid(0);
+                var caseId = rows.GetGuid(1);
+                var version = rows.GetInt64(2);
+                var revision = new RevisionScope(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, rows.GetGuid(3));
+                var state = State(rows.GetString(4));
+                var attempt = rows.GetInt32(5);
+                if (id == Guid.Empty || caseId == Guid.Empty || version < 1 || attempt is < 0 or > 3) throw Integrity();
+                values.Add(new(id, caseId, version, revision, state, attempt, new(rows.GetDateTime(6))));
+            }
+        }
+        if (values.Count > 0)
+        {
+            command.CommandText = "SELECT EXISTS(SELECT 1 FROM weft.list_regression_run_history(@org,@project,@mapping,@after,@maximum))";
+            if (await command.ExecuteScalarAsync(token) is not true) values.Clear();
+        }
+        Guid? next = null;
+        if (values.Count > limit) { values.RemoveAt(limit); next = values[^1].RunId; }
+        await tx.CommitAsync(token);
+        return new(values.AsReadOnly(), next);
+    }
+
     private async Task<bool> ClaimOperationAsync(RegressionRunClaim claim, string operation, byte[]? bytes, CancellationToken token)
     {
         RequireClaim(claim);
@@ -242,5 +281,15 @@ public sealed class PostgresRegressionRunStore : IRegressionRunStore, IAsyncDisp
         return result.Value == value ? result : throw Integrity();
     }
     private static InvalidOperationException Integrity() => new("Regression run integrity check failed.");
+    private static RegressionRunState State(string value) => value switch
+    {
+        "queued" => RegressionRunState.Queued,
+        "running" => RegressionRunState.Running,
+        "completed" => RegressionRunState.Completed,
+        "canceled" => RegressionRunState.Canceled,
+        "exhausted" => RegressionRunState.AttemptsExhausted,
+        "revoked" => RegressionRunState.AuthorityRevoked,
+        _ => throw Integrity()
+    };
     public ValueTask DisposeAsync() => source.DisposeAsync();
 }

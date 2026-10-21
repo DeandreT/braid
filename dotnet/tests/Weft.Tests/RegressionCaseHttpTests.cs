@@ -21,7 +21,7 @@ using Weft.Persistence.Postgres;
 namespace Weft.Tests;
 
 [Collection(PostgresCollection.Name)]
-public sealed class RegressionCaseHttpTests(PostgresFixture fixture)
+public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
 {
     [PostgresFact]
     public async Task Publish_reopen_append_and_retry_keep_exact_private_bytes_and_versions()
@@ -345,10 +345,15 @@ public sealed class RegressionCaseHttpTests(PostgresFixture fixture)
         private readonly WebApplication app;
         private readonly PostgresCatalogDatabase? catalog;
         private readonly RegressionCasePostgresTestSupport? data;
+        private readonly Lazy<PostgresRegressionRunStore>? runReader;
+        private readonly Lazy<PostgresRegressionRunStore>? runWriter;
         private int bodyReads;
         private int writes;
         internal HttpClient Client { get; }
         internal string BasePath { get; }
+        internal string RunsPath => BasePath.Replace("regression-cases", "regression-runs", StringComparison.Ordinal);
+        internal PostgresRegressionRunStore RunReader => runReader!.Value;
+        internal PostgresRegressionRunStore RunWriter => runWriter!.Value;
         internal string VersionPath => BasePath + "/" + (data?.CaseId.ToString("D") ?? Guid.Empty.ToString("D")) + "/versions/1";
         internal bool GateBody { get; set; }
         internal TaskCompletionSource BodyEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -364,6 +369,11 @@ public sealed class RegressionCaseHttpTests(PostgresFixture fixture)
             this.app = app;
             this.catalog = catalog;
             this.data = data;
+            if (data is not null)
+            {
+                runReader = new(() => new(data.Case.RegressionConnectionString("weft_run_reader"), writer: false));
+                runWriter = new(() => new(data.Case.RegressionConnectionString("weft_run_writer"), writer: true));
+            }
             Client = new(new HttpClientHandler { UseCookies = true, CookieContainer = new(), UseProxy = false, AllowAutoRedirect = false })
             { BaseAddress = origin, Timeout = TimeSpan.FromSeconds(30) };
             var mapping = data?.Mapping ?? new MappingScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
@@ -388,6 +398,7 @@ public sealed class RegressionCaseHttpTests(PostgresFixture fixture)
                     data.Mapping.OrganizationId, origin.GetLeftPart(UriPartial.Authority));
                 builder.Services.AddWeftCatalog(options, builder.Environment);
                 builder.Services.AddWeftRegressionCases(data is null ? new() : new(true, data.Runtime));
+                builder.Services.AddWeftRegressionRuns(new(data is not null));
                 CaseHttp? support = null;
                 if (data is not null)
                 {
@@ -395,6 +406,9 @@ public sealed class RegressionCaseHttpTests(PostgresFixture fixture)
                     builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(catalog));
                     builder.Services.AddSingleton<IRegressionCaseReader>(_ => new CasePort(support!));
                     builder.Services.AddSingleton<IRegressionCaseWriter>(_ => new CasePort(support!));
+                    builder.Services.AddSingleton<IRegressionRunReader>(_ => new RunPort(support!, false));
+                    builder.Services.AddSingleton<IRegressionRunStore>(_ => new RunPort(support!, true));
+                    builder.Services.AddSingleton(provider => new RegressionRunReadService(provider.GetRequiredService<IRegressionRunReader>(), provider.GetRequiredService<IRegressionCaseReader>()));
                 }
                 app = builder.Build();
                 support = new(app, catalog, data, origin);
@@ -407,6 +421,7 @@ public sealed class RegressionCaseHttpTests(PostgresFixture fixture)
                 });
                 app.MapWeftCatalog();
                 app.MapWeftRegressionCases();
+                app.MapWeftRegressionRuns();
                 reservation.Stop();
                 await app.StartAsync();
                 return support;
@@ -435,6 +450,15 @@ public sealed class RegressionCaseHttpTests(PostgresFixture fixture)
             if (token is not null) request.Headers.TryAddWithoutValidation(CatalogRequestBoundary.RequestTokenHeader, token);
             return await Client.SendAsync(request, cancellationToken);
         }
+        internal async Task<HttpResponseMessage> PutRunAsync(Guid id, JsonObject body, string? token, CancellationToken cancellationToken = default)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Put, RunsPath + "/" + id.ToString("D"))
+            { Content = new StringContent(body.ToJsonString(), Encoding.UTF8) };
+            request.Content.Headers.ContentType = new(CatalogRegressionRunRequest.MediaType);
+            request.Headers.TryAddWithoutValidation("Origin", Client.BaseAddress!.GetLeftPart(UriPartial.Authority));
+            if (token is not null) request.Headers.TryAddWithoutValidation(CatalogRequestBoundary.RequestTokenHeader, token);
+            return await Client.SendAsync(request, cancellationToken);
+        }
         public Task<RegressionCasePage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterCaseId = null, CancellationToken cancellationToken = default) =>
             data!.Reader.ListAsync(actor, mapping, limit, afterCaseId, cancellationToken);
         public async Task<RegressionCaseVersion?> ReadAsync(ActorContext actor, MappingScope mapping, Guid caseId, long version, CancellationToken cancellationToken = default)
@@ -457,7 +481,21 @@ public sealed class RegressionCaseHttpTests(PostgresFixture fixture)
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             await app.StopAsync(timeout.Token);
             await app.DisposeAsync();
+            if (runReader?.IsValueCreated == true) await runReader.Value.DisposeAsync();
+            if (runWriter?.IsValueCreated == true) await runWriter.Value.DisposeAsync();
             if (catalog is not null) await catalog.DisposeAsync();
+        }
+        private sealed class RunPort(CaseHttp owner, bool writer) : IRegressionRunStore
+        {
+            private PostgresRegressionRunStore Store => writer ? owner.RunWriter : owner.RunReader;
+            public Task<RegressionRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default) => Store.ReadAsync(actor, organizationId, runId, token);
+            public Task<RegressionRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null, CancellationToken token = default) => Store.ListAsync(actor, mapping, limit, afterRunId, token);
+            public Task<RegressionRunSubmitOutcome> SubmitAsync(RegressionRunSubmission submission, CancellationToken token = default) => Store.SubmitAsync(submission, token);
+            public Task<RegressionRunClaimResult> ClaimAsync(Guid organizationId, Guid runId, Guid worker, CancellationToken token = default) => Store.ClaimAsync(organizationId, runId, worker, token);
+            public Task<bool> ObserveAsync(RegressionRunClaim claim, CancellationToken token = default) => Store.ObserveAsync(claim, token);
+            public Task<bool> CompleteAsync(RegressionRunClaim claim, RegressionCaseExecution completion, CancellationToken token = default) => Store.CompleteAsync(claim, completion, token);
+            public Task<bool> ReleaseAsync(RegressionRunClaim claim, CancellationToken token = default) => Store.ReleaseAsync(claim, token);
+            public Task<bool> CancelAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default) => Store.CancelAsync(actor, organizationId, runId, token);
         }
         private sealed class CasePort(CaseHttp owner) : IRegressionCaseReader, IRegressionCaseWriter
         {

@@ -290,6 +290,7 @@ export async function runBrowserFixture(definition) {
       "0014_regression_cases.sql",
       "0015_regression_runs.sql",
       "0016_regression_dispatch.sql",
+      "0017_regression_run_history.sql",
     ];
     check(
       equivalent(

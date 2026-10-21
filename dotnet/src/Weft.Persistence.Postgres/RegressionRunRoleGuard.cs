@@ -6,10 +6,10 @@ namespace Weft.Persistence.Postgres;
 
 internal static partial class RegressionRunRoleGuard
 {
-    internal const string Fingerprint = "ef7f87a1a7cf12c9bb6b497729d4d4140c8ddfa30bf715a39be950f9d09bca90";
+    internal const string Fingerprint = "92679f5a0bc28eb38e758022eec378a29ecde9856e3c7678ed9b6c9718dabae4";
     private static readonly Lazy<Dictionary<string, Match>> Functions = new(Load);
     private static readonly string[] WriterFunctions = ["submit_regression_run", "claim_regression_run", "observe_regression_run",
-        "finish_regression_run", "release_regression_run", "cancel_regression_run", "read_regression_run", "list_ready_regression_runs"];
+        "finish_regression_run", "release_regression_run", "cancel_regression_run", "read_regression_run", "list_ready_regression_runs", "list_regression_run_history"];
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool writer, CancellationToken token)
     {
@@ -36,7 +36,7 @@ internal static partial class RegressionRunRoleGuard
             """, connection, transaction))
         {
             check.Parameters.AddWithValue("role", role);
-            check.Parameters.AddWithValue("functions", writer ? WriterFunctions : ["read_regression_run"]);
+            check.Parameters.AddWithValue("functions", writer ? WriterFunctions : ["read_regression_run", "list_regression_run_history"]);
             if (await check.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
         await using (var check = new NpgsqlCommand("""
@@ -82,12 +82,13 @@ internal static partial class RegressionRunRoleGuard
         ["release_regression_run"] = "boolean",
         ["cancel_regression_run"] = "boolean",
         ["read_regression_run"] = "SETOF weft.regression_runs",
-        ["list_ready_regression_runs"] = "TABLE(organization_id uuid, run_id uuid)"
+        ["list_ready_regression_runs"] = "TABLE(organization_id uuid, run_id uuid)",
+        ["list_regression_run_history"] = "TABLE(run_id uuid, case_id uuid, version bigint, revision_id uuid, state text, attempt integer, created_at timestamp with time zone)"
     };
 
     private static Dictionary<string, Match> Load()
     {
-        var text = string.Concat(new[] { "0015_regression_runs", "0016_regression_dispatch" }.Select(name =>
+        var text = string.Concat(new[] { "0015_regression_runs", "0016_regression_dispatch", "0017_regression_run_history" }.Select(name =>
         {
             using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Weft.Persistence.Postgres.Migrations.{name}.sql") ?? throw Invalid();
             using var reader = new StreamReader(stream);

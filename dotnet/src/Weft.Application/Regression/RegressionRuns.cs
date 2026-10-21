@@ -46,7 +46,17 @@ public sealed class RegressionRunSnapshot
     public override string ToString() => $"{nameof(RegressionRunSnapshot)}:{State}";
 }
 
-public interface IRegressionRunStore
+public sealed record RegressionRunSummary(Guid RunId, Guid CaseId, long Version, RevisionScope Revision,
+    RegressionRunState State, int Attempt, DateTimeOffset CreatedAt);
+public sealed record RegressionRunPage(IReadOnlyList<RegressionRunSummary> Runs, Guid? NextRunId);
+
+public interface IRegressionRunReader
+{
+    Task<RegressionRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default);
+    Task<RegressionRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null, CancellationToken token = default);
+}
+
+public interface IRegressionRunStore : IRegressionRunReader
 {
     Task<RegressionRunSubmitOutcome> SubmitAsync(RegressionRunSubmission submission, CancellationToken token = default);
     Task<RegressionRunClaimResult> ClaimAsync(Guid organizationId, Guid runId, Guid worker, CancellationToken token = default);
@@ -54,5 +64,4 @@ public interface IRegressionRunStore
     Task<bool> CompleteAsync(RegressionRunClaim claim, RegressionCaseExecution completion, CancellationToken token = default);
     Task<bool> ReleaseAsync(RegressionRunClaim claim, CancellationToken token = default);
     Task<bool> CancelAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default);
-    Task<RegressionRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default);
 }
