@@ -1,13 +1,7 @@
 # Weft delivery plan
 
-Status: architecture, P0's local web/API shell, P1's mapping contracts, and
-P2a/P2b's restricted Ferrule inspection/validation/projection backend and
-P2c's Angular viewer, P3a's PostgreSQL ownership, P3b's private storage and
-P3c1/P3c2's scoped native revision ingestion, P3d1's scoped catalog reads,
-P3d2's conditional metadata edits, P3d3's raw native upload/recovery, and
-P3d4a's explicit-capability atomic project creation persistence and P3d4b's
-project creation HTTP routes are qualified and merged.
-Local and independent clean-container evidence is recorded in
+Each increment links its tracking issue, implementing pull requests and contract
+documentation. The early increments are recorded in
 [PR #6](https://github.com/DeandreT/weft/pull/6) and
 [PR #10](https://github.com/DeandreT/weft/pull/10) and
 [PR #11](https://github.com/DeandreT/weft/pull/11) and
@@ -279,13 +273,24 @@ bootstrap, identity-generation fencing and private original-operation recovery t
 the Angular catalog. It preserves same-owner uncertainty without granting a new
 owner access to retained work; fresh resource authority and explicit recovery
 remain required. P4e-b [#122](https://github.com/DeandreT/weft/issues/122) composes
-sign-in and acknowledged session controls separately. See
-[Session-safe browser state](docs/browser-session-state.md).
+sign-in and acknowledged session controls separately ([#132](https://github.com/DeandreT/weft/pull/132)), and its owned
+HTTPS browser flow covers sign-in end to end ([#164](https://github.com/DeandreT/weft/pull/164)). See
+[Session-safe browser state](docs/browser-session-state.md) and
+[Browser sign-in](docs/browser-signin-ui.md).
 
-P5's remaining increment, [#136](https://github.com/DeandreT/weft/issues/136), adds
-authenticated revision-pinned chat routes, a resumable SSE event stream and
-server-owned model-profile host composition over the private chat ledger and
-orchestrator. See [Chat turn HTTP API](docs/chat-http.md).
+P5 follows four dependent increments: provider-neutral stream adapters and model
+profiles ([#111](https://github.com/DeandreT/weft/issues/111), [#133](https://github.com/DeandreT/weft/pull/133)), private revision-pinned conversation persistence
+([#124](https://github.com/DeandreT/weft/issues/124), [#134](https://github.com/DeandreT/weft/pull/134)), bounded turn orchestration ([#129](https://github.com/DeandreT/weft/issues/129), [#135](https://github.com/DeandreT/weft/pull/135)), and the
+authenticated chat routes with a resumable SSE event stream and server-owned
+model-profile host composition ([#136](https://github.com/DeandreT/weft/issues/136), [#153](https://github.com/DeandreT/weft/pull/153)). An opt-in check runs the
+adapters against a real local model ([#147](https://github.com/DeandreT/weft/pull/147)). See [AI chat](docs/ai-chat.md),
+[Chat turn orchestration](docs/chat-turn-orchestration.md) and
+[Chat turn HTTP API](docs/chat-http.md).
+
+P6 adds the five bounded read-only mapping tools ([#125](https://github.com/DeandreT/weft/issues/125), [#138](https://github.com/DeandreT/weft/pull/138)), delivery of
+verified citations within chat turns ([#210](https://github.com/DeandreT/weft/issues/210), [#213](https://github.com/DeandreT/weft/pull/213)) and the Angular chat
+window beside the mapping viewer ([#150](https://github.com/DeandreT/weft/issues/150), [#180](https://github.com/DeandreT/weft/pull/180)). See
+[Mapping AI tools](docs/mapping-ai-tools.md) and [Chat UI](docs/chat-ui.md).
 
 P7 starts from the Ferrule consumer pin qualified in
 [#123](https://github.com/DeandreT/weft/issues/123) and follows five dependent
@@ -295,7 +300,10 @@ exact inputs and idempotent outputs ([#141](https://github.com/DeandreT/weft/iss
 durable Wolverine execution ([#142](https://github.com/DeandreT/weft/issues/142)),
 the preview HTTP API and contracts ([#143](https://github.com/DeandreT/weft/issues/143)),
 and the Angular preview form ([#144](https://github.com/DeandreT/weft/issues/144)).
-See [Ferrule worker](docs/ferrule-worker.md#json-sample-preview).
+They are implemented in [#139](https://github.com/DeandreT/weft/pull/139), [#154](https://github.com/DeandreT/weft/pull/154), [#172](https://github.com/DeandreT/weft/pull/172), [#175](https://github.com/DeandreT/weft/pull/175), [#182](https://github.com/DeandreT/weft/pull/182) and
+[#185](https://github.com/DeandreT/weft/pull/185); [#218](https://github.com/DeandreT/weft/pull/218) exercises the preview panel against the actual API and worker.
+See [Ferrule worker](docs/ferrule-worker.md#json-sample-preview) and
+[Preview runs](docs/preview-runs.md).
 
 P5 can proceed after P4 while P7 proceeds in its own scoped branch. Coordinate
 shared API contracts explicitly; neither branch should accumulate the other's
@@ -304,10 +312,13 @@ builds and reuse compatible artifacts.
 
 P8a [#137](https://github.com/DeandreT/weft/issues/137) packages the server, its
 operator tools and the same-replica edge as container images, with a hosted-shape
-local stack. See [Runtime packaging](docs/runtime-packaging.md).
+local stack ([#145](https://github.com/DeandreT/weft/pull/145), [#174](https://github.com/DeandreT/weft/pull/174)). See [Runtime packaging](docs/runtime-packaging.md).
 P8b [#146](https://github.com/DeandreT/weft/issues/146) describes the first Azure
-environment as Bicep templates with its operator procedure and open hosting questions.
-See [Azure deployment](docs/azure-deployment.md).
+environment as Bicep templates with its operator procedure and open hosting questions
+([#176](https://github.com/DeandreT/weft/pull/176)). See [Azure deployment](docs/azure-deployment.md). The Session host
+composes chat, previews and revision comparison ([#211](https://github.com/DeandreT/weft/issues/211), [#214](https://github.com/DeandreT/weft/pull/214)); native upload
+and report derivation reach the native worker through the hosted worker service
+([#219](https://github.com/DeandreT/weft/issues/219)). See [Session host](docs/session-host.md).
 
 The first hosted release is admitted only when P0-P8 are implemented and
 qualified. Local-only viewer prototypes can be demonstrated earlier. Entra or
@@ -321,6 +332,37 @@ model credentials and Azure resources are not provisioned by this planning work.
 | P10 | Persisted regression examples and explicit comparison policies; test/run modules       | P7          | Stored cases replay exact revisions; expected output policy is explicit; diagnostics and access/retention preserved    | Arbitrary production data capture                          |
 | P11 | Immutable build/deploy contract and capability preflight; `dotnet/src/Weft.Deployment` | P7, P9, P10 | Exact runtime/format admission; build provenance; approved revision and environment references; fixture target adapter | Azure-specific rollout, arbitrary generated code execution |
 | P12 | First Azure mapping endpoint target; deployment adapter and infrastructure             | P8, P11     | Restricted build worker; HTTP trigger; machine authorization; qualified artifact rollback; deployment audit evidence   | Schedules, queue triggers, broad connector support         |
+
+P9 compares revision explanations ([#110](https://github.com/DeandreT/weft/issues/110)): the pure bounded comparison
+([#151](https://github.com/DeandreT/weft/pull/151)), the retained-report HTTP read ([#152](https://github.com/DeandreT/weft/pull/152)) and the Angular comparison view
+([#215](https://github.com/DeandreT/weft/pull/215)). See [Revision comparison](docs/revision-comparison.md).
+
+P10 ([#157](https://github.com/DeandreT/weft/issues/157)) adds persisted regression cases and exact-revision runs: the
+exact-output comparison policy ([#160](https://github.com/DeandreT/weft/issues/160), [#161](https://github.com/DeandreT/weft/pull/161)), immutable case envelopes
+([#165](https://github.com/DeandreT/weft/issues/165), [#166](https://github.com/DeandreT/weft/pull/166)), scoped case versions ([#169](https://github.com/DeandreT/weft/issues/169), [#170](https://github.com/DeandreT/weft/pull/170)), the case HTTP API
+([#173](https://github.com/DeandreT/weft/issues/173)), saved-case execution ([#178](https://github.com/DeandreT/weft/issues/178)), durable per-case runs ([#181](https://github.com/DeandreT/weft/issues/181)),
+ordered schema activation ([#183](https://github.com/DeandreT/weft/issues/183), [#186](https://github.com/DeandreT/weft/pull/186)), durable dispatch ([#187](https://github.com/DeandreT/weft/issues/187), [#188](https://github.com/DeandreT/weft/pull/188)),
+server composition ([#189](https://github.com/DeandreT/weft/issues/189), [#190](https://github.com/DeandreT/weft/pull/190)) and the Angular case and run views
+([#191](https://github.com/DeandreT/weft/issues/191), [#192](https://github.com/DeandreT/weft/pull/192)), exercised through the actual browser and worker
+([#199](https://github.com/DeandreT/weft/issues/199), [#202](https://github.com/DeandreT/weft/pull/202)). See [Regression cases](docs/regression-cases.md),
+[Regression comparison](docs/regression-comparison.md),
+[Regression runs](docs/regression-runs.md) and
+[Regression browser](docs/regression-browser.md).
+
+P11 ([#158](https://github.com/DeandreT/weft/issues/158)) adds immutable builds: build intent and capability preflight
+([#162](https://github.com/DeandreT/weft/issues/162), [#163](https://github.com/DeandreT/weft/pull/163)), the verified artifact workflow ([#193](https://github.com/DeandreT/weft/issues/193), [#194](https://github.com/DeandreT/weft/pull/194)), approvals
+and artifact persistence ([#195](https://github.com/DeandreT/weft/issues/195), [#196](https://github.com/DeandreT/weft/pull/196)), the restricted Ferrule C# compiler
+worker ([#197](https://github.com/DeandreT/weft/issues/197), [#198](https://github.com/DeandreT/weft/pull/198)), durable build dispatch ([#203](https://github.com/DeandreT/weft/issues/203), [#204](https://github.com/DeandreT/weft/pull/204)), build
+controls and the run API ([#205](https://github.com/DeandreT/weft/issues/205), [#206](https://github.com/DeandreT/weft/pull/206)), environment administration
+([#207](https://github.com/DeandreT/weft/issues/207), [#208](https://github.com/DeandreT/weft/pull/208)), the Angular build workflow ([#209](https://github.com/DeandreT/weft/issues/209), [#212](https://github.com/DeandreT/weft/pull/212)) and restricted
+compiled-runtime invocation ([#216](https://github.com/DeandreT/weft/issues/216), [#217](https://github.com/DeandreT/weft/pull/217)). See
+[Build contract](docs/build-contract.md), [Build workflow](docs/build-workflow.md),
+[Build HTTP](docs/build-http.md), [Build browser](docs/build-browser.md) and
+[Compiled runtime](docs/compiled-runtime.md).
+
+P12 ([#159](https://github.com/DeandreT/weft/issues/159)) targets the first Azure mapping endpoint; its first increment is
+durable qualified release activation, audit and rollback ([#222](https://github.com/DeandreT/weft/issues/222)). Azure
+resources are provisioned only from an operator-approved environment.
 
 Queue triggers, scheduled execution, additional preview formats, model providers,
 identity providers, and production mapping engines each get their own scoped
