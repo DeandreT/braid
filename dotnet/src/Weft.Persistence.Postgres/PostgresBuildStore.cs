@@ -9,7 +9,7 @@ using Weft.Domain;
 namespace Weft.Persistence.Postgres;
 
 /// <summary>Production build controls and durable first-writer artifact staging through narrow owner functions.</summary>
-public sealed class PostgresBuildStore(string connectionString, bool writer) : IBuildControlStore, IBuildPublicationCatalog, IAsyncDisposable
+public sealed class PostgresBuildStore(string connectionString, bool writer, BuildRunClaim? claim = null) : IBuildControlStore, IBuildPublicationCatalog, IAsyncDisposable
 {
     public const int MaximumArtifactBytes = 32 * 1024 * 1024;
     private readonly NpgsqlDataSource source = NpgsqlDataSource.Create(PostgresConfiguration.Normalize(connectionString));
@@ -169,6 +169,8 @@ public sealed class PostgresBuildStore(string connectionString, bool writer) : I
         string info, byte[]? intent, byte[]? artifact, CancellationToken token)
     {
         if (!writer) throw Invalid();
+        if (claim is not null && operation is ("stage" or "object" or "publish") &&
+            (key != claim.Intent.BuildId || intent is null || !intent.AsSpan().SequenceEqual(claim.Intent.CopyCanonicalBytes()))) throw Invalid();
         await using var tx = await BeginAsync(actor, org, true, token);
         await using var command = tx.CreateCommand("SELECT weft.write_build_record(@op,@org,@project,@key,@version,@info,@intent,@artifact)");
         Arguments(command, operation, org, project, key, version);
@@ -185,6 +187,7 @@ public sealed class PostgresBuildStore(string connectionString, bool writer) : I
     {
         ArgumentNullException.ThrowIfNull(actor);
         if (org == Guid.Empty) throw Invalid();
+        if (claim is not null && (claim.Actor != actor.PrincipalId || claim.Intent.Revision.OrganizationId != org)) throw Invalid();
         var connection = await source.OpenConnectionAsync(token);
         NpgsqlTransaction? transaction = null;
         try
@@ -201,6 +204,15 @@ public sealed class PostgresBuildStore(string connectionString, bool writer) : I
             }
             var tx = new PostgresTransaction(connection, transaction, org);
             await tx.BindOrganizationAsync(org, token);
+            if (claim is not null)
+            {
+                await using var fence = tx.CreateCommand("SELECT set_config('weft.build_worker_id',@worker,true),set_config('weft.build_claim_token',@claim,true),set_config('weft.build_claim_attempt',@attempt,true),set_config('weft.build_claim_intent',@intent,true)");
+                fence.Parameters.AddWithValue("worker", claim.WorkerId.ToString("D"));
+                fence.Parameters.AddWithValue("claim", claim.Token.ToString("D"));
+                fence.Parameters.AddWithValue("attempt", claim.Attempt.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                fence.Parameters.AddWithValue("intent", claim.Intent.Fingerprint.Value);
+                await fence.ExecuteNonQueryAsync(token);
+            }
             return tx;
         }
         catch { if (transaction is not null) await transaction.DisposeAsync(); await connection.DisposeAsync(); throw; }

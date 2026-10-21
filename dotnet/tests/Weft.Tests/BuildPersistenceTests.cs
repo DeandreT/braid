@@ -20,7 +20,7 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         await using var transaction = await connection.BeginTransactionAsync();
         await using (var settings = new NpgsqlCommand("SET LOCAL TimeZone='UTC'; SET LOCAL DateStyle='ISO, MDY'", connection, transaction)) await settings.ExecuteNonQueryAsync();
         var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, BuildRoleGuard.Tables, CancellationToken.None);
-        Assert.True(fingerprint == BuildRoleGuard.Fingerprint, "Build schema fingerprint: " + fingerprint);
+        Assert.True(fingerprint == BuildRunRoleGuard.PublicationFingerprint, "Build schema fingerprint: " + fingerprint);
     }
 
     [PostgresFact]
@@ -388,7 +388,7 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         return value;
     }
 
-    private sealed class Context : IAsyncDisposable
+    internal sealed class Context : IAsyncDisposable
     {
         internal required RegressionRunPostgresTestSupport Runs { get; init; }
         internal required PostgresBuildStore Store { get; init; }

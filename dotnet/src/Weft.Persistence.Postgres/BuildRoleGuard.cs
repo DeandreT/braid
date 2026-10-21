@@ -21,6 +21,10 @@ internal static partial class BuildRoleGuard
                 AND current_setting('standard_conforming_strings')='on'
                 AND coalesce(nullif(current_setting('weft.organization_id',true),''),'')=''
                 AND coalesce(nullif(current_setting('weft.build_principal_id',true),''),'')=''
+                AND coalesce(nullif(current_setting('weft.build_worker_id',true),''),'')=''
+                AND coalesce(nullif(current_setting('weft.build_claim_token',true),''),'')=''
+                AND coalesce(nullif(current_setting('weft.build_claim_attempt',true),''),'')=''
+                AND coalesce(nullif(current_setting('weft.build_claim_intent',true),''),'')=''
                 AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid)
                 AND NOT pg_catalog.has_database_privilege(r.oid,current_database(),'CREATE,TEMPORARY,CONNECT WITH GRANT OPTION')
                 AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_namespace n WHERE n.nspowner=r.oid OR pg_catalog.has_schema_privilege(r.oid,n.oid,'CREATE'))
@@ -38,6 +42,24 @@ internal static partial class BuildRoleGuard
             command.Parameters.AddWithValue("functions", writer ? new[] { "read_build_record", "write_build_record" } : ["read_build_record"]);
             if (await command.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
+        await ValidateContractAsync(connection, transaction, token);
+    }
+
+    internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
+        await ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
+        var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token);
+        if (await BuildRunRoleGuard.IsInstalledAsync(connection, transaction, token))
+        {
+            if (fingerprint != BuildRunRoleGuard.PublicationFingerprint) throw Invalid();
+            await BuildRunRoleGuard.ValidateContractAsync(connection, transaction, token);
+        }
+        else if (fingerprint != Fingerprint) throw Invalid();
+    }
+
+    internal static async Task ValidateFunctionsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        string[] names, Dictionary<string, Match> definitions, CancellationToken token)
+    {
         await using (var command = new NpgsqlCommand("""
             SELECT p.proname,p.prosrc,p.prosecdef,p.provolatile,l.lanname,pg_catalog.oidvectortypes(p.proargtypes),p.proargnames[1:p.pronargs],
                 p.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='weft_migrator')
@@ -49,13 +71,13 @@ internal static partial class BuildRoleGuard
             JOIN pg_catalog.pg_language l ON l.oid=p.prolang WHERE n.nspname='weft' AND p.proname=ANY(@names)
             """, connection, transaction))
         {
-            command.Parameters.AddWithValue("names", Names);
+            command.Parameters.AddWithValue("names", names);
             var seen = new HashSet<string>();
             await using var rows = await command.ExecuteReaderAsync(token);
             while (await rows.ReadAsync(token))
             {
                 var name = rows.GetString(0);
-                var definition = Definitions.Value[name];
+                var definition = definitions[name];
                 var args = definition.Groups[2].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(v => v.Split(' ', 2)).ToArray();
                 if (!seen.Add(name) || rows.GetString(1) != definition.Groups[7].Value || rows.GetBoolean(2) != (definition.Groups[6].Value == "DEFINER") ||
                     rows.GetChar(3) != (definition.Groups[5].Value == "STABLE" ? 's' : 'v') || rows.GetString(4) != definition.Groups[4].Value ||
@@ -63,17 +85,19 @@ internal static partial class BuildRoleGuard
                     !(rows.IsDBNull(6) ? Array.Empty<string>() : rows.GetFieldValue<string[]>(6)).SequenceEqual(args.Select(a => a[0])) ||
                     !rows.GetBoolean(7) || rows.GetString(8) != definition.Groups[3].Value.Trim()) throw Invalid();
             }
-            if (seen.Count != Names.Length) throw Invalid();
+            if (seen.Count != names.Length) throw Invalid();
         }
-        if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();
     }
 
     private static Dictionary<string, Match> Load()
+        => LoadFunctions("0018_build_publication.sql", Names.Length);
+
+    internal static Dictionary<string, Match> LoadFunctions(string file, int count)
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations.0018_build_publication.sql") ?? throw Invalid();
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations." + file) ?? throw Invalid();
         using var reader = new StreamReader(stream);
         var result = Function().Matches(reader.ReadToEnd()).ToDictionary(match => match.Groups[1].Value, StringComparer.Ordinal);
-        if (result.Count != Names.Length) throw Invalid();
+        if (result.Count != count) throw Invalid();
         return result;
     }
     [GeneratedRegex(@"CREATE FUNCTION weft\.([a-z_]+)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,weft,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]

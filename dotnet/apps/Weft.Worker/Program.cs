@@ -29,4 +29,6 @@ builder.Services.AddWolverine(options => PreviewJobs.Configure(options, settings
 builder.Services.AddWeftRegressionWorker(Environment.GetEnvironmentVariable, () =>
     new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, settings.WorkerImage.ToLowerInvariant(),
         FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile));
+builder.Services.AddWeftBuildWorker(Environment.GetEnvironmentVariable, () =>
+    new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage, profile: DockerWorkerProfile.Build));
 await builder.Build().RunAsync();

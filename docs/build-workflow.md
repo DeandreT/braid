@@ -41,11 +41,12 @@ verifies the existing artifact without invoking the compiler again. A changed
 actor, environment, approval, regression selection, source or profile cannot
 adopt it.
 
-The production publication adapter must make the staging/retention reservation
-durable and coordinate it with private-object maintenance before acknowledging
-staging. The current workflow does not implement that adapter, a durable queue,
-a production approval store, or host/API composition. Those are required
-integration boundaries, not guarantees supplied by the pure intent contracts or
+The [PostgreSQL adapters](build-persistence.md) make approvals and first-writer
+staging durable. Their private database artifact storage is independent of
+filesystem orphan maintenance. [Durable build runs](build-runs.md) compose the
+workflow with bounded queueing, current-claim publication fencing and explicit
+worker activation. HTTP/API and deployment-target composition are separate
+application boundaries, not guarantees supplied by the pure intent contracts or
 test catalog.
 
 ## Explicit fixture compiler and target
@@ -62,6 +63,6 @@ version, intent and artifact digest. Repeating the same deployment returns its
 original receipt; a changed request conflicts. It has no cloud resources or
 external executable effects and is not a production deployment adapter.
 
-Full P11 delivery still requires durable approvals and publication ownership,
-qualified runtime compilation, and server/worker composition. Azure rollout and
-rollback are the separate P12 target.
+Server/API and browser composition expose approved operations separately from
+worker execution. Compiled-runtime equivalence and Azure rollout/rollback remain
+separate target qualification boundaries.

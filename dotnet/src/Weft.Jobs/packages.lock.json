@@ -714,6 +714,15 @@
       "weft.domain": {
         "type": "Project"
       },
+      "weft.mappingbackends": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Application": "[1.0.0, )",
+          "Weft.Contracts": "[1.0.0, )",
+          "Weft.Deployment": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
+      },
       "weft.persistence.postgres": {
         "type": "Project",
         "dependencies": {
