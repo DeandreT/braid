@@ -103,6 +103,19 @@
           This revision was saved with validation issues.
         </p>
       }
+      @if (
+        context()?.features?.readReports &&
+        view.mapping.access.actions.readReports
+      ) {
+        <p class="catalog-description">
+          <a
+            class="catalog-page-link"
+            [routerLink]="routes.mapping(view.mapping.scope) + '/comparisons'"
+            [queryParams]="{ right: view.revision.scope.revisionId }"
+            >Compare with another revision</a
+          >
+        </p>
+      }
     </section>
     <section class="catalog-summary" aria-labelledby="current-mapping-title">
       <h2 id="current-mapping-title">Current mapping metadata</h2>

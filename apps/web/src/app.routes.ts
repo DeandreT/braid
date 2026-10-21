@@ -82,6 +82,14 @@ export const routes: Routes = [
         title: "Upload revision · Weft",
       },
       {
+        path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/comparisons",
+        loadComponent: () =>
+          import("./catalog/comparison/revision-comparison-page.component").then(
+            (module) => module.RevisionComparisonPageComponent,
+          ),
+        title: "Compare revisions · Weft",
+      },
+      {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",
         component: RevisionPageComponent,
         title: "Revision · Weft",

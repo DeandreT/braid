@@ -154,6 +154,19 @@
       <h2 class="catalog-section-title">Revision history</h2>
       <p>Each link opens a specific saved revision.</p>
     </div>
+    @if (
+      context()?.features?.readReports &&
+      view.mapping.access.actions.readReports
+    ) {
+      <p>
+        <a
+          class="catalog-page-link"
+          [routerLink]="routes.mapping(view.mapping.scope) + '/comparisons'"
+          [queryParams]="{ right: view.mapping.head.scope.revisionId }"
+          >Compare revisions</a
+        >
+      </p>
+    }
     @if (view.page.revisions.length === 0) {
       <section class="catalog-state catalog-empty">
         <h3>No revisions</h3>

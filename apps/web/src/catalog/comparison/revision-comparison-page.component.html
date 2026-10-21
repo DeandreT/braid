@@ -1,0 +1,785 @@
+<section class="catalog-page" aria-labelledby="catalog-page-title">
+  @if (data(); as view) {
+    <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <a [routerLink]="routes.projects(view.project.scope.organizationId)"
+            >Projects</a
+          >
+        </li>
+        <li>
+          <a [routerLink]="routes.project(view.project.scope)">{{
+            view.project.name
+          }}</a>
+        </li>
+        <li>
+          <a [routerLink]="routes.mapping(view.mapping.scope)">{{
+            view.mapping.name
+          }}</a>
+        </li>
+        <li><span aria-current="page">Compare revisions</span></li>
+      </ol>
+    </nav>
+  }
+  <header class="catalog-heading">
+    <div>
+      <p class="catalog-eyebrow">Revision comparison</p>
+      <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
+        Compare revisions
+      </h1>
+      <p class="catalog-intro">
+        Compares the saved explanations of two exact revisions of this mapping.
+        Only saved reports are read; nothing is generated. Matching explanations
+        are not evidence that two revisions run the same way.
+      </p>
+    </div>
+    <button
+      class="catalog-button"
+      type="button"
+      (click)="retry()"
+      [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
+    >
+      Refresh catalog
+    </button>
+  </header>
+  @if (data(); as view) {
+    <p class="catalog-live" role="status">{{ live() }}</p>
+
+    <div class="comparison-sides">
+      @for (side of sides(); track side.name) {
+        <section
+          class="comparison-side"
+          [attr.aria-labelledby]="'comparison-side-' + side.name"
+          [attr.aria-busy]="side.status.kind === 'reading'"
+        >
+          <h2 [id]="'comparison-side-' + side.name">{{ side.title }}</h2>
+          @if (side.revision; as revision) {
+            <p class="comparison-side-revision">
+              <a [routerLink]="routes.revision(revision.scope)"
+                >Revision {{ revision.sequence }}</a
+              >
+              <span
+                class="catalog-badge"
+                [class.catalog-badge-issues]="
+                  revision.admission === 'decodedInvalid'
+                "
+                >{{ admissionLabel(revision.admission) }}</span
+              >
+            </p>
+            <p class="comparison-meta">
+              {{ revision.originalFilename }} · committed
+              <time [attr.datetime]="revision.committedAtUtc"
+                >{{
+                  revision.committedAtUtc | date: "medium" : "UTC"
+                }}
+                UTC</time
+              >
+            </p>
+          }
+          @switch (side.status.kind) {
+            @case ("unselected") {
+              <p>No revision selected. Choose one from the list below.</p>
+            }
+            @case ("missing") {
+              <p class="comparison-problem" role="alert">
+                The selected revision is not part of this mapping or is no
+                longer available. Choose another revision below.
+              </p>
+            }
+            @case ("unreadable") {
+              <p class="comparison-problem">
+                Saved report reading is unavailable for this mapping. Refresh
+                the catalog to check current access and availability.
+              </p>
+            }
+            @case ("reading") {
+              <p role="status">Reading saved reports…</p>
+            }
+            @case ("noExplanation") {
+              @if (side.status.kind === "noExplanation") {
+                <p class="comparison-problem" role="alert">
+                  {{ problemText("explanation", side.status.problem) }}
+                </p>
+              }
+              @if (side.revision; as revision) {
+                <p class="comparison-actions">
+                  <a
+                    class="catalog-page-link"
+                    [routerLink]="routes.revision(revision.scope)"
+                    >Open revision {{ revision.sequence }} report controls</a
+                  >
+                  @if (pinned(side.name)) {
+                    <a
+                      class="catalog-page-link"
+                      [routerLink]="comparisonPath(view.mapping.scope)"
+                      [queryParams]="currentReportsQuery(side.name)"
+                      >Use current reports for this side</a
+                    >
+                  }
+                </p>
+              }
+            }
+            @case ("ready") {
+              @if (side.status.kind === "ready") {
+                <dl class="catalog-facts comparison-facts">
+                  <dt>Saved explanation</dt>
+                  <dd>
+                    <code class="catalog-code">{{
+                      side.status.projection.derivationId
+                    }}</code>
+                    <span class="comparison-meta"
+                      >Generation {{ side.status.projection.generation }} ·
+                      saved
+                      <time
+                        [attr.datetime]="side.status.projection.finishedAtUtc"
+                        >{{
+                          side.status.projection.finishedAtUtc
+                            | date: "medium" : "UTC"
+                        }}
+                        UTC</time
+                      ></span
+                    >
+                  </dd>
+                  <dt>Saved validation</dt>
+                  <dd>
+                    @if (side.status.validation; as validation) {
+                      <code class="catalog-code">{{
+                        validation.derivationId
+                      }}</code>
+                      <span class="comparison-meta">{{
+                        side.status.linked
+                          ? "Linked to this explanation"
+                          : "Not linked to this explanation"
+                      }}</span>
+                    } @else if (side.status.validationProblem; as problem) {
+                      <span
+                        >{{ problemText("validation", problem) }} Validation is
+                        not compared for this side.</span
+                      >
+                    }
+                  </dd>
+                  <dt>Selection</dt>
+                  <dd>
+                    {{
+                      pinned(side.name)
+                        ? "Pinned saved reports"
+                        : "Current saved reports for this revision"
+                    }}
+                  </dd>
+                </dl>
+                @if (!side.status.validation && side.revision; as revision) {
+                  <p class="comparison-actions">
+                    <a
+                      class="catalog-page-link"
+                      [routerLink]="routes.revision(revision.scope)"
+                      >Open revision {{ revision.sequence }} report controls</a
+                    >
+                  </p>
+                }
+              }
+            }
+          }
+        </section>
+      }
+    </div>
+
+    @if (sides()[0].selection && sides()[1].selection) {
+      <p class="comparison-actions">
+        <a
+          class="catalog-page-link"
+          [routerLink]="comparisonPath(view.mapping.scope)"
+          [queryParams]="swapQuery()"
+          >Swap left and right</a
+        >
+      </p>
+    }
+    @if (sameRevision()) {
+      <p class="comparison-note">
+        Both sides name the same revision. Only differences between the selected
+        saved reports can appear.
+      </p>
+    }
+
+    <section
+      class="comparison-picker"
+      aria-labelledby="comparison-picker-title"
+    >
+      <h2 id="comparison-picker-title">Choose revisions</h2>
+      <p class="comparison-meta">
+        Each choice selects one exact saved revision of this mapping and reads
+        its current saved reports.
+      </p>
+      @if (view.page.revisions.length === 0) {
+        <p>No revisions are available on this page.</p>
+      } @else {
+        <ul class="comparison-picker-list" aria-label="Revisions to compare">
+          @for (
+            revision of view.page.revisions;
+            track revision.scope.revisionId
+          ) {
+            <li class="comparison-picker-item">
+              <div class="comparison-picker-name">
+                <span>Revision {{ revision.sequence }}</span>
+                @if (
+                  sides()[0].selection?.revisionId === revision.scope.revisionId
+                ) {
+                  <span class="catalog-badge">Left</span>
+                }
+                @if (
+                  sides()[1].selection?.revisionId === revision.scope.revisionId
+                ) {
+                  <span class="catalog-badge">Right</span>
+                }
+              </div>
+              <span class="comparison-meta"
+                >{{ revision.originalFilename }} ·
+                <time [attr.datetime]="revision.committedAtUtc"
+                  >{{
+                    revision.committedAtUtc | date: "medium" : "UTC"
+                  }}
+                  UTC</time
+                ></span
+              >
+              <div class="comparison-picker-actions">
+                @if (
+                  sides()[0].selection?.revisionId !== revision.scope.revisionId
+                ) {
+                  <a
+                    class="catalog-page-link"
+                    [routerLink]="comparisonPath(view.mapping.scope)"
+                    [queryParams]="pick('left', revision)"
+                    [attr.aria-label]="
+                      'Use revision ' + revision.sequence + ' as left'
+                    "
+                    >Use as left</a
+                  >
+                }
+                @if (
+                  sides()[1].selection?.revisionId !== revision.scope.revisionId
+                ) {
+                  <a
+                    class="catalog-page-link"
+                    [routerLink]="comparisonPath(view.mapping.scope)"
+                    [queryParams]="pick('right', revision)"
+                    [attr.aria-label]="
+                      'Use revision ' + revision.sequence + ' as right'
+                    "
+                    >Use as right</a
+                  >
+                }
+              </div>
+            </li>
+          }
+        </ul>
+      }
+      <nav class="catalog-pagination" aria-label="Revision pages">
+        <p>Up to 10 revisions per page.</p>
+        @if (cursor()) {
+          <a
+            class="catalog-page-link"
+            [routerLink]="comparisonPath(view.mapping.scope)"
+            [queryParams]="pageQuery(null)"
+            >First page</a
+          >
+        }
+        @if (view.page.nextCursor) {
+          <a
+            class="catalog-page-link"
+            [routerLink]="comparisonPath(view.mapping.scope)"
+            [queryParams]="pageQuery(view.page.nextCursor)"
+            >Next page</a
+          >
+        }
+      </nav>
+    </section>
+
+    <section
+      class="comparison-results"
+      aria-labelledby="comparison-results-title"
+      [attr.aria-busy]="result().phase === 'loading'"
+    >
+      <h2 id="comparison-results-title" tabindex="-1">Comparison</h2>
+      @switch (result().phase) {
+        @case ("idle") {
+          <p>
+            The comparison starts when both revisions have a readable saved
+            explanation.
+          </p>
+        }
+        @case ("loading") {
+          <p role="status">Comparing saved explanations…</p>
+        }
+        @case ("error") {
+          @if (result(); as failed) {
+            @if (failed.phase === "error") {
+              <div class="comparison-problem" role="alert">
+                <p>{{ comparisonError(failed.error.kind) }}</p>
+                <p class="comparison-actions">
+                  @if (canRetryComparison(failed.error.kind)) {
+                    <button
+                      class="catalog-button"
+                      type="button"
+                      (click)="retryComparison()"
+                    >
+                      Try comparison again
+                    </button>
+                  }
+                  <button
+                    class="catalog-button"
+                    type="button"
+                    (click)="retry()"
+                  >
+                    Refresh catalog
+                  </button>
+                </p>
+              </div>
+            }
+          }
+        }
+        @case ("ready") {
+          @if (ready(); as comparison) {
+            <p class="comparison-headline">{{ headline() }}</p>
+            <ul class="comparison-banners" aria-label="Evidence limits">
+              @for (
+                entry of [
+                  { name: "left", coverage: comparison.leftCoverage },
+                  { name: "right", coverage: comparison.rightCoverage },
+                ];
+                track entry.name
+              ) {
+                @if (entry.coverage.status !== "complete") {
+                  <li class="comparison-banner">
+                    <p>
+                      The {{ entry.name }} explanation is
+                      {{ coverageText(entry.coverage.status).toLowerCase() }}.
+                      Facts outside its coverage are not compared, and absence
+                      from it is not confirmed.
+                    </p>
+                    @if (entry.coverage.gaps.length > 0) {
+                      <details class="comparison-details">
+                        <summary>
+                          {{ entry.coverage.gaps.length }}
+                          {{ entry.name }} explanation
+                          {{
+                            entry.coverage.gaps.length === 1 ? "gap" : "gaps"
+                          }}
+                        </summary>
+                        <ul>
+                          @for (gap of entry.coverage.gaps; track $index) {
+                            <li>
+                              <p>{{ gap.message }}</p>
+                              <weft-native-evidence
+                                [locator]="gap.nativeLocator"
+                              />
+                            </li>
+                          }
+                        </ul>
+                      </details>
+                    }
+                  </li>
+                }
+              }
+              @if (comparison.emittedItemCount < comparison.totalItemCount) {
+                <li class="comparison-banner">
+                  <p>
+                    Showing {{ comparison.emittedItemCount }} of
+                    {{ comparison.totalItemCount }} items. The remaining items
+                    were omitted, so this result is partial.
+                  </p>
+                </li>
+              }
+              @if (candidatesOmitted()) {
+                <li class="comparison-banner">
+                  <p>
+                    Some possible counterparts were omitted from ambiguous
+                    items, so this result is partial.
+                  </p>
+                </li>
+              }
+              @if (comparison.hasUncertainty) {
+                <li class="comparison-banner">
+                  <p>
+                    Some facts could not be compared. Uncertain aspects are
+                    marked with their reasons and are not reported as equal.
+                  </p>
+                </li>
+              }
+              @if (!comparison.validationIncluded) {
+                <li class="comparison-banner">
+                  <p>
+                    Validation was not compared: neither side has a saved
+                    validation in this comparison.
+                  </p>
+                </li>
+              } @else if (
+                !comparison.leftValidation || !comparison.rightValidation
+              ) {
+                <li class="comparison-banner">
+                  <p>
+                    Validation is available for only one side, so validity and
+                    notice counts are not compared.
+                  </p>
+                </li>
+              }
+            </ul>
+
+            <div class="comparison-toolbar">
+              <nav aria-label="Comparison groups">
+                <ul class="comparison-jumps">
+                  @for (group of visibleGroups(); track group.entity) {
+                    <li>
+                      <button
+                        class="comparison-jump"
+                        type="button"
+                        (click)="focusGroup(group)"
+                      >
+                        {{ group.title }} ({{ group.items.length }})
+                      </button>
+                    </li>
+                  }
+                </ul>
+              </nav>
+              <button
+                class="catalog-button"
+                type="button"
+                [attr.aria-pressed]="showUnchanged()"
+                (click)="toggleUnchanged()"
+              >
+                Show unchanged items
+              </button>
+            </div>
+            @if (hiddenUnchanged() > 0) {
+              <p class="comparison-meta">
+                {{ hiddenUnchanged() }} matched
+                {{ hiddenUnchanged() === 1 ? "item" : "items" }} with no
+                observed difference {{ hiddenUnchanged() === 1 ? "is" : "are" }}
+                hidden.
+              </p>
+            }
+            @if (groups().length === 0) {
+              <p>No comparison items were returned.</p>
+            }
+
+            <div class="comparison-groups">
+              @for (group of visibleGroups(); track group.entity) {
+                <section
+                  class="comparison-group"
+                  [attr.aria-labelledby]="group.id"
+                  (keydown)="moveItem($event)"
+                >
+                  <h3 [id]="group.id" tabindex="-1">
+                    {{ group.title }}
+                  </h3>
+                  <p class="comparison-meta">
+                    {{ groupSummary(group) }}
+                  </p>
+                  @if (group.visible.length === 0) {
+                    <p class="comparison-meta">
+                      Every item in this group is unchanged.
+                    </p>
+                  } @else {
+                    <ul
+                      class="comparison-items"
+                      [attr.aria-label]="group.title"
+                    >
+                      @for (item of group.visible; track item.id) {
+                        <li
+                          class="comparison-item"
+                          tabindex="-1"
+                          [attr.aria-labelledby]="item.id"
+                          [class.comparison-item-changed]="item.changed"
+                          [class.comparison-item-uncertain]="item.uncertain"
+                        >
+                          <div class="comparison-item-heading">
+                            <h4 [id]="item.id">{{ item.title }}</h4>
+                            <span
+                              class="catalog-badge"
+                              [class.catalog-badge-issues]="
+                                item.match !== 'matched'
+                              "
+                              >{{ matchLabel(item.match) }}</span
+                            >
+                          </div>
+                          @if (absenceText(item, sides()); as note) {
+                            <p class="comparison-meta">{{ note }}</p>
+                          }
+                          @if (item.presentationOnly) {
+                            <p class="comparison-meta">
+                              Only labels or summaries differ among the compared
+                              aspects.
+                            </p>
+                          }
+                          @if (item.entity === "validation") {
+                            <dl class="catalog-facts comparison-facts">
+                              <dt>Left validation</dt>
+                              <dd>
+                                {{ validityText(comparison.leftValidation) }}
+                              </dd>
+                              <dt>Right validation</dt>
+                              <dd>
+                                {{ validityText(comparison.rightValidation) }}
+                              </dd>
+                            </dl>
+                          }
+                          @for (
+                            entry of [
+                              {
+                                name: "left",
+                                candidates: item.left,
+                                omitted: item.leftOmitted,
+                              },
+                              {
+                                name: "right",
+                                candidates: item.right,
+                                omitted: item.rightOmitted,
+                              },
+                            ];
+                            track entry.name
+                          ) {
+                            @if (
+                              entry.candidates.length > 0 || entry.omitted > 0
+                            ) {
+                              <div class="comparison-candidates">
+                                <p class="comparison-candidates-title">
+                                  {{
+                                    entry.name === "left"
+                                      ? "In left revision"
+                                      : "In right revision"
+                                  }}
+                                </p>
+                                <ul>
+                                  @for (
+                                    candidate of entry.candidates;
+                                    track $index
+                                  ) {
+                                    <li>
+                                      <span
+                                        class="comparison-candidate-label"
+                                        >{{ candidate.label }}</span
+                                      >
+                                      @if (candidate.reference) {
+                                        <button
+                                          class="comparison-link"
+                                          type="button"
+                                          (click)="showCandidate(candidate)"
+                                        >
+                                          Show in {{ entry.name }} explanation
+                                        </button>
+                                      }
+                                    </li>
+                                  }
+                                </ul>
+                                @if (entry.omitted > 0) {
+                                  <p class="comparison-meta">
+                                    {{ entry.omitted }} more possible
+                                    {{
+                                      entry.omitted === 1
+                                        ? "counterpart"
+                                        : "counterparts"
+                                    }}
+                                    omitted.
+                                  </p>
+                                }
+                              </div>
+                            }
+                          }
+                          @if (item.facets.length > 0) {
+                            <ul
+                              class="comparison-facets"
+                              [attr.aria-label]="'Aspects of ' + item.title"
+                            >
+                              @for (facet of item.facets; track facet.aspect) {
+                                <li
+                                  class="comparison-facet"
+                                  [attr.data-state]="facet.state"
+                                >
+                                  <span class="comparison-facet-name">{{
+                                    facet.label
+                                  }}</span>
+                                  <span class="comparison-facet-state">{{
+                                    facet.text
+                                  }}</span>
+                                  @if (facet.reasons.length > 0) {
+                                    <ul class="comparison-reasons">
+                                      @for (
+                                        reason of facet.reasons;
+                                        track reason
+                                      ) {
+                                        <li>{{ reason }}</li>
+                                      }
+                                    </ul>
+                                  }
+                                </li>
+                              }
+                            </ul>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  }
+                </section>
+              }
+            </div>
+
+            <section
+              class="comparison-viewer"
+              aria-labelledby="comparison-viewer-title"
+            >
+              <h3 id="comparison-viewer-title" tabindex="-1">
+                Saved explanations
+              </h3>
+              <p class="comparison-meta">
+                Each side opens in the mapping viewer for its own saved
+                explanation. Item IDs are never shared between sides.
+              </p>
+              <div
+                class="comparison-actions"
+                role="group"
+                aria-label="Explanation side"
+              >
+                @for (side of sides(); track side.name) {
+                  <button
+                    class="catalog-button"
+                    type="button"
+                    [attr.aria-pressed]="viewerSide() === side.name"
+                    (click)="openViewer(side.name)"
+                  >
+                    {{ side.name === "left" ? "Left" : "Right" }} explanation ·
+                    revision {{ side.revision?.sequence }}
+                  </button>
+                }
+                @if (viewerSide()) {
+                  <button
+                    class="catalog-button"
+                    type="button"
+                    (click)="closeViewer()"
+                  >
+                    Close explanation
+                  </button>
+                }
+              </div>
+              @if (viewerDocument(); as document) {
+                <div class="comparison-viewer-body">
+                  <weft-mapping-projection
+                    [document]="document"
+                    [validation]="viewerValidation()"
+                  />
+                </div>
+              }
+            </section>
+
+            <section
+              class="comparison-evidence"
+              aria-labelledby="comparison-evidence-title"
+            >
+              <h3 id="comparison-evidence-title">Cited evidence</h3>
+              <p class="comparison-meta">
+                Policy {{ comparison.policyVersion }} · schema
+                {{ comparison.schemaVersion }}
+              </p>
+              <div class="comparison-sides">
+                @for (
+                  entry of [
+                    {
+                      name: "Left",
+                      citation: comparison.left,
+                      coverage: comparison.leftCoverage,
+                    },
+                    {
+                      name: "Right",
+                      citation: comparison.right,
+                      coverage: comparison.rightCoverage,
+                    },
+                  ];
+                  track entry.name
+                ) {
+                  <div class="comparison-side">
+                    <h4>
+                      {{ entry.name }}: revision {{ entry.citation.sequence }}
+                    </h4>
+                    <dl class="catalog-facts comparison-facts">
+                      <dt>Revision ID</dt>
+                      <dd>
+                        <code class="catalog-code">{{
+                          entry.citation.revision.revisionId
+                        }}</code>
+                      </dd>
+                      <dt>Native digest</dt>
+                      <dd>
+                        <span>{{ entry.citation.nativeDigest.algorithm }}</span>
+                        <code class="catalog-code">{{
+                          entry.citation.nativeDigest.value
+                        }}</code>
+                      </dd>
+                      <dt>Native bytes</dt>
+                      <dd>{{ entry.citation.nativeByteCount }}</dd>
+                      <dt>Explanation</dt>
+                      <dd>
+                        <code class="catalog-code">{{
+                          entry.citation.projection.derivationId
+                        }}</code>
+                        <span class="comparison-meta"
+                          >Generation
+                          {{ entry.citation.projection.generation }}</span
+                        >
+                      </dd>
+                      <dt>Validation</dt>
+                      <dd>
+                        @if (entry.citation.validation; as validation) {
+                          <code class="catalog-code">{{
+                            validation.derivationId
+                          }}</code>
+                          <span class="comparison-meta"
+                            >Generation {{ validation.generation }}</span
+                          >
+                        } @else {
+                          Not included
+                        }
+                      </dd>
+                      <dt>Coverage</dt>
+                      <dd>{{ coverageText(entry.coverage.status) }}</dd>
+                      <dt>Backend</dt>
+                      <dd>
+                        {{ entry.citation.projectionProvenance.backend.id }}
+                        <code class="catalog-code">{{
+                          entry.citation.projectionProvenance.backend.revision
+                        }}</code>
+                      </dd>
+                      <dt>Adapter</dt>
+                      <dd>
+                        {{ entry.citation.projectionProvenance.adapterVersion }}
+                        ·
+                        {{
+                          entry.citation.projectionProvenance.projectionVersion
+                        }}
+                      </dd>
+                    </dl>
+                    <p class="comparison-actions">
+                      <a
+                        class="catalog-page-link"
+                        [routerLink]="routes.revision(entry.citation.revision)"
+                        [queryParams]="revisionReportsQuery(entry.citation)"
+                        >Open revision {{ entry.citation.sequence }} with these
+                        saved reports</a
+                      >
+                    </p>
+                  </div>
+                }
+              </div>
+              <p class="comparison-actions">
+                <a
+                  class="catalog-page-link"
+                  [routerLink]="comparisonPath(view.mapping.scope)"
+                  [queryParams]="exactQuery(comparison)"
+                  >Link to this exact comparison</a
+                >
+              </p>
+            </section>
+          }
+        }
+      }
+    </section>
+  } @else {
+    <weft-catalog-status [kind]="kind()" (retry)="retry()" />
+  }
+</section>

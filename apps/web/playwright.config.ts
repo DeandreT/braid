@@ -7,6 +7,7 @@ export default defineConfig({
     "**/mapping-viewer.spec.ts",
     "**/browser-auth-controls.spec.ts",
     "**/revision-preview.spec.ts",
+    "**/revision-comparison.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,
