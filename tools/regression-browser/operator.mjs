@@ -99,7 +99,7 @@ await runBrowserFixture({
       await stopHost("read");
       await settleWorkers(true);
     }
-    async function capture(sample, runId) {
+    async function capture(sample, runId, expectedCase) {
       check(
         ["passed", "failed", "notEvaluated", "canceled"].includes(sample) &&
           !captures.has(runId),
@@ -146,6 +146,12 @@ await runBrowserFixture({
           row[0].submitter_id === ids.publisher,
         "productFailure",
       );
+      if (expectedCase)
+        check(
+          row[0].case_id === expectedCase.caseId &&
+            String(row[0].version) === expectedCase.version,
+          "productFailure",
+        );
       if (sample === "passed")
         check(
           value.previewStatus === "succeeded" &&
@@ -264,8 +270,10 @@ await runBrowserFixture({
         );
         guid(value.requestNonce);
         const fields = ["fixtureId", "requestNonce", "action"];
-        if (value.action === "capture-run") fields.push("sample", "runId");
-        else if (value.action === "restart-profile") fields.push("profile");
+        if (value.action === "capture-run") {
+          fields.push("sample", "runId");
+          if (Object.hasOwn(value, "caseId")) fields.push("caseId", "version");
+        } else if (value.action === "restart-profile") fields.push("profile");
         else
           check(
             [
@@ -285,6 +293,15 @@ await runBrowserFixture({
         );
         if (value.action === "capture-run") {
           guid(value.runId);
+          if (Object.hasOwn(value, "caseId")) {
+            guid(value.caseId);
+            check(
+              typeof value.version === "string" &&
+                /^[1-9][0-9]{0,18}$/.test(value.version) &&
+                BigInt(value.version) <= 9223372036854775807n,
+              "invalidControl",
+            );
+          }
           check(
             ["passed", "failed", "notEvaluated", "canceled"].includes(
               value.sample,
@@ -305,7 +322,11 @@ await runBrowserFixture({
       },
       async dispatch(item) {
         if (item.action === "capture-run")
-          return await capture(item.sample, item.runId);
+          return await capture(
+            item.sample,
+            item.runId,
+            item.caseId ? { caseId: item.caseId, version: item.version } : null,
+          );
         if (item.action === "checkpoint") return checkpoint();
         if (item.action === "pause-worker") {
           checkpoint();

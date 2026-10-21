@@ -25,6 +25,10 @@ interface Manifest {
   readOrigin: string;
   revision: Scope;
 }
+type SavedCase = Pick<
+  components["schemas"]["RegressionCaseSavedV1"],
+  "caseId" | "version"
+>;
 type Ack = Record<string, unknown>;
 
 /** Native browser, Linux API/worker; the pipe carries only closed controls and scoped metadata. */
@@ -252,7 +256,7 @@ async function publish(
   primary = input,
   output = expected,
   version = "1",
-): Promise<void> {
+): Promise<SavedCase> {
   await region(page)
     .getByRole("button", {
       name: version === "1" ? "New test case" : "Edit as next version",
@@ -279,13 +283,25 @@ async function publish(
     exact: true,
   });
   await expect(publish).toBeEnabled();
+  const receipt = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PUT" &&
+      /\/regression-cases\/[a-f0-9-]{36}\/versions\/[1-9][0-9]*$/.test(
+        new URL(response.url()).pathname,
+      ),
+  );
   await publish.click();
+  const response = await receipt;
+  expect(response.status()).toBe(201);
+  const saved = (await response.json()) as SavedCase;
+  expect(saved.version).toBe(version);
   await expect(
     region(page).getByRole("heading", {
       name: name + " · Version " + version,
       exact: true,
     }),
   ).toBeVisible();
+  return { caseId: saved.caseId, version: saved.version };
 }
 async function submit(page: Page): Promise<string> {
   const receipt = page.waitForResponse(
@@ -305,9 +321,14 @@ async function submit(page: Page): Promise<string> {
 async function run(
   page: Page,
   comparison: "passed" | "failed" | "notEvaluated",
+  expectedCase?: SavedCase,
 ): Promise<string> {
   const id = await submit(page);
-  await owner.control("capture-run", { sample: comparison, runId: id });
+  await owner.control("capture-run", {
+    sample: comparison,
+    runId: id,
+    ...expectedCase,
+  });
   await expect(
     region(page)
       .locator("code")
@@ -340,7 +361,11 @@ test("actual saved cases execute independently, survive restart and respect acce
   await open(page);
   await publish(page, "Valid before failure");
   const first = await run(page, "passed");
-  await publish(page, "Malformed input", Buffer.from("{"));
+  const malformedCase = await publish(
+    page,
+    "Malformed input",
+    Buffer.from("{"),
+  );
   const malformed = await run(page, "notEvaluated");
   await publish(page, "Valid after failure");
   const last = await run(page, "passed");
@@ -366,8 +391,15 @@ test("actual saved cases execute independently, survive restart and respect acce
   await region(page)
     .getByRole("button", { name: "Open Malformed input", exact: true })
     .click();
-  await publish(page, "Corrected input", input, expected, "2");
-  await run(page, "passed");
+  const corrected = await publish(
+    page,
+    "Corrected input",
+    input,
+    expected,
+    "2",
+  );
+  expect(corrected).toEqual({ caseId: malformedCase.caseId, version: "2" });
+  await run(page, "passed", corrected);
 
   const before = await owner.control("checkpoint");
   expect(before["runs"]).toBe(6);
@@ -425,5 +457,6 @@ test("actual saved cases execute independently, survive restart and respect acce
   await expect(region(page)).toContainText("Comparison: Passed");
   const after = await owner.control("checkpoint");
   expect(after["runs"]).toBe(6);
+  expect(after["caseVersions"]).toBe(5);
   expect(after["workerCreates"]).toBe(before["workerCreates"]);
 });
