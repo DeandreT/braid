@@ -31,6 +31,11 @@
     "test:native-revision-append-browser": "env -u WAYLAND_DISPLAY xvfb-run -a -w 10 npm --workspace @weft/web run test:e2e -- --config playwright.native-revision-append.config.ts",
     "format:check": "prettier --check \"apps/web/**/*.{ts,html,css,json}\" \"tools/**/*.{mjs,json}\" package.json global.json"
   },
+  "overrides": {
+    "@angular/build": {
+      "vite": "8.3.4"
+    }
+  },
   "devDependencies": {
     "prettier": "3.9.10",
     "typescript": "6.0.3"
