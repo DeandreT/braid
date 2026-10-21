@@ -82,6 +82,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
         var key = new ChatConversationKey(new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()), principal, Guid.NewGuid());
         await using var database = new PostgresChatDatabase(test.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
         await using var admitted = await database.BeginAsync(new(principal), key, false, ct);
+        await RegressionSchemaTestContract.AdmitAsync(test, ct);
     }
 
     // Rejected-install boundaries deliberately retain the actual partial or unsafe
@@ -121,12 +122,14 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }
                 .SelectMany(p => ChatSchemaContract.ColumnGrants(p).Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
             command.Parameters.AddWithValue(ChatSchemaContract.MigrationChecksum);
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.Tables);
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames);
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.Roles);
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.Tables.Concat(RegressionSchemaTestContract.Tables).ToArray());
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).ToArray());
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).ToArray());
             command.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
             command.Parameters.AddWithValue(PreviewSchemaTestContract.MigrationChecksum);
             command.Parameters.AddWithValue(PreviewSchemaTestContract.MessagesMigrationChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.CasesChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.RunsChecksum);
             var value = await command.ExecuteScalarAsync(cancellationToken);
             Assert.True(value is string, "The private session upgrade conservation observation is unavailable.");
             using var document = JsonDocument.Parse((string)value!);
@@ -323,12 +326,14 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 4 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 6 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=9+1)=$6::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=11)=$12::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=12)=$17::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=13)=$18::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=14)=$19::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=15)=$20::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -372,7 +377,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND c.conrelid=to_regclass('weft.chat_conversations')
                     AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey'))
                 OR EXISTS(SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND t.tgisinternal AND c.contype='f'
-                    AND c.conrelid=to_regclass('weft.preview_runs') AND c.conname=ANY($16::text[]))))),
+                    AND (c.conrelid=to_regclass('weft.preview_runs') AND c.conname=ANY($16::text[])
+                        OR c.conrelid IN (to_regclass('weft.regression_cases'),to_regclass('weft.regression_case_versions'),to_regclass('weft.regression_runs'))))))),
             'functions',(SELECT jsonb_agg(to_jsonb(f) ORDER BY f.oid) FROM old_functions f),
             'grants',jsonb_build_object(
                 'table',(SELECT jsonb_agg(to_jsonb(a) ORDER BY relation_name,grantor,grantee,privilege_type,is_grantable) FROM table_acls a),

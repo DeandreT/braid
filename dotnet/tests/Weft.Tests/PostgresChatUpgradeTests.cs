@@ -234,6 +234,7 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             var key = new ChatConversationKey(new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()), principal, Guid.NewGuid());
             await using var database = new PostgresChatDatabase(test.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
             await using var admitted = await database.BeginAsync(new(principal), key, false, CancellationToken.None);
+            await RegressionSchemaTestContract.AdmitAsync(test);
         }
         await using var connection = PostgresChatSecurityTests.Open(test.MigrationConnectionString); await connection.OpenAsync();
         var text = new StringBuilder();
@@ -248,8 +249,8 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         schema.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }.SelectMany(p => ChatSchemaContract.ColumnGrants(p)
             .Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
         schema.Parameters.AddWithValue(ChatSchemaContract.FunctionNames);
-        schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames);
-        schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles);
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).ToArray());
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
         text.Append(Assert.IsType<string>(await schema.ExecuteScalarAsync()));
         return SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()));
@@ -269,7 +270,8 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             WHERE NOT ($2 AND t.tgisinternal AND EXISTS(SELECT 1 FROM pg_catalog.pg_constraint c
                 WHERE c.oid=t.tgconstraint AND c.contype='f' AND (c.conrelid=pg_catalog.to_regclass('weft.chat_conversations')
                     AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey')
-                    OR c.conrelid=pg_catalog.to_regclass('weft.preview_runs') AND c.conname=ANY($7::text[]))))),
+                    OR c.conrelid=pg_catalog.to_regclass('weft.preview_runs') AND c.conname=ANY($7::text[])
+                    OR c.conrelid IN (pg_catalog.to_regclass('weft.regression_cases'),pg_catalog.to_regclass('weft.regression_case_versions'),pg_catalog.to_regclass('weft.regression_runs')))))),
         namespace_acls AS (SELECT a.* FROM pg_catalog.pg_namespace n CROSS JOIN LATERAL pg_catalog.aclexplode(n.nspacl) a
             WHERE n.nspname='weft' AND NOT ($2 AND a.grantee IN (SELECT oid FROM new_roles UNION ALL SELECT oid FROM pg_catalog.pg_roles WHERE rolname=ANY($6::text[]))
                 AND a.grantor=n.nspowner AND a.privilege_type='USAGE' AND NOT a.is_grantable))

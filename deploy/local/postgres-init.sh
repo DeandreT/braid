@@ -16,6 +16,17 @@ set -euo pipefail
   echo 'Preview profile passwords must be independent.' >&2; exit 1;
 }
 
+regression_passwords=()
+for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER; do
+  variable=WEFT_LOCAL_${role}_PASSWORD
+  [[ -n ${!variable:-} ]] || { echo "Set $variable." >&2; exit 1; }
+  for previous in "${regression_passwords[@]}"; do
+    [[ ${!variable} != "$previous" ]] || { echo 'Regression profile passwords must be independent.' >&2; exit 1; }
+  done
+  regression_passwords+=("${!variable}")
+done
+unset regression_passwords previous
+
 # This runs once inside this compose project's new, dedicated database.
 psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL'
 \getenv migrator_password WEFT_LOCAL_MIGRATOR_PASSWORD
@@ -36,6 +47,10 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv chat_lifecycle_password WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD
 \getenv preview_reader_password WEFT_LOCAL_PREVIEW_READER_PASSWORD
 \getenv preview_writer_password WEFT_LOCAL_PREVIEW_WRITER_PASSWORD
+\getenv case_reader_password WEFT_LOCAL_CASE_READER_PASSWORD
+\getenv case_writer_password WEFT_LOCAL_CASE_WRITER_PASSWORD
+\getenv run_reader_password WEFT_LOCAL_RUN_READER_PASSWORD
+\getenv run_writer_password WEFT_LOCAL_RUN_WRITER_PASSWORD
 CREATE ROLE weft_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
   PASSWORD :'migrator_password';
 CREATE ROLE weft_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
@@ -72,10 +87,18 @@ CREATE ROLE weft_preview_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHE
   PASSWORD :'preview_reader_password';
 CREATE ROLE weft_preview_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'preview_writer_password';
+CREATE ROLE weft_case_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'case_reader_password';
+CREATE ROLE weft_case_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'case_writer_password';
+CREATE ROLE weft_run_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'run_reader_password';
+CREATE ROLE weft_run_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'run_writer_password';
 ALTER DATABASE weft OWNER TO weft_migrator;
 -- Chat routines pin these scope settings in function SET clauses.
 GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator;
 REVOKE ALL ON DATABASE weft FROM PUBLIC;
-GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer;
+GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer, weft_case_reader, weft_case_writer, weft_run_reader, weft_run_writer;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SQL

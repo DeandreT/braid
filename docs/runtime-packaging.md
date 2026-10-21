@@ -110,6 +110,9 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
 `deploy/compose/compose.yml` runs the hosted layout locally:
 
 - `postgres` creates the restricted roles from `deploy/local/postgres-init.sh` in a new volume.
+
+  Existing volumes need the explicit administrator step in
+  `deploy/local/postgres-add-regression-roles.sh` before the regression migrations.
 - `migrate`, `storage-init` and `session-keys` are one-shot steps. Only `migrate`
   receives the migrator credential; the other two have no network.
 - `server` runs the Session profile with catalog reads, metadata edits, project
