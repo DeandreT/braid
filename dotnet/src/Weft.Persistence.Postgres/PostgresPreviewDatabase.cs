@@ -35,7 +35,9 @@ public sealed class PostgresPreviewDatabase : IAsyncDisposable
         if (write && Profile != PreviewDatabaseProfile.Writer)
             throw new InvalidOperationException("Preview mutation requires its separate writer profile.");
         await using var connection = await Source.OpenConnectionAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+        // A read sees one snapshot, so a run and its outputs cannot straddle a concurrent completion.
+        var isolation = write ? IsolationLevel.ReadCommitted : IsolationLevel.RepeatableRead;
+        await using var transaction = await connection.BeginTransactionAsync(isolation, ct);
         // Fix resolution before any function-based inspection; a startup search path is not trusted.
         await using (var path = new NpgsqlCommand("SET LOCAL search_path=pg_catalog", connection, transaction))
             await path.ExecuteNonQueryAsync(ct);
@@ -47,7 +49,7 @@ public sealed class PostgresPreviewDatabase : IAsyncDisposable
         await using (var inspect = new NpgsqlCommand("""
             SELECT current_user=session_user AND current_user=@profile AND NOT r.rolsuper AND NOT r.rolbypassrls
                 AND NOT r.rolinherit AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication
-                AND current_setting('transaction_isolation')='read committed'
+                AND current_setting('transaction_isolation')=@isolation
                 AND current_setting('session_replication_role')='origin'
                 AND current_setting('server_encoding')='UTF8' AND current_setting('client_encoding')='UTF8'
                 AND current_setting('standard_conforming_strings')='on'
@@ -56,6 +58,7 @@ public sealed class PostgresPreviewDatabase : IAsyncDisposable
             """, connection, transaction))
         {
             inspect.Parameters.AddWithValue("profile", Profile == PreviewDatabaseProfile.Reader ? "weft_preview_reader" : "weft_preview_writer");
+            inspect.Parameters.AddWithValue("isolation", write ? "read committed" : "repeatable read");
             if (await inspect.ExecuteScalarAsync(ct) is not true)
                 throw new InvalidOperationException("Preview database profile is invalid.");
         }

@@ -17,6 +17,39 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
     private static readonly byte[] Rates = PreviewRunTestSupport.Rates;
 
     [PostgresFact]
+    public async Task ReadsUseOneSnapshotForTheRunAndItsOutputsWhileWritesStayReadCommitted()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
+        var created = await test.Service().SubmitAsync(test.Alice, test.Submission());
+        var run = created.RunId!.Value;
+        var org = test.Revision.OrganizationId;
+        async Task<int> State(NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            await using var command = new NpgsqlCommand("SELECT state FROM weft.preview_read($1,$2,$3)", connection, transaction);
+            command.Parameters.AddWithValue(org); command.Parameters.AddWithValue(run); command.Parameters.AddWithValue(test.Alice.PrincipalId.Value);
+            return (int)(await command.ExecuteScalarAsync())!;
+        }
+        static async Task<string> Isolation(NpgsqlConnection connection, NpgsqlTransaction transaction)
+        {
+            await using var command = new NpgsqlCommand("SELECT current_setting('transaction_isolation')", connection, transaction);
+            return (string)(await command.ExecuteScalarAsync())!;
+        }
+
+        var (isolation, before, during) = await test.ReaderDatabase.RunAsync(false, async (connection, transaction) =>
+        {
+            var first = await State(connection, transaction);
+            // A cancellation committed between two reads of one transaction stays invisible to it.
+            Assert.Equal(PreviewCancelOutcome.Canceled, await test.Service().CancelAsync(test.Alice, org, run));
+            return (await Isolation(connection, transaction), first, await State(connection, transaction));
+        }, CancellationToken.None);
+        Assert.Equal("repeatable read", isolation);
+        Assert.Equal(1, before);
+        Assert.Equal(before, during);
+        Assert.Equal(PreviewRunState.Canceled, (await test.Reader.ReadAsync(test.Alice, org, run))!.State);
+        Assert.Equal("read committed", await test.WriterDatabase.RunAsync(true, Isolation, CancellationToken.None));
+    }
+
+    [PostgresFact]
     public async Task SubmissionReplaysOneKeyRefusesChangedContentAndRequiresFreshRunnerAuthority()
     {
         await using var test = await PreviewRunTestSupport.CreateAsync(fixture);
