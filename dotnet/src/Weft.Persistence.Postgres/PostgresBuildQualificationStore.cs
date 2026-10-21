@@ -1,8 +1,6 @@
 using System.Data;
-using System.Text.Json;
 using Npgsql;
 using Weft.Application;
-using Weft.Application.Regression;
 using Weft.Deployment;
 using Weft.Domain;
 
@@ -40,28 +38,7 @@ public sealed class PostgresBuildQualificationStore(string connectionString, boo
         {
             if (await rows.ReadAsync(token))
             {
-                var proof = rows.GetFieldValue<byte[]>(0); var completion = rows.GetFieldValue<byte[]>(1);
-                var intentBytes = rows.GetFieldValue<byte[]>(2); var caseBytes = rows.GetFieldValue<byte[]>(10);
-                var evidenceBytes = rows.GetFieldValue<byte[]>(13);
-                if (proof.Length is < 1 or > 16384 || completion.Length is < 1 or > RegressionRunResultCodec.MaximumBytes ||
-                    intentBytes.Length is < 1 or > 1048576 || caseBytes.Length is < 1 or > RegressionCaseEnvelopeCodec.MaximumEnvelopeBytes ||
-                    evidenceBytes.Length is < 1 or > RegressionRunResultCodec.MaximumBytes) throw Invalid();
-                using var document = JsonDocument.Parse(proof);
-                var metadata = document.RootElement;
-                var intent = BuildIntentCodec.Decode(intentBytes);
-                if (intent.Revision.OrganizationId != mapping.OrganizationId || intent.Revision.ProjectId != mapping.ProjectId ||
-                    intent.Revision.MappingId != mapping.MappingId || metadata.GetProperty("qualificationId").GetGuid() != qualificationId ||
-                    metadata.GetProperty("actorId").GetGuid() != actor.PrincipalId.Value) throw Invalid();
-                var artifact = BuildArtifactReference.Restore(intent, Sha256Digest.Parse(rows.GetString(3)), rows.GetInt32(4));
-                var build = new BuildRunSnapshot(actor.PrincipalId, intent, BuildRunState.Succeeded, rows.GetInt32(5),
-                    new(rows.GetDateTime(6)), (BuildExecutionOutcome)rows.GetInt32(7), artifact);
-                var reference = new RegressionCaseReference(metadata.GetProperty("caseId").GetGuid(), metadata.GetProperty("caseVersion").GetInt64(),
-                    new(rows.GetGuid(8)), intent.Revision, intent.NativeDigest, Sha256Digest.Parse(metadata.GetProperty("caseDigest").GetString()!), rows.GetInt32(9));
-                var sourceCase = new RegressionCaseEnvelopeCodec().Decode(reference, caseBytes, token);
-                var evidence = new RegressionRunSnapshot(intent.RegressionEvidenceId, actor.PrincipalId, reference, RegressionRunState.Completed,
-                    rows.GetInt32(11), new(rows.GetDateTime(12)), evidenceBytes, Sha256Digest.FromBytes(evidenceBytes));
-                result = BuildQualification.Restore(qualificationId, actor.PrincipalId, build, evidence, sourceCase,
-                    metadata.GetProperty("runtimeImage").GetString()!, proof, completion, token);
+                result = BuildQualificationRecord.Read(rows, 0, actor, mapping, qualificationId, token);
                 if (await rows.ReadAsync(token)) throw Invalid();
             }
         }

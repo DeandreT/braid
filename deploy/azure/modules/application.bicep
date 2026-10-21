@@ -83,6 +83,8 @@ var roles = [
   { key: 'build-metadata', env: 'BUILD_METADATA' }
   { key: 'qualification-reader', env: 'QUALIFICATION_READER' }
   { key: 'qualification-writer', env: 'QUALIFICATION_WRITER' }
+  { key: 'release-reader', env: 'RELEASE_READER' }
+  { key: 'release-writer', env: 'RELEASE_WRITER' }
 ]
 
 // A separately hosted inspection worker; the settings stay dormant until native upload or

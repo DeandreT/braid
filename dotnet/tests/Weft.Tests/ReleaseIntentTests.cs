@@ -48,5 +48,7 @@ public sealed class ReleaseIntentTests
         Assert.Throws<ArgumentException>(() => new ReleaseIntent(Guid.NewGuid(), fixture.Actor, target, qualification, ReleaseAction.Rollback, null, Guid.NewGuid()));
         Assert.Throws<ArgumentException>(() => new ReleaseIntent(Guid.NewGuid(), fixture.Actor, target, qualification, ReleaseAction.Rollback, Guid.NewGuid()));
         Assert.Throws<ArgumentException>(() => new ReleaseIntent(Guid.NewGuid(), fixture.Actor, target, qualification, ReleaseAction.Activate, null, Guid.NewGuid()));
+        var current = Guid.NewGuid();
+        Assert.Throws<ArgumentException>(() => new ReleaseIntent(Guid.NewGuid(), fixture.Actor, target, qualification, ReleaseAction.Rollback, current, current));
     }
 }

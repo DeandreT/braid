@@ -29,14 +29,14 @@ public sealed class CompiledBuildExecution(IBuildRunReader runs, IBuildAdmission
     public string RuntimeImage => runtime.RuntimeImage;
 
     public Task<CompiledBuildResult> ExecuteAsync(ActorContext actor, MappingScope mapping, Guid buildId,
-        RegressionReplay replay, CancellationToken token = default) => ExecuteAsync(actor, mapping, buildId, replay, null, null, token);
+        RegressionReplay replay, CancellationToken token = default) => ExecuteAsync(actor, mapping, buildId, replay, null, null, null, token);
 
     internal Task<CompiledBuildResult> ExecuteQualifiedAsync(ActorContext actor, MappingScope mapping, BuildArtifactReference expected,
-        RegressionReplay replay, string runtimeImage, CancellationToken token) =>
-        ExecuteAsync(actor, mapping, expected.Intent.BuildId, replay, expected, runtimeImage, token);
+        RegressionReplay replay, string runtimeImage, CancellationToken token, Func<CancellationToken, Task<bool>>? additionalAdmission = null) =>
+        ExecuteAsync(actor, mapping, expected.Intent.BuildId, replay, expected, runtimeImage, additionalAdmission, token);
 
     private async Task<CompiledBuildResult> ExecuteAsync(ActorContext actor, MappingScope mapping, Guid buildId,
-        RegressionReplay replay, BuildArtifactReference? expected, string? runtimeImage, CancellationToken token)
+        RegressionReplay replay, BuildArtifactReference? expected, string? runtimeImage, Func<CancellationToken, Task<bool>>? additionalAdmission, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(actor); ArgumentNullException.ThrowIfNull(mapping); ArgumentNullException.ThrowIfNull(replay);
         if (buildId == Guid.Empty) throw new ArgumentException("A build identifier is required.", nameof(buildId));
@@ -44,7 +44,7 @@ public sealed class CompiledBuildExecution(IBuildRunReader runs, IBuildAdmission
         if (!await slots.WaitAsync(0, token).ConfigureAwait(false)) return new(CompiledBuildOutcome.Busy);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(MaximumWallTime);
-        try { return await ExecuteCoreAsync(actor, mapping, buildId, replay, expected, runtimeImage, deadline.Token).ConfigureAwait(false); }
+        try { return await ExecuteCoreAsync(actor, mapping, buildId, replay, expected, runtimeImage, additionalAdmission, deadline.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (PrivateObjectStorageException error) when (error.Error is PrivateObjectStorageError.Integrity or PrivateObjectStorageError.ScopeMismatch or PrivateObjectStorageError.Conflict)
         { return new(CompiledBuildOutcome.IntegrityFailure); }
@@ -55,7 +55,7 @@ public sealed class CompiledBuildExecution(IBuildRunReader runs, IBuildAdmission
     }
 
     private async Task<CompiledBuildResult> ExecuteCoreAsync(ActorContext actor, MappingScope mapping, Guid buildId,
-        RegressionReplay replay, BuildArtifactReference? expectedArtifact, string? expectedImage, CancellationToken token)
+        RegressionReplay replay, BuildArtifactReference? expectedArtifact, string? expectedImage, Func<CancellationToken, Task<bool>>? additionalAdmission, CancellationToken token)
     {
         var run = await runs.ReadAsync(actor, mapping.OrganizationId, buildId, token).ConfigureAwait(false);
         if (run is null || !Belongs(run.Intent.Revision, mapping)) return new(CompiledBuildOutcome.Refused);
@@ -70,10 +70,12 @@ public sealed class CompiledBuildExecution(IBuildRunReader runs, IBuildAdmission
             publication.Object.Id.ObjectId != buildId || publication.Object.Id.Class != PrivateObjectClass.DerivedArtifact ||
             publication.Object.Digest != artifact.ContentDigest || publication.Object.ByteCount != artifact.ByteCount) return new(CompiledBuildOutcome.IntegrityFailure);
         if (!await Admitted(actor, run.Intent, token).ConfigureAwait(false)) return new(CompiledBuildOutcome.Refused);
+        if (additionalAdmission is not null && !await additionalAdmission(token).ConfigureAwait(false)) return new(CompiledBuildOutcome.Refused);
         var bytes = await objects.ReadVerifiedAsync(run.Intent.Revision, publication.Object, token).ConfigureAwait(false);
         if (bytes.LongLength != artifact.ByteCount || Sha256Digest.FromBytes(bytes) != artifact.ContentDigest)
             return new(CompiledBuildOutcome.IntegrityFailure);
         if (!await Admitted(actor, run.Intent, token).ConfigureAwait(false)) return new(CompiledBuildOutcome.Refused);
+        if (additionalAdmission is not null && !await additionalAdmission(token).ConfigureAwait(false)) return new(CompiledBuildOutcome.Refused);
         var image = RuntimeImage;
         if (expectedImage is not null && image != expectedImage) return new(CompiledBuildOutcome.IntegrityFailure);
         var result = await runtime.ExecuteAsync(artifact, new(bytes, artifact.Intent.Profile.MaximumArtifactBytes), replay, token).ConfigureAwait(false);
@@ -94,6 +96,7 @@ public sealed class CompiledBuildExecution(IBuildRunReader runs, IBuildAdmission
         if (fresh is null) return new(CompiledBuildOutcome.Refused);
         if (fresh.Actor != run.Actor || fresh.State != BuildRunState.Succeeded || fresh.Intent.Fingerprint != run.Intent.Fingerprint || fresh.Artifact is null || !Same(fresh.Artifact, artifact))
             return new(CompiledBuildOutcome.IntegrityFailure);
+        if (additionalAdmission is not null && !await additionalAdmission(token).ConfigureAwait(false)) return new(CompiledBuildOutcome.Refused);
         token.ThrowIfCancellationRequested();
         return result;
     }

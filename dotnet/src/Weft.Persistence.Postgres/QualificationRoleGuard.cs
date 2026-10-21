@@ -42,6 +42,11 @@ internal static class QualificationRoleGuard
             command.Parameters.AddWithValue("functions", writer ? new[] { "read_qualification", "write_qualification" } : ["read_qualification"]);
             if (await command.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
+        await ValidateContractAsync(connection, transaction, token);
+    }
+
+    internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
         await BuildRoleGuard.ValidateContractAsync(connection, transaction, token);
         await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
         if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();

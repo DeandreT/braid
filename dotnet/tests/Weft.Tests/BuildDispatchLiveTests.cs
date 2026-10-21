@@ -126,14 +126,12 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
         await api.SubmitAsync(first, replay: true);
         if (invocation is not null)
         {
-            await InvokeAndCompare(first);
-            await InvokeAndCompare(second);
-            Assert.True(await controls.RevokeAsync(native.Actor, revision.OrganizationId, revision.ProjectId, first.ApprovalId));
-            var refused = await invocation.ExecuteAsync(native.Actor, new(revision.OrganizationId, revision.ProjectId, revision.MappingId), first.BuildId, value.Replay);
-            Assert.Equal(CompiledBuildOutcome.Refused, refused.Outcome); Assert.Null(refused.Outputs);
+            var firstProof = await InvokeAndCompare(first);
+            var secondProof = await InvokeAndCompare(second);
+            await QualifyLocalReleases(firstProof, secondProof);
         }
 
-        async Task InvokeAndCompare(BuildIntent intent)
+        async Task<BuildQualification> InvokeAndCompare(BuildIntent intent)
         {
             var result = await invocation!.ExecuteAsync(native.Actor, new(revision.OrganizationId, revision.ProjectId, revision.MappingId), intent.BuildId, value.Replay);
             output.WriteLine("Compiled invocation transport: " + diagnostics.Summary);
@@ -152,6 +150,57 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
             var retainedQualification = (await qualifications.ReadAsync(native.Actor, new(revision.OrganizationId, revision.ProjectId, revision.MappingId), qualification.Id))!;
             Assert.Equal(qualification.Fingerprint, retainedQualification.Fingerprint);
             Assert.Equal(qualification.CopyResultBytes(), retainedQualification.CopyResultBytes());
+            return qualification;
+        }
+
+        async Task QualifyLocalReleases(BuildQualification firstProof, BuildQualification secondProof)
+        {
+            var scope = new MappingScope(revision.OrganizationId, revision.ProjectId, revision.MappingId);
+            var target = new LocalReleaseTarget(new(scope, environment, Guid.NewGuid()), first.Profile, invocation!.RuntimeImage);
+            await using var proofs = new PostgresBuildQualificationStore(native.Case.RegressionConnectionString("weft_qualification_reader"), false);
+            await using var releases = new PostgresLocalReleaseStore(native.Case.RegressionConnectionString("weft_release_writer"), true);
+            Assert.Equal(ReleaseWriteOutcome.Created, await releases.RegisterAsync(native.Actor, target));
+            var service = new LocalReleaseService(releases, proofs);
+            var endpoint = new LocalReleaseInvocation(releases, invocation);
+            var firstRelease = await Activate(firstProof, null);
+            await Execute(first.BuildId);
+            var secondRelease = await Activate(secondProof, firstRelease.Intent.ReleaseId);
+            await Execute(second.BuildId);
+            var rollback = await Activate(firstProof, secondRelease.Intent.ReleaseId, firstRelease.Intent.ReleaseId);
+            Assert.Equal(firstProof.Artifact.ContentDigest, rollback.Intent.Qualification.Artifact.ContentDigest);
+            await Execute(first.BuildId);
+            Assert.Equal(ReleaseTransitionOutcome.Replayed, await service.ApplyAsync(native.Actor, target.Reference, firstRelease.Intent.ReleaseId));
+            Assert.Equal(rollback.Intent.ReleaseId, (await releases.ReadTargetAsync(native.Actor, target.Reference))!.ActiveReleaseId);
+            var canceledId = Guid.NewGuid();
+            Assert.Equal(ReleaseWriteOutcome.Created, (await service.RequestAsync(native.Actor, target.Reference,
+                new(canceledId, secondProof.Id, rollback.Intent.ReleaseId))).Outcome);
+            Assert.Equal(ReleaseTransitionOutcome.Canceled, await service.CancelAsync(native.Actor, target.Reference, canceledId));
+            Assert.Equal(ReleaseTransitionOutcome.Canceled, await service.ApplyAsync(native.Actor, target.Reference, canceledId));
+            Assert.Equal(rollback.Intent.ReleaseId, (await releases.ReadTargetAsync(native.Actor, target.Reference))!.ActiveReleaseId);
+            Assert.True(await controls.RevokeAsync(native.Actor, revision.OrganizationId, revision.ProjectId, first.ApprovalId));
+            var refused = await endpoint.ExecuteAsync(native.Actor, target.Reference, value.Replay);
+            Assert.Equal(CompiledBuildOutcome.Refused, refused.Outcome); Assert.Null(refused.Outputs);
+            Assert.Equal(CompiledBuildOutcome.Refused, (await invocation.ExecuteAsync(native.Actor, scope, first.BuildId, value.Replay)).Outcome);
+
+            async Task<LocalReleaseSnapshot> Activate(BuildQualification proof, Guid? expected, Guid? rollbackOf = null)
+            {
+                var id = Guid.NewGuid();
+                var request = new LocalReleaseRequest(id, proof.Id, expected, rollbackOf is null ? ReleaseAction.Activate : ReleaseAction.Rollback, rollbackOf);
+                Assert.Equal(ReleaseWriteOutcome.Created, (await service.RequestAsync(native.Actor, target.Reference, request)).Outcome);
+                Assert.Equal(ReleaseTransitionOutcome.Activated, await service.ApplyAsync(native.Actor, target.Reference, id));
+                var release = (await releases.ReadAsync(native.Actor, target.Reference, id))!;
+                Assert.Equal(ReleasePhase.Active, release.Phase); Assert.Equal(2, release.Audit.Count);
+                return release;
+            }
+            async Task Execute(Guid expectedBuild)
+            {
+                var active = (await releases.ReadTargetAsync(native.Actor, target.Reference))!.ActiveReleaseId!.Value;
+                Assert.Equal(expectedBuild, (await releases.ReadAsync(native.Actor, target.Reference, active))!.Intent.Qualification.Artifact.Intent.BuildId);
+                var result = await endpoint.ExecuteAsync(native.Actor, target.Reference, value.Replay);
+                Assert.Equal(CompiledBuildOutcome.Completed, result.Outcome);
+                Assert.Equal(RegressionComparisonOutcome.Passed, new RegressionComparisonService().Compare(value.Expected,
+                    new(Weft.Contracts.Operations.OperationStatusV1.Succeeded, result.Outputs!)).Outcome);
+            }
         }
     }
 

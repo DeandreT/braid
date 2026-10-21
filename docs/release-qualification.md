@@ -79,3 +79,7 @@ requested/applying/active/failed/canceled/uncertain state, retain immutable audi
 records and recover an original request before retrying an uncertain effect. A
 late, canceled or revoked operation must not update the active pointer. Unknown
 external outcomes are not successful activation receipts.
+
+The PostgreSQL local pointer adapter and invocation boundary are described in
+[Local release activation](local-releases.md). They are separate from cloud
+provisioning and machine HTTP authorization.

@@ -30,7 +30,7 @@ public sealed class ReleaseIntent
         ArgumentNullException.ThrowIfNull(actor); ArgumentNullException.ThrowIfNull(target); ArgumentNullException.ThrowIfNull(qualification);
         if (releaseId == Guid.Empty || !Enum.IsDefined(action) || expectedActiveReleaseId == Guid.Empty || rollbackOfReleaseId == Guid.Empty ||
             expectedActiveReleaseId == releaseId || rollbackOfReleaseId == releaseId ||
-            (action == ReleaseAction.Rollback ? rollbackOfReleaseId is null || expectedActiveReleaseId is null : rollbackOfReleaseId is not null))
+            (action == ReleaseAction.Rollback ? rollbackOfReleaseId is null || expectedActiveReleaseId is null || rollbackOfReleaseId == expectedActiveReleaseId : rollbackOfReleaseId is not null))
             throw new ArgumentException("Invalid release selectors.");
         var intent = qualification.Artifact.Intent;
         if (qualification.Actor != actor || intent.Revision.OrganizationId != target.Mapping.OrganizationId ||
