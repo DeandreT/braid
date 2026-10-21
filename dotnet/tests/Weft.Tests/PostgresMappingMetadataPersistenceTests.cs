@@ -25,7 +25,8 @@ public sealed class PostgresMappingMetadataPersistenceTests(PostgresFixture fixt
         RegressionSchemaTestContract.CasesChecksum,
         RegressionSchemaTestContract.RunsChecksum,
         RegressionSchemaTestContract.DispatchChecksum,
-        RegressionSchemaTestContract.HistoryChecksum
+        RegressionSchemaTestContract.HistoryChecksum,
+        RegressionSchemaTestContract.BuildChecksum
     ];
 
     [PostgresFact]

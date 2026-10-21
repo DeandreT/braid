@@ -39,5 +39,15 @@ public sealed class BuildArtifactReference
         return Intent.Fingerprint == expected.Fingerprint;
     }
 
+    /// <summary>Restores trusted stored metadata, not capability or authorization. Callers must revalidate both.</summary>
+    public static BuildArtifactReference Restore(BuildIntent intent, Sha256Digest contentDigest, long byteCount)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        ArgumentNullException.ThrowIfNull(contentDigest);
+        if (byteCount < 1 || byteCount > intent.Profile.MaximumArtifactBytes)
+            throw new BuildContractException(BuildContractFailure.ResourceLimit);
+        return new(intent, contentDigest, byteCount);
+    }
+
     public override string ToString() => nameof(BuildArtifactReference);
 }

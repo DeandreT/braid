@@ -31,7 +31,7 @@ public sealed class BuildIntent
         Environment = environment;
         ApprovalId = BuildValues.Id(approvalId);
         RegressionEvidenceId = BuildValues.Id(regressionEvidenceId);
-        Fingerprint = FingerprintIntent();
+        Fingerprint = Sha256Digest.FromBytes(CopyCanonicalBytes());
     }
 
     public Guid BuildId { get; }
@@ -45,7 +45,7 @@ public sealed class BuildIntent
     public Guid RegressionEvidenceId { get; }
     public Sha256Digest Fingerprint { get; }
 
-    private Sha256Digest FingerprintIntent()
+    public byte[] CopyCanonicalBytes()
     {
         using var bytes = new MemoryStream();
         using (var json = new Utf8JsonWriter(bytes))
@@ -93,7 +93,7 @@ public sealed class BuildIntent
         }
         // All fields and collection counts were bounded before serialization.
         if (bytes.Length > 1024 * 1024) throw new BuildContractException(BuildContractFailure.ResourceLimit);
-        return Sha256Digest.FromBytes(bytes.ToArray());
+        return bytes.ToArray();
     }
 
     public override string ToString() => nameof(BuildIntent);

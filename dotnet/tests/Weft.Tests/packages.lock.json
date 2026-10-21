@@ -934,6 +934,7 @@
         "dependencies": {
           "Npgsql": "[10.0.3, )",
           "Weft.Application": "[1.0.0, )",
+          "Weft.Deployment": "[1.0.0, )",
           "Weft.Domain": "[1.0.0, )"
         }
       },

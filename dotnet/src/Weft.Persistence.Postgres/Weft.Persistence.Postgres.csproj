@@ -3,6 +3,7 @@
     <PackageReference Include="Npgsql" Version="10.0.3" />
     <ProjectReference Include="../Weft.Application/Weft.Application.csproj" />
     <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
+    <ProjectReference Include="../Weft.Deployment/Weft.Deployment.csproj" />
     <EmbeddedResource Include="../../../migrations/postgres/*.sql"
                       LogicalName="Weft.Persistence.Postgres.Migrations.%(Filename)%(Extension)" />
   </ItemGroup>
