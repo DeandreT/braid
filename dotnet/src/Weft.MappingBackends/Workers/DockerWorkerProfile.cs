@@ -27,9 +27,12 @@ public sealed class DockerWorkerProfile
     /// <summary>Package-free compilation from trusted native source emission; only a bounded private tmpfs is writable.</summary>
     public static DockerWorkerProfile Build { get; } = new("build", 2_147_483_648, 120,
         TimeSpan.FromSeconds(120), BuildWorkerProtocol.MaximumNativeBytes + 16388, BuildWorkerProtocol.MaximumReplyBytes);
-    public string Entrypoint => this == Build ? "/weft-build-worker" : "/ferrule-host";
-    public int ProcessLimit => this == Build ? 128 : 16;
-    public int FileLimit => this == Build ? 256 : 64;
+    /// <summary>One in-memory invocation of a verified compiled mapping, without a writable filesystem or network.</summary>
+    public static DockerWorkerProfile Compiled { get; } = new("compiled", 536_870_912, 30,
+        TimeSpan.FromSeconds(30), CompiledRuntimeProtocol.MaximumRequestBytes, CompiledRuntimeProtocol.MaximumResponseBytes);
+    public string Entrypoint => this == Build ? "/weft-build-worker" : this == Compiled ? "/weft-compiled-runtime" : "/ferrule-host";
+    public int ProcessLimit => this == Build ? 128 : this == Compiled ? 64 : 16;
+    public int FileLimit => this == Build ? 256 : this == Compiled ? 128 : 64;
     public const string BuildTemporaryMount = "rw,noexec,nosuid,nodev,size=536870912,uid=65532,gid=65532,mode=0700";
 
     public string Name { get; }

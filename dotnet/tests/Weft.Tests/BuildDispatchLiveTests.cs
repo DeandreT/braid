@@ -13,6 +13,7 @@ using Weft.Domain;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
+using Xunit.Abstractions;
 
 namespace Weft.Tests;
 
@@ -29,10 +30,15 @@ public sealed class BuildDispatchLiveFactAttribute : FactAttribute
 /// <summary>Actual native admission, saved regression evidence, ordinary worker process and private compiled publication.</summary>
 [Collection(PostgresCollection.Name)]
 [SupportedOSPlatform("linux")]
-public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
+public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputHelper output)
 {
     [BuildDispatchLiveFact]
-    public async Task Approved_builds_compile_through_the_ordinary_worker_before_and_after_restart()
+    public Task Approved_builds_compile_through_the_ordinary_worker_before_and_after_restart() => QualifyAsync(false);
+
+    [CompiledRuntimeDispatchFact]
+    public Task Persisted_compiled_build_invocation_matches_saved_evidence_and_rechecks_revocation() => QualifyAsync(true);
+
+    private async Task QualifyAsync(bool invokeCompiled)
     {
         var image = Environment.GetEnvironmentVariable("WEFT_BUILD_WORKER_IMAGE")!;
         Assert.Equal(image, Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE"));
@@ -92,6 +98,12 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
             retained = await UntilAsync(history, native.Actor, first, worker);
         Assert.Equal(1, retained.Attempt); Assert.NotNull(retained.Artifact);
         var objects = new PostgresBuildObjectStore(controls, native.Physical, native.Actor);
+        var diagnostics = new RuntimeDiagnosticLauncher();
+        await using var runtimeRunner = invokeCompiled ? new DockerInspectionWorkerRunner(new("/usr/bin/docker",
+            Environment.GetEnvironmentVariable("WEFT_COMPILED_RUNTIME_IMAGE")!, profile: DockerWorkerProfile.Compiled), diagnostics) : null;
+        var invocation = runtimeRunner is null ? null : new CompiledBuildExecution(history,
+            new BuildControlService(controls, new PostgresProjectReader(native.Native.ReaderDatabase), native.ReportReader, evidence),
+            controls, objects, new FerruleCompiledBuildRuntime(runtimeRunner, first.Backend));
         var artifact = new PrivateObjectReference(PrivateObjectId.Restore(revision, first.BuildId, PrivateObjectClass.DerivedArtifact),
             retained.Artifact.ContentDigest, retained.Artifact.ByteCount);
         var compiled = await objects.ReadVerifiedAsync(revision, artifact);
@@ -99,6 +111,7 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
         using (var bytes = new MemoryStream(compiled, false))
         using (var pe = new System.Reflection.PortableExecutable.PEReader(bytes))
             Assert.True(pe.HasMetadata && pe.PEHeaders.CorHeader is not null);
+        if (invocation is not null) await InvokeAndCompare(first);
 
         var second = Intent();
         await api.ApproveAsync(second);
@@ -111,6 +124,23 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
         Assert.Equal(compiled, await objects.ReadVerifiedAsync(revision, artifact));
         Assert.Equal(BuildRunSubmitOutcome.Replayed, await submission.SubmitAsync(native.Actor, first));
         await api.SubmitAsync(first, replay: true);
+        if (invocation is not null)
+        {
+            await InvokeAndCompare(first);
+            await InvokeAndCompare(second);
+            Assert.True(await controls.RevokeAsync(native.Actor, revision.OrganizationId, revision.ProjectId, first.ApprovalId));
+            var refused = await invocation.ExecuteAsync(native.Actor, new(revision.OrganizationId, revision.ProjectId, revision.MappingId), first.BuildId, value.Replay);
+            Assert.Equal(CompiledBuildOutcome.Refused, refused.Outcome); Assert.Null(refused.Outputs);
+        }
+
+        async Task InvokeAndCompare(BuildIntent intent)
+        {
+            var result = await invocation!.ExecuteAsync(native.Actor, new(revision.OrganizationId, revision.ProjectId, revision.MappingId), intent.BuildId, value.Replay);
+            output.WriteLine("Compiled invocation transport: " + diagnostics.Summary);
+            Assert.Equal(CompiledBuildOutcome.Completed, result.Outcome);
+            var comparison = new RegressionComparisonService().Compare(value.Expected, new(Weft.Contracts.Operations.OperationStatusV1.Succeeded, result.Outputs!));
+            Assert.Equal(RegressionComparisonOutcome.Passed, comparison.Outcome);
+        }
     }
 
     private static async Task<BuildRunSnapshot> UntilAsync(PostgresBuildRunStore history, ActorContext actor, BuildIntent intent, Child worker)

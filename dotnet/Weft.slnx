@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/apps/">
     <Project Path="apps/Weft.BuildWorker/Weft.BuildWorker.csproj" />
+    <Project Path="apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj" />
     <Project Path="apps/Weft.Server/Weft.Server.csproj" />
     <Project Path="apps/Weft.Worker/Weft.Worker.csproj" />
   </Folder>

@@ -19,6 +19,8 @@ COPY global.json ./
 COPY dotnet dotnet
 RUN /usr/share/dotnet/dotnet restore dotnet/apps/Weft.BuildWorker/Weft.BuildWorker.csproj --locked-mode \
     && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.BuildWorker/Weft.BuildWorker.csproj -c Release --no-restore --output /out -p:UseSharedCompilation=false
+RUN /usr/share/dotnet/dotnet restore dotnet/apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj --locked-mode \
+    && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj -c Release --no-restore --output /runtime -p:UseSharedCompilation=false
 
 # Optional qualification client; it is not shipped in the compiler image.
 FROM sdk AS qualification
@@ -45,6 +47,7 @@ COPY --from=sdk /lib64 /lib64
 COPY --from=sdk /usr/lib64 /usr/lib64
 COPY --from=sdk /usr/share/dotnet/shared/Microsoft.NETCore.App /usr/share/dotnet/shared/Microsoft.NETCore.App
 COPY --from=sdk /out/ /
+COPY --from=sdk /runtime/ /
 COPY --from=sdk /etc/os-release /etc/os-release
 USER 65532:65532
 ENTRYPOINT ["/weft-build-worker"]
