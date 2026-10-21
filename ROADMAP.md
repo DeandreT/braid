@@ -318,7 +318,9 @@ environment as Bicep templates with its operator procedure and open hosting ques
 ([#176](https://github.com/DeandreT/weft/pull/176)). See [Azure deployment](docs/azure-deployment.md). The Session host
 composes chat, previews and revision comparison ([#211](https://github.com/DeandreT/weft/issues/211), [#214](https://github.com/DeandreT/weft/pull/214)); native upload
 and report derivation reach the native worker through the hosted worker service
-([#219](https://github.com/DeandreT/weft/issues/219)). See [Session host](docs/session-host.md).
+([#219](https://github.com/DeandreT/weft/issues/219),
+[#223](https://github.com/DeandreT/weft/pull/223),
+[#227](https://github.com/DeandreT/weft/pull/227)). See [Session host](docs/session-host.md).
 
 The first hosted release is admitted only when P0-P8 are implemented and
 qualified. Local-only viewer prototypes can be demonstrated earlier. Entra or
@@ -361,7 +363,8 @@ compiled-runtime invocation ([#216](https://github.com/DeandreT/weft/issues/216)
 [Compiled runtime](docs/compiled-runtime.md).
 
 P12 ([#159](https://github.com/DeandreT/weft/issues/159)) targets the first Azure mapping endpoint; its first increment is
-durable qualified release activation, audit and rollback ([#222](https://github.com/DeandreT/weft/issues/222)). Azure
+durable qualified release activation, audit and rollback ([#222](https://github.com/DeandreT/weft/issues/222),
+[#225](https://github.com/DeandreT/weft/pull/225)). Azure
 resources are provisioned only from an operator-approved environment.
 
 Queue triggers, scheduled execution, additional preview formats, model providers,
