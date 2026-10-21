@@ -213,10 +213,13 @@ public sealed class BuildRunPersistenceTests(PostgresFixture fixture)
             {
                 Assert.Equal(BuildControlOutcome.Created, await control.Approve());
                 var test = control.Runs.Cases.Case;
-                return new() { Control = control,
+                return new()
+                {
+                    Control = control,
                     Writer = new(test.RegressionConnectionString("weft_build_run_writer"), BuildRunDatabaseProfile.Writer),
                     Reader = new(test.RegressionConnectionString("weft_build_run_reader"), BuildRunDatabaseProfile.Reader),
-                    Dispatcher = new(test.RegressionConnectionString("weft_build_dispatcher"), BuildRunDatabaseProfile.Dispatcher) };
+                    Dispatcher = new(test.RegressionConnectionString("weft_build_dispatcher"), BuildRunDatabaseProfile.Dispatcher)
+                };
             }
             catch { await control.DisposeAsync(); throw; }
         }

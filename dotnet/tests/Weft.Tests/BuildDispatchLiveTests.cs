@@ -133,8 +133,13 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture)
             var dll = Path.Combine(AppContext.BaseDirectory, "PreviewWorker", "Weft.Worker.dll");
             if (!File.Exists(dll)) throw new InvalidOperationException("The ordinary worker publication is required.");
             var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
-            var start = new ProcessStartInfo(host) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true,
-                WorkingDirectory = test.Root.ApplicationRoot };
+            var start = new ProcessStartInfo(host)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WorkingDirectory = test.Root.ApplicationRoot
+            };
             start.ArgumentList.Add(dll);
             var inherited = new[] { "PATH", "DOTNET_ROOT", "LANG", "LC_ALL", "HOME" }.Where(start.Environment.ContainsKey)
                 .ToDictionary(key => key, key => start.Environment[key]);

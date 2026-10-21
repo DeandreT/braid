@@ -48,9 +48,15 @@ public sealed class PostgresBuildRunStore(string connectionString, BuildRunDatab
                 var intent = Intent(rows.GetFieldValue<byte[]>(1), organizationId, buildId);
                 var state = rows.GetString(2) switch
                 {
-                    "queued" => BuildRunState.Queued, "running" => BuildRunState.Running, "succeeded" => BuildRunState.Succeeded,
-                    "failed" => BuildRunState.Failed, "canceled" => BuildRunState.Canceled, "exhausted" => BuildRunState.Exhausted,
-                    "revoked" => BuildRunState.Revoked, "uncertain" => BuildRunState.Uncertain, _ => throw Invalid()
+                    "queued" => BuildRunState.Queued,
+                    "running" => BuildRunState.Running,
+                    "succeeded" => BuildRunState.Succeeded,
+                    "failed" => BuildRunState.Failed,
+                    "canceled" => BuildRunState.Canceled,
+                    "exhausted" => BuildRunState.Exhausted,
+                    "revoked" => BuildRunState.Revoked,
+                    "uncertain" => BuildRunState.Uncertain,
+                    _ => throw Invalid()
                 };
                 var attempt = rows.GetInt32(3);
                 var created = new DateTimeOffset(rows.GetDateTime(4));
