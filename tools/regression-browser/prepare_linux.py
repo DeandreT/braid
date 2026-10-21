@@ -88,6 +88,7 @@ def main():
     config = {'schemaVersion': 'weft.regression-browser-operator-config.v1', 'fixtureId': data['fixtureId'],
               'privateDirectory': str(private), 'manifestPath': str(manifest_path), 'readOrigin': data['readOrigin'],
               'mutationOrigin': data['mutationOrigin'], 'docker': '/usr/bin/docker', 'daemonSocket': '/var/run/docker.sock',
+              'privateStorageRoot': '/run/weft-regression-' + data['fixtureId'] + '/objects',
               'dotnet': str(dotnet), 'workerImage': data['workerImage'],
               'postgresImage': 'postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc',
               'source': {'workspace': str(source), 'commit': data['commit'], 'tree': data['tree'], 'manifest': bound(source_manifest), 'admission': bound(source_admission)},

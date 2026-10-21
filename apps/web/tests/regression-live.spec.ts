@@ -67,10 +67,13 @@ class Owner {
         "TMPDIR=" + b.privateRoot,
         "WEFT_REGRESSION_BROWSER_MANIFEST=" + b.manifest,
         "WEFT_REGRESSION_BASE_URL=" + b.readOrigin,
+        "/usr/bin/python3",
+        "-I",
+        "-B",
+        b.operator.replace(/operator\.mjs$/, "run_linux.py"),
+        b.config,
         b.node,
         b.operator,
-        "--config",
-        b.config,
       ],
       { stdio: "pipe", windowsHide: true },
     );
@@ -257,20 +260,16 @@ async function publish(
     .getByLabel("Fixed clock (UTC or offset)", { exact: true })
     .fill("2026-10-20T12:00:00.123456789-07:00");
   const files = region(page).locator('input[type="file"]');
-  await files
-    .nth(0)
-    .setInputFiles({
-      name: "primary.json",
-      mimeType: "application/json",
-      buffer: primary,
-    });
-  await files
-    .nth(1)
-    .setInputFiles({
-      name: "expected.json",
-      mimeType: "application/json",
-      buffer: output,
-    });
+  await files.nth(0).setInputFiles({
+    name: "primary.json",
+    mimeType: "application/json",
+    buffer: primary,
+  });
+  await files.nth(1).setInputFiles({
+    name: "expected.json",
+    mimeType: "application/json",
+    buffer: output,
+  });
   const publish = region(page).getByRole("button", {
     name: "Publish fixture version",
     exact: true,
@@ -342,7 +341,7 @@ test("actual saved cases execute independently, survive restart and respect acce
     page,
     "Wrong expected bytes",
     input,
-    Buffer.from('{"not":"the mapped bytes"}\n'),
+    expected.subarray(0, expected.length - 1),
   );
   await run(page, "failed");
 

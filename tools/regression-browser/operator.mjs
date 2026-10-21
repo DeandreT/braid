@@ -42,6 +42,33 @@ await runBrowserFixture({
     let project, revision, original;
     let profile = "publisher";
     const captures = new Map();
+    const caseVersions = new Map();
+    const cases = new Map();
+    function preserveCases(current) {
+      for (const row of current.rows.regression_cases) {
+        const previous = cases.get(row.case_id);
+        if (previous) {
+          const { head_version: before, ...old } = previous;
+          const { head_version: after, ...next } = row;
+          check(
+            equivalent(old, next) && BigInt(after) >= BigInt(before),
+            "productFailure",
+          );
+        }
+        cases.set(row.case_id, row);
+      }
+      for (const row of current.rows.regression_case_versions) {
+        const key = row.case_id + ":" + row.version;
+        if (caseVersions.has(key))
+          check(equivalent(row, caseVersions.get(key)), "productFailure");
+        caseVersions.set(key, row);
+      }
+      check(
+        current.rows.regression_cases.length === cases.size &&
+          current.rows.regression_case_versions.length === caseVersions.size,
+        "productFailure",
+      );
+    }
     function nativeStable() {
       const current = snapshot();
       for (const table of fx.tables.filter(
@@ -132,7 +159,7 @@ await runBrowserFixture({
           "productFailure",
         );
       captures.set(runId, { sample, row: row[0] });
-      nativeStable();
+      preserveCases(nativeStable());
       state.observations.push({
         kind: "actual-regression-run",
         runId,
@@ -145,6 +172,7 @@ await runBrowserFixture({
     }
     function checkpoint() {
       const current = nativeStable();
+      preserveCases(current);
       for (const [id, captured] of captures) {
         const row = current.rows.regression_runs.filter(
           (row) => row.run_id === id,

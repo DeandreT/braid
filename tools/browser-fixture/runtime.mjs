@@ -322,8 +322,12 @@ export async function runBrowserFixture(definition) {
     const scratch = join(privateRoot, "scratch");
     check(!existsSync(scratch));
     mkdirSync(scratch, { mode: 0o700 });
-    const storageRoot = join(scratch, "private-objects"),
+    const storageRoot = regressionScenario
+        ? absolute(cfg.privateStorageRoot)
+        : join(scratch, "private-objects"),
       nonce = randomBytes(8).toString("hex");
+    if (regressionScenario)
+      check(storageRoot === "/run/weft-regression-" + fixtureId + "/objects");
     const resourceName =
       (creationScenario
         ? "weft-project-creation-browser-"
@@ -979,7 +983,9 @@ export async function runBrowserFixture(definition) {
           equivalent(actual.command, host.identity.command) &&
           equivalent(actual.command, [
             cfg.dotnet,
-            join(cfg.publications.server.directory, "Weft.Server.dll"),
+            host.regressionWorker
+              ? join(cfg.publications.worker.directory, "Weft.Worker.dll")
+              : join(cfg.publications.server.directory, "Weft.Server.dll"),
           ]),
         "ownershipChanged",
       );
