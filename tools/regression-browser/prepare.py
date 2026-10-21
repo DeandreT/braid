@@ -46,13 +46,22 @@ def main():
     archive = output / 'source.tar'
     subprocess.run(['git', 'archive', '--format=tar', '--output=' + str(archive), 'HEAD'], cwd=root, check=True)
     manifest = []
-    for row in subprocess.check_output(['git', 'ls-files', '--stage', '-z'], cwd=root).split(b'\0'):
-        if not row:
-            continue
-        metadata, name = row.split(b'\t', 1); mode, digest, stage = metadata.decode().split()
-        name = name.decode(); assert mode in ('100644', '100755') and stage == '0'
-        content = subprocess.check_output(['git', 'cat-file', 'blob', digest], cwd=root)
-        manifest.append({'path': name, 'sha256': hashlib.sha256(content).hexdigest(), 'mode': mode})
+    with subprocess.Popen(['git', 'cat-file', '--batch'], cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as reader:
+        try:
+            for row in subprocess.check_output(['git', 'ls-files', '--stage', '-z'], cwd=root).split(b'\0'):
+                if not row:
+                    continue
+                metadata, name = row.split(b'\t', 1); mode, digest, stage = metadata.decode().split()
+                name = name.decode(); assert mode in ('100644', '100755') and stage == '0'
+                reader.stdin.write(digest.encode() + b'\n'); reader.stdin.flush()
+                actual, kind, size = reader.stdout.readline().decode().split()
+                assert actual == digest and kind == 'blob' and 0 <= int(size) <= 64 * 1024 * 1024
+                content = reader.stdout.read(int(size))
+                assert len(content) == int(size) and reader.stdout.read(1) == b'\n'
+                manifest.append({'path': name, 'sha256': hashlib.sha256(content).hexdigest(), 'mode': mode})
+        finally:
+            reader.stdin.close()
+        assert reader.wait(timeout=10) == 0
     web = root / 'apps/web/dist/weft/browser'
     web_hashes = {path.relative_to(web).as_posix(): sha(path) for path in sorted(web.rglob('*')) if path.is_file()}
     result = output / 'bindings.json'

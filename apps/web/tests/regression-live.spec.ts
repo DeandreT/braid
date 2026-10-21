@@ -251,9 +251,13 @@ async function publish(
   name: string,
   primary = input,
   output = expected,
+  version = "1",
 ): Promise<void> {
   await region(page)
-    .getByRole("button", { name: "New test case", exact: true })
+    .getByRole("button", {
+      name: version === "1" ? "New test case" : "Edit as next version",
+      exact: true,
+    })
     .click();
   await region(page).getByLabel("Fixture name", { exact: true }).fill(name);
   await region(page)
@@ -278,15 +282,12 @@ async function publish(
   await publish.click();
   await expect(
     region(page).getByRole("heading", {
-      name: name + " · Version 1",
+      name: name + " · Version " + version,
       exact: true,
     }),
   ).toBeVisible();
 }
-async function run(
-  page: Page,
-  comparison: "passed" | "failed" | "notEvaluated",
-): Promise<string> {
+async function submit(page: Page): Promise<string> {
   const receipt = page.waitForResponse(
     (response) =>
       response.request().method() === "PUT" &&
@@ -299,7 +300,13 @@ async function run(
     .click();
   const response = await receipt;
   expect(response.status()).toBe(201);
-  const id = ((await response.json()) as { runId: string }).runId;
+  return ((await response.json()) as { runId: string }).runId;
+}
+async function run(
+  page: Page,
+  comparison: "passed" | "failed" | "notEvaluated",
+): Promise<string> {
+  const id = await submit(page);
   await owner.control("capture-run", { sample: comparison, runId: id });
   await expect(
     region(page)
@@ -334,7 +341,7 @@ test("actual saved cases execute independently, survive restart and respect acce
   await publish(page, "Valid before failure");
   const first = await run(page, "passed");
   await publish(page, "Malformed input", Buffer.from("{"));
-  await run(page, "notEvaluated");
+  const malformed = await run(page, "notEvaluated");
   await publish(page, "Valid after failure");
   const last = await run(page, "passed");
   await publish(
@@ -345,14 +352,40 @@ test("actual saved cases execute independently, survive restart and respect acce
   );
   await run(page, "failed");
 
+  await owner.control("pause-worker");
+  const canceled = await submit(page);
+  await region(page)
+    .getByRole("button", { name: "Cancel run", exact: true })
+    .click();
+  await expect(region(page)).toContainText("Canceled · Attempt 0 of 3");
+  await owner.control("capture-run", { sample: "canceled", runId: canceled });
+  await owner.control("resume-worker");
+  await region(page)
+    .getByRole("button", { name: "Refresh cases", exact: true })
+    .click();
+  await region(page)
+    .getByRole("button", { name: "Open Malformed input", exact: true })
+    .click();
+  await publish(page, "Corrected input", input, expected, "2");
+  await run(page, "passed");
+
   const before = await owner.control("checkpoint");
-  expect(before["runs"]).toBe(4);
-  expect(before["capturedRuns"]).toBe(4);
+  expect(before["runs"]).toBe(6);
+  expect(before["caseVersions"]).toBe(5);
+  expect(before["capturedRuns"]).toBe(6);
   await owner.control("restart");
   await open(page);
   await region(page)
     .getByRole("button", { name: "Load run history", exact: true })
     .click();
+  await region(page)
+    .getByRole("button", { name: "Open run " + malformed, exact: true })
+    .click();
+  await expect(region(page)).toContainText("Comparison: Not Evaluated");
+  await region(page)
+    .getByRole("button", { name: "Open run " + canceled, exact: true })
+    .click();
+  await expect(region(page)).toContainText("Canceled · Attempt 0 of 3");
   await region(page)
     .getByRole("button", { name: "Open run " + first, exact: true })
     .click();
@@ -391,6 +424,6 @@ test("actual saved cases execute independently, survive restart and respect acce
     .click();
   await expect(region(page)).toContainText("Comparison: Passed");
   const after = await owner.control("checkpoint");
-  expect(after["runs"]).toBe(4);
+  expect(after["runs"]).toBe(6);
   expect(after["workerCreates"]).toBe(before["workerCreates"]);
 });

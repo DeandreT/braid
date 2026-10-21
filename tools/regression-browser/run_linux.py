@@ -3,8 +3,45 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
+import time
+
+
+class OperatorUnsettled(RuntimeError):
+    pass
+
+
+def wait_for_operator(command):
+    child = None
+    interrupted = None
+    received = None
+
+    def forward(signum, _frame):
+        nonlocal interrupted, received
+        if interrupted is None:
+            interrupted = time.monotonic()
+            received = signum
+            if child is not None and child.poll() is None:
+                child.send_signal(signum)
+
+    previous = {sig: signal.signal(sig, forward) for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        # Keep terminal group interrupts away from the API/worker; their owner stops them.
+        child = subprocess.Popen(command, start_new_session=True)
+        if received is not None and child.poll() is None:
+            child.send_signal(received)
+        while True:
+            try:
+                return child.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                if interrupted is not None and time.monotonic() - interrupted > 180:
+                    # Leave the namespace alias intact for the live owner, never kill it mid-cleanup.
+                    raise OperatorUnsettled('The regression operator did not settle after interruption.')
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
 
 
 def main():
@@ -28,17 +65,23 @@ def main():
     assert data['privateStorageRoot'] == str(alias / 'objects')
     alias.mkdir(mode=0o700)  # An empty mountpoint only; all fixture writes land on Btrfs.
     mounted = False
+    settled = True
     try:
         subprocess.run(['/usr/bin/mount', '--bind', str(private), str(alias)], check=True)
         mounted = True
         actual = json.loads(subprocess.check_output(['findmnt', '-J', '-T', str(alias), '-o', 'FSTYPE,UUID,OPTIONS']))['filesystems'][0]
         assert actual['fstype'] == 'btrfs' and actual['uuid'] == mount['uuid'] and 'rw' in actual['options'].split(',')
         assert alias.stat().st_ino == private.stat().st_ino and alias.stat().st_dev == private.stat().st_dev
-        code = subprocess.call([node, operator, '--config', config])
+        try:
+            code = wait_for_operator([node, operator, '--config', config])
+        except OperatorUnsettled:
+            settled = False
+            raise
     finally:
-        if mounted:
-            subprocess.run(['/usr/bin/umount', str(alias)], check=True)
-        alias.rmdir()
+        if settled:
+            if mounted:
+                subprocess.run(['/usr/bin/umount', str(alias)], check=True)
+            alias.rmdir()
     return code
 
 

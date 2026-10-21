@@ -101,7 +101,7 @@ await runBrowserFixture({
     }
     async function capture(sample, runId) {
       check(
-        ["passed", "failed", "notEvaluated"].includes(sample) &&
+        ["passed", "failed", "notEvaluated", "canceled"].includes(sample) &&
           !captures.has(runId),
       );
       guid(runId);
@@ -115,7 +115,10 @@ await runBrowserFixture({
           "productFailure",
         );
         value = response.body;
-        if (value.run.state === "completed") break;
+        if (
+          value.run.state === (sample === "canceled" ? "canceled" : "completed")
+        )
+          break;
         check(
           ["queued", "running"].includes(value.run.state) && Date.now() < end,
           "productFailure",
@@ -123,8 +126,12 @@ await runBrowserFixture({
         await pause(100);
       }
       check(
-        value.executionOutcome === "completed" &&
-          value.comparison?.outcome === sample &&
+        (sample === "canceled"
+          ? value.executionOutcome === null &&
+            value.comparison === null &&
+            value.outputs === null
+          : value.executionOutcome === "completed" &&
+            value.comparison?.outcome === sample) &&
           equivalent(value.run.revision, revision),
         "productFailure",
       );
@@ -134,8 +141,8 @@ await runBrowserFixture({
       );
       check(
         row.length === 1 &&
-          row[0].state === "completed" &&
-          row[0].attempt === 1 &&
+          row[0].state === (sample === "canceled" ? "canceled" : "completed") &&
+          row[0].attempt === (sample === "canceled" ? 0 : 1) &&
           row[0].submitter_id === ids.publisher,
         "productFailure",
       );
@@ -164,7 +171,7 @@ await runBrowserFixture({
         kind: "actual-regression-run",
         runId,
         comparison: sample,
-        attempt: 1,
+        attempt: row[0].attempt,
         currentAuthorityAndNativePreserved: true,
       });
       save();
@@ -266,6 +273,8 @@ await runBrowserFixture({
               "revoke-publisher",
               "restore-publisher",
               "restart",
+              "pause-worker",
+              "resume-worker",
               "shutdown",
             ].includes(value.action),
             "invalidControl",
@@ -277,7 +286,9 @@ await runBrowserFixture({
         if (value.action === "capture-run") {
           guid(value.runId);
           check(
-            ["passed", "failed", "notEvaluated"].includes(value.sample),
+            ["passed", "failed", "notEvaluated", "canceled"].includes(
+              value.sample,
+            ),
             "invalidControl",
           );
         }
@@ -296,6 +307,21 @@ await runBrowserFixture({
         if (item.action === "capture-run")
           return await capture(item.sample, item.runId);
         if (item.action === "checkpoint") return checkpoint();
+        if (item.action === "pause-worker") {
+          checkpoint();
+          check(fx.mutationHost?.regressionWorker, "invalidControl");
+          await stopHost("mutation");
+          await settleWorkers(true);
+          return { outcome: "paused" };
+        }
+        if (item.action === "resume-worker") {
+          check(fx.mutationHost === null, "invalidControl");
+          await startHost("mutation", {
+            profile: "administrator",
+            regressionWorker: true,
+          });
+          return { outcome: "ready" };
+        }
         if (item.action === "restart") {
           checkpoint();
           await stop();

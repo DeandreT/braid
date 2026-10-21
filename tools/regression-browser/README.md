@@ -63,7 +63,9 @@ controlled browser suite remains useful but is not end-to-end evidence.
 The operator genuinely creates a project/mapping through HTTP before the browser
 starts. The browser publishes exact fixture versions, executes valid cases before
 and after a malformed case, rejects an otherwise-identical baseline missing its
-final line feed, reopens results after an
+final line feed, cancels a queued run while its worker is stopped, and publishes
+a corrected second version without changing the failed first version. It
+reopens results after an
 API/worker/PostgreSQL restart, and proves same-session access revocation removes
 private presentation. Viewer mode remains metadata-only.
 
