@@ -52,3 +52,9 @@ view retires unfinished file reads; their callbacks cannot update a new editor.
 
 Controlled HTTP browser checks cover presentation behavior. They do not replace
 actual API, database, worker and hosted-session qualification.
+
+The actual fixture is in `tools/regression-browser`. Its native Windows launcher
+exports a committed source snapshot, creates verified Linux publications on
+Btrfs and runs the ordinary API/worker against an owned PostgreSQL instance.
+`playwright.regression-live.config.ts` drives that fixture without mocked replies;
+see the fixture README for setup, acceptance and cleanup.
