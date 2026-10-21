@@ -255,10 +255,10 @@ internal static class ServerHostHttp
 
     internal static async Task<ServerHostReply> SendAsync(HttpClient client, string path,
         HttpMethod? method = null, IReadOnlyDictionary<string, string>? headers = null, byte[]? body = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, TimeSpan? budget = null)
     {
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        bounded.CancelAfter(TimeSpan.FromSeconds(15));
+        bounded.CancelAfter(budget ?? TimeSpan.FromSeconds(15));
         using var message = new HttpRequestMessage(method ?? HttpMethod.Get, path);
         if (body is not null) message.Content = new ByteArrayContent(body);
         if (headers is not null)

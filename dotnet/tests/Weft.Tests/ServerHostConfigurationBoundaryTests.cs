@@ -54,7 +54,11 @@ public sealed class ServerHostConfigurationBoundaryTests
     public void SessionFeatureScalarsAreRejectedBeforeAnySensitiveDeliveryIsRequested(string name, string value)
     {
         var values = SessionScalars();
-        if (name == "WEFT_NATIVE_BYTE_LIMIT") values["WEFT_REVISION_INGESTION_ENABLED"] = "true";
+        if (name == "WEFT_NATIVE_BYTE_LIMIT")
+        {
+            values["WEFT_REVISION_INGESTION_ENABLED"] = "true";
+            foreach (var pair in InspectionWorkerScalars()) values[pair.Key] = pair.Value;
+        }
         if (name == "WEFT_DERIVED_READ_BYTE_LIMIT") values["WEFT_REVISION_REPORTS_ENABLED"] = "true";
         int privateReads = 0;
         _ = ServerHostOptions.Read(Read); // Adjacent valid scalar control; no sensitive delivery exists.
@@ -80,18 +84,61 @@ public sealed class ServerHostConfigurationBoundaryTests
         ServerHostCheck.That(!dormant.Ingestion.Enabled && !dormant.Reports.Enabled
             && dormant.NativeByteLimit is null && dormant.DerivedReadByteLimit is null,
             "A dormant business limit became an active Session resource dependency.");
+        values["WEFT_INSPECTION_WORKER_URL"] = "invalid-dormant";
+        ServerHostCheck.That(ServerHostOptions.Read(values.GetValueOrDefault).InspectionWorker is null,
+            "Dormant hosted inspection settings became a Session dependency.");
         values["WEFT_METADATA_EDITS_ENABLED"] = "true"; values["WEFT_REVISION_INGESTION_ENABLED"] = "true";
         values["WEFT_PROJECT_CREATION_ENABLED"] = "true"; values["WEFT_REVISION_REPORTS_ENABLED"] = "true";
         values["WEFT_REVISION_REPORT_DERIVATION_ENABLED"] = "true";
         values["WEFT_NATIVE_BYTE_LIMIT"] = "1024"; values["WEFT_DERIVED_READ_BYTE_LIMIT"] = "2048";
+        foreach (var pair in InspectionWorkerScalars()) values[pair.Key] = pair.Value;
         var admitted = ServerHostOptions.Read(values.GetValueOrDefault);
         values["WEFT_METADATA_EDITS_ENABLED"] = "invalid-after-admission";
         values["WEFT_NATIVE_BYTE_LIMIT"] = "invalid-after-admission";
+        values["WEFT_INSPECTION_WORKER_URL"] = "invalid-after-admission";
         ServerHostCheck.That(admitted.Metadata.Enabled && admitted.Ingestion.Enabled && admitted.Creation.Enabled
             && admitted.Reports.Enabled && admitted.Reports.DerivationEnabled
-            && admitted.NativeByteLimit == 1024 && admitted.DerivedReadByteLimit == 2048,
+            && admitted.NativeByteLimit == 1024 && admitted.DerivedReadByteLimit == 2048
+            && admitted.InspectionWorker?.Endpoint == new Uri("https://10.0.0.4:8443"),
             "Session lost its admitted feature-scalar snapshot.");
     }
+
+    [Theory]
+    [InlineData("WEFT_REVISION_INGESTION_ENABLED", "WEFT_INSPECTION_WORKER_URL", null)]
+    [InlineData("WEFT_REVISION_INGESTION_ENABLED", "WEFT_INSPECTION_WORKER_URL", "http://10.0.0.4:8443")]
+    [InlineData("WEFT_REVISION_INGESTION_ENABLED", "WEFT_INSPECTION_WORKER_URL", "https://10.0.0.4:8443/")]
+    [InlineData("WEFT_REVISION_INGESTION_ENABLED", "WEFT_INSPECTION_WORKER_URL", "https://user@10.0.0.4:8443")]
+    [InlineData("WEFT_REVISION_INGESTION_ENABLED", "WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256", null)]
+    [InlineData("WEFT_REVISION_INGESTION_ENABLED", "WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256", "ABCDEF")]
+    [InlineData("WEFT_REVISION_INGESTION_ENABLED", "WEFT_FERRULE_WORKER_IMAGE", null)]
+    [InlineData("WEFT_REVISION_INGESTION_ENABLED", "WEFT_FERRULE_WORKER_IMAGE", "weft-ferrule:latest")]
+    [InlineData("WEFT_REVISION_REPORT_DERIVATION_ENABLED", "WEFT_INSPECTION_WORKER_URL", null)]
+    public void SessionNativeWorkRequiresTheHostedWorkerBeforeAnyPrivateDelivery(string feature, string name, string? value)
+    {
+        var values = SessionScalars();
+        values[feature] = "true";
+        if (feature == "WEFT_REVISION_REPORT_DERIVATION_ENABLED") values["WEFT_REVISION_REPORTS_ENABLED"] = "true";
+        foreach (var pair in InspectionWorkerScalars()) values[pair.Key] = pair.Value;
+        int privateReads = 0;
+        _ = ServerHostOptions.Read(Read);
+        values[name] = value;
+        bool rejected = false;
+        try { _ = ServerHostOptions.Read(Read); } catch (Exception) { rejected = true; }
+        ServerHostCheck.That(rejected && privateReads == 0,
+            "Session native work admitted an incomplete hosted worker or read a delivery first.");
+        string? Read(string key)
+        {
+            if (key.EndsWith("_FILE", StringComparison.Ordinal)) privateReads++;
+            return values.GetValueOrDefault(key);
+        }
+    }
+
+    private static Dictionary<string, string?> InspectionWorkerScalars() => new(StringComparer.Ordinal)
+    {
+        ["WEFT_INSPECTION_WORKER_URL"] = "https://10.0.0.4:8443",
+        ["WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256"] = new string('a', 64),
+        ["WEFT_FERRULE_WORKER_IMAGE"] = "sha256:" + new string('b', 64)
+    };
 
     [Theory]
     [InlineData("missing-user")]

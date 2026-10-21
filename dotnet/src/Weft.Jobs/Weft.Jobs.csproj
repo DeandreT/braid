@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <!-- The worker-side inspection transport listens with Kestrel. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../Weft.Deployment/Weft.Deployment.csproj" />
     <ProjectReference Include="../Weft.MappingBackends/Weft.MappingBackends.csproj" />
     <PackageReference Include="WolverineFx.Postgresql" Version="6.51.1" />

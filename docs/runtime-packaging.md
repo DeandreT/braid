@@ -157,8 +157,9 @@ through the worker. The generated Entra values are placeholders, so sign-in is n
 ## Hosted boundaries
 
 The Session host does not register a Docker worker runner. Native ingestion and
-report derivation therefore need a separately qualified hosted worker transport, and
-stay disabled in hosted configuration; examples remain a Development feature. Chat
+report derivation run through the inspection service of a separate `Weft.Worker`
+over the [hosted inspection transport](ferrule-worker.md#hosted-inspection-transport);
+examples remain a Development feature. Chat
 and preview submission are composed by the Session host with `_FILE` credential
 deliveries (see [feature composition](session-host.md#feature-composition)); preview
 execution additionally needs the separate `Weft.Worker` host.

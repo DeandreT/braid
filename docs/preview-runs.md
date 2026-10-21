@@ -79,7 +79,9 @@ The worker reads its configuration from the environment:
 `WEFT_PRIVATE_STORAGE_ROOT` (an existing v2 root, opened read-only),
 `WEFT_FERRULE_WORKER_IMAGE`, optional `WEFT_DOCKER_EXECUTABLE` and optional
 `WEFT_PREVIEW_LEASE_SECONDS` (35–600). It runs as the same operating-system user
-that owns the private storage root.
+that owns the private storage root. A worker that only serves
+[hosted inspection](ferrule-worker.md#worker-inspection-service) sets
+`WEFT_PREVIEW_WORKER_ENABLED=false` and needs none of the preview settings.
 
 Migration `0013_preview_messages.sql` creates the `weft_messages` schema and grants
 the preview writer `USAGE` and `CREATE` on it only. Wolverine creates and owns its

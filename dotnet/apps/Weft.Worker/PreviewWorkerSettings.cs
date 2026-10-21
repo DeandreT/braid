@@ -4,8 +4,9 @@ namespace Weft.Worker;
 
 /// <summary>Explicit environment configuration; nothing is inferred from a request or mapping.</summary>
 internal sealed record PreviewWorkerSettings(
-    string WriterConnectionString,
-    string StorageRoot,
+    bool PreviewEnabled,
+    string? WriterConnectionString,
+    string? StorageRoot,
     string WorkerImage,
     string DockerExecutable,
     TimeSpan Lease)
@@ -15,10 +16,22 @@ internal sealed record PreviewWorkerSettings(
         ArgumentNullException.ThrowIfNull(environment);
         string Required(string name) => environment(name) is { Length: > 0 } value
             ? value : throw new InvalidOperationException($"The preview worker requires {name}.");
-        return new(Required("WEFT_PREVIEW_WRITER_CONNECTION_STRING"),
-            Required("WEFT_PRIVATE_STORAGE_ROOT"), Required("WEFT_FERRULE_WORKER_IMAGE"),
+        // Previews stay on unless explicitly disabled; a worker that only serves inspection opts out.
+        var preview = environment("WEFT_PREVIEW_WORKER_ENABLED") switch
+        {
+            null or "true" => true,
+            "false" => false,
+            _ => throw new InvalidOperationException("Preview worker enablement must be true or false.")
+        };
+        // Regression and build execution read native objects and run previews through the preview composition.
+        if (!preview && (environment("WEFT_REGRESSION_WORKER_ENABLED") == "true" || environment("WEFT_BUILD_WORKER_ENABLED") == "true"))
+            throw new InvalidOperationException("Regression and build execution require the preview worker.");
+        return new(preview,
+            preview ? Required("WEFT_PREVIEW_WRITER_CONNECTION_STRING") : null,
+            preview ? Required("WEFT_PRIVATE_STORAGE_ROOT") : null,
+            Required("WEFT_FERRULE_WORKER_IMAGE"),
             environment("WEFT_DOCKER_EXECUTABLE") is { Length: > 0 } docker ? docker : "/usr/bin/docker",
-            environment("WEFT_PREVIEW_LEASE_SECONDS") is { Length: > 0 } lease
+            preview && environment("WEFT_PREVIEW_LEASE_SECONDS") is { Length: > 0 } lease
                 ? TimeSpan.FromSeconds(int.Parse(lease, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture))
                 : new PreviewRunOptions().Lease);
     }

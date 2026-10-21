@@ -11,24 +11,32 @@ using Weft.Worker;
 using Wolverine;
 
 var settings = PreviewWorkerSettings.Read(Environment.GetEnvironmentVariable);
+var inspection = InspectionWorkerSettings.Read(Environment.GetEnvironmentVariable, settings.WorkerImage, settings.DockerExecutable);
+if (!settings.PreviewEnabled && inspection is null)
+    throw new InvalidOperationException("The worker requires preview execution or the inspection service.");
 var builder = Host.CreateApplicationBuilder(args);
 var contentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(builder.Environment.ContentRootPath));
-builder.Services.AddSingleton(new PreviewWorkerInstance(Guid.NewGuid()));
-builder.Services.AddSingleton(new PreviewRunOptions { Lease = settings.Lease });
-builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton(_ => new PostgresPreviewDatabase(settings.WriterConnectionString, PreviewDatabaseProfile.Writer));
-builder.Services.AddSingleton(provider => new PostgresPreviewRunStore(provider.GetRequiredService<PostgresPreviewDatabase>()));
-builder.Services.AddSingleton<IPrivateObjectStore>(_ =>
-    FileSystemPrivateObjectStore.OpenV2(new FileSystemStorageOptions(settings.StorageRoot, contentRoot)));
-builder.Services.AddSingleton<IMappingPreviewBackend>(_ => new FerrulePreviewBackend(new DockerInspectionWorkerRunner(
-    new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage, profile: DockerWorkerProfile.Preview))));
-builder.Services.AddSingleton(provider => new PreviewRunExecutor(provider.GetRequiredService<PostgresPreviewRunStore>(),
-    provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(),
-    provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<PreviewRunOptions>()));
-builder.Services.AddWolverine(options => PreviewJobs.Configure(options, settings.WriterConnectionString, PreviewJobRole.Worker));
+if (settings.PreviewEnabled)
+{
+    builder.Services.AddSingleton(new PreviewWorkerInstance(Guid.NewGuid()));
+    builder.Services.AddSingleton(new PreviewRunOptions { Lease = settings.Lease });
+    builder.Services.AddSingleton(TimeProvider.System);
+    builder.Services.AddSingleton(_ => new PostgresPreviewDatabase(settings.WriterConnectionString!, PreviewDatabaseProfile.Writer));
+    builder.Services.AddSingleton(provider => new PostgresPreviewRunStore(provider.GetRequiredService<PostgresPreviewDatabase>()));
+    builder.Services.AddSingleton<IPrivateObjectStore>(_ =>
+        FileSystemPrivateObjectStore.OpenV2(new FileSystemStorageOptions(settings.StorageRoot!, contentRoot)));
+    builder.Services.AddSingleton<IMappingPreviewBackend>(_ => new FerrulePreviewBackend(new DockerInspectionWorkerRunner(
+        new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage, profile: DockerWorkerProfile.Preview))));
+    builder.Services.AddSingleton(provider => new PreviewRunExecutor(provider.GetRequiredService<PostgresPreviewRunStore>(),
+        provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(),
+        provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<PreviewRunOptions>()));
+    builder.Services.AddWolverine(options => PreviewJobs.Configure(options, settings.WriterConnectionString!, PreviewJobRole.Worker));
+}
 builder.Services.AddWeftRegressionWorker(Environment.GetEnvironmentVariable, () =>
     new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, settings.WorkerImage.ToLowerInvariant(),
         FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile));
 builder.Services.AddWeftBuildWorker(Environment.GetEnvironmentVariable, () =>
     new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage, profile: DockerWorkerProfile.Build));
+if (inspection is { } hosted)
+    builder.Services.AddWeftInspectionWorker(hosted.Transport, hosted.Runner);
 await builder.Build().RunAsync();

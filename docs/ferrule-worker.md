@@ -182,13 +182,100 @@ that is reported as uncertain cleanup, never as an acknowledged removal.
 Browser qualification gives its API and frontend processes bounded SIGTERM
 shutdown and audits every owned worker ID after teardown. The tests retain page
 closure with pending requests so ordinary cancellation remains exercised.
-This local Docker runner can later be replaced by a separately qualified hosted
-worker transport behind the same backend contract.
+The Session host never runs this runner; it reaches the same runner in a separate
+worker service through the hosted inspection transport below.
 
 The image builds on pinned Ubuntu 24.04 using checksum-verified rustup 1.29.1 and
 nightly `2026-07-21`, with locked dependencies and two build jobs. Its scratch
 runtime contains only `/ferrule-host`, observed allowlisted GNU runtime libraries,
 and dependency copyright/license metadata. BuildKit is required to build it.
+
+## Hosted inspection transport
+
+The hosted Session server has no Docker access. `RemoteInspectionWorkerRunner`
+implements the same byte-only `IInspectionWorkerRunner` seam and forwards each
+inspection, validation or projection frame to the inspection service in
+`Weft.Worker`, which runs it with its own singleton runner and the fixed
+inspection profile. The Session host keeps the Ferrule adapter: it builds the exact
+frame, and it decodes and verifies the exact worker output, including digests,
+echoed revision context and typed owners. The transport adds no mapping semantics.
+
+Native upload validates synchronously inside the upload request and its
+120-second claim, with explicit resume for recovery; report derivation runs inside
+the ensure request under its own 60-second claim. Both already own their leases,
+fencing and retry policy, and a worker call has no durable side effect, so the
+transport is request/response rather than a durable queue: the claim stays the
+only durable record, and a lost call is recovered by the workflow's own resume or
+ensure. Durable Wolverine jobs remain for previews, which outlive the submitting
+request.
+
+`weft.inspection-transport.v1` runs HTTP/1.1 over TLS 1.2 or 1.3 on a private
+network. Each side admits exactly one peer certificate by its SHA-256 pin: the
+Session host pins the worker's certificate, and the worker requires a client
+certificate and admits only the Session host's pin. Trust stores, host names and
+revocation are not consulted. Each operation:
+
+1. Opens one new connection; the handler cannot open a second one, so an internal
+   retry cannot deliver a frame twice.
+2. Sends `GET /v1/inspection/ready` on it. Under TLS 1.3 the client finishes its
+   handshake before the worker has judged its certificate; this answer proves the
+   worker admitted the client, and its `Weft-Worker-Image` must equal the Session
+   host's configured image. No frame byte is sent before it.
+3. Sends `POST /v1/inspection/operations/{operation}` on the same connection with a
+   fresh 128-bit operation identity, the exact frame as `application/octet-stream`
+   with a known length, and the expected image.
+4. Receives `200` with `Weft-Worker-Result` (`none`, `canceled`, `timedOut`,
+   `startFailed`, `workerFailed`, `outputLimitExceeded`, `cleanupFailed` or
+   `sandboxUnavailable`), the worker's image and, only for `none`, the exact runner
+   output with a known length.
+
+The worker admits each operation identity once and remembers recent ones; a
+repeated identity is refused. It reads the complete frame before admission, so an
+incomplete frame never runs. It accepts at most eight queued or running operations
+and refuses an operation that is not admitted to its runner within 20 seconds.
+Any refusal before execution is a non-`200` status, which the Session host reports
+as an unavailable backend; it does not close admission.
+
+| Situation | Session result |
+| --- | --- |
+| Worker unreachable, TLS refused, not ready, other image, busy | Backend unavailable; nothing ran |
+| Caller cancels before any frame byte | Canceled; nothing was sent |
+| Caller cancels later | `POST .../{operation}/cancel`, then the original answer: canceled only after the worker's runner settled |
+| No answer within admission, wall deadline, cleanup and margin | Cancellation as above; a settled answer is reported as a timeout |
+| No settled answer after cancellation, connection lost after the frame, or an inadmissible answer | Cleanup failure |
+| Worker reports `cleanupFailed` | Cleanup failure |
+
+A cancellation that reaches the worker before its operation refuses that operation
+when it arrives. A client that disconnects cancels its operation on the worker. A
+cleanup failure, like the local runner's, closes the Session runner's admission
+and faults the host's shutdown: settlement of work it requested is unconfirmed.
+The worker's own runner keeps the local runner's latch for its containers. Restart
+the Session host only after the worker's state is known.
+
+Shutdown on either side closes admission and cancels outstanding operations
+through the same path. The Session host joins its calls before the provider and
+the borrowed client certificate are released. The worker refuses new operations,
+answers admitted ones after its runner settled them, then drains its runner;
+unconfirmed cleanup faults the worker's exit.
+
+### Worker inspection service
+
+`Weft.Worker` serves the transport only with `WEFT_INSPECTION_WORKER_ENABLED=true`:
+
+| Setting | Value |
+| --- | --- |
+| `WEFT_INSPECTION_LISTEN_ADDR` | One canonical literal IP endpoint with a nonzero port on the private network, for example `0.0.0.0:8443` inside a container. |
+| `WEFT_INSPECTION_SERVER_CERTIFICATE_FILE` / `WEFT_INSPECTION_SERVER_PRIVATE_KEY_FILE` | The worker's current RSA (at least 2048-bit) PEM certificate and key as protected private files, admitted like the Session host's deliveries. |
+| `WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256` | Lowercase hexadecimal SHA-256 of the Session host's client certificate (DER). |
+| `WEFT_FERRULE_WORKER_IMAGE` | The immutable image ID shared with the Session host. |
+| `WEFT_DOCKER_EXECUTABLE` | Optional Docker CLI path (default `/usr/bin/docker`). |
+
+The worker needs the Docker access described above; it is never reachable from the
+internet. A worker that only serves inspection sets `WEFT_PREVIEW_WORKER_ENABLED=false`
+and then needs no preview database login or storage root; regression and build
+execution require the preview worker. Invalid or incomplete settings stop the
+worker at startup. Its client and worker certificates rotate by restart: deliver a
+new certificate and the matching new pin to the other side together.
 
 ## Qualification
 

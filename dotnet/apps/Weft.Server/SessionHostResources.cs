@@ -75,6 +75,10 @@ internal sealed class SessionHostResources
             finally { certificates.AddRange(chain.Cast<X509Certificate2>()); }
             TlsCertificateContext = SslStreamCertificateContext.Create(tls, chain, offline: true);
         }
+        // Native admission and derivation forward exact frames to the separately hosted worker.
+        X509Certificate2? inspectionClient = null;
+        if (options.InspectionWorker is not null)
+            inspectionClient = Certificate(read, SessionInspectionWorker.ClientCertificateFile, SessionInspectionWorker.ClientPrivateKeyFile, true, true);
         // Admit all three deliveries before constructing even a lazy pool owner.
         var readerConnection = ReadConnection(read, "WEFT_SESSION_READER_CONNECTION_STRING_FILE");
         var writerConnection = ReadConnection(read, "WEFT_SESSION_WRITER_CONNECTION_STRING_FILE");
@@ -96,6 +100,8 @@ internal sealed class SessionHostResources
         services.AddWeftEntraBrowserAuthentication(new(options.OrganizationId, options.Origin), profile, identities);
         services.AddWeftAuthenticationHttp(new(AuthenticationHttpMode.Session, options.Origin), environment);
         services.AddWeftSessionCatalog(new(options.OrganizationId), options.Metadata, options.Ingestion, options.Creation, options.Reports);
+        if (options.InspectionWorker is { } inspection)
+            InspectionWorkerHostConfiguration.ConfigureRemote(services, inspection.Options(inspectionClient!));
         CatalogBusinessServices.Configure(services, environment, options.Metadata, options.Ingestion, options.Creation, options.Reports, read,
             options.NativeByteLimit, options.DerivedReadByteLimit, options.Builds);
         ChatHostConfiguration.Configure(services, read, options.Chat, true, options.Reports, session: true);

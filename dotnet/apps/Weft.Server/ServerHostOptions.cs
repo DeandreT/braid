@@ -38,6 +38,7 @@ internal sealed class ServerHostOptions
     internal BuildHostRuntime Builds { get; private init; } = new(false);
     internal long? NativeByteLimit { get; private init; }
     internal int? DerivedReadByteLimit { get; private init; }
+    internal SessionInspectionWorker? InspectionWorker { get; private init; }
 
     internal static ServerHostOptions Read(Func<string, string?> read)
     {
@@ -107,6 +108,8 @@ internal sealed class ServerHostOptions
         if (chat && !reports.Enabled) throw Failure();
         var previews = new CatalogPreviewOptions(Flag(read, "WEFT_PREVIEWS_ENABLED"));
         var builds = CatalogBuildHostConfiguration.ReadRuntime(read, catalogEnabled: true);
+        // Native admission and derivation run only through the separate pinned worker; this host never runs Docker.
+        var inspection = ingestion.Enabled || reports.DerivationEnabled ? SessionInspectionWorker.Read(read) : null;
         return new(mode, address, publicOrigin, proxy, knownProxy, organization, tenant, client, application, directory)
         {
             Metadata = metadata,
@@ -117,7 +120,8 @@ internal sealed class ServerHostOptions
             Previews = previews,
             Builds = builds,
             NativeByteLimit = nativeLimit,
-            DerivedReadByteLimit = derivedLimit
+            DerivedReadByteLimit = derivedLimit,
+            InspectionWorker = inspection
         };
     }
 
