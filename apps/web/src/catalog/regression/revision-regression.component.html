@@ -1,0 +1,594 @@
+<section
+  class="catalog-summary regression-panel"
+  aria-labelledby="regression-title"
+>
+  <h2 id="regression-title">Regression tests</h2>
+  <p>
+    Save explicit test fixtures and compare exact output bytes. These are not
+    production payloads.
+  </p>
+  @if (!capabilities()) {
+    <button
+      class="catalog-button"
+      type="button"
+      (click)="load()"
+      [disabled]="busy()"
+    >
+      Load regression cases
+    </button>
+  }
+  @if (error(); as message) {
+    <p class="regression-error" role="alert">{{ message }}</p>
+  }
+  @if (notice(); as message) {
+    <p role="status">{{ message }}</p>
+  }
+  @if (capabilities(); as capability) {
+    <p class="regression-policy">
+      Comparison: exact bytes · Fixed runtime:
+      <code>{{ capability.runtime.backendId }}</code>
+    </p>
+    <div class="regression-actions">
+      <button
+        class="catalog-button"
+        type="button"
+        (click)="loadCases()"
+        [disabled]="busy()"
+      >
+        Refresh cases
+      </button>
+      @if (capability.publishCases) {
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="newCase()"
+          [disabled]="busy() || !!pendingCase()"
+        >
+          New test case
+        </button>
+      }
+      @if (capability.readSamples) {
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="loadHistory()"
+          [disabled]="busy()"
+        >
+          Load run history
+        </button>
+      }
+    </div>
+    @if (cases(); as page) {
+      @if (!page.cases.length) {
+        <p>No saved test cases on this page.</p>
+      }
+      <ul class="regression-list">
+        @for (item of page.cases; track item.caseId) {
+          <li>
+            <div>
+              <strong>{{ item.name }}</strong> · Version {{ item.version
+              }}<br /><small>Revision {{ item.revision.revisionId }}</small>
+            </div>
+            @if (capability.readSamples) {
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="openCase(item.caseId, item.version)"
+                [disabled]="busy() || !!pendingCase() || !!pendingRun()"
+              >
+                Open {{ item.name }}
+              </button>
+            } @else {
+              <span>Metadata only</span>
+            }
+          </li>
+        }
+      </ul>
+      @if (page.nextCaseId) {
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="loadCases(true)"
+          [disabled]="busy()"
+        >
+          Next cases
+        </button>
+      }
+    }
+    @if (selected(); as value) {
+      <section
+        class="regression-detail"
+        aria-labelledby="regression-case-title"
+      >
+        <h3 id="regression-case-title">
+          {{ value.definition.name }} · Version {{ value.version }}
+        </h3>
+        <dl class="catalog-facts">
+          <dt>Case ID</dt>
+          <dd>
+            <code>{{ value.caseId }}</code>
+          </dd>
+          <dt>Pinned revision</dt>
+          <dd>
+            <code>{{ value.revision.revisionId }}</code>
+          </dd>
+          <dt>Fixed clock</dt>
+          <dd>{{ value.definition.currentDateTime }}</dd>
+          <dt>Primary input</dt>
+          <dd>
+            {{
+              byteCount({
+                name: null,
+                bytesBase64Url: value.definition.primaryBase64Url,
+              })
+            }}
+            bytes
+          </dd>
+          <dt>Target</dt>
+          <dd>
+            {{ value.definition.target.name || value.definition.target.kind }}
+          </dd>
+        </dl>
+        @if (value.definition.parameters.length) {
+          <h4>Exact typed parameters</h4>
+          <ul>
+            @for (
+              parameter of value.definition.parameters;
+              track parameter.name
+            ) {
+              <li>
+                {{ parameter.name }} ({{ parameter.kind }}):
+                <code>{{ parameter.value }}</code>
+              </li>
+            }
+          </ul>
+        }
+        <h4>Expected outputs</h4>
+        @if (!value.definition.expected.length) {
+          <p>No baseline outputs. This cannot pass comparison.</p>
+        }
+        <ul>
+          @for (output of value.definition.expected; track output.name) {
+            <li>
+              {{ output.name || "Primary output" }} ·
+              {{ byteCount(output) }} bytes
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="show(output)"
+              >
+                View expected {{ output.name || "primary" }}
+              </button>
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="download(output)"
+              >
+                Download expected {{ output.name || "primary" }}
+              </button>
+            </li>
+          }
+        </ul>
+        <div class="regression-actions">
+          <button
+            class="catalog-button regression-primary"
+            type="button"
+            (click)="submit()"
+            [disabled]="busy() || !!pendingRun()"
+          >
+            Run saved version
+          </button>
+          @if (capability.publishCases) {
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="editNext()"
+              [disabled]="busy() || !!pendingCase()"
+            >
+              Edit as next version
+            </button>
+          }
+        </div>
+      </section>
+    }
+    @if (editing()) {
+      <section
+        class="regression-detail"
+        aria-labelledby="regression-editor-title"
+      >
+        <h3 id="regression-editor-title">Publish an immutable fixture</h3>
+        <p>
+          Uses revision {{ revision().sequence }} shown on this page. Text is
+          encoded as UTF-8 without reformatting. A chosen file preserves its
+          exact bytes.
+        </p>
+        <fieldset [disabled]="busy() || !!pendingCase()">
+          <label
+            >Fixture name<input
+              class="regression-text"
+              [(ngModel)]="name"
+              maxlength="256"
+          /></label>
+          <label
+            >Fixed clock (UTC or offset)<input
+              class="regression-text"
+              [(ngModel)]="clock"
+              placeholder="2026-10-20T12:00:00Z"
+          /></label>
+          <label
+            >Target<select [(ngModel)]="target">
+              <option value="all">All outputs</option>
+              <option value="primary">Primary output</option>
+              <option value="named">Named output</option>
+            </select></label
+          >
+          @if (target === "named") {
+            <label
+              >Exact target name<input
+                class="regression-text"
+                [(ngModel)]="targetName"
+            /></label>
+          }
+          @for (isOutput of [false, true]; track isOutput) {
+            <h4>
+              {{ isOutput ? "Expected output documents" : "Input documents" }}
+            </h4>
+            <p>
+              {{
+                isOutput
+                  ? "A blank name identifies the primary output. Add each named output explicitly."
+                  : "The first input is primary. Every additional input needs its exact name."
+              }}
+            </p>
+            @for (
+              item of isOutput ? outputs() : inputs();
+              track item.id;
+              let first = $first
+            ) {
+              <div class="regression-document">
+                @if (isOutput || !first) {
+                  <label
+                    >Document name<input
+                      class="regression-text"
+                      [ngModel]="item.name"
+                      (ngModelChange)="
+                        updateDocument(isOutput, item.id, { name: $event })
+                      "
+                  /></label>
+                } @else {
+                  <strong>Primary input</strong>
+                }
+                @if (item.file; as file) {
+                  <p>{{ file.name }} · {{ file.length }} exact bytes</p>
+                  <button
+                    class="catalog-button"
+                    type="button"
+                    (click)="clearFile(isOutput, item.id)"
+                  >
+                    Use text instead
+                  </button>
+                } @else {
+                  <label
+                    >{{ isOutput ? "Expected UTF-8 text" : "Input UTF-8 text" }}
+                    <textarea
+                      rows="4"
+                      class="regression-text"
+                      [ngModel]="item.text"
+                      (ngModelChange)="
+                        updateDocument(isOutput, item.id, { text: $event })
+                      "
+                      spellcheck="false"
+                    ></textarea>
+                  </label>
+                }
+                <label
+                  >Choose exact-byte file<input
+                    type="file"
+                    (change)="chooseFile(isOutput, item.id, $event)"
+                /></label>
+                @if (isOutput || !first) {
+                  <button
+                    class="catalog-button"
+                    type="button"
+                    (click)="removeDocument(isOutput, item.id)"
+                  >
+                    Remove document
+                  </button>
+                }
+              </div>
+            }
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="addDocument(isOutput)"
+            >
+              {{ isOutput ? "Add expected output" : "Add named input" }}
+            </button>
+          }
+          <h4>Typed parameters</h4>
+          <p>
+            Values remain strings, including large integers and the original
+            number spelling. Deliberately invalid values may be saved to test
+            runtime rejection.
+          </p>
+          @for (parameter of parameters(); track parameter.id) {
+            <div class="regression-document regression-parameter">
+              <label
+                >Parameter name<input
+                  [ngModel]="parameter.name"
+                  (ngModelChange)="
+                    updateParameter(parameter.id, { name: $event })
+                  "
+              /></label>
+              <label
+                >Parameter type<select
+                  [ngModel]="parameter.kind"
+                  (ngModelChange)="
+                    updateParameter(parameter.id, { kind: $event })
+                  "
+                >
+                  <option value="string">String</option>
+                  <option value="integer">Integer</option>
+                  <option value="float">Float</option>
+                  <option value="boolean">Boolean</option>
+                </select></label
+              >
+              <label
+                >Exact parameter value<input
+                  [ngModel]="parameter.value"
+                  (ngModelChange)="
+                    updateParameter(parameter.id, { value: $event })
+                  "
+              /></label>
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="removeParameter(parameter.id)"
+              >
+                Remove parameter
+              </button>
+            </div>
+          }
+          <button class="catalog-button" type="button" (click)="addParameter()">
+            Add parameter
+          </button>
+          <p>
+            Up to 8 MiB combined inputs and 8 MiB combined expected outputs.
+            Publication never overwrites an existing version.
+          </p>
+          @if (importing() > 0) {
+            <p role="status">Reading selected files…</p>
+          }
+          <button
+            class="catalog-button regression-primary"
+            type="button"
+            (click)="publish()"
+            [disabled]="importing() > 0"
+          >
+            Publish fixture version
+          </button>
+        </fieldset>
+      </section>
+    }
+    @if (pendingCase(); as pending) {
+      <div class="regression-recovery" role="status">
+        <h3>Confirm fixture publication</h3>
+        <p>
+          The original request is retained in this view. Case {{ pending.id }},
+          version {{ pending.version }}. Leaving this page clears its private
+          recovery data.
+        </p>
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="recoverPublication()"
+          [disabled]="busy()"
+        >
+          Check saved version
+        </button>
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="retryPublication()"
+          [disabled]="busy()"
+        >
+          Retry original publication
+        </button>
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="abandon()"
+          [disabled]="busy()"
+        >
+          Forget recovery details
+        </button>
+      </div>
+    }
+    @if (pendingRun(); as pending) {
+      <div class="regression-recovery" role="status">
+        <h3>Confirm run submission</h3>
+        <p>
+          Original run ID: <code>{{ pending.id }}</code
+          >. Check it before starting another run.
+        </p>
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="recoverRun()"
+          [disabled]="busy()"
+        >
+          Check original run
+        </button>
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="retryRun()"
+          [disabled]="busy()"
+        >
+          Retry original run request
+        </button>
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="abandon()"
+          [disabled]="busy()"
+        >
+          Forget recovery details
+        </button>
+      </div>
+    }
+    @if (history(); as page) {
+      <h3>Your run history</h3>
+      @if (!page.runs.length) {
+        <p>No runs on this page.</p>
+      }
+      <ul class="regression-list">
+        @for (item of page.runs; track item.runId) {
+          <li>
+            <div>
+              {{ label(item.state) }} · Case {{ item.caseId }} /
+              {{ item.version }}<br /><time
+                >{{ item.createdAtUtc | date: "medium" : "UTC" }} UTC</time
+              >
+            </div>
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="openRun(item.runId)"
+              [disabled]="busy() || !!pendingRun()"
+            >
+              Open run {{ item.runId }}
+            </button>
+          </li>
+        }
+      </ul>
+      @if (page.nextRunId) {
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="loadHistory(true)"
+          [disabled]="busy()"
+        >
+          Next runs
+        </button>
+      }
+    }
+    @if (run(); as value) {
+      <section
+        class="regression-detail"
+        aria-labelledby="regression-result-title"
+      >
+        <h3 id="regression-result-title">Regression run result</h3>
+        <p role="status">
+          {{ label(value.run.state) }} · Attempt {{ value.run.attempt }} of 3
+        </p>
+        <dl class="catalog-facts">
+          <dt>Run ID</dt>
+          <dd>
+            <code>{{ value.run.runId }}</code>
+          </dd>
+          <dt>Pinned revision</dt>
+          <dd>
+            <code>{{ value.run.revision.revisionId }}</code>
+          </dd>
+          <dt>Case version</dt>
+          <dd>{{ value.run.version }}</dd>
+        </dl>
+        <div class="regression-actions">
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="openRun(value.run.runId)"
+            [disabled]="busy()"
+          >
+            Refresh result
+          </button>
+          @if (isActive()) {
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="cancelRun()"
+              [disabled]="busy()"
+            >
+              Cancel run
+            </button>
+          }
+        </div>
+        @if (value.comparison; as comparison) {
+          <p
+            class="regression-verdict"
+            [class.regression-error]="comparison.outcome !== 'passed'"
+          >
+            Comparison: {{ label(comparison.outcome) }}
+          </p>
+          @if (comparison.outcome === "notEvaluated") {
+            <p>{{ label(comparison.notEvaluatedReason) }}</p>
+          }
+          <p>
+            {{ comparison.expectedOutputs }} expected outputs ·
+            {{ comparison.actualOutputs }} actual outputs ·
+            {{ comparison.totalDifferences }} differences
+          </p>
+          @if (comparison.truncated) {
+            <p>Only the bounded diagnostic subset is shown.</p>
+          }
+          <div class="regression-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Output</th>
+                  <th>Difference</th>
+                  <th>Expected bytes</th>
+                  <th>Actual bytes</th>
+                  <th>First different byte</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (difference of comparison.differences; track $index) {
+                  <tr>
+                    <td>{{ difference.name || "Primary" }}</td>
+                    <td>{{ label(difference.kind) }}</td>
+                    <td>{{ difference.expectedBytes ?? "—" }}</td>
+                    <td>{{ difference.actualBytes ?? "—" }}</td>
+                    <td>{{ difference.firstDifferentByte ?? "—" }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else if (value.executionOutcome) {
+          <p>No passing comparison: {{ label(value.executionOutcome) }}.</p>
+        }
+        @for (output of value.outputs || []; track output.name) {
+          <p>
+            {{ output.name || "Primary output" }} ·
+            {{ byteCount(output) }} bytes
+            <button class="catalog-button" type="button" (click)="show(output)">
+              View actual {{ output.name || "primary" }}
+            </button>
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="download(output)"
+            >
+              Download actual {{ output.name || "primary" }}
+            </button>
+          </p>
+        }
+      </section>
+    }
+    @if (shown(); as output) {
+      <section class="regression-detail" aria-label="Output text preview">
+        <h3>{{ output.name }}</h3>
+        <p>UTF-8 text preview only. Download preserves the exact bytes.</p>
+        @if (output.truncated) {
+          <p>Showing the first 64 KiB.</p>
+        }
+        <pre>{{ output.text }}</pre>
+        <button class="catalog-button" type="button" (click)="shown.set(null)">
+          Close output preview
+        </button>
+      </section>
+    }
+  }
+</section>

@@ -33,6 +33,7 @@ import {
 } from "./reports/revision-report-state";
 import { RevisionReportsComponent } from "./reports/revision-reports.component";
 import { RevisionPreviewComponent } from "./previews/revision-preview.component";
+import { RevisionRegressionComponent } from "./regression/revision-regression.component";
 
 interface RevisionScreen {
   project: CatalogProject;
@@ -48,6 +49,7 @@ interface RevisionScreen {
     CatalogStatusComponent,
     RevisionReportsComponent,
     RevisionPreviewComponent,
+    RevisionRegressionComponent,
   ],
   templateUrl: "./revision-page.component.html",
 })
