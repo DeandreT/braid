@@ -142,6 +142,10 @@ primary JSON document and named inputs as pasted text (sent as UTF-8) or as
 chosen files (sent as their exact bytes), typed parameters and the output target.
 It checks the policy's input, name and parameter bounds before submitting.
 
+`tools/preview-browser/run.mjs` qualifies this panel end to end against the actual
+API, database, `Weft.Worker` host and Ferrule worker image; see its
+[README](../tools/preview-browser/README.md).
+
 Each submission uses a new idempotency key. The tab keeps only that key and the
 returned run ID in session storage for the revision. After a reload it reads the
 recorded run again; when the earlier submission was never confirmed it reuses

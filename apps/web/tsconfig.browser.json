@@ -23,6 +23,8 @@
     "playwright.builds.config.ts",
     "playwright.builds-live.config.ts",
     "tests/builds*.ts",
+    "playwright.preview-live.config.ts",
+    "tests/preview-live.spec.ts",
     "tests/catalog*.ts",
     "tests/revision-reports*.ts",
     "tests/revision-comparison*.ts",
