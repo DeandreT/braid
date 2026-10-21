@@ -23,13 +23,14 @@ API/browser source download.
 `Weft.BuildWorker` invokes the fixed native generator, checks every source frame,
 and writes only the known generated mapping/target-builder and Runtime C# files
 under a new private temporary directory. The emitted project file is never
-executed. A fixed server-owned package-free .NET 10 project, empty package-source
-configuration and exact SDK selection control compilation.
+executed. The installed .NET 10 C# compiler is invoked directly with fixed
+arguments, the installed reference assemblies and trusted generated C# files.
+No project evaluation, restore or package-feed discovery occurs.
 
 Child environments are cleared, then populated with only the required tool,
 home and bounded cache paths. Every isolated `DOTNET_CLI_HOME` explicitly sets
 `DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false`. Compilation disables shared compiler
-servers and node reuse. Mapping code is compiled but never executed by this
+servers and node reuse by invoking the compiler directly. Mapping code is compiled but never executed by this
 worker. The response contains one managed assembly plus its exact provenance;
 the application verifies all identities and digest before publication.
 

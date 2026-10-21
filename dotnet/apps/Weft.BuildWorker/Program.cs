@@ -10,25 +10,18 @@ return await CompilerWorker.RunAsync();
 [SupportedOSPlatform("linux")]
 internal static class CompilerWorker
 {
-    private const string Project = """
-        <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
-        <TreatWarningsAsErrors>true</TreatWarningsAsErrors><Deterministic>true</Deterministic><InvariantGlobalization>true</InvariantGlobalization>
-        <EnableDefaultCompileItems>false</EnableDefaultCompileItems><EnableNETAnalyzers>false</EnableNETAnalyzers>
-        <AssemblyName>Ferrule.Generated</AssemblyName><RootNamespace>Ferrule.Generated</RootNamespace>
-        <DebugType>none</DebugType><DebugSymbols>false</DebugSymbols><GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-        <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries><AllowUnsafeBlocks>false</AllowUnsafeBlocks>
-        </PropertyGroup><ItemGroup><Compile Include="GeneratedMapping.cs"/><Compile Include="GeneratedTargetBuilder.cs"/><Compile Include="Runtime/**/*.cs"/></ItemGroup></Project>
-        """;
+    private const string GlobalUsings = "global using System;global using System.Collections.Generic;global using System.IO;global using System.Linq;global using System.Net.Http;global using System.Threading;global using System.Threading.Tasks;";
 
     internal static async Task<int> RunAsync()
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(110));
         string? root = null;
+        var stage = "request";
         try
         {
             var input = await BoundedAsync(Console.OpenStandardInput(), BuildWorkerProtocol.MaximumNativeBytes + 16388, stop.Token);
             var request = BuildWorkerProtocol.DecodeRequest(input).Header;
+            stage = "generation";
             var generated = await ProcessAsync("/ferrule-host", [], input, "/", stop.Token);
             var reply = BuildWorkerProtocol.DecodeReply(generated, request);
             if (reply.Header.Status != "supported" || request.Operation == "inspect")
@@ -48,18 +41,26 @@ internal static class CompilerWorker
                 await File.WriteAllBytesAsync(path, reply.Contents[i], stop.Token); names.Add(name);
             }
             if (!names.Contains("GeneratedMapping.cs") || !names.Contains("GeneratedTargetBuilder.cs") || names.Count < 3) throw new InvalidOperationException();
-            await File.WriteAllTextAsync(Path.Combine(root, "Build.csproj"), Project, stop.Token);
-            await File.WriteAllTextAsync(Path.Combine(root, "NuGet.Config"), "<configuration><packageSources><clear/></packageSources></configuration>", stop.Token);
-            await File.WriteAllTextAsync(Path.Combine(root, "global.json"), "{\"sdk\":{\"version\":\"10.0.112\",\"rollForward\":\"disable\"}}", stop.Token);
-            await ProcessAsync("/usr/share/dotnet/dotnet", ["restore", "Build.csproj", "--configfile", "NuGet.Config", "--disable-parallel", "-v:q", "-m:1", "-nr:false"], null, root, stop.Token);
-            await ProcessAsync("/usr/share/dotnet/dotnet", ["build", "Build.csproj", "-c", "Release", "--no-restore", "-m:1", "-nr:false", "-p:UseSharedCompilation=false", "-p:PathMap=" + root + "=/weft/build", "-v:q"], null, root, stop.Token);
-            var dll = await File.ReadAllBytesAsync(Path.Combine(root, "bin/Release/net10.0/Ferrule.Generated.dll"), stop.Token);
+            stage = "compilation";
+            await File.WriteAllTextAsync(Path.Combine(root, "GlobalUsings.cs"), GlobalUsings, stop.Token);
+            var output = Path.Combine(root, "Ferrule.Generated.dll");
+            var arguments = new List<string> { "-target:library", "-langversion:14", "-nullable:enable", "-warnaserror+", "-deterministic+", "-unsafe-", "-debug-", "-optimize+", "-nologo", "-nostdlib+", "-pathmap:" + root + "=/weft/build", "-out:" + output };
+            const string references = "/usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/" + BuildWorkerProtocol.RuntimeVersion + "/ref/net10.0";
+            if (!Directory.Exists(references)) throw new InvalidOperationException();
+            arguments.AddRange(Directory.GetFiles(references, "*.dll").Order(StringComparer.Ordinal).Select(path => "-reference:" + path));
+            arguments.Add(Path.Combine(root, "GlobalUsings.cs"));
+            arguments.AddRange(names.Order(StringComparer.Ordinal).Select(name => Path.Combine(root, name)));
+            await File.WriteAllLinesAsync(Path.Combine(root, "compiler.rsp"), arguments.Select(argument => "\"" + argument + "\""), stop.Token);
+            await ProcessAsync("/usr/share/dotnet/dotnet", ["exec", "/usr/share/dotnet/sdk/" + BuildWorkerProtocol.SdkVersion + "/Roslyn/bincore/csc.dll", "-noconfig", "@" + Path.Combine(root, "compiler.rsp")], null, root, stop.Token);
+            stage = "artifact";
+            var dll = await File.ReadAllBytesAsync(output, stop.Token);
             if (dll.Length is < 1 or > BuildWorkerProtocol.MaximumSourceBytes) throw new InvalidOperationException();
             var header = reply.Header with { Files = [new("Ferrule.Generated.dll", dll.Length, Sha256Digest.FromBytes(dll).Value)] };
             await Console.OpenStandardOutput().WriteAsync(BuildWorkerProtocol.EncodeReply(header, [dll]), stop.Token);
             return 0;
         }
-        catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException and not AccessViolationException) { return 1; }
+        catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        { Console.Error.WriteLine("WeftBuildWorkerFailed:" + stage + ":" + error.GetType().Name); return 1; }
         finally { if (root is not null) try { Directory.Delete(root, recursive: true); } catch (IOException) { } }
     }
 

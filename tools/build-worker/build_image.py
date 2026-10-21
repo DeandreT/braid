@@ -10,6 +10,17 @@ import tempfile
 import uuid
 
 
+def cleanup_container(native_image, name, ownership, acknowledged):
+    inspect = subprocess.run(['docker', 'container', 'inspect', name], text=True, capture_output=True)
+    if inspect.returncode == 0:
+        current = json.loads(inspect.stdout)[0]
+        if current['Image'] != native_image or current['Name'] != '/' + name or current['Config']['Labels'].get('io.weft.compiler.source-owner') != ownership or not re.fullmatch(r'[a-f0-9]{64}', current['Id']):
+            raise RuntimeError('Extraction container ownership mismatch; cleanup refused.')
+        subprocess.run(['docker', 'container', 'rm', current['Id']], check=True, stdout=subprocess.DEVNULL)
+    elif acknowledged:
+        raise RuntimeError('Extraction container cleanup could not be verified.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--native-image', required=True, help='Exact sha256 native Docker image ID')
@@ -34,13 +45,17 @@ def main():
         raise RuntimeError('Native image identity mismatch.')
     reference = 'weft-compiler-source:' + args.native_image[7:] + '-' + uuid.uuid4().hex[:12]
     name = 'weft-build-source-' + uuid.uuid4().hex
+    ownership = uuid.uuid4().hex
     container = None
+    attempted = False
     # BuildKit FROM resolves registry names, not local configuration IDs. Bind this unique local
     # reference to the verified ID and independently verify the binary copied into the final image.
     subprocess.run(['docker', 'tag', args.native_image, reference], check=True)
     try:
         with tempfile.TemporaryDirectory(prefix='native-source-', dir=args.work_root) as directory:
-            container = output('container', 'create', '--name', name, '--network', 'none', '--entrypoint', '/ferrule-host', args.native_image)
+            attempted = True
+            container = output('container', 'create', '--name', name, '--label', 'io.weft.compiler.source-owner=' + ownership,
+                               '--network', 'none', '--entrypoint', '/ferrule-host', args.native_image)
             metadata = json.loads(output('container', 'inspect', container))[0]
             if metadata['Image'] != args.native_image or metadata['Name'] != '/' + name:
                 raise RuntimeError('Native extraction container identity mismatch.')
@@ -60,8 +75,8 @@ def main():
                 raise RuntimeError('Native source reference changed during compilation.')
             print('Compiler image:', output('image', 'inspect', '--format', '{{.Id}}', args.tag))
     finally:
-        if container is not None:
-            subprocess.run(['docker', 'container', 'rm', container], check=True, stdout=subprocess.DEVNULL)
+        if attempted:
+            cleanup_container(args.native_image, name, ownership, container is not None)
         if output('image', 'inspect', '--format', '{{.Id}}', reference) == args.native_image:
             subprocess.run(['docker', 'image', 'rm', reference], check=True, stdout=subprocess.DEVNULL)
 

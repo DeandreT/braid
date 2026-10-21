@@ -11,6 +11,8 @@ public static class BuildWorkerProtocol
 {
     public const string Protocol = "weft.ferrule-build.v1";
     public const string Profile = "weft.ferrule-csharp-json.v1";
+    public const string SdkVersion = "10.0.112";
+    public const string RuntimeVersion = "10.0.12";
     public const string Engine = "577359a991a7dd44172a3c4af91fdcab7592457c";
     public const int MaximumNativeBytes = 4 * 1024 * 1024;
     public const int MaximumSourceBytes = 32 * 1024 * 1024;

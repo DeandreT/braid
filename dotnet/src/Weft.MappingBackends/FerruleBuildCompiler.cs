@@ -25,7 +25,7 @@ public sealed class BuildNativeSource(ActorContext actor, IBuildAdmissionReader 
 public sealed class FerruleBuildCompiler : IBuildCompiler
 {
     public const string Adapter = FerrulePreviewBackend.AdapterBuild;
-    public static BuildRuntimeProfile Profile { get; } = new(BuildWorkerProtocol.Profile, 1, "dotnet", "10.0.112", "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes);
+    public static BuildRuntimeProfile Profile { get; } = new(BuildWorkerProtocol.Profile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes);
     private readonly IInspectionWorkerRunner runner;
     private readonly BuildNativeSource sources;
     public FerruleBuildCompiler(IInspectionWorkerRunner runner, BuildNativeSource sources)
