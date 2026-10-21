@@ -140,6 +140,18 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
             Assert.Equal(CompiledBuildOutcome.Completed, result.Outcome);
             var comparison = new RegressionComparisonService().Compare(value.Expected, new(Weft.Contracts.Operations.OperationStatusV1.Succeeded, result.Outputs!));
             Assert.Equal(RegressionComparisonOutcome.Passed, comparison.Outcome);
+            var built = (await history.ReadAsync(native.Actor, revision.OrganizationId, intent.BuildId))!;
+            var savedEvidence = (await runReader.ReadAsync(native.Actor, revision.OrganizationId, intent.RegressionEvidenceId))!;
+            var qualification = BuildQualification.Create(Guid.NewGuid(), native.Actor.PrincipalId, built, savedEvidence, value,
+                invocation.RuntimeImage, result);
+            Assert.Equal(built.Artifact!.ContentDigest, qualification.Artifact.ContentDigest);
+            Assert.Equal(qualification.Fingerprint, BuildQualification.Restore(qualification.Id, native.Actor.PrincipalId, built,
+                savedEvidence, value, invocation.RuntimeImage, qualification.CopyCanonicalBytes(), qualification.CopyResultBytes()).Fingerprint);
+            await using var qualifications = new PostgresBuildQualificationStore(native.Case.RegressionConnectionString("weft_qualification_writer"), true);
+            Assert.Equal(BuildQualificationWriteOutcome.Created, await qualifications.SaveAsync(native.Actor, qualification));
+            var retainedQualification = (await qualifications.ReadAsync(native.Actor, new(revision.OrganizationId, revision.ProjectId, revision.MappingId), qualification.Id))!;
+            Assert.Equal(qualification.Fingerprint, retainedQualification.Fingerprint);
+            Assert.Equal(qualification.CopyResultBytes(), retainedQualification.CopyResultBytes());
         }
     }
 

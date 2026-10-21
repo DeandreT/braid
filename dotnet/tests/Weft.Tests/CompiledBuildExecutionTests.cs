@@ -120,6 +120,7 @@ public sealed class CompiledBuildExecutionTests
 
     private sealed class Fixture : IBuildRunReader, IBuildAdmissionReader, IBuildPublicationCatalog, IPrivateObjectStore, ICompiledBuildRuntime
     {
+        public string RuntimeImage => "sha256:" + new string('f', 64);
         internal ActorContext Actor { get; } = new(new(Guid.NewGuid()));
         internal BuildIntent Intent { get; }
         internal MappingScope Mapping => new(Intent.Revision.OrganizationId, Intent.Revision.ProjectId, Intent.Revision.MappingId);

@@ -135,6 +135,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(RegressionSchemaTestContract.BuildChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.BuildDispatchChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.BuildMetadataChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.QualificationChecksum);
             var value = await command.ExecuteScalarAsync(cancellationToken);
             Assert.True(value is string, "The private session upgrade conservation observation is unavailable.");
             using var document = JsonDocument.Parse((string)value!);
@@ -344,6 +345,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=18)=$23::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=19)=$24::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=20)=$25::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=21)=$26::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace

@@ -17,6 +17,23 @@ public sealed class RegressionRunResultCodec
         MaxDepth = 8
     };
 
+    /// <summary>Encodes observed bytes with a recomputed comparison, then validates the canonical result against its case.</summary>
+    public byte[] EncodeObservation(Guid runId, RegressionCaseVersion value, MappingPreviewStatus status,
+        RegressionOutputSet outputs, CancellationToken token = default)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(outputs);
+        token.ThrowIfCancellationRequested();
+        if (!Enum.IsDefined(status)) throw Invalid();
+        var reference = new RegressionCaseEnvelopeCodec().Encode(value, token).Reference;
+        var comparison = new RegressionComparisonService().Compare(value.Expected,
+            new(status == MappingPreviewStatus.Succeeded ? OperationStatusV1.Succeeded : OperationStatusV1.BackendFailure, outputs),
+            value.ComparisonPolicy, cancellationToken: token);
+        var bytes = Encode(runId, reference, RegressionCaseExecution.Complete(status, outputs, comparison), token);
+        _ = Decode(runId, value, bytes, token);
+        return bytes;
+    }
+
     public byte[] Encode(Guid runId, RegressionCaseReference reference, RegressionCaseExecution execution, CancellationToken token = default)
     {
         token.ThrowIfCancellationRequested();
