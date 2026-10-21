@@ -29,6 +29,8 @@ public sealed class BuildRunSchemaTests(PostgresFixture fixture, ITestOutputHelp
         await using var isolated = new PostgresFixture(provisionMetadataEditor: true, provisionBuildRunProfiles: false);
         await isolated.InitializeAsync();
         await using var test = await isolated.CreateCaseAsync(migrate: false);
+        await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(18).ToArray()))
+            await prefix.MigrateAsync();
         await Assert.ThrowsAsync<Npgsql.PostgresException>(() => test.MigrateAsync());
         Assert.Equal(18L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
         await using var legacy = new PostgresBuildStore(test.RegressionConnectionString("weft_build_reader"), false);
