@@ -333,6 +333,14 @@ can be stored in [Azure Blob storage](docs/private-storage-blob.md)
 [#234](https://github.com/DeandreT/weft/pull/234),
 [#238](https://github.com/DeandreT/weft/pull/238)); both are packaged for the hosted-shape
 stack and the Azure templates in [#241](https://github.com/DeandreT/weft/pull/241).
+The [hosted acceptance](docs/hosted-acceptance.md) run
+([#243](https://github.com/DeandreT/weft/issues/243),
+[#249](https://github.com/DeandreT/weft/pull/249),
+[#250](https://github.com/DeandreT/weft/pull/250)) drives the packaged, signed-in stack
+end to end with the Ferrule service and Blob storage: upload, reports, chat with verified
+citations, preview, comparison and regression runs, through server restart and service
+replica scaling. Its identity provider, Blob endpoint and model are local stand-ins;
+an operator-approved Azure environment and Entra registration replace them.
 
 The first hosted release is admitted only when P0-P8 are implemented and
 qualified. Local-only viewer prototypes can be demonstrated earlier. Entra or
