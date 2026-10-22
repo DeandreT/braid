@@ -19,14 +19,40 @@
 .session-copy h2 {
   margin: 0 0 4px;
   color: #69786f;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
 }
 
 .session-summary {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--wb-evidence-text);
+  background: var(--wb-evidence-tint);
+}
+.session-summary[data-tone="success"] {
+  color: var(--wb-success-text);
+  background: var(--wb-success-tint);
+}
+.session-summary[data-tone="running"] {
+  color: var(--wb-running-text);
+  background: var(--wb-running-tint);
+}
+.session-summary[data-tone="attention"],
+.session-summary[data-tone="uncertain"] {
+  color: var(--wb-attention-text);
+  background: var(--wb-attention-tint);
+}
+.session-summary[data-tone="uncertain"] {
+  border: 1px dashed currentColor;
+}
+.session-summary[data-tone="unavailable"] {
+  color: var(--wb-unavailable-text);
+  background: var(--wb-unavailable-tint);
 }
 
 .session-detail,
@@ -34,7 +60,7 @@
 .forget-review p {
   margin: 6px 0 0;
   color: #69786f;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
@@ -74,7 +100,7 @@
 
 .forget-review h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .forget-review .session-actions {

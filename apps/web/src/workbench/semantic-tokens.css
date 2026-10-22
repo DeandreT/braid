@@ -1,0 +1,80 @@
+:root {
+  --wb-source-text: #2d62a8;
+  --wb-source-tint: #edf4fc;
+  --wb-rule-text: #7051a3;
+  --wb-rule-tint: #f3effa;
+  --wb-output-text: #1d7475;
+  --wb-output-tint: #eaf6f4;
+  --wb-evidence-text: #5d6e80;
+  --wb-evidence-tint: #f0f3f6;
+  --wb-selection-text: #174d3f;
+  --wb-selection-tint: #e8f1de;
+  --wb-success-text: #2d6d42;
+  --wb-success-tint: #eaf5e8;
+  --wb-running-text: var(--wb-source-text);
+  --wb-running-tint: var(--wb-source-tint);
+  --wb-attention-text: #855b12;
+  --wb-attention-tint: #fff3d6;
+  --wb-failure-text: #a33b32;
+  --wb-failure-tint: #fcece8;
+  --wb-unavailable-text: #5f705f;
+  --wb-unavailable-tint: #eff3ec;
+  --wb-focus: #174d3f;
+  --wb-control-border: #7b8c78;
+}
+
+.app-shell
+  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):not(
+    :disabled
+  ):not([aria-invalid="true"]) {
+  border-color: var(--wb-control-border);
+}
+
+/* A labeled state gets a small marker, not a saturated panel or inferred verdict. */
+.wb-state {
+  --wb-state-color: var(--wb-evidence-text);
+  --wb-state-border-style: solid;
+  border-inline-start: 3px var(--wb-state-border-style) var(--wb-state-color);
+  padding-inline-start: 8px;
+}
+.wb-state[data-state="loading"],
+.wb-state[data-tone="running"] {
+  --wb-state-color: var(--wb-running-text);
+}
+.wb-state[data-state="invalidLink"],
+.wb-state[data-tone="failure"] {
+  --wb-state-color: var(--wb-failure-text);
+}
+.wb-state[data-state="rejected"],
+.wb-state[data-tone="attention"] {
+  --wb-state-color: var(--wb-attention-text);
+}
+.wb-state[data-tone="success"] {
+  --wb-state-color: var(--wb-success-text);
+}
+.wb-state[data-tone="uncertain"] {
+  --wb-state-color: var(--wb-attention-text);
+  --wb-state-border-style: dashed;
+}
+.wb-state[data-state="readOnly"],
+.wb-state[data-state="unavailable"],
+.wb-state[data-state="notFound"] {
+  --wb-state-color: var(--wb-unavailable-text);
+}
+
+[data-role="source"] {
+  --wb-role-text: var(--wb-source-text);
+  --wb-role-tint: var(--wb-source-tint);
+}
+[data-role="rule"] {
+  --wb-role-text: var(--wb-rule-text);
+  --wb-role-tint: var(--wb-rule-tint);
+}
+[data-role="output"] {
+  --wb-role-text: var(--wb-output-text);
+  --wb-role-tint: var(--wb-output-tint);
+}
+[data-role="evidence"] {
+  --wb-role-text: var(--wb-evidence-text);
+  --wb-role-tint: var(--wb-evidence-tint);
+}

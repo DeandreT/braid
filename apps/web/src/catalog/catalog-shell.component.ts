@@ -27,6 +27,7 @@ import {
 } from "rxjs";
 import { CatalogApi } from "./catalog-api";
 import { BrowserSessionState } from "../auth/browser-session-state";
+import { fileStatusLabel } from "../workbench/presentation";
 import { CatalogContextStore } from "./catalog-context";
 import { createCatalogRead } from "./catalog-state";
 import { revisionReportSelectors } from "./reports/revision-report-selection";
@@ -252,7 +253,7 @@ export abstract class CatalogRoutePage<T, TScope extends CatalogScope> {
   }
 
   admissionLabel(admission: "valid" | "decodedInvalid"): string {
-    return admission === "valid" ? "Passed validation" : "Validation issues";
+    return fileStatusLabel(admission);
   }
 }
 

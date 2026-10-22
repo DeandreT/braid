@@ -1,4 +1,4 @@
-import { DOCUMENT, DatePipe } from "@angular/common";
+import { DatePipe } from "@angular/common";
 import {
   Component,
   DestroyRef,
@@ -9,6 +9,16 @@ import {
   untracked,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { StatusChipComponent } from "../../workbench/status-chip.component";
+import { MetadataValueComponent } from "../../workbench/metadata-value.component";
+import { ConfirmationComponent } from "../../workbench/confirmation.component";
+import type { ConfirmationView } from "../../workbench/confirmation";
+import {
+  buildConfirmation,
+  type BuildConfirmationContext,
+} from "./build-confirmation";
+import { buildStatus } from "../../workbench/presentation";
+import { buildLabels, buildRequestLabels } from "./build-presentation";
 import { RouterLink } from "@angular/router";
 import { Subscription, map, switchMap, type Observable } from "rxjs";
 import { BrowserSessionState } from "../../auth/browser-session-state";
@@ -61,11 +71,21 @@ import {
 /** No durable browser storage: uncertain requests keep their original immutable frame until explicit recovery or invalidation. */
 @Component({
   selector: "weft-revision-builds",
-  imports: [FormsModule, DatePipe, RouterLink],
+  imports: [
+    FormsModule,
+    DatePipe,
+    RouterLink,
+    StatusChipComponent,
+    MetadataValueComponent,
+    ConfirmationComponent,
+  ],
   templateUrl: "./revision-builds.component.html",
   styleUrl: "./revision-builds.component.css",
 })
 export class RevisionBuildsComponent {
+  readonly copy = buildLabels;
+  readonly requestLabels = buildRequestLabels;
+  readonly buildStatus = buildStatus;
   readonly context = input.required<CatalogContext>();
   readonly mapping = input.required<CatalogMapping>();
   readonly revision = input.required<CatalogRevision>();
@@ -74,7 +94,6 @@ export class RevisionBuildsComponent {
   private readonly regression = inject(RegressionApi);
   private readonly catalog = inject(CatalogApi);
   private readonly sessions = inject(BrowserSessionState);
-  private readonly document = inject(DOCUMENT);
   private readonly recovery = inject(BuildViewRecovery);
   private readonly admission = signal<CatalogContext | null>(null);
   private readonly observedAccess = signal<CatalogMapping["access"] | null>(
@@ -101,6 +120,12 @@ export class RevisionBuildsComponent {
   readonly blocked = signal(false);
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
+  readonly confirmation = signal<{
+    view: ConfirmationView;
+    operation: PendingBuildMutation;
+    epoch: number;
+    forget: boolean;
+  } | null>(null);
   readonly routes = catalogRoutes;
 
   constructor() {
@@ -271,12 +296,18 @@ export class RevisionBuildsComponent {
     const value = this.selectedApproval();
     if (!value || !this.capabilities()?.submitBuilds || !this.canMutate())
       return;
-    this.capture(() => captureSubmission(this.owner(), value));
+    this.capture(
+      () => captureSubmission(this.owner(), value),
+      value.environment,
+    );
   }
   revoke(): void {
     const value = this.selectedApproval();
     if (value && this.canMutate())
-      this.capture(() => captureRevocation(this.owner(), value));
+      this.capture(
+        () => captureRevocation(this.owner(), value),
+        value.environment,
+      );
   }
   loadHistory(next = false): void {
     const after = next ? this.history()?.nextBuildId : undefined;
@@ -299,8 +330,14 @@ export class RevisionBuildsComponent {
   }
   cancel(): void {
     const value = this.selectedRun();
-    if (value && this.canMutate())
-      this.capture(() => captureCancellation(this.owner(), value));
+    if (value && this.canMutate()) {
+      const approval = this.selectedApproval();
+      this.capture(
+        () => captureCancellation(this.owner(), value),
+        approval?.buildId === value.buildId ? approval.environment : undefined,
+        buildStatus(value.state).label,
+      );
+    }
   }
   retryPending(): void {
     const pending = this.pending();
@@ -373,14 +410,47 @@ export class RevisionBuildsComponent {
     );
   }
   abandon(): void {
+    const operation = this.pending();
+    if (this.busy() || !operation || this.confirmation()) return;
+    this.confirmation.set({
+      operation,
+      epoch: this.epoch,
+      forget: true,
+      view: {
+        title: "Stop tracking this request?",
+        action: "Stop tracking",
+        effect:
+          "This clears only the local recovery details. It does not cancel the request, which may already have succeeded. Check the saved results before creating another request.",
+        afterLeaving:
+          "The server request may still finish after tracking stops or you leave this page.",
+        facts: [
+          { label: "Mapping version", value: String(this.revision().sequence) },
+          { label: "Request reference", value: operation.id },
+        ],
+      },
+    });
+  }
+  dismissConfirmation(): void {
+    this.confirmation.set(null);
+  }
+  confirmAction(): void {
+    const captured = this.confirmation();
+    this.confirmation.set(null);
     if (
-      this.busy() ||
-      !this.document.defaultView?.confirm(
-        "The original request may already have committed. Forget its recovery details? Check your saved approvals and build history before creating a replacement.",
-      )
+      !captured ||
+      captured.epoch !== this.epoch ||
+      !sameOwner(captured.operation.owner, this.owner())
     )
       return;
-    this.pending.set(null);
+    if (captured.forget) {
+      if (!this.busy() && this.pending() === captured.operation)
+        this.pending.set(null);
+      return;
+    }
+    if (!this.canMutate() || !this.sessions.canDispatch(this.admitted()))
+      return;
+    this.pending.set(captured.operation);
+    this.retryPending();
   }
   isCurrent(value: { revision: CatalogRevision["scope"] }): boolean {
     return sameRevision(value.revision, this.revision().scope);
@@ -410,10 +480,24 @@ export class RevisionBuildsComponent {
       "administrator"
     );
   }
-  private capture(factory: () => PendingBuildMutation): void {
+  private capture(
+    factory: () => PendingBuildMutation,
+    environment?: BuildConfirmationContext["environment"],
+    previousState?: string,
+  ): void {
+    if (this.confirmation()) return;
     try {
-      this.pending.set(factory());
-      this.retryPending();
+      const operation = factory();
+      this.confirmation.set({
+        operation,
+        epoch: this.epoch,
+        forget: false,
+        view: buildConfirmation(operation, {
+          sequence: String(this.revision().sequence),
+          environment,
+          previousState,
+        }),
+      });
     } catch (error: unknown) {
       this.error.set(message(error));
     }
@@ -497,8 +581,8 @@ export class RevisionBuildsComponent {
     this.selectedRun.set(value);
     this.notice.set(
       value.state === "uncertain"
-        ? "Artifact metadata was retained, but completion was not confirmed. This is not success; do not automatically create a replacement build."
-        : `Build state: ${this.label(value.state)}.`,
+        ? "The result is not confirmed. Check the previous request before preparing again."
+        : `${buildStatus(value.state).label}.`,
     );
     if (active(value)) this.schedulePoll(value.buildId);
   }
@@ -601,6 +685,7 @@ export class RevisionBuildsComponent {
     }, 2000);
   }
   private hideMetadata(): void {
+    this.confirmation.set(null);
     this.stopTimer();
     this.capabilities.set(null);
     this.environmentCapabilities.set(null);
@@ -650,18 +735,18 @@ function message(error: unknown): string {
         : "unavailable";
   return {
     unavailable:
-      "The request could not be confirmed. Keep its original recovery details and read or retry it explicitly.",
+      "The result could not be confirmed. If a previous request is still being tracked, check it before sending another.",
     notFound:
-      "Build controls or the requested record are unavailable. Refresh build access before continuing.",
+      "Preparation controls or the requested record are unavailable. Check access before continuing.",
     rejected: "Your access changed. Refresh the catalog before continuing.",
     conflict:
-      "This identity already belongs to different selectors. The original request has been kept.",
+      "This request reference already belongs to different settings. The original request has been kept.",
     invalid:
       "The request was refused. The original recovery details have been kept.",
     precondition:
-      "Current permission, runtime, active environment or passing saved evidence could not be established. No hidden report derivation was started.",
-    busy: "The active-build limit has been reached. Complete or cancel existing builds before retrying this original request.",
+      "The required permission, runtime, environment or passing test result could not be confirmed. No new report was generated.",
+    busy: "Too many preparations are active. Finish or cancel one, then resend the same request.",
     incompatible:
-      "The returned metadata could not be verified. No successful mutation or build is assumed.",
+      "The returned details could not be verified. No successful change or preparation is assumed.",
   }[kind];
 }

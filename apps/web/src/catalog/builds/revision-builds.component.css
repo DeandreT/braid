@@ -48,12 +48,20 @@
   background: #f5f8f1;
   margin-top: 16px;
 }
-.builds-error,
-.builds-uncertain {
-  background: #fbf3ef;
-  color: #6d3b2a;
+.builds-error {
+  background: var(--wb-failure-tint);
+  color: var(--wb-failure-text);
   padding: 12px;
   border-radius: 9px;
+}
+.builds-uncertain,
+.builds-recovery[data-tone="uncertain"] {
+  background: var(--wb-attention-tint);
+  border: 1px dashed var(--wb-attention-text);
+}
+.builds-recovery[data-tone="running"] {
+  background: var(--wb-running-tint);
+  border: 1px solid var(--wb-running-text);
 }
 h3,
 h4 {
@@ -70,7 +78,7 @@ select {
   width: 100%;
   min-width: 0;
   padding: 8px 10px;
-  border: 1px solid #ccdcca;
+  border: 1px solid var(--wb-control-border);
   border-radius: 8px;
   font: inherit;
 }

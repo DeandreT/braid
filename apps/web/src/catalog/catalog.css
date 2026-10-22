@@ -98,7 +98,7 @@
   min-height: 42px;
   padding: 10px 15px;
   border-radius: 9px;
-  border: 1px solid #ccdcca;
+  border: 1px solid var(--wb-control-border);
   background: #f5f8f1;
   color: #345d45;
   font-size: 13px;
@@ -280,7 +280,7 @@
   margin: 18px 0 0;
 }
 .catalog-facts dt {
-  color: #6d806c;
+  color: var(--wb-evidence-text);
 }
 .catalog-facts dd {
   margin: 0;

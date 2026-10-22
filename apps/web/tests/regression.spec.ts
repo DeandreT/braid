@@ -324,7 +324,7 @@ test("saved fixture keeps lexical values and executes its exact version", async 
   await panel(page)
     .getByRole("button", { name: "Run saved version", exact: true })
     .click();
-  await expect(panel(page)).toContainText("Comparison: Passed");
+  await expect(panel(page)).toContainText("Matches expected result");
   expect(fixture.submissions[0].body).toEqual({ caseId: CASE, version: "1" });
   await panel(page)
     .getByRole("button", { name: "View actual primary", exact: true })
@@ -341,10 +341,10 @@ test("a saved fixture refreshes the case table without a manual reload", async (
     .getByRole("button", { name: "New test case", exact: true })
     .click();
   await panel(page)
-    .getByLabel("Fixture name", { exact: true })
+    .getByLabel("Test name", { exact: true })
     .fill("Freshly saved case");
   await panel(page)
-    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .getByRole("button", { name: "Save test version", exact: true })
     .click();
   await expect(
     panel(page).getByRole("table", { name: "Saved regression cases" }),
@@ -381,10 +381,10 @@ test("recovering a new fixture clears a previously selected run from another cas
     .getByRole("button", { name: "New test case", exact: true })
     .click();
   await panel(page)
-    .getByLabel("Fixture name", { exact: true })
+    .getByLabel("Test name", { exact: true })
     .fill("Recovered new case");
   await panel(page)
-    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .getByRole("button", { name: "Save test version", exact: true })
     .click();
   await expect(
     panel(page).getByRole("button", {
@@ -439,10 +439,10 @@ test("file publication preserves binary bytes and named inputs", async ({
     .getByRole("button", { name: "New test case", exact: true })
     .click();
   await panel(page)
-    .getByLabel("Fixture name", { exact: true })
+    .getByLabel("Test name", { exact: true })
     .fill("Binary fixture");
   await panel(page)
-    .getByLabel("Fixed clock (UTC or offset)", { exact: true })
+    .getByLabel("Test date and time (UTC or offset)", { exact: true })
     .fill("2026-10-20T12:00:00Z");
   const files = panel(page).locator('input[type="file"]');
   await files.nth(0).setInputFiles({
@@ -456,7 +456,7 @@ test("file publication preserves binary bytes and named inputs", async ({
     buffer: Buffer.from([255, 0, 1]),
   });
   await panel(page)
-    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .getByRole("button", { name: "Save test version", exact: true })
     .click();
   await expect(panel(page)).toContainText(
     "The exact fixture version is saved.",
@@ -481,14 +481,14 @@ test("lost publication response retries the same immutable request", async ({
     .getByRole("button", { name: "New test case", exact: true })
     .click();
   await panel(page)
-    .getByLabel("Fixture name", { exact: true })
+    .getByLabel("Test name", { exact: true })
     .fill("Original fixture");
   await panel(page)
-    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .getByRole("button", { name: "Save test version", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toBeVisible();
   await expect(
-    panel(page).getByLabel("Fixture name", { exact: true }),
+    panel(page).getByLabel("Test name", { exact: true }),
   ).toBeDisabled();
   await panel(page)
     .getByRole("button", { name: "Retry original publication", exact: true })
@@ -511,7 +511,7 @@ test("lost run response can be recovered without submitting again", async ({
   await panel(page)
     .getByRole("button", { name: "Check original run", exact: true })
     .click();
-  await expect(panel(page)).toContainText("Comparison: Passed");
+  await expect(panel(page)).toContainText("Matches expected result");
   expect(fixture.submissions).toHaveLength(1);
 });
 
@@ -527,11 +527,11 @@ test("failed comparison displays a byte offset rather than a passing result", as
   await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
-  await expect(panel(page)).toContainText("Comparison: Failed");
+  await expect(panel(page)).toContainText("Result differs from expected");
   await expect(
     panel(page).getByRole("cell", { name: "Bytes Differ", exact: true }),
   ).toBeVisible();
-  await expect(panel(page)).not.toContainText("Comparison: Passed");
+  await expect(panel(page)).not.toContainText("Matches expected result");
 });
 
 test("running case can be canceled without fabricating a comparison", async ({
@@ -551,7 +551,7 @@ test("running case can be canceled without fabricating a comparison", async ({
     .click();
   await expect(panel(page)).toContainText("Canceled");
   expect(fixture.cancels).toBe(1);
-  await expect(panel(page)).not.toContainText("Comparison: Passed");
+  await expect(panel(page)).not.toContainText("Matches expected result");
 });
 
 test("a malformed passing response is rejected", async ({ page }) => {
@@ -567,7 +567,7 @@ test("a malformed passing response is rejected", async ({ page }) => {
   await expect(panel(page).getByRole("alert")).toContainText(
     "could not be verified",
   );
-  await expect(panel(page)).not.toContainText("Comparison: Passed");
+  await expect(panel(page)).not.toContainText("Matches expected result");
 });
 
 test("output text is never interpreted as HTML", async ({ page }) => {
@@ -643,10 +643,10 @@ test("publication remains busy until its chained case read finishes", async ({
       .getByRole("button", { name: "New test case", exact: true })
       .click();
     await panel(page)
-      .getByLabel("Fixture name", { exact: true })
+      .getByLabel("Test name", { exact: true })
       .fill("Chained fixture");
     await panel(page)
-      .getByRole("button", { name: "Publish fixture version", exact: true })
+      .getByRole("button", { name: "Save test version", exact: true })
       .click();
     await expect.poll(() => entered).toBe(true);
     await expect(
@@ -684,9 +684,7 @@ test("publication waits for all selected file bytes", async ({ page }) => {
   await panel(page)
     .getByRole("button", { name: "New test case", exact: true })
     .click();
-  await panel(page)
-    .getByLabel("Fixture name", { exact: true })
-    .fill("Slow file");
+  await panel(page).getByLabel("Test name", { exact: true }).fill("Slow file");
   await panel(page)
     .locator('input[type="file"]')
     .first()
@@ -698,7 +696,7 @@ test("publication waits for all selected file bytes", async ({ page }) => {
   await expect(panel(page)).toContainText("Reading selected files");
   await expect(
     panel(page).getByRole("button", {
-      name: "Publish fixture version",
+      name: "Save test version",
       exact: true,
     }),
   ).toBeDisabled();
@@ -709,7 +707,7 @@ test("publication waits for all selected file bytes", async ({ page }) => {
   );
   await expect(panel(page)).toContainText("slow.bin · 3 exact bytes");
   await panel(page)
-    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .getByRole("button", { name: "Save test version", exact: true })
     .click();
   await expect.poll(() => fixture.publications.length).toBe(1);
   expect(fixture.publications[0].body.primaryBase64Url).toBe("AP8B");
@@ -753,7 +751,7 @@ for (const defect of [
     await expect(panel(page).getByRole("alert")).toContainText(
       "could not be verified",
     );
-    await expect(panel(page)).not.toContainText("Comparison: Passed");
+    await expect(panel(page)).not.toContainText("Matches expected result");
   });
 }
 
@@ -767,7 +765,7 @@ test("publication recovery accepts canonical server collection ordering", async 
     .getByRole("button", { name: "New test case", exact: true })
     .click();
   await panel(page)
-    .getByLabel("Fixture name", { exact: true })
+    .getByLabel("Test name", { exact: true })
     .fill("Ordered fixture");
   await panel(page)
     .getByRole("button", { name: "Add named input", exact: true })
@@ -784,7 +782,7 @@ test("publication recovery accepts canonical server collection ordering", async 
     .nth(1)
     .fill("alpha");
   await panel(page)
-    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .getByRole("button", { name: "Save test version", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toBeVisible();
   await panel(page)
@@ -808,7 +806,7 @@ test("next version preserves offset nanoseconds and intentional invalid paramete
     .getByRole("button", { name: "Edit as next version", exact: true })
     .click();
   await panel(page)
-    .getByRole("button", { name: "Publish fixture version", exact: true })
+    .getByRole("button", { name: "Save test version", exact: true })
     .click();
   await expect.poll(() => fixture.publications.length).toBe(1);
   expect(fixture.publications[0].version).toBe("2");
@@ -860,7 +858,7 @@ test("active result polling resumes after a slower history request", async ({
       }),
     ).toBeEnabled();
     await page.clock.fastForward(2500);
-    await expect(panel(page)).toContainText("Comparison: Passed");
+    await expect(panel(page)).toContainText("Matches expected result");
   } finally {
     release();
   }

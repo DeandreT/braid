@@ -66,12 +66,12 @@ export function normalizeWorkbenchLayout(value: unknown): WorkbenchLayout {
 export function inspectorLabels(
   view: WorkbenchView,
 ): readonly [string, string, string] {
-  if (view === "tests") return ["Failure", "Reproduction", "Outputs"];
-  if (view === "builds") return ["Readiness", "Approval", "Artifact"];
+  if (view === "tests") return ["Result", "Test setup", "Outputs"];
+  if (view === "builds") return ["Readiness", "Approval", "Prepared version"];
   if (view === "releases" || view === "audit")
-    return ["Gates", "Release", "Audit"];
-  if (view === "preview") return ["Input", "Context", "Evidence"];
-  return ["Rule", "Lineage", "Evidence"];
+    return ["Required checks", "In use", "Change history"];
+  if (view === "preview") return ["Incoming data", "Context", "Details"];
+  return ["Rule", "Data flow", "Details"];
 }
 
 export function workbenchScopeKey(scope: CatalogRevisionScope): string {
@@ -93,6 +93,10 @@ export interface CaseSelection {
 export interface RunSelection extends CaseSelection {
   runId: string;
 }
+export interface InvestigationTrail {
+  run: RunSelection;
+  path: readonly NodeReference[];
+}
 export interface WorkbenchSelection {
   binding: string | null;
   epoch: number;
@@ -103,6 +107,7 @@ export interface WorkbenchSelection {
   case: CaseSelection | null;
   run: RunSelection | null;
   sampleMode: boolean;
+  investigation: InvestigationTrail | null;
 }
 export function emptyWorkbenchSelection(
   binding: string | null = null,
@@ -118,6 +123,7 @@ export function emptyWorkbenchSelection(
     case: null,
     run: null,
     sampleMode: false,
+    investigation: null,
   };
 }
 
@@ -145,6 +151,13 @@ export type WorkbenchAction =
       selection: RunSelection | null;
     }
   | { kind: "sample"; binding: string; epoch: number; enabled: boolean }
+  | {
+      kind: "investigate";
+      binding: string;
+      epoch: number;
+      run: RunSelection;
+      entity: NodeReference;
+    }
   | { kind: "clear" };
 
 function validCase(value: CaseSelection): boolean {
@@ -186,8 +199,41 @@ export function reduceWorkbenchSelection(
     state.epoch !== action.epoch
   )
     return state;
-  if (action.kind === "entity")
-    return { ...state, entity: action.entity ? { ...action.entity } : null };
+  if (action.kind === "investigate") {
+    if (
+      !state.run ||
+      !sameRun(state.run, action.run) ||
+      !state.case ||
+      state.case.caseId !== action.run.caseId ||
+      state.case.version !== action.run.version
+    )
+      return state;
+    return {
+      ...state,
+      investigation: { run: { ...state.run }, path: [{ ...action.entity }] },
+    };
+  }
+  if (action.kind === "entity") {
+    const trail = state.investigation;
+    const existing =
+      trail?.path.findIndex(
+        (value) => JSON.stringify(value) === JSON.stringify(action.entity),
+      ) ?? -1;
+    return {
+      ...state,
+      entity: action.entity ? { ...action.entity } : null,
+      investigation:
+        trail && action.entity
+          ? {
+              ...trail,
+              path:
+                existing >= 0
+                  ? trail.path.slice(0, existing + 1)
+                  : [...trail.path.slice(-7), { ...action.entity }],
+            }
+          : null,
+    };
+  }
   if (action.kind === "sample") return { ...state, sampleMode: action.enabled };
   if (action.kind === "case") {
     if (action.selection && !validCase(action.selection)) return state;
@@ -201,6 +247,7 @@ export function reduceWorkbenchSelection(
       case: value ? { ...value } : null,
       run: sameRun ? state.run : null,
       sampleMode: false,
+      investigation: sameRun ? state.investigation : null,
     };
   }
   if (
@@ -214,5 +261,13 @@ export function reduceWorkbenchSelection(
     run: run ? { ...run } : null,
     case: run ? { caseId: run.caseId, version: run.version } : state.case,
     sampleMode: false,
+    investigation:
+      run && state.run && sameRun(run, state.run) ? state.investigation : null,
   };
+}
+
+function sameRun(a: RunSelection, b: RunSelection): boolean {
+  return (
+    a.runId === b.runId && a.caseId === b.caseId && a.version === b.version
+  );
 }

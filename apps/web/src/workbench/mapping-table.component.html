@@ -5,16 +5,16 @@
   <input
     id="workbench-field-search"
     type="search"
-    placeholder="Filter source, rule or target…"
+    placeholder="Filter incoming field, rule or result…"
     [value]="search()"
     (input)="setSearch($any($event.target).value)"
   />
   <select
-    aria-label="Output boundary"
+    aria-label="Result document"
     [value]="outputId()"
     (change)="chooseOutput($any($event.target).value)"
   >
-    <option value="">All outputs</option>
+    <option value="">All result documents</option>
     @for (boundary of view().outputs; track boundary.id) {
       <option [value]="boundary.id">{{ boundary.name }}</option>
     }
@@ -22,24 +22,24 @@
   <select
     aria-label="Group fields"
     [value]="grouping()"
-    (change)="grouping.set($any($event.target).value)"
+    (change)="setGrouping($any($event.target).value)"
   >
     <option value="structure">By structure</option>
-    <option value="output">By output</option>
+    <option value="output">By result document</option>
   </select>
   <button
     type="button"
     (click)="partialOnly.set(!partialOnly()); page.set(0)"
     [attr.aria-pressed]="partialOnly()"
   >
-    Partial
+    Incomplete details
   </button>
   <button
     type="button"
     (click)="showLineage.set(!showLineage())"
     [attr.aria-pressed]="showLineage()"
   >
-    Lineage
+    Data flow
   </button>
   <button
     type="button"
@@ -48,8 +48,8 @@
     [attr.aria-pressed]="showSamples()"
     [title]="
       sample()
-        ? 'Show authorized observed sample values'
-        : 'Select an authorized case for this revision in Tests'
+        ? 'Show values from the selected saved sample'
+        : 'Select a saved test case for this version in Tests'
     "
   >
     Sample values
@@ -63,21 +63,28 @@
   >
     <summary>Columns</summary>
     <div>
-      <label><input type="checkbox" checked disabled />Source</label>
+      <label><input type="checkbox" checked disabled />Incoming field</label>
       <label
         ><input
           type="checkbox"
           [checked]="!hiddenColumns().has('rule')"
           (change)="toggleColumn('rule')"
-        />Transformation</label
+        />Rule</label
       >
-      <label><input type="checkbox" checked disabled />Target</label>
+      <label><input type="checkbox" checked disabled />Result field</label>
       <label
         ><input
           type="checkbox"
           [checked]="!hiddenColumns().has('type')"
           (change)="toggleColumn('type')"
         />Type</label
+      >
+      <label
+        ><input
+          type="checkbox"
+          [checked]="pinKeyColumn()"
+          (change)="togglePin()"
+        />Pin incoming field</label
       >
     </div>
   </details>
@@ -99,13 +106,19 @@
 @if (showLineage()) {
   <div class="wb-inline-lineage">
     @if (selectedRow(); as row) {
-      <span>{{ cell(row, "source") }}</span
-      ><span aria-hidden="true">→</span><strong>{{ cell(row, "rule") }}</strong
-      ><span aria-hidden="true">→</span><span>{{ path(row.field.path) }}</span>
+      <span data-role="source"
+        ><small>Incoming field</small>{{ cell(row, "source") }}</span
+      ><span aria-hidden="true">→</span
+      ><strong data-role="rule"
+        ><small>Rule</small>{{ cell(row, "rule") }}</strong
+      ><span aria-hidden="true">→</span
+      ><span data-role="output"
+        ><small>Result field</small>{{ path(row.field.path) }}</span
+      >
     } @else {
       <span class="wb-muted"
-        >Select a field to show its declared source → rule → target
-        lineage.</span
+        >Select a field to see how it is filled. This shows declared data flow,
+        not observed execution.</span
       >
     }
   </div>
@@ -117,6 +130,7 @@
 <div class="wb-table-scroll">
   <table
     class="wb-field-table"
+    [class.wb-pin-key]="pinKeyColumn()"
     [style.min-width.px]="minimumWidth()"
     aria-label="Mapping field connections"
     aria-describedby="workbench-row-help"
@@ -130,6 +144,7 @@
       <tr>
         @for (column of columns(); track column.id) {
           <th
+            [attr.data-role]="role(column.id)"
             scope="col"
             [attr.aria-sort]="
               sort() === column.id
@@ -212,7 +227,9 @@
                           ><weft-sample-value [value]="source.value" />
                         </div>
                       } @empty {
-                        <span class="wb-muted">No direct observed input</span>
+                        <span class="wb-muted"
+                          >No matching input value for this sample</span
+                        >
                       }
                     }
                     @case ("output") {
@@ -228,7 +245,7 @@
                         cell(row, column.id)
                       }}</span>
                       @if (column.id === "rule" && row.incomplete) {
-                        <span class="wb-partial"> · partial</span>
+                        <span class="wb-partial"> · incomplete details</span>
                       }
                     }
                   }
@@ -240,13 +257,20 @@
       } @empty {
         <tr>
           <td [attr.colspan]="columns().length">
-            No fields match this selection.
-            <button
-              type="button"
-              (click)="setSearch(''); outputId.set(''); partialOnly.set(false)"
-            >
-              Clear filters
-            </button>
+            @if (view().rows.length === 0) {
+              No field details are available from this mapping. Open Details for
+              any explanation gaps.
+            } @else {
+              No fields match this selection.
+              <button
+                type="button"
+                (click)="
+                  setSearch(''); outputId.set(''); partialOnly.set(false)
+                "
+              >
+                Clear filters
+              </button>
+            }
           </td>
         </tr>
       }

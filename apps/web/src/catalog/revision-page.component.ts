@@ -1,4 +1,4 @@
-import { DOCUMENT, DatePipe } from "@angular/common";
+import { DOCUMENT } from "@angular/common";
 import {
   Component,
   DestroyRef,
@@ -62,9 +62,20 @@ import {
   displayDocument,
   documentKey,
 } from "../workbench/workbench-documents";
-import type { NodeReference } from "../mappings/projection-view";
+import type {
+  NodeReference,
+  ProjectionView,
+} from "../mappings/projection-view";
 import type { DockView } from "../workbench/workbench-model";
 import { NativeEvidenceComponent } from "../mappings/native-evidence.component";
+import { StatusChipComponent } from "../workbench/status-chip.component";
+import { MetadataValueComponent } from "../workbench/metadata-value.component";
+import {
+  buildStatus,
+  comparisonStatus,
+  operationStatus,
+  uncertainStatus,
+} from "../workbench/presentation";
 
 interface RevisionScreen {
   project: CatalogProject;
@@ -75,7 +86,6 @@ interface RevisionScreen {
 @Component({
   selector: "weft-revision-page",
   imports: [
-    DatePipe,
     RouterLink,
     CatalogStatusComponent,
     RevisionReportsComponent,
@@ -86,6 +96,8 @@ interface RevisionScreen {
     WorkbenchFrameComponent,
     WorkbenchEntityInspectorComponent,
     NativeEvidenceComponent,
+    StatusChipComponent,
+    MetadataValueComponent,
   ],
   providers: [BuildViewRecovery, WorkbenchState],
   templateUrl: "./revision-page.component.html",
@@ -96,6 +108,37 @@ export class RevisionPageComponent extends CatalogRoutePage<
   CatalogRevisionScope
 > {
   readonly workbench = inject(WorkbenchState);
+  readonly comparisonStatus = comparisonStatus;
+  readonly buildStatus = buildStatus;
+  readonly operationStatus = operationStatus;
+  readonly uncertainStatus = uncertainStatus;
+  readonly investigation = computed(() => {
+    const trail = this.workbench.selection().investigation;
+    if (!trail) return null;
+    const run = this.selectedRun()?.run,
+      savedCase = this.selectedCase(),
+      projection = this.projection();
+    if (
+      !run ||
+      !savedCase ||
+      !projection ||
+      trail.run.runId !== run.runId ||
+      trail.run.caseId !== savedCase.caseId ||
+      trail.run.version !== savedCase.version ||
+      !trail.path.every((reference) =>
+        this.referenceExists(projection, reference),
+      )
+    )
+      return null;
+    return {
+      runId: run.runId,
+      name: savedCase.definition.name,
+      path: trail.path.map((reference) => ({
+        reference,
+        label: projection.label(reference),
+      })),
+    };
+  });
   private readonly recents = inject(WorkbenchRecents);
   readonly reportView = viewChild(RevisionReportsComponent);
   readonly regressionView = viewChild(RevisionRegressionComponent);
@@ -196,7 +239,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
             {
               id: "selected-case",
               label: this.selectedCase()!.definition.name,
-              detail: "Selected saved case",
+              detail: "Selected test case",
               view: "tests" as const,
             },
           ]
@@ -205,8 +248,8 @@ export class RevisionPageComponent extends CatalogRoutePage<
         ? [
             {
               id: "upload",
-              label: "Upload revision",
-              detail: "Preserve this immutable revision",
+              label: "Upload version",
+              detail: "Keep this saved version unchanged",
             },
           ]
         : []),
@@ -220,7 +263,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
     return [
       value?.definition.name,
       run ? "Selected run" : null,
-      revision ? `Revision ${revision}` : null,
+      revision ? `Version ${revision}` : null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -455,19 +498,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
     const value = this.projection(),
       { binding, epoch } = this.workbench.selection();
     if (!binding || !value) return;
-    if (reference) {
-      const present =
-        reference.kind === "field"
-          ? value.fields.has(reference.fieldId)
-          : reference.kind === "rule"
-            ? value.rules.has(reference.ruleId)
-            : reference.kind === "boundary"
-              ? value.boundaries.has(reference.boundaryId)
-              : reference.kind === "control"
-                ? value.controls.has(reference.controlId)
-                : value.parameters.has(reference.parameterId);
-      if (!present) return;
-    }
+    if (reference && !this.referenceExists(value, reference)) return;
     this.workbench.dispatch({
       kind: "entity",
       binding,
@@ -479,6 +510,56 @@ export class RevisionPageComponent extends CatalogRoutePage<
       this.workbench.updateLayout({ inspectorCollapsed: false });
       this.frame()?.mobileInspector.set(true);
     }
+  }
+
+  private referenceExists(
+    value: ProjectionView,
+    reference: NodeReference,
+  ): boolean {
+    switch (reference.kind) {
+      case "field":
+        return value.fields.has(reference.fieldId);
+      case "rule":
+        return value.rules.has(reference.ruleId);
+      case "boundary":
+        return value.boundaries.has(reference.boundaryId);
+      case "control":
+        return value.controls.has(reference.controlId);
+      case "parameter":
+        return value.parameters.has(reference.parameterId);
+    }
+  }
+
+  investigateField(fieldId: string): void {
+    const run = this.selectedRun()?.run;
+    const { binding, epoch } = this.workbench.selection();
+    if (
+      !binding ||
+      !run ||
+      !this.affectedFields().some((field) => field.fieldId === fieldId)
+    )
+      return;
+    this.workbench.dispatch({
+      kind: "investigate",
+      binding,
+      epoch,
+      run: { runId: run.runId, caseId: run.caseId, version: run.version },
+      entity: { kind: "field", fieldId },
+    });
+    this.inspect({ kind: "field", fieldId });
+  }
+
+  returnToTest(): void {
+    if (!this.investigation()) return;
+    this.workbench.dispatch({ kind: "view", view: "tests" });
+    this.frame()?.mobileInspector.set(false);
+    afterNextRender(
+      () =>
+        this.document
+          .querySelector<HTMLElement>("#regression-result-title")
+          ?.focus(),
+      { injector: this.injector },
+    );
   }
 
   showDiagnostic(value: { validation: boolean; ordinal: number }): void {

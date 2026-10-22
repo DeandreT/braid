@@ -39,7 +39,7 @@ input {
 }
 button,
 .wb-action {
-  border: 1px solid #cad9bf;
+  border: 1px solid var(--wb-control-border);
   border-radius: 3px;
   padding: 3px 6px;
   color: #244c36;
@@ -64,6 +64,31 @@ button:disabled {
 }
 .wb-workflow {
   min-width: 0;
+}
+.wb-workflows {
+  display: flex;
+  flex-direction: column;
+}
+.wb-workflow {
+  flex: 1;
+  min-height: 0;
+}
+.wb-trail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid #d7e2d1;
+  background: var(--wb-evidence-tint);
+}
+.wb-trail button {
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.wb-trail button:focus-visible {
+  outline: 2px solid var(--wb-focus);
+  outline-offset: 1px;
 }
 .wb-command-bar {
   display: flex;
@@ -160,6 +185,18 @@ pre {
   min-width: 0;
   border-right: 1px solid #d7e2d1;
   padding-right: 6px;
+}
+.wb-diff-changed > section:first-child h3 {
+  color: var(--wb-failure-text);
+}
+.wb-diff-changed > section:last-child h3 {
+  color: var(--wb-success-text);
+}
+[data-severity="error"] {
+  color: var(--wb-failure-text);
+}
+[data-severity="warning"] {
+  color: var(--wb-attention-text);
 }
 .wb-diagnostic-group article {
   border-bottom: 1px solid #d7e2d1;

@@ -1,14 +1,23 @@
 import { test, expect, type Page } from "@playwright/test";
-import { buildFixture, type BuildFixture } from "./builds.fixture";
+import {
+  buildFixture,
+  environmentId,
+  scope,
+  type BuildFixture,
+} from "./builds.fixture";
+import { confirmAction } from "./confirmation.fixture";
 
 const panel = (page: Page) =>
-  page.getByRole("region", { name: "Approved builds", exact: true });
+  page.getByRole("region", { name: "Prepare this version", exact: true });
 async function loaded(page: Page) {
   await panel(page)
-    .getByRole("button", { name: "Load build controls", exact: true })
+    .getByRole("button", { name: "Load preparation controls", exact: true })
     .click();
   await expect(
-    panel(page).getByLabel("Exact retained environment version"),
+    panel(page).getByRole("combobox", {
+      name: "Environment version",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     panel(page).getByRole("button", {
@@ -27,17 +36,18 @@ async function approved(page: Page, state: BuildFixture) {
     .click();
   await expect(
     panel(page).getByRole("button", {
-      name: "Approve immutable build",
+      name: "Approve preparation",
       exact: true,
     }),
   ).toBeEnabled();
   await panel(page)
-    .getByRole("button", { name: "Approve immutable build", exact: true })
+    .getByRole("button", { name: "Approve preparation", exact: true })
     .click();
+  await confirmAction(page);
   await expect.poll(() => state.approval?.approvalId).toBeTruthy();
   await expect(
     panel(page).getByRole("button", {
-      name: "Queue approved build",
+      name: "Prepare approved version",
       exact: true,
     }),
   ).toBeEnabled();
@@ -46,11 +56,143 @@ async function settledOriginal(page: Page, state: BuildFixture): Promise<void> {
   await expect.poll(() => state.writes.length).toBe(1);
   await expect(
     panel(page).getByRole("button", {
-      name: "Retry original request",
+      name: "Resend the same request",
       exact: true,
     }),
   ).toBeEnabled();
 }
+
+test("approval confirmation names the exact version and environment and Escape sends nothing", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  await loaded(page);
+  await panel(page)
+    .getByRole("button", { name: "Load saved regression runs", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("button", { name: "Verify this evidence", exact: true })
+    .click();
+  const approve = panel(page).getByRole("button", {
+    name: "Approve preparation",
+    exact: true,
+  });
+  await approve.click();
+  const dialog = page.getByRole("dialog", {
+    name: "Approve preparation of version 1",
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(scope.revisionId);
+  await expect(dialog).toContainText(environmentId);
+  await expect(dialog).toContainText(
+    "does not start preparation or change the version in use",
+  );
+  await expect(
+    dialog.getByRole("button", { name: "Not now", exact: true }),
+  ).toBeFocused();
+  expect(state.writes).toHaveLength(0);
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(approve).toBeFocused();
+  expect(state.writes).toHaveLength(0);
+  await approve.click();
+  const reference = (
+    await dialog.locator('dt:has-text("Request reference") + dd').innerText()
+  ).trim();
+  await confirmAction(page);
+  await expect.poll(() => state.writes.length).toBe(1);
+  expect(state.writes[0].url).toMatch(
+    new RegExp("/build-approvals/" + reference + "$"),
+  );
+  expect(JSON.parse(state.writes[0].body!)).toMatchObject({
+    revisionId: scope.revisionId,
+    environmentId,
+  });
+});
+
+test("confirming after access changes cannot send the captured mutation", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  await loaded(page);
+  await panel(page)
+    .getByRole("button", { name: "Environment administration", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("button", { name: "Register new environment", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  expect(state.writes).toHaveLength(0);
+  state.role = "publisher";
+  await confirmAction(page);
+  await expect(panel(page).getByRole("alert")).toContainText("access changed");
+  expect(state.writes).toHaveLength(0);
+});
+
+test("leaving an unconfirmed dialog does not submit or retain a pending operation", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  await loaded(page);
+  await panel(page)
+    .getByRole("button", { name: "Environment administration", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("button", { name: "Register new environment", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.reload();
+  await page.getByRole("tab", { name: "Prepare", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Previous request",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(state.writes).toHaveLength(0);
+});
+
+test("stopping tracking is explicit and never sends server cancellation", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  await loaded(page);
+  await panel(page)
+    .getByRole("button", { name: "Environment administration", exact: true })
+    .click();
+  state.nextWriteFailure = "abort";
+  await panel(page)
+    .getByRole("button", { name: "Register new environment", exact: true })
+    .click();
+  await confirmAction(page);
+  await settledOriginal(page, state);
+  await panel(page)
+    .getByRole("button", { name: "Stop tracking this request", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "does not cancel the request",
+  );
+  await page.keyboard.press("Escape");
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Previous request",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await panel(page)
+    .getByRole("button", { name: "Stop tracking this request", exact: true })
+    .click();
+  await confirmAction(page);
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Previous request",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(state.writes).toHaveLength(1);
+});
 
 test("approval, explicit queue and a terminal cancellation race preserve actual result metadata", async ({
   page,
@@ -63,21 +205,30 @@ test("approval, explicit queue and a terminal cancellation race preserve actual 
   );
   expect(state.writes[0].token).toBe("synthetic-ui-only-not-a-credential");
   await panel(page)
-    .getByRole("button", { name: "Queue approved build", exact: true })
+    .getByRole("button", { name: "Prepare approved version", exact: true })
     .click();
+  await confirmAction(page);
   await expect(
-    panel(page).getByRole("button", { name: "Cancel build", exact: true }),
+    panel(page).getByRole("button", {
+      name: "Cancel preparation",
+      exact: true,
+    }),
   ).toBeEnabled();
   state.cancelWinsAsSuccess = true;
   await panel(page)
-    .getByRole("button", { name: "Cancel build", exact: true })
+    .getByRole("button", { name: "Cancel preparation", exact: true })
     .click();
+  await confirmAction(page);
   await expect(
     panel(page).getByRole("heading", {
-      name: "Succeeded · Attempt 1 of 3",
+      name: "Preparation complete · Attempt 1 of 3",
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    panel(page).getByText("Private artifact digest", { exact: true }),
+  ).not.toBeVisible();
+  await panel(page).locator(".builds-result-details > summary").click();
   await expect(
     panel(page).getByText("Private artifact digest", { exact: true }),
   ).toBeVisible();
@@ -99,22 +250,23 @@ test("lost approval reply retries the original URL and exact body without creati
     .click();
   state.nextWriteFailure = "abort";
   await panel(page)
-    .getByRole("button", { name: "Approve immutable build", exact: true })
+    .getByRole("button", { name: "Approve preparation", exact: true })
     .click();
+  await confirmAction(page);
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toBeVisible();
   await settledOriginal(page, state);
   const original = state.writes[0];
   await panel(page)
-    .getByRole("button", { name: "Retry original request", exact: true })
+    .getByRole("button", { name: "Resend the same request", exact: true })
     .click();
   await expect(
     panel(page).getByRole("button", {
-      name: "Queue approved build",
+      name: "Prepare approved version",
       exact: true,
     }),
   ).toBeEnabled();
@@ -135,9 +287,10 @@ test("a catalog metadata refresh replaces the child without discarding its uncer
   await panel(page)
     .getByRole("button", { name: "Register new environment", exact: true })
     .click();
+  await confirmAction(page);
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toBeVisible();
@@ -149,17 +302,17 @@ test("a catalog metadata refresh replaces the child without discarding its uncer
   await loaded(page);
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toBeVisible();
   await panel(page)
-    .getByRole("button", { name: "Retry original request", exact: true })
+    .getByRole("button", { name: "Resend the same request", exact: true })
     .click();
   await expect.poll(() => state.writes.length).toBe(2);
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -180,21 +333,22 @@ test("fresh administrator-to-publisher change clears the old operation before mu
   await panel(page)
     .getByRole("button", { name: "Register new environment", exact: true })
     .click();
+  await confirmAction(page);
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toBeVisible();
   await settledOriginal(page, state);
   state.role = "publisher";
   await panel(page)
-    .getByRole("button", { name: "Retry original request", exact: true })
+    .getByRole("button", { name: "Resend the same request", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toContainText("access changed");
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -220,20 +374,21 @@ test("an opaque post-commit 404 hides metadata without replacing a still-owned o
   await panel(page)
     .getByRole("button", { name: "Register new environment", exact: true })
     .click();
+  await confirmAction(page);
   await expect(
     panel(page).getByRole("button", {
-      name: "Load build controls",
+      name: "Load preparation controls",
       exact: true,
     }),
   ).toBeVisible();
   const original = state.writes[0];
   await loaded(page);
   await panel(page)
-    .getByRole("button", { name: "Read original result", exact: true })
+    .getByRole("button", { name: "Check previous result", exact: true })
     .click();
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -247,10 +402,14 @@ test("uncertain is terminal metadata, never a successful build or an automatic r
   const state = await buildFixture(page);
   await approved(page, state);
   await panel(page)
-    .getByRole("button", { name: "Queue approved build", exact: true })
+    .getByRole("button", { name: "Prepare approved version", exact: true })
     .click();
+  await confirmAction(page);
   await expect(
-    panel(page).getByRole("button", { name: "Cancel build", exact: true }),
+    panel(page).getByRole("button", {
+      name: "Cancel preparation",
+      exact: true,
+    }),
   ).toBeEnabled();
   Object.assign(state.run!, {
     state: "uncertain",
@@ -263,11 +422,11 @@ test("uncertain is terminal metadata, never a successful build or an automatic r
     },
   });
   await panel(page)
-    .getByRole("button", { name: "Refresh build result", exact: true })
+    .getByRole("button", { name: "Refresh preparation result", exact: true })
     .click();
   await expect(
     panel(page).getByRole("heading", {
-      name: "Uncertain · Attempt 3 of 3",
+      name: "Result not confirmed — check the previous request · Attempt 3 of 3",
       exact: true,
     }),
   ).toBeVisible();
@@ -275,7 +434,10 @@ test("uncertain is terminal metadata, never a successful build or an automatic r
     panel(page).getByText("Not confirmed as successful.", { exact: true }),
   ).toBeVisible();
   await expect(
-    panel(page).getByRole("button", { name: "Cancel build", exact: true }),
+    panel(page).getByRole("button", {
+      name: "Cancel preparation",
+      exact: true,
+    }),
   ).toHaveCount(0);
   expect(state.writes).toHaveLength(2);
 });
@@ -292,16 +454,17 @@ test("an incompatible receipt preserves the original request for a read-only rec
   await panel(page)
     .getByRole("button", { name: "Register new environment", exact: true })
     .click();
+  await confirmAction(page);
   await settledOriginal(page, state);
   await expect(panel(page).getByRole("alert")).toContainText(
     "could not be verified",
   );
   await panel(page)
-    .getByRole("button", { name: "Read original result", exact: true })
+    .getByRole("button", { name: "Check previous result", exact: true })
     .click();
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -320,15 +483,16 @@ test("a changed actor clears private recovery before another write", async ({
   await panel(page)
     .getByRole("button", { name: "Register new environment", exact: true })
     .click();
+  await confirmAction(page);
   await settledOriginal(page, state);
   state.actorPrincipalId = "70000000-0000-4000-8000-000000000099";
   await panel(page)
-    .getByRole("button", { name: "Retry original request", exact: true })
+    .getByRole("button", { name: "Resend the same request", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toContainText("access changed");
   await expect(
     panel(page).getByRole("heading", {
-      name: "Original request recovery",
+      name: "Previous request",
       exact: true,
     }),
   ).toHaveCount(0);
@@ -341,7 +505,7 @@ test("viewer admission does not dispatch a private build request", async ({
   const state = await buildFixture(page);
   state.role = "viewer";
   await panel(page)
-    .getByRole("button", { name: "Load build controls", exact: true })
+    .getByRole("button", { name: "Load preparation controls", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toContainText("access changed");
   await expect(
@@ -359,7 +523,7 @@ test("an explicit metadata capability refusal does not display private build con
   const state = await buildFixture(page);
   state.readOwnMetadata = false;
   await panel(page)
-    .getByRole("button", { name: "Load build controls", exact: true })
+    .getByRole("button", { name: "Load preparation controls", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toContainText(
     "cannot read private build metadata",
@@ -379,14 +543,18 @@ test("foreign run scope is refused without replacing the displayed original resu
   const state = await buildFixture(page);
   await approved(page, state);
   await panel(page)
-    .getByRole("button", { name: "Queue approved build", exact: true })
+    .getByRole("button", { name: "Prepare approved version", exact: true })
     .click();
+  await confirmAction(page);
   await expect(
-    panel(page).getByRole("button", { name: "Cancel build", exact: true }),
+    panel(page).getByRole("button", {
+      name: "Cancel preparation",
+      exact: true,
+    }),
   ).toBeEnabled();
   state.forgeRun = true;
   await panel(page)
-    .getByRole("button", { name: "Refresh build result", exact: true })
+    .getByRole("button", { name: "Refresh preparation result", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toContainText(
     "could not be verified",
@@ -405,21 +573,58 @@ test("narrow keyboard interaction keeps the build panel within the viewport", as
   await buildFixture(page);
   await page.setViewportSize({ width: 360, height: 780 });
   const load = panel(page).getByRole("button", {
-    name: "Load build controls",
+    name: "Load preparation controls",
     exact: true,
   });
   await load.focus();
   await page.keyboard.press("Enter");
   await expect(
-    panel(page).getByLabel("Exact retained environment version"),
+    panel(page).getByRole("combobox", {
+      name: "Environment version",
+      exact: true,
+    }),
   ).toBeVisible();
-  await panel(page).getByLabel("Exact retained environment version").focus();
+  await panel(page)
+    .getByRole("combobox", { name: "Environment version", exact: true })
+    .focus();
   await expect(
-    panel(page).getByLabel("Exact retained environment version"),
+    panel(page).getByRole("combobox", {
+      name: "Environment version",
+      exact: true,
+    }),
   ).toBeFocused();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+});
+
+test("a scaled narrow confirmation keeps exact references readable and defaults to the safe action", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  await loaded(page);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.addStyleTag({ content: ":root { font-size: 24px !important; }" });
+  await panel(page)
+    .getByRole("button", { name: "Environment administration", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("button", { name: "Register new environment", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText(scope.revisionId);
+  await expect(
+    dialog.getByRole("button", { name: "Not now", exact: true }),
+  ).toBeFocused();
+  expect((await dialog.boundingBox())!.width).toBeLessThanOrEqual(360);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.keyboard.press("Enter");
+  await expect(dialog).not.toBeVisible();
+  expect(state.writes).toHaveLength(0);
 });

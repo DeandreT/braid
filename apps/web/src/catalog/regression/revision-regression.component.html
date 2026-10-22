@@ -4,8 +4,8 @@
 >
   <h2 id="regression-title">Regression tests</h2>
   <p>
-    Save explicit test fixtures and compare exact output bytes. These are not
-    production payloads.
+    Save test cases and compare their results, including exact formatting. These
+    are not production payloads.
   </p>
   @if (!capabilities()) {
     <button
@@ -118,7 +118,13 @@
                       : "Other revision"
                   }}
                 </td>
-                <td>{{ item.createdAtUtc | date: "short" : "UTC" }}</td>
+                <td>
+                  <weft-metadata-value
+                    kind="time"
+                    label="Test saved time"
+                    [value]="item.createdAtUtc"
+                  />
+                </td>
                 <td>
                   @if (capability.readSamples) {
                     <button
@@ -196,7 +202,7 @@
           <dd>
             <code>{{ value.revision.revisionId }}</code>
           </dd>
-          <dt>Fixed clock</dt>
+          <dt>Test date and time</dt>
           <dd>{{ value.definition.currentDateTime }}</dd>
           <dt>Primary input</dt>
           <dd>
@@ -214,7 +220,7 @@
           </dd>
         </dl>
         @if (value.definition.parameters.length) {
-          <h4>Exact typed parameters</h4>
+          <h4>Test settings</h4>
           <ul>
             @for (
               parameter of value.definition.parameters;
@@ -229,7 +235,9 @@
         }
         <h4>Expected outputs</h4>
         @if (!value.definition.expected.length) {
-          <p>No baseline outputs. This cannot pass comparison.</p>
+          <p>
+            No expected result is saved. Add one before checking this sample.
+          </p>
         }
         <ul>
           @for (output of value.definition.expected; track output.name) {
@@ -280,7 +288,7 @@
         class="regression-detail"
         aria-labelledby="regression-editor-title"
       >
-        <h3 id="regression-editor-title">Publish an immutable fixture</h3>
+        <h3 id="regression-editor-title">Save test case</h3>
         <p>
           Uses revision {{ revision().sequence }} shown on this page. Text is
           encoded as UTF-8 without reformatting. A chosen file preserves its
@@ -288,13 +296,13 @@
         </p>
         <fieldset [disabled]="busy() || !!pendingCase()">
           <label
-            >Fixture name<input
+            >Test name<input
               class="regression-text"
               [(ngModel)]="name"
               maxlength="256"
           /></label>
           <label
-            >Fixed clock (UTC or offset)<input
+            >Test date and time (UTC or offset)<input
               class="regression-text"
               [(ngModel)]="clock"
               placeholder="2026-10-20T12:00:00Z"
@@ -449,14 +457,14 @@
             (click)="publish()"
             [disabled]="importing() > 0"
           >
-            Publish fixture version
+            Save test version
           </button>
         </fieldset>
       </section>
     }
     @if (pendingCase(); as pending) {
       <div class="regression-recovery" role="status">
-        <h3>Confirm fixture publication</h3>
+        <h3>Check previous save</h3>
         <p>
           The original request is retained in this view. Case {{ pending.id }},
           version {{ pending.version }}. Leaving this page clears its private
@@ -490,7 +498,7 @@
     }
     @if (pendingRun(); as pending) {
       <div class="regression-recovery" role="status">
-        <h3>Confirm run submission</h3>
+        <h3>Check previous run</h3>
         <p>
           Original run ID: <code>{{ pending.id }}</code
           >. Check it before starting another run.
@@ -607,9 +615,12 @@
         class="regression-detail"
         aria-labelledby="regression-result-title"
       >
-        <h3 id="regression-result-title">Regression run result</h3>
+        <h3 id="regression-result-title" tabindex="-1">
+          Regression run result
+        </h3>
         <p role="status">
-          {{ label(value.run.state) }} · Attempt {{ value.run.attempt }} of 3
+          <weft-status-chip [status]="operationStatus(value.run.state)" /> ·
+          Attempt {{ value.run.attempt }} of 3
         </p>
         <dl class="catalog-facts">
           <dt>Run ID</dt>
@@ -644,12 +655,20 @@
           }
         </div>
         @if (value.comparison; as comparison) {
-          <p
-            class="regression-verdict"
-            [class.regression-error]="comparison.outcome !== 'passed'"
-          >
-            Comparison: {{ label(comparison.outcome) }}
+          <p class="regression-verdict">
+            <weft-status-chip
+              [status]="
+                comparisonStatus(
+                  comparison.outcome,
+                  comparison.notEvaluatedReason
+                )
+              "
+            />
           </p>
+          <details>
+            <summary>Technical comparison details</summary>
+            Outcome: {{ comparison.outcome }} · Policy: {{ comparison.policy }}
+          </details>
           @if (comparison.outcome === "notEvaluated") {
             <p>{{ label(comparison.notEvaluatedReason) }}</p>
           }

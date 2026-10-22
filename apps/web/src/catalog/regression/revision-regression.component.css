@@ -59,7 +59,7 @@ textarea {
   min-width: 0;
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #ccdcca;
+  border: 1px solid var(--wb-control-border);
   border-radius: 8px;
   font: inherit;
 }

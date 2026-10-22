@@ -95,7 +95,7 @@
   line-height: 1.7;
 }
 .report-facts dt {
-  color: #6d806c;
+  color: var(--wb-evidence-text);
 }
 .report-facts dd {
   min-width: 0;
@@ -124,7 +124,7 @@
   justify-content: center;
   min-height: 42px;
   padding: 10px 14px;
-  border: 1px solid #ccdcca;
+  border: 1px solid var(--wb-control-border);
   border-radius: 9px;
   background: #f5f8f1;
   color: #345d45;

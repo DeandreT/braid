@@ -4,7 +4,7 @@
   [attr.aria-busy]="state.busy() || state.preparingFile()"
 >
   <header class="upload-heading">
-    <p class="upload-eyebrow">Native mapping</p>
+    <p class="upload-eyebrow">Original mapping file</p>
     <h1 id="upload-title" tabindex="-1">Upload mapping</h1>
     <p>
       Choose a Ferrule native JSON mapping. The original file is stored
@@ -74,9 +74,15 @@
   }
 
   @if (state.admission() === "loading") {
-    <p role="status">Checking current identity and project access…</p>
+    <p class="wb-state" data-state="loading" role="status">
+      Checking current identity and project access…
+    </p>
   } @else if (state.admission() !== "ready") {
-    <section class="upload-card" role="status">
+    <section
+      class="upload-card wb-state"
+      [attr.data-state]="state.admission()"
+      role="status"
+    >
       <h2>Upload form unavailable</h2>
       @switch (state.admission()) {
         @case ("invalidLink") {
@@ -135,7 +141,11 @@
     <p class="upload-error" role="alert">{{ errorMessage(error.kind) }}</p>
   }
   @if (state.outcomeUnknown()) {
-    <section class="upload-card upload-notice" aria-labelledby="upload-unknown">
+    <section
+      class="upload-card upload-notice wb-state"
+      data-tone="uncertain"
+      aria-labelledby="upload-unknown"
+    >
       <h2 id="upload-unknown" tabindex="-1">Upload outcome is unknown</h2>
       <p>
         The upload may have saved. Keep this tab open and recover the original
@@ -152,7 +162,15 @@
   }
 
   @if (state.acknowledgement(); as saved) {
-    <section class="upload-card" aria-labelledby="upload-saved">
+    <section
+      class="upload-card wb-state"
+      [attr.data-tone]="
+        saved.detailed && saved.admission === 'decodedInvalid'
+          ? 'attention'
+          : 'success'
+      "
+      aria-labelledby="upload-saved"
+    >
       <h2 id="upload-saved" tabindex="-1">
         {{
           saved.detailed && saved.admission === "decodedInvalid"

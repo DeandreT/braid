@@ -1,14 +1,18 @@
-<section class="catalog-summary builds-panel" aria-labelledby="builds-title">
-  <h2 id="builds-title">Approved builds</h2>
+<section
+  class="catalog-summary builds-panel"
+  aria-labelledby="builds-title"
+  [attr.aria-busy]="busy()"
+>
+  <h2 id="builds-title">{{ copy.title }}</h2>
   <p>
-    Compile this exact saved revision using passing saved evidence. A build does
-    not deploy an endpoint. Artifact bodies are not downloaded here.
+    Prepare this saved version using the test result selected below. This will
+    not change the version currently in use.
   </p>
   @if (!capabilities()) {
     @if (pending()) {
       <p role="status">
-        An original request is retained in this revision view. Load build access
-        to recover it before creating a replacement.
+        A previous request is still being tracked. Check access to its result
+        before sending another request.
       </p>
     }
     <button
@@ -17,7 +21,7 @@
       (click)="load()"
       [disabled]="busy()"
     >
-      Load build controls
+      {{ copy.load }}
     </button>
   }
   @if (error(); as value) {
@@ -27,28 +31,45 @@
     <p role="status">{{ value }}</p>
   }
   @if (capabilities(); as cap) {
-    <p class="builds-runtime">
-      Server-selected runtime:
+    @if (!cap.approveBuilds && !cap.submitBuilds) {
+      <p role="note">
+        Read-only preparation view. You can check existing records; new
+        preparation actions are unavailable.
+      </p>
+    }
+    <details class="builds-runtime">
+      <summary>Technical details</summary>
+      Runtime selected by the server:
       <strong
         >{{ cap.profile.runtime }} {{ cap.profile.runtimeVersion }}</strong
       >
-      · Profile {{ cap.profile.id }} v{{ cap.profile.version }}.
-    </p>
+      · Profile {{ cap.profile.id }} v{{ cap.profile.version }}. Prepared files
+      are not downloaded from this screen.
+    </details>
     @if (!cap.approveBuilds) {
       <p>
-        New builds are not supported for this backend. Retained own metadata can
-        still be recovered.
+        Approval is unavailable with the current access and configuration. You
+        can still check your existing records.
       </p>
     }
     @if (pending(); as value) {
-      <section class="builds-recovery" aria-labelledby="builds-recovery-title">
-        <h3 id="builds-recovery-title">Original request recovery</h3>
+      <section
+        class="builds-recovery"
+        [attr.data-tone]="busy() ? 'running' : 'uncertain'"
+        aria-labelledby="builds-recovery-title"
+      >
+        <h3 id="builds-recovery-title">{{ copy.recovery }}</h3>
         <p>
-          {{ label(value.kind) }} · <code>{{ value.id }}</code>
+          {{ requestLabels[value.kind] }} · <code>{{ value.id }}</code>
         </p>
         <p>
-          The exact original IDs and body are retained. No replacement is
-          created automatically.
+          @if (busy()) {
+            The original request is in progress. Wait for its result.
+          } @else {
+            We couldn't confirm the previous request. Check its result before
+            sending another request. Resending uses the same request, not a
+            replacement.
+          }
         </p>
         <div class="builds-actions">
           <button
@@ -57,7 +78,7 @@
             (click)="recoverPending()"
             [disabled]="busy()"
           >
-            Read original result
+            {{ copy.readOriginal }}
           </button>
           <button
             class="catalog-button"
@@ -65,7 +86,7 @@
             (click)="retryPending()"
             [disabled]="busy()"
           >
-            Retry original request
+            {{ copy.resend }}
           </button>
           <button
             class="catalog-button"
@@ -73,7 +94,7 @@
             (click)="abandon()"
             [disabled]="busy()"
           >
-            Forget recovery details
+            {{ copy.forget }}
           </button>
         </div>
       </section>
@@ -102,8 +123,9 @@
       </div>
       @if (environments(); as page) {
         <label
-          >Exact retained environment version
+          >Environment version
           <select
+            aria-label="Environment version"
             [ngModel]="
               selectedEnvironment()
                 ? environmentKey(selectedEnvironment()!)
@@ -177,10 +199,10 @@
       }
     </section>
     <section class="builds-section" aria-labelledby="builds-evidence-title">
-      <h3 id="builds-evidence-title">Passing saved evidence</h3>
+      <h3 id="builds-evidence-title">Required test result</h3>
       <p>
-        A completed run is not assumed to pass. Selecting one reloads and
-        verifies its comparison for this revision.
+        Select a completed run to check whether its result matches the saved
+        expectation for this version.
       </p>
       <button
         class="catalog-button"
@@ -196,9 +218,11 @@
             @if (isCurrent(item)) {
               <li>
                 <div>
-                  <code>{{ item.runId }}</code
-                  ><br />Case version {{ item.version }} ·
-                  {{ label(item.state) }}
+                  Test version {{ item.version }} · {{ label(item.state) }}
+                  <details>
+                    <summary>Run reference</summary>
+                    <code>{{ item.runId }}</code>
+                  </details>
                 </div>
                 <button
                   class="catalog-button"
@@ -227,9 +251,12 @@
       }
       @if (evidence(); as value) {
         <p role="status">
-          Exact-byte comparison passed for <code>{{ value.runId }}</code
-          >.
+          Result matches the saved expectation, including formatting.
         </p>
+        <details class="builds-evidence-reference">
+          <summary>Selected test result reference</summary>
+          <code>{{ value.runId }}</code>
+        </details>
       }
       <div class="builds-actions">
         <button
@@ -244,35 +271,39 @@
             !evidence()
           "
         >
-          Approve immutable build
+          {{ copy.approve }}
         </button>
       </div>
     </section>
     <section class="builds-section" aria-labelledby="builds-approvals-title">
-      <h3 id="builds-approvals-title">Own approvals</h3>
+      <h3 id="builds-approvals-title">{{ copy.approvals }}</h3>
       <button
         class="catalog-button"
         type="button"
         (click)="loadApprovals()"
         [disabled]="busy()"
       >
-        Load own approvals
+        {{ copy.loadApprovals }}
       </button>
       @if (approvals(); as page) {
         <ul class="builds-list">
           @for (item of page.approvals; track item.approvalId) {
             <li>
               <div>
-                <code>{{ item.approvalId }}</code
-                ><br />{{ item.revoked ? "Revoked" : "Retained" }} ·
+                {{ item.revoked ? "Withdrawn" : "Recorded" }} ·
                 {{
                   item.environmentActive
                     ? "Active environment"
                     : "Inactive environment"
-                }}<br />
-                <a [routerLink]="routes.revision(item.revision)"
-                  >Revision {{ item.revision.revisionId }}</a
-                >
+                }}
+                <details>
+                  <summary>Approval references</summary>
+                  <code>{{ item.approvalId }}</code
+                  ><br />
+                  <a [routerLink]="routes.revision(item.revision)"
+                    >Version {{ item.revision.revisionId }}</a
+                  >
+                </details>
               </div>
               <button
                 class="catalog-button"
@@ -297,36 +328,43 @@
         }
       }
       @if (selectedApproval(); as value) {
-        <dl class="catalog-facts">
-          <dt>Approval</dt>
-          <dd>
-            <code>{{ value.approvalId }}</code>
-          </dd>
-          <dt>Build ID</dt>
-          <dd>
-            <code>{{ value.buildId }}</code>
-          </dd>
-          <dt>Approved native digest</dt>
-          <dd>
-            <code>{{ value.nativeDigest }}</code>
-          </dd>
-          <dt>Original runtime</dt>
-          <dd>
-            {{ value.profile.runtime }} {{ value.profile.runtimeVersion }}
-          </dd>
-          <dt>Status</dt>
-          <dd>
-            {{ value.revoked ? "Revoked" : "Retained approval" }} ·
-            {{
-              value.environmentActive
-                ? "Active environment"
-                : "Inactive environment"
-            }}
-          </dd>
-        </dl>
+        <p>
+          {{ value.revoked ? "Approval withdrawn" : "Approval recorded" }} ·
+          Environment version {{ value.environment.version }}
+        </p>
+        <details class="builds-approval-details">
+          <summary>Approval technical details</summary>
+          <dl class="catalog-facts">
+            <dt>Approval</dt>
+            <dd>
+              <code>{{ value.approvalId }}</code>
+            </dd>
+            <dt>Build ID</dt>
+            <dd>
+              <code>{{ value.buildId }}</code>
+            </dd>
+            <dt>Approved native digest</dt>
+            <dd>
+              <code>{{ value.nativeDigest }}</code>
+            </dd>
+            <dt>Original runtime</dt>
+            <dd>
+              {{ value.profile.runtime }} {{ value.profile.runtimeVersion }}
+            </dd>
+            <dt>Status</dt>
+            <dd>
+              {{ value.revoked ? "Revoked" : "Retained approval" }} ·
+              {{
+                value.environmentActive
+                  ? "Active environment"
+                  : "Inactive environment"
+              }}
+            </dd>
+          </dl>
+        </details>
         @if (!isCurrent(value)) {
           <p>
-            This approval belongs to another revision. Open that revision before
+            This approval belongs to another version. Open that version before
             creating new work.
           </p>
         }
@@ -337,7 +375,7 @@
             (click)="submit()"
             [disabled]="busy() || !!pending() || !canQueue()"
           >
-            Queue approved build
+            {{ copy.submit }}
           </button>
           <button
             class="catalog-button"
@@ -345,7 +383,7 @@
             (click)="recoverApprovalRun()"
             [disabled]="busy() || !!pending()"
           >
-            Recover original build
+            {{ copy.recoverBuild }}
           </button>
           <button
             class="catalog-button"
@@ -355,30 +393,30 @@
               busy() || !!pending() || value.revoked || !isCurrent(value)
             "
           >
-            Revoke own approval
+            {{ copy.withdraw }}
           </button>
         </div>
       }
     </section>
     <section class="builds-section" aria-labelledby="builds-history-title">
-      <h3 id="builds-history-title">Own build history</h3>
+      <h3 id="builds-history-title">{{ copy.history }}</h3>
       <button
         class="catalog-button"
         type="button"
         (click)="loadHistory()"
         [disabled]="busy()"
       >
-        Load own build history
+        {{ copy.loadHistory }}
       </button>
       @if (history(); as page) {
         @if (workbench()) {
-          <table class="wb-build-table" aria-label="Own build history">
+          <table class="wb-build-table" [attr.aria-label]="copy.history">
             <thead>
               <tr>
-                <th>Build</th>
+                <th>Preparation</th>
                 <th>State</th>
-                <th>Artifact</th>
-                <th>Revision</th>
+                <th>Prepared file</th>
+                <th>Version</th>
                 <th>Started (UTC)</th>
               </tr>
             </thead>
@@ -392,7 +430,7 @@
                       (click)="openRun(item.buildId)"
                       [disabled]="busy() || !!pending()"
                     >
-                      Open build result
+                      {{ copy.openResult }}
                     </button>
                     <details>
                       <summary>Identity</summary>
@@ -400,23 +438,41 @@
                     </details>
                   </td>
                   <td>
-                    {{ label(item.state) }} · {{ item.outcome ?? "Pending" }}
+                    <weft-status-chip [status]="buildStatus(item.state)" />
+                    @if (item.outcome) {
+                      <details>
+                        <summary>Technical details</summary>
+                        State: {{ item.state }} · Outcome: {{ item.outcome }}
+                      </details>
+                    }
+                  </td>
+                  <td>
+                    @if (item.artifact; as file) {
+                      <weft-metadata-value
+                        kind="bytes"
+                        label="Prepared file size"
+                        [value]="file.byteCount"
+                      />
+                    } @else {
+                      Not available
+                    }
                   </td>
                   <td>
                     {{
-                      item.artifact
-                        ? item.artifact.byteCount + " bytes"
-                        : "Not available"
+                      isCurrent(item) ? "Viewing this version" : "Other version"
                     }}
                   </td>
                   <td>
-                    {{ isCurrent(item) ? "Pinned revision" : "Other revision" }}
+                    <weft-metadata-value
+                      kind="time"
+                      label="Preparation time"
+                      [value]="item.createdAtUtc"
+                    />
                   </td>
-                  <td>{{ item.createdAtUtc | date: "short" : "UTC" }}</td>
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="5">No own builds on this page.</td>
+                  <td colspan="5">No preparations on this page.</td>
                 </tr>
               }
             </tbody>
@@ -442,14 +498,14 @@
                   (click)="openRun(item.buildId)"
                   [disabled]="busy() || !!pending()"
                 >
-                  Open build result
+                  {{ copy.openResult }}
                 </button>
               </li>
             }
           </ul>
         }
         @if (!page.runs.length) {
-          <p>No own builds on this page.</p>
+          <p>No preparations on this page.</p>
         }
         @if (page.nextBuildId) {
           <button
@@ -458,7 +514,7 @@
             (click)="loadHistory(true)"
             [disabled]="busy()"
           >
-            Next builds
+            {{ copy.nextHistory }}
           </button>
         }
       }
@@ -469,11 +525,9 @@
           aria-labelledby="builds-result-title"
         >
           <h4 id="builds-result-title">
-            {{ label(value.state) }} · Attempt {{ value.attempt }} of 3
+            <weft-status-chip [status]="buildStatus(value.state)" /> · Attempt
+            {{ value.attempt }} of 3
           </h4>
-          <p>
-            <code>{{ value.buildId }}</code>
-          </p>
           @if (value.state === "uncertain") {
             <p>
               <strong>Not confirmed as successful.</strong> Retained artifact
@@ -482,17 +536,43 @@
             </p>
           }
           @if (value.artifact; as artifact) {
-            <dl class="catalog-facts">
-              <dt>Private artifact digest</dt>
-              <dd>
-                <code>{{ artifact.sha256 }}</code>
-              </dd>
-              <dt>Bytes</dt>
-              <dd>{{ artifact.byteCount }}</dd>
-              <dt>Format</dt>
-              <dd>{{ artifact.format }}</dd>
-            </dl>
+            <p>
+              {{ artifact.format }} ·
+              <weft-metadata-value
+                kind="bytes"
+                label="Prepared file size"
+                [value]="artifact.byteCount"
+              />
+            </p>
           }
+          <details class="builds-result-details">
+            <summary>Preparation technical details</summary>
+            <p>
+              <code>{{ value.buildId }}</code>
+            </p>
+            <p>
+              State: {{ value.state }} · Outcome:
+              {{ value.outcome ?? "not returned" }}
+            </p>
+            @if (value.artifact; as artifact) {
+              <dl class="catalog-facts">
+                <dt>Private artifact digest</dt>
+                <dd>
+                  <code>{{ artifact.sha256 }}</code>
+                </dd>
+                <dt>Bytes</dt>
+                <dd>
+                  <weft-metadata-value
+                    kind="bytes"
+                    label="Prepared file size"
+                    [value]="artifact.byteCount"
+                  />
+                </dd>
+                <dt>Format</dt>
+                <dd>{{ artifact.format }}</dd>
+              </dl>
+            }
+          </details>
           <div class="builds-actions">
             <button
               class="catalog-button"
@@ -500,7 +580,7 @@
               (click)="openRun(value.buildId)"
               [disabled]="busy() || !!pending()"
             >
-              Refresh build result
+              {{ copy.refreshResult }}
             </button>
             @if (isActive() && isCurrent(value)) {
               <button
@@ -509,7 +589,7 @@
                 (click)="cancel()"
                 [disabled]="busy() || !!pending()"
               >
-                Cancel build
+                {{ copy.cancel }}
               </button>
             }
           </div>
@@ -518,3 +598,8 @@
     </section>
   }
 </section>
+<weft-confirmation
+  [model]="confirmation()?.view ?? null"
+  (confirmed)="confirmAction()"
+  (dismissed)="dismissConfirmation()"
+/>

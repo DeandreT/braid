@@ -271,16 +271,19 @@
       <section class="preview-run" aria-labelledby="preview-run-title">
         <h3 id="preview-run-title">Preview run</h3>
         <p class="preview-status" role="status" aria-live="polite">
-          {{ stateLabel(run.state) }}
-          @if (run.state === "completed") {
-            · {{ outcomeLabel(run.outcome) }}
-          }
+          <weft-status-chip [status]="runStatus(run)" />
           @if (
             preview.notice() === "cancelRequested" && run.state === "running"
           ) {
             · Cancellation requested
           }
         </p>
+        @if (run.state === "completed" && run.outcome === "succeeded") {
+          <p class="preview-hint">
+            This sample ran successfully. It has not been compared with a saved
+            expected result in Regression tests.
+          </p>
+        }
         <dl class="catalog-facts">
           <dt>Run ID</dt>
           <dd>
@@ -310,7 +313,11 @@
           </dd>
         </dl>
         @if (run.failure; as failure) {
-          <div class="preview-failure" role="alert">
+          <div
+            class="preview-failure"
+            [attr.data-tone]="runStatus(run).tone"
+            role="alert"
+          >
             <p>
               <strong>{{ outcomeLabel(run.outcome) }}</strong>
               @if (failure.subject) {

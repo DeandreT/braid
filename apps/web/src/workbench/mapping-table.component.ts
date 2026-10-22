@@ -27,6 +27,8 @@ import {
 import { ResizeHandleComponent } from "./resize-handle.component";
 import { SampleValueComponent } from "./sample-value.component";
 import { type WorkbenchSample } from "./workbench-sample";
+import { LayoutPreferencesStore } from "./layout-preferences-store";
+import { columnRole } from "./presentation";
 
 @Component({
   selector: "weft-workbench-mapping-table",
@@ -35,6 +37,7 @@ import { type WorkbenchSample } from "./workbench-sample";
   styleUrl: "./mapping-table.component.css",
 })
 export class WorkbenchMappingTableComponent {
+  private readonly preferences = inject(LayoutPreferencesStore);
   readonly view = input.required<ProjectionView>();
   readonly selected = input<NodeReference | null>(null);
   readonly sample = input<WorkbenchSample | null>(null);
@@ -43,35 +46,34 @@ export class WorkbenchMappingTableComponent {
   readonly inspect = output<NodeReference | null>();
   readonly search = signal("");
   readonly outputId = signal("");
-  readonly grouping = signal<MappingGrouping>("structure");
+  readonly grouping = computed(() => this.preferences.table().grouping);
   readonly partialOnly = signal(false);
-  readonly sort = signal<MappingColumn | null>(null);
-  readonly ascending = signal(true);
+  readonly sort = computed(() => this.preferences.table().sort);
+  readonly ascending = computed(() => this.preferences.table().ascending);
   readonly closed = signal<ReadonlySet<string>>(new Set());
   readonly page = signal(0);
   readonly showSamples = computed(() => this.sampleMode() && !!this.sample());
   readonly showLineage = signal(false);
-  readonly hiddenColumns = signal<ReadonlySet<MappingColumn>>(new Set());
-  readonly widths = signal<Record<string, number>>({
-    source: 190,
-    rule: 210,
-    target: 190,
-    type: 100,
-    input: 180,
-    output: 180,
-  });
+  readonly hiddenColumns = computed(
+    () => new Set<string>(this.preferences.table().hiddenColumns),
+  );
+  readonly widths = computed<Record<string, number>>(
+    () => this.preferences.table().widths,
+  );
+  readonly pinKeyColumn = computed(() => this.preferences.table().pinKeyColumn);
+  readonly role = columnRole;
   readonly pageSize = 100;
   readonly columns = computed(() => [
-    { id: "source", label: "Source" },
+    { id: "source", label: "Incoming field" },
     ...(this.sample() && this.showSamples()
-      ? [{ id: "input", label: "Observed input" }]
+      ? [{ id: "input", label: "Sample input" }]
       : []),
     ...(!this.hiddenColumns().has("rule")
-      ? [{ id: "rule", label: "Transformation" }]
+      ? [{ id: "rule", label: "Rule" }]
       : []),
-    { id: "target", label: "Target" },
+    { id: "target", label: "Result field" },
     ...(this.sample() && this.showSamples()
-      ? [{ id: "output", label: "Observed output" }]
+      ? [{ id: "output", label: "Sample result" }]
       : []),
     ...(!this.hiddenColumns().has("type")
       ? [{ id: "type", label: "Type" }]
@@ -199,24 +201,29 @@ export class WorkbenchMappingTableComponent {
   }
   sortColumn(column: string): void {
     if (!["source", "rule", "target", "type"].includes(column)) return;
-    if (this.sort() === column) this.ascending.update((value) => !value);
-    else {
-      this.sort.set(column as MappingColumn);
-      this.ascending.set(true);
-    }
+    this.preferences.updateTable({
+      sort: column as MappingColumn,
+      ascending: this.sort() === column ? !this.ascending() : true,
+    });
     this.page.set(0);
+  }
+  setGrouping(grouping: string): void {
+    this.preferences.updateTable({ grouping: grouping as MappingGrouping });
+  }
+  togglePin(): void {
+    this.preferences.updateTable({ pinKeyColumn: !this.pinKeyColumn() });
   }
   toggleColumn(column: MappingColumn): void {
     if (column === "source" || column === "target") return;
-    this.hiddenColumns.update((current) => {
-      const next = new Set(current);
-      if (next.has(column)) next.delete(column);
-      else next.add(column);
-      return next;
-    });
+    const next = new Set(this.preferences.table().hiddenColumns);
+    if (next.has(column)) next.delete(column);
+    else next.add(column);
+    this.preferences.updateTable({ hiddenColumns: [...next] });
   }
   resize(column: string, value: number): void {
-    this.widths.update((widths) => ({ ...widths, [column]: value }));
+    this.preferences.updateTable({
+      widths: { ...this.preferences.table().widths, [column]: value },
+    });
   }
   select(row: MappingRow): void {
     this.focusedKey.set(row.key);

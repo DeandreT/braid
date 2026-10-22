@@ -50,7 +50,7 @@
   width: 100%;
   min-width: 0;
   padding: 8px 10px;
-  border: 1px solid #ccdcca;
+  border: 1px solid var(--wb-control-border);
   border-radius: 8px;
   font:
     13px ui-monospace,
@@ -107,8 +107,20 @@
 .preview-failure {
   padding: 10px 12px;
   border-radius: 9px;
-  background: #fbf3ef;
-  color: #6d3b2a;
+  background: var(--wb-evidence-tint);
+  color: #213b34;
+}
+.preview-failure[data-tone="failure"] {
+  background: var(--wb-failure-tint);
+  color: var(--wb-failure-text);
+}
+.preview-failure[data-tone="attention"] {
+  background: var(--wb-attention-tint);
+  color: var(--wb-attention-text);
+}
+.preview-failure[data-tone="unavailable"] {
+  background: var(--wb-unavailable-tint);
+  color: var(--wb-unavailable-text);
 }
 .preview-table {
   overflow-x: auto;

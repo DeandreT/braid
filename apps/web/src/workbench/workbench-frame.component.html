@@ -20,7 +20,7 @@
     </button>
   </header>
   <div class="wb-workflow-bar">
-    <nav role="tablist" aria-label="Revision workflows">
+    <nav role="tablist" aria-label="Version workflows">
       @for (view of views; track view) {
         <button
           type="button"
@@ -125,6 +125,13 @@
           role="tab"
           [id]="'wb-dock-' + item.id"
           [attr.data-dock]="item.id"
+          [attr.data-role]="
+            item.id === 'input'
+              ? 'source'
+              : item.id === 'output'
+                ? 'output'
+                : 'evidence'
+          "
           aria-controls="wb-dock-panel"
           [tabIndex]="state.selection().dock === item.id ? 0 : -1"
           [attr.aria-selected]="state.selection().dock === item.id"
@@ -162,6 +169,7 @@
   </section>
   <footer class="wb-status">
     <ng-content select="[workbench-status]" /><span class="wb-spacer"></span
+    ><button type="button" (click)="state.resetLayout()">Reset layout</button
     ><button type="button" (click)="cycleDensity()">
       {{ state.layout().density }} · {{ rowHeight() }}px rows
     </button>

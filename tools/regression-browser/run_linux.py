@@ -13,6 +13,17 @@ class OperatorUnsettled(RuntimeError):
     pass
 
 
+def ensure_docker():
+    """Called only after mount/headroom admission; never adopts another data root."""
+    command = ['/usr/bin/docker', 'info', '--format', '{{.DockerRootDir}} {{.Driver}} {{.CgroupVersion}}']
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        subprocess.run(['systemctl', 'start', 'docker.service'], check=True, capture_output=True, text=True)
+        result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0 or result.stdout.strip() != '/srv/example-build/cache/weft-docker overlay2 2':
+        raise RuntimeError('The guarded Btrfs Docker daemon is unavailable or has unexpected storage.')
+
+
 def wait_for_operator(command, shutdown_seconds=180):
     child = None
     interrupted = None
@@ -72,6 +83,7 @@ def main():
         actual = json.loads(subprocess.check_output(['findmnt', '-J', '-T', str(alias), '-o', 'FSTYPE,UUID,OPTIONS']))['filesystems'][0]
         assert actual['fstype'] == 'btrfs' and actual['uuid'] == mount['uuid'] and 'rw' in actual['options'].split(',')
         assert alias.stat().st_ino == private.stat().st_ino and alias.stat().st_dev == private.stat().st_dev
+        ensure_docker()
         try:
             code = wait_for_operator([node, operator, '--config', config],
                                      shutdown_seconds=360 if data['schemaVersion'] == 'weft.build-browser-operator-config.v1' else 180)

@@ -33,7 +33,7 @@ summary {
 .wb-table-toolbar input,
 .wb-table-toolbar select,
 button {
-  border: 1px solid var(--wb-border, #d7e2d1);
+  border: 1px solid var(--wb-control-border);
   border-radius: 3px;
   padding: 3px 6px;
   background: #fff;
@@ -50,12 +50,12 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 2px solid #287a60;
+  outline: 2px solid var(--wb-focus);
   outline-offset: 1px;
 }
 .wb-table-scroll {
   flex: 1;
-  min-height: 0;
+  min-height: 160px;
   overflow: auto;
 }
 table {
@@ -79,8 +79,9 @@ thead th {
   top: 0;
   z-index: 1;
   font-weight: 500;
-  background: #f0f5e9;
-  color: #5f7557;
+  background: var(--wb-role-tint, #f0f5e9);
+  color: var(--wb-role-text, #5f7557);
+  box-shadow: inset 0 2px var(--wb-role-text, transparent);
   overflow: visible;
 }
 thead th > button {
@@ -112,12 +113,12 @@ thead th > button {
   font-weight: 400;
 }
 .wb-selected td {
-  background: #e8f1de;
+  background: var(--wb-selection-tint);
 }
 .wb-selected td:first-child {
-  box-shadow: inset 2px 0 #43834c;
+  box-shadow: inset 3px 0 var(--wb-selection-text);
 }
-tbody tr:not(.wb-group-row):hover td {
+tbody tr:not(.wb-group-row):not(.wb-selected):hover td {
   background: #f0f6e8;
 }
 .wb-row-focus {
@@ -134,17 +135,17 @@ code {
   font-size: 0.75rem;
 }
 .wb-rule {
-  color: #456b3d;
+  color: var(--wb-rule-text);
 }
 .wb-partial {
-  color: #806323;
+  color: var(--wb-attention-text);
   font-size: 0.6875rem;
 }
 .wb-muted {
   color: #61745c;
 }
 .wb-sample-cell {
-  background: #f6faef;
+  background: var(--wb-evidence-tint);
 }
 .wb-observed-source {
   margin: 2px 0;
@@ -159,7 +160,7 @@ code {
   padding: 5px 6px;
   border-bottom: 1px solid var(--wb-border, #d7e2d1);
   font-size: 0.75rem;
-  background: #edf5e5;
+  background: var(--wb-evidence-tint);
 }
 .wb-inline-lineage {
   display: flex;
@@ -167,6 +168,42 @@ code {
   overflow: auto;
   white-space: nowrap;
   background: #f8fbf3;
+}
+.wb-inline-lineage [data-role] {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--wb-role-text);
+}
+.wb-inline-lineage small {
+  font: inherit;
+  padding: 1px 4px;
+  background: var(--wb-role-tint);
+  border-radius: 3px;
+}
+.wb-pin-key tbody tr:not(.wb-group-row) td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+}
+.wb-pin-key thead th:first-child {
+  left: 0;
+  z-index: 3;
+}
+.wb-pin-key tbody tr.wb-selected td:first-child {
+  background: var(--wb-selection-tint);
+}
+.wb-pin-key tbody tr:not(.wb-group-row):not(.wb-selected):hover td:first-child {
+  background: #f0f6e8;
+}
+@media (max-width: 600px) {
+  .wb-pin-key tbody tr:not(.wb-group-row) td:first-child {
+    position: static;
+  }
+  .wb-pin-key thead th:first-child {
+    left: auto;
+  }
 }
 .wb-columns {
   position: relative;

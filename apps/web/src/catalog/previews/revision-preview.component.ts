@@ -17,6 +17,8 @@ import type {
 } from "../catalog-types";
 import { PreviewApi } from "./preview-api";
 import { PreviewState } from "./preview-state";
+import { StatusChipComponent } from "../../workbench/status-chip.component";
+import { previewOutcomeStatus, previewRunStatus } from "./preview-presentation";
 import {
   PreviewError,
   previewLimits,
@@ -31,10 +33,12 @@ const decoder = new TextDecoder("utf-8", { fatal: false });
 
 @Component({
   selector: "weft-revision-preview",
+  imports: [StatusChipComponent],
   templateUrl: "./revision-preview.component.html",
   styleUrl: "./revision-preview.component.css",
 })
 export class RevisionPreviewComponent {
+  readonly runStatus = previewRunStatus;
   private readonly document = inject(DOCUMENT);
   private downloads: Subscription[] = [];
   readonly context = input.required<CatalogContext>();
@@ -147,54 +151,8 @@ export class RevisionPreviewComponent {
       : "Primary output";
   }
 
-  stateLabel(state: string): string {
-    switch (state) {
-      case "queued":
-        return "Queued";
-      case "running":
-        return "Running";
-      case "completed":
-        return "Completed";
-      default:
-        return "Canceled";
-    }
-  }
-
   outcomeLabel(outcome: string | null): string {
-    switch (outcome) {
-      case null:
-        return "Pending";
-      case "succeeded":
-        return "Succeeded";
-      case "invalidRequest":
-        return "Invalid request";
-      case "invalidMapping":
-        return "The mapping is not valid for preview";
-      case "unsupportedArtifact":
-        return "This mapping format is not supported for preview";
-      case "unsupportedCapability":
-        return "The mapping uses features that preview does not support";
-      case "missingInput":
-        return "A required input is missing";
-      case "invalidInput":
-        return "An input is not valid JSON for this mapping";
-      case "invalidParameter":
-        return "A parameter is missing or invalid";
-      case "executionFailed":
-        return "The mapping failed while running";
-      case "resourceLimit":
-        return "A preview limit was exceeded";
-      case "timedOut":
-        return "The preview timed out";
-      case "canceled":
-        return "Canceled";
-      case "authorityRevoked":
-        return "Your access changed before the preview ran";
-      case "attemptsExhausted":
-        return "The preview worker was unavailable for every attempt";
-      default:
-        return "The preview worker failed";
-    }
+    return previewOutcomeStatus(outcome).label;
   }
 
   errorText(kind: PreviewErrorKind): string {

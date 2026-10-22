@@ -5,7 +5,9 @@
 >
   <div class="session-copy">
     <h2>Session</h2>
-    <p class="session-summary" role="status">{{ summary() }}</p>
+    <p class="session-summary" role="status" [attr.data-tone]="tone()">
+      {{ summary() }}
+    </p>
     <p class="session-detail">{{ detail() }}</p>
   </div>
   @if (

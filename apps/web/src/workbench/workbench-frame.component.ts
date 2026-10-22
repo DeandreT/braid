@@ -13,6 +13,7 @@ import {
 } from "@angular/core";
 import { ResizeHandleComponent } from "./resize-handle.component";
 import { WorkbenchState } from "./workbench-state";
+import { dockLabels, workbenchLabels } from "./presentation";
 import {
   rowHeights,
   workbenchViews,
@@ -27,16 +28,7 @@ export interface WorkbenchCommand {
   detail?: string;
   view?: WorkbenchView;
 }
-export const workbenchLabels: Readonly<Record<WorkbenchView, string>> = {
-  mapping: "Mapping",
-  preview: "Preview",
-  revisions: "Revisions",
-  compare: "Compare",
-  tests: "Tests",
-  builds: "Builds",
-  releases: "Releases",
-  audit: "Audit",
-};
+export { workbenchLabels } from "./presentation";
 
 @Component({
   selector: "weft-workbench-frame",
@@ -55,12 +47,9 @@ export class WorkbenchFrameComponent {
   readonly viewLabels = workbenchLabels;
   readonly views = workbenchViews;
   readonly docks: readonly { id: DockView; label: string }[] = [
-    { id: "ask", label: "Ask Weft" },
-    { id: "diagnostics", label: "Diagnostics" },
-    { id: "input", label: "Input" },
-    { id: "output", label: "Output" },
-    { id: "diff", label: "Diff" },
-    { id: "activity", label: "Activity" },
+    ...(
+      ["ask", "diagnostics", "input", "output", "diff", "activity"] as const
+    ).map((id) => ({ id, label: dockLabels[id] })),
   ];
   readonly rowHeight = computed(() => rowHeights[this.state.layout().density]);
   readonly mobileInspector = signal(false);
@@ -71,7 +60,7 @@ export class WorkbenchFrameComponent {
       ...this.views.map((view) => ({
         id: `view:${view}`,
         label: workbenchLabels[view],
-        detail: "This revision",
+        detail: "This saved version",
         view,
       })),
       ...this.commands(),

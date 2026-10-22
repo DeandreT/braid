@@ -6,6 +6,7 @@ import {
   signal,
 } from "@angular/core";
 import { BrowserSessionState } from "../auth/browser-session-state";
+import { LayoutPreferencesStore } from "./layout-preferences-store";
 import { CatalogContextStore } from "../catalog/catalog-context";
 import type {
   CatalogContext,
@@ -13,10 +14,8 @@ import type {
   CatalogRevisionScope,
 } from "../catalog/catalog-types";
 import {
-  defaultWorkbenchLayout,
   emptyWorkbenchSelection,
   inspectorLabels,
-  normalizeWorkbenchLayout,
   reduceWorkbenchSelection,
   workbenchScopeKey,
   type WorkbenchAction,
@@ -27,9 +26,9 @@ import {
 @Injectable()
 export class WorkbenchState {
   private readonly current = signal(emptyWorkbenchSelection());
-  private readonly preferences = signal({ ...defaultWorkbenchLayout });
+  private readonly preferences = inject(LayoutPreferencesStore);
   readonly selection = this.current.asReadonly();
-  readonly layout = this.preferences.asReadonly();
+  readonly layout = this.preferences.frame;
   readonly lifetime = computed(
     () => `${this.current().epoch}:${this.current().binding ?? ""}`,
   );
@@ -87,9 +86,11 @@ export class WorkbenchState {
   }
 
   updateLayout(change: Partial<WorkbenchLayout>): void {
-    this.preferences.update((value) =>
-      normalizeWorkbenchLayout({ ...value, ...change }),
-    );
+    this.preferences.updateFrame(change);
+  }
+
+  resetLayout(): void {
+    this.preferences.reset();
   }
 
   clear(): void {

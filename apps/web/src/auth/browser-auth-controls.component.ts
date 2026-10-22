@@ -12,6 +12,7 @@ import {
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import type { Observable } from "rxjs";
 import { BrowserSessionState } from "./browser-session-state";
+import { sessionTone } from "./browser-auth-presentation";
 
 @Component({
   selector: "weft-browser-auth-controls",
@@ -20,6 +21,9 @@ import { BrowserSessionState } from "./browser-session-state";
 })
 export class BrowserAuthControlsComponent {
   readonly session = inject(BrowserSessionState);
+  readonly tone = computed(() =>
+    sessionTone(this.session.state().kind, this.session.action().kind),
+  );
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);

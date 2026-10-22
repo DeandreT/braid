@@ -6,6 +6,31 @@ import {
   reduceWorkbenchSelection,
 } from "../src/workbench/workbench-model";
 import { ObservedJson } from "../src/workbench/observed-json";
+import { sessionTone } from "../src/auth/browser-auth-presentation";
+import { buildConfirmation } from "../src/catalog/builds/build-confirmation";
+import {
+  previewOutcomeStatus,
+  previewRunStatus,
+} from "../src/catalog/previews/preview-presentation";
+import type { PendingBuildMutation } from "../src/catalog/builds/build-recovery";
+import {
+  formatByteCount,
+  formatUtcTimestamp,
+} from "../src/workbench/metadata-format";
+import {
+  normalizeSavedLayout,
+  readSavedLayout,
+  writeSavedLayout,
+  layoutStorageKey,
+} from "../src/workbench/layout-preferences";
+import {
+  workbenchLabels,
+  dockLabels,
+  comparisonStatus,
+  buildStatus,
+  operationStatus,
+  fileStatusLabel,
+} from "../src/workbench/presentation";
 
 const caseId = "11111111-1111-4111-8111-111111111111";
 const runId = "22222222-2222-4222-8222-222222222222";
@@ -15,6 +40,111 @@ const field = (name: string) => ({
   namespaceUri: null,
 });
 const bytes = (value: string) => new TextEncoder().encode(value);
+
+test("sign-in colors never promote local recovery or a pending action to authenticated success", () => {
+  expect(sessionTone("authenticated", "idle")).toBe("success");
+  expect(sessionTone("authenticated", "pending")).toBe("running");
+  expect(sessionTone("unavailable", "revocationUnconfirmed")).toBe("uncertain");
+  expect(sessionTone("unavailable", "unconfirmed")).toBe("uncertain");
+  expect(sessionTone("development", "idle")).toBe("neutral");
+  expect(sessionTone("anonymous", "idle")).toBe("neutral");
+  expect(sessionTone("future", "idle")).toBe("unavailable");
+});
+
+test("sample status never confuses execution success with a comparison or an unknown state", () => {
+  expect(
+    previewRunStatus({ state: "completed", outcome: "succeeded" }),
+  ).toMatchObject({ label: "Sample ran successfully", tone: "success" });
+  expect(previewRunStatus({ state: "future", outcome: "succeeded" }).tone).toBe(
+    "unavailable",
+  );
+  expect(previewOutcomeStatus("future").tone).toBe("unavailable");
+  expect(previewOutcomeStatus(null).tone).toBe("unavailable");
+  expect(previewOutcomeStatus("missingInput").tone).toBe("attention");
+  expect(previewOutcomeStatus("protocolFailure").tone).toBe("failure");
+  expect(previewOutcomeStatus("backendUnavailable").tone).toBe("unavailable");
+});
+
+test("confirmation copy preserves exact operation facts without implying deployment", () => {
+  const operation: PendingBuildMutation = Object.freeze({
+    kind: "approval",
+    id: runId,
+    owner: {
+      identity: "current-owner",
+      nativeDigest: "a".repeat(64),
+      scope: {
+        organizationId: caseId,
+        projectId: caseId,
+        mappingId: caseId,
+        revisionId: caseId,
+      },
+    },
+    body: JSON.stringify({
+      environmentId: caseId,
+      environmentVersion: "27",
+      regressionEvidenceId: runId,
+    }),
+  });
+  const original = JSON.stringify(operation);
+  const copy = buildConfirmation(operation, { sequence: "19" });
+  expect(copy.action).toBe("Approve version 19");
+  expect(copy.effect).toContain(
+    "does not start preparation or change the version in use",
+  );
+  expect(copy.facts).toContainEqual({
+    label: "Environment reference",
+    value: caseId,
+  });
+  expect(copy.facts).toContainEqual({
+    label: "Environment version",
+    value: "27",
+  });
+  expect(copy.facts).toContainEqual({
+    label: "Request reference",
+    value: runId,
+  });
+  expect(JSON.stringify(operation)).toBe(original);
+  const cancel = buildConfirmation(
+    { kind: "cancel", id: runId, owner: operation.owner },
+    { sequence: "19", previousState: "Running" },
+  );
+  expect(cancel.facts).toContainEqual({
+    label: "Environment reference",
+    value: "Not supplied with this operation",
+  });
+  expect(cancel.effect).toContain("may already have finished");
+});
+
+test("metadata formatting is readable, timezone-explicit and never guesses missing values", () => {
+  expect(formatByteCount(0)).toBe("0 bytes");
+  expect(formatByteCount(1)).toBe("1 byte");
+  expect(formatByteCount(1536)).toBe("1.5 KiB");
+  expect(formatByteCount(1048576)).toBe("1 MiB");
+  for (const value of [
+    null,
+    undefined,
+    -1,
+    1.5,
+    Infinity,
+    "1536",
+    Number.MAX_SAFE_INTEGER + 1,
+  ])
+    expect(formatByteCount(value)).toBe("Size unavailable");
+  expect(formatUtcTimestamp("2026-10-21T01:30:00.123456789+02:00")).toBe(
+    "Oct 20, 2026, 23:30 UTC",
+  );
+  for (const value of [
+    null,
+    undefined,
+    "",
+    "not a date",
+    "2026-10-21T01:30:00",
+    "2026-13-99T01:30:00Z",
+    "2026-02-30T01:30:00Z",
+    "2026-10-21T24:30:00Z",
+  ])
+    expect(formatUtcTimestamp(value)).toBe("Time unavailable");
+});
 
 test("workflow and dock changes retain the same authorized selected case/run", () => {
   let state = emptyWorkbenchSelection("owner/revision");
@@ -158,18 +288,167 @@ test("an admission refresh keeps only nonprivate workflow navigation", () => {
 });
 
 test("inspector labels follow the workflow", () => {
-  expect(inspectorLabels("mapping")).toEqual(["Rule", "Lineage", "Evidence"]);
-  expect(inspectorLabels("tests")).toEqual([
-    "Failure",
-    "Reproduction",
-    "Outputs",
-  ]);
+  expect(inspectorLabels("mapping")).toEqual(["Rule", "Data flow", "Details"]);
+  expect(inspectorLabels("tests")).toEqual(["Result", "Test setup", "Outputs"]);
   expect(inspectorLabels("builds")).toEqual([
     "Readiness",
     "Approval",
-    "Artifact",
+    "Prepared version",
   ]);
-  expect(inspectorLabels("releases")).toEqual(["Gates", "Release", "Audit"]);
+  expect(inspectorLabels("releases")).toEqual([
+    "Required checks",
+    "In use",
+    "Change history",
+  ]);
+});
+
+test("saved layout uses a bounded allowlist and never stores private context", () => {
+  const privateFields = {
+    search: "private-search",
+    runId,
+    caseId,
+    sample: "private-sample",
+    token: "private-token",
+  };
+  let saved = "";
+  writeSavedLayout(
+    {
+      setItem: (key, value) => {
+        expect(key).toBe(layoutStorageKey);
+        saved = value;
+      },
+    },
+    {
+      ...privateFields,
+      frame: { density: "dense", ...privateFields },
+      table: {
+        ...privateFields,
+        widths: { source: Infinity, target: 9999, ...privateFields },
+        hiddenColumns: ["source", "rule", "private"],
+        sort: "private-search",
+        pinKeyColumn: false,
+      },
+    },
+  );
+  expect(saved).not.toMatch(/private|11111111|22222222/);
+  const parsed = readSavedLayout({ getItem: () => saved });
+  expect(parsed.frame.density).toBe("dense");
+  expect(parsed.table.widths.source).toBe(190);
+  expect(parsed.table.widths.target).toBe(720);
+  expect(parsed.table.hiddenColumns).toEqual(["rule"]);
+  expect(parsed.table.sort).toBeNull();
+  expect(parsed.table.pinKeyColumn).toBe(false);
+});
+
+test("blocked, corrupt, oversized and future layout storage falls back without blocking access", () => {
+  const defaults = normalizeSavedLayout(null);
+  for (const value of [
+    "{",
+    "x".repeat(8193),
+    '{"version":2,"frame":{"density":"dense"}}',
+  ])
+    expect(readSavedLayout({ getItem: () => value })).toEqual(defaults);
+  expect(
+    readSavedLayout({
+      getItem: () => {
+        throw Error("blocked");
+      },
+    }),
+  ).toEqual(defaults);
+  expect(() =>
+    writeSavedLayout(
+      {
+        setItem: () => {
+          throw Error("quota");
+        },
+      },
+      defaults,
+    ),
+  ).not.toThrow();
+});
+
+test("presentation distinguishes completion, a comparison pass, uncertainty and unknown state codes", () => {
+  expect(workbenchLabels.tests).toBe("Tests");
+  expect(dockLabels.diff).toBe("Diff");
+  expect(comparisonStatus("notEvaluated").tone).toBe("attention");
+  expect(comparisonStatus("notEvaluated", "missingBaseline").label).toBe(
+    "Expected result needed",
+  );
+  expect(comparisonStatus("notEvaluated", "unsupportedPolicy").tone).toBe(
+    "unavailable",
+  );
+  expect(fileStatusLabel("valid")).toBe("File accepted");
+  expect(fileStatusLabel("future")).toBe("File status not confirmed");
+  expect(comparisonStatus("passed").tone).toBe("success");
+  expect(comparisonStatus("failed").tone).toBe("failure");
+  expect(operationStatus("completed").tone).toBe("neutral");
+  expect(buildStatus("uncertain").tone).toBe("uncertain");
+  expect(buildStatus("succeeded").label).not.toMatch(
+    /in use|verified|approved/i,
+  );
+  for (const code of ["future", "Passed", "", null, undefined]) {
+    expect(comparisonStatus(code).tone).toBe("unavailable");
+    expect(operationStatus(code).tone).toBe("unavailable");
+  }
+});
+
+test("investigation follows only the selected run and clears on case, run or access changes", () => {
+  const run = { runId, caseId, version: "1" };
+  let state = reduceWorkbenchSelection(emptyWorkbenchSelection("owner"), {
+    kind: "run",
+    binding: "owner",
+    epoch: 0,
+    selection: run,
+  });
+  const entity = { kind: "field" as const, fieldId: "actual-output-field" };
+  state = reduceWorkbenchSelection(state, {
+    kind: "investigate",
+    binding: "owner",
+    epoch: 0,
+    run,
+    entity,
+  });
+  state = reduceWorkbenchSelection(state, {
+    kind: "entity",
+    binding: "owner",
+    epoch: 0,
+    entity: { kind: "rule", ruleId: "declared-rule" },
+  });
+  expect(state.investigation?.path).toEqual([
+    entity,
+    { kind: "rule", ruleId: "declared-rule" },
+  ]);
+  const linked = state;
+  for (const action of [
+    {
+      kind: "case" as const,
+      binding: "owner",
+      epoch: 0,
+      selection: { caseId, version: "2" },
+    },
+    { kind: "run" as const, binding: "owner", epoch: 0, selection: null },
+    { kind: "bind" as const, binding: "another-user" },
+    { kind: "clear" as const },
+  ])
+    expect(reduceWorkbenchSelection(linked, action).investigation).toBeNull();
+  expect(
+    reduceWorkbenchSelection(linked, {
+      kind: "investigate",
+      binding: "owner",
+      epoch: 0,
+      run: { ...run, version: "2" },
+      entity,
+    }),
+  ).toBe(linked);
+  expect(
+    reduceWorkbenchSelection(linked, {
+      kind: "investigate",
+      binding: "old-user",
+      epoch: 0,
+      run,
+      entity,
+    }),
+  ).toBe(linked);
 });
 
 test("observed JSON preserves exact numeric and null lexemes", () => {

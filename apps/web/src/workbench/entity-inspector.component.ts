@@ -24,22 +24,33 @@ import type { InspectorTab } from "./workbench-model";
   ],
   template: `
     @if (reference(); as ref) {
-      <p class="kind">Selected {{ ref.kind }}</p>
+      <p
+        class="kind"
+        [attr.data-role]="
+          ref.kind === 'rule'
+            ? 'rule'
+            : ref.kind === 'field'
+              ? fieldRole(ref.fieldId)
+              : 'evidence'
+        "
+      >
+        Selected {{ ref.kind }}
+      </p>
       <h3>{{ view().label(ref) }}</h3>
       @if (tab() === 2) {
         <dl>
-          <dt>Revision</dt>
+          <dt>Version ID</dt>
           <dd>
             <code>{{ view().document.provenance.revision.revisionId }}</code>
           </dd>
-          <dt>Backend</dt>
+          <dt>Engine</dt>
           <dd>{{ view().document.provenance.backend.id }}</dd>
-          <dt>Coverage</dt>
+          <dt>Detail coverage</dt>
           <dd>{{ view().document.coverage.status }}</dd>
         </dl>
         <weft-native-evidence [locator]="locator()" />
         <details>
-          <summary>Full runtime and source identity</summary>
+          <summary>Technical details</summary>
           <dl>
             <dt>Engine revision</dt>
             <dd>
@@ -62,7 +73,7 @@ import type { InspectorTab } from "./workbench-model";
           </dl>
         </details>
       } @else if (tab() === 1) {
-        <h4>Produces / reads</h4>
+        <h4>How this field is filled</h4>
         @if (ref.kind === "field") {
           @for (rule of view().producers(ref.fieldId); track rule.id) {
             <button
@@ -83,7 +94,7 @@ import type { InspectorTab } from "./workbench-model";
               }
             }
           } @empty {
-            <p>No producing rule is explained for this field.</p>
+            <p>No rule details are available for this field.</p>
           }
         } @else {
           <weft-mapping-entity
@@ -102,7 +113,7 @@ import type { InspectorTab } from "./workbench-model";
             {{ entity.summary }}
           </button>
         } @empty {
-          <p>No dependent rule or control is shown.</p>
+          <p>No dependent rule or control is shown in the available details.</p>
         }
       } @else {
         @if (ref.kind === "field") {
@@ -129,7 +140,7 @@ import type { InspectorTab } from "./workbench-model";
                 (navigate)="navigate.emit($event)"
               />
             } @empty {
-              <p>No producing rule is explained.</p>
+              <p>No rule details are available for this field.</p>
             }
             @if (fieldControls(field.id).length) {
               <h4>Governing controls</h4>
@@ -172,19 +183,17 @@ import type { InspectorTab } from "./workbench-model";
       }
       @if (view().document.coverage.status !== "complete") {
         <p class="warning">
-          Explanation is incomplete. Read dependencies can be possibilities, not
-          proven runtime observations.
+          Some mapping details aren't available from this file. Declared data
+          flow does not prove which values were used during a run.
         </p>
       }
     } @else {
-      <p class="empty">
-        Select a field or rule. Its details stay beside the mapping.
-      </p>
+      <p class="empty">Select a field to see how it is filled.</p>
     }
     @if (view().document.coverage.gaps.length) {
       <details>
         <summary>
-          Explanation gaps ({{ view().document.coverage.gaps.length }})
+          Missing mapping details ({{ view().document.coverage.gaps.length }})
         </summary>
         @for (gap of view().document.coverage.gaps; track $index) {
           <p>{{ gap.message }}</p>
@@ -214,7 +223,7 @@ import type { InspectorTab } from "./workbench-model";
         line-height: 1.5;
       }
       .kind {
-        color: #64785f;
+        color: var(--wb-role-text, var(--wb-evidence-text));
         font-size: 0.6875rem;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -237,7 +246,7 @@ import type { InspectorTab } from "./workbench-model";
       }
       button {
         display: block;
-        border: 1px solid #cbd9bf;
+        border: 1px solid var(--wb-control-border);
         background: #fff;
         border-radius: 3px;
         padding: 4px 6px;
@@ -249,7 +258,7 @@ import type { InspectorTab } from "./workbench-model";
       }
       button:focus-visible,
       summary:focus-visible {
-        outline: 2px solid #287a60;
+        outline: 2px solid var(--wb-focus);
         outline-offset: 1px;
       }
       .link {
@@ -267,7 +276,7 @@ import type { InspectorTab } from "./workbench-model";
       .warning {
         border-left: 2px solid #ad842f;
         padding-left: 6px;
-        color: #826323;
+        color: var(--wb-attention-text);
       }
       .empty {
         color: #64785f;
@@ -284,6 +293,15 @@ export class WorkbenchEntityInspectorComponent {
   readonly type = dataTypeText;
   readonly cardinality = cardinalityText;
   readonly dependencyRef = dependencyReference;
+  fieldRole(id: string): string {
+    const view = this.view(),
+      field = view.fields.get(id);
+    if (view.outputs.some((boundary) => boundary.id === field?.boundaryId))
+      return "output";
+    if (view.inputs.some((boundary) => boundary.id === field?.boundaryId))
+      return "source";
+    return "evidence";
+  }
   fieldControls(id: string): readonly Control[] {
     const view = this.view(),
       field = view.fields.get(id);

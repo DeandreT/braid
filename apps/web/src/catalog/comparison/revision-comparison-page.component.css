@@ -188,7 +188,7 @@ p {
 .comparison-link {
   min-height: 36px;
   padding: 6px 10px;
-  border: 1px solid #ccdcca;
+  border: 1px solid var(--wb-control-border);
   border-radius: 8px;
   background: #f5f8f1;
   color: #345d45;
@@ -251,7 +251,7 @@ p {
   margin: 10px 0 0;
 }
 .comparison-candidates .comparison-candidates-title {
-  color: #6d806c;
+  color: var(--wb-evidence-text);
   font-size: 12px;
   font-weight: 600;
   margin: 0 0 4px;
@@ -298,7 +298,7 @@ p {
   color: #88602e;
 }
 [data-state="unchanged"] .comparison-facet-state {
-  color: #6d806c;
+  color: var(--wb-evidence-text);
   font-weight: 400;
 }
 .comparison-reasons {

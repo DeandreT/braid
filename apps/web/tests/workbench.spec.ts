@@ -7,10 +7,277 @@ import {
   syntheticCatalog,
 } from "./catalog.fixture";
 import type { components } from "../src/api/generated";
+import { workbenchLabels, dockLabels } from "../src/workbench/presentation";
+import { layoutStorageKey } from "../src/workbench/layout-preferences";
 
 const CASE = "50000000-0000-4000-8000-000000000091";
 const RUN = "60000000-0000-4000-8000-000000000091";
 const base64 = (text: string) => Buffer.from(text).toString("base64url");
+
+test("the offline notice states only browser connectivity and never retries a mutation", async ({
+  page,
+  context,
+}) => {
+  const fixture = await workbench(page);
+  await context.setOffline(true);
+  await expect(
+    page.getByRole("status", { name: "Browser offline", exact: true }),
+  ).toContainText("may still finish");
+  expect(fixture.writes).toEqual([]);
+  await context.setOffline(false);
+  await expect(
+    page.getByRole("status", { name: "Browser offline", exact: true }),
+  ).not.toBeVisible();
+  expect(fixture.writes).toEqual([]);
+});
+
+test("readable saved timestamps retain their exact value through a keyboard disclosure", async ({
+  page,
+}) => {
+  await workbench(page);
+  await page.getByRole("tab", { name: "Tests", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Load regression cases", exact: true })
+    .click();
+  const metadata = page.locator(".wb-case-table weft-metadata-value");
+  const summary = metadata.locator("summary");
+  await expect(summary).toContainText("UTC");
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(metadata.locator("code")).toBeVisible();
+  await expect(metadata.locator("code")).toHaveText("2026-10-20T12:00:00Z");
+});
+
+test("layout preferences survive reload and Reset layout without persisting private selection", async ({
+  page,
+}) => {
+  await workbench(page, 20);
+  await page.locator(".wb-columns > summary").click();
+  await page.getByRole("checkbox", { name: "Rule", exact: true }).uncheck();
+  await page.keyboard.press("Escape");
+  const resize = page.getByRole("separator", {
+    name: "Resize Incoming field column",
+    exact: true,
+  });
+  await resize.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.getByRole("button", { name: "compact · 28px rows" }).click();
+  await page
+    .getByRole("button", {
+      name: 'Inspect field ["group0"]["value0"]',
+      exact: true,
+    })
+    .click();
+  await page.getByLabel("Filter mapping fields").fill("value0");
+  const stored = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    layoutStorageKey,
+  );
+  expect(stored).toBeTruthy();
+  expect(stored).not.toMatch(
+    /value0|synthetic-field|50000000|60000000|privateSample|binding|epoch|token/,
+  );
+  await page.reload();
+  await expect(
+    page
+      .getByRole("table", { name: "Mapping field connections" })
+      .getByRole("columnheader"),
+  ).toHaveCount(3);
+  await expect(resize).toHaveAttribute("aria-valuenow", "200");
+  await expect(
+    page.getByRole("button", { name: "comfortable · 32px rows" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Filter mapping fields")).toHaveValue("");
+  await expect(page.locator("tr.wb-selected")).toHaveCount(0);
+  await page.getByRole("button", { name: "Reset layout", exact: true }).click();
+  await expect(
+    page
+      .getByRole("table", { name: "Mapping field connections" })
+      .getByRole("columnheader"),
+  ).toHaveCount(4);
+  await expect(resize).toHaveAttribute("aria-valuenow", "190");
+  await expect(
+    page.getByRole("button", { name: "compact · 28px rows" }),
+  ).toBeVisible();
+});
+
+test("semantic tokens have readable contrast and selected rows retain their own treatment", async ({
+  page,
+}) => {
+  await workbench(page);
+  const tokens = await page.evaluate(() => {
+    const style = getComputedStyle(document.documentElement);
+    const roles = [
+      "source",
+      "rule",
+      "output",
+      "evidence",
+      "selection",
+      "success",
+      "running",
+      "attention",
+      "failure",
+      "unavailable",
+    ];
+    return roles.map((role) => ({
+      role,
+      text: style.getPropertyValue(`--wb-${role}-text`).trim(),
+      tint: style.getPropertyValue(`--wb-${role}-tint`).trim(),
+    }));
+  });
+  const luminance = (hex: string) => {
+    const linear = [1, 3, 5]
+      .map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255)
+      .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return linear[0]! * 0.2126 + linear[1]! * 0.7152 + linear[2]! * 0.0722;
+  };
+  for (const token of tokens) {
+    const a = luminance(token.text),
+      b = luminance(token.tint);
+    expect(
+      (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+      token.role,
+    ).toBeGreaterThanOrEqual(4.5);
+  }
+  await page.locator("[data-row-key]").first().click();
+  const cell = page.locator("tr.wb-selected td").first();
+  const background = await cell.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await cell.hover();
+  expect(
+    await cell.evaluate((element) => getComputedStyle(element).backgroundColor),
+  ).toBe(background);
+  await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
+  await expect(
+    page.getByRole("tab", { name: "Data mapping", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("rendered workbench text keeps readable contrast including neutral metadata", async ({
+  page,
+}) => {
+  await workbench(page);
+  await page.locator("[data-row-key]").first().click();
+  const audit = () =>
+    page.locator(".wb-frame").evaluate((frame) => {
+      const rgba = (value: string): number[] => {
+        const numbers = value.match(/[\d.]+/g)?.map(Number) ?? [];
+        return [
+          numbers[0] ?? 0,
+          numbers[1] ?? 0,
+          numbers[2] ?? 0,
+          numbers[3] ?? 1,
+        ];
+      };
+      const over = (front: number[], back: number[]) =>
+        front
+          .slice(0, 3)
+          .map((v, i) => v * front[3]! + back[i]! * (1 - front[3]!));
+      const light = (color: number[]) =>
+        color
+          .map((v) => v / 255)
+          .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+          .reduce((n, v, i) => n + v * [0.2126, 0.7152, 0.0722][i]!, 0);
+      const bad: {
+        text: string;
+        element: string;
+        ratio: number;
+        foreground: string;
+      }[] = [];
+      for (const element of frame.querySelectorAll<HTMLElement>("*")) {
+        if (
+          !element.getClientRects().length ||
+          element.closest("[hidden], [disabled], [aria-disabled='true']")
+        )
+          continue;
+        const text = Array.from(element.childNodes)
+          .filter((n) => n.nodeType === Node.TEXT_NODE)
+          .map((n) => n.textContent)
+          .join("")
+          .trim();
+        if (!text) continue;
+        const style = getComputedStyle(element);
+        const backgrounds: number[][] = [];
+        let opacity = 1;
+        for (
+          let parent: HTMLElement | null = element;
+          parent;
+          parent = parent.parentElement
+        ) {
+          const parentStyle = getComputedStyle(parent);
+          backgrounds.push(rgba(parentStyle.backgroundColor));
+          opacity *= Number(parentStyle.opacity);
+        }
+        let background = [255, 255, 255];
+        for (const layer of backgrounds.reverse())
+          background = over(layer, background);
+        const foreground = rgba(style.color);
+        foreground[3] = foreground[3]! * opacity;
+        const a = light(over(foreground, background)),
+          b = light(background);
+        const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        const large =
+          parseFloat(style.fontSize) >= 24 ||
+          (parseFloat(style.fontSize) >= 18.66 &&
+            parseInt(style.fontWeight, 10) >= 700);
+        if (ratio < (large ? 3 : 4.5))
+          bad.push({
+            text: text.slice(0, 50),
+            element: element.className,
+            ratio,
+            foreground: style.color,
+          });
+      }
+      return bad;
+    });
+  expect(await audit(), "Data mapping").toEqual([]);
+  for (const name of [
+    "Try sample",
+    "Versions",
+    "Compare",
+    "Tests",
+    "Prepare",
+    "In use",
+    "Change history",
+    "Data mapping",
+  ]) {
+    await page
+      .getByRole("tablist", { name: "Version workflows", exact: true })
+      .getByRole("tab", { name, exact: true })
+      .click();
+    expect(await audit(), name).toEqual([]);
+  }
+  const control = page.getByLabel("Filter mapping fields");
+  await control.focus();
+  const ratios = await control.evaluate((element) => {
+    const light = (color: string) => {
+      const values = color
+        .match(/[\d.]+/g)!
+        .slice(0, 3)
+        .map(Number)
+        .map((v) => v / 255)
+        .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+      return values.reduce(
+        (sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i]!,
+        0,
+      );
+    };
+    const style = getComputedStyle(element),
+      background = light(style.backgroundColor);
+    return [style.borderTopColor, style.outlineColor].map(
+      (color) =>
+        (Math.max(light(color), background) + 0.05) /
+        (Math.min(light(color), background) + 0.05),
+    );
+  });
+  expect(ratios.every((ratio) => ratio >= 3)).toBe(true);
+});
 
 async function workbench(page: Page, fieldCount = 1) {
   const data = controlledData();
@@ -187,7 +454,7 @@ test("compact mapping is keyboard accessible, grouped, filterable and adjustable
   await expect(
     page.getByRole("complementary", { name: "Context inspector" }),
   ).toContainText('Controlled output ["savedValue"]');
-  await page.getByRole("button", { name: "Lineage", exact: true }).click();
+  await page.getByRole("button", { name: "Data flow", exact: true }).click();
   await expect(page.locator(".wb-inline-lineage")).toContainText(
     "Controlled saved explanation",
   );
@@ -197,21 +464,23 @@ test("compact mapping is keyboard accessible, grouped, filterable and adjustable
   ).toContainText("No fields match");
   await page.getByRole("button", { name: "Clear filters" }).click();
   const resize = page.getByRole("separator", {
-    name: "Resize Source column",
+    name: "Resize Incoming field column",
     exact: true,
   });
   const old = Number(await resize.getAttribute("aria-valuenow"));
   await resize.focus();
   await page.keyboard.press("ArrowRight");
   await expect(resize).toHaveAttribute("aria-valuenow", String(old + 10));
-  await page.getByRole("tab", { name: "Mapping", exact: true }).focus();
+  await page
+    .getByRole("tab", { name: workbenchLabels.mapping, exact: true })
+    .focus();
   await page.keyboard.press("ArrowRight");
   await expect(
-    page.getByRole("tab", { name: "Preview", exact: true }),
+    page.getByRole("tab", { name: workbenchLabels.preview, exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Home");
   await expect(
-    page.getByRole("tab", { name: "Mapping", exact: true }),
+    page.getByRole("tab", { name: workbenchLabels.mapping, exact: true }),
   ).toBeFocused();
   await expect(page.locator(".app-shell")).toHaveClass(/app-workbench/);
 });
@@ -244,12 +513,24 @@ test("selected saved case and run survive workflow changes without writes or num
     })
     .click();
   await expect(
-    page.getByRole("tab", { name: "Mapping", exact: true }),
+    page.getByRole("tab", { name: workbenchLabels.mapping, exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await expect(
     page.getByRole("complementary", { name: "Context inspector" }),
   ).toContainText("Controlled saved explanation");
-  await page.getByRole("tab", { name: "Mapping", exact: true }).click();
+  await expect(
+    page.getByRole("navigation", { name: "Investigation trail" }),
+  ).toContainText("Exact number sample");
+  await page
+    .getByRole("button", { name: "Return to Exact number sample", exact: true })
+    .click();
+  await expect(page.locator("#regression-result-title")).toBeFocused();
+  await expect(
+    page.getByRole("tab", { name: "Tests", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await page
+    .getByRole("tab", { name: workbenchLabels.mapping, exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Sample values", exact: true })
     .click();
@@ -259,11 +540,15 @@ test("selected saved case and run survive workflow changes without writes or num
   await expect(page.locator(".wb-sample-label")).toContainText(
     "Exact number sample",
   );
-  await page.getByRole("tab", { name: "Builds", exact: true }).click();
+  await page
+    .getByRole("tab", { name: workbenchLabels.builds, exact: true })
+    .click();
   await expect(
     page.getByRole("tab", { name: "Readiness", exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Mapping", exact: true }).click();
+  await page
+    .getByRole("tab", { name: workbenchLabels.mapping, exact: true })
+    .click();
   await expect(page.locator(".wb-sample-label")).toBeVisible();
   expect(fixture.writes).toEqual([]);
   const persisted = await page.evaluate(() =>
@@ -282,7 +567,7 @@ test("revoked sample access clears dock and table values", async ({ page }) => {
   await page
     .getByRole("button", { name: "Open Exact number sample", exact: true })
     .click();
-  await page.getByRole("tab", { name: "Input", exact: true }).click();
+  await page.getByRole("tab", { name: dockLabels.input, exact: true }).click();
   await expect(page.locator(".wb-dock-body")).toContainText("privateSample");
   fixture.revoke();
   await page
@@ -291,7 +576,9 @@ test("revoked sample access clears dock and table values", async ({ page }) => {
   await expect(page.locator(".wb-dock-body")).not.toContainText(
     "privateSample",
   );
-  await page.getByRole("tab", { name: "Mapping", exact: true }).click();
+  await page
+    .getByRole("tab", { name: workbenchLabels.mapping, exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Sample values", exact: true }),
   ).toBeDisabled();
@@ -307,14 +594,16 @@ test("palette, responsive inspector and unavailable release state do not invent 
   ).toBeVisible();
   await page
     .getByRole("combobox", { name: "Search commands and current context" })
-    .fill("Releases");
+    .fill(workbenchLabels.releases);
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("table").filter({ hasText: "Active release" }),
-  ).toContainText("Not exposed by the connected browser API");
+    page.getByRole("table").filter({ hasText: "Version currently in use" }),
+  ).toContainText("This workspace can't show which version is in use.");
   expect(fixture.writes).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("tab", { name: "Mapping", exact: true }).click();
+  await page
+    .getByRole("tab", { name: workbenchLabels.mapping, exact: true })
+    .click();
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
   await expect(
     page.getByRole("complementary", { name: "Context inspector" }),
@@ -373,9 +662,9 @@ test("columns, density and both resize handles work together on the dense layout
   await workbench(page, 60);
   const table = page.getByRole("table", { name: "Mapping field connections" });
   await page.locator(".wb-columns > summary").click();
-  await page.getByLabel("Transformation", { exact: true }).uncheck();
+  await page.getByRole("checkbox", { name: "Rule", exact: true }).uncheck();
   await expect(table.getByRole("columnheader")).toHaveCount(3);
-  await page.getByLabel("Transformation", { exact: true }).check();
+  await page.getByRole("checkbox", { name: "Rule", exact: true }).check();
   await expect(table.getByRole("columnheader")).toHaveCount(4);
   await page.keyboard.press("Escape");
   await expect(page.locator(".wb-columns")).not.toHaveAttribute("open", "");
@@ -405,7 +694,7 @@ test("columns, density and both resize handles work together on the dense layout
     page.getByRole("button", { name: "dense · 24px rows", exact: true }),
   ).toBeVisible();
   await table.locator("[data-row-key]").first().click();
-  await page.getByRole("button", { name: "Lineage", exact: true }).click();
+  await page.getByRole("button", { name: "Data flow", exact: true }).click();
   await page.screenshot({
     path: testInfo.outputPath("synthetic-workbench-desktop.png"),
   });
@@ -441,4 +730,27 @@ test("narrow scaled text keeps role, controls and overflow inside the workbench"
   await page.screenshot({
     path: testInfo.outputPath("synthetic-workbench-scaled-mobile.png"),
   });
+});
+
+test("narrow enlarged text leaves a usable table viewport and keyboard-reachable rows", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await workbench(page, 60);
+  await page.addStyleTag({ content: ":root {font-size:24px !important}" });
+  expect(
+    await page
+      .locator(".wb-table-scroll")
+      .evaluate((element) => element.clientHeight),
+  ).toBeGreaterThanOrEqual(160);
+  const rows = page.locator("[data-row-key]");
+  await rows.first().focus();
+  await expect(rows.first()).toBeInViewport();
+  await page.keyboard.press("ArrowDown");
+  await expect(rows.nth(1)).toBeFocused();
+  await expect(rows.nth(1)).toBeInViewport();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("complementary", { name: "Context inspector" }),
+  ).toContainText("value1");
 });

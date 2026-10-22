@@ -9,8 +9,36 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
-wait_for_operator = runpy.run_path(str(Path(__file__).with_name('run_linux.py')))['wait_for_operator']
+launcher = runpy.run_path(str(Path(__file__).with_name('run_linux.py')))
+wait_for_operator = launcher['wait_for_operator']
+ensure_docker = launcher['ensure_docker']
+
+
+class DockerAdmissionTests(unittest.TestCase):
+    def test_running_guarded_daemon_is_not_restarted(self):
+        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, '/srv/example-build/cache/weft-docker overlay2 2\n')) as run:
+            ensure_docker()
+        self.assertEqual(run.call_count, 1)
+
+    def test_absent_daemon_starts_existing_service_and_rechecks(self):
+        results = [subprocess.CompletedProcess([], 1, ''), subprocess.CompletedProcess([], 0, ''),
+                   subprocess.CompletedProcess([], 0, '/srv/example-build/cache/weft-docker overlay2 2\n')]
+        with patch('subprocess.run', side_effect=results) as run:
+            ensure_docker()
+        self.assertEqual(run.call_args_list[1].args[0], ['systemctl', 'start', 'docker.service'])
+        self.assertEqual(run.call_count, 3)
+
+    def test_another_data_root_is_refused_without_changing_it(self):
+        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0, '/var/lib/docker overlay2 2\n')) as run:
+            with self.assertRaises(RuntimeError): ensure_docker()
+        self.assertEqual(run.call_count, 1)
+
+    def test_failed_restart_never_admits_the_operator(self):
+        with patch('subprocess.run', side_effect=[subprocess.CompletedProcess([], 1, ''),
+                   subprocess.CalledProcessError(1, ['systemctl'])]):
+            with self.assertRaises(subprocess.CalledProcessError): ensure_docker()
 
 
 @unittest.skipUnless(sys.platform == 'linux', 'Requires Linux process signal semantics.')

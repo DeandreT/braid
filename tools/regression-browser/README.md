@@ -18,6 +18,9 @@ API replies.
 
 The fixture is a local development operation with Docker administrator access.
 It never provisions Azure resources or grants production-payload permission.
+After storage and disk-headroom admission, the WSL launcher checks Docker's data
+root and starts the existing guarded `docker.service` only if the daemon is
+unavailable. It does not change daemon settings or start an interactive viewer.
 
 The default regression scenario uses the qualified native Ferrule image. For
 `--scenario build`, supply the qualified combined compiler image built from

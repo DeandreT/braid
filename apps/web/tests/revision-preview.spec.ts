@@ -150,10 +150,8 @@ const panel = (page: Page) =>
 
 async function open(page: Page) {
   await page.goto(revisionPath(scope));
-  await page.getByRole("tab", { name: "Preview", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Revision 1",
-  );
+  await page.getByRole("tab", { name: "Try sample", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
 }
 
 test("a preview runs, shows its outputs and downloads their exact bytes", async ({
@@ -173,7 +171,7 @@ test("a preview runs, shows its outputs and downloads their exact bytes", async 
   await region.getByRole("button", { name: "Run preview" }).click();
 
   await expect(
-    region.getByRole("status").filter({ hasText: "Succeeded" }),
+    region.getByRole("status").filter({ hasText: "Sample ran successfully" }),
   ).toBeVisible();
   expect(previews.submissions).toHaveLength(1);
   const body = previews.submissions[0].body;
@@ -292,16 +290,18 @@ test("a reload recovers the submitted run and an unconfirmed key is reused", asy
   await region.getByLabel("Primary input (JSON)").fill("{}");
   await region.getByRole("button", { name: "Run preview" }).click();
   await expect(
-    region.getByRole("status").filter({ hasText: "Succeeded" }),
+    region.getByRole("status").filter({ hasText: "Sample ran successfully" }),
   ).toBeVisible();
 
   await page.reload();
-  await page.getByRole("tab", { name: "Preview", exact: true }).click();
+  await page.getByRole("tab", { name: "Try sample", exact: true }).click();
   await expect(
     panel(page).getByText("Showing your last preview of this revision"),
   ).toBeVisible();
   await expect(
-    panel(page).getByRole("status").filter({ hasText: "Succeeded" }),
+    panel(page)
+      .getByRole("status")
+      .filter({ hasText: "Sample ran successfully" }),
   ).toBeVisible();
   expect(previews.submissions).toHaveLength(1);
 
@@ -316,7 +316,7 @@ test("a reload recovers the submitted run and an unconfirmed key is reused", asy
     "Previews are unavailable right now.",
   );
   await page.reload();
-  await page.getByRole("tab", { name: "Preview", exact: true }).click();
+  await page.getByRole("tab", { name: "Try sample", exact: true }).click();
   await expect(
     panel(page).getByText(
       "An earlier submission from this tab was not confirmed",

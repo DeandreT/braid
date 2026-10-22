@@ -5,7 +5,7 @@
   [attr.aria-busy]="view.work !== 'idle' || view.preparingFile"
 >
   <header class="append-heading">
-    <p class="append-eyebrow">Native mapping</p>
+    <p class="append-eyebrow">Original mapping file</p>
     <h1 id="append-title" tabindex="-1">Upload revision</h1>
     <p>
       Append one original native file as a new immutable revision of an existing
@@ -86,9 +86,15 @@
       Append status
     </h2>
     @if (view.admission === "loading") {
-      <p role="status">Checking current identity and mapping access…</p>
+      <p class="wb-state" data-state="loading" role="status">
+        Checking current identity and mapping access…
+      </p>
     } @else if (view.admission !== "ready") {
-      <section class="append-card" role="status">
+      <section
+        class="append-card wb-state"
+        [attr.data-state]="view.admission"
+        role="status"
+      >
         <h3>Append form unavailable</h3>
         @switch (view.admission) {
           @case ("invalidLink") {
@@ -141,7 +147,8 @@
     }
     @if (view.outcomeUnknown) {
       <section
-        class="append-card append-notice"
+        class="append-card append-notice wb-state"
+        data-tone="uncertain"
         aria-labelledby="append-unknown"
       >
         <h3 id="append-unknown">Append outcome is unknown</h3>
@@ -160,7 +167,15 @@
     }
 
     @if (view.acknowledgement; as saved) {
-      <section class="append-card" aria-labelledby="append-saved">
+      <section
+        class="append-card wb-state"
+        [attr.data-tone]="
+          saved.detailed && saved.revision?.admission === 'decodedInvalid'
+            ? 'attention'
+            : 'success'
+        "
+        aria-labelledby="append-saved"
+      >
         <h3 id="append-saved">
           {{
             saved.detailed && saved.revision?.admission === "decodedInvalid"

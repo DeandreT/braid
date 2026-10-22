@@ -11,6 +11,7 @@ import {
 import { filter } from "rxjs";
 import { BrowserSessionState } from "./auth/browser-session-state";
 import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.component";
+import { ConnectionNoticeComponent } from "./workbench/connection-notice.component";
 
 @Component({
   selector: "weft-root",
@@ -19,6 +20,7 @@ import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.compo
     RouterLinkActive,
     RouterOutlet,
     BrowserAuthControlsComponent,
+    ConnectionNoticeComponent,
   ],
   templateUrl: "./app.component.html",
 })

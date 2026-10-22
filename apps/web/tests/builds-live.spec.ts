@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Response } from "@playwright/test";
 import { isAbsolute, join } from "node:path";
+import { confirmAction } from "./confirmation.fixture";
 import {
   ExecutionOwner,
   type ExecutionManifest,
@@ -14,19 +15,22 @@ const owner = new ExecutionOwner<Manifest>(
   () => process.env.WEFT_BUILD_BINDINGS,
 );
 const panel = (page: Page) =>
-  page.getByRole("region", { name: "Approved builds", exact: true });
+  page.getByRole("region", { name: "Prepare this version", exact: true });
 function revisionPath(): string {
   const scope = owner.manifest.revision;
   return `${owner.binding.readOrigin}/catalog/organizations/${scope.organizationId}/projects/${scope.projectId}/mappings/${scope.mappingId}/revisions/${scope.revisionId}`;
 }
 async function open(page: Page) {
   await page.goto(revisionPath());
-  await page.getByRole("tab", { name: "Builds", exact: true }).click();
+  await page.getByRole("tab", { name: "Prepare", exact: true }).click();
   await panel(page)
-    .getByRole("button", { name: "Load build controls", exact: true })
+    .getByRole("button", { name: "Load preparation controls", exact: true })
     .click();
   await expect(
-    panel(page).getByLabel("Exact retained environment version"),
+    panel(page).getByRole("combobox", {
+      name: "Environment version",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     panel(page).getByRole("button", {
@@ -52,6 +56,7 @@ async function mutation(
     { timeout: 120000 },
   );
   await action();
+  await confirmAction(page);
   const response = await received;
   expect([200, 201]).toContain(response.status());
   expect(response.headers()["cache-control"]).toContain("no-store");
@@ -67,13 +72,19 @@ async function approve(
     .getByRole("button", { name: "Verify this evidence", exact: true })
     .click();
   await expect(
-    panel(page)
-      .getByRole("status")
-      .filter({ hasText: "Exact-byte comparison passed" }),
-  ).toContainText(owner.manifest.evidenceId);
+    panel(page).getByRole("status").filter({
+      hasText: "Result matches the saved expectation, including formatting",
+    }),
+  ).toBeVisible();
+  const evidenceDetails = panel(page).locator(".builds-evidence-reference");
+  await evidenceDetails.locator("summary").click();
+  await expect(evidenceDetails.locator("code")).toHaveText(
+    owner.manifest.evidenceId,
+  );
+  await evidenceDetails.locator("summary").click();
   const response = await mutation(page, /\/build-approvals\/[^/]+$/, () =>
     panel(page)
-      .getByRole("button", { name: "Approve immutable build", exact: true })
+      .getByRole("button", { name: "Approve preparation", exact: true })
       .click(),
   );
   const body = await response.json();
@@ -81,7 +92,7 @@ async function approve(
   expect(body.approval.regressionEvidenceId).toBe(owner.manifest.evidenceId);
   await expect(
     panel(page).getByRole("button", {
-      name: "Queue approved build",
+      name: "Prepare approved version",
       exact: true,
     }),
   ).toBeEnabled();
@@ -96,29 +107,38 @@ async function submit(page: Page, buildId: string): Promise<void> {
     new RegExp("/build-runs/" + buildId + "$"),
     () =>
       panel(page)
-        .getByRole("button", { name: "Queue approved build", exact: true })
+        .getByRole("button", { name: "Prepare approved version", exact: true })
         .click(),
   );
   const value = await response.json();
   expect(value.run.buildId).toBe(buildId);
+  await showTechnicalDetails(page);
   await expect(
     panel(page).locator(".builds-result").getByText(buildId, { exact: true }),
   ).toBeVisible();
+  await panel(page).locator(".builds-result-details > summary").click();
+}
+async function showTechnicalDetails(page: Page): Promise<void> {
+  const details = panel(page).locator(".builds-result-details");
+  if (
+    !(await details.evaluate((element) => (element as HTMLDetailsElement).open))
+  )
+    await details.locator(":scope > summary").click();
 }
 async function openHistory(page: Page, buildId: string): Promise<void> {
   await panel(page)
-    .getByRole("button", { name: "Load own build history", exact: true })
+    .getByRole("button", { name: "Load preparation history", exact: true })
     .click();
   const row = panel(page)
     .locator(".wb-build-table tbody tr")
     .filter({ hasText: buildId });
   await row
-    .getByRole("button", { name: "Open build result", exact: true })
+    .getByRole("button", { name: "Open preparation result", exact: true })
     .click();
 }
 async function openApproval(page: Page, approvalId: string): Promise<void> {
   await panel(page)
-    .getByRole("button", { name: "Load own approvals", exact: true })
+    .getByRole("button", { name: "Load your approvals", exact: true })
     .click();
   const row = panel(page)
     .locator(".builds-list li")
@@ -162,7 +182,7 @@ test("real environment approval compilation restart and revocation preserve exac
   await submit(page, first.buildId);
   await expect(
     panel(page).getByRole("heading", {
-      name: "Succeeded · Attempt 1 of 3",
+      name: "Preparation complete · Attempt 1 of 3",
       exact: true,
     }),
   ).toBeVisible({ timeout: 120000 });
@@ -173,11 +193,14 @@ test("real environment approval compilation restart and revocation preserve exac
   expect(original.state).toBe("succeeded");
   expect(original.artifactDigest).toMatch(/^[a-f0-9]{64}$/);
   const originalDigest = String(original.artifactDigest);
+  await showTechnicalDetails(page);
   await expect(
     panel(page).getByText(originalDigest, { exact: true }),
   ).toBeVisible();
   if (process.env.WEFT_WORKBENCH_CAPTURE_DIR) {
     expect(isAbsolute(process.env.WEFT_WORKBENCH_CAPTURE_DIR)).toBe(true);
+    await panel(page).locator(".builds-result-details > summary").click();
+    await panel(page).locator(".builds-result").scrollIntoViewIfNeeded();
     await page.screenshot({
       path: join(
         process.env.WEFT_WORKBENCH_CAPTURE_DIR,
@@ -191,6 +214,7 @@ test("real environment approval compilation restart and revocation preserve exac
   await owner.control("restart");
   await open(page);
   await openHistory(page, first.buildId);
+  await showTechnicalDetails(page);
   await expect(
     panel(page).getByText(originalDigest, { exact: true }),
   ).toBeVisible();
@@ -199,7 +223,7 @@ test("real environment approval compilation restart and revocation preserve exac
   await submit(page, second.buildId);
   await expect(
     panel(page).getByRole("heading", {
-      name: "Succeeded · Attempt 1 of 3",
+      name: "Preparation complete · Attempt 1 of 3",
       exact: true,
     }),
   ).toBeVisible({ timeout: 120000 });
@@ -218,7 +242,7 @@ test("real environment approval compilation restart and revocation preserve exac
   ).toBeVisible();
   await mutation(page, /\/build-runs\/[^/]+\/cancel$/, () =>
     panel(page)
-      .getByRole("button", { name: "Cancel build", exact: true })
+      .getByRole("button", { name: "Cancel preparation", exact: true })
       .click(),
   );
   await expect(
@@ -235,7 +259,10 @@ test("real environment approval compilation restart and revocation preserve exac
   await owner.control("restart-profile", { profile: "administrator" });
   await open(page);
   await expect(
-    panel(page).getByLabel("Exact retained environment version"),
+    panel(page).getByRole("combobox", {
+      name: "Environment version",
+      exact: true,
+    }),
   ).toHaveValue(environmentId + "/1");
   await panel(page)
     .getByRole("button", { name: "Environment administration", exact: true })
@@ -250,47 +277,48 @@ test("real environment approval compilation restart and revocation preserve exac
   await openApproval(page, first.approvalId);
   await expect(
     panel(page).getByRole("button", {
-      name: "Queue approved build",
+      name: "Prepare approved version",
       exact: true,
     }),
   ).toBeDisabled();
   await panel(page)
-    .getByRole("button", { name: "Recover original build", exact: true })
+    .getByRole("button", { name: "Check previous preparation", exact: true })
     .click();
+  await showTechnicalDetails(page);
   await expect(
     panel(page).getByText(originalDigest, { exact: true }),
   ).toBeVisible();
   await mutation(page, /\/build-approvals\/[^/]+\/revoke$/, () =>
     panel(page)
-      .getByRole("button", { name: "Revoke own approval", exact: true })
+      .getByRole("button", { name: "Withdraw your approval", exact: true })
       .click(),
   );
   await expect(
     panel(page).getByRole("button", {
-      name: "Queue approved build",
+      name: "Prepare approved version",
       exact: true,
     }),
   ).toBeDisabled();
   expect((await owner.control("checkpoint")).capturedBuilds).toBe(3);
   await owner.control("revoke-publisher");
   await panel(page)
-    .getByRole("button", { name: "Refresh build result", exact: true })
+    .getByRole("button", { name: "Refresh preparation result", exact: true })
     .click();
   await expect(
     panel(page).getByText(originalDigest, { exact: true }),
   ).toHaveCount(0);
   await expect(
     panel(page).getByRole("button", {
-      name: "Queue approved build",
+      name: "Prepare approved version",
       exact: true,
     }),
   ).toHaveCount(0);
   await owner.control("restore-publisher");
   await owner.control("restart-profile", { profile: "viewer" });
   await page.goto(revisionPath());
-  await page.getByRole("tab", { name: "Builds", exact: true }).click();
+  await page.getByRole("tab", { name: "Prepare", exact: true }).click();
   await panel(page)
-    .getByRole("button", { name: "Load build controls", exact: true })
+    .getByRole("button", { name: "Load preparation controls", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toContainText("access changed");
   expect((await owner.control("checkpoint")).capturedBuilds).toBe(3);

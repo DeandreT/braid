@@ -3,6 +3,8 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   testMatch: [
+    "browser-auth-controls.spec.ts",
+    "upload-presentation.spec.ts",
     "workbench.spec.ts",
     "workbench-model.spec.ts",
     "regression.spec.ts",

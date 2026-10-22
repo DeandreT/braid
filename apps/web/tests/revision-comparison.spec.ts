@@ -85,7 +85,7 @@ test("the mapping and revision pages open a comparison that pairs the chosen rev
   await page.goto(fixture.revisionPage(1));
   await page.getByRole("tab", { name: "Compare", exact: true }).click();
   await page
-    .getByRole("link", { name: "Compare with another revision" })
+    .getByRole("link", { name: "Compare with another version" })
     .click();
   await expect(page).toHaveURL(new RegExp(`/comparisons\\?right=${REV[1]}$`));
   await expect(side(page, "Right revision")).toContainText("Revision 2");

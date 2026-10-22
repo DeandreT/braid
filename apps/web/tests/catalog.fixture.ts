@@ -581,7 +581,9 @@ export async function expectRevision(
     ["Native digest", value.nativeDigest.value],
     [
       "Admission",
-      value.admission === "valid" ? "Passed validation" : "Validation issues",
+      value.admission === "valid"
+        ? "File accepted"
+        : "Saved with validation issues",
     ],
     ["Original filename", value.originalFilename],
     ["Native bytes", String(value.nativeByteCount)],

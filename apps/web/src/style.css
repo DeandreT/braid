@@ -1,6 +1,7 @@
 @import "./mappings/mapping.css";
 @import "./catalog/catalog.css";
 @import "./workbench/workbench.css";
+@import "./workbench/semantic-tokens.css";
 
 :root {
   font-family: "DM Sans", system-ui, sans-serif;
@@ -202,7 +203,7 @@ h1 span {
   margin: 6px 0 0;
 }
 .secondary-button {
-  border: 1px solid #d9e2d5;
+  border: 1px solid var(--wb-control-border);
   border-radius: 9px;
   background: #f8faf6;
   color: #45614c;

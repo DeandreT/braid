@@ -10,6 +10,12 @@ import {
   untracked,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { StatusChipComponent } from "../../workbench/status-chip.component";
+import { MetadataValueComponent } from "../../workbench/metadata-value.component";
+import {
+  comparisonStatus,
+  operationStatus,
+} from "../../workbench/presentation";
 import { RouterLink } from "@angular/router";
 import { Subscription, type Observable } from "rxjs";
 import { BrowserSessionState } from "../../auth/browser-session-state";
@@ -63,11 +69,19 @@ const maxBytes = 8 * 1024 * 1024;
 /** Private samples live only in this revision view; no local/session storage or HTML rendering. */
 @Component({
   selector: "weft-revision-regression",
-  imports: [FormsModule, DatePipe, RouterLink],
+  imports: [
+    FormsModule,
+    DatePipe,
+    RouterLink,
+    StatusChipComponent,
+    MetadataValueComponent,
+  ],
   templateUrl: "./revision-regression.component.html",
   styleUrl: "./revision-regression.component.css",
 })
 export class RevisionRegressionComponent {
+  readonly comparisonStatus = comparisonStatus;
+  readonly operationStatus = operationStatus;
   readonly context = input.required<CatalogContext>();
   readonly mapping = input.required<CatalogMapping>();
   readonly revision = input.required<CatalogRevision>();
