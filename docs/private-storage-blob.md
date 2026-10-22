@@ -170,6 +170,16 @@ optional repair target, candidate object and complete canonical report key.
 Absence records are 218 bytes and prepared records 326 bytes; records are at most 1,024
 bytes. Decoding rejects extra, missing or noncanonical bytes and re-encodes for equality.
 
+## Publication format
+
+The Blob store registers every publication with the explicit store kind `azure-blob`, and
+the database stamps the format label `weft.private-publication.azure-blob.v1` from that kind
+(the filesystem store's kind `filesystem` carries `weft.private-publication.linux.v2`). The
+label is never inferred from identity facts. Recovery by natural key returns only a
+registration of the store's own kind, and the store refuses a tracked-temporary cleanup
+claim whose publication carries another kind (`UnsafeStorage`) before it takes any lease or
+writes a fence. See [private object maintenance metadata](private-object-maintenance-metadata.md#publication-store-kinds).
+
 ## Publication identity mapping
 
 The registry and maintenance observations keep the existing v2 identity record. A Blob

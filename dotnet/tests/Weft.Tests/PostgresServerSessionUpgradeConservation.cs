@@ -137,6 +137,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(RegressionSchemaTestContract.BuildMetadataChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.QualificationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.LocalReleaseChecksum);
+            command.Parameters.AddWithValue(MaintenanceSchemaContract.StoreKindMigrationChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.Tables);
             var value = await command.ExecuteScalarAsync(cancellationToken);
             Assert.True(value is string, "The private session upgrade conservation observation is unavailable.");
             using var document = JsonDocument.Parse((string)value!);
@@ -159,6 +161,9 @@ internal sealed class PostgresServerSessionUpgradeConservation
     // child FK parent triggers and thirteen exact old-column SELECT grants are
     // removed from before/after comparison; all fifty-five new column grants
     // (reader19, writer20SELECT+13INSERT+3UPDATE) are independently validated.
+    // Migration 0023 deliberately replaces the publication format check and guard
+    // body and appends the store-kind column and its grants. Those exact objects are
+    // projected out of both observations; maintenance admission pins their definitions.
     private const string SnapshotSql = """
         WITH old_relations AS (
             SELECT r.* FROM pg_catalog.pg_class r JOIN pg_catalog.pg_namespace n ON n.oid=r.relnamespace
@@ -171,6 +176,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
         ), old_functions AS (
             SELECT p.* FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
             WHERE n.nspname='weft' AND NOT p.proname=ANY($4::text[])
+                AND p.proname<>'guard_private_object_publications_v1'
                 AND NOT ($1 AND (p.proname=ANY($10::text[]) OR p.proname=ANY($14::text[])))
         ), chat_roles AS (
             SELECT oid,rolname FROM pg_roles WHERE rolname IN ('weft_chat_reader','weft_chat_writer','weft_chat_lifecycle')
@@ -192,6 +198,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
             SELECT r.relname::text relation_name,c.attname::text column_name,a.*
             FROM old_relations r JOIN pg_catalog.pg_attribute c ON c.attrelid=r.oid AND c.attnum>0 AND NOT c.attisdropped
             CROSS JOIN LATERAL pg_catalog.aclexplode(c.attacl) a
+            WHERE NOT ($1 AND r.relname='private_object_publications' AND c.attname='storage_kind')
         ), column_acls AS (
             SELECT a.* FROM unprojected_column_acls a WHERE NOT ($1 AND EXISTS(SELECT 1 FROM chat_columns e
                 JOIN chat_roles role ON role.rolname=e.role WHERE a.relation_name=e.tab AND a.column_name=e.col
@@ -333,7 +340,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 11 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 14 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=9+1)=$6::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=11)=$12::text)
@@ -348,6 +355,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=20)=$25::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=21)=$26::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=22)=$27::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=23)=$28::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -376,9 +384,11 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 'schemaOwner',(SELECT nspowner FROM pg_catalog.pg_namespace WHERE nspname='weft')),
             'columns',(SELECT jsonb_agg(jsonb_build_array(r.relname,to_jsonb(a)-'attacl',d.adbin::text)
                 ORDER BY r.relname,a.attnum) FROM old_relations r JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid AND a.attnum>0
-                LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=r.oid AND d.adnum=a.attnum),
+                LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=r.oid AND d.adnum=a.attnum
+                WHERE NOT ($1 AND r.relname='private_object_publications' AND a.attname='storage_kind')),
             'constraints',(SELECT jsonb_agg(jsonb_build_array(r.relname,to_jsonb(c)) ORDER BY r.relname,c.conname)
-                FROM old_relations r JOIN pg_catalog.pg_constraint c ON c.conrelid=r.oid),
+                FROM old_relations r JOIN pg_catalog.pg_constraint c ON c.conrelid=r.oid
+                WHERE NOT (r.relname='private_object_publications' AND c.conname='private_object_publications_format_check')),
             'indexes',(SELECT jsonb_agg(jsonb_build_array(r.relname,index_namespace.nspname,x.relname,to_jsonb(i),x.relowner,x.relam,x.reloptions)
                 ORDER BY r.relname,index_namespace.nspname,x.relname) FROM old_relations r JOIN pg_catalog.pg_index i ON i.indrelid=r.oid
                 JOIN pg_catalog.pg_class x ON x.oid=i.indexrelid
@@ -392,7 +402,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey'))
                 OR EXISTS(SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND t.tgisinternal AND c.contype='f'
                     AND (c.conrelid=to_regclass('weft.preview_runs') AND c.conname=ANY($16::text[])
-                        OR c.conrelid IN (to_regclass('weft.regression_cases'),to_regclass('weft.regression_case_versions'),to_regclass('weft.regression_runs'))))))),
+                        OR c.conrelid IN (SELECT to_regclass('weft.' || suffix) FROM unnest($29::text[]) suffix)))))),
             'functions',(SELECT jsonb_agg(to_jsonb(f) ORDER BY f.oid) FROM old_functions f),
             'grants',jsonb_build_object(
                 'table',(SELECT jsonb_agg(to_jsonb(a) ORDER BY relation_name,grantor,grantee,privilege_type,is_grantable) FROM table_acls a),
@@ -419,7 +429,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 'column',(SELECT jsonb_agg(jsonb_build_array(role.name,r.relname,a.attname,p.name,
                     pg_catalog.has_column_privilege(role.name,r.oid,a.attnum,p.name)) ORDER BY role.name,r.relname,a.attnum,p.name)
                     FROM privilege_roles role CROSS JOIN old_relations r JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid AND a.attnum>0 AND NOT a.attisdropped
-                    CROSS JOIN column_privileges p),
+                    CROSS JOIN column_privileges p WHERE NOT ($1 AND r.relname='private_object_publications' AND a.attname='storage_kind')),
                 'function',(SELECT jsonb_agg(jsonb_build_array(role.name,f.oid,pg_catalog.has_function_privilege(role.name,f.oid,'EXECUTE'),
                     pg_catalog.has_function_privilege(role.name,f.oid,'EXECUTE WITH GRANT OPTION')) ORDER BY role.name,f.oid)
                     FROM privilege_roles role CROSS JOIN old_functions f),

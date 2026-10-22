@@ -49,11 +49,11 @@ internal sealed class ProbeRegistry(ProbeCommand command, PrivatePublicationOwne
     private sealed class ObservedRegistry(IPrivateObjectPublicationRegistry inner, ProbeState state)
         : IPrivateObjectPublicationRegistry
     {
-        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
         {
             state.ReserveCalls++;
-            return inner.ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
+            return inner.ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
         }
 
         public Task<PrivatePublicationBindResult> BindAsync(PrivatePublicationReservation reservation,
@@ -63,11 +63,11 @@ internal sealed class ProbeRegistry(ProbeCommand command, PrivatePublicationOwne
             return inner.BindAsync(reservation, actualIdentity, boundRecordDigest, cancellationToken);
         }
 
-        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
         {
             state.GetCalls++;
-            return inner.GetAsync(owner, rootId, objectId, tempId, cancellationToken);
+            return inner.GetAsync(owner, storeKind, rootId, objectId, tempId, cancellationToken);
         }
     }
 
@@ -78,8 +78,8 @@ internal sealed class ProbeRegistry(ProbeCommand command, PrivatePublicationOwne
     {
         private readonly Dictionary<PrivatePublicationKey, PrivatePublicationRecord> _records = [];
 
-        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var now = DateTimeOffset.UtcNow;
@@ -88,14 +88,15 @@ internal sealed class ProbeRegistry(ProbeCommand command, PrivatePublicationOwne
             var key = new PrivatePublicationKey(rootId, objectId, tempId);
             if (_records.TryGetValue(key, out var existing))
             {
-                return Task.FromResult(existing.Reservation.Owner != owner || existing.Reservation.AbsenceRecordDigest != absenceRecordDigest
+                return Task.FromResult(existing.Reservation.Owner != owner || existing.Reservation.StoreKind != storeKind ||
+                    existing.Reservation.AbsenceRecordDigest != absenceRecordDigest
                     ? PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.Conflict)
                     : PrivatePublicationReserveResult.ForSnapshot(PrivatePublicationReserveOutcome.Existing,
                         new(existing, now, true, false, false)));
             }
             if (_records.Count >= 4)
                 throw new InvalidDataException();
-            var record = new PrivatePublicationRecord(new(Guid.NewGuid(), key, owner, absenceRecordDigest, now));
+            var record = new PrivatePublicationRecord(new(Guid.NewGuid(), key, storeKind, owner, absenceRecordDigest, now));
             _records.Add(key, record);
             return Task.FromResult(PrivatePublicationReserveResult.ForSnapshot(PrivatePublicationReserveOutcome.Reserved,
                 new(record, now, true, false, false)));
@@ -117,11 +118,12 @@ internal sealed class ProbeRegistry(ProbeCommand command, PrivatePublicationOwne
             return Task.FromResult(PrivatePublicationBindResult.ForSnapshot(outcome, new(record, now, true, false, false)));
         }
 
-        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!_records.TryGetValue(new(rootId, objectId, tempId), out var record) || record.Reservation.Owner != owner)
+            if (!_records.TryGetValue(new(rootId, objectId, tempId), out var record) || record.Reservation.Owner != owner ||
+                record.Reservation.StoreKind != storeKind)
                 return Task.FromResult<PrivatePublicationSnapshot?>(null);
             var now = DateTimeOffset.UtcNow;
             return Task.FromResult<PrivatePublicationSnapshot?>(new(record, now, Live(owner, now), false, false));

@@ -81,7 +81,8 @@ public sealed partial class BlobPrivateObjectStore
         var publication = claim.Retirement.Publication ?? throw Failure(PrivateObjectStorageError.UnsafeStorage);
         var reservation = publication.Reservation;
         var key = reservation.Key;
-        if (key.RootId != _rootId || key.Object != claim.Retirement.Target.Object ||
+        // A publication registered by another store kind is never this store's temporary.
+        if (reservation.StoreKind != PublicationStoreKind || key.RootId != _rootId || key.Object != claim.Retirement.Target.Object ||
             reservation.PublicationId != claim.Retirement.Target.PublicationAttemptId)
             throw Failure(PrivateObjectStorageError.UnsafeStorage);
         var id = key.Object;

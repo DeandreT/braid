@@ -188,7 +188,7 @@ public sealed class PostgresClaimAwareStorageRetryTests(PostgresFixture fixture)
             Assert.Empty(test.NativeRegistry.Bindings);
             Assert.False(File.Exists(temp));
             Assert.False(File.Exists(test.Root.FinalPath(publication.Reference)));
-            var retained = await test.NativeRegistry.Actual.GetAsync(registration.Owner, registration.Key.RootId,
+            var retained = await test.NativeRegistry.Actual.GetAsync(registration.Owner, PrivatePublicationStoreKind.FileSystem, registration.Key.RootId,
                 registration.Key.Object, registration.Key.TempId, deadline.Token);
             Assert.NotNull(retained);
             Assert.Equal(registration, retained.Record.Reservation);
@@ -254,9 +254,9 @@ public sealed class PostgresClaimAwareStorageRetryTests(PostgresFixture fixture)
         internal PrivatePublicationBindResult? Result { get; private set; }
         internal PrivatePublicationReservation? Reservation { get; private set; }
         internal PrivatePublicationFileIdentity? Identity { get; private set; }
-        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default) =>
-            actual.ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
+        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default) =>
+            actual.ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
         public async Task<PrivatePublicationBindResult> BindAsync(PrivatePublicationReservation reservation,
             PrivatePublicationFileIdentity actualIdentity, Sha256Digest boundRecordDigest, CancellationToken cancellationToken = default)
         {
@@ -266,8 +266,8 @@ public sealed class PostgresClaimAwareStorageRetryTests(PostgresFixture fixture)
             Result = result;
             return result;
         }
-        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default) =>
-            actual.GetAsync(owner, rootId, objectId, tempId, cancellationToken);
+        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default) =>
+            actual.GetAsync(owner, storeKind, rootId, objectId, tempId, cancellationToken);
     }
 }

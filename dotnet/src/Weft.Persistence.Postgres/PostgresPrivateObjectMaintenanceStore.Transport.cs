@@ -80,7 +80,8 @@ internal static partial class PrivateObjectMaintenancePersistence
         writer.WriteString("publication_id", reservation.PublicationId);
         writer.WriteString("root_id", reservation.Key.RootId);
         writer.WriteString("temp_id", reservation.Key.TempId);
-        writer.WriteString("format", PrivatePublicationFileIdentity.Format);
+        writer.WriteString("format", PrivatePublicationFileIdentity.Format(reservation.StoreKind));
+        writer.WriteString("storage_kind", StorageKind(reservation.StoreKind));
         writer.WriteString("owner_kind", OwnerKind(owner.Kind));
         writer.WriteString("actor_principal_id", owner.OriginalActor.Value);
         WriteId(writer, "ingestion_operation_id", owner.IngestionClaim?.OperationId);
@@ -150,6 +151,12 @@ internal static partial class PrivateObjectMaintenancePersistence
     {
         PrivateObjectOwnerKind.NativeIngestion => "native_ingestion",
         PrivateObjectOwnerKind.ReportAttempt => "report_attempt",
+        _ => throw new ArgumentOutOfRangeException(nameof(value))
+    };
+    internal static string StorageKind(PrivatePublicationStoreKind value) => value switch
+    {
+        PrivatePublicationStoreKind.FileSystem => "filesystem",
+        PrivatePublicationStoreKind.AzureBlob => "azure-blob",
         _ => throw new ArgumentOutOfRangeException(nameof(value))
     };
     private static string TargetKind(CleanupTargetKind value) => value switch

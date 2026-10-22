@@ -57,7 +57,7 @@ public sealed class PostgresBlobPrivateStorageTests(PostgresFixture fixture, Azu
                 if (observation.Phase is not (BlobStoragePhase.ReservationAcknowledged or BlobStoragePhase.BindingAcknowledged)) return;
                 Assert.Equal(0, input.ReadCalls);
                 var key = Assert.IsType<PrivatePublicationKey>(observation.Publication);
-                var persisted = await registry.GetAsync(owner, key.RootId, key.Object, key.TempId, token);
+                var persisted = await registry.GetAsync(owner, PrivatePublicationStoreKind.AzureBlob, key.RootId, key.Object, key.TempId, token);
                 Assert.NotNull(persisted);
                 Assert.True(persisted.CanWrite);
                 committed = persisted.Record;
@@ -79,8 +79,12 @@ public sealed class PostgresBlobPrivateStorageTests(PostgresFixture fixture, Azu
             {
                 Assert.Equal(PrivateObjectPublishResult.Created, await store.PublishCreateOnlyAsync(owner, reference.Id.Scope, reference, input));
                 Assert.NotNull(committed);
+                // The Blob store registers its own kind, and PostgreSQL stamps the Blob label for it.
+                Assert.Equal(PrivatePublicationStoreKind.AzureBlob, committed.Reservation.StoreKind);
+                Assert.Equal(PostgresPrivatePublicationStoreKindTests.Expected(PrivatePublicationStoreKind.AzureBlob),
+                    await PostgresPrivatePublicationStoreKindTests.LabelAsync(test, committed.Reservation.PublicationId));
                 var key = committed.Reservation.Key;
-                Assert.Equal(committed, (await registry.GetAsync(owner, key.RootId, key.Object, key.TempId))!.Record);
+                Assert.Equal(committed, (await registry.GetAsync(owner, PrivatePublicationStoreKind.AzureBlob, key.RootId, key.Object, key.TempId))!.Record);
                 var page = await store.ObserveAsync(test.Project);
                 var final = Assert.Single(page.Entries, entry => entry.Kind == PrivateStorageEntryKind.CandidateSlot).Slot!;
                 Assert.Equal(reference.Id, final.ObjectId);
@@ -143,6 +147,56 @@ public sealed class PostgresBlobPrivateStorageTests(PostgresFixture fixture, Azu
         Assert.Equal(0, again.Observations.BoundPublicationMatchesObserved);
         Assert.Equal(0, again.Observations.OwnershipUnprovedEntriesObserved);
         Assert.Equal(new long[] { 3, 3, 3 }, await facts.CountsAsync());
+    }
+
+    [PostgresAzuriteFact]
+    public async Task AMaintenanceRunOverBothKindsRetiresItsOwnObjectAndRefusesTheOtherKindsTemporary()
+    {
+        await using var facts = await PostgresPrivateObjectMaintenanceTestSupport.CreateAsync(fixture);
+        var container = await azurite.CreateContainerAsync();
+        var registry = new LazyPrivateObjectPublicationRegistry(() => facts.NativePublications, () => facts.ReportPublications);
+        await using var store = await BlobPrivateObjectStore.InitializeAsync(azurite.Options(container), azurite.Client(container), () => registry, null);
+
+        var native = await facts.ReserveNativeAsync();
+        var nativeClaim = await facts.ClaimNativeAsync(native);
+        Assert.Equal(PrivateObjectPublishResult.Created, await store.PublishCreateOnlyAsync(PrivatePublicationOwner.ForIngestion(facts.Actor, nativeClaim),
+            native.FutureRevision, native.NativeObject, new MemoryStream(PostgresIngestionTestSupport.SyntheticBody)));
+        Assert.Equal(IngestionPhase.Rejected, (await facts.Ingestions.CompleteAttemptAsync(facts.Actor, nativeClaim,
+            IngestionAttemptCompletion.FromOperationalFailure(IngestionFailureCode.EvidenceLimit))).Receipt!.Phase);
+        await facts.SyntheticAgeNativeAsync(native, TimeSpan.FromHours(25));
+
+        // An abandoned temporary that the filesystem store registered in the same project.
+        var other = await facts.ReserveNativeAsync();
+        var otherOwner = PrivatePublicationOwner.ForIngestion(facts.Actor, await facts.ClaimNativeAsync(other));
+        var root = Guid.NewGuid();
+        var reserved = await facts.NativePublications.ReserveAsync(otherOwner, PrivatePublicationStoreKind.FileSystem, root,
+            other.NativeObject.Id, Guid.NewGuid(), PostgresPrivateObjectMaintenanceTestSupport.AbsenceDigest);
+        var bound = await facts.NativePublications.BindAsync(reserved.Snapshot!.Record.Reservation,
+            PostgresPrivateObjectMaintenanceTestSupport.SyntheticIdentity(root), PostgresPrivateObjectMaintenanceTestSupport.BoundDigest);
+        var foreign = await facts.SyntheticAgePublicationAsync(bound.Snapshot!.Record.Reservation, TimeSpan.FromHours(25));
+
+        var service = new PrivateObjectMaintenanceService(facts.Maintenance, facts.Maintenance, facts.Maintenance, store, store, Guid.NewGuid());
+        var run = await service.RunOnceAsync(facts.Project);
+        Assert.Equal(PrivateObjectMaintenanceRunOutcome.Finished, run.Outcome);
+        Assert.Null(run.Failure);
+        Assert.Equal(2, run.ClaimedCount);
+        var own = run.Targets[0];
+        Assert.Equal((CleanupTargetKind.FinalObject, PrivateObjectMaintenancePhysicalObservation.Deleted, ObjectCleanupDisposition.Deleted),
+            (own.TargetKind, own.Physical, own.AcknowledgedDisposition));
+        // The other kind's temporary is never fenced or acknowledged as removed by this store.
+        var refused = run.Targets[1];
+        Assert.Equal((CleanupTargetKind.TrackedTemporary, PrivateObjectMaintenancePhysicalObservation.UnsafeStorage, ObjectCleanupDisposition.UnsafeStorage),
+            (refused.TargetKind, refused.Physical, refused.AcknowledgedDisposition));
+        Assert.True(await facts.Case.ScalarAsync<bool>("""
+            SELECT r.completed_attempt_id IS NULL AND a.disposition='unsafe_storage' AND NOT a.success
+            FROM weft.private_object_retirements r JOIN weft.private_object_cleanup_attempts a
+              ON a.organization_id=r.organization_id AND a.project_id=r.project_id AND a.retirement_id=r.retirement_id
+            WHERE r.publication_id=$1
+            """, foreign.PublicationId));
+        Assert.Equal(PostgresPrivatePublicationStoreKindTests.Expected(PrivatePublicationStoreKind.FileSystem),
+            await PostgresPrivatePublicationStoreKindTests.LabelAsync(facts, foreign.PublicationId));
+        await PrivateStorageData.ErrorAsync(PrivateObjectStorageError.Missing, () => store.ReadVerifiedAsync(native.FutureRevision, native.NativeObject));
+        Assert.Equal(new long[] { 2, 2, 2 }, await facts.CountsAsync());
     }
 
     [PostgresAzuriteFact]

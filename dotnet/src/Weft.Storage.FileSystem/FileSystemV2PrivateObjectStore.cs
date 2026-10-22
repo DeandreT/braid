@@ -11,6 +11,8 @@ namespace Weft.Storage.FileSystem;
 public sealed partial class FileSystemV2PrivateObjectStore : IPrivateObjectPublicationStore,
     IPrivateObjectRetirementStore, IDisposable, IAsyncDisposable
 {
+    /// <summary>The explicit kind this store registers; it selects the filesystem publication format.</summary>
+    public const PrivatePublicationStoreKind PublicationStoreKind = PrivatePublicationStoreKind.FileSystem;
     private const int ChunkSize = 64 * 1024;
     private readonly FileSystemStorageOptions _options;
     private readonly SafeFileHandle _root;

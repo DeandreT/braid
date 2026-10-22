@@ -10,7 +10,7 @@ internal static class PublicationSchemaContract
         "organization_id", "project_id", "mapping_id", "revision_id", "object_class", "object_id",
         "root_id", "temp_id", "owner_kind", "actor_principal_id", "ingestion_operation_id",
         "cache_entry_id", "derivation_id", "owner_generation", "owner_instance_id", "owner_token",
-        "owner_lease_expires_at", "absence_record_digest"
+        "owner_lease_expires_at", "absence_record_digest", "storage_kind"
     ];
     internal static readonly string[] BindingColumns =
     [
@@ -25,6 +25,6 @@ internal static class PublicationSchemaContract
         "publication_id", "root_id", "temp_id", "format", "owner_kind", "actor_principal_id",
         "ingestion_operation_id", "cache_entry_id", "derivation_id", "native_object_id", "candidate_object_id", "owner_generation", "owner_instance_id",
         "owner_token", "owner_lease_expires_at", "absence_record_digest", "registered_at",
-        .. BindingColumns, "bound_at"
+        .. BindingColumns, "bound_at", "storage_kind"
     ];
 }

@@ -24,11 +24,11 @@ public sealed class LazyPrivateObjectPublicationRegistryTests
         using var canceled = new CancellationTokenSource();
         canceled.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => router.ReserveAsync(fixture.Owner,
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => router.ReserveAsync(fixture.Owner, PrivatePublicationStoreKind.FileSystem,
             fixture.Key.RootId, fixture.Key.Object, fixture.Key.TempId, fixture.AbsenceDigest, canceled.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => router.BindAsync(fixture.Reservation,
             fixture.Identity, fixture.BoundDigest, canceled.Token));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => router.GetAsync(fixture.Owner,
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => router.GetAsync(fixture.Owner, PrivatePublicationStoreKind.FileSystem,
             fixture.Key.RootId, fixture.Key.Object, fixture.Key.TempId, canceled.Token));
 
         Assert.Equal(0, resolutions);
@@ -47,11 +47,12 @@ public sealed class LazyPrivateObjectPublicationRegistryTests
         var router = new LazyPrivateObjectPublicationRegistry(report ? Wrong : Resolve, report ? Resolve : Wrong);
         using var caller = new CancellationTokenSource();
 
-        var reserve = router.ReserveAsync(fixture.Owner, fixture.Key.RootId, fixture.Key.Object,
-            fixture.Key.TempId, fixture.AbsenceDigest, caller.Token);
+        var reserve = router.ReserveAsync(fixture.Owner, PrivatePublicationStoreKind.AzureBlob, fixture.Key.RootId,
+            fixture.Key.Object, fixture.Key.TempId, fixture.AbsenceDigest, caller.Token);
         Assert.Same(selected.ReserveTask, reserve);
         Assert.Same(selected.ReserveResult, await reserve);
         Assert.Same(fixture.Owner, selected.Owner);
+        Assert.Equal(PrivatePublicationStoreKind.AzureBlob, selected.StoreKind);
         Assert.Same(fixture.Key.Object, selected.Object);
         Assert.Equal(fixture.Key.RootId, selected.RootId);
         Assert.Equal(fixture.Key.TempId, selected.TempId);
@@ -63,14 +64,17 @@ public sealed class LazyPrivateObjectPublicationRegistryTests
         Assert.Same(selected.BindResult, await bind);
         Assert.Same(fixture.Reservation, selected.Reservation);
         Assert.Same(fixture.Owner, selected.Reservation!.Owner);
+        Assert.Equal(PrivatePublicationStoreKind.AzureBlob, selected.StoreKind);
         Assert.Same(fixture.Identity, selected.Identity);
         Assert.Same(fixture.BoundDigest, selected.Digest);
         Assert.Equal(caller.Token, selected.Token);
 
-        var get = router.GetAsync(fixture.Owner, fixture.Key.RootId, fixture.Key.Object, fixture.Key.TempId, caller.Token);
+        var get = router.GetAsync(fixture.Owner, PrivatePublicationStoreKind.AzureBlob, fixture.Key.RootId,
+            fixture.Key.Object, fixture.Key.TempId, caller.Token);
         Assert.Same(selected.GetTask, get);
         Assert.Same(fixture.Snapshot, await get);
         Assert.Same(fixture.Owner, selected.Owner);
+        Assert.Equal(PrivatePublicationStoreKind.AzureBlob, selected.StoreKind);
         Assert.Same(fixture.Key.Object, selected.Object);
         Assert.Equal(fixture.Key.RootId, selected.RootId);
         Assert.Equal(fixture.Key.TempId, selected.TempId);
@@ -101,7 +105,7 @@ public sealed class LazyPrivateObjectPublicationRegistryTests
         }
         IPrivateObjectPublicationRegistry Wrong() => throw new InvalidOperationException("Credential fallback is forbidden.");
         var router = new LazyPrivateObjectPublicationRegistry(report ? Wrong : Resolve, report ? Resolve : Wrong);
-        Task<PrivatePublicationSnapshot?> Get() => router.GetAsync(fixture.Owner, fixture.Key.RootId,
+        Task<PrivatePublicationSnapshot?> Get() => router.GetAsync(fixture.Owner, PrivatePublicationStoreKind.FileSystem, fixture.Key.RootId,
             fixture.Key.Object, fixture.Key.TempId);
 
         if (nullFactory) await Assert.ThrowsAsync<InvalidOperationException>(Get);
@@ -127,13 +131,13 @@ public sealed class LazyPrivateObjectPublicationRegistryTests
         var original = new IOException("Synthetic selected-registry operation failure.");
         nativeRegistry.Failure = original;
 
-        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => router.GetAsync(native.Owner,
+        Assert.Same(original, await Assert.ThrowsAsync<IOException>(() => router.GetAsync(native.Owner, PrivatePublicationStoreKind.FileSystem,
             native.Key.RootId, native.Key.Object, native.Key.TempId)));
         Assert.Equal(0, reportResolutions);
         nativeRegistry.Failure = null;
-        Assert.Same(native.Snapshot, await router.GetAsync(native.Owner, native.Key.RootId, native.Key.Object, native.Key.TempId));
-        Assert.Same(report.Snapshot, await router.GetAsync(report.Owner, report.Key.RootId, report.Key.Object, report.Key.TempId));
-        Assert.Same(report.Snapshot, await router.GetAsync(report.Owner, report.Key.RootId, report.Key.Object, report.Key.TempId));
+        Assert.Same(native.Snapshot, await router.GetAsync(native.Owner, PrivatePublicationStoreKind.FileSystem, native.Key.RootId, native.Key.Object, native.Key.TempId));
+        Assert.Same(report.Snapshot, await router.GetAsync(report.Owner, PrivatePublicationStoreKind.FileSystem, report.Key.RootId, report.Key.Object, report.Key.TempId));
+        Assert.Same(report.Snapshot, await router.GetAsync(report.Owner, PrivatePublicationStoreKind.FileSystem, report.Key.RootId, report.Key.Object, report.Key.TempId));
         Assert.Equal(1, nativeResolutions);
         Assert.Equal(1, reportResolutions);
     }
@@ -150,7 +154,8 @@ public sealed class LazyPrivateObjectPublicationRegistryTests
                         RevisionReportServiceTestPorts.Actor.PrincipalId, Guid.NewGuid(), Guid.NewGuid(), 3,
                         RevisionReportServiceTestPorts.Start.AddSeconds(120)));
             Key = new(Guid.NewGuid(), report ? claim.CandidateObjectId : ports.Source.NativeObject.Id, Guid.NewGuid());
-            Reservation = new(Guid.NewGuid(), Key, Owner, AbsenceDigest, RevisionReportServiceTestPorts.Start.AddSeconds(1));
+            Reservation = new(Guid.NewGuid(), Key, PrivatePublicationStoreKind.AzureBlob, Owner, AbsenceDigest,
+                RevisionReportServiceTestPorts.Start.AddSeconds(1));
             ReserveSnapshot = new(new(Reservation), RevisionReportServiceTestPorts.Start.AddSeconds(1), true, false, false);
             Identity = new(Key.RootId, Guid.NewGuid(), Guid.NewGuid(), 7, 101, 1000,
                 new(301, 8, 1, 71), new(302, 8, 1, 71));
@@ -182,6 +187,7 @@ public sealed class LazyPrivateObjectPublicationRegistryTests
         internal int Calls;
         internal Exception? Failure;
         internal PrivatePublicationOwner? Owner;
+        internal PrivatePublicationStoreKind? StoreKind;
         internal Guid RootId;
         internal Guid TempId;
         internal PrivateObjectId? Object;
@@ -190,32 +196,35 @@ public sealed class LazyPrivateObjectPublicationRegistryTests
         internal PrivatePublicationFileIdentity? Identity;
         internal CancellationToken Token;
 
-        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
         {
-            Capture(owner, rootId, objectId, tempId, cancellationToken);
+            Capture(owner, storeKind, rootId, objectId, tempId, cancellationToken);
             Digest = absenceRecordDigest;
             return Failure is { } failure ? Task.FromException<PrivatePublicationReserveResult>(failure) : ReserveTask;
         }
         public Task<PrivatePublicationBindResult> BindAsync(PrivatePublicationReservation reservation,
             PrivatePublicationFileIdentity actualIdentity, Sha256Digest boundRecordDigest, CancellationToken cancellationToken = default)
         {
-            Capture(reservation.Owner, reservation.Key.RootId, reservation.Key.Object, reservation.Key.TempId, cancellationToken);
+            Capture(reservation.Owner, reservation.StoreKind, reservation.Key.RootId, reservation.Key.Object, reservation.Key.TempId,
+                cancellationToken);
             Reservation = reservation;
             Identity = actualIdentity;
             Digest = boundRecordDigest;
             return Failure is { } failure ? Task.FromException<PrivatePublicationBindResult>(failure) : BindTask;
         }
-        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
         {
-            Capture(owner, rootId, objectId, tempId, cancellationToken);
+            Capture(owner, storeKind, rootId, objectId, tempId, cancellationToken);
             return Failure is { } failure ? Task.FromException<PrivatePublicationSnapshot?>(failure) : GetTask;
         }
-        private void Capture(PrivatePublicationOwner owner, Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken token)
+        private void Capture(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind, Guid rootId,
+            PrivateObjectId objectId, Guid tempId, CancellationToken token)
         {
             Calls++;
             Owner = owner;
+            StoreKind = storeKind;
             RootId = rootId;
             Object = objectId;
             TempId = tempId;

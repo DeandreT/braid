@@ -54,7 +54,7 @@ internal static class MaintenanceCommandTrackedTemporaryAging
         await using var derivation = new PostgresRevisionDerivationDatabase(test.DerivationConnectionString);
         IPrivateObjectPublicationRegistry registry = original.Owner.Kind == PrivateObjectOwnerKind.NativeIngestion
             ? new PostgresIngestionPublicationRegistry(ingestion) : new PostgresRevisionReportPublicationRegistry(derivation);
-        var before = Assert.IsType<PrivatePublicationSnapshot>(await registry.GetAsync(original.Owner,
+        var before = Assert.IsType<PrivatePublicationSnapshot>(await registry.GetAsync(original.Owner, PrivatePublicationStoreKind.FileSystem,
             key.RootId, key.Object, key.TempId));
         var reservation = before.Record.Reservation;
         Assert.Equal(original.Owner, reservation.Owner);
@@ -134,7 +134,7 @@ internal static class MaintenanceCommandTrackedTemporaryAging
                 prepared.PublicationId, prepared.BoundAtUtc - age, prepared.DataFileIdentity,
                 prepared.VerifiedDigest, prepared.VerifiedByteCount)));
         Assert.Equal(seals.Keys.Order(), replacements.Keys.Order()); // preserve actual3/4-seal shape
-        var aged = new PrivatePublicationRecord(new(reservation.PublicationId, key, owner,
+        var aged = new PrivatePublicationRecord(new(reservation.PublicationId, key, reservation.StoreKind, owner,
             Sha256Digest.FromBytes(replacements[V2RecordKind.Absence]), reservation.RegisteredAtUtc - age),
             before.Record.Binding is { } oldBinding ? new(oldBinding.ActualIdentity,
                 Sha256Digest.FromBytes(replacements[V2RecordKind.Bound]), oldBinding.BoundAtUtc - age) : null);
@@ -197,7 +197,7 @@ internal static class MaintenanceCommandTrackedTemporaryAging
                 throw new AggregateException("Owned age fixture failed; rollback/restoration failures are retained after the original.", failures);
             throw;
         }
-        var observed = Assert.IsType<PrivatePublicationSnapshot>(await registry.GetAsync(owner, key.RootId, key.Object, key.TempId));
+        var observed = Assert.IsType<PrivatePublicationSnapshot>(await registry.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, key.RootId, key.Object, key.TempId));
         Assert.Equal(aged, observed.Record);
         Assert.False(observed.OwnerIsLive);
         Assert.False(observed.CanWrite);

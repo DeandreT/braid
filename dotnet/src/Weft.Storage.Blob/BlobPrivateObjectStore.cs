@@ -16,6 +16,8 @@ namespace Weft.Storage.Blob;
 public sealed partial class BlobPrivateObjectStore : IPrivateObjectPublicationStore,
     IPrivateObjectRetirementStore, IDisposable, IAsyncDisposable
 {
+    /// <summary>The explicit kind this store registers; it selects the Blob publication format.</summary>
+    public const PrivatePublicationStoreKind PublicationStoreKind = PrivatePublicationStoreKind.AzureBlob;
     private const int ChunkSize = 64 * 1024;
     private const int BlockSize = 1024 * 1024;
     // The published development key of the Azurite emulator; it protects no deployed data.

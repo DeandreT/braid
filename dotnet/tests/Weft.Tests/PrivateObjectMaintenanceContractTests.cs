@@ -383,7 +383,7 @@ internal static class PrivateObjectMaintenanceContractFacts
     internal static PrivatePublicationRecord Publication(bool bound = false)
     {
         var owner = PrivatePublicationOwner.ForIngestion(Actor, IngestionClaim());
-        var reservation = new PrivatePublicationReservation(Id(25), new PrivatePublicationKey(Id(10), Native(), Id(26)),
+        var reservation = new PrivatePublicationReservation(Id(25), new PrivatePublicationKey(Id(10), Native(), Id(26)), PrivatePublicationStoreKind.FileSystem,
             owner, AbsenceDigest, At);
         return new(reservation, bound ? new PrivatePublicationBinding(FileIdentity(), BoundDigest, At.AddSeconds(1)) : null);
     }

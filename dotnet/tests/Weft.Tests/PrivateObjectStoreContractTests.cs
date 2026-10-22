@@ -366,6 +366,37 @@ public sealed class PrivateObjectStoreContractTests(AzuriteFixture azurite)
     }
 
     [Theory, MemberData(nameof(Stores))]
+    public async Task EachStoreRegistersItsOwnKindAndRefusesToRetireATemporaryOfAnotherKind(string kind)
+    {
+        await using var harness = await StoreHarness.CreateAsync(kind, azurite);
+        var registry = new PrivateStorageV2PhysicalRegistry();
+        var boundary = new ContractBoundary(ContractPhase.BindingAcknowledged);
+        await using var store = await harness.InitializeAsync(() => registry, boundary.ObserveAsync);
+        var bytes = "registered under the store's own kind"u8.ToArray();
+        var reference = PrivateStorageData.Reference(bytes);
+        using var input = new PrivateStorageInput(bytes);
+        var write = store.PublishAsync(PrivateStorageV2Data.Owner(reference), reference, input);
+        try
+        {
+            await boundary.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            var row = registry.Single;
+            var own = kind == StoreHarness.Blob ? PrivatePublicationStoreKind.AzureBlob : PrivatePublicationStoreKind.FileSystem;
+            Assert.Equal(own, row.Reservation.StoreKind);
+            var reservation = row.Reservation;
+            var foreign = new PrivatePublicationRecord(new(reservation.PublicationId, reservation.Key,
+                own == PrivatePublicationStoreKind.FileSystem ? PrivatePublicationStoreKind.AzureBlob : PrivatePublicationStoreKind.FileSystem,
+                reservation.Owner, reservation.AbsenceRecordDigest, reservation.RegisteredAtUtc), row.Binding);
+            // The kind is refused before any gate or fence; the exact bound temporary is untouched.
+            Assert.Equal(PrivateObjectRetirementOutcome.UnsafeStorage, await store.RetireAsync(PrivateStorageV2Data.TemporaryClaim(foreign)));
+            Assert.Equal(1, await harness.TemporarySlotsAsync());
+            Assert.True(await harness.SealPresentAsync(reservation.Key, "bound"));
+        }
+        finally { boundary.Release(); }
+        Assert.Equal(PrivateObjectPublishResult.Created, await write);
+        Assert.Equal(bytes, await store.ReadAsync(reference));
+    }
+
+    [Theory, MemberData(nameof(Stores))]
     public async Task CancellationAtCommittedBindingSettlesWithoutReadingAndLeavesSealsForMissingRecovery(string kind)
     {
         await using var harness = await StoreHarness.CreateAsync(kind, azurite);
@@ -397,10 +428,10 @@ public sealed class PrivateObjectStoreContractTests(AzuriteFixture azurite)
     /// <summary>Serializes calls into one shared synthetic registry for concurrent adapters.</summary>
     private sealed class SynchronizedRegistry(PrivateStorageV2PhysicalRegistry inner, object gate) : IPrivateObjectPublicationRegistry
     {
-        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId, PrivateObjectId objectId,
-            Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
         {
-            lock (gate) return inner.ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
+            lock (gate) return inner.ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
         }
 
         public Task<PrivatePublicationBindResult> BindAsync(PrivatePublicationReservation reservation, PrivatePublicationFileIdentity actualIdentity,
@@ -409,10 +440,10 @@ public sealed class PrivateObjectStoreContractTests(AzuriteFixture azurite)
             lock (gate) return inner.BindAsync(reservation, actualIdentity, boundRecordDigest, cancellationToken);
         }
 
-        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId, PrivateObjectId objectId,
-            Guid tempId, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
         {
-            lock (gate) return inner.GetAsync(owner, rootId, objectId, tempId, cancellationToken);
+            lock (gate) return inner.GetAsync(owner, storeKind, rootId, objectId, tempId, cancellationToken);
         }
     }
 }

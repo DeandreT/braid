@@ -72,6 +72,28 @@ Registry writes recheck the original actor, exact current claim, full object and
 retirement state. A retained observation can report expired ownership without
 granting further writes. A temporary retirement never retires its final object.
 
+## Publication store kinds
+
+Each registration records the explicit kind of the store that registered it in
+`storage_kind`, and the publication guard stamps the immutable `format` label from that
+kind. Ordinary logins may insert the kind but can never write the label.
+
+| Store kind | Format label |
+| --- | --- |
+| `filesystem` | `weft.private-publication.linux.v2` |
+| `azure-blob` | `weft.private-publication.azure-blob.v1` |
+
+A missing or unknown kind is refused, and the format check admits only these exact
+pairs. Reservation and natural-key recovery carry the registering store's kind: a
+retained record of another kind is a conflict and is never returned as that store's
+registration. Maintenance claims restore the kind and label together and acknowledge only
+the exact retained pair, and each store refuses to retire a tracked temporary whose
+publication carries another kind.
+
+Migration 0023 adds `storage_kind` and replaces only the format check and the
+publication guard body. Registrations made before it were all written by the filesystem
+store; they are recorded as `filesystem` and keep `weft.private-publication.linux.v2`.
+
 ## Roles and deployment
 
 The maintenance pool requires its separate `weft_maintenance` credential and an

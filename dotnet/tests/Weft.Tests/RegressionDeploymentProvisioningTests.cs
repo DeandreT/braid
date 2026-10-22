@@ -106,7 +106,8 @@ public sealed class RegressionDeploymentProvisioningTests
             Assert.Contains($"[\"{login}\", \"{role}\"]",
                 File.ReadAllText(Path.Combine(root, "tools/browser-fixture/runtime.mjs")), StringComparison.Ordinal);
         }
-        var browserFixture = File.ReadAllText(Path.Combine(root, "tools/browser-fixture/runtime.mjs"));
+        // The browser fixture admits its exact migration inventory from schema.mjs.
+        var browserFixture = File.ReadAllText(Path.Combine(root, "tools/browser-fixture/schema.mjs"));
         foreach (var path in Directory.EnumerateFiles(Path.Combine(root, "migrations/postgres"), "*.sql"))
             Assert.Contains('"' + Path.GetFileName(path) + '"', browserFixture, StringComparison.Ordinal);
     }

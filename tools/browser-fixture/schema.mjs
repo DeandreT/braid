@@ -23,6 +23,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0020_build_metadata.sql",
   "0021_build_qualification.sql",
   "0022_local_releases.sql",
+  "0023_private_publication_storage_kind.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([

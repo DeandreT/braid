@@ -9,6 +9,11 @@ internal static class MaintenanceSchemaContract
 {
     internal const string MigrationName = "0007_private_object_maintenance";
     internal const string MigrationChecksum = "39cbd985bf607ae1fac08700794ad7bd939988d4fe49766f181ca6984b2a29fa";
+    // 0023 appends the registering store's explicit kind and replaces only the publication
+    // format check and guard body. Admission pins the resulting complete definitions.
+    internal const string StoreKindMigrationName = "0023_private_publication_storage_kind";
+    internal const string StoreKindMigrationChecksum = "33e96702ecced238b9b08f8a78c98b38a39ce8eed8afb8a0683b614bcc5be2b0";
+    private const string PublicationGuard = "guard_private_object_publications_v1";
     internal sealed record Function(string Name, string IdentityArguments, string ResultType, string Body,
         bool SecurityDefiner = true, char Volatility = 'v', char Parallel = 'u', string SearchPath = "pg_catalog, weft, pg_temp");
     internal sealed record Trigger(string Name, string Table, string Function, short Events);
@@ -59,30 +64,22 @@ internal static class MaintenanceSchemaContract
     private static (IReadOnlyDictionary<string, CatalogSchemaContract.Table>, IReadOnlyDictionary<string, Function>) Load()
     {
         MaintenanceCheckDefinitions.RequireCaptured();
-        if (MigrationChecksum.Length != 64 || Indexes.Any(index => index.Predicate is { Length: 0 } || index.Expressions is { Length: 0 })
+        if (MigrationChecksum.Length != 64 || StoreKindMigrationChecksum.Length != 64 || Indexes.Any(index => index.Predicate is { Length: 0 } || index.Expressions is { Length: 0 })
             || Policies.Any(policy => policy.Expression.Length == 0 || policy.CheckExpression.Length == 0))
             throw new InvalidOperationException("The trusted maintenance source calibration is incomplete.");
-        using var source = Assembly.GetExecutingAssembly().GetManifestResourceStream(
-            "Weft.Persistence.Postgres.Migrations." + MigrationName + ".sql") ??
-            throw new InvalidOperationException("The trusted maintenance migration is missing.");
-        using var buffer = new MemoryStream();
-        source.CopyTo(buffer);
-        var bytes = buffer.ToArray();
-        if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != MigrationChecksum)
-            throw new InvalidOperationException("The maintenance migration does not match this build.");
-        var sql = new UTF8Encoding(false, true).GetString(bytes);
-        var functions = new Dictionary<string, Function>(StringComparer.Ordinal);
-        foreach (Match match in Regex.Matches(sql,
-                     @"^CREATE FUNCTION weft\.(?<name>[a-z_0-9]+)\((?<args>.*?)\) RETURNS (?<result>jsonb|boolean|void|trigger)\s+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER\s+SET search_path = pg_catalog, weft, pg_temp AS \$weft_\k<name>\$(?<body>.*?)\$weft_\k<name>\$;",
-                     RegexOptions.Multiline | RegexOptions.Singleline | RegexOptions.CultureInvariant))
-        {
-            var name = match.Groups["name"].Value;
-            var arguments = Regex.Replace(match.Groups["args"].Value.Trim(), @"\s+", " ");
-            arguments = Regex.Replace(arguments, @",\s*", ", ");
-            functions.Add(name, new(name, arguments, match.Groups["result"].Value, match.Groups["body"].Value));
-        }
+        var sql = Source(MigrationName, MigrationChecksum, "The maintenance migration does not match this build.");
+        var functions = ParseFunctions(sql, "CREATE FUNCTION");
         if (functions.Count == 0 || EntryFunctionNames.Any(name => !functions.ContainsKey(name)))
             throw new InvalidOperationException("The trusted maintenance routine declarations are incomplete.");
+        var storeKind = Source(StoreKindMigrationName, StoreKindMigrationChecksum,
+            "The publication store-kind migration does not match this build.");
+        var replaced = ParseFunctions(storeKind, "CREATE OR REPLACE FUNCTION");
+        if (replaced.Count != 1 || !replaced.TryGetValue(PublicationGuard, out var guard) ||
+            functions[PublicationGuard] with { Body = guard.Body } != guard ||
+            !Regex.IsMatch(storeKind, @"^ALTER TABLE weft\.private_object_publications ADD COLUMN storage_kind text NOT NULL DEFAULT 'filesystem';\nALTER TABLE weft\.private_object_publications ALTER COLUMN storage_kind DROP DEFAULT;$",
+                RegexOptions.Multiline | RegexOptions.CultureInvariant))
+            throw new InvalidOperationException("The trusted publication store-kind declarations are incomplete.");
+        functions[PublicationGuard] = guard;
         var tables = new Dictionary<string, CatalogSchemaContract.Table>(StringComparer.Ordinal);
         foreach (Match match in Regex.Matches(sql,
                      @"^CREATE TABLE weft\.(?<name>private_object_publications|private_object_retirements|private_object_cleanup_attempts) \(\n(?<body>.*?)\n\);",
@@ -103,6 +100,8 @@ internal static class MaintenanceSchemaContract
                 columns.Add(new(column.Groups["name"].Value, type == "numeric(20,0)" ? "numeric(20,0)" : type,
                     tail.Contains("NOT NULL", StringComparison.Ordinal), defaultSql));
             }
+            // 0023 appends the explicit store kind last; its backfill default is dropped.
+            if (name == "private_object_publications") columns.Add(new("storage_kind", "text", true, null));
             var constraints = new List<IngestionSchemaContract.Constraint>();
             foreach (Match constraint in Regex.Matches(body,
                          @"CONSTRAINT (?<name>[a-z_0-9]+) (?<kind>PRIMARY KEY|UNIQUE|FOREIGN KEY|CHECK)(?<definition>.*?)(?=,\n    CONSTRAINT|\z)",
@@ -118,6 +117,34 @@ internal static class MaintenanceSchemaContract
                 .SequenceEqual(MaintenanceCheckDefinitions.Names.Order(StringComparer.Ordinal)))
             throw new InvalidOperationException("The trusted maintenance relation declarations are incomplete.");
         return (tables, functions);
+    }
+
+    private static string Source(string name, string checksum, string mismatch)
+    {
+        using var source = Assembly.GetExecutingAssembly().GetManifestResourceStream(
+            "Weft.Persistence.Postgres.Migrations." + name + ".sql") ??
+            throw new InvalidOperationException("The trusted maintenance migration is missing.");
+        using var buffer = new MemoryStream();
+        source.CopyTo(buffer);
+        var bytes = buffer.ToArray();
+        if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != checksum)
+            throw new InvalidOperationException(mismatch);
+        return new UTF8Encoding(false, true).GetString(bytes);
+    }
+
+    private static Dictionary<string, Function> ParseFunctions(string sql, string statement)
+    {
+        var functions = new Dictionary<string, Function>(StringComparer.Ordinal);
+        foreach (Match match in Regex.Matches(sql,
+                     "^" + statement + @" weft\.(?<name>[a-z_0-9]+)\((?<args>.*?)\) RETURNS (?<result>jsonb|boolean|void|trigger)\s+LANGUAGE plpgsql VOLATILE PARALLEL UNSAFE SECURITY DEFINER\s+SET search_path = pg_catalog, weft, pg_temp AS \$weft_\k<name>\$(?<body>.*?)\$weft_\k<name>\$;",
+                     RegexOptions.Multiline | RegexOptions.Singleline | RegexOptions.CultureInvariant))
+        {
+            var name = match.Groups["name"].Value;
+            var arguments = Regex.Replace(match.Groups["args"].Value.Trim(), @"\s+", " ");
+            arguments = Regex.Replace(arguments, @",\s*", ", ");
+            functions.Add(name, new(name, arguments, match.Groups["result"].Value, match.Groups["body"].Value));
+        }
+        return functions;
     }
 
     private static IngestionSchemaContract.Constraint ParseConstraint(Match match)

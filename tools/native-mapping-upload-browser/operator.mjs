@@ -695,6 +695,8 @@ await runBrowserFixture({
           publication.owner_lease_expires_at !== null &&
           publication.root_id === initializedMarker.rootId &&
           publication.control_namespace_id === initializedMarker.controlId &&
+          // The fixture configures the filesystem store, whose label this is.
+          publication.storage_kind === "filesystem" &&
           publication.format === "weft.private-publication.linux.v2" &&
           /^[a-f0-9]{64}$/.test(publication.absence_record_digest) &&
           /^[a-f0-9]{64}$/.test(publication.bound_record_digest),

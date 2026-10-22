@@ -246,14 +246,14 @@ public sealed class LazyPrivateObjectStoreTests
     {
         private readonly object sync = new();
         private readonly PrivateStorageV2PhysicalRegistry inner = new();
-        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
-        { lock (sync) return inner.ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken); }
+        public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+        { lock (sync) return inner.ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken); }
         public Task<PrivatePublicationBindResult> BindAsync(PrivatePublicationReservation reservation,
             PrivatePublicationFileIdentity actualIdentity, Sha256Digest boundRecordDigest, CancellationToken cancellationToken = default)
         { lock (sync) return inner.BindAsync(reservation, actualIdentity, boundRecordDigest, cancellationToken); }
-        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
-        { lock (sync) return inner.GetAsync(owner, rootId, objectId, tempId, cancellationToken); }
+        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+        { lock (sync) return inner.GetAsync(owner, storeKind, rootId, objectId, tempId, cancellationToken); }
     }
 }

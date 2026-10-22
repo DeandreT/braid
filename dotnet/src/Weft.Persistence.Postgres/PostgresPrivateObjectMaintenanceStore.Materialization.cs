@@ -85,7 +85,14 @@ internal static partial class PrivateObjectMaintenancePersistence
 
     internal static PrivatePublicationRecord Publication(JsonElement row)
     {
-        if (Text(row, "format") != PrivatePublicationFileIdentity.Format) throw InvalidFacts();
+        // The retained label must be exactly the one stamped for the row's explicit store kind.
+        var storeKind = Text(row, "storage_kind") switch
+        {
+            "filesystem" => PrivatePublicationStoreKind.FileSystem,
+            "azure-blob" => PrivatePublicationStoreKind.AzureBlob,
+            _ => throw InvalidFacts()
+        };
+        if (Text(row, "format") != PrivatePublicationFileIdentity.Format(storeKind)) throw InvalidFacts();
         var @object = Object(row);
         var actor = new ActorContext(new(Id(row, "actor_principal_id")));
         PrivatePublicationOwner owner;
@@ -139,7 +146,7 @@ internal static partial class PrivateObjectMaintenancePersistence
             default: throw InvalidFacts();
         }
         var key = new PrivatePublicationKey(Id(row, "root_id"), @object, Id(row, "temp_id"));
-        var reservation = new PrivatePublicationReservation(Id(row, "publication_id"), key, owner,
+        var reservation = new PrivatePublicationReservation(Id(row, "publication_id"), key, storeKind, owner,
             Digest(row, "absence_record_digest"), Time(row, "registered_at"));
         var present = BindingColumns.Count(name => !Null(row, name));
         if (present == 0) return new(reservation);

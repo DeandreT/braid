@@ -214,7 +214,7 @@ internal sealed class PostgresPrivateObjectMaintenanceTestSupport : IAsyncDispos
         await OwnerEditAsync(triggers.ToArray(), edits.ToArray());
         var key = reservation.Key;
         var registry = owner.Kind == PrivateObjectOwnerKind.NativeIngestion ? (IPrivateObjectPublicationRegistry)NativePublications : ReportPublications;
-        var observed = await registry.GetAsync(shifted, key.RootId, key.Object, key.TempId);
+        var observed = await registry.GetAsync(shifted, reservation.StoreKind, key.RootId, key.Object, key.TempId);
         Assert.NotNull(observed);
         Assert.False(observed.OwnerIsLive);
         return observed.Record.Reservation;

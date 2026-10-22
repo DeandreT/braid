@@ -19,11 +19,12 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
         _begin = begin;
     }
 
-    internal Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, Sha256Digest absence, CancellationToken cancellationToken)
+    internal Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absence, CancellationToken cancellationToken)
     {
         var key = new PrivatePublicationKey(rootId, objectId, tempId);
         Validate(owner, key);
+        _ = StorageKind(storeKind);
         ArgumentNullException.ThrowIfNull(absence);
         cancellationToken.ThrowIfCancellationRequested();
         return ExecuteAsync(async () =>
@@ -36,7 +37,7 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
             {
                 // The original inner scope has disposed before exact natural-key recovery.
                 var expected = staged?.Snapshot ?? throw InvalidFacts();
-                var retained = await RecoverAsync(owner, key, cancellationToken);
+                var retained = await RecoverAsync(owner, storeKind, key, cancellationToken);
                 if (retained is null || retained.Record.Reservation != expected.Record.Reservation) throw Unavailable();
                 if (!retained.OwnerIsLive) return PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.OwnerUnavailable);
                 if (!retained.CanWrite) return PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.Retired);
@@ -45,7 +46,7 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
             async Task<PrivatePublicationReserveResult> CommitAsync()
             {
                 await using var transaction = await _begin(owner.Project.OrganizationId, cancellationToken);
-                var result = await ReserveInTransactionAsync(transaction, owner, key, absence, cancellationToken);
+                var result = await ReserveInTransactionAsync(transaction, owner, storeKind, key, absence, cancellationToken);
                 staged = result;
                 committing = true;
                 await transaction.CommitAsync(cancellationToken);
@@ -68,7 +69,7 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
             catch (NpgsqlException) when (committing && !cancellationToken.IsCancellationRequested && staged?.Snapshot is not null)
             {
                 var expected = staged?.Snapshot ?? throw InvalidFacts();
-                var retained = await RecoverAsync(reservation.Owner, reservation.Key, cancellationToken);
+                var retained = await RecoverAsync(reservation.Owner, reservation.StoreKind, reservation.Key, cancellationToken);
                 if (retained is null || retained.Record.Reservation != reservation ||
                     retained.Record.Binding != expected.Record.Binding) throw Unavailable();
                 if (!retained.OwnerIsLive) return PrivatePublicationBindResult.WithoutSnapshot(PrivatePublicationBindOutcome.OwnerUnavailable);
@@ -88,16 +89,17 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
         }, cancellationToken);
     }
 
-    internal Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken)
+    internal Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken)
     {
         var key = new PrivatePublicationKey(rootId, objectId, tempId);
         Validate(owner, key);
+        _ = StorageKind(storeKind);
         cancellationToken.ThrowIfCancellationRequested();
         return ExecuteAsync(async () =>
         {
             await using var transaction = await _begin(owner.Project.OrganizationId, cancellationToken);
-            var result = await GetInTransactionAsync(transaction, owner, key, cancellationToken);
+            var result = await GetInTransactionAsync(transaction, owner, storeKind, key, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             return result;
@@ -105,12 +107,12 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
     }
 
     private async Task<PrivatePublicationSnapshot?> RecoverAsync(PrivatePublicationOwner owner,
-        PrivatePublicationKey key, CancellationToken caller)
+        PrivatePublicationStoreKind storeKind, PrivatePublicationKey key, CancellationToken caller)
     {
         using var recovery = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
-            var result = await GetAsync(owner, key.RootId, key.Object, key.TempId, recovery.Token);
+            var result = await GetAsync(owner, storeKind, key.RootId, key.Object, key.TempId, recovery.Token);
             caller.ThrowIfCancellationRequested();
             return result;
         }
@@ -119,32 +121,37 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
     }
 
     internal async Task<PrivatePublicationReserveResult> ReserveInTransactionAsync(PrivatePublicationTransaction transaction,
-        PrivatePublicationOwner owner, PrivatePublicationKey key, Sha256Digest absence, CancellationToken cancellationToken)
+        PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind, PrivatePublicationKey key, Sha256Digest absence,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(transaction);
         ArgumentNullException.ThrowIfNull(absence);
         Validate(owner, key);
+        var storageKind = StorageKind(storeKind);
         await PrepareAsync(transaction, owner, key, cancellationToken);
         var observed = await ObserveAsync(transaction, owner, key, cancellationToken);
         if (!observed.OwnerLive) return PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.OwnerUnavailable);
         if (observed.FinalRetired || observed.TempRetired) return PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.Retired);
         if (observed.Record is { } existing)
         {
-            if (existing.Reservation.Owner != owner || existing.Reservation.Key != key || existing.Reservation.AbsenceRecordDigest != absence)
+            if (existing.Reservation.Owner != owner || existing.Reservation.Key != key || existing.Reservation.StoreKind != storeKind ||
+                existing.Reservation.AbsenceRecordDigest != absence)
                 return PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.Conflict);
             return PrivatePublicationReserveResult.ForSnapshot(PrivatePublicationReserveOutcome.Existing, observed.Snapshot());
         }
+        // The guard stamps the retained format from this explicit store kind; it is never inferred.
         await using (var insert = transaction.CreateCommand("""
             INSERT INTO weft.private_object_publications
                 (organization_id,project_id,mapping_id,revision_id,object_class,object_id,root_id,temp_id,
                  owner_kind,actor_principal_id,ingestion_operation_id,cache_entry_id,derivation_id,
-                 owner_generation,owner_instance_id,owner_token,owner_lease_expires_at,absence_record_digest)
+                 owner_generation,owner_instance_id,owner_token,owner_lease_expires_at,absence_record_digest,storage_kind)
             VALUES (@organizationId,@projectId,@mappingId,@revisionId,@objectClass,@objectId,@rootId,@tempId,
-                 @ownerKind,@actorId,@operationId,@cacheEntryId,@derivationId,@ownerGeneration,@instanceId,@leaseToken,@expiresAt,@absence)
+                 @ownerKind,@actorId,@operationId,@cacheEntryId,@derivationId,@ownerGeneration,@instanceId,@leaseToken,@expiresAt,@absence,@storageKind)
             """))
         {
             Parameters(insert, owner, key);
             Add(insert, "absence", NpgsqlDbType.Text, absence.Value);
+            Add(insert, "storageKind", NpgsqlDbType.Text, storageKind);
             if (await insert.ExecuteNonQueryAsync(cancellationToken) != 1) throw InvalidFacts();
         }
         var reserved = await ObserveAsync(transaction, owner, key, cancellationToken);
@@ -152,7 +159,8 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
         if (reserved.FinalRetired || reserved.TempRetired) return PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.Retired);
         var snapshot = reserved.Snapshot();
         if (snapshot.Record.Reservation.Owner != owner || snapshot.Record.Reservation.Key != key ||
-            snapshot.Record.Reservation.AbsenceRecordDigest != absence || snapshot.Record.Binding is not null) throw InvalidFacts();
+            snapshot.Record.Reservation.StoreKind != storeKind || snapshot.Record.Reservation.AbsenceRecordDigest != absence ||
+            snapshot.Record.Binding is not null) throw InvalidFacts();
         return PrivatePublicationReserveResult.ForSnapshot(PrivatePublicationReserveOutcome.Reserved, snapshot);
     }
 
@@ -206,14 +214,17 @@ internal sealed partial class PostgresPrivateObjectPublicationRegistry
     }
 
     internal async Task<PrivatePublicationSnapshot?> GetInTransactionAsync(PrivatePublicationTransaction transaction,
-        PrivatePublicationOwner owner, PrivatePublicationKey key, CancellationToken cancellationToken)
+        PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind, PrivatePublicationKey key,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(transaction);
         Validate(owner, key);
+        _ = StorageKind(storeKind);
         await PrepareAsync(transaction, owner, key, cancellationToken);
         var observed = await ObserveAsync(transaction, owner, key, cancellationToken);
-        return observed.Record is { } record && record.Reservation.Owner == owner && record.Reservation.Key == key
-            ? observed.Snapshot() : null;
+        // Another store kind's registration is never this store's record.
+        return observed.Record is { } record && record.Reservation.Owner == owner && record.Reservation.Key == key &&
+            record.Reservation.StoreKind == storeKind ? observed.Snapshot() : null;
     }
 
     private void Validate(PrivatePublicationOwner owner, PrivatePublicationKey key)

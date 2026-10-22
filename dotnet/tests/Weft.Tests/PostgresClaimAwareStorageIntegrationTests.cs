@@ -37,7 +37,7 @@ public sealed class PostgresClaimAwareStorageIntegrationTests(PostgresFixture fi
             Assert.Equal(0, publication.ReadCalls);
             Assert.Equal(0, publication.BytesRead);
             var port = key.Object.Class == PrivateObjectClass.NativeArtifact ? test.NativeRegistry : test.ReportPublicationRegistry;
-            var stored = await port.Actual.GetAsync(publication.Owner, key.RootId, key.Object, key.TempId, token);
+            var stored = await port.Actual.GetAsync(publication.Owner, PrivatePublicationStoreKind.FileSystem, key.RootId, key.Object, key.TempId, token);
             Assert.NotNull(stored);
             Assert.True(stored.CanWrite);
             Assert.Equal(publication.Owner, stored.Record.Reservation.Owner);

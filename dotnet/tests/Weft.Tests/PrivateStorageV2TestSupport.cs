@@ -87,7 +87,7 @@ internal static class PrivateStorageV2Data
             File.ReadAllBytes(Path.Combine(leaf, "reservation"))));
         var context = reservation.Context;
         var row = new PrivatePublicationReservation(reservation.PublicationId,
-            new(context.RootId, reference.Id, context.TempId), context.Owner,
+            new(context.RootId, reference.Id, context.TempId), PrivatePublicationStoreKind.FileSystem, context.Owner,
             reservation.AbsenceRecordDigest, reservation.RegisteredAtUtc);
         if (!bound) return new(row);
         var bytes = File.ReadAllBytes(Path.Combine(leaf, "bound"));
@@ -116,8 +116,8 @@ internal sealed class PrivateStorageV2PhysicalRegistry : IPrivateObjectPublicati
     internal Action? BeforeBind { get; init; }
     internal PrivatePublicationRecord Single => Assert.Single(records.Values);
 
-    public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+    public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ReserveCalls++;
@@ -125,7 +125,7 @@ internal sealed class PrivateStorageV2PhysicalRegistry : IPrivateObjectPublicati
         LastReserveKey = new(rootId, objectId, tempId);
         BeforeReserve?.Invoke();
         if (RefuseOwner) return Task.FromResult(PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.OwnerUnavailable));
-        var record = new PrivatePublicationRecord(new(Guid.NewGuid(), new(rootId, objectId, tempId), owner,
+        var record = new PrivatePublicationRecord(new(Guid.NewGuid(), new(rootId, objectId, tempId), storeKind, owner,
             absenceRecordDigest, DateTimeOffset.UtcNow));
         records.Add(record.Reservation.Key, record);
         if (ThrowAfterReserve) throw new IOException("Synthetic loss after registration.");
@@ -147,14 +147,15 @@ internal sealed class PrivateStorageV2PhysicalRegistry : IPrivateObjectPublicati
         return Task.FromResult(PrivatePublicationBindResult.ForSnapshot(PrivatePublicationBindOutcome.Bound, Snapshot(record)));
     }
 
-    public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+    public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         GetCalls++;
         if (RefuseEveryCall) throw new InvalidOperationException("Unexpected synthetic registry call.");
         var record = records[new(rootId, objectId, tempId)];
         Assert.Equal(owner, record.Reservation.Owner);
+        Assert.Equal(storeKind, record.Reservation.StoreKind);
         return Task.FromResult<PrivatePublicationSnapshot?>(Snapshot(record));
     }
 

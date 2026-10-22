@@ -38,13 +38,26 @@ public sealed record PrivatePublicationInodeIdentity
     public ulong MountId { get; }
 }
 
+/// <summary>The private store kind that registers a publication. Each kind retains its own format label.</summary>
+public enum PrivatePublicationStoreKind { FileSystem = 1, AzureBlob = 2 }
+
 /// <summary>
 /// Actual private v2 storage facts. Destructive recovery must preserve the exact
 /// boot, namespace and root/control incarnation; mount IDs are not reboot-stable.
+/// The Azure Blob store fills the same record with its documented fixed mapping.
 /// </summary>
 public sealed record PrivatePublicationFileIdentity
 {
-    public const string Format = "weft.private-publication.linux.v2";
+    public const string FileSystemFormat = "weft.private-publication.linux.v2";
+    public const string AzureBlobFormat = "weft.private-publication.azure-blob.v1";
+
+    /// <summary>The retained format label of a publication registered by a store of this kind.</summary>
+    public static string Format(PrivatePublicationStoreKind kind) => kind switch
+    {
+        PrivatePublicationStoreKind.FileSystem => FileSystemFormat,
+        PrivatePublicationStoreKind.AzureBlob => AzureBlobFormat,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), "The publication store kind is unknown.")
+    };
 
     public PrivatePublicationFileIdentity(Guid rootId, Guid controlNamespaceId, Guid linuxBootId,
         ulong mountNamespaceDevice, ulong mountNamespaceInode, uint effectiveUserId,

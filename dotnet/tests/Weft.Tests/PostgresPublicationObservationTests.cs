@@ -117,7 +117,7 @@ public sealed class PostgresPublicationObservationTests(PostgresFixture fixture)
         identity = CopyIdentity(identity, uid: uint.MaxValue);
         var reservation = await PostgresMaintenanceObservationTestSupport.BoundAsync(test, test.NativePublications, owner, facts.NativeObject.Id, identity);
         var unboundTemp = Guid.NewGuid();
-        Assert.Equal(PrivatePublicationReserveOutcome.Reserved, (await test.NativePublications.ReserveAsync(owner,
+        Assert.Equal(PrivatePublicationReserveOutcome.Reserved, (await test.NativePublications.ReserveAsync(owner, PrivatePublicationStoreKind.FileSystem,
             identity.RootId, facts.NativeObject.Id, unboundTemp, PostgresPrivateObjectMaintenanceTestSupport.AbsenceDigest)).Outcome);
         var changed = new[]
         {

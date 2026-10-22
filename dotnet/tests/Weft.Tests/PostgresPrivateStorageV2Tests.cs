@@ -40,7 +40,7 @@ public sealed class PostgresPrivateStorageV2Tests(PostgresFixture fixture)
                 if (observation.Phase is not (V2StoragePhase.ReservationAcknowledged or V2StoragePhase.BindingAcknowledged)) return;
                 Assert.Equal(0, input.ReadCalls);
                 var key = Assert.IsType<PrivatePublicationKey>(observation.Publication);
-                var persisted = await registry.GetAsync(owner, key.RootId, key.Object, key.TempId, token);
+                var persisted = await registry.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, key.RootId, key.Object, key.TempId, token);
                 Assert.NotNull(persisted);
                 Assert.True(persisted.CanWrite);
                 committed = persisted.Record;
@@ -62,8 +62,13 @@ public sealed class PostgresPrivateStorageV2Tests(PostgresFixture fixture)
             using (var store = FileSystemV2PrivateObjectStore.Initialize(root.Options, () => registry, observer))
                 Assert.Equal(PrivateObjectPublishResult.Created, await store.PublishCreateOnlyAsync(owner, reference.Id.Scope, reference, input));
             Assert.NotNull(committed);
+            // The filesystem store registers its own kind and keeps the filesystem label.
+            Assert.Equal(PrivatePublicationStoreKind.FileSystem, committed.Reservation.StoreKind);
+            Assert.Equal(PostgresPrivatePublicationStoreKindTests.Expected(PrivatePublicationStoreKind.FileSystem),
+                await PostgresPrivatePublicationStoreKindTests.LabelAsync(test, committed.Reservation.PublicationId));
             var key = committed.Reservation.Key;
-            Assert.Equal(committed, (await registry.GetAsync(owner, key.RootId, key.Object, key.TempId))!.Record);
+            Assert.Equal(committed, (await registry.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, key.RootId, key.Object, key.TempId))!.Record);
+            Assert.Null(await registry.GetAsync(owner, PrivatePublicationStoreKind.AzureBlob, key.RootId, key.Object, key.TempId));
             Assert.Equal(committed.Binding!.ActualIdentity.FileIdentity, PrivateStorageV2Identity.Read(root.FinalPath(reference)));
             using var readOnly = FileSystemV2PrivateObjectStore.Open(root.Options);
             Assert.Equal(bytes, await readOnly.ReadVerifiedAsync(reference.Id.Scope, reference));

@@ -252,16 +252,21 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
+        schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables);
         text.Append(Assert.IsType<string>(await schema.ExecuteScalarAsync()));
         return SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()));
     }
     private static void Same(byte[] before, byte[] after) => Assert.True(CryptographicOperations.FixedTimeEquals(before, after), "Chat migration changed historical rows, schema, authority or grants outside its exact additive delta.");
 
+    // Migration 0023 deliberately appends the publication store kind with its grants and
+    // replaces the publication format check and guard body; maintenance admission pins
+    // those exact objects, so only they are projected out of the conserved prefix.
     private const string SnapshotSql = """
         WITH old_relations AS (SELECT * FROM pg_catalog.pg_class WHERE relnamespace='weft'::regnamespace AND relname=ANY($1::text[])),
         new_roles AS (SELECT oid,rolname FROM pg_catalog.pg_roles WHERE rolname IN ('weft_chat_reader','weft_chat_writer','weft_chat_lifecycle')),
         expected_columns AS (SELECT split_part(x,'|',1) tab,split_part(x,'|',2) col,split_part(x,'|',3) privilege,split_part(x,'|',4) role FROM unnest($3::text[]) x),
-        columns AS (SELECT r.relname,a.* FROM old_relations r JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid AND a.attnum>0),
+        columns AS (SELECT r.relname,a.* FROM old_relations r JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid AND a.attnum>0
+            WHERE NOT ($2 AND r.relname='private_object_publications' AND a.attname='storage_kind')),
         column_acls AS (SELECT c.relname,c.attname,x.* FROM columns c CROSS JOIN LATERAL pg_catalog.aclexplode(c.attacl) x),
         retained_column_acls AS (SELECT a.* FROM column_acls a WHERE NOT ($2 AND EXISTS(SELECT 1 FROM expected_columns e
             JOIN new_roles nr ON nr.rolname=e.role JOIN old_relations r ON r.relname=e.tab
@@ -271,15 +276,18 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
                 WHERE c.oid=t.tgconstraint AND c.contype='f' AND (c.conrelid=pg_catalog.to_regclass('weft.chat_conversations')
                     AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey')
                     OR c.conrelid=pg_catalog.to_regclass('weft.preview_runs') AND c.conname=ANY($7::text[])
-                    OR c.conrelid IN (pg_catalog.to_regclass('weft.regression_cases'),pg_catalog.to_regclass('weft.regression_case_versions'),pg_catalog.to_regclass('weft.regression_runs')))))),
+                    OR c.conrelid IN (SELECT pg_catalog.to_regclass('weft.' || suffix) FROM unnest($8::text[]) suffix))))),
         namespace_acls AS (SELECT a.* FROM pg_catalog.pg_namespace n CROSS JOIN LATERAL pg_catalog.aclexplode(n.nspacl) a
             WHERE n.nspname='weft' AND NOT ($2 AND a.grantee IN (SELECT oid FROM new_roles UNION ALL SELECT oid FROM pg_catalog.pg_roles WHERE rolname=ANY($6::text[]))
                 AND a.grantor=n.nspowner AND a.privilege_type='USAGE' AND NOT a.is_grantable))
         SELECT jsonb_build_object(
-            'relations',(SELECT coalesce(jsonb_agg(jsonb_build_array(oid,relname,relkind,relpersistence,relowner,relnatts,relacl,relrowsecurity,relforcerowsecurity,reloptions,relreplident) ORDER BY relname),'[]'::jsonb) FROM old_relations),
+            'relations',(SELECT coalesce(jsonb_agg(jsonb_build_array(oid,relname,relkind,relpersistence,relowner,
+                relnatts - CASE WHEN $2 AND relname='private_object_publications' THEN 1 ELSE 0 END,
+                relacl,relrowsecurity,relforcerowsecurity,reloptions,relreplident) ORDER BY relname),'[]'::jsonb) FROM old_relations),
             'columns',(SELECT coalesce(jsonb_agg(to_jsonb(c)-'attacl' ORDER BY relname,attnum),'[]'::jsonb) FROM columns c),
             'columnAcls',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY relname,attname,grantor,grantee,privilege_type),'[]'::jsonb) FROM retained_column_acls a),
-            'constraints',(SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.oid),'[]'::jsonb) FROM pg_catalog.pg_constraint c WHERE c.conrelid IN (SELECT oid FROM old_relations)),
+            'constraints',(SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.oid),'[]'::jsonb) FROM pg_catalog.pg_constraint c WHERE c.conrelid IN (SELECT oid FROM old_relations)
+                AND NOT (c.conrelid=pg_catalog.to_regclass('weft.private_object_publications') AND c.conname='private_object_publications_format_check')),
             'triggers',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.oid),'[]'::jsonb) FROM retained_triggers t),
             'indexes',(SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY i.indexrelid),'[]'::jsonb) FROM pg_catalog.pg_index i WHERE i.indrelid IN (SELECT oid FROM old_relations)),
             'indexOwners',(SELECT coalesce(jsonb_agg(jsonb_build_array(r.oid,r.relname,r.relowner,r.reloptions,r.relkind,r.relpersistence) ORDER BY r.oid),'[]'::jsonb)
@@ -288,7 +296,8 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             'rules',(SELECT coalesce(jsonb_agg(to_jsonb(w) ORDER BY w.oid),'[]'::jsonb) FROM pg_catalog.pg_rewrite w WHERE w.ev_class IN (SELECT oid FROM old_relations)),
             'inherits',(SELECT coalesce(jsonb_agg(to_jsonb(h) ORDER BY inhrelid,inhseqno),'[]'::jsonb) FROM pg_catalog.pg_inherits h WHERE h.inhrelid IN (SELECT oid FROM old_relations) OR h.inhparent IN (SELECT oid FROM old_relations)),
             'policies',(SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY p.oid),'[]'::jsonb) FROM pg_catalog.pg_policy p WHERE p.polrelid IN (SELECT oid FROM old_relations)),
-            'functions',(SELECT coalesce(jsonb_agg(to_jsonb(f) ORDER BY f.oid),'[]'::jsonb) FROM pg_catalog.pg_proc f WHERE f.pronamespace='weft'::regnamespace AND NOT ($2 AND (f.proname=ANY($4::text[]) OR f.proname=ANY($5::text[])))),
+            'functions',(SELECT coalesce(jsonb_agg(to_jsonb(f) ORDER BY f.oid),'[]'::jsonb) FROM pg_catalog.pg_proc f WHERE f.pronamespace='weft'::regnamespace
+                AND f.proname<>'guard_private_object_publications_v1' AND NOT ($2 AND (f.proname=ANY($4::text[]) OR f.proname=ANY($5::text[])))),
             'namespaceAcls',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY grantor,grantee,privilege_type),'[]'::jsonb) FROM namespace_acls a),
             'roles',(SELECT coalesce(jsonb_agg(to_jsonb(r)-'rolpassword' ORDER BY r.oid),'[]'::jsonb) FROM pg_catalog.pg_roles r WHERE r.rolname LIKE 'weft_%'),
             'memberships',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY roleid,member,grantor),'[]'::jsonb) FROM pg_catalog.pg_auth_members m),

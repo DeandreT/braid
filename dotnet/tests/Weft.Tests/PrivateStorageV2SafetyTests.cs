@@ -142,7 +142,7 @@ public sealed class PrivateStorageV2SafetyTests
             mismatch == "mount-namespace" ? identity.MountNamespaceDevice ^ 1UL : identity.MountNamespaceDevice,
             identity.MountNamespaceInode, identity.EffectiveUserId, identity.FileIdentity, identity.DirectoryIdentity);
         var key = new PrivatePublicationKey(rootId, reservation.Key.Object, reservation.Key.TempId);
-        return new(new(reservation.PublicationId, key, reservation.Owner, reservation.AbsenceRecordDigest,
+        return new(new(reservation.PublicationId, key, reservation.StoreKind, reservation.Owner, reservation.AbsenceRecordDigest,
             reservation.RegisteredAtUtc), new(changed, binding.BoundRecordDigest, binding.BoundAtUtc));
     }
 

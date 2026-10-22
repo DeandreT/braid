@@ -172,8 +172,9 @@ internal sealed record PublicationCommand
     internal PrivatePublicationRecord Restore(PrivateObjectId targetObject)
     {
         Protocol.Utc(RegisteredAtUtc);
+        // This probe drives only the filesystem store, so every captured publication is of its kind.
         var reservation = new PrivatePublicationReservation(PublicationId, new(RootId, targetObject, TempId),
-            Owner.Restore(), Protocol.Digest(AbsenceRecordDigest), RegisteredAtUtc);
+            FileSystemV2PrivateObjectStore.PublicationStoreKind, Owner.Restore(), Protocol.Digest(AbsenceRecordDigest), RegisteredAtUtc);
         return new(reservation, Binding?.Restore());
     }
 }

@@ -32,7 +32,7 @@ public sealed class PostgresPrivateObjectMaintenanceSecurityTests(PostgresFixtur
     [
         "organization_id", "project_id", "mapping_id", "revision_id", "object_class", "object_id", "root_id", "temp_id",
         "owner_kind", "actor_principal_id", "ingestion_operation_id", "cache_entry_id", "derivation_id", "owner_generation",
-        "owner_instance_id", "owner_token", "owner_lease_expires_at", "absence_record_digest"
+        "owner_instance_id", "owner_token", "owner_lease_expires_at", "absence_record_digest", "storage_kind"
     ];
     private static readonly string[] PublicationBind =
     [
@@ -46,7 +46,7 @@ public sealed class PostgresPrivateObjectMaintenanceSecurityTests(PostgresFixtur
         "temp_id", "format", "owner_kind", "actor_principal_id", "ingestion_operation_id", "cache_entry_id", "derivation_id",
         "native_object_id", "candidate_object_id",
         "owner_generation", "owner_instance_id", "owner_token", "owner_lease_expires_at", "absence_record_digest", "registered_at",
-        .. PublicationBind, "bound_at"
+        .. PublicationBind, "bound_at", "storage_kind"
     ];
     private static readonly string[] RetirementRead =
         ["organization_id", "project_id", "mapping_id", "revision_id", "object_class", "object_id", "target_kind", "publication_id"];
@@ -181,7 +181,7 @@ public sealed class PostgresPrivateObjectMaintenanceSecurityTests(PostgresFixtur
             }
             var root = Guid.NewGuid();
             var temp = Guid.NewGuid();
-            var reserved = await registry.ReserveAsync(owner, root, target, temp,
+            var reserved = await registry.ReserveAsync(owner, PrivatePublicationStoreKind.FileSystem, root, target, temp,
                 PostgresPrivateObjectMaintenanceTestSupport.AbsenceDigest);
             Assert.Equal(PrivatePublicationReserveOutcome.Reserved, reserved.Outcome);
             var record = reserved.Snapshot!.Record;
@@ -204,7 +204,7 @@ public sealed class PostgresPrivateObjectMaintenanceSecurityTests(PostgresFixtur
                 }
                 // The failed real UPDATE has settled and its transaction has rolled back.
                 Assert.Equal(original, await test.PublicationSnapshotAsync(record.Reservation.PublicationId));
-                var recovered = await registry.GetAsync(owner, root, target, temp);
+                var recovered = await registry.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, root, target, temp);
                 Assert.Equal(record, recovered!.Record);
                 Assert.Null(recovered.Record.Binding);
             }
@@ -212,7 +212,7 @@ public sealed class PostgresPrivateObjectMaintenanceSecurityTests(PostgresFixtur
                 PostgresPrivateObjectMaintenanceTestSupport.BoundDigest);
             Assert.Equal(PrivatePublicationBindOutcome.Bound, valid.Outcome);
             Assert.Equal(identity, valid.Snapshot!.Record.Binding!.ActualIdentity);
-            Assert.Equal(valid.Snapshot.Record, (await registry.GetAsync(owner, root, target, temp))!.Record);
+            Assert.Equal(valid.Snapshot.Record, (await registry.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, root, target, temp))!.Record);
         }
         Assert.Equal(new long[] { 0, 0, 2 }, await test.CountsAsync());
         await AssertHealthyAsync(test);
@@ -225,7 +225,7 @@ public sealed class PostgresPrivateObjectMaintenanceSecurityTests(PostgresFixtur
         var facts = await test.ReserveNativeAsync();
         var native = await test.ClaimNativeAsync(facts);
         var published = await test.NativePublications.ReserveAsync(PrivatePublicationOwner.ForIngestion(test.Actor, native),
-            Guid.NewGuid(), facts.NativeObject.Id, Guid.NewGuid(), PostgresPrivateObjectMaintenanceTestSupport.AbsenceDigest);
+            PrivatePublicationStoreKind.FileSystem, Guid.NewGuid(), facts.NativeObject.Id, Guid.NewGuid(), PostgresPrivateObjectMaintenanceTestSupport.AbsenceDigest);
         Assert.Equal(PrivatePublicationReserveOutcome.Reserved, published.Outcome);
         var rejected = await test.CreateRejectedNativeAsync();
         var cleanup = await test.ClaimSingleAsync(rejected.NativeObject.Id);
@@ -652,14 +652,27 @@ public sealed class PostgresPrivateObjectMaintenanceSecurityTests(PostgresFixtur
     }
 
     private static string Sql => MigrationRunner.EmbeddedMigrations.Single(script => script.Version == 7).Sql;
+    // 0023 replaces the publication guard body and format check; their trusted source is that later declaration.
+    private static string StoreKindSql => MigrationRunner.EmbeddedMigrations.Single(script => script.Version == 23).Sql;
     private static string TrustedTrigger(string name) => Trusted(@"^CREATE TRIGGER " + Regex.Escape(name) + @"\b.*?;");
     private static string TrustedIndex(string name) => Trusted(@"^CREATE (?:UNIQUE )?INDEX " + Regex.Escape(name) + @"\b.*?;");
-    private static string TrustedFunction(string name) => Trusted(@"^CREATE FUNCTION weft\." + Regex.Escape(name) +
-        @"\(.*?\$weft_" + Regex.Escape(name) + @"\$.*?\$weft_" + Regex.Escape(name) + @"\$;");
+    private static string TrustedFunction(string name)
+    {
+        var definition = @"\(.*?\$weft_" + Regex.Escape(name) + @"\$.*?\$weft_" + Regex.Escape(name) + @"\$;";
+        return Replaced(@"^CREATE OR REPLACE FUNCTION weft\." + Regex.Escape(name) + definition) ??
+            Trusted(@"^CREATE FUNCTION weft\." + Regex.Escape(name) + definition);
+    }
     private static string TrustedCheck(string name)
     {
-        var declaration = Trusted(@"^    CONSTRAINT " + Regex.Escape(name) + @" CHECK\b.*?(?=,\n    CONSTRAINT|\n\);)");
+        var declaration = Replaced(@"(?<=^ALTER TABLE weft\.private_object_publications ADD )CONSTRAINT " + Regex.Escape(name) + @"\s+CHECK\b.*?(?=;$)") ??
+            Trusted(@"^    CONSTRAINT " + Regex.Escape(name) + @" CHECK\b.*?(?=,\n    CONSTRAINT|\n\);)");
         return declaration.Trim();
+    }
+    private static string? Replaced(string pattern)
+    {
+        var matches = Regex.Matches(StoreKindSql, pattern, RegexOptions.Multiline | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+        Assert.True(matches.Count <= 1);
+        return matches.Count == 1 ? matches[0].Value : null;
     }
     private static string TrustedConstraint(string table, string name)
     {

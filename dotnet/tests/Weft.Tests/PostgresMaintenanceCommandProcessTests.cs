@@ -134,7 +134,7 @@ public sealed class PostgresMaintenanceCommandProcessTests(PostgresFixture fixtu
             await MaintenanceCommandProcessTestSupport.NativeClaimAsync(test, facts.OperationId));
         var tempId = await test.Case.ScalarAsync<Guid>("SELECT temp_id FROM weft.private_object_publications");
         var rootId = PrivateStorageV2Data.Marker(test.Root).Root;
-        var publication = Assert.IsType<PrivatePublicationSnapshot>(await test.NativeRegistry.Actual.GetAsync(owner,
+        var publication = Assert.IsType<PrivatePublicationSnapshot>(await test.NativeRegistry.Actual.GetAsync(owner, PrivatePublicationStoreKind.FileSystem,
             rootId, facts.NativeObject.Id, tempId));
         Assert.True(publication.CanWrite);
         Assert.NotNull(publication.Record.Binding);
@@ -160,7 +160,7 @@ public sealed class PostgresMaintenanceCommandProcessTests(PostgresFixture fixtu
             .ToDictionary(path => path, path => File.ReadAllBytes(Path.Combine(controlRoot, path)), StringComparer.Ordinal);
         await writer.KillAsync();
         Assert.Equal(identity, PrivateStorageV2Identity.Read(tempPath));
-        Assert.Equal(publication.Record, (await test.NativeRegistry.Actual.GetAsync(owner, rootId, facts.NativeObject.Id, tempId))!.Record);
+        Assert.Equal(publication.Record, (await test.NativeRegistry.Actual.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, rootId, facts.NativeObject.Id, tempId))!.Record);
         var retainedControl = PrivateStorageV2Data.Files(controlRoot);
         Assert.Equal(originalControlPaths.Order(StringComparer.Ordinal), retainedControl.Keys.Order(StringComparer.Ordinal));
         foreach (var (path, originalIdentity) in originalControlIdentities)

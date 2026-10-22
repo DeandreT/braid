@@ -79,7 +79,7 @@ public sealed class PostgresPrivateStorageV2AcknowledgementTests(PostgresFixture
 
             // This separate ordinary restricted connection observes the committed
             // row while the actual original transport still lacks both ACK frames.
-            var durable = await direct.GetAsync(owner, key.RootId, key.Object, key.TempId);
+            var durable = await direct.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, key.RootId, key.Object, key.TempId);
             Assert.NotNull(durable);
             Assert.True(durable.CanWrite);
             Assert.Equal(owner, durable.Record.Reservation.Owner);
@@ -124,7 +124,7 @@ public sealed class PostgresPrivateStorageV2AcknowledgementTests(PostgresFixture
                 Assert.Equal(owner, recovery.Owner);
                 Assert.Equal(key, recovery.Key);
             });
-            var after = await direct.GetAsync(owner, key.RootId, key.Object, key.TempId);
+            var after = await direct.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, key.RootId, key.Object, key.TempId);
             Assert.NotNull(after);
             Assert.Equal(durable.Record.Reservation, after.Record.Reservation);
             Assert.NotNull(after.Record.Binding);
@@ -186,15 +186,15 @@ public sealed class PostgresPrivateStorageV2AcknowledgementTests(PostgresFixture
         internal bool RoutedCallThrew { get; private set; }
         internal List<(PrivatePublicationOwner Owner, PrivatePublicationKey Key, bool OriginalSettled)> Recoveries { get; } = [];
 
-        public async Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+        public async Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
         {
             ReserveCalls++;
             Owner = owner;
             Key = new(rootId, objectId, tempId);
             AbsenceDigest = absenceRecordDigest;
-            if (bind) return await direct.ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
-            try { return await routed.ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken); }
+            if (bind) return await direct.ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
+            try { return await routed.ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken); }
             catch { RoutedCallThrew = true; throw; }
             finally { RoutedCallSettled = true; }
         }
@@ -212,11 +212,11 @@ public sealed class PostgresPrivateStorageV2AcknowledgementTests(PostgresFixture
             finally { RoutedCallSettled = true; }
         }
 
-        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
         {
             Recoveries.Add((owner, new(rootId, objectId, tempId), RoutedCallSettled));
-            return direct.GetAsync(owner, rootId, objectId, tempId, cancellationToken);
+            return direct.GetAsync(owner, storeKind, rootId, objectId, tempId, cancellationToken);
         }
     }
 }

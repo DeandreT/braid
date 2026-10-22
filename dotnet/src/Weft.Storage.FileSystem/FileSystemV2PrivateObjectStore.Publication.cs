@@ -145,7 +145,7 @@ public sealed partial class FileSystemV2PrivateObjectStore
         PrivatePublicationReserveResult result;
         try
         {
-            result = await registry.ReserveAsync(context.Owner, key.RootId, key.Object, key.TempId,
+            result = await registry.ReserveAsync(context.Owner, PublicationStoreKind, key.RootId, key.Object, key.TempId,
                 absenceDigest, token).ConfigureAwait(false);
         }
         catch
@@ -163,7 +163,7 @@ public sealed partial class FileSystemV2PrivateObjectStore
         {
             RequireWritable(snapshot);
             var reservation = snapshot!.Record.Reservation;
-            if (reservation.Key != key || reservation.Owner != context.Owner ||
+            if (reservation.Key != key || reservation.StoreKind != PublicationStoreKind || reservation.Owner != context.Owner ||
                 reservation.AbsenceRecordDigest != absenceDigest || snapshot.Record.Binding is not null)
                 throw Failure(PrivateObjectStorageError.UnsafeStorage);
             token.ThrowIfCancellationRequested();
@@ -209,7 +209,8 @@ public sealed partial class FileSystemV2PrivateObjectStore
         recovery.CancelAfter(TimeSpan.FromSeconds(5));
         try
         {
-            return await registry.GetAsync(owner, key.RootId, key.Object, key.TempId, recovery.Token).ConfigureAwait(false);
+            return await registry.GetAsync(owner, PublicationStoreKind, key.RootId, key.Object, key.TempId, recovery.Token)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
         { throw Failure(PrivateObjectStorageError.Io); }

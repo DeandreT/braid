@@ -143,17 +143,17 @@ public sealed class PrivateObjectPublicationContractTests
     {
         var original = Publication().Reservation;
         var owner = original.Owner;
-        Assert.Equal(original, new PrivatePublicationReservation(original.PublicationId, original.Key, owner, AbsenceDigest, At));
-        Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(original.PublicationId, original.Key,
+        Assert.Equal(original, new PrivatePublicationReservation(original.PublicationId, original.Key, PrivatePublicationStoreKind.FileSystem, owner, AbsenceDigest, At));
+        Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(original.PublicationId, original.Key, PrivatePublicationStoreKind.FileSystem,
             owner, AbsenceDigest, At.AddTicks(-1)));
-        Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(original.PublicationId, original.Key,
+        Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(original.PublicationId, original.Key, PrivatePublicationStoreKind.FileSystem,
             owner, AbsenceDigest, owner.LeaseExpiresAtUtc));
-        var last = new PrivatePublicationReservation(original.PublicationId, original.Key, owner,
+        var last = new PrivatePublicationReservation(original.PublicationId, original.Key, PrivatePublicationStoreKind.FileSystem, owner,
             AbsenceDigest, owner.LeaseExpiresAtUtc.AddTicks(-1));
         Assert.Equal(original.Key, last.Key);
-        Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(Guid.Empty, original.Key, owner, AbsenceDigest, At));
+        Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(Guid.Empty, original.Key, PrivatePublicationStoreKind.FileSystem, owner, AbsenceDigest, At));
         Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(original.PublicationId,
-            new PrivatePublicationKey(Id(10), Derived(), Id(26)), owner, AbsenceDigest, At));
+            new PrivatePublicationKey(Id(10), Derived(), Id(26)), PrivatePublicationStoreKind.FileSystem, owner, AbsenceDigest, At));
     }
 
     [Fact]
@@ -161,8 +161,8 @@ public sealed class PrivateObjectPublicationContractTests
     {
         var original = Publication().Reservation;
         var changedOwner = PrivatePublicationOwner.ForIngestion(Actor, IngestionClaim(token: Id(99)));
-        var ownerVariant = new PrivatePublicationReservation(original.PublicationId, original.Key, changedOwner, AbsenceDigest, At);
-        var absenceVariant = new PrivatePublicationReservation(original.PublicationId, original.Key, original.Owner, BoundDigest, At);
+        var ownerVariant = new PrivatePublicationReservation(original.PublicationId, original.Key, PrivatePublicationStoreKind.FileSystem, changedOwner, AbsenceDigest, At);
+        var absenceVariant = new PrivatePublicationReservation(original.PublicationId, original.Key, PrivatePublicationStoreKind.FileSystem, original.Owner, BoundDigest, At);
         Assert.Equal(original.Key, ownerVariant.Key);
         Assert.Equal(original.Key, absenceVariant.Key);
         Assert.NotEqual(original, ownerVariant);
@@ -194,7 +194,7 @@ public sealed class PrivateObjectPublicationContractTests
     {
         var reservation = Publication().Reservation;
         var shifted = At.ToOffset(TimeSpan.FromHours(offsetHours));
-        Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(reservation.PublicationId, reservation.Key,
+        Assert.Throws<ArgumentException>(() => new PrivatePublicationReservation(reservation.PublicationId, reservation.Key, PrivatePublicationStoreKind.FileSystem,
             reservation.Owner, AbsenceDigest, shifted));
         Assert.Throws<ArgumentException>(() => new PrivatePublicationBinding(FileIdentity(), BoundDigest, shifted));
         Assert.Throws<ArgumentException>(() => new PrivatePublicationSnapshot(Publication(), shifted, true, false, false));

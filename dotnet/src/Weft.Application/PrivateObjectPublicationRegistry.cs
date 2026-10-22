@@ -73,21 +73,26 @@ public sealed record PrivatePublicationOwner
     }
 }
 
-/// <summary>Database-issued immutable registration, recoverable by its caller-known natural key.</summary>
+/// <summary>
+/// Database-issued immutable registration, recoverable by its caller-known natural key.
+/// The store kind is the registering store's explicit kind; its format label is retained with it.
+/// </summary>
 public sealed record PrivatePublicationReservation
 {
-    public PrivatePublicationReservation(Guid publicationId, PrivatePublicationKey key, PrivatePublicationOwner owner,
-        Sha256Digest absenceRecordDigest, DateTimeOffset registeredAtUtc)
+    public PrivatePublicationReservation(Guid publicationId, PrivatePublicationKey key, PrivatePublicationStoreKind storeKind,
+        PrivatePublicationOwner owner, Sha256Digest absenceRecordDigest, DateTimeOffset registeredAtUtc)
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(absenceRecordDigest);
         PublicationId = MaintenanceValue.Id(publicationId, nameof(publicationId));
+        MaintenanceValue.Known(storeKind, nameof(storeKind));
         MaintenanceValue.Utc(registeredAtUtc, nameof(registeredAtUtc));
         if (registeredAtUtc < owner.LeaseStartedAtUtc || registeredAtUtc >= owner.LeaseExpiresAtUtc)
             throw new ArgumentException("Publication registration must occur within its actual owner's lease.", nameof(registeredAtUtc));
         Origin = owner.OriginFor(key.Object);
         Key = key;
+        StoreKind = storeKind;
         Owner = owner;
         AbsenceRecordDigest = absenceRecordDigest;
         RegisteredAtUtc = registeredAtUtc;
@@ -95,6 +100,7 @@ public sealed record PrivatePublicationReservation
 
     public Guid PublicationId { get; }
     public PrivatePublicationKey Key { get; }
+    public PrivatePublicationStoreKind StoreKind { get; }
     public PrivatePublicationOwner Owner { get; }
     public Sha256Digest AbsenceRecordDigest { get; }
     public DateTimeOffset RegisteredAtUtc { get; }
@@ -232,12 +238,14 @@ public sealed record PrivatePublicationBindResult
 /// <summary>
 /// Trusted metadata registration only: Reserve commits before CreateNew; Bind commits
 /// before payload I/O. Implementations recheck actual current ownership and fresh access.
+/// The registering store supplies its own explicit kind, which selects the retained format;
+/// a record of another kind is never accepted as this store's registration.
 /// Faults remain exceptions and cancellation remains OperationCanceledException.
 /// </summary>
 public interface IPrivateObjectPublicationRegistry
 {
-    Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest,
+    Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest,
         CancellationToken cancellationToken = default);
 
     Task<PrivatePublicationBindResult> BindAsync(PrivatePublicationReservation reservation,
@@ -245,9 +253,9 @@ public interface IPrivateObjectPublicationRegistry
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Recovers only this natural key and original owner after the original call settles.
+    /// Recovers only this natural key, store kind and original owner after the original call settles.
     /// A retained record never substitutes another/current claim or grants permission by age.
     /// </summary>
-    Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default);
+    Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default);
 }

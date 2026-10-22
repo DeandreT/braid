@@ -259,7 +259,7 @@ public sealed partial class BlobPrivateObjectStore
         PrivatePublicationReserveResult result;
         try
         {
-            result = await registry.ReserveAsync(owner, key.RootId, key.Object, key.TempId, absenceDigest, token)
+            result = await registry.ReserveAsync(owner, PublicationStoreKind, key.RootId, key.Object, key.TempId, absenceDigest, token)
                 .ConfigureAwait(false);
         }
         catch
@@ -277,7 +277,7 @@ public sealed partial class BlobPrivateObjectStore
         {
             RequireWritable(snapshot);
             var reservation = snapshot!.Record.Reservation;
-            if (reservation.Key != key || reservation.Owner != owner ||
+            if (reservation.Key != key || reservation.StoreKind != PublicationStoreKind || reservation.Owner != owner ||
                 reservation.AbsenceRecordDigest != absenceDigest || snapshot.Record.Binding is not null)
                 throw Failure(PrivateObjectStorageError.UnsafeStorage);
             token.ThrowIfCancellationRequested();
@@ -323,7 +323,8 @@ public sealed partial class BlobPrivateObjectStore
         recovery.CancelAfter(TimeSpan.FromSeconds(5));
         try
         {
-            return await registry.GetAsync(owner, key.RootId, key.Object, key.TempId, recovery.Token).ConfigureAwait(false);
+            return await registry.GetAsync(owner, PublicationStoreKind, key.RootId, key.Object, key.TempId, recovery.Token)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
         { throw Failure(PrivateObjectStorageError.Io); }

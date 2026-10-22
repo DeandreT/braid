@@ -20,13 +20,13 @@ internal sealed class LazyPrivateObjectPublicationRegistry : IPrivateObjectPubli
         this.reportFactory = reportFactory ?? throw new ArgumentNullException(nameof(reportFactory));
     }
 
-    public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest,
+    public Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(owner);
         cancellationToken.ThrowIfCancellationRequested();
-        return Resolve(owner.Kind).ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
+        return Resolve(owner.Kind).ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
     }
 
     public Task<PrivatePublicationBindResult> BindAsync(PrivatePublicationReservation reservation,
@@ -38,12 +38,12 @@ internal sealed class LazyPrivateObjectPublicationRegistry : IPrivateObjectPubli
         return Resolve(reservation.Owner.Kind).BindAsync(reservation, actualIdentity, boundRecordDigest, cancellationToken);
     }
 
-    public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+    public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(owner);
         cancellationToken.ThrowIfCancellationRequested();
-        return Resolve(owner.Kind).GetAsync(owner, rootId, objectId, tempId, cancellationToken);
+        return Resolve(owner.Kind).GetAsync(owner, storeKind, rootId, objectId, tempId, cancellationToken);
     }
 
     private IPrivateObjectPublicationRegistry Resolve(PrivateObjectOwnerKind kind)

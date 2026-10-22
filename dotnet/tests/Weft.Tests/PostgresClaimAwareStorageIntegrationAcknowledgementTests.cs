@@ -65,7 +65,7 @@ public sealed class PostgresClaimAwareStorageIntegrationAcknowledgementTests(Pos
 
             // Independent direct restricted Get proves the durable exact original
             // owner/key while the actual routed product Task remains pending.
-            var durable = await registry.Actual.GetAsync(owner, key.RootId, key.Object, key.TempId);
+            var durable = await registry.Actual.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, key.RootId, key.Object, key.TempId);
             Assert.NotNull(durable);
             Assert.True(durable.CanWrite);
             Assert.Equal(owner, durable.Record.Reservation.Owner);
@@ -125,7 +125,7 @@ public sealed class PostgresClaimAwareStorageIntegrationAcknowledgementTests(Pos
                 Assert.Equal(owner, observation.Owner);
                 Assert.Equal(key, observation.Key);
             });
-            var retained = await registry.Actual.GetAsync(owner, key.RootId, key.Object, key.TempId);
+            var retained = await registry.Actual.GetAsync(owner, PrivatePublicationStoreKind.FileSystem, key.RootId, key.Object, key.TempId);
             Assert.Equal(durable.Record.Reservation, retained!.Record.Reservation);
             Assert.NotNull(retained.Record.Binding);
             if (report) Assert.Equal(durable.Record, retained.Record);
@@ -176,12 +176,12 @@ public sealed class PostgresClaimAwareStorageIntegrationAcknowledgementTests(Pos
         internal bool Settled { get; private set; }
         internal bool Threw { get; private set; }
         internal List<(PrivatePublicationOwner Owner, PrivatePublicationKey Key, bool Settled)> Recoveries { get; } = [];
-        public async Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+        public async Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
         {
             Owner = owner; Key = new(rootId, objectId, tempId);
-            if (bind) return await direct.ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
-            try { return await routed.ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken); }
+            if (bind) return await direct.ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
+            try { return await routed.ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken); }
             catch { Threw = true; throw; }
             finally { Settled = true; }
         }
@@ -193,11 +193,11 @@ public sealed class PostgresClaimAwareStorageIntegrationAcknowledgementTests(Pos
             catch { Threw = true; throw; }
             finally { Settled = true; }
         }
-        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-            PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+        public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+            Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
         {
             Recoveries.Add((owner, new(rootId, objectId, tempId), Settled));
-            return direct.GetAsync(owner, rootId, objectId, tempId, cancellationToken);
+            return direct.GetAsync(owner, storeKind, rootId, objectId, tempId, cancellationToken);
         }
     }
 }

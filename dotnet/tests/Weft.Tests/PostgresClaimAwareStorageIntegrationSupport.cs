@@ -180,10 +180,10 @@ internal sealed class ClaimAwareServiceRegistry(IPrivateObjectPublicationRegistr
     internal List<PrivatePublicationSnapshot> Bindings { get; } = [];
     internal List<PrivatePublicationKey> Recoveries { get; } = [];
     internal Func<PrivatePublicationReservation, CancellationToken, Task>? BeforeBindAsync { get; set; }
-    public async Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
+    public async Task<PrivatePublicationReserveResult> ReserveAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, Sha256Digest absenceRecordDigest, CancellationToken cancellationToken = default)
     {
-        var result = await (Override ?? actual).ReserveAsync(owner, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
+        var result = await (Override ?? actual).ReserveAsync(owner, storeKind, rootId, objectId, tempId, absenceRecordDigest, cancellationToken);
         if (result.Snapshot is { } snapshot) Reservations.Add(snapshot);
         return result;
     }
@@ -195,11 +195,11 @@ internal sealed class ClaimAwareServiceRegistry(IPrivateObjectPublicationRegistr
         if (result.Snapshot is { } snapshot) Bindings.Add(snapshot);
         return result;
     }
-    public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, Guid rootId,
-        PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
+    public Task<PrivatePublicationSnapshot?> GetAsync(PrivatePublicationOwner owner, PrivatePublicationStoreKind storeKind,
+        Guid rootId, PrivateObjectId objectId, Guid tempId, CancellationToken cancellationToken = default)
     {
         Recoveries.Add(new(rootId, objectId, tempId));
-        return (Override ?? actual).GetAsync(owner, rootId, objectId, tempId, cancellationToken);
+        return (Override ?? actual).GetAsync(owner, storeKind, rootId, objectId, tempId, cancellationToken);
     }
 }
 

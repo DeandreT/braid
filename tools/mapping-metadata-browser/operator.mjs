@@ -266,6 +266,8 @@ await runBrowserFixture({
         check(
           row.bound_at !== null &&
             /^[a-f0-9]{64}$/.test(row.bound_record_digest) &&
+            // The fixture configures the filesystem store, whose label this is.
+            row.storage_kind === "filesystem" &&
             row.format === "weft.private-publication.linux.v2",
         );
       for (const revision of current.rows.mapping_revisions) {

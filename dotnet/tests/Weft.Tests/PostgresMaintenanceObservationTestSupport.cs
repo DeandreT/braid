@@ -59,7 +59,7 @@ internal static class PostgresMaintenanceObservationTestSupport
         IPrivateObjectPublicationRegistry registry, PrivatePublicationOwner owner, PrivateObjectId target,
         PrivatePublicationFileIdentity identity, Guid? tempId = null)
     {
-        var reserve = await registry.ReserveAsync(owner, identity.RootId, target, tempId ?? Guid.NewGuid(),
+        var reserve = await registry.ReserveAsync(owner, PrivatePublicationStoreKind.FileSystem, identity.RootId, target, tempId ?? Guid.NewGuid(),
             PostgresPrivateObjectMaintenanceTestSupport.AbsenceDigest);
         Assert.Equal(PrivatePublicationReserveOutcome.Reserved, reserve.Outcome);
         var reservation = reserve.Snapshot!.Record.Reservation;
