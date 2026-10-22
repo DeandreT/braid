@@ -162,6 +162,26 @@ Host process tests require these explicit absolute paths to fresh publications o
 the same Release build. The privacy probe is a qualification tool, not a deployed
 Server dependency; keep its publication separate from the shipped host.
 
+### Isolated test builds
+
+Keep native Windows and Linux outputs separate. Pass the same `--artifacts-path`
+and configuration to restore, build and test commands. For example, in PowerShell:
+
+```powershell
+$env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH = 'false'
+dotnet restore dotnet/tests/Weft.Tests/Weft.Tests.csproj --locked-mode --artifacts-path artifacts/windows-tests
+dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --no-restore --configuration Release --artifacts-path artifacts/windows-tests --filter FullyQualifiedName~ChildProgramBuildOutputTests
+```
+
+The test project resolves each child program through MSBuild's `GetTargetPath`
+and copies that program's complete output into its existing test subdirectory.
+This honors isolated artifact directories and explicit output overrides rather
+than looking for another build's conventional `bin` directory. A missing built
+child fails the build; do not repair it by borrowing binaries from another source
+revision. `ChildProgramBuildOutputTests` checks entrypoints, runtime configuration
+and managed runtime dependencies. Platform-specific execution tests retain their
+own Linux, Docker, database and host-publication requirements.
+
 Azure Blob storage tests run against an owned Azurite emulator when
 `WEFT_AZURITE_IMAGE` names its pinned image
 (`mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5`);
