@@ -321,6 +321,18 @@ and report derivation reach the native worker through the hosted worker service
 ([#219](https://github.com/DeandreT/weft/issues/219),
 [#223](https://github.com/DeandreT/weft/pull/223),
 [#227](https://github.com/DeandreT/weft/pull/227)). See [Session host](docs/session-host.md).
+Hosted platforms run Ferrule through the platform-agnostic, autoscaling
+[Ferrule service](docs/ferrule-service.md)
+([#233](https://github.com/DeandreT/weft/issues/233),
+[#235](https://github.com/DeandreT/weft/pull/235),
+[#237](https://github.com/DeandreT/weft/pull/237),
+[#240](https://github.com/DeandreT/weft/pull/240)), with per-request isolation and
+platform sandbox adapters such as Azure Container Apps dynamic sessions. Private objects
+can be stored in [Azure Blob storage](docs/private-storage-blob.md)
+([#232](https://github.com/DeandreT/weft/issues/232),
+[#234](https://github.com/DeandreT/weft/pull/234),
+[#238](https://github.com/DeandreT/weft/pull/238)); both are packaged for the hosted-shape
+stack and the Azure templates in [#241](https://github.com/DeandreT/weft/pull/241).
 
 The first hosted release is admitted only when P0-P8 are implemented and
 qualified. Local-only viewer prototypes can be demonstrated earlier. Entra or
