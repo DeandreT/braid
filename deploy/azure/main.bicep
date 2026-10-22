@@ -57,6 +57,34 @@ param inspectionWorkerCertificateSha256 string = ''
 @description('Immutable lowercase sha256 image ID of the Ferrule worker image that the inspection worker runs. Required with inspectionWorkerUrl.')
 param ferruleWorkerImage string = ''
 
+@description('Where the Session host runs native upload and report derivation: worker (a separately hosted Weft.Worker with Docker, see inspectionWorkerUrl), service (the Ferrule service container app in this environment) or sessions (the Ferrule service in a dynamic-sessions pool). Native work stays dormant until it is enabled.')
+@allowed(['worker', 'service', 'sessions'])
+param ferruleRunner string = 'worker'
+
+@description('Ferrule service image in the registry, preferably by digest (weft-ferrule-service@sha256:...). Required with the service and sessions runners.')
+param ferruleServiceImage string = ''
+
+@description('Build identity of that image: sha256: followed by its io.weft.ferrule.worker-sha256 label. Required with the service and sessions runners.')
+param ferruleServiceIdentity string = ''
+
+@description('Lowercase SHA-256 of the weft-ferrule-service certificate (DER), from initialize-secrets.sh. Required with the service runner.')
+param ferruleServiceCertificateSha256 string = ''
+
+@description('Lowercase SHA-256 of the weft-ferrule-service-client certificate (DER), from initialize-secrets.sh. Required with the service runner.')
+param ferruleServiceClientCertificateSha256 string = ''
+
+@description('Child processes per Ferrule service replica (512 MiB each), which is also its concurrent-connection scale target.')
+param ferruleServiceConcurrency int = 2
+
+@description('Most Ferrule service replicas the scale rule may run.')
+param ferruleServiceMaxReplicas int = 10
+
+@description('Most concurrent dynamic sessions, which bounds concurrent Ferrule operations with the sessions runner.')
+param ferruleSessionsMax int = 20
+
+@description('Object ID of a separately hosted Weft.Worker managed identity, granted the same data-plane role on the private object container. Empty grants none.')
+param workerPrincipalId string = ''
+
 @description('PostgreSQL administrator login, used only by the database provisioning job.')
 param postgresAdministratorLogin string = 'weftadmin'
 
@@ -90,9 +118,12 @@ var names = {
   registry: take('${name}acr${compactSuffix}', 50)
   vault: take('${name}-kv-${compactSuffix}', 24)
   storage: take('${name}st${compactSuffix}', 24)
+  objects: take('${name}obj${compactSuffix}', 24)
   database: '${name}-pg-${compactSuffix}'
   environment: '${name}-env'
   app: '${name}-app'
+  ferrule: '${name}-ferrule'
+  ferruleSessions: '${name}-ferrule-sessions'
 }
 
 module network 'modules/network.bicep' = {
@@ -160,6 +191,19 @@ module storage 'modules/storage.bicep' = {
   }
 }
 
+module objects 'modules/objects.bicep' = {
+  name: 'objects'
+  params: {
+    location: location
+    name: names.objects
+    containerName: 'weft-private-objects'
+    endpointsSubnetId: network.outputs.endpointsSubnetId
+    privateDnsZoneId: network.outputs.blobZoneId
+    contributorPrincipalIds: concat([identity.properties.principalId], empty(workerPrincipalId) ? [] : [workerPrincipalId])
+    tags: tags
+  }
+}
+
 module database 'modules/postgres.bicep' = {
   name: 'postgres'
   params: {
@@ -189,6 +233,41 @@ module environment 'modules/environment.bicep' = {
   }
 }
 
+// The Ferrule service: either an internal container app scaled on concurrent connections, or a
+// dynamic-sessions pool with one sandbox per operation. Neither needs Docker or outbound network.
+module ferruleService 'modules/ferrule-service.bicep' = if (deployApplication && ferruleRunner == 'service') {
+  name: 'ferrule-service'
+  params: {
+    location: location
+    name: names.ferrule
+    environmentName: environment.outputs.name
+    identityId: identity.id
+    registryServer: registry.outputs.loginServer
+    vaultUri: vault.outputs.uri
+    image: ferruleServiceImage
+    clientCertificatePins: ferruleServiceClientCertificateSha256
+    concurrency: ferruleServiceConcurrency
+    queue: ferruleServiceConcurrency
+    maxReplicas: ferruleServiceMaxReplicas
+    tags: tags
+  }
+}
+
+module ferruleSessions 'modules/ferrule-session-pool.bicep' = if (deployApplication && ferruleRunner == 'sessions') {
+  name: 'ferrule-session-pool'
+  params: {
+    location: location
+    name: names.ferruleSessions
+    environmentName: environment.outputs.name
+    identityId: identity.id
+    callerPrincipalId: identity.properties.principalId
+    registryServer: registry.outputs.loginServer
+    image: ferruleServiceImage
+    maxSessions: ferruleSessionsMax
+    tags: tags
+  }
+}
+
 module application 'modules/application.bicep' = if (deployApplication) {
   name: 'application'
   params: {
@@ -198,6 +277,7 @@ module application 'modules/application.bicep' = if (deployApplication) {
     environmentName: environment.outputs.name
     keyRingStorageName: environment.outputs.keyRingStorageName
     identityId: identity.id
+    identityClientId: identity.properties.clientId
     registryServer: registry.outputs.loginServer
     imageTag: imageTag
     vaultUri: vault.outputs.uri
@@ -211,9 +291,16 @@ module application 'modules/application.bicep' = if (deployApplication) {
     trustedIngressRange: appsSubnetPrefix
     enableMetadataEdits: enableMetadataEdits
     enableProjectCreation: enableProjectCreation
-    inspectionWorkerUrl: inspectionWorkerUrl
+    inspectionWorkerUrl: ferruleRunner == 'worker' ? inspectionWorkerUrl : ''
     inspectionWorkerCertificateSha256: inspectionWorkerCertificateSha256
     ferruleWorkerImage: ferruleWorkerImage
+    ferruleRunner: ferruleRunner
+    ferruleServiceUrl: ferruleService.?outputs.url ?? ''
+    ferruleServiceCertificateSha256: ferruleServiceCertificateSha256
+    ferruleSessionsEndpoint: ferruleSessions.?outputs.poolManagementEndpoint ?? ''
+    ferruleServiceIdentity: ferruleServiceIdentity
+    privateObjectsEndpoint: objects.outputs.blobEndpoint
+    privateObjectsContainer: objects.outputs.containerName
     tags: tags
   }
 }
@@ -227,3 +314,6 @@ output customDomainVerificationId string = environment.outputs.customDomainVerif
 output publicHost string = application.?outputs.publicHost ?? ''
 output entraRedirectUri string = application.?outputs.redirectUri ?? ''
 output applicationName string = names.app
+output privateObjectsEndpoint string = objects.outputs.blobEndpoint
+output privateObjectsContainer string = objects.outputs.containerName
+output identityClientId string = identity.properties.clientId

@@ -6,6 +6,7 @@ param jobPrefix string
 param environmentName string
 param keyRingStorageName string
 param identityId string
+param identityClientId string
 param registryServer string
 param imageTag string
 param vaultUri string
@@ -22,6 +23,14 @@ param enableProjectCreation bool
 param inspectionWorkerUrl string
 param inspectionWorkerCertificateSha256 string
 param ferruleWorkerImage string
+@allowed(['worker', 'service', 'sessions'])
+param ferruleRunner string
+param ferruleServiceUrl string
+param ferruleServiceCertificateSha256 string
+param ferruleSessionsEndpoint string
+param ferruleServiceIdentity string
+param privateObjectsEndpoint string
+param privateObjectsContainer string
 param tags object
 
 // The provisioning job uses the PostgreSQL client from the image whose major version the
@@ -88,8 +97,18 @@ var roles = [
 ]
 
 // A separately hosted inspection worker; the settings stay dormant until native upload or
-// derivation is enabled, which also needs a private storage profile this environment lacks.
+// derivation is enabled.
 var inspectionWorker = !empty(inspectionWorkerUrl)
+
+// Private objects live in the Blob container through the application identity. These carry no
+// secret; they stay dormant until a feature that reads or writes private objects is enabled.
+var privateStorageEnvironment = [
+  { name: 'WEFT_PRIVATE_STORAGE_KIND', value: 'azure-blob' }
+  { name: 'WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT', value: privateObjectsEndpoint }
+  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CONTAINER', value: privateObjectsContainer }
+  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL', value: 'managed-identity' }
+  { name: 'WEFT_PRIVATE_STORAGE_BLOB_CLIENT_ID', value: identityClientId }
+]
 
 var serverSecretNames = concat([
   'session-key-pem'
@@ -99,7 +118,7 @@ var serverSecretNames = concat([
   'session-writer-connection'
   'identity-connection'
 ], enableMetadataEdits ? ['metadata-connection'] : [], enableProjectCreation ? ['creator-connection'] : [],
-  inspectionWorker ? ['inspection-client-pem'] : [])
+  inspectionWorker ? ['inspection-client-pem'] : [], ferruleRunner == 'service' ? ['ferrule-service-client-pem'] : [])
 var vaultNames = {
   'session-key-pem': 'weft-session-key'
   'entra-client-pem': 'weft-entra-client'
@@ -110,6 +129,7 @@ var vaultNames = {
   'metadata-connection': 'pg-metadata-connection'
   'creator-connection': 'pg-creator-connection'
   'inspection-client-pem': 'weft-inspection-client'
+  'ferrule-service-client-pem': 'weft-ferrule-service-client'
 }
 
 var serverEnvironment = concat([
@@ -133,7 +153,7 @@ var serverEnvironment = concat([
   // The host accepts only lowercase true/false; ARM string() would capitalize booleans.
   { name: 'WEFT_METADATA_EDITS_ENABLED', value: enableMetadataEdits ? 'true' : 'false' }
   { name: 'WEFT_PROJECT_CREATION_ENABLED', value: enableProjectCreation ? 'true' : 'false' }
-], enableMetadataEdits ? [
+], privateStorageEnvironment, enableMetadataEdits ? [
   { name: 'WEFT_POSTGRES_METADATA_CONNECTION_STRING', secretRef: 'metadata-connection' }
 ] : [], enableProjectCreation ? [
   { name: 'WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING', secretRef: 'creator-connection' }
@@ -142,6 +162,19 @@ var serverEnvironment = concat([
   { name: 'WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256', value: inspectionWorkerCertificateSha256 }
   { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleWorkerImage }
   { name: 'WEFT_DELIVER_INSPECTION_CLIENT_PEM', secretRef: 'inspection-client-pem' }
+] : [], ferruleRunner == 'service' ? [
+  // The Ferrule service in this environment, pinned in both directions over its TCP ingress.
+  { name: 'WEFT_FERRULE_RUNNER', value: 'service' }
+  { name: 'WEFT_FERRULE_SERVICE_URL', value: ferruleServiceUrl }
+  { name: 'WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256', value: ferruleServiceCertificateSha256 }
+  { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
+  { name: 'WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-service-client-pem' }
+] : [], ferruleRunner == 'sessions' ? [
+  // Dynamic sessions with this app's managed identity; no credential is configured.
+  { name: 'WEFT_FERRULE_RUNNER', value: 'azureContainerAppsSessions' }
+  { name: 'WEFT_FERRULE_SESSIONS_POOL_ENDPOINT', value: ferruleSessionsEndpoint }
+  { name: 'WEFT_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID', value: identityClientId }
+  { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
 ] : [])
 
 var healthProbe = {
@@ -372,6 +405,60 @@ resource sessionKeys 'Microsoft.App/jobs@2024-03-01' = {
           storageType: 'AzureFile'
           storageName: keyRingStorageName
           mountOptions: keyRingMountOptions
+        }
+      ]
+    }
+  }
+}
+
+// Provisions the claim-aware store in the existing private container once; a second run
+// refuses the initialized container.
+resource privateStorage 'Microsoft.App/jobs@2024-03-01' = {
+  name: '${jobPrefix}-private-storage'
+  location: location
+  tags: tags
+  identity: jobIdentity
+  properties: {
+    environmentId: environment.id
+    workloadProfileName: 'Consumption'
+    configuration: jobConfiguration
+    template: {
+      containers: [
+        {
+          name: 'private-storage'
+          image: weftImage
+          args: ['storage', 'initialize-blob']
+          env: privateStorageEnvironment
+          resources: jobResources
+        }
+      ]
+    }
+  }
+}
+
+// One bounded private-object maintenance run; supply `maintenance run-once ORGANIZATION_ID
+// PROJECT_ID` (and optional cursors) as arguments when starting an execution.
+resource maintenance 'Microsoft.App/jobs@2024-03-01' = {
+  name: '${jobPrefix}-maintenance'
+  location: location
+  tags: tags
+  identity: jobIdentity
+  properties: {
+    environmentId: environment.id
+    workloadProfileName: 'Consumption'
+    configuration: union(jobConfiguration, {
+      secrets: [vaultSecret(vaultUri, identityId, 'maintenance-connection', 'pg-maintenance-connection')]
+    })
+    template: {
+      containers: [
+        {
+          name: 'maintenance'
+          image: weftImage
+          args: ['maintenance', '--help']
+          env: concat([
+            { name: 'WEFT_MAINTENANCE_CONNECTION_STRING', secretRef: 'maintenance-connection' }
+          ], privateStorageEnvironment)
+          resources: jobResources
         }
       ]
     }

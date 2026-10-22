@@ -14,3 +14,10 @@ param customDomainCertificateId = ''
 param postgresAdministratorPassword = readEnvironmentVariable('WEFT_POSTGRES_ADMIN_PASSWORD')
 param deployApplication = false
 param imageTag = ''
+// Native work through the Ferrule service: 'service' (internal container app) or 'sessions'
+// (dynamic sessions). The pins come from initialize-secrets.sh; the identity from the image label.
+param ferruleRunner = 'worker'
+param ferruleServiceImage = ''
+param ferruleServiceIdentity = ''
+param ferruleServiceCertificateSha256 = ''
+param ferruleServiceClientCertificateSha256 = ''

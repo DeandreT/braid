@@ -61,6 +61,7 @@ var zoneNames = [
   '${databaseServerName}.private.postgres.database.azure.com'
   'privatelink.vaultcore.azure.net'
   'privatelink.file.${environment().suffixes.storage}'
+  'privatelink.blob.${environment().suffixes.storage}'
 ]
 
 resource zones 'Microsoft.Network/privateDnsZones@2024-06-01' = [for zone in zoneNames: {
@@ -88,3 +89,4 @@ output endpointsSubnetId string = network.properties.subnets[2].id
 output databaseZoneId string = zones[0].id
 output vaultZoneId string = zones[1].id
 output fileZoneId string = zones[2].id
+output blobZoneId string = zones[3].id

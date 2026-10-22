@@ -137,6 +137,17 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   native examples. Docker socket access is equivalent to host root access; this file
   is local only and never part of the hosted shape.
 
+- The override file `deploy/compose/compose.ferrule-service.yml` runs native upload and
+  report derivation through the [Ferrule service](ferrule-service.md) instead of the
+  worker override: `WEFT_FERRULE_SERVICE_REPLICAS` replicas (default two) of the service
+  image on an internal network, each answering health through its own `probe` command, and
+  the Session server selecting `WEFT_FERRULE_RUNNER=service`. No container receives the
+  Docker socket. It requires `WEFT_FERRULE_SERVICE_IMAGE`, the service's build identity
+  `WEFT_FERRULE_SERVICE_IDENTITY`, the PEM bundles `WEFT_FERRULE_SERVICE_PEM` and
+  `WEFT_FERRULE_SERVICE_CLIENT_PEM`, and the pins `WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256`
+  and `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256`. Use it instead of the worker
+  override, not beside it.
+
 All runtime containers use a read-only root filesystem, drop every capability and
 set `no-new-privileges`. The compose file reads every value from the caller's
 environment: the `WEFT_LOCAL_*_PASSWORD` values required by `postgres-init.sh` plus
@@ -171,7 +182,12 @@ also applies the examples and worker overrides and requires native projection an
 validation through the examples worker runner; the Session server to start with native
 upload and derivation enabled, also after the restart; and, on the worker's internal
 address, admission of only the pinned server certificate and one exact native validation
-frame through the hosted worker. The generated Entra values are placeholders, so
+frame through the hosted worker. With `WEFT_FERRULE_SERVICE_IMAGE` set to a built service
+image, it applies the Ferrule service override instead and requires the configured number
+of healthy, read-only, non-root replicas on an internal network, the Session server to
+start with the service selection (also after the restart), and on every replica: admission
+of only the pinned server certificate, its build identity and capabilities, and one exact
+native validation frame. The generated Entra values are placeholders, so
 sign-in and therefore browser upload are not exercised.
 
 ## Hosted boundaries

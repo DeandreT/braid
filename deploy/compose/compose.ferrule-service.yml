@@ -1,0 +1,51 @@
+# Ferrule service: native upload and report derivation for the Session server through the portable
+# Ferrule service instead of a Docker-capable worker. Nothing here needs the Docker socket. Every
+# replica runs each operation in a fresh sandboxed child process; replicas share one service
+# certificate, the server pins it, and the service admits only the server's client certificate.
+# The service network is internal: no egress and no published port. See docs/ferrule-service.md.
+# Use with: docker compose -f compose.yml -f compose.ferrule-service.yml
+services:
+  server:
+    environment:
+      WEFT_REVISION_INGESTION_ENABLED: "true"
+      WEFT_POSTGRES_INGESTION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_ingest;Password=${WEFT_LOCAL_INGEST_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_REVISION_REPORT_DERIVATION_ENABLED: "true"
+      WEFT_POSTGRES_DERIVATION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_deriver;Password=${WEFT_LOCAL_DERIVATION_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_FERRULE_RUNNER: service
+      WEFT_FERRULE_WORKER_IMAGE: ${WEFT_FERRULE_SERVICE_IDENTITY:?Set the service build identity}
+      WEFT_FERRULE_SERVICE_URL: https://ferrule:8443
+      WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256: ${WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256:?Set the service certificate pin}
+      WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM: ${WEFT_FERRULE_SERVICE_CLIENT_PEM:?Set the server service client PEM}
+    networks: [database, egress, ferrule]
+
+  ferrule:
+    image: ${WEFT_FERRULE_SERVICE_IMAGE:?Set the Ferrule service image}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    environment:
+      WEFT_FERRULE_SERVICE_LISTEN_ADDR: 0.0.0.0:8443
+      WEFT_FERRULE_SERVICE_HEALTH_ADDR: 0.0.0.0:8080
+      WEFT_FERRULE_SERVICE_PEM: ${WEFT_FERRULE_SERVICE_PEM:?Set the service PEM}
+      WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256: ${WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:?Set the server client certificate pin}
+      WEFT_FERRULE_SERVICE_CONCURRENCY: ${WEFT_FERRULE_SERVICE_CONCURRENCY:-2}
+    # The service name resolves to every replica; each operation's connection lands on one of them.
+    deploy:
+      replicas: ${WEFT_FERRULE_SERVICE_REPLICAS:-2}
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1536M
+    healthcheck:
+      test: ["CMD", "/app/weft-ferrule-service", "probe"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [ferrule]
+
+networks:
+  ferrule:
+    internal: true

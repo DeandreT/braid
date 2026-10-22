@@ -242,6 +242,43 @@ operations, and its ready sessions absorb bursts.
   provides that affinity, such as a session identifier, before they can host the
   service.
 
+## Deploying and scaling
+
+The service runs on any container platform that can run a Linux amd64 image with
+a writable `/tmp` and a TCP listener:
+
+1. Build the native worker image from `engines/ferrule-host`, then the service image
+   from `engines/ferrule-service/Dockerfile` with that native image and the SHA-256 of
+   its `/ferrule-host`. Configure Weft hosts with `WEFT_FERRULE_WORKER_IMAGE` set to
+   `sha256:` followed by the image's `io.weft.ferrule.worker-sha256` label.
+2. Create one RSA service certificate for all replicas and one client certificate per
+   calling host. Give the service its PEM bundle and the client pins; give each host
+   the service pin and its own client PEM. Rotate them by restart.
+3. Run the image as UID 65532 with a read-only root, all capabilities dropped,
+   no-new-privileges, a writable (memory-backed) volume at `/tmp`, and no outbound
+   network. The platform's default seccomp profile and resource limits stay in
+   force around the children's own controls.
+4. Put a layer-4 load balancer in front of the TLS port; the service terminates TLS.
+   Point readiness and liveness probes at `/v1/health/ready` and `/v1/health/live`
+   on the plain probe port. Where only exec health checks exist, use
+   `/app/weft-ferrule-service probe`, which exits 0 when the local service is ready.
+5. Scale replicas on load. Each operation holds one connection for its duration, so
+   concurrent connections per replica (or CPU) track busy children. Target the
+   per-replica concurrency, and size each replica for that many 512 MiB children, its
+   capacity's largest request frames and the service. Refused operations are retried by the runner, so new replicas take
+   load as they become ready. Scaling to zero is possible when cold-start latency is
+   acceptable.
+
+`deploy/compose/compose.ferrule-service.yml` runs this shape locally with two
+replicas behind the service name on an internal network, and wires the Session
+server to it ([runtime packaging](runtime-packaging.md)).
+`deploy/azure` provides an internal-only Container App with TCP ingress and a
+concurrent-connections scale rule, or the dynamic-sessions pool
+([Azure deployment](azure-deployment.md)). On Kubernetes, a Deployment with these
+security settings behind a ClusterIP `Service`, with an `emptyDir` (medium `Memory`)
+at `/tmp`, an egress-denying `NetworkPolicy` and an HPA or KEDA scaler, is the same
+shape.
+
 ## Configuration
 
 | Setting | Value |

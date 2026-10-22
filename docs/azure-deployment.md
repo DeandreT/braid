@@ -7,16 +7,17 @@ dependency privately. Tracking work is [#146](https://github.com/DeandreT/weft/i
 
 | Resource | Configuration |
 | --- | --- |
-| Virtual network | Subnets for the Container Apps environment, the delegated PostgreSQL server and private endpoints, with private DNS zones for PostgreSQL, Key Vault and Azure Files. |
+| Virtual network | Subnets for the Container Apps environment, the delegated PostgreSQL server and private endpoints, with private DNS zones for PostgreSQL, Key Vault, Azure Files and Blob Storage. |
 | Log Analytics | Container Apps console and system logs (30 days). |
 | Container registry | Basic SKU, no admin user; the application identity has only `AcrPull`. |
-| Managed identity | One user-assigned identity for the app and jobs: image pull and Key Vault secret reads. |
+| Managed identity | One user-assigned identity for the app and jobs: image pull, Key Vault secret reads and `Storage Blob Data Contributor` on the private object container only. |
 | Key Vault | RBAC authorization, purge protection, private endpoint; optional operator IP allow-list. Holds every credential and certificate. |
 | Storage account | No public network access; private endpoint; SMB share `weft-session-keys` for the session key ring. |
+| Private object storage | A separate account with shared-key access disabled, no public network access and a blob private endpoint; container `weft-private-objects` without anonymous access. Blob versioning and blob soft delete are off so retired objects are not retained; deleted containers are kept for 14 days. Holds every [private object](private-storage-blob.md). |
 | PostgreSQL Flexible Server | Version 16, private VNet access only, password authentication, 14-day backups. |
 | Container Apps environment | Workload-profile (Consumption) environment in the VNet with public ingress. |
 | Container app | `server` and `edge` containers in one replica (fixed at one), ingress on the edge's port 8080, HTTPS only, probes on `/api/v1/health`, key-ring share mounted with UID/GID 1654 and modes 0700/0600. |
-| Jobs (manual) | `<name>-database-roles`, `<name>-migrate`, `<name>-session-keys` and `<name>-owner`. |
+| Jobs (manual) | `<name>-database-roles`, `<name>-migrate`, `<name>-session-keys`, `<name>-private-storage`, `<name>-maintenance` and `<name>-owner`. |
 
 Templates contain no secrets. The PostgreSQL administrator password is read from the
 deploying shell's environment by the parameter file and also stored in Key Vault for the
@@ -39,6 +40,7 @@ provisioning job. Every other credential is generated into Key Vault by
 | Custom domain and DNS | Optional `customDomain`, a CNAME to the app's default host name and a TXT record `asuid.<domain>`. |
 | Initial users' Entra `sub` values | One per user, for identity bindings: the ID-token `sub` claim issued to this client ID. It is pairwise per application and differs from the object ID. |
 | Model-provider credential | Only once chat can be enabled (see the limits below); stored in Key Vault. |
+| Worker identity | Optional `workerPrincipalId`: the object ID of a separately hosted `Weft.Worker`'s managed identity, granted the same data-plane role on the private object container. |
 
 ### Entra app registration
 
@@ -107,7 +109,13 @@ its placeholders.
 6. **Session key ring.** `az containerapp job start --resource-group <group> --name <name>-session-keys`
    prints `Bootstrapped` once (`ExistingKeyRingRetained` afterwards).
 
-7. **Start.** Restart the active revision
+7. **Private object storage.** `az containerapp job start --resource-group <group> --name <name>-private-storage`
+   writes the store marker into the empty container and prints `InitializedBlob`. It runs once: a
+   rerun prints `UnsafeStorage` and changes nothing, and the server never initializes storage
+   itself. Admission at first use requires the container, the marker and the identity's role;
+   the job also proves the role by creating, leasing and deleting one probe blob.
+
+8. **Start.** Restart the active revision
    (`az containerapp revision restart --resource-group <group> --name <name>-app --revision <revision>`).
 
 ## Verification
@@ -172,7 +180,14 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   for as long as keys it protects remain in the ring; rotation is restart-based. Add a new
   Entra client certificate to the app registration before restarting with it.
 - **Backups.** PostgreSQL keeps 14 days of point-in-time restore. Snapshot the key-ring share
-  to retain session continuity across a restore.
+  to retain session continuity across a restore. Private objects are referenced by exact digest
+  from the database; a database restore can refer to objects that maintenance has since retired,
+  which then read as missing rather than as different content.
+- **Private object maintenance.** Run one bounded [maintenance](maintenance-command.md) batch per
+  project with `az containerapp job start -g <group> -n <name>-maintenance --container-name maintenance
+  --args maintenance run-once <organizationId> <projectId>` (and its continuation cursors); environment
+  overrides replace the job's list, so pass arguments only. The job uses the `pg-maintenance-connection`
+  secret and the same Blob settings as the server.
 
 ## Open questions and limits
 
@@ -192,23 +207,40 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   The session-keys job and a successful server start verify admission on the share. If it
   is refused, use a persistent POSIX volume such as an Azure Files NFS share prepared with
   the same ownership.
-- **Private object storage and native work.** The private storage adapter admits only local
-  ext4, Btrfs, XFS, tmpfs and overlay filesystems; Azure Files (SMB or NFS) is refused, so
-  native upload, report reads and report derivation stay disabled here until a Blob storage
-  adapter (or a qualified network-filesystem profile) exists. Native work also needs the
+- **Native work.** Private objects use the Blob container above, so the server is configured
+  for them; native upload and report derivation also need the
   [hosted inspection worker](ferrule-worker.md#hosted-inspection-transport): `Weft.Worker`
   runs the Ferrule image with a Docker daemon, which Container Apps cannot provide, so it
   must run on a Docker-capable Linux host inside the virtual network, reachable only from the
-  apps subnet on its inspection port. These templates do not create that host. They wire the
+  apps subnet on its inspection port (or use the Ferrule service below). These templates do
+  not create that host. They wire the
   Session host to it with `inspectionWorkerUrl`, `inspectionWorkerCertificateSha256` (from
   `weft-inspection-worker.sha256`) and `ferruleWorkerImage`, delivering the
   `weft-inspection-client` certificate; the settings stay dormant until native upload or
-  derivation is enabled. `initialize-secrets.sh` creates both inspection certificates in Key
+  derivation is enabled. Retained report reads need only the private container and the
+  report reader login. `initialize-secrets.sh` creates both inspection certificates in Key
   Vault and writes their pins; the worker host receives `weft-inspection-worker` as
   `WEFT_DELIVER_INSPECTION_WORKER_PEM` and the client pin from `weft-inspection-client.sha256`.
-- **Chat.** [Chat](chat-http.md) requires revision report reads, so it stays disabled until
-  the storage and worker limits above are resolved. Enabling it then means
-  `WEFT_CHAT_ENABLED=true`, the `pg-chat-reader-connection` and `pg-chat-writer-connection`
+- **Ferrule service.** Instead of a Docker-capable worker host, native work can run through
+  the [Ferrule service](ferrule-service.md), which needs no Docker. With
+  `ferruleRunner=service`, the application deployment adds the internal-only `<name>-ferrule`
+  container app: TCP ingress on 8443 (TLS terminates in the service), probes on its plain
+  port 8080, an `EmptyDir` volume at `/tmp`, and a TCP scale rule targeting
+  `ferruleServiceConcurrency` concurrent connections per replica, up to
+  `ferruleServiceMaxReplicas`. It receives `weft-ferrule-service` from Key Vault and admits
+  `ferruleServiceClientCertificateSha256`; the Session host pins
+  `ferruleServiceCertificateSha256` and receives `weft-ferrule-service-client`
+  (`initialize-secrets.sh` creates both certificates and writes their pins). With
+  `ferruleRunner=sessions`, it instead adds the `<name>-ferrule-sessions` custom-container
+  session pool (egress disabled, one session per operation, `ferruleSessionsMax` sessions)
+  and grants the application identity the Session Executor role on it. Both need
+  `ferruleServiceImage` (pushed to the registry, preferably by digest) and
+  `ferruleServiceIdentity`. Container Apps does not offer a read-only root filesystem; the
+  children's own controls apply regardless. The settings stay dormant until native work is
+  enabled.
+- **Chat.** [Chat](chat-http.md) requires revision report reads, and reports exist only once
+  derivation runs, so it stays disabled until the worker limit above is resolved. Enabling it
+  then means `WEFT_CHAT_ENABLED=true`, the `pg-chat-reader-connection` and `pg-chat-writer-connection`
   secrets delivered with `WEFT_DELIVER_FILE_CHAT_READER_CONNECTION` and
   `WEFT_DELIVER_FILE_CHAT_WRITER_CONNECTION` and named by
   `WEFT_CHAT_READER_CONNECTION_STRING_FILE=/run/weft/secrets/chat-reader-connection` and
@@ -219,7 +251,12 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   (the profile's credential entry then names `/run/weft/secrets/model-provider-credential`).
 - **Previews.** The Session host can record previews, but execution needs the separate
   `Weft.Worker` host with a Ferrule worker transport, which this environment does not run, so
-  previews stay disabled. Enabling them later means `WEFT_PREVIEWS_ENABLED=true` and the
+  previews stay disabled. That host reads native objects with the same `WEFT_PRIVATE_STORAGE_*`
+  settings (deployment outputs `privateObjectsEndpoint` and `privateObjectsContainer`), using
+  its own managed identity granted through `workerPrincipalId` (with
+  `WEFT_PRIVATE_STORAGE_BLOB_CLIENT_ID` for a user-assigned one) or a workload identity, and
+  must resolve the blob private endpoint from the virtual network. Enabling them later means
+  `WEFT_PREVIEWS_ENABLED=true` and the
   `pg-preview-writer-connection` and `pg-preview-reader-connection` secrets delivered with
   `WEFT_DELIVER_FILE_PREVIEW_WRITER_CONNECTION` and `WEFT_DELIVER_FILE_PREVIEW_READER_CONNECTION`
   and named by `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE` and

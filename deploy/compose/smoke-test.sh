@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Builds the runtime images, starts the hosted-shape stack from new volumes, checks it through
 # the edge, restarts it, and removes every container, network, volume and image tag it created.
-# With WEFT_FERRULE_WORKER_IMAGE set, it also checks native examples through the Docker worker and
-# the hosted inspection worker: mutual pinning and one exact native validation frame.
+# With WEFT_FERRULE_SERVICE_IMAGE set (a built engines/ferrule-service image), it instead runs the
+# Session server with the Ferrule service override: replicas, health, mutual pinning and one exact
+# native validation frame on every replica. Otherwise, with WEFT_FERRULE_WORKER_IMAGE set, it also
+# checks native examples through the Docker worker and the hosted inspection worker: mutual pinning
+# and one exact native validation frame.
 # Generated passwords and certificates stay in a private temporary directory and are never printed.
 set -euo pipefail
 
@@ -11,11 +14,14 @@ compose_directory=$repository/deploy/compose
 project=weft-smoke-$(openssl rand -hex 4)
 work=$(mktemp -d "${TMPDIR:-/tmp}/weft-smoke.XXXXXXXX")
 chmod 0700 "$work"
+ferrule_service=false
+[[ -n ${WEFT_FERRULE_SERVICE_IMAGE:-} ]] && ferrule_service=true
 examples=false
-[[ -n ${WEFT_FERRULE_WORKER_IMAGE:-} ]] && examples=true
+[[ $ferrule_service == false && -n ${WEFT_FERRULE_WORKER_IMAGE:-} ]] && examples=true
 built_images=()
 files=(--file "$compose_directory/compose.yml")
 [[ $examples == true ]] && files+=(--file "$compose_directory/compose.examples.yml" --file "$compose_directory/compose.worker.yml")
+[[ $ferrule_service == true ]] && files+=(--file "$compose_directory/compose.ferrule-service.yml")
 
 compose() {
   docker compose --project-name "$project" "${files[@]}" --profile operator "$@"
@@ -83,11 +89,24 @@ WEFT_ENTRA_CLIENT_ID=$(cat /proc/sys/kernel/random/uuid)
 export WEFT_SESSION_ORGANIZATION_ID WEFT_ENTRA_TENANT_ID WEFT_ENTRA_CLIENT_ID
 export WEFT_PUBLIC_HOST=weft.example.test WEFT_EDGE_TRUSTED_PROXIES=
 export WEFT_COMPOSE_PORT=0 WEFT_COMPOSE_EXAMPLES_PORT=0
+# Each side of a pinned transport pins the other's certificate (SHA-256 of its DER encoding).
+pin() { openssl x509 -in "$work/$1.crt" -outform DER | openssl dgst -sha256 -r | cut -d' ' -f1; }
+if [[ $ferrule_service == true ]]; then
+  # The service's build identity is the digest of the exact worker binary recorded in its image.
+  worker_digest=$(docker image inspect --format '{{index .Config.Labels "io.weft.ferrule.worker-sha256"}}' "$WEFT_FERRULE_SERVICE_IMAGE")
+  [[ $worker_digest =~ ^[0-9a-f]{64}$ ]] || fail 'service image identity label'
+  WEFT_FERRULE_SERVICE_IDENTITY=sha256:$worker_digest
+  WEFT_FERRULE_SERVICE_PEM=$(new_pem weft-ferrule-service)
+  WEFT_FERRULE_SERVICE_CLIENT_PEM=$(new_pem weft-ferrule-service-client)
+  WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256=$(pin weft-ferrule-service)
+  WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256=$(pin weft-ferrule-service-client)
+  export WEFT_FERRULE_SERVICE_IDENTITY WEFT_FERRULE_SERVICE_PEM WEFT_FERRULE_SERVICE_CLIENT_PEM \
+    WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256 WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256
+  export WEFT_FERRULE_SERVICE_REPLICAS=${WEFT_FERRULE_SERVICE_REPLICAS:-2}
+fi
 if [[ $examples == true ]]; then
   WEFT_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
   export WEFT_DOCKER_GID
-  # Each side of the inspection transport pins the other's certificate (SHA-256 of its DER encoding).
-  pin() { openssl x509 -in "$work/$1.crt" -outform DER | openssl dgst -sha256 -r | cut -d' ' -f1; }
   WEFT_INSPECTION_WORKER_PEM=$(new_pem weft-inspection-worker)
   WEFT_INSPECTION_CLIENT_PEM=$(new_pem weft-inspection-client)
   WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256=$(pin weft-inspection-worker)
@@ -96,13 +115,14 @@ if [[ $examples == true ]]; then
     WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256
 fi
 
-env -u WEFT_FERRULE_WORKER_IMAGE -u WEFT_DOCKER_GID docker compose --project-name "$project" \
+env -u WEFT_FERRULE_WORKER_IMAGE -u WEFT_DOCKER_GID -u WEFT_FERRULE_SERVICE_IMAGE docker compose --project-name "$project" \
   --file "$compose_directory/compose.yml" --profile operator config --quiet ||
   fail 'base stack configuration without the examples settings'
 echo 'ok - base stack renders without the examples settings'
 
 runtime_services=(server edge)
 [[ $examples == true ]] && runtime_services+=(worker)
+[[ $ferrule_service == true ]] && runtime_services+=(ferrule)
 echo "Starting $project from new volumes"
 compose up --detach --wait --wait-timeout 180 "${runtime_services[@]}" >/dev/null 2>"$work/up.log" ||
   { tail -n 20 "$work/up.log" >&2; compose logs --no-color migrate storage-init session-keys "${runtime_services[@]}" 2>&1 | tail -n 40 >&2; fail 'stack start'; }
@@ -180,8 +200,56 @@ check_inspection_worker() {
   grep -q '"isValid":true' "$work/body" || fail 'worker validation result'
 }
 
+# One validation frame for the native fixture, as the Ferrule adapter builds it.
+write_frame() {
+  local native=$repository/engines/ferrule-host/tests/fixtures/valid-basic.json header uuid
+  uuid() { cat /proc/sys/kernel/random/uuid; }
+  header=$(printf '{"protocolVersion":"weft.ferrule-host.v1","requestId":"%s","operation":"validate","revision":{"organizationId":"%s","projectId":"%s","mappingId":"%s","revisionId":"%s"},"nativeDigest":"%s","documentId":"entry.native.json","limits":{"maximumDiagnostics":128,"maximumItems":8192,"maximumTextBytes":2048}}' \
+    "$(uuid)" "$(uuid)" "$(uuid)" "$(uuid)" "$(uuid)" "$(sha256sum "$native" | cut -d' ' -f1)")
+  { be32 "${#header}"; printf '%s' "$header"; be32 "$(stat -c %s "$native")"; cat "$native"; } >"$work/frame"
+}
+
+# The server reaches the service only on its internal network; the host checks every replica's listener.
+check_ferrule_service() {
+  local containers container ip url key pinned client status
+  mapfile -t containers < <(compose ps --quiet ferrule)
+  ((${#containers[@]} == WEFT_FERRULE_SERVICE_REPLICAS)) || fail "Ferrule service replicas: ${#containers[@]}"
+  [[ $(docker network inspect --format '{{.Internal}}' "${project}_ferrule") == true ]] || fail 'service network is internal'
+  key=$(openssl x509 -in "$work/weft-ferrule-service.crt" -pubkey -noout | openssl pkey -pubin -outform DER |
+    openssl dgst -sha256 -binary | base64)
+  pinned=(--http2 --insecure --pinnedpubkey "sha256//$key")
+  client=(--cert "$work/weft-ferrule-service-client.crt" --key "$work/weft-ferrule-service-client.key")
+  write_frame
+  for container in "${containers[@]}"; do
+    [[ $(docker inspect --format '{{.State.Health.Status}} {{.HostConfig.ReadonlyRootfs}} {{.Config.User}}' "$container") == 'healthy true 65532:65532' ]] ||
+      { compose logs --no-color ferrule 2>&1 | tail -n 20 >&2; fail 'healthy read-only non-root service replica'; }
+    ip=$(docker inspect --format "{{with index .NetworkSettings.Networks \"${project}_ferrule\"}}{{.IPAddress}}{{end}}" "$container")
+    [[ -n $ip ]] || fail 'service replica address on the service network'
+    url=https://$ip:8443
+    expect 204 "service replica $ip admits the pinned server client" "${pinned[@]}" "${client[@]}" "$url/v1/ready"
+    grep -qi "^weft-worker-image: $WEFT_FERRULE_SERVICE_IDENTITY" "$work/headers" || fail 'service build identity'
+    grep -qi '^weft-service-protocol: weft.ferrule-service.v1' "$work/headers" || fail 'service protocol'
+    for refused in none other; do
+      local identity=()
+      [[ $refused == other ]] && identity=(--cert "$work/weft-entra-client.crt" --key "$work/weft-entra-client.key")
+      if status=$(request "${pinned[@]}" "${identity[@]}" "$url/v1/ready" 2>/dev/null); then
+        [[ $status != 204 ]] || fail "service admitted a client with $refused certificate"
+      fi
+    done
+    echo "ok - service replica $ip refuses clients without the pinned certificate"
+    expect 200 "service replica $ip capabilities" "${pinned[@]}" "${client[@]}" "$url/v1/capabilities"
+    body_has "\"buildIdentity\":\"$WEFT_FERRULE_SERVICE_IDENTITY\"" 'capability identity'
+    request_seconds=60 expect 200 "native validation frame through service replica $ip" "${pinned[@]}" "${client[@]}" \
+      --header 'Content-Type: application/octet-stream' --header "Weft-Worker-Image: $WEFT_FERRULE_SERVICE_IDENTITY" \
+      --data-binary "@$work/frame" "$url/v1/operations/inspection/$(openssl rand -hex 16)"
+    grep -qi '^weft-worker-result: none' "$work/headers" || fail "service result $(grep -i '^weft-worker-result' "$work/headers")"
+    grep -q '"isValid":true' "$work/body" || fail 'service validation result'
+  done
+}
+
 check_session_profile
 [[ $examples == true ]] && check_inspection_worker frame
+[[ $ferrule_service == true ]] && check_ferrule_service
 for service in migrate storage-init session-keys; do
   [[ $(docker inspect --format '{{.State.ExitCode}}' "$(compose ps --all --quiet "$service")") == 0 ]] ||
     fail "$service exit status"
@@ -208,6 +276,10 @@ echo 'ok - restart reopened the persistent key ring and storage configuration'
 if [[ $examples == true ]]; then
   # The restarted server admitted its native settings again; the worker keeps its pinned admission.
   check_inspection_worker admission
+fi
+if [[ $ferrule_service == true ]]; then
+  # The restarted server admitted its service settings again; every replica keeps serving.
+  check_ferrule_service
 fi
 
 if [[ $examples == true ]]; then
