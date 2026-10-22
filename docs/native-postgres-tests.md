@@ -23,6 +23,11 @@ PostgreSQL is an explicit setup operation, not a test side effect. Prefer the
 vendor's verified portable binaries; no Windows service or global PostgreSQL
 configuration is required or changed by the fixture.
 
+For a clean source snapshot, short isolated output paths, controlled child
+environment and retained source/TRX receipts, use the
+[native qualification launcher](../tools/native-postgres/README.md). It wraps
+this same fixture rather than introducing another database implementation.
+
 Each fixture creates its own marked data directory, bootstrap identity and
 random test passwords. It starts PostgreSQL as an owned child on an unused
 loopback port, disables statement logging, and verifies the server's version,
