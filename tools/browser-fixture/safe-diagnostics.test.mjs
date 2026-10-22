@@ -58,6 +58,22 @@ test("multiple snapshots and repeated lines have bounded fixed output", () => {
   assert.deepEqual(summary.snapshot(), ["unhandledAggregate"]);
 });
 
+test("known stack namespaces become fixed categories without method names or paths", () => {
+  const summary = hostFailureSummary();
+  summary.write(
+    Buffer.from(
+      "   at Weft.Worker.SecretMethod(private-data) in /private/file:line 2\n   at Weft.Jobs.PrivateMethod()\n   at Wolverine.SecretMethod()\n   at Customer.SecretMethod()\n",
+    ),
+  );
+  assert.deepEqual(summary.snapshot(), [
+    "durableJobFrame",
+    "wolverineFrame",
+    "workerHostFrame",
+  ]);
+  assert.equal(JSON.stringify(summary.snapshot()).includes("Secret"), false);
+  assert.equal(JSON.stringify(summary.snapshot()).includes("private"), false);
+});
+
 test("report setup retains only HTTP status and known contract categories", () => {
   assert.deepEqual(
     reportSetupDiagnostic("validation", {

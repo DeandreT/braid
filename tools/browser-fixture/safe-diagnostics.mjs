@@ -7,6 +7,17 @@ export function hostFailureSummary() {
   const found = new Set();
   let prefix = "";
   function classify(line) {
+    for (const [pattern, category] of [
+      [/^\s+at Weft\.Worker\./, "workerHostFrame"],
+      [/^\s+at Weft\.Jobs\./, "durableJobFrame"],
+      [/^\s+at Weft\.Persistence\.Postgres\./, "databaseFrame"],
+      [/^\s+at Weft\.Storage\./, "privateStorageFrame"],
+      [/^\s+at Weft\.MappingBackends\.Workers\./, "workerRunnerFrame"],
+      [/^\s+at Wolverine\./, "wolverineFrame"],
+      [/^\s+at JasperFx\./, "jasperFxFrame"],
+    ]) {
+      if (pattern.test(line)) found.add(category);
+    }
     if (/^Out of memory\.$/.test(line)) found.add("outOfMemory");
     if (/^Fatal error\./.test(line)) found.add("fatalRuntimeError");
     const type =
