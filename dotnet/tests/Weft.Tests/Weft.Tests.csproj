@@ -46,6 +46,8 @@
     <ProjectReference Include="../../tools/Weft.WorkerShutdownProbe/Weft.WorkerShutdownProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../apps/Weft.FerruleService/Weft.FerruleService.csproj" />
+    <ProjectReference Include="../../src/Weft.WorkerTransport/Weft.WorkerTransport.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
@@ -63,6 +65,12 @@
       <PreviewWorkerFiles Include="../../apps/Weft.Worker/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(PreviewWorkerFiles)" DestinationFiles="@(PreviewWorkerFiles->'$(OutDir)PreviewWorker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyFerruleService" AfterTargets="Build">
+    <ItemGroup>
+      <FerruleServiceFiles Include="../../apps/Weft.FerruleService/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FerruleServiceFiles)" DestinationFiles="@(FerruleServiceFiles->'$(OutDir)FerruleService/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopyStorageProbe" AfterTargets="Build">
     <ItemGroup>

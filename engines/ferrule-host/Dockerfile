@@ -39,12 +39,15 @@ EOF
 WORKDIR /work
 COPY . .
 
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
 RUN --mount=type=secret,id=proxy_ca <<'EOF'
 set -eu
 if [ -s /run/secrets/proxy_ca ]; then
     cat /etc/ssl/certs/ca-certificates.crt /run/secrets/proxy_ca > /tmp/weft-build-ca.pem
     export CARGO_HTTP_CAINFO=/tmp/weft-build-ca.pem
     export CURL_CA_BUNDLE=/tmp/weft-build-ca.pem
+    export GIT_SSL_CAINFO=/tmp/weft-build-ca.pem
 fi
 cargo build --release --locked --package weft-ferrule-host --bin weft-ferrule-host
 rm -f /tmp/weft-build-ca.pem
@@ -100,7 +103,7 @@ cp -R /work/third-party /runtime/usr/share/weft-ferrule-host/third-party
 EOF
 
 FROM build AS qualification
-RUN cargo test --release --locked --package weft-ferrule-host --test build_qualification --test protocol_qualification --test preview_qualification
+RUN cargo test --release --locked --package weft-ferrule-host --test build_qualification --test protocol_qualification --test preview_qualification --test sandbox_qualification
 
 FROM scratch
 ARG WEFT_REVISION=""

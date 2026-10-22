@@ -1,0 +1,16 @@
+using Microsoft.Extensions.Hosting;
+using Weft.FerruleService;
+
+FerruleServiceSettings settings;
+try { settings = FerruleServiceSettings.Read(Environment.GetEnvironmentVariable); }
+catch (Exception error) when (error is not (OutOfMemoryException or StackOverflowException))
+{
+    // Settings never echo values; invalid or incomplete configuration stops the service.
+    Console.Error.WriteLine("WeftFerruleServiceConfigurationFailed");
+    return 1;
+}
+
+var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { Args = [], ContentRootPath = AppContext.BaseDirectory });
+builder.Services.AddFerruleService(settings);
+await builder.Build().RunAsync();
+return 0;

@@ -6,6 +6,9 @@ adapter, `FerruleInspectionBackend`, talks
 to a restricted Rust worker. It keeps Ferrule types and native JSON decoding
 inside that worker; application results contain Weft-owned data and evidence.
 
+Hosted environments that cannot run Docker use the same worker binary and
+protocols inside the [Ferrule service](ferrule-service.md).
+
 Inspection and validation were qualified in
 [PR #10](https://github.com/DeandreT/weft/pull/10). Native projection is tracked in
 [#8](https://github.com/DeandreT/weft/issues/8), followed by the Angular viewer in

@@ -5,13 +5,14 @@ use std::io::{self, Read, Write};
 use ferrule_mapping::FileCodecError;
 use sha2::{Digest, Sha256};
 
-pub mod decode;
 pub mod build;
+pub mod decode;
 pub mod framing;
 pub mod inspect;
 pub mod preview;
 pub mod projection;
 pub mod protocol;
+pub mod sandbox;
 pub mod validation;
 
 use preview::protocol::PREVIEW_PROTOCOL_VERSION;

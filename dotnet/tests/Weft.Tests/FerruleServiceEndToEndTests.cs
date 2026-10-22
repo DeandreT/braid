@@ -1,0 +1,329 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+using Weft.MappingBackends;
+using Weft.MappingBackends.Workers;
+using Weft.WorkerTransport;
+using static Weft.Tests.FerruleServiceTestSupport;
+using static Weft.Tests.InspectionTransportTests;
+
+namespace Weft.Tests;
+
+/// <summary>The Ferrule service with real child processes behind its pinned listener, and the packaged service host.</summary>
+[Collection(FerruleServiceProcessCollection.Name)]
+public sealed class FerruleServiceEndToEndTests
+{
+    [ServiceWorkerFact]
+    public async Task ServiceAnswersEqualDirectChildOutputsOnEveryRoute()
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            await using var service = await ServiceHost.StartAsync(root);
+            await using var direct = new ProcessWorkerRunner(Options(root));
+            await using var directPreview = new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview));
+
+            // The existing pinned inspection client (the Session host's) reaches the service unchanged.
+            await using var remote = new RemoteInspectionWorkerRunner(new(service.Endpoint, service.ServerPin, service.ClientCertificate, direct.BuildIdentity));
+            var comparing = new ComparingRunner(direct, remote);
+            var backend = new FerruleInspectionBackend(comparing);
+            foreach (var fixture in Fixtures())
+            {
+                await backend.InspectAsync(Artifact(fixture));
+                await backend.ValidateAsync(Artifact(fixture));
+                await backend.ProjectAsync(Artifact(fixture));
+            }
+            Assert.True(comparing.Compared >= 3 * Fixtures().Count());
+            await remote.StopAsync();
+
+            // Preview frames travel on the preview profile route over HTTP/2.
+            var capture = new CapturingRunner();
+            await new FerrulePreviewBackend(capture).PreviewAsync(Preview());
+            var expected = await directPreview.RunAsync(capture.Frame!, CancellationToken.None);
+            Assert.Equal(WorkerProcessFailure.None, expected.Failure);
+            using var http = service.Client();
+            using var answer = await http.SendAsync(Operation(FerruleServiceProtocol.PreviewProfile, capture.Frame!, direct.BuildIdentity));
+            Assert.Equal("none", Assert.Single(answer.Headers.GetValues(InspectionTransport.ResultHeader)));
+            Assert.Equal(expected.Output, await answer.Content.ReadAsByteArrayAsync());
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+            Assert.Empty(WorkerChildren());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [ServiceWorkerFact]
+    public async Task FullReplicaRefusesRetryablyWhileALiveChildHoldsItsOnlySlot()
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            await using var service = await ServiceHost.StartAsync(root, concurrency: 1, capacity: 1, holdInspection: true);
+            var frame = await FerruleServiceProcessRunnerTests.InspectionFrameAsync();
+            using var http = service.Client(connections: 4);
+            var held = http.SendAsync(Operation(FerruleServiceProtocol.InspectionProfile, frame, service.Identity));
+            await WaitForWorkerChildren(1);
+            var capture = new CapturingRunner();
+            await new FerrulePreviewBackend(capture).PreviewAsync(Preview());
+            using (var busy = await http.SendAsync(Operation(FerruleServiceProtocol.PreviewProfile, capture.Frame!, service.Identity)))
+            {
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, busy.StatusCode);
+                Assert.NotNull(busy.Headers.RetryAfter);
+            }
+            using (var expired = await held.WaitAsync(TimeSpan.FromSeconds(15)))
+                Assert.Equal("timedOut", Assert.Single(expired.Headers.GetValues(InspectionTransport.ResultHeader)));
+            using (var admitted = await http.SendAsync(Operation(FerruleServiceProtocol.PreviewProfile, capture.Frame!, service.Identity)))
+                Assert.Equal("none", Assert.Single(admitted.Headers.GetValues(InspectionTransport.ResultHeader)));
+            Assert.Empty(WorkerChildren());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [ServiceWorkerFact]
+    public async Task PackagedServiceHostServesPinnedOperationsAndStopsCleanly()
+    {
+        var root = TemporaryRoot();
+        using var serverCertificate = TransportCase.Certificate("CN=Ferrule service");
+        using var client = TransportCase.Certificate("CN=Ferrule service client");
+        var port = FreePort();
+        var healthPort = FreePort();
+        using var process = StartPackagedService(new Dictionary<string, string>
+        {
+            ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "127.0.0.1:" + port,
+            ["WEFT_FERRULE_SERVICE_HEALTH_ADDR"] = "127.0.0.1:" + healthPort,
+            ["WEFT_FERRULE_SERVICE_PEM"] = Bundle(serverCertificate),
+            ["WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256"] = TransportCase.Pin(client),
+            ["WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE"] = Executable!,
+            ["WEFT_FERRULE_SERVICE_TEMPORARY_ROOT"] = root,
+            ["WEFT_FERRULE_SERVICE_CONCURRENCY"] = "2"
+        });
+        try
+        {
+            using var probe = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + healthPort), Timeout = TimeSpan.FromSeconds(2) };
+            await WaitForReadiness(probe, process);
+            var identity = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(Executable!)));
+            await using var remote = new RemoteInspectionWorkerRunner(new(new Uri("https://127.0.0.1:" + port), TransportCase.Pin(serverCertificate), client, identity));
+            var validation = await new FerruleInspectionBackend(remote).ValidateAsync(Artifact("invalid-function"));
+            Assert.Equal(MappingOperationStatus.InvalidMapping, validation.Status);
+            Assert.True(validation.Provenance.Confirmed);
+            await remote.StopAsync();
+            using (var http = ServiceHost.PinnedClient(new Uri("https://127.0.0.1:" + port), TransportCase.Pin(serverCertificate), client))
+            using (var capabilities = await http.GetAsync(FerruleServiceProtocol.CapabilitiesPath))
+            using (var document = JsonDocument.Parse(await capabilities.Content.ReadAsByteArrayAsync()))
+            {
+                Assert.Equal(identity, document.RootElement.GetProperty("buildIdentity").GetString());
+                Assert.Equal(2, document.RootElement.GetProperty("concurrency").GetInt32());
+                Assert.Equal(4, document.RootElement.GetProperty("capacity").GetInt32());
+            }
+
+            using (var terminate = Process.Start("/usr/bin/kill", ["-TERM", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]))
+                await terminate.WaitForExitAsync();
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal(0, process.ExitCode);
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+        }
+        finally
+        {
+            if (!process.HasExited) process.Kill();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PackagedServiceHostRefusesIncompleteConfigurationWithoutEchoingIt()
+    {
+        if (!OperatingSystem.IsLinux() || !File.Exists(PackagedServicePath)) return;
+        using var process = StartPackagedService(new Dictionary<string, string>
+        {
+            ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "127.0.0.1:1",
+            ["WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256"] = new string('a', 64),
+            ["WEFT_FERRULE_SERVICE_PEM"] = "not-a-pem-secret-value"
+        });
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(1, process.ExitCode);
+        Assert.Equal("WeftFerruleServiceConfigurationFailed", (await error).Trim());
+        Assert.DoesNotContain("not-a-pem-secret-value", await process.StandardOutput.ReadToEndAsync(), StringComparison.Ordinal);
+    }
+
+    private static string PackagedServicePath => Path.Combine(AppContext.BaseDirectory, "FerruleService", "weft-ferrule-service.dll");
+
+    private static Process StartPackagedService(IReadOnlyDictionary<string, string> environment)
+    {
+        var start = new ProcessStartInfo(Path.Combine(Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? "/usr/share/dotnet", "dotnet"))
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        start.ArgumentList.Add(PackagedServicePath);
+        start.Environment.Clear();
+        start.Environment["DOTNET_ROOT"] = Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? "/usr/share/dotnet";
+        start.Environment["DOTNET_NOLOGO"] = "1";
+        start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+        start.Environment["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "false";
+        start.Environment["HOME"] = Path.GetTempPath();
+        foreach (var (name, value) in environment) start.Environment[name] = value;
+        return Process.Start(start)!;
+    }
+
+    private static async Task WaitForReadiness(HttpClient probe, Process process)
+    {
+        for (var attempt = 0; attempt < 300; attempt++)
+        {
+            if (process.HasExited)
+                Assert.Fail("The packaged Ferrule service exited: " + await process.StandardError.ReadToEndAsync());
+            try
+            {
+                using var ready = await probe.GetAsync(FerruleServiceProtocol.ReadinessPath);
+                if (ready.StatusCode == HttpStatusCode.NoContent) return;
+            }
+            catch (Exception error) when (error is HttpRequestException or TaskCanceledException) { }
+            await Task.Delay(100);
+        }
+
+        throw new TimeoutException("The packaged Ferrule service did not become ready.");
+    }
+
+    private static string Bundle(X509Certificate2 certificate)
+    {
+        using var key = certificate.GetRSAPrivateKey()!;
+        return certificate.ExportCertificatePem() + "\n" + key.ExportPkcs8PrivateKeyPem() + "\n";
+    }
+
+    private static int FreePort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
+    }
+
+    private static HttpRequestMessage Operation(string profile, byte[] frame, string identity)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, FerruleServiceProtocol.OperationPath(profile, Guid.NewGuid().ToString("N")))
+        {
+            Content = new ByteArrayContent(frame),
+            Version = HttpVersion.Version20,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue(InspectionTransport.MediaType);
+        request.Headers.TryAddWithoutValidation(InspectionTransport.ImageHeader, identity);
+        return request;
+    }
+
+    private sealed class CapturingRunner : IInspectionWorkerRunner
+    {
+        internal byte[]? Frame { get; private set; }
+        public string BuildIdentity => "sha256:" + new string('1', 64);
+
+        public Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
+        {
+            Frame = requestFrame.ToArray();
+            return Task.FromResult(new WorkerProcessResult([], WorkerProcessFailure.WorkerFailed));
+        }
+    }
+
+    private sealed class ComparingRunner(IInspectionWorkerRunner expected, IInspectionWorkerRunner actual) : IInspectionWorkerRunner
+    {
+        internal int Compared { get; private set; }
+        public string BuildIdentity => expected.BuildIdentity;
+
+        public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
+        {
+            var reference = await expected.RunAsync(requestFrame, cancellationToken);
+            var candidate = await actual.RunAsync(requestFrame, cancellationToken);
+            Assert.Equal(WorkerProcessFailure.None, reference.Failure);
+            Assert.Equal(reference.Failure, candidate.Failure);
+            Assert.Equal(reference.Output, candidate.Output);
+            Compared++;
+            return reference;
+        }
+    }
+
+    /// <summary>The service composition (child runners behind one pinned listener) on an ephemeral port.</summary>
+    private sealed class ServiceHost : IAsyncDisposable
+    {
+        private readonly ProcessWorkerRunner inspection;
+        private readonly ProcessWorkerRunner preview;
+
+        private ServiceHost(WorkerTransportServer server, ProcessWorkerRunner inspection, ProcessWorkerRunner preview,
+            X509Certificate2 serverCertificate, X509Certificate2 client)
+        {
+            Server = server;
+            this.inspection = inspection;
+            this.preview = preview;
+            ServerCertificate = serverCertificate;
+            ClientCertificate = client;
+        }
+
+        internal WorkerTransportServer Server { get; }
+        internal X509Certificate2 ServerCertificate { get; }
+        internal X509Certificate2 ClientCertificate { get; }
+        internal string Identity => inspection.BuildIdentity;
+        internal Uri Endpoint => new("https://127.0.0.1:" + Server.Port);
+        internal string ServerPin => TransportCase.Pin(ServerCertificate);
+
+        internal static async Task<ServiceHost> StartAsync(string root, int concurrency = 2, int capacity = 4, bool holdInspection = false)
+        {
+            var inspection = new ProcessWorkerRunner(Options(root, deadline: holdInspection ? TimeSpan.FromSeconds(3) : null, withhold: holdInspection));
+            var preview = new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview));
+            var serverCertificate = TransportCase.Certificate("CN=Ferrule service");
+            var client = TransportCase.Certificate("CN=Ferrule service client");
+            var server = new WorkerTransportServer(new WorkerTransportServerOptions(new IPEndPoint(IPAddress.Loopback, 0), serverCertificate, [TransportCase.Pin(client)])
+            {
+                ServiceRoutes = true,
+                Concurrency = concurrency,
+                Capacity = capacity,
+                AdmissionWait = TimeSpan.Zero,
+                Healthy = () => inspection.Available && preview.Available,
+                EngineRevision = FerruleInspectionBackend.EngineRevision
+            }, new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
+            {
+                [FerruleServiceProtocol.InspectionProfile] = inspection,
+                [FerruleServiceProtocol.PreviewProfile] = preview
+            });
+            await server.StartAsync(CancellationToken.None);
+            return new(server, inspection, preview, serverCertificate, client);
+        }
+
+        internal HttpClient Client(int connections = 1) => PinnedClient(Endpoint, ServerPin, ClientCertificate, connections);
+
+        internal static HttpClient PinnedClient(Uri endpoint, string serverPin, X509Certificate2 client, int connections = 1) =>
+            new(new SocketsHttpHandler
+            {
+                UseProxy = false,
+                MaxConnectionsPerServer = connections,
+                EnableMultipleHttp2Connections = connections > 1,
+                SslOptions = new()
+                {
+                    ClientCertificates = [client],
+                    RemoteCertificateValidationCallback = (_, presented, _, _) => InspectionTransport.HasDigest(presented, serverPin)
+                }
+            })
+            {
+                BaseAddress = endpoint,
+                Timeout = TimeSpan.FromSeconds(60),
+                DefaultRequestVersion = HttpVersion.Version20,
+                DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+            };
+
+        public async ValueTask DisposeAsync()
+        {
+            await Server.StopAsync(CancellationToken.None);
+            await Server.DisposeAsync();
+            await inspection.DisposeAsync();
+            await preview.DisposeAsync();
+            ServerCertificate.Dispose();
+            ClientCertificate.Dispose();
+        }
+    }
+}

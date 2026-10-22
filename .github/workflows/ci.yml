@@ -51,6 +51,11 @@ jobs:
           weft_image_id="$(cat "$RUNNER_TEMP/weft-worker-image-id")"
           [[ "$weft_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
           printf 'WEFT_FERRULE_WORKER_IMAGE=%s\n' "$weft_image_id" >> "$GITHUB_ENV"
+          # The Ferrule service tests run this exact worker binary as their sandboxed child.
+          weft_native_container="$(docker create "$weft_image_id")"
+          docker cp "$weft_native_container:/ferrule-host" "$RUNNER_TEMP/ferrule-host"
+          docker rm "$weft_native_container"
+          printf 'WEFT_FERRULE_HOST_EXECUTABLE=%s\n' "$RUNNER_TEMP/ferrule-host" >> "$GITHUB_ENV"
       - name: Pull the pinned ownership database and blob emulator
         run: |
           docker pull "$WEFT_POSTGRES_IMAGE"

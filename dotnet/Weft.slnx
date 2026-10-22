@@ -2,6 +2,7 @@
   <Folder Name="/apps/">
     <Project Path="apps/Weft.BuildWorker/Weft.BuildWorker.csproj" />
     <Project Path="apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj" />
+    <Project Path="apps/Weft.FerruleService/Weft.FerruleService.csproj" />
     <Project Path="apps/Weft.Server/Weft.Server.csproj" />
     <Project Path="apps/Weft.Worker/Weft.Worker.csproj" />
   </Folder>
@@ -18,6 +19,7 @@
     <Project Path="src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
     <Project Path="src/Weft.Storage.Blob/Weft.Storage.Blob.csproj" />
     <Project Path="src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+    <Project Path="src/Weft.WorkerTransport/Weft.WorkerTransport.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Weft.Tests/Weft.Tests.csproj" />

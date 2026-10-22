@@ -440,7 +440,8 @@ public sealed class InspectionTransportTests
             using var key = RSA.Create(2048);
             var request = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             using var created = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(2));
-            return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pkcs12), null);
+            return X509CertificateLoader.LoadPkcs12(created.Export(X509ContentType.Pkcs12), null,
+                X509KeyStorageFlags.Exportable);
         }
 
         internal static string Pin(X509Certificate2 certificate) => Convert.ToHexStringLower(SHA256.HashData(certificate.RawData));
