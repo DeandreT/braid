@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
-using System.Text;
 using Weft.Deployment;
-using Weft.Domain;
 
 if (!OperatingSystem.IsLinux()) return 1;
 return await CompilerWorker.RunAsync();
@@ -10,8 +8,6 @@ return await CompilerWorker.RunAsync();
 [SupportedOSPlatform("linux")]
 internal static class CompilerWorker
 {
-    private const string GlobalUsings = "global using System;global using System.Collections.Generic;global using System.IO;global using System.Linq;global using System.Net.Http;global using System.Threading;global using System.Threading.Tasks;";
-
     internal static async Task<int> RunAsync()
     {
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(110));
@@ -26,37 +22,17 @@ internal static class CompilerWorker
             var reply = BuildWorkerProtocol.DecodeReply(generated, request);
             if (reply.Header.Status != "supported" || request.Operation == "inspect")
             {
-                await Console.OpenStandardOutput().WriteAsync(BuildWorkerProtocol.EncodeReply(reply.Header with { Files = [] }, []), stop.Token);
+                await Console.OpenStandardOutput().WriteAsync(BuildCompilation.Refusal(reply), stop.Token);
                 return 0;
             }
             root = Directory.CreateTempSubdirectory("weft-compile-").FullName;
             File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            var names = new HashSet<string>(StringComparer.Ordinal);
-            for (var i = 0; i < reply.Header.Files.Length; i++)
-            {
-                var name = reply.Header.Files[i].Path;
-                if (name == "Ferrule.Generated.csproj") continue;
-                if (name is not ("GeneratedMapping.cs" or "GeneratedTargetBuilder.cs") && !(name.StartsWith("Runtime/", StringComparison.Ordinal) && name.EndsWith(".cs", StringComparison.Ordinal))) throw new InvalidOperationException();
-                var path = Path.Combine(root, name); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await File.WriteAllBytesAsync(path, reply.Contents[i], stop.Token); names.Add(name);
-            }
-            if (!names.Contains("GeneratedMapping.cs") || !names.Contains("GeneratedTargetBuilder.cs") || names.Count < 3) throw new InvalidOperationException();
+            await BuildCompilation.PrepareAsync(root, BuildCompilation.DotnetRoot, reply, stop.Token);
             stage = "compilation";
-            await File.WriteAllTextAsync(Path.Combine(root, "GlobalUsings.cs"), GlobalUsings, stop.Token);
-            var output = Path.Combine(root, "Ferrule.Generated.dll");
-            var arguments = new List<string> { "-target:library", "-langversion:14", "-nullable:enable", "-warnaserror+", "-deterministic+", "-unsafe-", "-debug-", "-optimize+", "-nologo", "-nostdlib+", "-pathmap:" + root + "=/weft/build", "-out:" + output };
-            const string references = "/usr/share/dotnet/packs/Microsoft.NETCore.App.Ref/" + BuildWorkerProtocol.RuntimeVersion + "/ref/net10.0";
-            if (!Directory.Exists(references)) throw new InvalidOperationException();
-            arguments.AddRange(Directory.GetFiles(references, "*.dll").Order(StringComparer.Ordinal).Select(path => "-reference:" + path));
-            arguments.Add(Path.Combine(root, "GlobalUsings.cs"));
-            arguments.AddRange(names.Order(StringComparer.Ordinal).Select(name => Path.Combine(root, name)));
-            await File.WriteAllLinesAsync(Path.Combine(root, "compiler.rsp"), arguments.Select(argument => "\"" + argument + "\""), stop.Token);
-            await ProcessAsync("/usr/share/dotnet/dotnet", ["exec", "/usr/share/dotnet/sdk/" + BuildWorkerProtocol.SdkVersion + "/Roslyn/bincore/csc.dll", "-noconfig", "@" + Path.Combine(root, "compiler.rsp")], null, root, stop.Token);
+            await ProcessAsync(BuildCompilation.Host(BuildCompilation.DotnetRoot), [.. BuildCompilation.CompilerArguments(BuildCompilation.DotnetRoot, root)], null, root, stop.Token);
             stage = "artifact";
-            var dll = await File.ReadAllBytesAsync(output, stop.Token);
-            if (dll.Length is < 1 or > BuildWorkerProtocol.MaximumSourceBytes) throw new InvalidOperationException();
-            var header = reply.Header with { Files = [new("Ferrule.Generated.dll", dll.Length, Sha256Digest.FromBytes(dll).Value)] };
-            await Console.OpenStandardOutput().WriteAsync(BuildWorkerProtocol.EncodeReply(header, [dll]), stop.Token);
+            var dll = await File.ReadAllBytesAsync(Path.Combine(root, BuildCompilation.Output), stop.Token);
+            await Console.OpenStandardOutput().WriteAsync(BuildCompilation.Artifact(reply, dll), stop.Token);
             return 0;
         }
         catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)

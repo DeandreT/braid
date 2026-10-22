@@ -122,6 +122,78 @@ public sealed class FerruleServiceEndToEndTests
         }
     }
 
+    [ServiceCompileFact]
+    public async Task PackagedServiceCompilesThroughThePinnedRunnerWithTheDirectChildsBytes()
+    {
+        var root = TemporaryRoot();
+        using var serverCertificate = TransportCase.Certificate("CN=Ferrule service");
+        using var client = TransportCase.Certificate("CN=Ferrule service client");
+        try
+        {
+            await using var direct = new ProcessCompileRunner(CompileOptions(root));
+            var (directCompiler, intent, native) = FerruleServiceCompileTests.Compiler(direct, "valid-basic");
+            var expected = (await directCompiler.BuildAsync(intent, new(native, native.Length))).Copy();
+            await using var service = await PackagedFerruleService.StartAsync(PackagedFerruleService.Bundle(serverCertificate), [TransportCase.Pin(client)], root,
+                extra: PackagedFerruleService.Compilation);
+            var endpoint = new Uri("https://127.0.0.1:" + service.Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            await using var runner = new FerruleServiceRunner(new(new PinnedServiceConnector(new(endpoint, TransportCase.Pin(serverCertificate), client)),
+                FerruleServiceProtocol.CompileProfile, direct.BuildIdentity, direct.ToolchainIdentity));
+            var (compiler, remoteIntent, _) = FerruleServiceCompileTests.Compiler(runner, "valid-basic");
+            Assert.Equal(intent.Backend, remoteIntent.Backend);
+            Assert.Equal(expected, (await compiler.BuildAsync(remoteIntent, new(native, native.Length))).Copy());
+            await runner.StopAsync();
+            using (var http = ServiceHost.PinnedClient(endpoint, TransportCase.Pin(serverCertificate), client))
+            using (var capabilities = await http.GetAsync(FerruleServiceProtocol.CapabilitiesPath))
+            using (var document = JsonDocument.Parse(await capabilities.Content.ReadAsByteArrayAsync()))
+            {
+                var compile = document.RootElement.GetProperty("profiles").EnumerateArray().Single(profile => profile.GetProperty("name").GetString() == "compile");
+                Assert.Equal(direct.ToolchainIdentity, compile.GetProperty("toolchain").GetProperty("identity").GetString());
+                Assert.Empty(document.RootElement.GetProperty("reserved").EnumerateArray());
+            }
+
+            Assert.Equal(0, await service.StopAsync());
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PackagedServiceRefusesToStartWhenTheCompileSandboxIsNotProved()
+    {
+        if (!OperatingSystem.IsLinux() || !File.Exists(PackagedFerruleService.Path)) return;
+        var root = TemporaryRoot();
+        using var installation = new FerruleServiceCompileTests.FakeInstallation();
+        using var serverCertificate = TransportCase.Certificate("CN=Ferrule service");
+        try
+        {
+            // A launcher that announces itself without any control can never be admitted.
+            var launcher = installation.Script("launcher", "#!/bin/sh\nprintf WFC1\ncat >/dev/null\n");
+            using var process = PackagedFerruleService.Launch(new Dictionary<string, string>
+            {
+                ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "127.0.0.1:" + PackagedFerruleService.FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256"] = new string('a', 64),
+                ["WEFT_FERRULE_SERVICE_PEM"] = PackagedFerruleService.Bundle(serverCertificate),
+                ["WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE"] = launcher,
+                ["WEFT_FERRULE_SERVICE_TEMPORARY_ROOT"] = root,
+                ["WEFT_FERRULE_SERVICE_COMPILE_ENABLED"] = "true",
+                ["WEFT_FERRULE_SERVICE_COMPILE_LAUNCHER"] = launcher,
+                ["WEFT_FERRULE_SERVICE_COMPILE_TOOLCHAIN"] = installation.Toolchain
+            });
+            var error = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(60));
+            Assert.Equal(1, process.ExitCode);
+            Assert.Equal("WeftFerruleServiceConfigurationFailed", (await error).Trim());
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task PackagedServiceHostRefusesIncompleteConfigurationWithoutEchoingIt()
     {

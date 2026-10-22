@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
@@ -45,8 +44,7 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
         Directory.CreateDirectory(probe, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         Directory.Delete(probe);
         // Each child inherits the service's own filters and must add exactly its three.
-        inheritedFilters = SeccompFilters(File.ReadAllLines("/proc/self/status")) ??
-            throw new PlatformNotSupportedException("The kernel does not report seccomp filters.");
+        inheritedFilters = ChildSandboxVerification.InheritedFilters();
     }
 
     public string BuildIdentity { get; }
@@ -227,59 +225,19 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
     }
 
     /// <summary>Confirms in procfs that the running child applied every control before it reads input.</summary>
-    private bool Verified(int processId)
-    {
-        try
-        {
-            var status = File.ReadAllLines($"/proc/{processId}/status");
-            if (!status.Contains("NoNewPrivs:\t1", StringComparer.Ordinal) || !status.Contains("Seccomp:\t2", StringComparer.Ordinal) ||
-                SeccompFilters(status) != inheritedFilters + 3)
-                return false;
-            var limits = File.ReadAllLines($"/proc/{processId}/limits");
-            string Text(long value) => value.ToString(CultureInfo.InvariantCulture);
-            foreach (var (name, value) in new[]
-            {
-                ("Max cpu time", Text(options.Profile.CpuSeconds)),
-                ("Max file size", "0"),
-                ("Max core file size", "0"),
-                ("Max processes", "1"),
-                ("Max open files", Text(options.Profile.FileLimit)),
-                ("Max address space", Text(options.Profile.MemoryBytes)),
-                ("Max locked memory", "0"),
-                ("Max file locks", "0"),
-                ("Max msgqueue size", "0"),
-                ("Max realtime priority", "0")
-            })
-            {
-                var line = limits.SingleOrDefault(candidate => candidate.StartsWith(name + "  ", StringComparison.Ordinal));
-                var fields = line?[name.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (fields is not { Length: >= 2 } || fields[0] != value || fields[1] != value) return false;
-            }
-
-            // A non-dumpable process hides its environment even from its own user.
-            try
-            {
-                _ = File.ReadAllBytes($"/proc/{processId}/environ");
-                return false;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return true;
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            return false;
-        }
-    }
-
-    private static int? SeccompFilters(IEnumerable<string> status)
-    {
-        const string prefix = "Seccomp_filters:\t";
-        var line = status.FirstOrDefault(candidate => candidate.StartsWith(prefix, StringComparison.Ordinal));
-        return line is not null && int.TryParse(line.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var count)
-            ? count : null;
-    }
+    private bool Verified(int processId) => ChildSandboxVerification.Verified(processId, inheritedFilters + 3,
+    [
+        ("Max cpu time", options.Profile.CpuSeconds),
+        ("Max file size", 0),
+        ("Max core file size", 0),
+        ("Max processes", 1),
+        ("Max open files", options.Profile.FileLimit),
+        ("Max address space", options.Profile.MemoryBytes),
+        ("Max locked memory", 0),
+        ("Max file locks", 0),
+        ("Max msgqueue size", 0),
+        ("Max realtime priority", 0)
+    ]);
 
     /// <summary>Kills a child that is still running and waits, within a bound, until it is reaped.</summary>
     private static async Task<bool> SettleAsync(Process process)

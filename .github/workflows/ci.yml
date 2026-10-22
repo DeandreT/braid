@@ -45,6 +45,15 @@ jobs:
           cargo +nightly-2026-07-21 fmt --manifest-path engines/ferrule-host/Cargo.toml --check
           cargo +nightly-2026-07-21 clippy --manifest-path engines/ferrule-host/Cargo.toml --all-targets --locked -- -D warnings
           cargo +nightly-2026-07-21 test --manifest-path engines/ferrule-host/Cargo.toml --locked
+      - name: Verify the compile sandbox launcher
+        env:
+          CARGO_TARGET_DIR: target/compile-sandbox
+        run: |
+          cargo +nightly-2026-07-21 fmt --manifest-path engines/compile-sandbox/Cargo.toml --check
+          cargo +nightly-2026-07-21 clippy --manifest-path engines/compile-sandbox/Cargo.toml --all-targets --locked -- -D warnings
+          cargo +nightly-2026-07-21 test --manifest-path engines/compile-sandbox/Cargo.toml --release --locked
+          # The Ferrule service compile tests run this exact launcher around the pinned SDK's compiler.
+          printf 'WEFT_COMPILE_SANDBOX_EXECUTABLE=%s\n' "$PWD/target/compile-sandbox/release/weft-compile-sandbox" >> "$GITHUB_ENV"
       - name: Build the restricted worker image
         run: |
           docker build --build-arg "WEFT_REVISION=$GITHUB_SHA" --iidfile "$RUNNER_TEMP/weft-worker-image-id" engines/ferrule-host

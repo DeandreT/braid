@@ -1,16 +1,17 @@
 # Ferrule service
 
 The Ferrule service answers questions about mapping revisions for hosted Weft:
-inspection, validation, projection and JSON sample preview. Compilation of
-deployable mapping libraries is reserved in the same API. Weft users never see it;
+inspection, validation, projection and JSON sample preview. When compilation is
+enabled it also compiles deployable mapping libraries. Weft users never see it;
 Weft hosts call it on their behalf. It is one stateless, long-running HTTP service
 image that any container platform can run and scale by adding replicas. The
-per-operation Docker runner remains the local development and test runner.
+per-operation Docker runners remain the local development and test runners.
 
-The service keeps the restricted worker's semantics: the same `ferrule-host`
+The service keeps the restricted workers' semantics: the same `ferrule-host`
 binary, the same framed protocols (`weft.ferrule-host.v1`,
-`weft.ferrule-preview.v1`) and the same fixed limits. Its answers are byte for
-byte what the Docker runner returns for the same frame.
+`weft.ferrule-preview.v1`, `weft.ferrule-build.v1`) and the same fixed limits. Its
+answers are byte for byte what the Docker runner, or for compilation the Docker
+compiler worker, returns for the same frame.
 
 ## Image
 
@@ -18,9 +19,13 @@ byte what the Docker runner returns for the same frame.
 native worker image built from `engines/ferrule-host`. It verifies the native
 binary against `WEFT_NATIVE_BINARY_SHA256` and assembles a shell-less image with
 the service (`/app/weft-ferrule-service`), the verified worker (`/ferrule-host`),
-the .NET and ASP.NET Core shared frameworks and their libraries. It runs as UID/GID
-65532 with a read-only root, needs a writable volume at `/tmp`, and needs no
-outbound network.
+the .NET and ASP.NET Core shared frameworks and their libraries. For compilation it
+also holds the compile launcher (`/weft-compile-sandbox`, built from
+`engines/compile-sandbox` with the worker's pinned Rust toolchain) and, of the pinned
+SDK archive the Docker compiler uses, only the Roslyn compiler and the reference
+assemblies (about 85 MB). It runs as UID/GID 65532 with a read-only root, needs a
+writable volume at `/tmp`, and needs no outbound network. The build requires
+BuildKit.
 
 The service host is .NET so that it shares one implementation of the worker
 transport server with `Weft.Worker`; Ferrule types and native decoding stay inside
@@ -38,17 +43,30 @@ the Ferrule operation within it.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /v1/ready` | `204` with `Weft-Worker-Image` (build identity) and `Weft-Service-Protocol`. Over pinned TLS, the answer proves that the service admitted the client certificate. |
-| `GET /v1/capabilities` | JSON: protocol, build identity, engine revision, per-replica concurrency, capacity and admission wait, the served profiles with their limits, and reserved profiles. |
-| `POST /v1/operations/{profile}/{operation}` | One exact frame (`application/octet-stream`, known length, `Weft-Worker-Image` equal to the build identity) under a fresh 128-bit operation identity (32 lowercase hexadecimal characters). |
+| `GET /v1/ready` | `204` with `Weft-Worker-Image` (native identity) and `Weft-Service-Protocol`; a compiling service also returns `Weft-Compile-Toolchain`. Over pinned TLS, the answer proves that the service admitted the client certificate. |
+| `GET /v1/capabilities` | JSON: protocol, build identity, engine revision, per-replica concurrency, capacity and admission wait, the served profiles with their limits (the compile profile also with its toolchain), and reserved profiles. |
+| `POST /v1/operations/{profile}/{operation}` | One exact frame (`application/octet-stream`, known length, `Weft-Worker-Image` equal to the native identity) under a fresh 128-bit operation identity (32 lowercase hexadecimal characters). Compile calls also require the exact `Weft-Compile-Toolchain` pin. |
 | `POST /v1/operations/{profile}/{operation}/cancel` | Cancels that operation, or refuses it when it arrives later. |
 | `GET /v1/health/live`, `GET /v1/health/ready` | Platform probes; readiness fails while stopping or after an unconfirmed cleanup. |
 
-Profiles are `inspection` (inspect, validate and project frames) and `preview`.
-`compile` is reserved: the service answers `501` until it implements it. The
-inspection transport's own routes (`/v1/inspection/...`) are also served, so an
-existing pinned inspection client works against a single service instance
-unchanged.
+Profiles are `inspection` (inspect, validate and project frames), `preview` and
+`compile` (`weft.ferrule-build.v1` capability inspection and compilation). A service
+serves `compile` only when compilation is enabled; otherwise the profile is reserved
+and answers `501`. With it, the capability route reports the compile toolchain: the
+build protocol and profile, the SDK and runtime versions, and the **toolchain
+identity**, `sha256:` over the compiler, reference assemblies, .NET host/runtime,
+launcher and the assemblies implementing compilation and its runner (each file's
+label, length and SHA-256 in ordinal order). The client checks the configured pin
+before sending bytes, the service checks it before admission, and the client
+checks it again on the response. An unknown or changed toolchain is not adopted.
+
+Compilation provenance uses `weft.compiler-identity.v1`, a digest binding the native
+and toolchain identities. Build-related inspection and preview clients use the
+same pin so their report and regression evidence has that same combined identity.
+Clients without a toolchain pin retain their existing native identity and behavior.
+The inspection transport's own routes
+(`/v1/inspection/...`) are also served, so an existing pinned inspection client works
+against a single service instance unchanged.
 
 An operation is admitted once. The service reads the complete frame before
 admission, so an incomplete frame never runs. An admitted operation answers `200`
@@ -61,7 +79,7 @@ status means nothing ran:
 | --- | --- |
 | `400` | Malformed route, identity, media type, encoding or length. |
 | `404` / `501` | Unknown profile / reserved profile. |
-| `409` | Other build identity, or a repeated operation identity. |
+| `409` | Other native/toolchain identity, or a repeated operation identity. |
 | `503` with `Retry-After` | The replica is full or stopping. A fresh operation may be sent to any replica. |
 
 Every request of one operation, including its cancellation, must reach the same
@@ -103,10 +121,55 @@ shutdown faults.
 | --- | --- | --- | --- | --- |
 | `inspection` | 10 s | 256 MiB | 64 | 8 MiB + 4 bytes / 8 MiB + 4 bytes |
 | `preview` | 30 s | 512 MiB | 64 | the preview policy's request and response bounds |
+| `compile` | 120 s per child; one 120 s wall deadline for the operation | 2 GiB (generation); 6 GiB with a 2 GiB managed heap (compiler) | 256 | 4 MiB + 16388 bytes / the build protocol's reply bound |
+
+### Compile operations
+
+A compile operation runs the Docker compiler worker's steps, from the same shared
+implementation, in two fresh children:
+
+1. **Generation.** The worker runs in the self-hardening child above with the build
+   profile's limits and returns the generated sources for the exact frame. An
+   inadmissible request or a failed generation is a failed operation
+   (`workerFailed`), as in the Docker compiler; a refused mapping or a capability
+   inspection answers at once without compiling.
+2. **Compilation.** The service writes only the known generated mapping,
+   target-builder and Runtime C# files, the fixed global usings, the compiler
+   response file and an empty output assembly into a fresh private directory under
+   `/tmp`, then starts `/weft-compile-sandbox` there. Before the compiler runs, the
+   launcher refuses any inherited descriptor beyond its standard streams, applies
+   fixed hard limits (CPU, address space, open files, a 64 MiB file size, no core
+   dumps, locked memory, message queues or realtime priority), becomes non-dumpable,
+   sets no-new-privileges, confines the filesystem with Landlock (ABI 3 or later:
+   read-only access to the toolchain, the system libraries, `/dev/urandom`, its own
+   procfs entry and the private directory; write access only to the pre-created
+   output assembly; execute access only to the .NET host and its ELF interpreter;
+   no TCP), confirms that the private directory's parent is unreadable, and installs
+   seccomp filters that deny sockets, new processes (threads only), tracing,
+   cross-process memory access, signals, limits or CPU affinity of other processes,
+   System V IPC and message queues, namespace, mount and module operations, BPF,
+   io_uring, keyrings, and changes to ownership, mode or extended attributes of
+   paths. It writes a four-byte ready marker and waits; the service verifies
+   no-new-privileges, the filter mode and count, every limit and non-dumpability in
+   procfs and only then sends the byte that starts the pinned compiler with an
+   empty environment except its fixed settings (a 2 GiB managed heap, no diagnostics
+   channel). The compiler cannot create any file, so the operation's disk use is
+   bounded by its inputs and the output limit.
+
+The reply carries the compiled assembly and its exact provenance, the Docker
+compiler's bytes for the same frame. At the wall deadline, on cancellation or when
+the compiler's diagnostics exceed 1 MiB, the service kills the running child and
+waits until it is reaped; unconfirmed cleanup closes the replica as for every
+profile. With compilation enabled the service starts only after one launcher proved
+these controls in procfs on the platform, so a kernel without Landlock ABI 3
+(Linux 6.2) or a runtime that refuses its system calls stops the service with
+`WeftFerruleServiceConfigurationFailed`. The launcher keeps no state between
+operations and can confine any program it is given, not only the compiler.
 
 Concurrent children of one replica share its kernel and user ID. The controls
-above confine each child, but tenant-grade isolation between concurrent
-operations comes from a platform sandbox around the service (see
+above confine each child (a compiler cannot open another child's directory or
+process entries), but tenant-grade isolation between concurrent operations comes
+from a platform sandbox around the service (see
 [isolation adapters](#isolation-adapters)), or from running each replica with a
 concurrency of one inside a sandboxed runtime.
 
@@ -123,8 +186,10 @@ within `WEFT_FERRULE_SERVICE_ADMISSION_WAIT_SECONDS` is refused unexecuted, and 
 operation beyond capacity is refused at once with `503` and `Retry-After: 1`.
 Nothing ran, so a client may retry with a fresh operation, and new replicas absorb
 load as a platform autoscaler adds them. Budget for concurrency times 512 MiB (the
-preview address-space limit), capacity times the largest admitted request frame,
-and the service's own memory; give each concurrent child an allotted CPU. The queue
+preview address-space limit), or 2.5 GiB (the compiler's heap and runtime) where
+compilation is enabled, capacity times the largest admitted request frame, and the
+service's own memory; give each concurrent child an allotted CPU. Under memory
+pressure the kernel kills a compiler before the service. The queue
 limit is therefore a memory budget as well as a waiting-time policy. A replica holds no state
 between operations, so platforms may add or remove replicas at any time; a
 stopping replica refuses new operations and answers admitted ones after their
@@ -293,10 +358,13 @@ shape.
 | `WEFT_FERRULE_SERVICE_QUEUE` | Queued operations per replica (default: the concurrency). |
 | `WEFT_FERRULE_SERVICE_ADMISSION_WAIT_SECONDS` | 0–20 (default 5). |
 | `WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE` / `WEFT_FERRULE_SERVICE_TEMPORARY_ROOT` | `/ferrule-host` and `/tmp` in the image. |
+| `WEFT_FERRULE_SERVICE_COMPILE_ENABLED` | `true` serves the `compile` profile; `false` (default) keeps it reserved. |
+| `WEFT_FERRULE_SERVICE_COMPILE_LAUNCHER` / `WEFT_FERRULE_SERVICE_COMPILE_TOOLCHAIN` | `/weft-compile-sandbox` and `/usr/share/dotnet` in the image; refused unless compilation is enabled. |
 
 Invalid or incomplete settings stop the service with
 `WeftFerruleServiceConfigurationFailed` and no echoed values; so do an unreadable
-worker or an unwritable temporary root. Certificates rotate by restart: deliver
+worker, an unwritable temporary root, and with compilation enabled a missing
+toolchain or a compile sandbox the platform does not enforce. Certificates rotate by restart: deliver
 the new certificate and its pin to the clients together.
 
 `platformSandbox` serves the service routes over plain HTTP on the listen address
@@ -317,10 +385,31 @@ container mode for every fixture and operation, refusal of an inherited
 descriptor, the network, process, thread, file and signal denials, the
 address-space limit, and termination at the CPU limit.
 
+```sh
+CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/compile-sandbox \
+  cargo +nightly-2026-07-21 test --manifest-path engines/compile-sandbox/Cargo.toml --release --locked
+```
+
+The compile launcher's `sandbox_qualification` launches a fresh copy of the test
+program through the real launcher, so every control is observed after `execve`: the
+argument shape, the procfs-visible controls before the program starts, that nothing
+but the start byte runs it, refusal of an inherited descriptor or a missing grant,
+socket, process, exec, signal, limit, mode and System V IPC denials, threads, reads
+of the grants and the private directory, writes to the output only (none without an
+output grant), no other process's procfs entries, the address-space limit, and
+termination at the CPU and file-size limits.
+
 Set `WEFT_FERRULE_HOST_EXECUTABLE` to a worker built from this source to run the
 live .NET service tests. With `WEFT_FERRULE_WORKER_IMAGE` naming an image that
 contains the same binary, the equivalence test also compares every child answer
-with the Docker runner byte for byte. Without these settings the live tests are
+with the Docker runner byte for byte. With `WEFT_COMPILE_SANDBOX_EXECUTABLE` naming a
+launcher built from this source and `DOTNET_ROOT` holding the pinned SDK, the compile
+tests run real compilations, deadline, cancellation and stop through the service's
+children, the packaged host and the sessions stub; with `WEFT_BUILD_WORKER_IMAGE`
+naming the Docker compiler built from the same worker, every compile and inspection
+reply for every fixture must equal the Docker compiler's byte for byte. With
+`WEFT_FERRULE_SERVICE_IMAGE` as well, the same comparison runs against the service
+image itself under the container runtime. Without these settings the live tests are
 explicitly skipped. The dynamic-sessions adapter is qualified against a local stub
 of the pool management API (token checks, per-identifier sessions, forwarding,
 stop, pool refusal and gateway failure); provisioning a real pool is a deployment

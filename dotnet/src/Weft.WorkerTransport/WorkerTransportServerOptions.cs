@@ -75,6 +75,9 @@ public sealed class WorkerTransportServerOptions
     /// <summary>Reported by the capability route.</summary>
     public string? EngineRevision { get; init; }
 
+    /// <summary>The compile toolchain identity, reported with a served compile profile.</summary>
+    public string? CompileToolchain { get; init; }
+
     /// <summary>Readiness also requires this host-supplied check, for example that no cleanup is unconfirmed.</summary>
     public Func<bool>? Healthy { get; init; }
 

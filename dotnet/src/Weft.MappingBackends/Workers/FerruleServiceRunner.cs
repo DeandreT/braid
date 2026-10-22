@@ -7,14 +7,22 @@ namespace Weft.MappingBackends.Workers;
 /// <summary>Trusted host configuration for one profile of a Ferrule service, never supplied by a mapping or browser.</summary>
 public sealed class FerruleServiceRunnerOptions
 {
-    public FerruleServiceRunnerOptions(IFerruleServiceConnector connector, string profile, string buildIdentity)
+    public FerruleServiceRunnerOptions(IFerruleServiceConnector connector, string profile, string buildIdentity, string? compileToolchainIdentity = null)
     {
         ArgumentNullException.ThrowIfNull(connector);
         Profile = FerruleServiceProtocol.Profile(profile) ??
-            throw new ArgumentException("The Ferrule service profile must be inspection or preview.", nameof(profile));
+            throw new ArgumentException("The Ferrule service profile must be inspection, preview or compile.", nameof(profile));
         Connector = connector;
         ProfileName = profile;
         BuildIdentity = InspectionTransport.RequireImage(buildIdentity);
+        if (compileToolchainIdentity is not null)
+        {
+            CompileToolchainIdentity = InspectionTransport.RequireImage(compileToolchainIdentity);
+            if (profile == FerruleServiceProtocol.CompileProfile)
+                CompilationBuildIdentity = CompileWorkerIdentity.Combine(BuildIdentity, CompileToolchainIdentity);
+        }
+        else if (profile == FerruleServiceProtocol.CompileProfile)
+            throw new ArgumentException("Compilation requires an explicitly pinned toolchain identity.", nameof(compileToolchainIdentity));
         ResponseBound = MaximumServiceAdmissionWait + Profile.MaximumWallTimeout * 2 + ProcessWorkerOptions.KillTimeout + TimeSpan.FromSeconds(5);
         SettlementBound = Profile.MaximumWallTimeout + ProcessWorkerOptions.KillTimeout + TimeSpan.FromSeconds(3);
     }
@@ -27,6 +35,8 @@ public sealed class FerruleServiceRunnerOptions
     public DockerWorkerProfile Profile { get; }
     /// <summary>The exact worker build every answering instance must report.</summary>
     public string BuildIdentity { get; }
+    public string? CompileToolchainIdentity { get; }
+    public string? CompilationBuildIdentity { get; }
 
     /// <summary>Bounded body transfer, service admission, execution, child reaping, and transport margin.</summary>
     internal TimeSpan ResponseBound { get; init; }
@@ -49,7 +59,7 @@ public sealed class FerruleServiceRunnerOptions
 /// waits for the settled answer. An answer that cannot be confirmed after frame bytes may have been delivered is a
 /// cleanup failure and closes further admission.
 /// </summary>
-public sealed class FerruleServiceRunner : IInspectionWorkerRunner, IAsyncDisposable
+public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilationIdentitySource, IAsyncDisposable
 {
     private readonly FerruleServiceRunnerOptions options;
     private readonly object lifetimeGate = new();
@@ -67,7 +77,12 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, IAsyncDispos
         this.options = options;
     }
 
-    public string BuildIdentity => options.BuildIdentity;
+    public string BuildIdentity => options.CompileToolchainIdentity is { } toolchain
+        ? CompileWorkerIdentity.Combine(options.BuildIdentity, toolchain) : options.BuildIdentity;
+    public string? CompilationBuildIdentity => options.CompilationBuildIdentity;
+
+    /// <summary>The service profile every operation of this runner is sent to.</summary>
+    public string ProfileName => options.ProfileName;
 
     public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
     {
@@ -201,12 +216,17 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, IAsyncDispos
             if (admitted.StatusCode != HttpStatusCode.NoContent || !Single(admitted.Headers, InspectionTransport.ImageHeader, out var identity) ||
                 !string.Equals(identity, options.BuildIdentity, StringComparison.Ordinal) || !FromService(admitted.Headers))
                 return (Failed(WorkerProcessFailure.SandboxUnavailable), false);
+            if (options.CompileToolchainIdentity is { } expected &&
+                (!Single(admitted.Headers, FerruleServiceProtocol.CompileToolchainHeader, out var toolchain) || toolchain != expected))
+                return (Failed(WorkerProcessFailure.SandboxUnavailable), false);
         }
 
         // The frame travels on the same channel, which reaches the instance that just answered.
         var path = new Uri(FerruleServiceProtocol.OperationPath(options.ProfileName, operation), UriKind.Relative);
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = content };
         request.Headers.TryAddWithoutValidation(InspectionTransport.ImageHeader, options.BuildIdentity);
+        if (options.CompileToolchainIdentity is { } pinnedToolchain)
+            request.Headers.TryAddWithoutValidation(FerruleServiceProtocol.CompileToolchainHeader, pinnedToolchain);
         content.Headers.ContentType = new MediaTypeHeaderValue(InspectionTransport.MediaType);
         using var response = await channel.SendAsync(request, abort).ConfigureAwait(false);
         if (response.StatusCode != HttpStatusCode.OK)
@@ -225,6 +245,8 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, IAsyncDispos
             !InspectionTransport.TryDecode(code, out var failure) ||
             !Single(response.Headers, InspectionTransport.ImageHeader, out var image) ||
             !string.Equals(image, options.BuildIdentity, StringComparison.Ordinal) ||
+            options.CompileToolchainIdentity is { } expectedToolchain &&
+                (!Single(response.Headers, FerruleServiceProtocol.CompileToolchainHeader, out var responseToolchain) || responseToolchain != expectedToolchain) ||
             response.Content.Headers.ContentEncoding.Count != 0 ||
             response.Content.Headers.ContentType?.MediaType != InspectionTransport.MediaType ||
             response.Content.Headers.ContentType.Parameters.Count != 0 ||

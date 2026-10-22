@@ -33,11 +33,13 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
         ArgumentNullException.ThrowIfNull(runner); ArgumentNullException.ThrowIfNull(sources);
         if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Build)
             throw new ArgumentException("Build requires the fixed compiler worker profile.", nameof(runner));
-        if (runner.BuildIdentity.Length != 71 || !runner.BuildIdentity.StartsWith("sha256:", StringComparison.Ordinal) ||
-            runner.BuildIdentity[7..].Any(c => c is not (>= 'a' and <= 'f') and not (>= '0' and <= '9'))) throw new ArgumentException("An immutable build image is required.");
         this.runner = runner; this.sources = sources;
+        _ = InspectionTransport.RequireImage(CompilationIdentity);
     }
-    public BuildBackendIdentity Backend => new("ferrule", BuildWorkerProtocol.Engine, runner.BuildIdentity, Adapter);
+    private string CompilationIdentity => runner is ICompilationIdentitySource source
+        ? source.CompilationBuildIdentity ?? throw new ArgumentException("The selected runner does not serve compilation.")
+        : runner.BuildIdentity;
+    public BuildBackendIdentity Backend => new("ferrule", BuildWorkerProtocol.Engine, CompilationIdentity, Adapter);
 
     public async Task<BuildCapabilitySnapshot> InspectAsync(BuildIntent intent, CancellationToken token = default)
     {

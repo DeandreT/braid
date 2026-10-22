@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using Weft.Deployment;
 using Weft.MappingBackends.Workers;
 using Weft.Storage.FileSystem;
 using Weft.WorkerTransport;
@@ -25,6 +26,9 @@ internal sealed class FerruleServiceSettings
     internal const string AdmissionWait = "WEFT_FERRULE_SERVICE_ADMISSION_WAIT_SECONDS";
     internal const string WorkerExecutableSetting = "WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE";
     internal const string TemporaryRootSetting = "WEFT_FERRULE_SERVICE_TEMPORARY_ROOT";
+    internal const string CompileEnabled = "WEFT_FERRULE_SERVICE_COMPILE_ENABLED";
+    internal const string CompileLauncherSetting = "WEFT_FERRULE_SERVICE_COMPILE_LAUNCHER";
+    internal const string CompileToolchainSetting = "WEFT_FERRULE_SERVICE_COMPILE_TOOLCHAIN";
 
     private readonly IPEndPoint listen;
     private readonly X509Certificate2? certificate;
@@ -32,7 +36,7 @@ internal sealed class FerruleServiceSettings
     private readonly IPEndPoint? health;
 
     private FerruleServiceSettings(IPEndPoint listen, X509Certificate2? certificate, string[] pins, IPEndPoint? health,
-        int concurrency, int queue, TimeSpan admissionWait, string workerExecutable, string temporaryRoot)
+        int concurrency, int queue, TimeSpan admissionWait, string workerExecutable, string temporaryRoot, CompileSettings? compile)
     {
         this.listen = listen;
         this.certificate = certificate;
@@ -43,6 +47,7 @@ internal sealed class FerruleServiceSettings
         Wait = admissionWait;
         WorkerExecutable = workerExecutable;
         TemporaryRoot = temporaryRoot;
+        Compile = compile;
     }
 
     internal bool PlatformSandbox => certificate is null;
@@ -51,6 +56,8 @@ internal sealed class FerruleServiceSettings
     internal TimeSpan Wait { get; }
     internal string WorkerExecutable { get; }
     internal string TemporaryRoot { get; }
+    /// <summary>The compile profile's installation, or null while compilation stays reserved.</summary>
+    internal CompileSettings? Compile { get; }
 
     internal static FerruleServiceSettings Read(Func<string, string?> environment)
     {
@@ -72,6 +79,14 @@ internal sealed class FerruleServiceSettings
         var wait = TimeSpan.FromSeconds(Number(Optional(AdmissionWait), 0, (int)WorkerTransportServerOptions.MaximumAdmissionWait.TotalSeconds) ?? 5);
         var executable = Optional(WorkerExecutableSetting) ?? "/ferrule-host";
         var temporary = Optional(TemporaryRootSetting) ?? "/tmp";
+        // Compilation is opt-in; its installation paths beside a disabled profile are ambiguous.
+        var compile = Optional(CompileEnabled) switch
+        {
+            null or "false" => Optional(CompileLauncherSetting) is null && Optional(CompileToolchainSetting) is null ? null : throw Failure(),
+            "true" => new CompileSettings(Optional(CompileLauncherSetting) ?? "/weft-compile-sandbox",
+                Optional(CompileToolchainSetting) ?? BuildCompilation.DotnetRoot),
+            _ => throw Failure()
+        };
 
         if (platform)
         {
@@ -79,7 +94,7 @@ internal sealed class FerruleServiceSettings
             if (Optional(ClientPins) is not null || Optional(Pem) is not null || Optional(CertificateFile) is not null ||
                 Optional(PrivateKeyFile) is not null || Optional(HealthListen) is not null)
                 throw Failure();
-            return new(listen, null, [], null, concurrency, queue, wait, executable, temporary);
+            return new(listen, null, [], null, concurrency, queue, wait, executable, temporary, compile);
         }
 
         var pins = Required(ClientPins).Split(',');
@@ -102,11 +117,11 @@ internal sealed class FerruleServiceSettings
                 ProtectedHostFiles.ReadText(Required(PrivateKeyFile), 65_536));
         }
 
-        return new(listen, admitted, pins, health, concurrency, queue, wait, executable, temporary);
+        return new(listen, admitted, pins, health, concurrency, queue, wait, executable, temporary, compile);
     }
 
     /// <summary>The listener options; the certificate stays owned by these settings for the process lifetime.</summary>
-    internal WorkerTransportServerOptions Transport(Func<bool> healthy, string engineRevision)
+    internal WorkerTransportServerOptions Transport(Func<bool> healthy, string engineRevision, string? compileToolchain = null)
     {
         if (certificate is null)
         {
@@ -116,7 +131,8 @@ internal sealed class FerruleServiceSettings
                 Capacity = ConcurrencyLimit + QueueLimit,
                 AdmissionWait = Wait,
                 Healthy = healthy,
-                EngineRevision = engineRevision
+                EngineRevision = engineRevision,
+                CompileToolchain = compileToolchain
             };
         }
 
@@ -128,9 +144,13 @@ internal sealed class FerruleServiceSettings
             Capacity = ConcurrencyLimit + QueueLimit,
             AdmissionWait = Wait,
             Healthy = healthy,
-            EngineRevision = engineRevision
+            EngineRevision = engineRevision,
+            CompileToolchain = compileToolchain
         };
     }
+
+    /// <summary>The compile launcher and the installed .NET toolchain: <c>/weft-compile-sandbox</c> and <c>/usr/share/dotnet</c> in the image.</summary>
+    internal sealed record CompileSettings(string Launcher, string Toolchain);
 
     private static IPEndPoint Endpoint(string value) =>
         IPEndPoint.TryParse(value, out var endpoint) && endpoint.Port != 0 && value == endpoint.ToString() ? endpoint : throw Failure();

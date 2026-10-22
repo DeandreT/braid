@@ -84,6 +84,63 @@ public sealed class FerruleServiceTransportTests
     }
 
     [Fact]
+    public async Task EnabledCompilationIsServedWithItsToolchainAndTheBuildProfilesBounds()
+    {
+        await using var test = await ServiceCase.StartAsync(compile: true);
+        using var http = test.Client();
+        test.Compile.Behavior = (frame, _) => Task.FromResult(new WorkerProcessResult([.. frame.ToArray(), 3], WorkerProcessFailure.None));
+        using (var compiled = await http.SendAsync(Operation(FerruleServiceProtocol.CompileProfile, [4])))
+        {
+            Assert.Equal("none", Assert.Single(compiled.Headers.GetValues(InspectionTransport.ResultHeader)));
+            Assert.Equal(new byte[] { 4, 3 }, await compiled.Content.ReadAsByteArrayAsync());
+        }
+        var largest = new byte[DockerWorkerProfile.Build.MaximumRequestBytes];
+        using (var admitted = await http.SendAsync(Operation(FerruleServiceProtocol.CompileProfile, largest)))
+            Assert.Equal(HttpStatusCode.OK, admitted.StatusCode);
+        using (var refused = await http.SendAsync(Operation(FerruleServiceProtocol.CompileProfile, new byte[largest.Length + 1])))
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(2, test.Compile.Frames.Count);
+        Assert.Empty(test.Inspection.Frames);
+
+        using var response = await http.GetAsync(FerruleServiceProtocol.CapabilitiesPath);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync());
+        var root = document.RootElement;
+        var profiles = root.GetProperty("profiles").EnumerateArray().ToArray();
+        Assert.Equal(["compile", "inspection", "preview"], profiles.Select(profile => profile.GetProperty("name").GetString()));
+        Assert.Equal(120, profiles[0].GetProperty("wallSeconds").GetInt32());
+        Assert.Equal(120, profiles[0].GetProperty("cpuSeconds").GetInt32());
+        Assert.Equal(2_147_483_648, profiles[0].GetProperty("memoryBytes").GetInt64());
+        var toolchain = profiles[0].GetProperty("toolchain");
+        Assert.Equal("weft.ferrule-build.v1", toolchain.GetProperty("protocol").GetString());
+        Assert.Equal("weft.ferrule-csharp-json.v1", toolchain.GetProperty("profile").GetString());
+        Assert.Equal("10.0.112", toolchain.GetProperty("sdkVersion").GetString());
+        Assert.Equal("10.0.12", toolchain.GetProperty("runtimeVersion").GetString());
+        Assert.Equal(ServiceCase.Toolchain, toolchain.GetProperty("identity").GetString());
+        Assert.Equal(CompileWorkerIdentity.Combine(Identity, ServiceCase.Toolchain), toolchain.GetProperty("buildIdentity").GetString());
+        Assert.False(profiles[1].TryGetProperty("toolchain", out _));
+        Assert.Empty(root.GetProperty("reserved").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task CompilationRequiresTheExactToolchainBeforeBufferingOrExecution()
+    {
+        await using var test = await ServiceCase.StartAsync(compile: true);
+        using var http = test.Client();
+        foreach (var value in new string?[] { null, "sha256:" + new string('4', 64), ServiceCase.Toolchain + "," + ServiceCase.Toolchain })
+        {
+            using var request = Operation(FerruleServiceProtocol.CompileProfile, [1]);
+            request.Headers.Remove(FerruleServiceProtocol.CompileToolchainHeader);
+            if (value is not null) request.Headers.TryAddWithoutValidation(FerruleServiceProtocol.CompileToolchainHeader, value);
+            using var response = await http.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Empty(test.Compile.Frames);
+        }
+        using var accepted = await http.SendAsync(Operation(FerruleServiceProtocol.CompileProfile, [1]));
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.Equal(ServiceCase.Toolchain, Assert.Single(accepted.Headers.GetValues(FerruleServiceProtocol.CompileToolchainHeader)));
+    }
+
+    [Fact]
     public async Task ReplicaRunsItsConcurrencyQueuesItsCapacityAndRefusesTheRestRetryably()
     {
         await using var test = await ServiceCase.StartAsync(concurrency: 2, capacity: 3, admissionWait: TimeSpan.FromSeconds(10));
@@ -357,6 +414,12 @@ public sealed class FerruleServiceTransportTests
                 ["preview"] = new OtherIdentityRunner()
             }));
         Assert.Throws<ArgumentException>(() => new WorkerTransportServer(new WorkerTransportServerOptions(listen) { HealthListen = listen }, runners));
+        // A served compile profile and its toolchain identity come together.
+        var compiling = new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal) { ["compile"] = new ScriptedRunner() };
+        Assert.Throws<ArgumentException>(() => new WorkerTransportServer(new WorkerTransportServerOptions(listen) { CompileToolchain = "ferrule:latest" }, compiling));
+        Assert.Throws<ArgumentException>(() => new WorkerTransportServer(new WorkerTransportServerOptions(listen) { CompileToolchain = ServiceCase.Toolchain },
+            new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal) { ["preview"] = new ScriptedRunner() }));
+        _ = new WorkerTransportServer(new WorkerTransportServerOptions(listen) { CompileToolchain = ServiceCase.Toolchain }, compiling);
     }
 
     internal static HttpRequestMessage Operation(string profile, byte[] frame, string? operation = null, bool http2 = true)
@@ -369,6 +432,8 @@ public sealed class FerruleServiceTransportTests
         };
         request.Content.Headers.ContentType = new MediaTypeHeaderValue(InspectionTransport.MediaType);
         request.Headers.TryAddWithoutValidation(InspectionTransport.ImageHeader, Identity);
+        if (profile == FerruleServiceProtocol.CompileProfile)
+            request.Headers.TryAddWithoutValidation(FerruleServiceProtocol.CompileToolchainHeader, ServiceCase.Toolchain);
         return request;
     }
 
@@ -418,7 +483,8 @@ public sealed class FerruleServiceTransportTests
         private readonly bool ownsCertificates;
 
         private ServiceCase(WorkerTransportServer server, System.Security.Cryptography.X509Certificates.X509Certificate2 serverCertificate,
-            System.Security.Cryptography.X509Certificates.X509Certificate2 client, ScriptedRunner inspection, ScriptedRunner preview, bool ownsCertificates)
+            System.Security.Cryptography.X509Certificates.X509Certificate2 client, ScriptedRunner inspection, ScriptedRunner preview,
+            ScriptedRunner compile, bool ownsCertificates)
         {
             this.ownsCertificates = ownsCertificates;
             Server = server;
@@ -426,20 +492,25 @@ public sealed class FerruleServiceTransportTests
             ClientCertificate = client;
             Inspection = inspection;
             Preview = preview;
+            Compile = compile;
         }
+
+        internal const string Toolchain = "sha256:3333333333333333333333333333333333333333333333333333333333333333";
 
         internal WorkerTransportServer Server { get; }
         internal System.Security.Cryptography.X509Certificates.X509Certificate2 ServerCertificate { get; }
         internal System.Security.Cryptography.X509Certificates.X509Certificate2 ClientCertificate { get; }
         internal ScriptedRunner Inspection { get; }
         internal ScriptedRunner Preview { get; }
+        /// <summary>The compile profile's runner; it is served only by a case started with compilation.</summary>
+        internal ScriptedRunner Compile { get; }
         internal Uri Endpoint => new("https://127.0.0.1:" + Server.Port);
         internal string ServerPin => TransportCase.Pin(ServerCertificate);
 
         internal static async Task<ServiceCase> StartAsync(int concurrency = 2, int capacity = 4, TimeSpan? admissionWait = null,
             bool health = false, Func<bool>? healthy = null, System.Security.Cryptography.X509Certificates.X509Certificate2? extraClient = null,
             System.Security.Cryptography.X509Certificates.X509Certificate2? serverCertificate = null,
-            System.Security.Cryptography.X509Certificates.X509Certificate2? clientCertificate = null)
+            System.Security.Cryptography.X509Certificates.X509Certificate2? clientCertificate = null, bool compile = false, string? compileToolchain = null)
         {
             // Replicas of one service share its certificate and admit the same clients.
             var owned = serverCertificate is null;
@@ -447,6 +518,7 @@ public sealed class FerruleServiceTransportTests
             var client = clientCertificate ?? TransportCase.Certificate("CN=Session host service client");
             var inspection = new ScriptedRunner();
             var preview = new ScriptedRunner();
+            var compiler = new ScriptedRunner();
             string[] pins = extraClient is null ? [TransportCase.Pin(client)] : [TransportCase.Pin(client), TransportCase.Pin(extraClient)];
             var server = new WorkerTransportServer(new WorkerTransportServerOptions(new IPEndPoint(IPAddress.Loopback, 0), serverCertificate, pins)
             {
@@ -456,14 +528,20 @@ public sealed class FerruleServiceTransportTests
                 AdmissionWait = admissionWait ?? TimeSpan.FromSeconds(5),
                 HealthListen = health ? new IPEndPoint(IPAddress.Loopback, 0) : null,
                 Healthy = healthy,
-                EngineRevision = "577359a991a7dd44172a3c4af91fdcab7592457c"
-            }, new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
+                EngineRevision = "577359a991a7dd44172a3c4af91fdcab7592457c",
+                CompileToolchain = compile ? compileToolchain ?? Toolchain : null
+            }, compile ? new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
+            {
+                [FerruleServiceProtocol.InspectionProfile] = inspection,
+                [FerruleServiceProtocol.PreviewProfile] = preview,
+                [FerruleServiceProtocol.CompileProfile] = compiler
+            } : new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
             {
                 [FerruleServiceProtocol.InspectionProfile] = inspection,
                 [FerruleServiceProtocol.PreviewProfile] = preview
             });
             await server.StartAsync(CancellationToken.None);
-            return new(server, serverCertificate, client, inspection, preview, owned);
+            return new(server, serverCertificate, client, inspection, preview, compiler, owned);
         }
 
         /// <summary>An HTTP/2 client that pins the service and presents a client certificate.</summary>

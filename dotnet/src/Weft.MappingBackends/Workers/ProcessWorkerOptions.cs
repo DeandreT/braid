@@ -19,8 +19,10 @@ public sealed class ProcessWorkerOptions
     public ProcessWorkerOptions(string workerExecutable, DockerWorkerProfile profile, string temporaryRoot, TimeSpan? wallTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        if (profile != DockerWorkerProfile.Inspection && profile != DockerWorkerProfile.Preview)
-            throw new ArgumentException("Service child processes run only the inspection and preview profiles.", nameof(profile));
+        // The build profile runs the native generation stage of a compile operation; compilation itself runs in
+        // the separate compile sandbox (ProcessCompileRunner).
+        if (profile != DockerWorkerProfile.Inspection && profile != DockerWorkerProfile.Preview && profile != DockerWorkerProfile.Build)
+            throw new ArgumentException("Service child processes run only the inspection, preview and build generation profiles.", nameof(profile));
         WorkerExecutable = AbsolutePath(workerExecutable, nameof(workerExecutable));
         TemporaryRoot = AbsolutePath(temporaryRoot, nameof(temporaryRoot));
         Profile = profile;
@@ -47,7 +49,7 @@ public sealed class ProcessWorkerOptions
         "--open-files=" + Profile.FileLimit.ToString(CultureInfo.InvariantCulture)
     ];
 
-    private static string AbsolutePath(string path, string parameterName)
+    internal static string AbsolutePath(string path, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(path, parameterName);
         if (!path.StartsWith('/') || path.Contains('\0') || path.Contains('\n') || path.Contains('\r') || path.Contains('\\') ||

@@ -256,7 +256,9 @@ public sealed class FerruleServiceProcessRunnerTests
     [Fact]
     public void OptionsAdmitOnlyServiceProfilesNormalizedPathsAndProfileDeadlines()
     {
-        Assert.Throws<ArgumentException>(() => new ProcessWorkerOptions("/ferrule-host", DockerWorkerProfile.Build, "/tmp"));
+        // The build profile is the generation stage of a compile operation; compilation runs in its own launcher.
+        Assert.Equal(["--service-sandbox", "--cpu-seconds=120", "--memory-bytes=2147483648", "--open-files=256"],
+            new ProcessWorkerOptions("/ferrule-host", DockerWorkerProfile.Build, "/tmp").Arguments);
         Assert.Throws<ArgumentException>(() => new ProcessWorkerOptions("/ferrule-host", DockerWorkerProfile.Compiled, "/tmp"));
         foreach (var path in new[] { "ferrule-host", "/a/../ferrule-host", "/a//b", "/a\\b", "/tmp/" })
             Assert.Throws<ArgumentException>(() => new ProcessWorkerOptions(path, DockerWorkerProfile.Inspection, "/tmp"));

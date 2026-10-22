@@ -326,7 +326,7 @@ public sealed class FerruleServiceRunnerTests
         Assert.Throws<InvalidOperationException>(() => FerruleRunnerSelection.Read(_ => "worker", FerruleRunnerKind.Docker, FerruleRunnerKind.Docker, FerruleRunnerKind.Service));
         Assert.Throws<InvalidOperationException>(() => FerruleRunnerSelection.Read(_ => "Service", FerruleRunnerKind.Docker, FerruleRunnerKind.Docker, FerruleRunnerKind.Service));
         Assert.Throws<ArgumentException>(() => new FerruleServiceRunnerOptions(new PinnedServiceConnector(new(new Uri("https://f:1"), new string('a', 64),
-            TransportCase.Certificate("CN=x"))), "compile", Identity));
+            TransportCase.Certificate("CN=x"))), "build", Identity));
     }
 
     [Theory]
@@ -354,6 +354,106 @@ public sealed class FerruleServiceRunnerTests
         var options = new FerruleServiceRunnerOptions(new StatusConnector(HttpStatusCode.BadRequest), "preview", Identity);
         Assert.Equal(FerruleServiceRunnerOptions.MaximumServiceAdmissionWait + DockerWorkerProfile.Preview.MaximumWallTimeout * 2 +
             ProcessWorkerOptions.KillTimeout + TimeSpan.FromSeconds(5), options.ResponseBound);
+        var compile = new FerruleServiceRunnerOptions(new StatusConnector(HttpStatusCode.BadRequest), "compile", Identity, ServiceCase.Toolchain);
+        Assert.Equal(TimeSpan.FromSeconds(20 + 240 + 2 + 5), compile.ResponseBound);
+        Assert.Equal(TimeSpan.FromSeconds(120 + 2 + 3), compile.SettlementBound);
+    }
+
+    [Fact]
+    public async Task CompileFramesTravelOnTheCompileProfileAndOnlyItBuilds()
+    {
+        await using var service = await ServiceCase.StartAsync(compile: true);
+        service.Compile.Behavior = (frame, _) => Task.FromResult(new WorkerProcessResult([.. frame.ToArray(), 8], WorkerProcessFailure.None));
+        await using var runner = Runner(service, FerruleServiceProtocol.CompileProfile);
+        Assert.Equal(FerruleServiceProtocol.CompileProfile, runner.ProfileName);
+        var frame = new byte[DockerWorkerProfile.Build.MaximumRequestBytes];
+        Random.Shared.NextBytes(frame);
+        var result = await runner.RunAsync(frame, CancellationToken.None);
+        Assert.Equal(WorkerProcessFailure.None, result.Failure);
+        Assert.Equal([.. frame, 8], result.Output);
+        Assert.Equal(frame, Assert.Single(service.Compile.Frames));
+        Assert.Throws<ArgumentException>(() =>
+            runner.RunAsync(new byte[DockerWorkerProfile.Build.MaximumRequestBytes + 1], CancellationToken.None).GetAwaiter().GetResult());
+
+        // A service without compilation refuses the reserved profile before anything runs.
+        await using var reserved = await ServiceCase.StartAsync();
+        await using var refused = Runner(reserved, FerruleServiceProtocol.CompileProfile);
+        Assert.Equal(WorkerProcessFailure.SandboxUnavailable, (await refused.RunAsync(new byte[] { 1 }, CancellationToken.None)).Failure);
+        Assert.Empty(reserved.Compile.Frames);
+
+        // The build compiler reports the service identity as its engine build.
+        var source = new Weft.MappingBackends.BuildNativeSource(new(new(Guid.NewGuid())), new NoAdmission(), new NoObjects());
+        Assert.Equal(CompileWorkerIdentity.Combine(Identity, ServiceCase.Toolchain), new Weft.MappingBackends.FerruleBuildCompiler(runner, source).Backend.EngineBuild);
+        await runner.StopAsync();
+        await refused.StopAsync();
+    }
+
+    [Fact]
+    public async Task AChangedToolchainWithTheSameNativeWorkerIsRefusedBeforeDelivery()
+    {
+        await using var changed = await ServiceCase.StartAsync(compile: true, compileToolchain: "sha256:" + new string('4', 64));
+        await using var runner = Runner(changed, FerruleServiceProtocol.CompileProfile);
+        var result = await runner.RunAsync(new byte[] { 1 }, CancellationToken.None);
+        Assert.Equal(WorkerProcessFailure.SandboxUnavailable, result.Failure);
+        Assert.Empty(changed.Compile.Frames);
+        Assert.NotEqual(Identity, runner.CompilationBuildIdentity);
+        Assert.NotEqual(CompileWorkerIdentity.Combine(Identity, "sha256:" + new string('4', 64)), runner.CompilationBuildIdentity);
+    }
+
+    [Fact]
+    public async Task AChangedToolchainOnTheAnswerCannotBeAcceptedAsACompletedCompile()
+    {
+        await using var service = await ServiceCase.StartAsync(compile: true);
+        var connector = new ChangedCompileAnswer(Connector(service));
+        var runner = new FerruleServiceRunner(new(connector, FerruleServiceProtocol.CompileProfile, Identity, ServiceCase.Toolchain));
+        Assert.Equal(WorkerProcessFailure.CleanupFailed, (await runner.RunAsync(new byte[] { 1 }, CancellationToken.None)).Failure);
+        Assert.Single(service.Compile.Frames);
+        await Assert.ThrowsAsync<InvalidOperationException>(runner.StopAsync);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await runner.DisposeAsync());
+    }
+
+    [Fact]
+    public void ACompileRunnerRequiresAnExplicitToolchainPin()
+    {
+        var connector = new StatusConnector(HttpStatusCode.BadRequest);
+        Assert.Throws<ArgumentException>(() => new FerruleServiceRunnerOptions(connector, FerruleServiceProtocol.CompileProfile, Identity));
+        var inspection = new FerruleServiceRunner(new(connector, FerruleServiceProtocol.InspectionProfile, Identity, ServiceCase.Toolchain));
+        Assert.Equal(CompileWorkerIdentity.Combine(Identity, ServiceCase.Toolchain), inspection.BuildIdentity);
+        Assert.Null(inspection.CompilationBuildIdentity);
+    }
+
+    private sealed class ChangedCompileAnswer(IFerruleServiceConnector inner) : IFerruleServiceConnector
+    {
+        public IFerruleServiceChannel Open() => new Channel(inner.Open());
+        private sealed class Channel(IFerruleServiceChannel inner) : IFerruleServiceChannel
+        {
+            public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+            {
+                var response = await inner.SendAsync(request, token);
+                if (request.Method == HttpMethod.Post && response.StatusCode == HttpStatusCode.OK)
+                {
+                    response.Headers.Remove(FerruleServiceProtocol.CompileToolchainHeader);
+                    response.Headers.Add(FerruleServiceProtocol.CompileToolchainHeader, "sha256:" + new string('4', 64));
+                }
+                return response;
+            }
+            public ValueTask DisposeAsync() => inner.DisposeAsync();
+        }
+    }
+
+    private sealed class NoAdmission : Weft.Deployment.IBuildAdmissionReader
+    {
+        public Task<Weft.Deployment.BuildAdmission?> ReadAsync(Weft.Application.ActorContext actor, Weft.Deployment.BuildIntent intent, CancellationToken token = default) =>
+            Task.FromResult<Weft.Deployment.BuildAdmission?>(null);
+    }
+
+    private sealed class NoObjects : Weft.Application.IPrivateObjectStore
+    {
+        public Task<byte[]> ReadVerifiedAsync(Weft.Domain.RevisionScope scope, Weft.Domain.PrivateObjectReference value, CancellationToken token = default) =>
+            throw new NotSupportedException();
+
+        public Task<Weft.Application.PrivateObjectPublishResult> PublishCreateOnlyAsync(Weft.Domain.RevisionScope scope, Weft.Domain.PrivateObjectReference value,
+            Stream source, CancellationToken token = default) => throw new NotSupportedException();
     }
 
     private sealed class StatusConnector(HttpStatusCode status) : IFerruleServiceConnector
@@ -387,7 +487,8 @@ public sealed class FerruleServiceRunnerTests
         new(new(service.Endpoint, service.ServerPin, service.ClientCertificate));
 
     private static FerruleServiceRunner Runner(ServiceCase service, string profile, TimeSpan? retryDelay = null) =>
-        new(new(Connector(service), profile, Identity) { RetryDelay = retryDelay ?? TimeSpan.FromMilliseconds(50) });
+        new(new(Connector(service), profile, Identity, profile == FerruleServiceProtocol.CompileProfile ? ServiceCase.Toolchain : null)
+        { RetryDelay = retryDelay ?? TimeSpan.FromMilliseconds(50) });
 
     /// <summary>A loopback layer-4 balancer that assigns each new connection to the next backend.</summary>
     private sealed class RoundRobinBalancer : IAsyncDisposable

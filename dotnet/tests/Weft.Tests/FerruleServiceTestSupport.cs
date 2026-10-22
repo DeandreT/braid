@@ -34,6 +34,30 @@ public sealed class ServiceEquivalenceFactAttribute : FactAttribute
     }
 }
 
+/// <summary>
+/// Runs with a worker executable and a <c>weft-compile-sandbox</c> launcher built from this source
+/// (<c>WEFT_COMPILE_SANDBOX_EXECUTABLE</c>) and the pinned .NET SDK under <c>DOTNET_ROOT</c>.
+/// </summary>
+public sealed class ServiceCompileFactAttribute : FactAttribute
+{
+    public ServiceCompileFactAttribute()
+    {
+        if (!OperatingSystem.IsLinux() || !FerruleServiceTestSupport.CompileConfigured)
+            Skip = "Set WEFT_FERRULE_HOST_EXECUTABLE, WEFT_COMPILE_SANDBOX_EXECUTABLE and DOTNET_ROOT (the pinned SDK) for live compile qualification.";
+    }
+}
+
+/// <summary>Compares service compilation with the Docker compiler image built from the same worker.</summary>
+public sealed class CompileEquivalenceFactAttribute : FactAttribute
+{
+    public CompileEquivalenceFactAttribute()
+    {
+        if (!OperatingSystem.IsLinux() || !FerruleServiceTestSupport.CompileConfigured ||
+            string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEFT_BUILD_WORKER_IMAGE")))
+            Skip = "Set the live compile settings and WEFT_BUILD_WORKER_IMAGE, built from the same worker, for compile equivalence.";
+    }
+}
+
 internal static class FerruleServiceTestSupport
 {
     internal static readonly RevisionScope Scope = new(
@@ -46,6 +70,59 @@ internal static class FerruleServiceTestSupport
     internal static readonly byte[] Rates = "{\"currency\":\"EUR\"}"u8.ToArray();
 
     internal static string? Executable => Environment.GetEnvironmentVariable("WEFT_FERRULE_HOST_EXECUTABLE");
+
+    internal static string? Launcher => Environment.GetEnvironmentVariable("WEFT_COMPILE_SANDBOX_EXECUTABLE");
+
+    /// <summary>The installed .NET root of the test run, which must hold the pinned SDK and reference pack.</summary>
+    internal static string Toolchain => Path.TrimEndingDirectorySeparator(Environment.GetEnvironmentVariable("DOTNET_ROOT") is { Length: > 0 } root
+        ? Path.GetFullPath(root) : Weft.Deployment.BuildCompilation.DotnetRoot);
+
+    internal static bool CompileConfigured => !string.IsNullOrEmpty(Executable) && !string.IsNullOrEmpty(Launcher) &&
+        File.Exists(Weft.Deployment.BuildCompilation.Compiler(Toolchain)) && Directory.Exists(Weft.Deployment.BuildCompilation.References(Toolchain));
+
+    internal static ProcessCompileOptions CompileOptions(string root, TimeSpan? deadline = null, IReadOnlyList<string>? command = null,
+        bool withholdGeneration = false) =>
+        new(Executable!, Launcher!, root, Toolchain, deadline)
+        {
+            CompilerCommand = command,
+            Generation = new ProcessWorkerOptions(Executable!, DockerWorkerProfile.Build, root, deadline) { WithholdEndOfInput = withholdGeneration }
+        };
+
+    /// <summary>An exact <c>weft.ferrule-build.v1</c> frame for a fixture, identical for every runner that receives it.</summary>
+    internal static byte[] BuildFrame(string fixture, string operation)
+    {
+        var native = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", fixture + ".json"));
+        var header = new Weft.Deployment.BuildWorkerProtocol.Request(Weft.Deployment.BuildWorkerProtocol.Protocol,
+            "66666666-6666-4666-8666-666666666666", Scope, Sha256Digest.FromBytes(native).Value, new string('a', 64), operation,
+            Weft.Deployment.BuildWorkerProtocol.Profile);
+        return Weft.Deployment.BuildWorkerProtocol.EncodeRequest(header, native);
+    }
+
+    /// <summary>Live children of this test process whose command name is one of the given names (first 15 bytes).</summary>
+    internal static int[] Children(params string[] names)
+    {
+        var self = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
+        var expected = names.Select(name => name[..Math.Min(15, name.Length)]).ToHashSet(StringComparer.Ordinal);
+        var children = new List<int>();
+        foreach (var directory in Directory.EnumerateDirectories("/proc"))
+        {
+            if (!int.TryParse(Path.GetFileName(directory), NumberStyles.None, CultureInfo.InvariantCulture, out var pid)) continue;
+            string stat;
+            try { stat = File.ReadAllText(Path.Combine(directory, "stat")); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { continue; }
+            var open = stat.IndexOf('(', StringComparison.Ordinal);
+            var close = stat.LastIndexOf(')');
+            if (open < 0 || close < open) continue;
+            var fields = stat[(close + 2)..].Split(' ');
+            if (fields.Length > 1 && fields[1] == self && fields[0] != "Z" && expected.Contains(stat[(open + 1)..close])) children.Add(pid);
+        }
+
+        return [.. children];
+    }
+
+    /// <summary>The compile children this test process may have: workers, launchers and the programs they execute.</summary>
+    internal static int[] CompileChildren() => Children(Path.GetFileName(Executable ?? "weft-ferrule-host"),
+        Path.GetFileName(Launcher ?? "weft-compile-sandbox"), "dotnet", "sleep");
 
     internal static IEnumerable<string> Fixtures() =>
         Directory.EnumerateFiles(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures"), "*.json")
@@ -166,12 +243,21 @@ internal sealed class PackagedFerruleService : IAsyncDisposable
         return System.Diagnostics.Process.Start(start)!;
     }
 
+    /// <summary>The settings that enable compilation with this run's launcher and pinned SDK.</summary>
+    internal static IReadOnlyDictionary<string, string> Compilation => new Dictionary<string, string>
+    {
+        ["WEFT_FERRULE_SERVICE_COMPILE_ENABLED"] = "true",
+        ["WEFT_FERRULE_SERVICE_COMPILE_LAUNCHER"] = FerruleServiceTestSupport.Launcher!,
+        ["WEFT_FERRULE_SERVICE_COMPILE_TOOLCHAIN"] = FerruleServiceTestSupport.Toolchain
+    };
+
     /// <summary>Starts the service with a PEM bundle, the admitted client pins and a private temporary root.</summary>
-    internal static async Task<PackagedFerruleService> StartAsync(string serverPem, IEnumerable<string> clientPins, string temporaryRoot, int concurrency = 2)
+    internal static async Task<PackagedFerruleService> StartAsync(string serverPem, IEnumerable<string> clientPins, string temporaryRoot, int concurrency = 2,
+        IReadOnlyDictionary<string, string>? extra = null)
     {
         var port = FreePort();
         var healthPort = FreePort();
-        var process = Launch(new Dictionary<string, string>
+        var process = Launch(new Dictionary<string, string>(extra ?? new Dictionary<string, string>())
         {
             ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture),
             ["WEFT_FERRULE_SERVICE_HEALTH_ADDR"] = "127.0.0.1:" + healthPort.ToString(CultureInfo.InvariantCulture),

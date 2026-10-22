@@ -8,6 +8,7 @@
 !deploy/container/
 !dotnet/
 !engines/ferrule-host/tests/fixtures/
+!engines/compile-sandbox/
 !migrations/
 **/node_modules/
 **/bin/
@@ -16,3 +17,4 @@
 **/.angular/
 **/playwright-report/
 **/test-results/
+**/target/

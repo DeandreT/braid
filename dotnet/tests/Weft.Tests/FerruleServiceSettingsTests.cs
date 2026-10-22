@@ -98,6 +98,44 @@ public sealed class FerruleServiceSettingsTests
         Assert.ThrowsAny<Exception>(() => FerruleServiceSettings.Read(Read(Pinned(expired))));
     }
 
+    [Fact]
+    public void CompilationIsExplicitAndItsInstallationRequiresIt()
+    {
+        var platform = new Dictionary<string, string>
+        {
+            ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "0.0.0.0:8080",
+            ["WEFT_FERRULE_SERVICE_AUTHENTICATION"] = "platformSandbox",
+            ["WEFT_FERRULE_SERVICE_CONCURRENCY"] = "1",
+            ["WEFT_FERRULE_SERVICE_QUEUE"] = "0"
+        };
+        Assert.Null(FerruleServiceSettings.Read(Read(platform)).Compile);
+        Assert.Null(FerruleServiceSettings.Read(Read(new Dictionary<string, string>(platform) { ["WEFT_FERRULE_SERVICE_COMPILE_ENABLED"] = "false" })).Compile);
+        var enabled = FerruleServiceSettings.Read(Read(new Dictionary<string, string>(platform) { ["WEFT_FERRULE_SERVICE_COMPILE_ENABLED"] = "true" }));
+        Assert.Equal(new FerruleServiceSettings.CompileSettings("/weft-compile-sandbox", "/usr/share/dotnet"), enabled.Compile);
+        var installed = FerruleServiceSettings.Read(Read(new Dictionary<string, string>(platform)
+        {
+            ["WEFT_FERRULE_SERVICE_COMPILE_ENABLED"] = "true",
+            ["WEFT_FERRULE_SERVICE_COMPILE_LAUNCHER"] = "/opt/weft/launcher",
+            ["WEFT_FERRULE_SERVICE_COMPILE_TOOLCHAIN"] = "/opt/dotnet"
+        }));
+        Assert.Equal(new FerruleServiceSettings.CompileSettings("/opt/weft/launcher", "/opt/dotnet"), installed.Compile);
+        var toolchain = "sha256:" + new string('3', 64);
+        Assert.Equal(toolchain, installed.Transport(() => true, "engine", toolchain).CompileToolchain);
+        Assert.Null(enabled.Transport(() => true, "engine").CompileToolchain);
+        foreach (var extra in new Dictionary<string, string>[]
+        {
+            new() { ["WEFT_FERRULE_SERVICE_COMPILE_ENABLED"] = "TRUE" },
+            new() { ["WEFT_FERRULE_SERVICE_COMPILE_ENABLED"] = "1" },
+            new() { ["WEFT_FERRULE_SERVICE_COMPILE_LAUNCHER"] = "/weft-compile-sandbox" },
+            new() { ["WEFT_FERRULE_SERVICE_COMPILE_ENABLED"] = "false", ["WEFT_FERRULE_SERVICE_COMPILE_TOOLCHAIN"] = "/usr/share/dotnet" }
+        })
+        {
+            var environment = new Dictionary<string, string>(platform);
+            foreach (var (name, value) in extra) environment[name] = value;
+            Assert.Throws<InvalidOperationException>(() => FerruleServiceSettings.Read(Read(environment)));
+        }
+    }
+
     private static Dictionary<string, string> Pinned(X509Certificate2 certificate)
     {
         using var key = certificate.GetRSAPrivateKey()!;

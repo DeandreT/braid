@@ -175,6 +175,68 @@ public sealed class AzureSessionsConnectorTests
     }
 
     [Fact]
+    public async Task CompileOperationsRunInFreshSessionsAndCancellationReachesTheirOwn()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var pool = await SessionsPoolStub.StartAsync(session => session.Compile.Behavior = async (frame, token) =>
+        {
+            if (frame.Span[0] == 1) return new WorkerProcessResult([.. frame.ToArray(), 7], WorkerProcessFailure.None);
+            started.TrySetResult();
+            try { await Task.Delay(Timeout.Infinite, token); }
+            catch (OperationCanceledException) { }
+            return new WorkerProcessResult([], WorkerProcessFailure.Canceled);
+        }, compile: true);
+        using var connector = Connector(pool, new FakeCredential());
+        await using var runner = Runner(connector, FerruleServiceProtocol.CompileProfile);
+        var frame = new byte[DockerWorkerProfile.Build.MaximumRequestBytes];
+        frame[0] = 1;
+        var compiled = await runner.RunAsync(frame, CancellationToken.None);
+        Assert.Equal(WorkerProcessFailure.None, compiled.Failure);
+        Assert.Equal([.. frame, 7], compiled.Output);
+        using var cancellation = new CancellationTokenSource();
+        var running = runner.RunAsync(new byte[] { 2 }, cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await cancellation.CancelAsync();
+        Assert.Equal(WorkerProcessFailure.Canceled, (await running.WaitAsync(TimeSpan.FromSeconds(10))).Failure);
+        var sessions = pool.Sessions;
+        Assert.Equal(2, sessions.Count);
+        Assert.Equal(["GET /v1/ready", "POST /v1/operations/compile/"], sessions[0].Requests.Select(Shape));
+        Assert.Equal(["GET /v1/ready", "POST /v1/operations/compile/", "POST /v1/operations/compile/"], sessions[1].Requests.Select(Shape));
+        Assert.All(sessions, session =>
+        {
+            Assert.Single(session.Compile.Frames);
+            Assert.Empty(session.Inspection.Frames);
+            Assert.True(session.Stopped);
+        });
+        Assert.Empty(pool.Violations);
+        await runner.StopAsync();
+    }
+
+    [ServiceCompileFact]
+    public async Task SessionsCompileWithRealSandboxedChildren()
+    {
+        var root = FerruleServiceTestSupport.TemporaryRoot();
+        try
+        {
+            await using var direct = new ProcessCompileRunner(FerruleServiceTestSupport.CompileOptions(root));
+            var (directCompiler, intent, native) = FerruleServiceCompileTests.Compiler(direct, "valid-basic");
+            var expected = (await directCompiler.BuildAsync(intent, new(native, native.Length))).Copy();
+            await using var pool = await SessionsPoolStub.StartAsync(realChildren: root, compile: true);
+            using var connector = Connector(pool, new FakeCredential());
+            await using var runner = new FerruleServiceRunner(new(connector, FerruleServiceProtocol.CompileProfile, direct.BuildIdentity, direct.ToolchainIdentity));
+            var (compiler, remoteIntent, _) = FerruleServiceCompileTests.Compiler(runner, "valid-basic");
+            Assert.Equal(expected, (await compiler.BuildAsync(remoteIntent, new(native, native.Length))).Copy());
+            Assert.All(pool.Sessions, session => Assert.True(session.Stopped));
+            await runner.StopAsync();
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void SettingsAdmitOnlyACanonicalPoolEndpointIdentityAndClientId()
     {
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
@@ -214,7 +276,8 @@ public sealed class AzureSessionsConnectorTests
         });
 
     private static FerruleServiceRunner Runner(AzureSessionsConnector connector, string profile) =>
-        new(new(connector, profile, Identity) { RetryDelay = TimeSpan.FromMilliseconds(20) });
+        new(new(connector, profile, Identity, profile == FerruleServiceProtocol.CompileProfile ? "sha256:" + new string('3', 64) : null)
+        { RetryDelay = TimeSpan.FromMilliseconds(20) });
 
     private sealed class FakeCredential(string token = SessionsPoolStub.Token) : TokenCredential
     {
@@ -244,14 +307,16 @@ public sealed class AzureSessionsConnectorTests
         private readonly List<string> violations = [];
         private readonly Action<Session>? configure;
         private readonly string? realChildren;
+        private readonly bool compile;
         private readonly HttpClient forwarder = new() { Timeout = Timeout.InfiniteTimeSpan };
         private WebApplication? application;
         private X509Certificate2? certificate;
 
-        private SessionsPoolStub(Action<Session>? configure, string? realChildren)
+        private SessionsPoolStub(Action<Session>? configure, string? realChildren, bool compile)
         {
             this.configure = configure;
             this.realChildren = realChildren;
+            this.compile = compile;
         }
 
         internal Uri Endpoint { get; private set; } = null!;
@@ -263,9 +328,9 @@ public sealed class AzureSessionsConnectorTests
         internal IReadOnlyList<string> Identifiers { get { lock (gate) return [.. identifiers]; } }
         internal IReadOnlyList<string> Violations { get { lock (gate) return [.. violations]; } }
 
-        internal static async Task<SessionsPoolStub> StartAsync(Action<Session>? configure = null, string? realChildren = null)
+        internal static async Task<SessionsPoolStub> StartAsync(Action<Session>? configure = null, string? realChildren = null, bool compile = false)
         {
-            var stub = new SessionsPoolStub(configure, realChildren);
+            var stub = new SessionsPoolStub(configure, realChildren, compile);
             await stub.StartCoreAsync();
             return stub;
         }
@@ -347,7 +412,7 @@ public sealed class AzureSessionsConnectorTests
                 return;
             }
 
-            await session.EnsureStartedAsync(configure, realChildren);
+            await session.EnsureStartedAsync(configure, realChildren, compile);
             var body = new MemoryStream();
             await request.Body.CopyToAsync(body, context.RequestAborted);
             session.Record(new Forwarded(request.Method, request.Path.ToString()));
@@ -396,12 +461,13 @@ public sealed class AzureSessionsConnectorTests
             private readonly List<Forwarded> requests = [];
             private readonly SemaphoreSlim startGate = new(1, 1);
             private WorkerTransportServer? server;
-            private ProcessWorkerRunner[] children = [];
+            private IAsyncDisposable[] children = [];
 
             internal string Identifier => identifier;
             internal int Order => order;
             internal ScriptedRunner Inspection { get; } = new();
             internal ScriptedRunner Preview { get; } = new();
+            internal ScriptedRunner Compile { get; } = new();
             internal Uri Address { get; private set; } = null!;
             internal bool Stopped { get; private set; }
             internal IReadOnlyList<Forwarded> Requests { get { lock (requests) return [.. requests]; } }
@@ -411,14 +477,15 @@ public sealed class AzureSessionsConnectorTests
                 lock (requests) requests.Add(request);
             }
 
-            internal async Task EnsureStartedAsync(Action<Session>? configure, string? realChildren)
+            internal async Task EnsureStartedAsync(Action<Session>? configure, string? realChildren, bool compile)
             {
                 await startGate.WaitAsync();
                 try
                 {
                     if (server is not null) return;
                     configure?.Invoke(this);
-                    IReadOnlyDictionary<string, IInspectionWorkerRunner> runners;
+                    Dictionary<string, IInspectionWorkerRunner> runners;
+                    string? toolchain = null;
                     if (realChildren is null)
                     {
                         runners = new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
@@ -426,25 +493,36 @@ public sealed class AzureSessionsConnectorTests
                             [FerruleServiceProtocol.InspectionProfile] = Inspection,
                             [FerruleServiceProtocol.PreviewProfile] = Preview
                         };
+                        if (compile)
+                        {
+                            runners[FerruleServiceProtocol.CompileProfile] = Compile;
+                            toolchain = "sha256:" + new string('3', 64);
+                        }
                     }
                     else
                     {
-                        children =
-                        [
-                            new ProcessWorkerRunner(FerruleServiceTestSupport.Options(realChildren)),
-                            new ProcessWorkerRunner(FerruleServiceTestSupport.Options(realChildren, DockerWorkerProfile.Preview))
-                        ];
+                        var inspection = new ProcessWorkerRunner(FerruleServiceTestSupport.Options(realChildren));
+                        var preview = new ProcessWorkerRunner(FerruleServiceTestSupport.Options(realChildren, DockerWorkerProfile.Preview));
                         runners = new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
                         {
-                            [FerruleServiceProtocol.InspectionProfile] = children[0],
-                            [FerruleServiceProtocol.PreviewProfile] = children[1]
+                            [FerruleServiceProtocol.InspectionProfile] = inspection,
+                            [FerruleServiceProtocol.PreviewProfile] = preview
                         };
+                        children = [inspection, preview];
+                        if (compile)
+                        {
+                            var compiler = new ProcessCompileRunner(FerruleServiceTestSupport.CompileOptions(realChildren));
+                            runners[FerruleServiceProtocol.CompileProfile] = compiler;
+                            toolchain = compiler.ToolchainIdentity;
+                            children = [inspection, preview, compiler];
+                        }
                     }
                     server = new WorkerTransportServer(new WorkerTransportServerOptions(new IPEndPoint(IPAddress.Loopback, 0))
                     {
                         Concurrency = 1,
                         Capacity = 1,
-                        AdmissionWait = TimeSpan.Zero
+                        AdmissionWait = TimeSpan.Zero,
+                        CompileToolchain = toolchain
                     }, runners);
                     await server.StartAsync(CancellationToken.None);
                     Address = new Uri("http://127.0.0.1:" + server.Port);

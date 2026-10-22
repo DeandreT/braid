@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Weft.Deployment;
 using Weft.MappingBackends.Workers;
 
 namespace Weft.WorkerTransport;
@@ -53,6 +54,9 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
             throw new ArgumentException("Every runner must serve one known profile.", nameof(runners));
         if (!options.ServiceRoutes && (runners.Count != 1 || !runners.ContainsKey(FerruleServiceProtocol.InspectionProfile)))
             throw new ArgumentException("The inspection transport alone serves exactly the inspection profile.", nameof(runners));
+        if (runners.ContainsKey(FerruleServiceProtocol.CompileProfile) != options.CompileToolchain is not null)
+            throw new ArgumentException("A served compile profile reports exactly one toolchain identity.", nameof(runners));
+        if (options.CompileToolchain is { } toolchain) InspectionTransport.RequireImage(toolchain);
         // One service runs one worker build; every profile reports the same identity.
         var identities = runners.Values.Select(runner => runner.BuildIdentity).Distinct(StringComparer.Ordinal).ToArray();
         if (identities.Length != 1)
@@ -189,6 +193,8 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         context.Response.StatusCode = StatusCodes.Status204NoContent;
         context.Response.Headers[InspectionTransport.ImageHeader] = identity;
         if (service) context.Response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
+        if (service && options.CompileToolchain is { } toolchain)
+            context.Response.Headers[FerruleServiceProtocol.CompileToolchainHeader] = toolchain;
         return Task.CompletedTask;
     }
 
@@ -230,12 +236,25 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                 writer.WriteNumber("wallSeconds", (long)profile.MaximumWallTimeout.TotalSeconds);
                 writer.WriteNumber("cpuSeconds", profile.CpuSeconds);
                 writer.WriteNumber("memoryBytes", profile.MemoryBytes);
+                if (name == FerruleServiceProtocol.CompileProfile)
+                {
+                    writer.WriteStartObject("toolchain");
+                    writer.WriteString("protocol", BuildWorkerProtocol.Protocol);
+                    writer.WriteString("profile", BuildWorkerProtocol.Profile);
+                    writer.WriteString("sdkVersion", BuildWorkerProtocol.SdkVersion);
+                    writer.WriteString("runtimeVersion", BuildWorkerProtocol.RuntimeVersion);
+                    writer.WriteString("identity", options.CompileToolchain);
+                    writer.WriteString("buildIdentity", CompileWorkerIdentity.Combine(identity, options.CompileToolchain!));
+                    writer.WriteEndObject();
+                }
+
                 writer.WriteEndObject();
             }
 
             writer.WriteEndArray();
             writer.WriteStartArray("reserved");
-            writer.WriteStringValue(FerruleServiceProtocol.CompileProfile);
+            if (!runners.ContainsKey(FerruleServiceProtocol.CompileProfile))
+                writer.WriteStringValue(FerruleServiceProtocol.CompileProfile);
             writer.WriteEndArray();
             writer.WriteEndObject();
         }
@@ -275,6 +294,15 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
             context.Response.StatusCode = StatusCodes.Status409Conflict;
             return;
         }
+        if (profileName == FerruleServiceProtocol.CompileProfile || request.Headers.ContainsKey(FerruleServiceProtocol.CompileToolchainHeader))
+        {
+            var toolchain = request.Headers[FerruleServiceProtocol.CompileToolchainHeader];
+            if (toolchain.Count != 1 || toolchain[0] != options.CompileToolchain)
+            {
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                return;
+            }
+        }
 
         // Body readers count against capacity before allocating a frame. Cancellation
         // endpoints remain independent so a full replica can still settle its work.
@@ -297,6 +325,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         IInspectionWorkerRunner runner, string operation, long length, bool service)
     {
         var request = context.Request;
+        var compileToolchain = options.CompileToolchain;
         var frame = new byte[length];
         try
         {
@@ -326,7 +355,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                 Busy(context);
                 return;
             case Admission.CanceledBeforeArrival:
-                await RespondAsync(context, new([], WorkerProcessFailure.Canceled), service).ConfigureAwait(false);
+                await RespondAsync(context, new([], WorkerProcessFailure.Canceled), service, compileToolchain).ConfigureAwait(false);
                 return;
         }
 
@@ -339,7 +368,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                await RespondAsync(context, new([], WorkerProcessFailure.Canceled), service).ConfigureAwait(false);
+                await RespondAsync(context, new([], WorkerProcessFailure.Canceled), service, compileToolchain).ConfigureAwait(false);
                 return;
             }
 
@@ -364,7 +393,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                 slots.Release();
             }
 
-            await RespondAsync(context, result, service).ConfigureAwait(false);
+            await RespondAsync(context, result, service, compileToolchain).ConfigureAwait(false);
         }
         finally
         {
@@ -429,7 +458,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         if (order.Count > RememberedOperations) set.Remove(order.Dequeue());
     }
 
-    private async Task RespondAsync(HttpContext context, WorkerProcessResult result, bool service)
+    private async Task RespondAsync(HttpContext context, WorkerProcessResult result, bool service, string? compileToolchain)
     {
         var body = result.Failure == WorkerProcessFailure.None ? result.Output : [];
         var response = context.Response;
@@ -439,6 +468,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         response.Headers[InspectionTransport.ResultHeader] = InspectionTransport.Encode(result.Failure);
         response.Headers[InspectionTransport.ImageHeader] = identity;
         if (service) response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
+        if (compileToolchain is not null) response.Headers[FerruleServiceProtocol.CompileToolchainHeader] = compileToolchain;
         try
         {
             await response.Body.WriteAsync(body, context.RequestAborted).ConfigureAwait(false);

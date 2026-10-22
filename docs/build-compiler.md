@@ -25,7 +25,10 @@ and writes only the known generated mapping/target-builder and Runtime C# files
 under a new private temporary directory. The emitted project file is never
 executed. The installed .NET 10 C# compiler is invoked directly with fixed
 arguments, the installed reference assemblies and trusted generated C# files.
-No project evaluation, restore or package-feed discovery occurs.
+No project evaluation, restore or package-feed discovery occurs. The admitted
+source set, directory layout, compiler arguments and framed reply are one shared
+implementation (`BuildCompilation` in `Weft.Deployment`), which the
+[Ferrule service](#ferrule-service-compilation) uses as well.
 
 Child environments are cleared, then populated with only the required tool,
 home and bounded cache paths. Every isolated `DOTNET_CLI_HOME` explicitly sets
@@ -49,6 +52,25 @@ fixed by trusted host composition, not request input. The existing owned
 container lifecycle still verifies its identity and removes it after completion
 or cancellation.
 
+## Ferrule service compilation
+
+Hosted platforms that cannot run Docker compile through the
+[Ferrule service](ferrule-service.md#compile-operations) `compile` profile, with the
+same `weft.ferrule-build.v1` frames, bounds and wall deadline. Each operation runs
+the generator in the worker's own service sandbox and the pinned compiler in a fresh
+`weft-compile-sandbox` launcher whose controls the service verifies before the
+compiler starts: fixed limits with a 2 GiB managed heap, no network or new
+processes, and Landlock confinement to the read-only toolchain, the private
+directory and its one pre-created output file. Its replies, including the artifact
+bytes, are the Docker compiler's for the same frame and the same worker. The
+service reports the native worker and complete toolchain identities separately.
+Compile calls require an explicit toolchain pin before dispatch and on the answer;
+their build identity binds both digests. Build-related inspection and preview use
+that same pin so saved evidence matches the build intent. The toolchain digest
+includes the .NET host/runtime, compiler, reference assemblies, launcher and shared
+compilation implementation, rather than only a version label.
+Docker compilation remains the default runner for local development and tests.
+
 Build the native image first from `engines/ferrule-host`, then use
 `tools/build-worker/build_image.py --native-image sha256:<id> --tag <tag>
 --work-root <existing-work-directory>`. The launcher binds a temporary local
@@ -57,4 +79,6 @@ hash in the Docker build. Registry builds may use a native manifest digest with
 the corresponding verified binary hash. Local metadata/protocol tests
 do not establish actual Linux compilation/isolation. Qualify the exact combined
 image with real generation, compilation, preview/regression equivalence,
-cancellation and cleanup before enabling it in a deployment workflow.
+cancellation and cleanup before enabling it in a deployment workflow. The service
+compile tests compare every fixture's compile and inspection reply with this image
+byte for byte (see [Ferrule service qualification](ferrule-service.md#qualification)).
