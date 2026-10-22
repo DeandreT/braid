@@ -2,36 +2,36 @@
 
 The PostgreSQL ownership library and its separate local setup are described in
 [Project ownership](project-ownership.md). Explicit local identity, persistent
-catalog reads and owner provisioning are described in [Catalog reads](catalog-reads.md);
-that increment's qualification status is recorded there.
+catalog reads and owner provisioning are described in [Catalog reads](catalog-reads.md).
 Current database setup also requires the separate maintenance login before
 migration 0007; its explicit upgrade and metadata-only scope are described in
 [Maintenance metadata](private-object-maintenance-metadata.md).
-The [project payload permission foundation](project-payload-permissions.md) is in
-progress, with a separate reader credential and explicit migration-owner command.
-Its selected grant contract adds no HTTP/auth/payload or preview activation;
-integration and qualification remain pending as described there.
-Configured catalog storage uses the v2 filesystem profile. Provision new roots
-or activate existing v1 roots explicitly using the
-[offline storage procedure](private-storage-activation.md); the server does
-neither during startup or requests.
+The [project payload permission](project-payload-permissions.md) has a separate
+reader credential and explicit migration-owner command. Preparing a grant does
+not activate an HTTP route, authentication or a preview worker.
+Catalog storage uses an explicitly selected filesystem or Azure Blob store.
+For the filesystem profile, provision new roots or activate existing v1 roots
+using the [offline storage procedure](private-storage-activation.md); the server
+does neither during startup or requests. Blob setup has its own
+[initialization and host settings](private-storage-blob.md).
 
-The Angular/ASP.NET Core workspace is local-only. It supplies a live API health
-check and a read-only mapping viewer over development native examples, with
-generated API contracts. A separate Ferrule adapter supplies native inspection,
-validation, and projection. The first [catalog browser](catalog-browser.md)
-increment adds read-only saved metadata and immutable history; its qualification
-status is recorded there. The [saved reports](saved-reports.md) increment connects
-the revision page to explanations and validation with explicit generation and
-repair controls; its qualification is tracked separately. The catalog API
-supports immutable native uploads. Browser writes, hosted authentication, chat
-and Wolverine-backed execution follow separate increments. The separate
-[project creation HTTP](project-creation-http.md) increment adds explicit
-organization actions and its dedicated creator configuration.
+The Angular/ASP.NET Core workspace supplies a compact mapping workbench, generated
+API contracts and explicit Disabled, Development and Session host profiles.
+A separate Ferrule adapter supplies native inspection, validation and projection.
+The [catalog browser](catalog-browser.md) reads saved metadata and immutable
+history. [Saved reports](saved-reports.md) connect the revision page to explanations
+and validation, with explicit generation and repair controls. The catalog API
+supports project creation, metadata edits and immutable native uploads through
+their separately configured write capabilities. [Session host operations](session-host.md)
+describes hosted authentication and private configuration; a local test does not
+establish a working cloud deployment.
 
 Revision-pinned chat is off unless configured; its server-owned model profiles,
 credentials and routes are described in [Chat turn HTTP API](chat-http.md). A
 local OpenAI-compatible or Ollama endpoint can be configured as a profile.
+Sample previews, saved regression runs and build execution use their own worker
+and persistence settings; see [Preview runs](preview-runs.md),
+[Regression runs](regression-runs.md) and [Build workflow](build-workflow.md).
 
 The [native mapping upload page](native-mapping-upload-ui.md) creates a mapping
 and its first immutable revision from the original file. Its separate
@@ -39,7 +39,9 @@ and its first immutable revision from the original file. Its separate
 explicit replay, source-free recovery and permission changes with private fixture
 bindings. Run `npm run test:native-mapping-upload-browser` through the alternate
 display; controlled frontend checks and actual packaged-host results retain their
-separate qualification scopes. Appending a revision follows separately.
+separate qualification scopes. The [revision append page](native-revision-append-ui.md)
+checks the reviewed head before sending and retains the original request for
+explicit recovery.
 
 The packaged container images, their private configuration delivery and a local
 stack in the hosted shape are described in [Runtime packaging](runtime-packaging.md).
@@ -242,6 +244,7 @@ The harness runs the API in Development. Supply the configured immutable worker
 image for actual native viewer flows; missing configuration does not qualify
 those flows. Display-only fixtures are explicitly labelled synthetic and exercise
 generic contract states independently of native backend qualification.
-NuGet and npm lockfiles are committed. Domain/application assemblies will stay
+NuGet and npm lockfiles are committed. Domain/application assemblies remain
 independent of ASP.NET Core and provider SDK types, following the Wareboxes-style
-modular layout. Wolverine will enter with the first durable job workflow.
+modular layout. Wolverine carries durable execution commands; its persistence and
+worker settings are separate from the browser-facing API.

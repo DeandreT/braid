@@ -1,11 +1,12 @@
 # Explicit project payload permission
 
-Implementation and qualification are in progress for
-[P4b #93](https://github.com/DeandreT/weft/issues/93). This document describes the
-selected contract; it does not establish passed database/tool qualification or
-working production-payload access. It builds on the qualified, merged
-[external identity foundation](external-identity-bindings.md). Migration
+The permission contract from [P4b #93](https://github.com/DeandreT/weft/issues/93)
+is implemented in [#105](https://github.com/DeandreT/weft/pull/105). It builds on the
+[external identity foundation](external-identity-bindings.md); migration
 `0009_project_payload_read_grants.sql` adds the separate permission schema.
+Applying the schema or configuring its reader does not grant payload access.
+Operators must explicitly grant the scoped permission, and each payload workflow
+must combine it with its own current authority and ownership checks.
 
 ## Permission and current project authority
 

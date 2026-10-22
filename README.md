@@ -2,46 +2,51 @@
 
 **Understand, test, and deploy your data mappings.**
 
-Weft is a web application in development for exploring, reviewing, testing, and
-operating data mappings. Ferrule will be its first mapping backend; the
-application will support other engines through explicit adapters.
+Weft is a web application for exploring, reviewing, testing, and operating data
+mappings. Ferrule is its first mapping backend; other engines require explicit
+adapters and their own capability checks.
 
-An integrated AI chat window will help users understand mappings through a
-model-independent backend and permission-controlled mapping tools.
+## Implemented workflows
 
-## Planned first release
-
-- A mapping catalog with immutable revisions and project ownership.
-- A searchable source-to-rule-to-target view with expandable details and lineage.
-- An AI chat window that explains the selected mapping and links answers to rules.
-- Bounded sample previews through the selected mapping backend.
-- Microsoft Entra sign-in and project-scoped application permissions.
+- A mapping catalog with immutable revisions, native-file uploads and project ownership.
+- A compact source-to-rule-to-target workbench with a contextual inspector and investigation dock.
+- Revision-pinned AI chat with permission-controlled mapping tools and verified citations.
+- Bounded sample previews, revision comparison and saved regression cases.
+- Immutable build preparation, qualification, and local release activation, audit and rollback.
+- Microsoft Entra sign-in, server sessions and project-scoped application permissions.
 
 Other mapping engines, identity providers, and AI model providers will integrate
 through separate adapters. Web hosting and publishing a mapping as a runnable
 endpoint are distinct workflows.
 
-## Status and planning
+## Configuration and qualification boundaries
 
 The Angular frontend and C# API provide a mapping catalog, immutable revision
 history, saved projection and validation views, project creation, metadata editing,
 and native-file upload with explicit recovery. A separate upload page appends a
 revision against a reviewed head. Ferrule is the first mapping backend.
 
-Catalog persistence, scoped APIs, private storage, maintenance, and all six catalog
-browser workflows are qualified and merged. Conditional revision append completed
-[PR #96](https://github.com/DeandreT/weft/pull/96) after 140 fresh browser cases
-passed with no retries or skips, completing
-[#19](https://github.com/DeandreT/weft/issues/19). Authentication, AI chat, sample
-previews, and deployment follow those catalog workflows.
+Optional business features remain off until their own settings and dependencies are configured.
+The repository includes a local hosted-shape stack and Azure deployment templates;
+source code, local qualification and actual hosted/provider qualification are
+separate gates. Templates do not establish a working Azure deployment or mapping
+endpoint. See [Delivery plan](ROADMAP.md) for the acceptance requirements.
+
+Preparing a build or using the [local release adapter](docs/local-releases.md)
+does not deploy an HTTP endpoint. The local adapter changes a retained release
+pointer and invokes an already qualified artifact through the restricted runtime.
+
+Conditional revision append is implemented in
+[PR #96](https://github.com/DeandreT/weft/pull/96), completing
+[#19](https://github.com/DeandreT/weft/issues/19). Upload recovery preserves the
+original request and does not guess whether an unconfirmed operation succeeded.
 
 Provider-neutral external identity bindings and explicit owner commands are
-qualified and merged in [PR #98](https://github.com/DeandreT/weft/pull/98).
-They do not enable Entra sign-in, browser sessions, or production-payload access;
-see [External identity bindings](docs/external-identity-bindings.md) for the
-operator contract and qualification evidence.
+implemented in [PR #98](https://github.com/DeandreT/weft/pull/98).
+Preparing a binding does not itself enable sign-in, create a browser session or
+grant payload access; see [External identity bindings](docs/external-identity-bindings.md).
 
-Explicit project payload-read permissions are qualified and merged in
+Explicit project payload-read permissions are implemented in
 [PR #105](https://github.com/DeandreT/weft/pull/105), with a separate grant from
 project membership. The owner contract is described in
 [Payload permissions](docs/project-payload-permissions.md).
@@ -58,13 +63,14 @@ The Server explicitly selects disabled, local Development, or Session mode.
 [Session host operations](docs/session-host.md) describes private credential
 delivery, the admitted durable ring, direct HTTPS or one-hop proxy ingress,
 privacy and shutdown ownership. Host activation does not provision identities,
-keys, database grants, or an Entra application, and does not itself provide an
-Angular sign-in interface or establish live-provider/cloud support.
+keys, database grants or an Entra application, or establish live-provider/cloud
+qualification.
 
 The Angular catalog uses [session-safe browser state](docs/browser-session-state.md)
 to observe the explicit host mode, fence stale identity callbacks, and preserve
-private uncertain requests across same-owner reauthentication. Status observation
-does not replace fresh catalog authority or add sign-in controls.
+private uncertain requests across same-owner reauthentication. Its sign-in
+controls use the separate [authentication HTTP protocol](docs/browser-authentication-http.md);
+status observation and authentication do not replace fresh catalog authority.
 
 Versioned mapping contracts and development-only synthetic projections provide
 the shared foundation for the viewer. Angular types are generated from
@@ -102,11 +108,16 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Claim-aware storage](docs/private-storage-v2.md) and [offline activation](docs/private-storage-activation.md): tracked publication, permanent gates, and explicit v1 root conversion.
 - [Revision report metadata](docs/revision-report-metadata.md): complete report identity, restricted roles, claims, retained attempts, and repair.
 - [Persisted report API](docs/persisted-report-api.md): current and retained report reads, explicit derivation, and complete-response limits.
-- [Maintenance metadata](docs/private-object-maintenance-metadata.md): permanent retirement, fenced cleanup claims, and positive publication registration; implementation in progress.
+- [Maintenance metadata](docs/private-object-maintenance-metadata.md): permanent retirement, fenced cleanup claims, and positive publication registration.
+- [Workbench presentation](docs/workbench-presentation.md): semantic colors, exact-value details, safe layout preferences and action confirmations.
+- [Chat UI](docs/chat-ui.md): revision-pinned conversations and evidence-backed navigation.
+- [Preview runs](docs/preview-runs.md): bounded execution of explicit sample inputs.
+- [Regression cases](docs/regression-cases.md): saved inputs, expected output and immutable case versions.
+- [Build workflow](docs/build-workflow.md) and [compiled runtime](docs/compiled-runtime.md): capability admission, immutable artifacts and restricted execution.
+- [Local releases](docs/local-releases.md): atomic activation, retained audit, explicit rollback and current-release invocation.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 
 Stack: Angular frontend, C#/.NET 10 modular backend, PostgreSQL metadata,
-and private object storage. Wolverine will handle durable internal jobs when
-preview execution is introduced. Model providers remain behind an independent
+private object storage and Wolverine-backed durable execution. Model providers remain behind an independent
 chat adapter; Ferrule remains behind a typed mapping-engine boundary.
