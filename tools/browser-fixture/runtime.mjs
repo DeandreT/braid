@@ -22,6 +22,7 @@ import net from "node:net";
 import { setTimeout as pause } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { failureSite } from "./failure-site.mjs";
+import { hostFailureSummary } from "./safe-diagnostics.mjs";
 import {
   browserFixtureMigrations,
   browserFixtureProtectedTables,
@@ -1539,6 +1540,10 @@ export async function runBrowserFixture(definition) {
         outputBytes: 0,
         overflow: false,
         spawnFailure: false,
+        diagnostics: {
+          stdout: hostFailureSummary(),
+          stderr: hostFailureSummary(),
+        },
       };
       const admission = {
         stage: "spawn",
@@ -1569,10 +1574,14 @@ export async function runBrowserFixture(definition) {
         host.spawnFailure = true;
         rejectSpawn(new Failure("productFailure"));
       });
-      for (const stream of [child.stdout, child.stderr])
+      for (const [name, stream] of [
+        ["stdout", child.stdout],
+        ["stderr", child.stderr],
+      ])
         stream.on("data", (bytes) => {
           host.outputBytes += bytes.length;
           if (host.outputBytes > 2097152) host.overflow = true;
+          host.diagnostics[name].write(bytes);
         });
       // Do not retain framework output, cookies or tokens, even in the private ledger.
       if (kind === "read") readHost = host;
@@ -1769,6 +1778,10 @@ export async function runBrowserFixture(definition) {
           forced,
           outputBytes: host.outputBytes,
           overflow: host.overflow,
+          diagnostics: {
+            stdout: host.diagnostics.stdout.snapshot(),
+            stderr: host.diagnostics.stderr.snapshot(),
+          },
         };
         save();
       }

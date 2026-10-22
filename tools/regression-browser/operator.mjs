@@ -1,6 +1,7 @@
 // Real regression API, immutable cases and the ordinary Weft.Worker process. No scripted execution output.
 import { runBrowserFixture } from "../browser-fixture/runtime.mjs";
 import { setTimeout as pause } from "node:timers/promises";
+import { reportSetupDiagnostic } from "../browser-fixture/safe-diagnostics.mjs";
 
 await runBrowserFixture({
   kind: "regression",
@@ -258,6 +259,8 @@ await runBrowserFixture({
             await pause(100);
             response = await request(fx.readHost, path);
           }
+          state.observations.push(reportSetupDiagnostic(operation, response));
+          save();
           check(
             response.status === 200 &&
               response.body?.state === "available" &&

@@ -126,3 +126,8 @@ native-worker cleanup. It then removes only the fixture's labeled database,
 network and volume. A cleanup failure fails qualification. Private source,
 publication and journal artifacts remain available for investigation; their
 removal is separate from proving successful resource settlement.
+
+Setup observations retain only allowlisted report state/failure categories and
+HTTP status. Host settlement records fixed fatal-error categories detected from
+bounded output prefixes; it never stores framework messages, paths, tokens or
+payloads. These clues do not replace a verified cause or make a failed setup pass.
