@@ -106,9 +106,9 @@ shutdown faults.
 
 Concurrent children of one replica share its kernel and user ID. The controls
 above confine each child, but tenant-grade isolation between concurrent
-operations comes from a platform sandbox around the service (see isolation
-adapters), or from running each replica with a concurrency of one inside a
-sandboxed runtime.
+operations comes from a platform sandbox around the service (see
+[isolation adapters](#isolation-adapters)), or from running each replica with a
+concurrency of one inside a sandboxed runtime.
 
 ## Concurrency and scaling
 
@@ -159,9 +159,9 @@ Hosts select the runner explicitly with `WEFT_FERRULE_RUNNER`:
 
 | Host | Values (default first) |
 | --- | --- |
-| Development host (`DOTNET_ENVIRONMENT=Development`) | `docker`, `service` |
-| Session host (native upload and report derivation) | `worker` (the hosted inspection transport), `service` |
-| `Weft.Worker` previews (and the regressions that run them) | `docker`, `service` |
+| Development host (`DOTNET_ENVIRONMENT=Development`) | `docker`, `service`, `azureContainerAppsSessions` |
+| Session host (native upload and report derivation) | `worker` (the hosted inspection transport), `service`, `azureContainerAppsSessions` |
+| `Weft.Worker` previews (and the regressions that run them) | `docker`, `service`, `azureContainerAppsSessions` |
 
 With `service`, the host requires:
 
@@ -177,6 +177,70 @@ scalars beside the default hosted worker, or `WEFT_INSPECTION_WORKER_*` beside
 `service` on the Session host. Startup does not contact the service; an unreachable
 service fails operations as a retryable unavailable backend. `Weft.Worker`'s own
 inspection transport and build execution keep using Docker.
+
+## Isolation adapters
+
+Stronger isolation than one replica's child processes comes from the platform. A
+platform sandbox plugs in as an `IFerruleServiceConnector` (in
+`Weft.MappingBackends.Workers`) without changing core Weft, the runner or the
+service. A connector opens one channel per operation and supplies only the
+transport and the caller's authentication. It must deliver every request of a
+channel, including the cancellation, to the same service instance, and must never
+send a request twice. The service runs unchanged inside the sandbox.
+
+### Azure Container Apps dynamic sessions
+
+`Weft.MappingBackends.AzureSessions` is the only project that depends on the Azure
+SDK. `AzureSessionsConnector` runs each operation in a fresh session of a
+custom-container session pool that runs the Ferrule service image:
+
+- every channel is a new random session identifier (`weft-` plus 32 hexadecimal
+  characters), passed as `identifier` on every request and never used again;
+- requests go to the pool management endpoint with a managed-identity token for
+  `https://dynamicsessions.io/.default`; the pool forwards the path to the session's
+  service, so ready, operation and cancellation reach the same session;
+- after the operation settles, the connector stops the session
+  (`POST /.management/stopSession`); if the stop is lost, the pool's lifecycle
+  removes the session;
+- a pool refusal before any frame byte (for example an exhausted pool) is retried in
+  a fresh session; an answer after frame bytes that does not come from the service,
+  such as a gateway error, is a cleanup failure.
+
+Select it with `WEFT_FERRULE_RUNNER=azureContainerAppsSessions` in the Development
+host, the Session host or `Weft.Worker`:
+
+| Setting | Value |
+| --- | --- |
+| `WEFT_FERRULE_SESSIONS_POOL_ENDPOINT` | The pool's management endpoint, one canonical HTTPS origin such as `https://<pool>.<environment>.<region>.azurecontainerapps.io`. |
+| `WEFT_FERRULE_WORKER_IMAGE` | The service image's build identity. |
+| `WEFT_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID` | Optional client ID of a user-assigned managed identity; without it, the system-assigned identity is used. |
+
+The host's identity needs the *Azure ContainerApps Session Executor* role on the
+pool. Configure the pool as a custom container pool with network egress disabled,
+running the service image with `WEFT_FERRULE_SERVICE_AUTHENTICATION=platformSandbox`,
+`WEFT_FERRULE_SERVICE_LISTEN_ADDR=0.0.0.0:8080` (the pool's target port),
+`WEFT_FERRULE_SERVICE_CONCURRENCY=1` and `WEFT_FERRULE_SERVICE_QUEUE=0`, a writable
+`/tmp`, and liveness and startup probes on `/v1/health/live` and `/v1/health/ready`.
+Each session is a Hyper-V sandbox that serves exactly one operation, so concurrent
+operations never share a kernel. The pool's maximum sessions bound concurrent
+operations, and its ready sessions absorb bursts.
+
+### Other platforms
+
+- **Kubernetes with a sandboxed runtime.** Run the same image as a Deployment with a
+  gVisor or Kata `RuntimeClass` behind a layer-4 `Service`, and use the pinned
+  connector unchanged. With `WEFT_FERRULE_SERVICE_CONCURRENCY=1`, each pod's
+  sandbox runs one operation at a time; scale pods with an HPA or KEDA on concurrent
+  connections or CPU. The child-process controls stay in force inside the sandbox.
+- **Per-operation sandboxes on other platforms** (for example a sandbox API that
+  creates an isolated instance per request) need a connector that creates or
+  addresses one instance per channel, authenticates to the platform, and routes the
+  channel's requests to that instance; the service runs there in `platformSandbox`
+  mode.
+- **Platforms that terminate TLS and route each request independently** cannot
+  keep an operation's cancellation on its instance. They need a connector that
+  provides that affinity, such as a session identifier, before they can host the
+  service.
 
 ## Configuration
 
@@ -220,4 +284,7 @@ Set `WEFT_FERRULE_HOST_EXECUTABLE` to a worker built from this source to run the
 live .NET service tests. With `WEFT_FERRULE_WORKER_IMAGE` naming an image that
 contains the same binary, the equivalence test also compares every child answer
 with the Docker runner byte for byte. Without these settings the live tests are
-explicitly skipped.
+explicitly skipped. The dynamic-sessions adapter is qualified against a local stub
+of the pool management API (token checks, per-identifier sessions, forwarding,
+stop, pool refusal and gateway failure); provisioning a real pool is a deployment
+step.

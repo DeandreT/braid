@@ -16,6 +16,7 @@
     <Project Path="src/Weft.Identity/Weft.Identity.csproj" />
     <Project Path="src/Weft.Jobs/Weft.Jobs.csproj" />
     <Project Path="src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
+    <Project Path="src/Weft.MappingBackends.AzureSessions/Weft.MappingBackends.AzureSessions.csproj" />
     <Project Path="src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
     <Project Path="src/Weft.Storage.Blob/Weft.Storage.Blob.csproj" />
     <Project Path="src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />

@@ -183,6 +183,33 @@ public sealed class ServerHostConfigurationBoundaryTests
         }
     }
 
+    [Fact]
+    public void SessionNativeWorkSelectsDynamicSessionsOnlyExplicitlyAndUnambiguously()
+    {
+        var values = SessionScalars();
+        values["WEFT_REVISION_REPORTS_ENABLED"] = "true";
+        values["WEFT_REVISION_REPORT_DERIVATION_ENABLED"] = "true";
+        values["WEFT_FERRULE_RUNNER"] = "azureContainerAppsSessions";
+        values["WEFT_FERRULE_SESSIONS_POOL_ENDPOINT"] = "https://weft-ferrule.env.westus2.azurecontainerapps.io";
+        values["WEFT_FERRULE_WORKER_IMAGE"] = "sha256:" + new string('b', 64);
+        var admitted = ServerHostOptions.Read(values.GetValueOrDefault);
+        ServerHostCheck.That(admitted.FerruleSessions?.PoolManagementEndpoint == new Uri("https://weft-ferrule.env.westus2.azurecontainerapps.io")
+            && admitted.FerruleService is null && admitted.InspectionWorker is null && admitted.FerruleSessions.ManagedIdentityClientId is null,
+            "Session did not select dynamic sessions from its explicit scalars.");
+        foreach (var (name, value) in new (string, string?)[]
+        {
+            ("WEFT_FERRULE_SESSIONS_POOL_ENDPOINT", null), ("WEFT_FERRULE_SESSIONS_POOL_ENDPOINT", "https://10.0.0.6"),
+            ("WEFT_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID", "not-a-guid"),
+            ("WEFT_FERRULE_SERVICE_URL", "https://10.0.0.5:8443"), ("WEFT_INSPECTION_WORKER_URL", "https://10.0.0.4:8443")
+        })
+        {
+            var copy = new Dictionary<string, string?>(values) { [name] = value };
+            bool rejected = false;
+            try { _ = ServerHostOptions.Read(copy.GetValueOrDefault); } catch (Exception) { rejected = true; }
+            ServerHostCheck.That(rejected, "Session admitted an invalid or ambiguous dynamic-sessions selection: " + name + ".");
+        }
+    }
+
     private static Dictionary<string, string?> FerruleServiceScalars() => new(StringComparer.Ordinal)
     {
         ["WEFT_FERRULE_RUNNER"] = "service",

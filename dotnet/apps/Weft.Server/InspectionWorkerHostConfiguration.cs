@@ -37,11 +37,23 @@ public static class InspectionWorkerHostConfiguration
     /// <summary>Exact inspection frames sent to the Ferrule service over pinned mutual TLS.</summary>
     internal static void ConfigureService(IServiceCollection services, FerruleServiceEndpoint service, X509Certificate2 clientCertificate)
     {
-        ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(clientCertificate);
-        var connector = new PinnedServiceConnector(new(service.Endpoint, service.ServiceCertificateSha256, clientCertificate));
-        services.AddSingleton(_ => new FerruleServiceRunner(new(connector, FerruleServiceProtocol.InspectionProfile, service.BuildIdentity)));
+        ConfigureConnector(services,
+            _ => new PinnedServiceConnector(new(service.Endpoint, service.ServiceCertificateSha256, clientCertificate)), service.BuildIdentity);
+    }
+
+    /// <summary>
+    /// Exact inspection frames sent to the Ferrule service through a connector, for example a platform sandbox. The
+    /// container owns the connector and disposes it after the runner has stopped.
+    /// </summary>
+    internal static void ConfigureConnector(IServiceCollection services, Func<IServiceProvider, IFerruleServiceConnector> connector, string buildIdentity)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(connector);
+        services.AddKeyedSingleton(nameof(IFerruleServiceConnector), (provider, _) => connector(provider));
+        services.AddSingleton(provider => new FerruleServiceRunner(new(
+            provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)), FerruleServiceProtocol.InspectionProfile, buildIdentity)));
         services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<FerruleServiceRunner>());
         services.AddSingleton<IHostedService>(provider =>
             new InspectionWorkerHostLifetime(provider.GetRequiredService<FerruleServiceRunner>().StopAsync));

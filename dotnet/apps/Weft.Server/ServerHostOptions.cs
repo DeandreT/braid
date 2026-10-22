@@ -4,6 +4,7 @@ using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Identity;
 
+using Weft.MappingBackends.AzureSessions;
 using Weft.MappingBackends.Workers;
 
 namespace Weft.Server;
@@ -42,6 +43,7 @@ internal sealed class ServerHostOptions
     internal int? DerivedReadByteLimit { get; private init; }
     internal SessionInspectionWorker? InspectionWorker { get; private init; }
     internal FerruleServiceEndpoint? FerruleService { get; private init; }
+    internal AzureSessionsRunnerSettings? FerruleSessions { get; private init; }
 
     internal static ServerHostOptions Read(Func<string, string?> read)
     {
@@ -115,22 +117,22 @@ internal sealed class ServerHostOptions
         // Docker. The hosted Weft.Worker stays the default; the Ferrule service is an explicit selection.
         SessionInspectionWorker? inspection = null;
         FerruleServiceEndpoint? service = null;
+        AzureSessionsRunnerSettings? sessions = null;
         if (ingestion.Enabled || reports.DerivationEnabled)
         {
             try
             {
-                if (FerruleRunnerSelection.Read(read, FerruleRunnerKind.InspectionWorker, FerruleRunnerKind.InspectionWorker,
-                    FerruleRunnerKind.Service) == FerruleRunnerKind.Service)
-                {
-                    if (read("WEFT_INSPECTION_WORKER_URL") is not null || read("WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256") is not null)
-                        throw Failure();
-                    service = FerruleServiceEndpoint.Read(read);
-                }
-                else
-                {
-                    if (FerruleServiceEndpoint.Configured(read)) throw Failure();
-                    inspection = SessionInspectionWorker.Read(read);
-                }
+                var runner = FerruleRunnerSelection.Read(read, FerruleRunnerKind.InspectionWorker, FerruleRunnerKind.InspectionWorker,
+                    FerruleRunnerKind.Service, FerruleRunnerKind.AzureContainerAppsSessions);
+                // Settings of a runner that is not selected are ambiguous, not ignored.
+                var worker = read("WEFT_INSPECTION_WORKER_URL") is not null || read("WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256") is not null;
+                if ((runner != FerruleRunnerKind.InspectionWorker && worker) ||
+                    (runner != FerruleRunnerKind.Service && FerruleServiceEndpoint.Configured(read)) ||
+                    (runner != FerruleRunnerKind.AzureContainerAppsSessions && AzureSessionsRunnerSettings.Configured(read)))
+                    throw Failure();
+                if (runner == FerruleRunnerKind.Service) service = FerruleServiceEndpoint.Read(read);
+                else if (runner == FerruleRunnerKind.AzureContainerAppsSessions) sessions = AzureSessionsRunnerSettings.Read(read);
+                else inspection = SessionInspectionWorker.Read(read);
             }
             catch (Exception error) when (SessionHostResources.Nonfatal(error)) { throw Failure(); }
         }
@@ -146,7 +148,8 @@ internal sealed class ServerHostOptions
             NativeByteLimit = nativeLimit,
             DerivedReadByteLimit = derivedLimit,
             InspectionWorker = inspection,
-            FerruleService = service
+            FerruleService = service,
+            FerruleSessions = sessions
         };
     }
 

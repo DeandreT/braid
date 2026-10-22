@@ -107,6 +107,8 @@ internal sealed class SessionHostResources
             InspectionWorkerHostConfiguration.ConfigureRemote(services, inspection.Options(inspectionClient!));
         if (options.FerruleService is { } service)
             InspectionWorkerHostConfiguration.ConfigureService(services, service, inspectionClient!);
+        if (options.FerruleSessions is { } sessions)
+            InspectionWorkerHostConfiguration.ConfigureConnector(services, _ => sessions.CreateConnector(), sessions.BuildIdentity);
         CatalogBusinessServices.Configure(services, environment, options.Metadata, options.Ingestion, options.Creation, options.Reports, read,
             options.NativeByteLimit, options.DerivedReadByteLimit, options.Builds);
         ChatHostConfiguration.Configure(services, read, options.Chat, true, options.Reports, session: true);

@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using Weft.MappingBackends.AzureSessions;
 using Weft.MappingBackends.Workers;
 using Weft.Storage.FileSystem;
 using Weft.WorkerTransport;
@@ -6,32 +7,42 @@ using Weft.WorkerTransport;
 namespace Weft.Worker;
 
 /// <summary>
-/// The preview runner: the local Docker runner (default) or, with <c>WEFT_FERRULE_RUNNER=service</c>, the Ferrule
-/// service over pinned mutual TLS. <c>WEFT_FERRULE_WORKER_IMAGE</c> is the expected worker identity for either.
+/// The preview runner: the local Docker runner (default), the Ferrule service over pinned mutual TLS
+/// (<c>WEFT_FERRULE_RUNNER=service</c>) or the Ferrule service in Azure Container Apps dynamic sessions
+/// (<c>azureContainerAppsSessions</c>). <c>WEFT_FERRULE_WORKER_IMAGE</c> is the expected worker identity for each.
 /// </summary>
 internal sealed class PreviewRunnerSettings
 {
     private readonly FerruleServiceEndpoint? service;
     private readonly X509Certificate2? clientCertificate;
+    private readonly AzureSessionsRunnerSettings? sessions;
 
-    private PreviewRunnerSettings(FerruleServiceEndpoint? service, X509Certificate2? clientCertificate)
+    private PreviewRunnerSettings(FerruleServiceEndpoint? service = null, X509Certificate2? clientCertificate = null,
+        AzureSessionsRunnerSettings? sessions = null)
     {
         this.service = service;
         this.clientCertificate = clientCertificate;
+        this.sessions = sessions;
     }
 
-    internal FerruleRunnerKind Kind => service is null ? FerruleRunnerKind.Docker : FerruleRunnerKind.Service;
+    internal FerruleRunnerKind Kind => service is not null ? FerruleRunnerKind.Service
+        : sessions is not null ? FerruleRunnerKind.AzureContainerAppsSessions : FerruleRunnerKind.Docker;
 
     internal static PreviewRunnerSettings Read(Func<string, string?> environment, PreviewWorkerSettings settings)
     {
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(settings);
-        if (!settings.PreviewEnabled) return new(null, null);
+        if (!settings.PreviewEnabled) return new();
         try
         {
-            if (FerruleRunnerSelection.Read(environment, FerruleRunnerKind.Docker, FerruleRunnerKind.Docker, FerruleRunnerKind.Service) ==
-                FerruleRunnerKind.Docker)
-                return FerruleServiceEndpoint.Configured(environment) ? throw Failure() : new(null, null);
+            var runner = FerruleRunnerSelection.Read(environment, FerruleRunnerKind.Docker, FerruleRunnerKind.Docker, FerruleRunnerKind.Service,
+                FerruleRunnerKind.AzureContainerAppsSessions);
+            // Settings of a runner that is not selected are ambiguous, not ignored.
+            if ((runner != FerruleRunnerKind.Service && FerruleServiceEndpoint.Configured(environment)) ||
+                (runner != FerruleRunnerKind.AzureContainerAppsSessions && AzureSessionsRunnerSettings.Configured(environment)))
+                throw Failure();
+            if (runner == FerruleRunnerKind.Docker) return new();
+            if (runner == FerruleRunnerKind.AzureContainerAppsSessions) return new(sessions: AzureSessionsRunnerSettings.Read(environment));
             string Required(string name) => environment(name) is { Length: > 0 } value ? value : throw Failure();
             var endpoint = FerruleServiceEndpoint.Read(environment);
             var certificate = PinnedCertificates.FromPem(
@@ -43,10 +54,36 @@ internal sealed class PreviewRunnerSettings
     }
 
     /// <summary>The preview runner; the container owns it, and with it the client certificate's use.</summary>
-    internal IInspectionWorkerRunner CreateRunner(PreviewWorkerSettings settings) => service is null
-        ? new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage, profile: DockerWorkerProfile.Preview))
-        : new FerruleServiceRunner(new(new PinnedServiceConnector(new(service.Endpoint, service.ServiceCertificateSha256, clientCertificate!)),
-            FerruleServiceProtocol.PreviewProfile, service.BuildIdentity));
+    internal IInspectionWorkerRunner CreateRunner(PreviewWorkerSettings settings)
+    {
+        if (service is not null)
+            return new FerruleServiceRunner(new(new PinnedServiceConnector(new(service.Endpoint, service.ServiceCertificateSha256, clientCertificate!)),
+                FerruleServiceProtocol.PreviewProfile, service.BuildIdentity));
+        if (sessions is not null)
+        {
+            var connector = sessions.CreateConnector();
+            return new ConnectorOwningRunner(new FerruleServiceRunner(new(connector, FerruleServiceProtocol.PreviewProfile, sessions.BuildIdentity)),
+                connector);
+        }
+        return new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage,
+            profile: DockerWorkerProfile.Preview));
+    }
+
 
     private static InvalidOperationException Failure() => new("The preview runner configuration is invalid.");
+
+    /// <summary>Disposes the sessions connector only after its runner has stopped and joined every operation.</summary>
+    private sealed class ConnectorOwningRunner(FerruleServiceRunner runner, AzureSessionsConnector connector) : IInspectionWorkerRunner, IAsyncDisposable
+    {
+        public string BuildIdentity => runner.BuildIdentity;
+
+        public Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken) =>
+            runner.RunAsync(requestFrame, cancellationToken);
+
+        public async ValueTask DisposeAsync()
+        {
+            try { await runner.DisposeAsync().ConfigureAwait(false); }
+            finally { connector.Dispose(); }
+        }
+    }
 }

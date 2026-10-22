@@ -48,6 +48,7 @@
     <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.FerruleService/Weft.FerruleService.csproj" />
     <ProjectReference Include="../../src/Weft.WorkerTransport/Weft.WorkerTransport.csproj" />
+    <ProjectReference Include="../../src/Weft.MappingBackends.AzureSessions/Weft.MappingBackends.AzureSessions.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
