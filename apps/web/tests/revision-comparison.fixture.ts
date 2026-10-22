@@ -455,6 +455,10 @@ export class ComparisonFixture {
   readonly posts: string[] = [];
   missingRevisions = new Set<string>();
   compare: Handler = () => ({ json: comparison({}) });
+  /** Like the server's per-instance report read admission: reads beyond it are refused. */
+  reportReadCapacity: number | null = null;
+  reportReadDelayMs = 0;
+  readonly reportReads = { active: 0, maximum: 0, refused: 0 };
 
   constructor(readonly page: Page) {
     this.context.features.readReports = true;
@@ -522,6 +526,8 @@ export class ComparisonFixture {
     else if (path === `${this.mappingApi}/comparisons`) {
       this.comparisons.push(url.search.slice(1));
       reply = await this.compare(request, url);
+    } else if (path.includes("/reports/")) {
+      reply = await this.reportReply(path, url);
     } else {
       reply = this.revisionReply(path, url);
     }
@@ -538,6 +544,30 @@ export class ComparisonFixture {
         });
     } catch (error) {
       if (!request.failure()) throw error;
+    }
+  }
+
+  private async reportReply(path: string, url: URL): Promise<Reply | null> {
+    const reads = this.reportReads;
+    reads.maximum = Math.max(reads.maximum, ++reads.active);
+    try {
+      if (
+        this.reportReadCapacity !== null &&
+        reads.active > this.reportReadCapacity
+      ) {
+        reads.refused += 1;
+        return {
+          status: 429,
+          json: { code: "revisionReportAdmissionBusy" },
+        };
+      }
+      if (this.reportReadDelayMs > 0)
+        await new Promise((resolve) =>
+          setTimeout(resolve, this.reportReadDelayMs),
+        );
+      return this.revisionReply(path, url);
+    } finally {
+      reads.active -= 1;
     }
   }
 

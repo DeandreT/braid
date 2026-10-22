@@ -279,7 +279,11 @@ export class RevisionComparisonPageComponent extends CatalogRoutePage<
       const selection = this.selection();
       const view = this.data();
       const context = this.context();
+      // Each side reads its explanation and validation together, which is the service's
+      // per-instance report read capacity, so the right side reads after the left settles.
+      this.leftReports.readsSettled();
       untracked(() => {
+        let leftReading = false;
         for (const name of sideNames) {
           const reports = this.reports(name);
           const chosen = selection?.[name];
@@ -294,11 +298,13 @@ export class RevisionComparisonPageComponent extends CatalogRoutePage<
             revision.scope.revisionId !== chosen.revisionId
           )
             reports.unbind();
-          else
+          else if (!leftReading) {
             reports.bind(
               { context, mapping: view.mapping, revision },
               chosen.selectors,
             );
+            leftReading = name === "left" && !reports.readsSettled();
+          }
         }
       });
     });

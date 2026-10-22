@@ -598,6 +598,20 @@ test("missing revisions and invalid links are shown without a comparison", async
   expect(fixture.comparisons).toEqual([]);
 });
 
+test("the two sides read within the service's two concurrent report reads", async ({
+  page,
+}) => {
+  const fixture = fixtures.get(page)!;
+  fixture.reportReadCapacity = 2;
+  fixture.reportReadDelayMs = 250;
+  await openPaired(page, fixture);
+  await expect(side(page, "Left revision")).not.toContainText("busy");
+  await expect(side(page, "Right revision")).not.toContainText("busy");
+  expect(fixture.reportReads.refused).toBe(0);
+  expect(fixture.reportReads.maximum).toBe(2);
+  expect(fixture.comparisons).toHaveLength(1);
+});
+
 test("a superseded comparison reply is ignored after the sides change", async ({
   page,
 }) => {
