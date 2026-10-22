@@ -12,6 +12,7 @@ import {
 import { CatalogApi, catalogFailure } from "./catalog-api";
 import {
   CatalogReadError,
+  catalogOwner,
   type CatalogContext,
   type CatalogContextState,
 } from "./catalog-types";
@@ -74,9 +75,7 @@ export class CatalogContextStore {
         tap((context) => {
           settled = true;
           if (generation !== this.generation) return;
-          const identityContext =
-            context.mode === "session" ? context.identityContext : "";
-          const identity = `${context.mode}/${context.actorPrincipalId}/${context.allowedOrganizationId}/${identityContext}`;
+          const identity = catalogOwner(context);
           if (this.lastIdentity !== null && identity !== this.lastIdentity)
             this.identityRevision.update((revision) => revision + 1);
           this.lastIdentity = identity;

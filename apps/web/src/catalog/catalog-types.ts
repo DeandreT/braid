@@ -43,6 +43,20 @@ export type CatalogContextState =
   | { kind: "ready"; context: CatalogContext }
   | { kind: CatalogFailureKind };
 
+/**
+ * The owner of private browser work: mode, principal, organization and Session identity context.
+ * Only a fresh context with a different key confirms a new owner; a failed or negative session
+ * observation produces no context at all.
+ */
+export function catalogOwner(context: CatalogContext): string {
+  return JSON.stringify([
+    context.mode,
+    context.actorPrincipalId,
+    context.allowedOrganizationId,
+    context.mode === "session" ? context.identityContext : null,
+  ]);
+}
+
 export function isCatalogId(value: unknown): value is string {
   return (
     typeof value === "string" &&

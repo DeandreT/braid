@@ -132,19 +132,16 @@ export class RevisionBuildsComponent {
     effect(() => {
       const context = this.context(),
         mapping = this.mapping(),
-        revision = this.revision(),
-        generation = this.sessions.generation();
+        revision = this.revision();
+      this.sessions.generation();
       untracked(() => {
-        this.recovery.bind(
-          buildOwner(context, revision),
-          mapping.access,
-          generation,
-        );
+        this.recovery.bind(buildOwner(context, revision), mapping.access);
         this.clear(false);
       });
     });
+    // A failed or negative check is not a new owner: hide build metadata but keep the frame.
     const invalidation = this.sessions.invalidated.subscribe(() =>
-      this.clear(),
+      this.clear(false),
     );
     inject(DestroyRef).onDestroy(() => {
       invalidation.unsubscribe();
@@ -526,13 +523,7 @@ export class RevisionBuildsComponent {
             // Catalog upload actions also depend on ingestion enablement; builds have their own default-off capability.
             if (!["publisher", "administrator"].includes(mapping.access.role))
               throw new BuildError("rejected");
-            if (
-              this.recovery.bind(
-                owner,
-                mapping.access,
-                this.sessions.generation(),
-              )
-            )
+            if (this.recovery.bind(owner, mapping.access))
               throw new BuildError("rejected");
             this.observedAccess.set(mapping.access);
             this.admission.set(ctx);

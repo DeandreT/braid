@@ -767,6 +767,108 @@ test("identity changes clear private chat instead of adopting another owner's co
   ).toEqual({ local: 0, session: 0 });
 });
 
+/** A focus refresh whose session check fails, then the shell and page Retry controls. */
+async function failSessionCheck(page: Page) {
+  const workspaceAccess = page.getByRole("alert").filter({
+    has: page.getByRole("heading", {
+      name: "Workspace access unavailable",
+      exact: true,
+    }),
+  });
+  await page.route(
+    "**/api/auth/session*",
+    (route) => route.fulfill({ status: 503, json: { code: "unavailable" } }),
+    { times: 1 },
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(workspaceAccess).toBeVisible();
+  await expect(panel(page)).toHaveCount(0);
+  await workspaceAccess
+    .getByRole("button", { name: "Retry", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Catalog unavailable", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+}
+
+async function unsentQuestion(page: Page) {
+  await panel(page)
+    .getByRole("button", { name: "New conversation", exact: true })
+    .click();
+  await panel(page)
+    .getByLabel("Question", { exact: true })
+    .fill("Which rule sets the region?");
+}
+
+test("an unsent question survives a failed session check", async ({ page }) => {
+  const f = await fixture(page);
+  await page.goto(f.data.browserPath);
+  await unsentQuestion(page);
+  await failSessionCheck(page);
+  await expect(panel(page).getByLabel("Question", { exact: true })).toHaveValue(
+    "Which rule sets the region?",
+  );
+  expect(f.posts).toHaveLength(1);
+  await panel(page)
+    .getByRole("button", { name: "Send question", exact: true })
+    .click();
+  await expect(panel(page)).toContainText("Answer complete.");
+  expect(f.posts).toHaveLength(2);
+  expect((f.posts[1]!.body as { text: string }).text).toBe(
+    "Which rule sets the region?",
+  );
+});
+
+test("an unacknowledged question keeps its original request across a failed session check", async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  f.loseSend();
+  await page.goto(f.data.browserPath);
+  await start(page);
+  await expect(
+    panel(page).getByRole("button", { name: "Recover original question" }),
+  ).toBeVisible();
+  await failSessionCheck(page);
+  await expect(
+    panel(page).getByRole("button", { name: "Recover original question" }),
+  ).toBeVisible();
+  expect(f.posts).toHaveLength(2);
+  // Reopening the conversation shows the committed turn; only the explicit resend confirms the request.
+  await panel(page)
+    .getByRole("button", { name: "Recover original question" })
+    .click();
+  await expect.poll(() => f.posts.length).toBe(3);
+  expect(f.posts[1]!.body).toEqual(f.posts[2]!.body);
+  await expect(
+    panel(page).getByRole("button", { name: "Recover original question" }),
+  ).toHaveCount(0);
+  await expect(panel(page)).toContainText("Answer complete.");
+});
+
+test("a different actor after a failed session check clears the unsent question", async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await page.goto(f.data.browserPath);
+  await unsentQuestion(page);
+  f.data.context.actorPrincipalId = "b0000000-0000-4000-8000-000000000001";
+  await failSessionCheck(page);
+  await expect(
+    panel(page).getByRole("button", { name: "New conversation", exact: true }),
+  ).toBeEnabled();
+  await expect(panel(page).getByLabel("Question", { exact: true })).toHaveCount(
+    0,
+  );
+  await panel(page)
+    .getByRole("button", { name: "New conversation", exact: true })
+    .click();
+  await expect(panel(page).getByLabel("Question", { exact: true })).toHaveValue(
+    "",
+  );
+});
+
 test("tool activity and per-round usage snapshots do not sum observations", async ({
   page,
 }) => {

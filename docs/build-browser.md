@@ -48,12 +48,14 @@ state if a terminal result wins the race. `Uncertain` retains artifact metadata 
 is never shown as successful and is not automatically replaced.
 
 Recovery lives only in the revision page's memory. A page-scoped provider retains
-one frame when a metadata refresh temporarily replaces its child panel; that
-child aborts its transport and discards displayed data. Parent disposal, route,
-identity, session-generation or mapping-access changes clear the frame. Fresh
-admission compares the complete access descriptor, including administrator to
-publisher changes that preserve upload permission. Private frames never go into
-browser local/session storage, the address bar, logs or an application-wide cache.
+one frame when a metadata refresh or a failed, timed-out or negative session
+check replaces or hides its child panel; that child aborts its transport and
+discards displayed data. A fresh context for another owner (mode, principal,
+organization or Session identity context), parent disposal, route or
+mapping-access changes clear the frame. Fresh admission compares the complete
+access descriptor, including administrator to publisher changes that preserve
+upload permission. Private frames never go into browser local/session storage,
+the address bar, logs or an application-wide cache.
 
 After a full reload or leaving the revision view, use own approval/build history
 before creating another request. Forgetting an unresolved frame requires explicit

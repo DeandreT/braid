@@ -1,4 +1,5 @@
 import {
+  catalogOwner,
   isCatalogId,
   type CatalogContext,
   type CatalogRevision,
@@ -62,12 +63,7 @@ export function buildOwner(
   )
     throw new BuildError("invalid");
   return Object.freeze({
-    identity: JSON.stringify([
-      context.mode,
-      context.actorPrincipalId,
-      context.allowedOrganizationId,
-      context.mode === "session" ? context.identityContext : null,
-    ]),
+    identity: catalogOwner(context),
     scope,
     nativeDigest: revision.nativeDigest.value,
   });

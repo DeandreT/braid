@@ -106,6 +106,15 @@ explicit Review latest. A failed or negative session observation alone is not a
 confirmed new owner. Existing explicit replacement/abandonment and accepted route
 loss retain their normal memory boundaries.
 
+Revision-page workflow panels (regression tests, builds and chat) are child
+views that a boundary or a catalog refresh unmounts. Their unsent drafts and
+uncertain requests live in page-scoped recovery providers rather than in the
+panel. A boundary or refresh suspends that work. Only a fresh catalog context
+whose owner (mode, principal, organization and Session identity context)
+differs discards it, as does another revision, explicit abandonment or leaving
+the page. The panel restores it to the same owner only after its own fresh
+admission.
+
 There is no durable draft storage, cross-tab registry, account-sharing mechanism,
 provider SDK, automatic mutation retry or sign-in/out control in this state
 increment. Sign-in controls compose this boundary separately.

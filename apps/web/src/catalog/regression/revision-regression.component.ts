@@ -40,33 +40,23 @@ import {
   type RegressionRun,
   type RunPage,
 } from "./regression-api";
+import {
+  RegressionViewRecovery,
+  type DocumentDraft,
+  type ParameterDraft,
+  type PendingCase,
+  type PendingRun,
+  type RegressionWork,
+} from "./regression-view-recovery";
 
-interface DocumentDraft {
-  id: number;
-  name: string;
-  text: string;
-  file: { name: string; encoded: string; length: number } | null;
-}
-interface ParameterDraft {
-  id: number;
-  name: string;
-  kind: string;
-  value: string;
-}
-interface PendingCase {
-  id: string;
-  version: string;
-  body: CaseDefinition;
-}
-interface PendingRun {
-  id: string;
-  caseId: string;
-  version: string;
-}
 const encoder = new TextEncoder();
 const maxBytes = 8 * 1024 * 1024;
 
-/** Private samples live only in this revision view; no local/session storage or HTML rendering. */
+/**
+ * Private samples live only in this revision view; no local/session storage or HTML rendering.
+ * A session boundary or panel replacement suspends the editor and uncertain requests into the
+ * page's recovery provider; only the same owner's next admission of this revision restores them.
+ */
 @Component({
   selector: "weft-revision-regression",
   imports: [
@@ -90,6 +80,7 @@ export class RevisionRegressionComponent {
   readonly workbench = input(false);
   private readonly api = inject(RegressionApi);
   private readonly sessions = inject(BrowserSessionState);
+  private readonly recovery = inject(RegressionViewRecovery);
   private readonly document = inject(DOCUMENT);
   private requests = new Subscription();
   private epoch = 0;
@@ -98,7 +89,25 @@ export class RevisionRegressionComponent {
   private fileSequence = new Map<number, number>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private editId: { id: string; version: string } | null = null;
+  private admission: {
+    context: CatalogContext;
+    scope: CatalogRevisionScope;
+  } | null = null;
   readonly capabilities = signal<CaseCapabilities | null>(null);
+  readonly kept = computed(() => {
+    if (this.capabilities()) return null;
+    const work = this.recovery.peek(this.context(), this.revision().scope);
+    if (!work) return null;
+    return [
+      work.draft ? "An unsaved test case draft is kept in this tab." : null,
+      work.pendingCase || work.pendingRun
+        ? "Recovery details for an earlier request are kept in this tab."
+        : null,
+      "Load regression cases to continue with it.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  });
   readonly cases = signal<CasePage | null>(null);
   readonly caseFilter = signal("");
   readonly caseAscending = signal(true);
@@ -144,14 +153,15 @@ export class RevisionRegressionComponent {
       this.mapping();
       this.revision();
       this.sessions.generation();
-      untracked(() => this.clear());
+      untracked(() => this.suspend());
     });
+    // A failed or negative check is not a new owner: suspend unsent work rather than discard it.
     const invalidation = this.sessions.invalidated.subscribe(() =>
-      this.clear(),
+      this.suspend(),
     );
     inject(DestroyRef).onDestroy(() => {
       invalidation.unsubscribe();
-      this.clear();
+      this.suspend();
     });
   }
 
@@ -161,6 +171,11 @@ export class RevisionRegressionComponent {
       this.api.capabilities(this.context(), this.mapping().scope),
       (value) => {
         this.capabilities.set(value);
+        this.admission = {
+          context: this.context(),
+          scope: { ...this.revision().scope },
+        };
+        this.resume(value);
         if (!value.readSamples) this.hidePrivate();
         this.loadCases();
       },
@@ -690,8 +705,62 @@ export class RevisionRegressionComponent {
       else this.openRun(id);
     }, 2000);
   }
+  private suspend(): void {
+    const admission = this.admission,
+      work = this.work();
+    if (admission && work)
+      this.recovery.keep(admission.context, admission.scope, work);
+    this.clear();
+  }
+  private work(): RegressionWork | null {
+    const draft = this.editing()
+      ? {
+          editId: this.editId,
+          name: this.name,
+          clock: this.clock,
+          target: this.target,
+          targetName: this.targetName,
+          inputs: this.inputs(),
+          outputs: this.outputs(),
+          parameters: this.parameters(),
+        }
+      : null;
+    const pendingCase = this.pendingCase(),
+      pendingRun = this.pendingRun();
+    return draft || pendingCase || pendingRun
+      ? { draft, pendingCase, pendingRun }
+      : null;
+  }
+  /** Restores suspended work after this panel's own fresh capability read; nothing is sent again. */
+  private resume(capabilities: CaseCapabilities): void {
+    const work = this.recovery.take(this.context(), this.revision().scope);
+    if (!work) return;
+    this.pendingCase.set(work.pendingCase);
+    this.pendingRun.set(work.pendingRun);
+    // An editor needs current publication permission; an uncertain request keeps its frame regardless.
+    const draft = capabilities.publishCases ? work.draft : null;
+    if (draft) {
+      this.editId = draft.editId;
+      this.name = draft.name;
+      this.clock = draft.clock;
+      this.target = draft.target;
+      this.targetName = draft.targetName;
+      this.inputs.set(draft.inputs.map((item) => this.renumber(item)));
+      this.outputs.set(draft.outputs.map((item) => this.renumber(item)));
+      this.parameters.set(draft.parameters.map((item) => this.renumber(item)));
+      this.editing.set(true);
+    }
+    if (draft || work.pendingCase || work.pendingRun)
+      this.notice.set(
+        "Work kept in this tab is restored. Nothing was sent again.",
+      );
+  }
+  private renumber<T extends { id: number }>(item: T): T {
+    return { ...item, id: ++this.sequence };
+  }
   private clear(): void {
     this.otherRevision.set(null);
+    this.admission = null;
     ++this.epoch;
     this.requests.unsubscribe();
     this.requests = new Subscription();

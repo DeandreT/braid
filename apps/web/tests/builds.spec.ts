@@ -6,6 +6,7 @@ import {
   type BuildFixture,
 } from "./builds.fixture";
 import { confirmAction } from "./confirmation.fixture";
+import { synthetic } from "./catalog.fixture";
 
 const panel = (page: Page) =>
   page.getByRole("region", { name: "Prepare this version", exact: true });
@@ -319,6 +320,94 @@ test("a catalog metadata refresh replaces the child without discarding its uncer
   expect(state.writes).toHaveLength(2);
   expect(state.writes[1].url).toBe(original.url);
   expect(state.writes[1].body).toBe(original.body);
+});
+
+const workspaceAccess = (page: Page) =>
+  page.getByRole("alert").filter({
+    has: page.getByRole("heading", {
+      name: "Workspace access unavailable",
+      exact: true,
+    }),
+  });
+
+/** A focus refresh whose session check fails, then the shell and page Retry controls. */
+async function failSessionCheck(page: Page) {
+  await page.route(
+    "**/api/auth/session*",
+    (route) => route.fulfill({ status: 503, json: { code: "unavailable" } }),
+    { times: 1 },
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(workspaceAccess(page)).toBeVisible();
+  await expect(panel(page)).toHaveCount(0);
+  await workspaceAccess(page)
+    .getByRole("button", { name: "Retry", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Catalog unavailable", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await page.getByRole("tab", { name: "Prepare", exact: true }).click();
+}
+
+async function lostRegistration(page: Page, state: BuildFixture) {
+  await loaded(page);
+  await panel(page)
+    .getByRole("button", { name: "Environment administration", exact: true })
+    .click();
+  state.nextWriteFailure = "abort";
+  await panel(page)
+    .getByRole("button", { name: "Register new environment", exact: true })
+    .click();
+  await confirmAction(page);
+  await settledOriginal(page, state);
+}
+
+test("a failed session check keeps the uncertain original request", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  await lostRegistration(page, state);
+  const original = state.writes[0];
+  await failSessionCheck(page);
+  await loaded(page);
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Previous request",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await panel(page)
+    .getByRole("button", { name: "Resend the same request", exact: true })
+    .click();
+  await expect.poll(() => state.writes.length).toBe(2);
+  expect(state.writes[1].url).toBe(original.url);
+  expect(state.writes[1].body).toBe(original.body);
+});
+
+test("a different actor after a failed session check clears the original request", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  await lostRegistration(page, state);
+  await page.route("**/api/v1/catalog/context", (route) =>
+    route.fulfill({
+      json: {
+        ...synthetic.context,
+        actorPrincipalId: "70000000-0000-4000-8000-000000000099",
+        features: { ...synthetic.context.features, uploadRevisions: false },
+      },
+    }),
+  );
+  await failSessionCheck(page);
+  await loaded(page);
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Previous request",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(state.writes).toHaveLength(1);
 });
 
 test("fresh administrator-to-publisher change clears the old operation before mutation dispatch", async ({

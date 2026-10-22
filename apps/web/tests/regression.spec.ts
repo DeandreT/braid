@@ -820,6 +820,209 @@ test("next version preserves offset nanoseconds and intentional invalid paramete
   });
 });
 
+const workspaceAccess = (page: Page) =>
+  page.getByRole("alert").filter({
+    has: page.getByRole("heading", {
+      name: "Workspace access unavailable",
+      exact: true,
+    }),
+  });
+
+/** A background focus refresh whose session status observation fails once. */
+async function failSessionCheck(
+  page: Page,
+  failure: "unavailable" | "timeout",
+) {
+  await page.route(
+    "**/api/auth/session*",
+    (route) =>
+      failure === "timeout"
+        ? route.abort("timedout")
+        : route.fulfill({ status: 503, json: { code: "unavailable" } }),
+    { times: 1 },
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(workspaceAccess(page)).toBeVisible();
+  await expect(panel(page)).toHaveCount(0);
+}
+
+/** The shell Retry restores status and context only; the revision read and panel load stay explicit. */
+async function recoverAccess(page: Page) {
+  await workspaceAccess(page)
+    .getByRole("button", { name: "Retry", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Catalog unavailable", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await page.getByRole("tab", { name: "Tests", exact: true }).click();
+  await expect(
+    panel(page).getByRole("button", {
+      name: "Load regression cases",
+      exact: true,
+    }),
+  ).toBeVisible();
+}
+
+async function enterDraft(page: Page) {
+  await panel(page)
+    .getByRole("button", { name: "New test case", exact: true })
+    .click();
+  await panel(page)
+    .getByLabel("Test name", { exact: true })
+    .fill("Unsaved west order");
+  await panel(page)
+    .getByLabel("Test date and time (UTC or offset)", { exact: true })
+    .fill("2026-10-20T12:00:00Z");
+  const documents = panel(page).locator(".regression-document");
+  await documents.nth(0).getByLabel("Input UTF-8 text").fill('{"order":1}');
+  await documents.nth(1).getByLabel("Expected UTF-8 text").fill('{"ok":1}');
+  await panel(page)
+    .getByRole("button", { name: "Add parameter", exact: true })
+    .click();
+  const parameter = panel(page).locator(".regression-parameter");
+  await parameter.getByLabel("Parameter name").fill("region");
+  await parameter.getByLabel("Exact parameter value").fill("west");
+}
+
+async function expectDraft(page: Page) {
+  await expect(
+    panel(page).getByLabel("Test name", { exact: true }),
+  ).toHaveValue("Unsaved west order");
+  await expect(
+    panel(page).getByLabel("Test date and time (UTC or offset)", {
+      exact: true,
+    }),
+  ).toHaveValue("2026-10-20T12:00:00Z");
+  const documents = panel(page).locator(".regression-document");
+  await expect(documents.nth(0).getByLabel("Input UTF-8 text")).toHaveValue(
+    '{"order":1}',
+  );
+  await expect(documents.nth(1).getByLabel("Expected UTF-8 text")).toHaveValue(
+    '{"ok":1}',
+  );
+  const parameter = panel(page).locator(".regression-parameter");
+  await expect(parameter.getByLabel("Parameter name")).toHaveValue("region");
+  await expect(parameter.getByLabel("Exact parameter value")).toHaveValue(
+    "west",
+  );
+}
+
+for (const failure of ["unavailable", "timeout"] as const) {
+  test(`a draft survives a session check that is ${failure}`, async ({
+    page,
+  }) => {
+    const fixture = new RegressionFixture();
+    await fixture.install(page);
+    await enterDraft(page);
+    await failSessionCheck(page, failure);
+    await recoverAccess(page);
+    // The kept draft is announced but stays hidden until the panel's own fresh admission.
+    await expect(panel(page)).toContainText(
+      "An unsaved test case draft is kept in this tab",
+    );
+    await expect(
+      panel(page).getByLabel("Test name", { exact: true }),
+    ).toHaveCount(0);
+    await panel(page)
+      .getByRole("button", { name: "Load regression cases", exact: true })
+      .click();
+    await expectDraft(page);
+    await panel(page)
+      .getByRole("button", { name: "Save test version", exact: true })
+      .click();
+    await expect.poll(() => fixture.publications.length).toBe(1);
+    const sent = fixture.publications[0].body;
+    expect(sent.name).toBe("Unsaved west order");
+    expect(sent.parameters).toEqual([
+      { name: "region", kind: "string", value: "west" },
+    ]);
+  });
+}
+
+test("a draft survives a successful background refresh that replaces the panel", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  await fixture.install(page);
+  await enterDraft(page);
+  const reread = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/catalog/context",
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  expect((await reread).status()).toBe(200);
+  await page.getByRole("tab", { name: "Tests", exact: true }).click();
+  await panel(page)
+    .getByRole("button", { name: "Load regression cases", exact: true })
+    .click();
+  await expectDraft(page);
+});
+
+test("an uncertain publication keeps its original request across a failed session check", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  fixture.failPublication = true;
+  await fixture.install(page);
+  await enterDraft(page);
+  await panel(page)
+    .getByRole("button", { name: "Save test version", exact: true })
+    .click();
+  await expect(
+    panel(page).getByRole("heading", { name: "Check previous save" }),
+  ).toBeVisible();
+  await failSessionCheck(page, "unavailable");
+  await recoverAccess(page);
+  await panel(page)
+    .getByRole("button", { name: "Load regression cases", exact: true })
+    .click();
+  await expect(
+    panel(page).getByRole("heading", { name: "Check previous save" }),
+  ).toBeVisible();
+  await expect(
+    panel(page).getByLabel("Test name", { exact: true }),
+  ).toBeDisabled();
+  await panel(page)
+    .getByRole("button", { name: "Retry original publication", exact: true })
+    .click();
+  await expect.poll(() => fixture.publications.length).toBe(2);
+  expect(fixture.publications[1]).toEqual(fixture.publications[0]);
+});
+
+test("a confirmed owner change clears the unsent draft", async ({ page }) => {
+  const fixture = new RegressionFixture();
+  await fixture.install(page);
+  await enterDraft(page);
+  await failSessionCheck(page, "unavailable");
+  await page.route("**/api/v1/catalog/context", (route) =>
+    route.fulfill({
+      json: {
+        ...synthetic.context,
+        actorPrincipalId: "10000000-0000-4000-8000-000000000099",
+      },
+    }),
+  );
+  await recoverAccess(page);
+  await expect(panel(page)).not.toContainText("draft is kept");
+  await panel(page)
+    .getByRole("button", { name: "Load regression cases", exact: true })
+    .click();
+  await expect(
+    panel(page).getByRole("button", { name: "Refresh cases", exact: true }),
+  ).toBeVisible();
+  await expect(
+    panel(page).getByLabel("Test name", { exact: true }),
+  ).toHaveCount(0);
+  await panel(page)
+    .getByRole("button", { name: "New test case", exact: true })
+    .click();
+  await expect(
+    panel(page).getByLabel("Test name", { exact: true }),
+  ).toHaveValue("");
+  await expect(panel(page)).not.toContainText('{"order":1}');
+});
+
 test("active result polling resumes after a slower history request", async ({
   page,
 }) => {

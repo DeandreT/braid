@@ -21,6 +21,7 @@ import type {
   CatalogRevisionScope,
 } from "../catalog/catalog-types";
 import { ChatApi } from "./chat-api";
+import { ChatViewRecovery } from "./chat-view-recovery";
 import {
   ChatError,
   reconcileTurn,
@@ -50,6 +51,7 @@ export class RevisionChatComponent {
   private readonly api = inject(ChatApi);
   private readonly contexts = inject(CatalogContextStore);
   private readonly catalog = inject(CatalogApi);
+  private readonly recovery = inject(ChatViewRecovery);
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
@@ -123,6 +125,10 @@ export class RevisionChatComponent {
   private acceptedBytes = 0;
   private pending: { conversationId: string; body: ChatCreate } | null = null;
   private pendingConversation: string | null = null;
+  private admission: {
+    context: CatalogContext;
+    scope: CatalogRevisionScope;
+  } | null = null;
   private focusTarget: HTMLElement | null = null;
   private preferredFocus: string | null = null;
   private focusVersion = 0;
@@ -133,7 +139,7 @@ export class RevisionChatComponent {
       this.context();
       this.contexts.identityVersion();
       untracked(() => {
-        this.clear();
+        this.suspend();
         if (this.reportsReady()) void this.load();
       });
     });
@@ -143,16 +149,44 @@ export class RevisionChatComponent {
         if (ready && !this.availability() && !this.busy()) void this.load();
       });
     });
+    // A failed or negative check is not a new owner: suspend the unsent question rather than discard it.
     const subscription = this.contexts.invalidated.subscribe(() =>
-      this.clear(),
+      this.suspend(),
     );
     inject(DestroyRef).onDestroy(() => {
       subscription.unsubscribe();
-      this.clear();
+      this.suspend();
     });
   }
 
+  private suspend(): void {
+    const admission = this.admission,
+      draft = this.draft(),
+      pending = this.pending,
+      pendingConversation = this.pendingConversation;
+    if (admission && (draft || pending || pendingConversation))
+      this.recovery.keep(admission.context, admission.scope, {
+        conversationId: this.current()?.conversationId ?? null,
+        draft,
+        pending,
+        pendingConversation,
+      });
+    this.clear();
+  }
+
+  /** Reopens the kept question's conversation after this panel's own fresh admission; nothing is sent again. */
+  private async resume(): Promise<void> {
+    const work = this.recovery.take(this.context(), this.scope());
+    if (!work) return;
+    this.draft.set(work.draft);
+    this.pending = work.pending;
+    this.pendingConversation = work.pendingConversation;
+    const conversation = work.pending?.conversationId ?? work.conversationId;
+    if (conversation) await this.show(conversation);
+  }
+
   private clear(): void {
+    this.admission = null;
     ++this.generation;
     for (const c of this.operations) c.abort();
     this.operations.clear();
@@ -206,6 +240,7 @@ export class RevisionChatComponent {
           (expected.mode === "session" ? expected.identityContext : null) ||
         !this.contexts.canPresent(context)
       ) {
+        this.recovery.discard();
         this.clear();
         throw new ChatError("stale");
       }
@@ -241,7 +276,9 @@ export class RevisionChatComponent {
       this.hasMore.set(page.hasMore);
       if (!availability.profiles.length)
         this.problem.set("No selectable model profile is available.");
+      this.admission = { context: this.context(), scope: this.scope() };
     });
+    if (this.admission) await this.resume();
   }
   async newConversation(): Promise<void> {
     if (this.busy() || this.pending) return;
@@ -267,6 +304,9 @@ export class RevisionChatComponent {
   }
   async open(id: string): Promise<void> {
     if (this.busy() || this.pending) return;
+    await this.show(id);
+  }
+  private async show(id: string): Promise<void> {
     this.stopStream();
     this.current.set(null);
     this.turns.set([]);

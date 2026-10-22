@@ -43,10 +43,12 @@ import {
 } from "./reports/revision-report-state";
 import { RevisionReportsComponent } from "./reports/revision-reports.component";
 import { RevisionChatComponent } from "../chat/revision-chat.component";
+import { ChatViewRecovery } from "../chat/chat-view-recovery";
 import { RevisionPreviewComponent } from "./previews/revision-preview.component";
 import { RevisionRegressionComponent } from "./regression/revision-regression.component";
 import { RevisionBuildsComponent } from "./builds/revision-builds.component";
 import { BuildViewRecovery } from "./builds/build-view-recovery";
+import { RegressionViewRecovery } from "./regression/regression-view-recovery";
 import { BrowserSessionState } from "../auth/browser-session-state";
 import { WorkbenchState } from "../workbench/workbench-state";
 import { WorkbenchRecents } from "../workbench/workbench-recents";
@@ -99,7 +101,12 @@ interface RevisionScreen {
     StatusChipComponent,
     MetadataValueComponent,
   ],
-  providers: [BuildViewRecovery, WorkbenchState],
+  providers: [
+    BuildViewRecovery,
+    RegressionViewRecovery,
+    ChatViewRecovery,
+    WorkbenchState,
+  ],
   templateUrl: "./revision-page.component.html",
   styleUrl: "./revision-page.component.css",
 })
@@ -306,6 +313,8 @@ export class RevisionPageComponent extends CatalogRoutePage<
   });
   private readonly contexts = inject(CatalogContextStore);
   private readonly buildRecovery = inject(BuildViewRecovery);
+  private readonly regressionRecovery = inject(RegressionViewRecovery);
+  private readonly chatRecovery = inject(ChatViewRecovery);
   private readonly injector = inject(Injector);
   private readonly document = inject(DOCUMENT);
   private readonly reportDestroyRef = inject(DestroyRef);
@@ -418,14 +427,10 @@ export class RevisionPageComponent extends CatalogRoutePage<
         this.switcherPaths.clear();
       });
     });
-    const invalidation = this.contexts.invalidated.subscribe(() => {
-      this.reports.unbind();
-      this.buildRecovery.clear();
-    });
-    effect(() => {
-      this.contexts.identityVersion();
-      untracked(() => this.buildRecovery.clear());
-    });
+    // Recovery providers keep unsent work across boundaries and clear it on a confirmed new owner.
+    const invalidation = this.contexts.invalidated.subscribe(() =>
+      this.reports.unbind(),
+    );
     this.reportDestroyRef.onDestroy(() => invalidation.unsubscribe());
     this.bind("revision", (scope) =>
       forkJoin({
@@ -463,7 +468,10 @@ export class RevisionPageComponent extends CatalogRoutePage<
               }
             : null,
         );
-        this.buildRecovery.routeScope(this.reportSelection()?.scope ?? null);
+        const scope = this.reportSelection()?.scope ?? null;
+        this.buildRecovery.routeScope(scope);
+        this.regressionRecovery.routeScope(scope);
+        this.chatRecovery.routeScope(scope);
       });
     effect(() => {
       const selection = this.reportSelection();
