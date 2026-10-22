@@ -29,6 +29,7 @@
     <ProjectReference Include="../../src/Weft.Contracts/Weft.Contracts.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
     <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Weft.Storage.Blob/Weft.Storage.Blob.csproj" />
     <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
     <ProjectReference Include="../../tools/Weft.StorageProbe/Weft.StorageProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.StorageProtocolProbe/Weft.StorageProtocolProbe.csproj" ReferenceOutputAssembly="false" />

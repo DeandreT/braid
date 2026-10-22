@@ -216,4 +216,6 @@ publication returns `Created`.
 Synthetic registries qualify physical behavior only. PostgreSQL integration
 checks must use actual persisted claims and registrations. This document and
 the unactivated component do not qualify service activation, cleanup command
-execution, cloud storage or existing-root conversion.
+execution or existing-root conversion. The [Azure Blob store](private-storage-blob.md)
+implements the same contract with blob leases and conditional commits, and the
+shared contract tests run against both stores.

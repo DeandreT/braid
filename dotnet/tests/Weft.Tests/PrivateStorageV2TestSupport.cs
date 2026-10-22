@@ -107,6 +107,7 @@ internal sealed class PrivateStorageV2PhysicalRegistry : IPrivateObjectPublicati
     internal int ReserveCalls { get; private set; }
     internal int BindCalls { get; private set; }
     internal int GetCalls { get; private set; }
+    internal PrivatePublicationKey? LastReserveKey { get; private set; }
     internal bool ThrowAfterReserve { get; init; }
     internal bool ThrowAfterBind { get; init; }
     internal bool RefuseOwner { get; set; }
@@ -121,6 +122,7 @@ internal sealed class PrivateStorageV2PhysicalRegistry : IPrivateObjectPublicati
         cancellationToken.ThrowIfCancellationRequested();
         ReserveCalls++;
         if (RefuseEveryCall) throw new InvalidOperationException("Unexpected synthetic registry call.");
+        LastReserveKey = new(rootId, objectId, tempId);
         BeforeReserve?.Invoke();
         if (RefuseOwner) return Task.FromResult(PrivatePublicationReserveResult.WithoutSnapshot(PrivatePublicationReserveOutcome.OwnerUnavailable));
         var record = new PrivatePublicationRecord(new(Guid.NewGuid(), new(rootId, objectId, tempId), owner,

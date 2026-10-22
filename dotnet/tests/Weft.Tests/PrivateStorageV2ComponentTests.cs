@@ -32,22 +32,6 @@ public sealed class PrivateStorageV2ComponentTests
         Assert.Equal(0, resolutions);
     }
 
-    [Fact]
-    public async Task PlainPublicationAndMissingRegistryRefuseBeforeAnySourceRead()
-    {
-        using var root = new PrivateStorageTestRoot();
-        using var store = FileSystemV2PrivateObjectStore.Initialize(root.Options);
-        var bytes = "opaque payload"u8.ToArray();
-        var reference = PrivateStorageData.Reference(bytes);
-        using var source = new PrivateStorageInput(bytes);
-        await PrivateStorageData.ErrorAsync(PrivateObjectStorageError.Unsupported,
-            () => store.PublishCreateOnlyAsync(reference.Id.Scope, reference, source));
-        await PrivateStorageData.ErrorAsync(PrivateObjectStorageError.Unsupported,
-            () => store.PublishCreateOnlyAsync(PrivateStorageV2Data.Owner(reference), reference.Id.Scope, reference, source));
-        Assert.Equal(0, source.ReadCalls);
-        Assert.False(File.Exists(root.FinalPath(reference)));
-    }
-
     [Theory]
     [InlineData(PrivateObjectClass.NativeArtifact)]
     [InlineData(PrivateObjectClass.DerivedArtifact)]
@@ -102,68 +86,6 @@ public sealed class PrivateStorageV2ComponentTests
         Assert.False(File.Exists(PrivateStorageV2Data.TempPath(root, registry.Single.Reservation.Key)));
         Assert.Equal(bytes, await store.ReadVerifiedAsync(reference.Id.Scope, reference));
         Assert.True(input.CanRead); // The caller still owns the stream.
-    }
-
-    [Fact]
-    public async Task IndependentAdaptersVerifyAlreadyPresentAndNeverReplaceDifferentContent()
-    {
-        using var root = new PrivateStorageTestRoot();
-        var registry = new PrivateStorageV2PhysicalRegistry();
-        var bytes = "original exact bytes"u8.ToArray();
-        var reference = PrivateStorageData.Reference(bytes);
-        using (var first = FileSystemV2PrivateObjectStore.Initialize(root.Options, () => registry))
-            Assert.Equal(PrivateObjectPublishResult.Created, await first.PublishCreateOnlyAsync(
-                PrivateStorageV2Data.Owner(reference), reference.Id.Scope, reference, new MemoryStream(bytes)));
-        using var second = FileSystemV2PrivateObjectStore.Open(root.Options, () => registry);
-        Assert.Equal(PrivateObjectPublishResult.AlreadyPresent, await second.PublishCreateOnlyAsync(
-            PrivateStorageV2Data.Owner(reference), reference.Id.Scope, reference, new MemoryStream(bytes)));
-        var replacement = "other bytes"u8.ToArray();
-        var conflict = new PrivateObjectReference(reference.Id, Sha256Digest.FromBytes(replacement), replacement.LongLength);
-        await PrivateStorageData.ErrorAsync(PrivateObjectStorageError.Conflict, () => second.PublishCreateOnlyAsync(
-            PrivateStorageV2Data.Owner(conflict), conflict.Id.Scope, conflict, new MemoryStream(replacement)));
-        Assert.Equal(bytes, File.ReadAllBytes(root.FinalPath(reference)));
-        Assert.Equal(bytes, await second.ReadVerifiedAsync(reference.Id.Scope, reference));
-    }
-
-    [Fact]
-    public async Task SyntheticLostReserveAndBindAcknowledgementsResolveOnlyTheOriginalNaturalKeyBeforeAnyRead()
-    {
-        using var root = new PrivateStorageTestRoot();
-        var bytes = PrivateStorageData.Pattern(71);
-        var reference = PrivateStorageData.Reference(bytes);
-        using var input = new PrivateStorageInput(bytes);
-        var registry = new PrivateStorageV2PhysicalRegistry
-        {
-            ThrowAfterReserve = true,
-            ThrowAfterBind = true,
-            BeforeReserve = () => Assert.Equal(0, input.ReadCalls),
-            BeforeBind = () => Assert.Equal(0, input.ReadCalls)
-        };
-        using var store = FileSystemV2PrivateObjectStore.Initialize(root.Options, () => registry);
-        var owner = PrivateStorageV2Data.Owner(reference);
-        Assert.Equal(PrivateObjectPublishResult.Created, await store.PublishCreateOnlyAsync(owner, reference.Id.Scope, reference, input));
-        Assert.Equal(2, registry.GetCalls);
-        Assert.Equal(owner, registry.Single.Reservation.Owner);
-        Assert.NotNull(registry.Single.Binding);
-        Assert.Equal(bytes, await store.ReadVerifiedAsync(reference.Id.Scope, reference));
-    }
-
-    [Fact]
-    public async Task OwnerRefusalLeavesAbsenceEvidenceButCannotCreateOrReadPayload()
-    {
-        using var root = new PrivateStorageTestRoot();
-        var registry = new PrivateStorageV2PhysicalRegistry { RefuseOwner = true };
-        using var store = FileSystemV2PrivateObjectStore.Initialize(root.Options, () => registry);
-        var bytes = "refused"u8.ToArray();
-        var reference = PrivateStorageData.Reference(bytes);
-        using var input = new PrivateStorageInput(bytes);
-        await PrivateStorageData.ErrorAsync(PrivateObjectStorageError.Io, () => store.PublishCreateOnlyAsync(
-            PrivateStorageV2Data.Owner(reference), reference.Id.Scope, reference, input));
-        Assert.Equal(0, input.ReadCalls);
-        Assert.Equal(0, registry.BindCalls);
-        Assert.Empty(Directory.GetFiles(root.RootPath, "*.tmp", SearchOption.AllDirectories));
-        Assert.Single(Directory.GetFiles(root.RootPath, "absence", SearchOption.AllDirectories));
-        Assert.False(File.Exists(root.FinalPath(reference)));
     }
 
     [Fact]
@@ -288,68 +210,5 @@ public sealed class PrivateStorageV2ComponentTests
         Assert.False(File.Exists(root.FinalPath(reference)));
         Assert.Equal(replacement, File.ReadAllBytes(temp!));
         Assert.Equal(bytes, File.ReadAllBytes(temp + ".original"));
-    }
-
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(0)]
-    [InlineData(1)]
-    public async Task CapturedReservationWithoutLocalAcknowledgementCanFenceOnlyAnActuallyAbsentTemp(int presentBytes)
-    {
-        using var root = new PrivateStorageTestRoot();
-        var registry = new PrivateStorageV2PhysicalRegistry();
-        var observer = new PrivateStorageV2Observer((observation, _) => observation.Phase == V2StoragePhase.ReservationAcknowledged
-            ? ValueTask.FromException(new IOException("Synthetic stop after real in-memory registration.")) : ValueTask.CompletedTask);
-        var reference = PrivateStorageData.Reference("absent before CreateNew"u8.ToArray());
-        using (var writer = FileSystemV2PrivateObjectStore.Initialize(root.Options, () => registry, observer))
-            await PrivateStorageData.ErrorAsync(PrivateObjectStorageError.Io, () => writer.PublishCreateOnlyAsync(
-                PrivateStorageV2Data.Owner(reference), reference.Id.Scope, reference, new MemoryStream("absent before CreateNew"u8.ToArray())));
-        var row = registry.Single;
-        var leaf = PrivateStorageV2Data.TempLeaf(root, row.Reservation.Key);
-        Assert.True(File.Exists(Path.Combine(leaf, "absence")));
-        Assert.False(File.Exists(Path.Combine(leaf, "reservation")));
-        var temp = PrivateStorageV2Data.TempPath(root, row.Reservation.Key);
-        Assert.False(File.Exists(temp));
-        if (presentBytes >= 0)
-        {
-            File.WriteAllBytes(temp, new byte[presentBytes]);
-            File.SetUnixFileMode(temp, PrivateStorageTestRoot.AttemptMode);
-        }
-        registry.RefuseEveryCall = true;
-        using var cleanup = FileSystemV2PrivateObjectStore.Open(root.Options, () => registry);
-        Assert.Equal(presentBytes < 0 ? PrivateObjectRetirementOutcome.Missing : PrivateObjectRetirementOutcome.UnsafeStorage,
-            await cleanup.RetireAsync(PrivateStorageV2Data.TemporaryClaim(row)));
-        Assert.Equal(presentBytes < 0, File.Exists(Path.Combine(leaf, "temp.retired")));
-        if (presentBytes >= 0) Assert.Equal(presentBytes, new FileInfo(temp).Length);
-        Assert.Equal(0, registry.BindCalls);
-        Assert.Equal(0, registry.GetCalls);
-    }
-
-    [Fact]
-    public async Task CancellationAtCommittedBindingSettlesWithoutReadingAndLeavesSealsForMissingRecovery()
-    {
-        using var root = new PrivateStorageTestRoot();
-        var registry = new PrivateStorageV2PhysicalRegistry();
-        var boundary = new PrivateStorageV2Boundary(V2StoragePhase.BindingAcknowledged);
-        using var store = FileSystemV2PrivateObjectStore.Initialize(root.Options, () => registry, boundary);
-        var bytes = "canceled after binding"u8.ToArray();
-        var reference = PrivateStorageData.Reference(bytes);
-        using var input = new PrivateStorageInput(bytes);
-        using var cancellation = new CancellationTokenSource();
-        var write = store.PublishCreateOnlyAsync(PrivateStorageV2Data.Owner(reference), reference.Id.Scope, reference, input, cancellation.Token);
-        try
-        {
-            await boundary.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            cancellation.Cancel();
-        }
-        finally { boundary.Release(); }
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => { _ = await write; });
-        Assert.Equal(0, input.ReadCalls);
-        var row = registry.Single;
-        Assert.NotNull(row.Binding);
-        Assert.False(File.Exists(PrivateStorageV2Data.TempPath(root, row.Reservation.Key)));
-        Assert.True(File.Exists(Path.Combine(PrivateStorageV2Data.TempLeaf(root, row.Reservation.Key), "bound")));
-        registry.RefuseEveryCall = true;
-        Assert.Equal(PrivateObjectRetirementOutcome.Missing, await store.RetireAsync(PrivateStorageV2Data.TemporaryClaim(row)));
     }
 }

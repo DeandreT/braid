@@ -42,8 +42,8 @@ two. This bounds adapter work, not deployment-wide storage or tenant quotas.
 ## Local profile and initialization
 
 The first adapter supports Linux x86-64 with the required filesystem primitives.
-Windows, other architectures, network storage, and Azure Blob are separate
-transport qualifications. Only ext4, Btrfs, XFS, tmpfs, and overlay filesystem
+Windows, other architectures and network storage are separate transport
+qualifications; Azure Blob Storage has its own [Blob profile](private-storage-blob.md). Only ext4, Btrfs, XFS, tmpfs, and overlay filesystem
 families are admitted; opening also probes the actual create-only primitive.
 Admission alone does not prove a deployment's durability or capacity.
 

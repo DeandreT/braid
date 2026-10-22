@@ -159,6 +159,11 @@ Host process tests require these explicit absolute paths to fresh publications o
 the same Release build. The privacy probe is a qualification tool, not a deployed
 Server dependency; keep its publication separate from the shipped host.
 
+Azure Blob storage tests run against an owned Azurite emulator when
+`WEFT_AZURITE_IMAGE` names its pinned image
+(`mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5`);
+otherwise they are skipped. See [Azure Blob private storage](private-storage-blob.md).
+
 The owned HTTPS sign-in qualification drives the pinned Chrome for Testing through
 real TLS, a mock OIDC issuer and the actual session modules hosted by the probe
 (see [transport admission](browser-https-network-admission.md)). It also needs
