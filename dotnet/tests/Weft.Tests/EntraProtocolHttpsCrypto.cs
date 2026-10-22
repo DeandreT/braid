@@ -168,6 +168,21 @@ internal sealed class EntraProtocolCrypto : IDisposable
         return token;
     }
 
+    /// <summary>Signs an exact claims document, for access tokens, with the same owned key selection as ID tokens.</summary>
+    internal string SignClaims(string json, EntraProtocolTokenCase variant = EntraProtocolTokenCase.Good, bool useSecond = false)
+    {
+        if (variant == EntraProtocolTokenCase.Unsigned)
+            return Base64UrlEncoder.Encode("{\"alg\":\"none\",\"typ\":\"JWT\"}") + "." + Base64UrlEncoder.Encode(json) + ".";
+        SecurityKey key; string algorithm = variant == EntraProtocolTokenCase.UnapprovedRsaAlgorithm ? SecurityAlgorithms.RsaSha512 : SecurityAlgorithms.RsaSha256;
+        if (variant == EntraProtocolTokenCase.SymmetricAlgorithm)
+        { key = new SymmetricSecurityKey(symmetric) { KeyId = "weft-k1" }; algorithm = SecurityAlgorithms.HmacSha256; }
+        else if (variant == EntraProtocolTokenCase.BadSignature) key = new RsaSecurityKey(unknown) { KeyId = "weft-k1" };
+        else if (variant == EntraProtocolTokenCase.ExcludedKey) key = new RsaSecurityKey(foreign) { KeyId = "weft-foreign" };
+        else key = new RsaSecurityKey(useSecond ? second : first) { KeyId = useSecond ? "weft-k2" : "weft-k1" };
+        return new JsonWebTokenHandler().CreateToken(json, new SigningCredentials(key, algorithm)
+        { CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false } });
+    }
+
     internal async Task AssertValidUnsupportedRsaVectorAsync(string token, bool secondKey)
     {
         var parameters = new TokenValidationParameters

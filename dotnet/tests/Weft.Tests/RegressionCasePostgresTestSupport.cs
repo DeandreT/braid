@@ -25,7 +25,8 @@ internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
         Runtime = new(receipt.Facts.BackendProfile.BackendId, "engine", "build", "adapter", PreviewPolicy.Profile);
     }
 
-    internal static async Task<RegressionCasePostgresTestSupport> CreateAsync(PostgresFixture fixture)
+    /// <param name="migrations">Optional ordered migration prefix for upgrade tests; the default is the current schema.</param>
+    internal static async Task<RegressionCasePostgresTestSupport> CreateAsync(PostgresFixture fixture, int? migrations = null)
     {
         var test = await fixture.CreateCaseAsync(migrate: false);
         try
@@ -36,7 +37,7 @@ internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
             await test.ExecuteAsync("UPDATE weft.project_memberships SET role='publisher',version=version+1 WHERE principal_id=$1", seed.Alice);
             var actor = new ActorContext(new(seed.Alice));
             var receipt = await HistoricalIngestionSeed.CommitCreateAsync(test, actor, new(seed.OrganizationA, seed.ProjectA));
-            await using (var baseline = new MigrationRunner(test.MigrationConnectionString, scripts)) await baseline.MigrateAsync();
+            await using (var baseline = new MigrationRunner(test.MigrationConnectionString, scripts.Take(migrations ?? scripts.Count).ToArray())) await baseline.MigrateAsync();
             return new(fixture, test, seed, receipt);
         }
         catch { await test.DisposeAsync(); throw; }

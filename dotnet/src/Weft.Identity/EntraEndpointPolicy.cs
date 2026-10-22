@@ -20,10 +20,13 @@ internal sealed class EntraEndpointPolicy
     internal readonly string TenantKeys;
     internal const string CommonKeys = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
 
-    internal EntraEndpointPolicy(EntraClientOptions options)
+    internal EntraEndpointPolicy(EntraClientOptions options) : this(options.TenantId, options.ClientId) { }
+
+    // The machine token profile has the same fixed tenant endpoints; its client is the token audience.
+    internal EntraEndpointPolicy(Guid tenant, Guid client)
     {
-        Tenant = options.TenantId.ToString("D");
-        Client = options.ClientId.ToString("D");
+        Tenant = tenant.ToString("D");
+        Client = client.ToString("D");
         Issuer = "https://" + Host + "/" + Tenant + "/v2.0";
         Discovery = Issuer + "/.well-known/openid-configuration";
         var protocol = "https://" + Host + "/" + Tenant + "/oauth2/v2.0/";

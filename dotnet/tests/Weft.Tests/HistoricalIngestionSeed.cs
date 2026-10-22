@@ -23,7 +23,7 @@ internal static class HistoricalIngestionSeed
     private const int MaximumTableRows = 64;
     private const int MaximumJournalRows = 32;
     private const int MaximumSchemaRows = 1024;
-    private const int MaximumSnapshotBytes = 1024 * 1024;
+    private const int MaximumSnapshotBytes = 2 * 1024 * 1024;
     private static readonly (string Name, string Order)[] Tables =
     [
         ("organizations", "id"),

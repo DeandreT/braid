@@ -54,7 +54,7 @@ public sealed class PostgresPublicationStoreKindUpgradeTests(PostgresFixture fix
 
         await test.MigrateAsync();
 
-        Assert.Equal(Enumerable.Range(1, PrefixVersion + 1), await test.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, MigrationRunner.EmbeddedMigrations.Count), await test.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(MaintenanceSchemaContract.StoreKindMigrationChecksum, await test.ScalarAsync<string>(
             "SELECT checksum FROM weft.schema_migrations WHERE version=23"));

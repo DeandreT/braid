@@ -398,9 +398,9 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         internal required Weft.Domain.Sha256Digest Evidence { get; init; }
         internal ActorContext Actor => Runs.Actor;
 
-        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool pass = true, bool nullContent = false)
+        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool pass = true, bool nullContent = false, int? migrations = null)
         {
-            var runs = await RegressionRunPostgresTestSupport.CreateAsync(fixture);
+            var runs = await RegressionRunPostgresTestSupport.CreateAsync(fixture, migrations);
             PostgresBuildStore? store = null;
             try
             {

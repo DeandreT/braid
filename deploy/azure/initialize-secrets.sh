@@ -47,6 +47,7 @@ declare -A logins=(
   [build-metadata]=weft_build_metadata_reader
   [qualification-reader]=weft_qualification_reader [qualification-writer]=weft_qualification_writer
   [release-reader]=weft_release_reader [release-writer]=weft_release_writer
+  [invocation-grant-writer]=weft_invocation_grant_writer [invocation-writer]=weft_invocation_writer
 )
 
 for key in "${!logins[@]}"; do

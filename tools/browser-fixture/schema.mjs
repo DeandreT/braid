@@ -24,6 +24,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0021_build_qualification.sql",
   "0022_local_releases.sql",
   "0023_private_publication_storage_kind.sql",
+  "0024_machine_invocation.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
@@ -31,6 +32,11 @@ export const browserFixtureProtectedTables = Object.freeze([
   "local_release_targets",
   "local_releases",
   "local_release_audit",
+  "invocation_grants",
+  "invocation_grant_audit",
+  "machine_invocations",
+  "machine_invocation_audit",
+  "machine_invocation_results",
 ]);
 
 /** Read-side regression hosts may derive the same saved reports that the UI reads. */

@@ -9,6 +9,9 @@ if (ExternalIdentityOwnerCommands.IsCommand(args))
 if (ProjectPayloadOwnerCommands.IsCommand(args))
     return await ProjectPayloadOwnerCommands.RunAsync(args);
 
+if (InvocationGrantCommands.IsCommand(args))
+    return await InvocationGrantCommands.RunAsync(args);
+
 var existingCommand = args.Length == 1 && args[0] is "migrate" or "provision-development-identity";
 var capabilityCommand = args.Length == 4 && args[0] == "set-project-creation-capability" && args[3] is "true" or "false";
 if (!existingCommand && !capabilityCommand)

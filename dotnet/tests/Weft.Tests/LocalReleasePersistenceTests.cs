@@ -263,7 +263,7 @@ public sealed class LocalReleasePersistenceTests(PostgresFixture fixture)
         Assert.Equal(ReleasePhase.Requested, (await test.Store.ReadAsync(test.Actor, test.Target.Reference, intent.ReleaseId))!.Phase);
     }
 
-    private sealed class Context : IAsyncDisposable
+    internal sealed class Context : IAsyncDisposable
     {
         internal required BuildPersistenceTests.Context Control { get; init; }
         internal required PostgresBuildQualificationStore Qualifications { get; init; }
@@ -273,9 +273,9 @@ public sealed class LocalReleasePersistenceTests(PostgresFixture fixture)
         internal BuildQualification First { get; private set; } = null!;
         internal PostgresCase Case => Control.Runs.Cases.Case;
         internal ActorContext Actor => Control.Actor;
-        internal static async Task<Context> CreateAsync(PostgresFixture fixture)
+        internal static async Task<Context> CreateAsync(PostgresFixture fixture, int? migrations = null)
         {
-            var control = await BuildPersistenceTests.Context.CreateAsync(fixture);
+            var control = await BuildPersistenceTests.Context.CreateAsync(fixture, migrations: migrations);
             PostgresBuildQualificationStore? qualifications = null; PostgresLocalReleaseStore? releases = null;
             try
             {

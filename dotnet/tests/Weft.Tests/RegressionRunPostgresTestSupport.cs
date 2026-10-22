@@ -30,9 +30,9 @@ internal sealed class RegressionRunPostgresTestSupport : IAsyncDisposable
         Queue = new(WriterConnection);
     }
 
-    internal static async Task<RegressionRunPostgresTestSupport> CreateAsync(PostgresFixture fixture)
+    internal static async Task<RegressionRunPostgresTestSupport> CreateAsync(PostgresFixture fixture, int? migrations = null)
     {
-        var cases = await RegressionCasePostgresTestSupport.CreateAsync(fixture);
+        var cases = await RegressionCasePostgresTestSupport.CreateAsync(fixture, migrations);
         try
         {
             var value = cases.Version(1);

@@ -280,7 +280,7 @@ public sealed class PostgresProjectPayloadUpgradeTests(PostgresFixture fixture)
             .SequenceEqual(new[] { PayloadPermissionSchemaContract.MigrationChecksum, ServerSessionSchemaContract.MigrationChecksum, ChatSchemaContract.MigrationChecksum,
                 PreviewSchemaTestContract.MigrationChecksum, PreviewSchemaTestContract.MessagesMigrationChecksum,
                 RegressionSchemaTestContract.CasesChecksum, RegressionSchemaTestContract.RunsChecksum, RegressionSchemaTestContract.DispatchChecksum, RegressionSchemaTestContract.HistoryChecksum, RegressionSchemaTestContract.BuildChecksum, RegressionSchemaTestContract.BuildDispatchChecksum, RegressionSchemaTestContract.BuildMetadataChecksum, RegressionSchemaTestContract.QualificationChecksum, RegressionSchemaTestContract.LocalReleaseChecksum,
-                MaintenanceSchemaContract.StoreKindMigrationChecksum }, StringComparer.Ordinal),
+                MaintenanceSchemaContract.StoreKindMigrationChecksum, RegressionSchemaTestContract.MachineInvocationChecksum }, StringComparer.Ordinal),
             "The current migration supplements do not match the payload, session, chat and preview sources.");
         Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
             .SequenceEqual(Enumerable.Range(1, scripts.Count)), "The complete migration versions do not match this build.");

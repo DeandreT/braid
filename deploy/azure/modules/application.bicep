@@ -94,6 +94,8 @@ var roles = [
   { key: 'qualification-writer', env: 'QUALIFICATION_WRITER' }
   { key: 'release-reader', env: 'RELEASE_READER' }
   { key: 'release-writer', env: 'RELEASE_WRITER' }
+  { key: 'invocation-grant-writer', env: 'INVOCATION_GRANT_WRITER' }
+  { key: 'invocation-writer', env: 'INVOCATION_WRITER' }
 ]
 
 // A separately hosted inspection worker; the settings stay dormant until native upload or
