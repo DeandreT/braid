@@ -78,7 +78,9 @@ The worker reads its configuration from the environment:
 `WEFT_PREVIEW_WRITER_CONNECTION_STRING`,
 `WEFT_PRIVATE_STORAGE_ROOT` (an existing v2 root, opened read-only),
 `WEFT_FERRULE_WORKER_IMAGE`, optional `WEFT_DOCKER_EXECUTABLE` and optional
-`WEFT_PREVIEW_LEASE_SECONDS` (35–600). It runs as the same operating-system user
+`WEFT_PREVIEW_LEASE_SECONDS` (35–600). With `WEFT_FERRULE_RUNNER=service` it runs
+previews through the [Ferrule service](ferrule-service.md#weft-service-runner) instead of
+Docker. It runs as the same operating-system user
 that owns the private storage root. A worker that only serves
 [hosted inspection](ferrule-worker.md#worker-inspection-service) sets
 `WEFT_PREVIEW_WORKER_ENABLED=false` and needs none of the preview settings.

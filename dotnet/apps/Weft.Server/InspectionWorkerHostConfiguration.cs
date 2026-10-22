@@ -34,6 +34,20 @@ public static class InspectionWorkerHostConfiguration
         AddBackends(services);
     }
 
+    /// <summary>Exact inspection frames sent to the Ferrule service over pinned mutual TLS.</summary>
+    internal static void ConfigureService(IServiceCollection services, FerruleServiceEndpoint service, X509Certificate2 clientCertificate)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(clientCertificate);
+        var connector = new PinnedServiceConnector(new(service.Endpoint, service.ServiceCertificateSha256, clientCertificate));
+        services.AddSingleton(_ => new FerruleServiceRunner(new(connector, FerruleServiceProtocol.InspectionProfile, service.BuildIdentity)));
+        services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<FerruleServiceRunner>());
+        services.AddSingleton<IHostedService>(provider =>
+            new InspectionWorkerHostLifetime(provider.GetRequiredService<FerruleServiceRunner>().StopAsync));
+        AddBackends(services);
+    }
+
     private static void AddBackends(IServiceCollection services)
     {
         services.AddSingleton<FerruleInspectionBackend>();

@@ -15,7 +15,8 @@ internal sealed class PreviewWorkerProcess
 
     internal bool HasExited => process.HasExited;
 
-    internal static PreviewWorkerProcess Start(PreviewRunTestSupport test, PrivateStorageTestRoot storage)
+    internal static PreviewWorkerProcess Start(PreviewRunTestSupport test, PrivateStorageTestRoot storage,
+        IReadOnlyDictionary<string, string?>? environment = null)
     {
         var dll = Path.Combine(AppContext.BaseDirectory, "PreviewWorker", "Weft.Worker.dll");
         if (!File.Exists(dll)) throw new InvalidOperationException("The preview worker build must be copied into the test output.");
@@ -36,6 +37,11 @@ internal sealed class PreviewWorkerProcess
         start.Environment["WEFT_FERRULE_WORKER_IMAGE"] = Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE");
         start.Environment["WEFT_PREVIEW_LEASE_SECONDS"] = "35";
         start.Environment["DOTNET_ENVIRONMENT"] = "Production";
+        foreach (var (name, value) in environment ?? new Dictionary<string, string?>())
+        {
+            if (value is null) start.Environment.Remove(name);
+            else start.Environment[name] = value;
+        }
         var started = Process.Start(start) ?? throw new InvalidOperationException("The preview worker did not start.");
         var worker = new PreviewWorkerProcess(started);
         started.OutputDataReceived += (_, line) => worker.Append(line.Data);

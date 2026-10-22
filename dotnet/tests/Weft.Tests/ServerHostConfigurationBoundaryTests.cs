@@ -133,6 +133,64 @@ public sealed class ServerHostConfigurationBoundaryTests
         }
     }
 
+    [Fact]
+    public void SessionNativeWorkSelectsTheFerruleServiceOnlyExplicitlyAndUnambiguously()
+    {
+        var values = SessionScalars();
+        values["WEFT_REVISION_INGESTION_ENABLED"] = "true";
+        foreach (var pair in FerruleServiceScalars()) values[pair.Key] = pair.Value;
+        int privateReads = 0;
+        var admitted = ServerHostOptions.Read(Read);
+        ServerHostCheck.That(admitted.FerruleService?.Endpoint == new Uri("https://10.0.0.5:8443") && admitted.InspectionWorker is null
+            && admitted.FerruleService.BuildIdentity == "sha256:" + new string('b', 64) && privateReads == 0,
+            "Session did not select the Ferrule service from its explicit scalars.");
+
+        foreach (var (name, value) in new (string, string?)[]
+        {
+            ("WEFT_FERRULE_RUNNER", "docker"), ("WEFT_FERRULE_RUNNER", "Service"), ("WEFT_FERRULE_RUNNER", "azure"),
+            ("WEFT_FERRULE_SERVICE_URL", null), ("WEFT_FERRULE_SERVICE_URL", "http://10.0.0.5:8443"),
+            ("WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256", "ABCDEF"), ("WEFT_FERRULE_WORKER_IMAGE", null),
+            // A second runner's settings beside the selected one are ambiguous.
+            ("WEFT_INSPECTION_WORKER_URL", "https://10.0.0.4:8443")
+        })
+        {
+            var copy = new Dictionary<string, string?>(values) { [name] = value };
+            bool rejected = false;
+            try { _ = ServerHostOptions.Read(key => Count(copy, key)); } catch (Exception) { rejected = true; }
+            ServerHostCheck.That(rejected && privateReads == 0, "Session admitted an invalid or ambiguous Ferrule service selection: " + name + ".");
+        }
+
+        // The hosted worker remains the default, and service scalars beside it are ambiguous.
+        var worker = SessionScalars();
+        worker["WEFT_REVISION_INGESTION_ENABLED"] = "true";
+        foreach (var pair in InspectionWorkerScalars()) worker[pair.Key] = pair.Value;
+        ServerHostCheck.That(ServerHostOptions.Read(worker.GetValueOrDefault).InspectionWorker is not null, "The hosted worker stopped being the default.");
+        worker["WEFT_FERRULE_SERVICE_URL"] = "https://10.0.0.5:8443";
+        bool ambiguous = false;
+        try { _ = ServerHostOptions.Read(worker.GetValueOrDefault); } catch (Exception) { ambiguous = true; }
+        ServerHostCheck.That(ambiguous, "Session admitted Ferrule service scalars beside the hosted worker.");
+
+        // A dormant selection never becomes a dependency.
+        var dormant = SessionScalars();
+        dormant["WEFT_FERRULE_RUNNER"] = "invalid-dormant";
+        ServerHostCheck.That(ServerHostOptions.Read(dormant.GetValueOrDefault).FerruleService is null, "A dormant runner selection was admitted.");
+
+        string? Read(string key) => Count(values, key);
+        string? Count(Dictionary<string, string?> source, string key)
+        {
+            if (key.EndsWith("_FILE", StringComparison.Ordinal)) privateReads++;
+            return source.GetValueOrDefault(key);
+        }
+    }
+
+    private static Dictionary<string, string?> FerruleServiceScalars() => new(StringComparer.Ordinal)
+    {
+        ["WEFT_FERRULE_RUNNER"] = "service",
+        ["WEFT_FERRULE_SERVICE_URL"] = "https://10.0.0.5:8443",
+        ["WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256"] = new string('a', 64),
+        ["WEFT_FERRULE_WORKER_IMAGE"] = "sha256:" + new string('b', 64)
+    };
+
     private static Dictionary<string, string?> InspectionWorkerScalars() => new(StringComparer.Ordinal)
     {
         ["WEFT_INSPECTION_WORKER_URL"] = "https://10.0.0.4:8443",

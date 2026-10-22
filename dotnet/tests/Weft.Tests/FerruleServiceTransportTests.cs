@@ -415,9 +415,12 @@ public sealed class FerruleServiceTransportTests
 
     internal sealed class ServiceCase : IAsyncDisposable
     {
+        private readonly bool ownsCertificates;
+
         private ServiceCase(WorkerTransportServer server, System.Security.Cryptography.X509Certificates.X509Certificate2 serverCertificate,
-            System.Security.Cryptography.X509Certificates.X509Certificate2 client, ScriptedRunner inspection, ScriptedRunner preview)
+            System.Security.Cryptography.X509Certificates.X509Certificate2 client, ScriptedRunner inspection, ScriptedRunner preview, bool ownsCertificates)
         {
+            this.ownsCertificates = ownsCertificates;
             Server = server;
             ServerCertificate = serverCertificate;
             ClientCertificate = client;
@@ -434,10 +437,14 @@ public sealed class FerruleServiceTransportTests
         internal string ServerPin => TransportCase.Pin(ServerCertificate);
 
         internal static async Task<ServiceCase> StartAsync(int concurrency = 2, int capacity = 4, TimeSpan? admissionWait = null,
-            bool health = false, Func<bool>? healthy = null, System.Security.Cryptography.X509Certificates.X509Certificate2? extraClient = null)
+            bool health = false, Func<bool>? healthy = null, System.Security.Cryptography.X509Certificates.X509Certificate2? extraClient = null,
+            System.Security.Cryptography.X509Certificates.X509Certificate2? serverCertificate = null,
+            System.Security.Cryptography.X509Certificates.X509Certificate2? clientCertificate = null)
         {
-            var serverCertificate = TransportCase.Certificate("CN=Ferrule service");
-            var client = TransportCase.Certificate("CN=Session host service client");
+            // Replicas of one service share its certificate and admit the same clients.
+            var owned = serverCertificate is null;
+            serverCertificate ??= TransportCase.Certificate("CN=Ferrule service");
+            var client = clientCertificate ?? TransportCase.Certificate("CN=Session host service client");
             var inspection = new ScriptedRunner();
             var preview = new ScriptedRunner();
             string[] pins = extraClient is null ? [TransportCase.Pin(client)] : [TransportCase.Pin(client), TransportCase.Pin(extraClient)];
@@ -456,7 +463,7 @@ public sealed class FerruleServiceTransportTests
                 [FerruleServiceProtocol.PreviewProfile] = preview
             });
             await server.StartAsync(CancellationToken.None);
-            return new(server, serverCertificate, client, inspection, preview);
+            return new(server, serverCertificate, client, inspection, preview, owned);
         }
 
         /// <summary>An HTTP/2 client that pins the service and presents a client certificate.</summary>
@@ -486,6 +493,7 @@ public sealed class FerruleServiceTransportTests
         {
             await Server.StopAsync(CancellationToken.None);
             await Server.DisposeAsync();
+            if (!ownsCertificates) return;
             ServerCertificate.Dispose();
             ClientCertificate.Dispose();
         }

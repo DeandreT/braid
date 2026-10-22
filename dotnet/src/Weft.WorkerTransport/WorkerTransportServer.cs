@@ -177,6 +177,15 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
     private Task Ready(HttpContext context, bool service)
     {
         // Over pinned TLS, reaching any route proves the handshake admitted an admitted client certificate.
+        bool accepting;
+        lock (gate) accepting = !stopping;
+        if (service && !accepting)
+        {
+            context.Response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
+            Busy(context);
+            return Task.CompletedTask;
+        }
+
         context.Response.StatusCode = StatusCodes.Status204NoContent;
         context.Response.Headers[InspectionTransport.ImageHeader] = identity;
         if (service) context.Response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
@@ -242,6 +251,8 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
     {
         var request = context.Request;
         var operation = request.RouteValues["operation"] as string;
+        // Service refusals identify the service, so a client can tell them from an intermediary's answer.
+        if (service) context.Response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
         if (profileName is null || !runners.TryGetValue(profileName, out var runner))
         {
             context.Response.StatusCode = profileName == FerruleServiceProtocol.CompileProfile

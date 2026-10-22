@@ -3,11 +3,11 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Weft.WorkerTransport;
 
-public static class ServerCertificates
+public static class PinnedCertificates
 {
     /// <summary>
-    /// Admits a pinned listener's current RSA (at least 2048-bit) certificate and its matching private key.
-    /// Trust chains are never consulted; the peer pins this exact certificate.
+    /// Admits a pinned peer's current RSA (at least 2048-bit) certificate and its matching private key, for a listener
+    /// or a client. Trust chains are never consulted; the other side pins this exact certificate.
     /// </summary>
     public static X509Certificate2 FromPem(string certificatePem, string keyPem)
     {
@@ -51,5 +51,5 @@ public static class ServerCertificates
         return FromPem(text, text);
     }
 
-    private static InvalidOperationException Failure() => new("The listener certificate is invalid.");
+    private static InvalidOperationException Failure() => new("The pinned certificate is invalid.");
 }

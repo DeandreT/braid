@@ -94,11 +94,11 @@ internal sealed class FerruleServiceSettings
         if (Optional(Pem) is { } bundle)
         {
             if (Optional(CertificateFile) is not null || Optional(PrivateKeyFile) is not null) throw Failure();
-            admitted = ServerCertificates.FromPemBundle(bundle);
+            admitted = PinnedCertificates.FromPemBundle(bundle);
         }
         else
         {
-            admitted = ServerCertificates.FromPem(ProtectedHostFiles.ReadText(Required(CertificateFile), 65_536),
+            admitted = PinnedCertificates.FromPem(ProtectedHostFiles.ReadText(Required(CertificateFile), 65_536),
                 ProtectedHostFiles.ReadText(Required(PrivateKeyFile), 65_536));
         }
 

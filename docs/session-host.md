@@ -54,6 +54,8 @@ Session native upload and report derivation forward each inspection, validation 
 | `WEFT_FERRULE_WORKER_IMAGE` | The immutable lowercase `sha256:` image ID the worker runs; recorded in admission and report provenance. |
 | `WEFT_INSPECTION_CLIENT_CERTIFICATE_FILE` / `WEFT_INSPECTION_CLIENT_PRIVATE_KEY_FILE` | The host's current RSA client PEM certificate and key, delivered as protected private files; the worker admits only this certificate's pin. |
 
+With `WEFT_FERRULE_RUNNER=service`, Session sends the same frames directly to the [Ferrule service](ferrule-service.md#weft-service-runner) instead and requires `WEFT_FERRULE_SERVICE_URL`, `WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256`, `WEFT_FERRULE_WORKER_IMAGE` (the service's build identity) and the protected `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_FILE` / `WEFT_FERRULE_SERVICE_CLIENT_PRIVATE_KEY_FILE`. The settings of the runner that is not selected must be absent.
+
 The scalars are checked with the other feature scalars, before any private delivery is opened; the client PEM is admitted with the other PEMs. A missing or invalid value refuses startup. With both flags disabled these settings stay dormant. Startup does not contact the worker: an unreachable worker makes admission and derivation fail as a retryable unavailable backend, recovered by explicit resume or ensure.
 
 Session snapshots every feature flag before it opens any PEM, ring or credential. Chat additionally requires report reads, and that inconsistency is refused at the same scalar stage. Chat's private profile document is described in [Chat turn HTTP API](chat-http.md); previews in [Preview runs](preview-runs.md).

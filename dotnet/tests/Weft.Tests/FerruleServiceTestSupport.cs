@@ -125,3 +125,128 @@ internal static class FerruleServiceTestSupport
         throw new TimeoutException("The expected worker children did not start.");
     }
 }
+
+/// <summary>The packaged Ferrule service host as a separate process with only its explicit environment.</summary>
+internal sealed class PackagedFerruleService : IAsyncDisposable
+{
+    private readonly System.Diagnostics.Process process;
+
+    private PackagedFerruleService(System.Diagnostics.Process process, int port, int healthPort)
+    {
+        this.process = process;
+        Port = port;
+        HealthPort = healthPort;
+    }
+
+    internal static string Path => System.IO.Path.Combine(AppContext.BaseDirectory, "FerruleService", "weft-ferrule-service.dll");
+    internal int Port { get; }
+    internal int HealthPort { get; }
+    internal System.Diagnostics.Process Process => process;
+
+    /// <summary>The build identity the service reports for the configured worker executable.</summary>
+    internal static string Identity => "sha256:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(FerruleServiceTestSupport.Executable!)));
+
+    internal static System.Diagnostics.Process Launch(IReadOnlyDictionary<string, string> environment)
+    {
+        var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? "/usr/share/dotnet";
+        var start = new System.Diagnostics.ProcessStartInfo(System.IO.Path.Combine(dotnetRoot, "dotnet"))
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        start.ArgumentList.Add(Path);
+        start.Environment.Clear();
+        start.Environment["DOTNET_ROOT"] = dotnetRoot;
+        start.Environment["DOTNET_NOLOGO"] = "1";
+        start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+        start.Environment["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "false";
+        start.Environment["HOME"] = System.IO.Path.GetTempPath();
+        foreach (var (name, value) in environment) start.Environment[name] = value;
+        return System.Diagnostics.Process.Start(start)!;
+    }
+
+    /// <summary>Starts the service with a PEM bundle, the admitted client pins and a private temporary root.</summary>
+    internal static async Task<PackagedFerruleService> StartAsync(string serverPem, IEnumerable<string> clientPins, string temporaryRoot, int concurrency = 2)
+    {
+        var port = FreePort();
+        var healthPort = FreePort();
+        var process = Launch(new Dictionary<string, string>
+        {
+            ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture),
+            ["WEFT_FERRULE_SERVICE_HEALTH_ADDR"] = "127.0.0.1:" + healthPort.ToString(CultureInfo.InvariantCulture),
+            ["WEFT_FERRULE_SERVICE_PEM"] = serverPem,
+            ["WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256"] = string.Join(',', clientPins),
+            ["WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE"] = FerruleServiceTestSupport.Executable!,
+            ["WEFT_FERRULE_SERVICE_TEMPORARY_ROOT"] = temporaryRoot,
+            ["WEFT_FERRULE_SERVICE_CONCURRENCY"] = concurrency.ToString(CultureInfo.InvariantCulture)
+        });
+        var service = new PackagedFerruleService(process, port, healthPort);
+        try
+        {
+            await service.WaitForReadinessAsync();
+            return service;
+        }
+        catch
+        {
+            await service.DisposeAsync();
+            throw;
+        }
+    }
+
+    internal async Task WaitForReadinessAsync()
+    {
+        using var probe = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + HealthPort.ToString(CultureInfo.InvariantCulture)), Timeout = TimeSpan.FromSeconds(2) };
+        for (var attempt = 0; attempt < 300; attempt++)
+        {
+            if (process.HasExited)
+                throw new InvalidOperationException("The packaged Ferrule service exited: " + await process.StandardError.ReadToEndAsync());
+            try
+            {
+                using var ready = await probe.GetAsync(Weft.MappingBackends.Workers.FerruleServiceProtocol.ReadinessPath);
+                if (ready.StatusCode == System.Net.HttpStatusCode.NoContent) return;
+            }
+            catch (Exception error) when (error is HttpRequestException or TaskCanceledException) { }
+            await Task.Delay(100);
+        }
+
+        throw new TimeoutException("The packaged Ferrule service did not become ready.");
+    }
+
+    /// <summary>Graceful stop through SIGTERM; returns the exit code.</summary>
+    internal async Task<int> StopAsync()
+    {
+        if (!process.HasExited)
+        {
+            using var terminate = System.Diagnostics.Process.Start("/usr/bin/kill", ["-TERM", process.Id.ToString(CultureInfo.InvariantCulture)]);
+            await terminate.WaitForExitAsync();
+        }
+
+        await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        return process.ExitCode;
+    }
+
+    internal static string Bundle(System.Security.Cryptography.X509Certificates.X509Certificate2 certificate)
+    {
+        using var key = System.Security.Cryptography.X509Certificates.RSACertificateExtensions.GetRSAPrivateKey(certificate)!;
+        return certificate.ExportCertificatePem() + "\n" + key.ExportPkcs8PrivateKeyPem() + "\n";
+    }
+
+    internal static int FreePort()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!process.HasExited)
+        {
+            process.Kill();
+            await process.WaitForExitAsync();
+        }
+
+        process.Dispose();
+    }
+}

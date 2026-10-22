@@ -74,7 +74,7 @@ public sealed class RemoteInspectionWorkerRunner : IInspectionWorkerRunner, IAsy
     {
         var operation = Guid.NewGuid().ToString("N");
         using var abort = new CancellationTokenSource();
-        var content = new FrameContent(frame);
+        var content = new TransportFrameContent(frame);
         var exchange = SendAsync(operation, content, abort.Token);
         var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using (var bound = new CancellationTokenSource(options.ResponseBound))
@@ -113,7 +113,7 @@ public sealed class RemoteInspectionWorkerRunner : IInspectionWorkerRunner, IAsy
         return Failed(WorkerProcessFailure.CleanupFailed);
     }
 
-    private static async Task<WorkerProcessResult> SettleAsync(Task<WorkerProcessResult> exchange, FrameContent content, bool expired)
+    private static async Task<WorkerProcessResult> SettleAsync(Task<WorkerProcessResult> exchange, TransportFrameContent content, bool expired)
     {
         WorkerProcessResult result;
         try
@@ -130,7 +130,7 @@ public sealed class RemoteInspectionWorkerRunner : IInspectionWorkerRunner, IAsy
         return expired && result.Failure == WorkerProcessFailure.Canceled ? Failed(WorkerProcessFailure.TimedOut) : result;
     }
 
-    private async Task<WorkerProcessResult> SendAsync(string operation, FrameContent content, CancellationToken abort)
+    private async Task<WorkerProcessResult> SendAsync(string operation, TransportFrameContent content, CancellationToken abort)
     {
         using var client = CreateClient(reuse: true);
         using (var ready = new HttpRequestMessage(HttpMethod.Get, new Uri(options.Endpoint, InspectionTransport.ReadyPath))
@@ -281,28 +281,6 @@ public sealed class RemoteInspectionWorkerRunner : IInspectionWorkerRunner, IAsy
     }
 
     private static WorkerProcessResult Failed(WorkerProcessFailure failure) => new([], failure);
-
-    /// <summary>Records whether any frame byte may have reached the connection.</summary>
-    private sealed class FrameContent(ReadOnlyMemory<byte> frame) : HttpContent
-    {
-        private int started;
-        internal bool Started => Volatile.Read(ref started) != 0;
-
-        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
-            SerializeToStreamAsync(stream, context, CancellationToken.None);
-
-        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
-        {
-            Interlocked.Exchange(ref started, 1);
-            await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
-        }
-
-        protected override bool TryComputeLength(out long length)
-        {
-            length = frame.Length;
-            return true;
-        }
-    }
 
     /// <summary>One connection per client: an internal handler retry cannot deliver the frame a second time.</summary>
     private sealed class SingleConnection(Uri endpoint)

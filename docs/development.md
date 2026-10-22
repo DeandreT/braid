@@ -101,6 +101,9 @@ in [Ferrule worker](ferrule-worker.md). Set `WEFT_FERRULE_WORKER_IMAGE` to its
 immutable `sha256:...` image ID and start the server with
 `DOTNET_ENVIRONMENT=Development`. The same singleton worker runner serves
 projection and validation requests; its local Linux/Docker requirements apply.
+With `WEFT_FERRULE_RUNNER=service` and the
+[service runner settings](ferrule-service.md#weft-service-runner), the Development host
+uses a running Ferrule service instead of Docker.
 The example list remains available without a configured worker and reports that
 the explanation and validation are unavailable. The browser does not substitute
 synthetic data for a failed native operation.

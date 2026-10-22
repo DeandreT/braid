@@ -4,6 +4,8 @@ using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Identity;
 
+using Weft.MappingBackends.Workers;
+
 namespace Weft.Server;
 
 /// <summary>One explicit host identity/transport profile. No credential is read while parsing scalars.</summary>
@@ -39,6 +41,7 @@ internal sealed class ServerHostOptions
     internal long? NativeByteLimit { get; private init; }
     internal int? DerivedReadByteLimit { get; private init; }
     internal SessionInspectionWorker? InspectionWorker { get; private init; }
+    internal FerruleServiceEndpoint? FerruleService { get; private init; }
 
     internal static ServerHostOptions Read(Func<string, string?> read)
     {
@@ -108,8 +111,29 @@ internal sealed class ServerHostOptions
         if (chat && !reports.Enabled) throw Failure();
         var previews = new CatalogPreviewOptions(Flag(read, "WEFT_PREVIEWS_ENABLED"));
         var builds = CatalogBuildHostConfiguration.ReadRuntime(read, catalogEnabled: true);
-        // Native admission and derivation run only through the separate pinned worker; this host never runs Docker.
-        var inspection = ingestion.Enabled || reports.DerivationEnabled ? SessionInspectionWorker.Read(read) : null;
+        // Native admission and derivation run only through a separately hosted, pinned runner; this host never runs
+        // Docker. The hosted Weft.Worker stays the default; the Ferrule service is an explicit selection.
+        SessionInspectionWorker? inspection = null;
+        FerruleServiceEndpoint? service = null;
+        if (ingestion.Enabled || reports.DerivationEnabled)
+        {
+            try
+            {
+                if (FerruleRunnerSelection.Read(read, FerruleRunnerKind.InspectionWorker, FerruleRunnerKind.InspectionWorker,
+                    FerruleRunnerKind.Service) == FerruleRunnerKind.Service)
+                {
+                    if (read("WEFT_INSPECTION_WORKER_URL") is not null || read("WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256") is not null)
+                        throw Failure();
+                    service = FerruleServiceEndpoint.Read(read);
+                }
+                else
+                {
+                    if (FerruleServiceEndpoint.Configured(read)) throw Failure();
+                    inspection = SessionInspectionWorker.Read(read);
+                }
+            }
+            catch (Exception error) when (SessionHostResources.Nonfatal(error)) { throw Failure(); }
+        }
         return new(mode, address, publicOrigin, proxy, knownProxy, organization, tenant, client, application, directory)
         {
             Metadata = metadata,
@@ -121,7 +145,8 @@ internal sealed class ServerHostOptions
             Builds = builds,
             NativeByteLimit = nativeLimit,
             DerivedReadByteLimit = derivedLimit,
-            InspectionWorker = inspection
+            InspectionWorker = inspection,
+            FerruleService = service
         };
     }
 

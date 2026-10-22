@@ -12,6 +12,8 @@ using Wolverine;
 
 var settings = PreviewWorkerSettings.Read(Environment.GetEnvironmentVariable);
 var inspection = InspectionWorkerSettings.Read(Environment.GetEnvironmentVariable, settings.WorkerImage, settings.DockerExecutable);
+var previewRunner = PreviewRunnerSettings.Read(Environment.GetEnvironmentVariable, settings);
+const string previewRunnerKey = "preview-runner";
 if (!settings.PreviewEnabled && inspection is null)
     throw new InvalidOperationException("The worker requires preview execution or the inspection service.");
 var builder = Host.CreateApplicationBuilder(args);
@@ -25,8 +27,9 @@ if (settings.PreviewEnabled)
     builder.Services.AddSingleton(provider => new PostgresPreviewRunStore(provider.GetRequiredService<PostgresPreviewDatabase>()));
     builder.Services.AddSingleton<IPrivateObjectStore>(_ =>
         FileSystemPrivateObjectStore.OpenV2(new FileSystemStorageOptions(settings.StorageRoot!, contentRoot)));
-    builder.Services.AddSingleton<IMappingPreviewBackend>(_ => new FerrulePreviewBackend(new DockerInspectionWorkerRunner(
-        new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage, profile: DockerWorkerProfile.Preview))));
+    builder.Services.AddKeyedSingleton(previewRunnerKey, (_, _) => previewRunner.CreateRunner(settings));
+    builder.Services.AddSingleton<IMappingPreviewBackend>(provider =>
+        new FerrulePreviewBackend(provider.GetRequiredKeyedService<IInspectionWorkerRunner>(previewRunnerKey)));
     builder.Services.AddSingleton(provider => new PreviewRunExecutor(provider.GetRequiredService<PostgresPreviewRunStore>(),
         provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(),
         provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<PreviewRunOptions>()));

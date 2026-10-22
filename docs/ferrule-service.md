@@ -130,6 +130,54 @@ between operations, so platforms may add or remove replicas at any time; a
 stopping replica refuses new operations and answers admitted ones after their
 children settle.
 
+## Weft service runner
+
+`FerruleServiceRunner` implements the inspection and preview runner seam
+(`IInspectionWorkerRunner`) against the service, one runner per profile. The Ferrule
+adapters above it are unchanged: they build the exact frames and verify the exact
+answers, digests, echoed revision context and typed owners.
+
+For every operation the runner opens one fresh channel from its connector, checks
+`GET /v1/ready` (status, build identity and protocol), then sends the frame on the
+same channel under a fresh operation identity. Cancellation and deadline expiry
+send the cancellation on that channel and wait for the settled answer, so a caller
+sees `canceled` only after the child has settled. The runner sends a call again,
+with a fresh identity on a fresh channel and at most three attempts, only when the
+service proves that nothing ran: a `503` from the service, or a failure before any
+frame byte was written. Any answer after frame bytes that does not come from the
+service, a lost connection, or a missing settled answer is a cleanup failure. As
+with the hosted inspection transport, it closes the runner's admission and faults
+host shutdown.
+
+The pinned connector (`PinnedServiceConnector`) opens one HTTP/2 connection per
+channel and can never open a second, so retries inside the HTTP stack cannot
+deliver a frame elsewhere or twice. Place the service behind a layer-4 load balancer
+(for example a Kubernetes `Service` or Container Apps TCP ingress); TLS terminates
+in the service.
+
+Hosts select the runner explicitly with `WEFT_FERRULE_RUNNER`:
+
+| Host | Values (default first) |
+| --- | --- |
+| Development host (`DOTNET_ENVIRONMENT=Development`) | `docker`, `service` |
+| Session host (native upload and report derivation) | `worker` (the hosted inspection transport), `service` |
+| `Weft.Worker` previews (and the regressions that run them) | `docker`, `service` |
+
+With `service`, the host requires:
+
+| Setting | Value |
+| --- | --- |
+| `WEFT_FERRULE_SERVICE_URL` | The service's canonical HTTPS origin, for example `https://ferrule:8443`. |
+| `WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256` | Lowercase SHA-256 of the service certificate (DER); the only certificate admitted for it. |
+| `WEFT_FERRULE_WORKER_IMAGE` | The service's build identity, recorded in admission, report and preview provenance. |
+| `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_FILE` / `WEFT_FERRULE_SERVICE_CLIENT_PRIVATE_KEY_FILE` | The host's current RSA client PEM certificate and key as protected private files; its pin is in the service's admitted pins. |
+
+Settings for a runner that is not selected are refused as ambiguous: for example, service
+scalars beside the default hosted worker, or `WEFT_INSPECTION_WORKER_*` beside
+`service` on the Session host. Startup does not contact the service; an unreachable
+service fails operations as a retryable unavailable backend. `Weft.Worker`'s own
+inspection transport and build execution keep using Docker.
+
 ## Configuration
 
 | Setting | Value |

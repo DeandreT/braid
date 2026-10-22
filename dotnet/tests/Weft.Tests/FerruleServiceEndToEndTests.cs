@@ -94,29 +94,17 @@ public sealed class FerruleServiceEndToEndTests
         var root = TemporaryRoot();
         using var serverCertificate = TransportCase.Certificate("CN=Ferrule service");
         using var client = TransportCase.Certificate("CN=Ferrule service client");
-        var port = FreePort();
-        var healthPort = FreePort();
-        using var process = StartPackagedService(new Dictionary<string, string>
-        {
-            ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "127.0.0.1:" + port,
-            ["WEFT_FERRULE_SERVICE_HEALTH_ADDR"] = "127.0.0.1:" + healthPort,
-            ["WEFT_FERRULE_SERVICE_PEM"] = Bundle(serverCertificate),
-            ["WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256"] = TransportCase.Pin(client),
-            ["WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE"] = Executable!,
-            ["WEFT_FERRULE_SERVICE_TEMPORARY_ROOT"] = root,
-            ["WEFT_FERRULE_SERVICE_CONCURRENCY"] = "2"
-        });
         try
         {
-            using var probe = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + healthPort), Timeout = TimeSpan.FromSeconds(2) };
-            await WaitForReadiness(probe, process);
-            var identity = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(Executable!)));
-            await using var remote = new RemoteInspectionWorkerRunner(new(new Uri("https://127.0.0.1:" + port), TransportCase.Pin(serverCertificate), client, identity));
+            await using var service = await PackagedFerruleService.StartAsync(PackagedFerruleService.Bundle(serverCertificate), [TransportCase.Pin(client)], root);
+            var identity = PackagedFerruleService.Identity;
+            var endpoint = new Uri("https://127.0.0.1:" + service.Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            await using var remote = new RemoteInspectionWorkerRunner(new(endpoint, TransportCase.Pin(serverCertificate), client, identity));
             var validation = await new FerruleInspectionBackend(remote).ValidateAsync(Artifact("invalid-function"));
             Assert.Equal(MappingOperationStatus.InvalidMapping, validation.Status);
             Assert.True(validation.Provenance.Confirmed);
             await remote.StopAsync();
-            using (var http = ServiceHost.PinnedClient(new Uri("https://127.0.0.1:" + port), TransportCase.Pin(serverCertificate), client))
+            using (var http = ServiceHost.PinnedClient(endpoint, TransportCase.Pin(serverCertificate), client))
             using (var capabilities = await http.GetAsync(FerruleServiceProtocol.CapabilitiesPath))
             using (var document = JsonDocument.Parse(await capabilities.Content.ReadAsByteArrayAsync()))
             {
@@ -125,15 +113,11 @@ public sealed class FerruleServiceEndToEndTests
                 Assert.Equal(4, document.RootElement.GetProperty("capacity").GetInt32());
             }
 
-            using (var terminate = Process.Start("/usr/bin/kill", ["-TERM", process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]))
-                await terminate.WaitForExitAsync();
-            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
-            Assert.Equal(0, process.ExitCode);
+            Assert.Equal(0, await service.StopAsync());
             Assert.Empty(Directory.EnumerateFileSystemEntries(root));
         }
         finally
         {
-            if (!process.HasExited) process.Kill();
             Directory.Delete(root, recursive: true);
         }
     }
@@ -141,8 +125,8 @@ public sealed class FerruleServiceEndToEndTests
     [Fact]
     public async Task PackagedServiceHostRefusesIncompleteConfigurationWithoutEchoingIt()
     {
-        if (!OperatingSystem.IsLinux() || !File.Exists(PackagedServicePath)) return;
-        using var process = StartPackagedService(new Dictionary<string, string>
+        if (!OperatingSystem.IsLinux() || !File.Exists(PackagedFerruleService.Path)) return;
+        using var process = PackagedFerruleService.Launch(new Dictionary<string, string>
         {
             ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "127.0.0.1:1",
             ["WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256"] = new string('a', 64),
@@ -153,58 +137,6 @@ public sealed class FerruleServiceEndToEndTests
         Assert.Equal(1, process.ExitCode);
         Assert.Equal("WeftFerruleServiceConfigurationFailed", (await error).Trim());
         Assert.DoesNotContain("not-a-pem-secret-value", await process.StandardOutput.ReadToEndAsync(), StringComparison.Ordinal);
-    }
-
-    private static string PackagedServicePath => Path.Combine(AppContext.BaseDirectory, "FerruleService", "weft-ferrule-service.dll");
-
-    private static Process StartPackagedService(IReadOnlyDictionary<string, string> environment)
-    {
-        var start = new ProcessStartInfo(Path.Combine(Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? "/usr/share/dotnet", "dotnet"))
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        start.ArgumentList.Add(PackagedServicePath);
-        start.Environment.Clear();
-        start.Environment["DOTNET_ROOT"] = Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? "/usr/share/dotnet";
-        start.Environment["DOTNET_NOLOGO"] = "1";
-        start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
-        start.Environment["DOTNET_ADD_GLOBAL_TOOLS_TO_PATH"] = "false";
-        start.Environment["HOME"] = Path.GetTempPath();
-        foreach (var (name, value) in environment) start.Environment[name] = value;
-        return Process.Start(start)!;
-    }
-
-    private static async Task WaitForReadiness(HttpClient probe, Process process)
-    {
-        for (var attempt = 0; attempt < 300; attempt++)
-        {
-            if (process.HasExited)
-                Assert.Fail("The packaged Ferrule service exited: " + await process.StandardError.ReadToEndAsync());
-            try
-            {
-                using var ready = await probe.GetAsync(FerruleServiceProtocol.ReadinessPath);
-                if (ready.StatusCode == HttpStatusCode.NoContent) return;
-            }
-            catch (Exception error) when (error is HttpRequestException or TaskCanceledException) { }
-            await Task.Delay(100);
-        }
-
-        throw new TimeoutException("The packaged Ferrule service did not become ready.");
-    }
-
-    private static string Bundle(X509Certificate2 certificate)
-    {
-        using var key = certificate.GetRSAPrivateKey()!;
-        return certificate.ExportCertificatePem() + "\n" + key.ExportPkcs8PrivateKeyPem() + "\n";
-    }
-
-    private static int FreePort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
     private static HttpRequestMessage Operation(string profile, byte[] frame, string identity)

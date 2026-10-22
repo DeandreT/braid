@@ -11,6 +11,7 @@ using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Application;
 using Weft.Identity;
+using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 
 namespace Weft.Server;
@@ -79,6 +80,8 @@ internal sealed class SessionHostResources
         X509Certificate2? inspectionClient = null;
         if (options.InspectionWorker is not null)
             inspectionClient = Certificate(read, SessionInspectionWorker.ClientCertificateFile, SessionInspectionWorker.ClientPrivateKeyFile, true, true);
+        if (options.FerruleService is not null)
+            inspectionClient = Certificate(read, FerruleServiceEndpoint.ClientCertificateFile, FerruleServiceEndpoint.ClientPrivateKeyFile, true, true);
         // Admit all three deliveries before constructing even a lazy pool owner.
         var readerConnection = ReadConnection(read, "WEFT_SESSION_READER_CONNECTION_STRING_FILE");
         var writerConnection = ReadConnection(read, "WEFT_SESSION_WRITER_CONNECTION_STRING_FILE");
@@ -102,6 +105,8 @@ internal sealed class SessionHostResources
         services.AddWeftSessionCatalog(new(options.OrganizationId), options.Metadata, options.Ingestion, options.Creation, options.Reports);
         if (options.InspectionWorker is { } inspection)
             InspectionWorkerHostConfiguration.ConfigureRemote(services, inspection.Options(inspectionClient!));
+        if (options.FerruleService is { } service)
+            InspectionWorkerHostConfiguration.ConfigureService(services, service, inspectionClient!);
         CatalogBusinessServices.Configure(services, environment, options.Metadata, options.Ingestion, options.Creation, options.Reports, read,
             options.NativeByteLimit, options.DerivedReadByteLimit, options.Builds);
         ChatHostConfiguration.Configure(services, read, options.Chat, true, options.Reports, session: true);
