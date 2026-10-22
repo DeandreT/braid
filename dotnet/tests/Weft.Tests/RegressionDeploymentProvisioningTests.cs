@@ -10,6 +10,32 @@ namespace Weft.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class RegressionDeploymentProvisioningTests
 {
+    private static readonly string[] PasswordRoles =
+    [
+        "MIGRATOR", "RUNTIME", "INGEST", "CATALOG", "METADATA", "CREATOR", "REPORT", "DERIVATION",
+        "MAINTENANCE", "IDENTITY", "PAYLOAD_PERMISSION", "SESSION_READER", "SESSION_WRITER", "CHAT_READER", "CHAT_WRITER",
+        "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER",
+        "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA",
+        "QUALIFICATION_READER", "QUALIFICATION_WRITER", "RELEASE_READER", "RELEASE_WRITER"
+    ];
+
+    [Theory]
+    [InlineData("deploy/local/postgres-init.sh")]
+    [InlineData("deploy/azure/provision-database.sh")]
+    public void Native_fixture_supplies_every_declared_provisioning_password(string script)
+    {
+        var text = File.ReadAllText(Path.Combine(Repository(), script));
+        Assert.NotEmpty(RequiredPasswordRoles(text));
+        Assert.Empty(MissingPasswordRoles(text));
+    }
+
+    [Fact]
+    public void An_unrecognized_provisioning_password_is_not_silently_ignored()
+    {
+        Assert.Equal(["NEW_READER"], MissingPasswordRoles("\\getenv new_password WEFT_LOCAL_NEW_READER_PASSWORD\n"));
+        Assert.Equal(["NEW_READER"], MissingPasswordRoles("\\getenv new_password WEFT_NEW_READER_PASSWORD\n"));
+    }
+
     [RegressionNativeTheory]
     [InlineData("deploy/local/postgres-init.sh")]
     [InlineData("deploy/azure/provision-database.sh")]
@@ -38,12 +64,10 @@ public sealed class RegressionDeploymentProvisioningTests
             await create.ExecuteNonQueryAsync();
         }
         var passwords = new Dictionary<string, string>();
-        foreach (var role in new[] { "MIGRATOR", "RUNTIME", "INGEST", "CATALOG", "METADATA", "CREATOR", "REPORT", "DERIVATION",
-            "MAINTENANCE", "IDENTITY", "PAYLOAD_PERMISSION", "SESSION_READER", "SESSION_WRITER", "CHAT_READER", "CHAT_WRITER",
-            "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "BUILD_READER", "BUILD_WRITER",
-            "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA" })
+        foreach (var role in PasswordRoles)
             passwords[role] = Guid.NewGuid().ToString("N");
         var text = await File.ReadAllTextAsync(Path.Combine(Repository(), script));
+        Assert.Empty(MissingPasswordRoles(text));
         var match = Regex.Match(text, "<<'SQL'\\r?\\n(.*?)\\r?\\nSQL", RegexOptions.Singleline | RegexOptions.CultureInvariant);
         Assert.True(match.Success, "Provisioning SQL block must be explicit.");
         var start = new ProcessStartInfo(Path.Combine(bin, "psql.exe"))
@@ -117,6 +141,14 @@ public sealed class RegressionDeploymentProvisioningTests
         var buffer = new char[4096];
         while (await reader.ReadAsync(buffer, token) != 0) { }
     }
+
+    private static string[] RequiredPasswordRoles(string text) => Regex.Matches(text,
+            @"^\\getenv [a-z_]+ WEFT_(?:LOCAL_)?(?<role>[A-Z_]+)_PASSWORD\r?$",
+            RegexOptions.Multiline | RegexOptions.CultureInvariant)
+        .Select(match => match.Groups["role"].Value).Distinct(StringComparer.Ordinal).ToArray();
+
+    private static string[] MissingPasswordRoles(string text) => RequiredPasswordRoles(text)
+        .Where(role => !PasswordRoles.Contains(role, StringComparer.Ordinal)).ToArray();
 
     private static string Repository()
     {
