@@ -29,6 +29,8 @@
     "tests/builds*.ts",
     "playwright.preview-live.config.ts",
     "tests/preview-live.spec.ts",
+    "playwright.hosted-acceptance.config.ts",
+    "tests/hosted-acceptance.spec.ts",
     "tests/catalog*.ts",
     "tests/revision-reports*.ts",
     "tests/revision-chat*.ts",

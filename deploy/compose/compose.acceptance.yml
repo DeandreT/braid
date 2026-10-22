@@ -1,0 +1,167 @@
+# Test-only plumbing for deploy/compose/acceptance-test.sh; never part of a deployment.
+# - Azure Blob private storage against an Azurite emulator on an internal network. The product
+#   admits the emulator's development account only on loopback HTTP, so each consumer reaches it
+#   through a loopback relay in its own network namespace.
+# - A test-owned issuer for the fixed Microsoft organizational endpoints: the server resolves
+#   login.microsoftonline.com to it through a network alias and trusts only the run's test
+#   certificate authority (SSL_CERT_FILE). The Session host's identity validation is unchanged.
+# - A TLS ingress for the public host in front of the edge, as the platform ingress would be.
+# - A local Ollama model for chat on an internal network, reached through the server's relay.
+# Use with: compose.yml, compose.ferrule-service.yml and compose.features.yml. See docs/hosted-acceptance.md.
+x-relay: &relay
+  image: ${WEFT_ACCEPTANCE_NODE_IMAGE:?Set the Node image}
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  user: "65532:65532"
+  entrypoint: ["node"]
+  volumes:
+    - ../../tools/hosted-acceptance:/opt/acceptance:ro
+
+x-blob: &blob
+  WEFT_PRIVATE_STORAGE_KIND: azure-blob
+  WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
+  WEFT_PRIVATE_STORAGE_BLOB_CONTAINER: weft-private
+  WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL: emulator
+
+services:
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
+    restart: unless-stopped
+    command: ["azurite-blob", "--blobHost", "0.0.0.0", "--blobPort", "10000", "--location", "/data", "--skipApiVersionCheck", "--loose"]
+    volumes:
+      - blob-data:/data
+    networks: [storage]
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(10000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  blob-container:
+    <<: *relay
+    restart: "no"
+    command: ["/opt/acceptance/blob-container.mjs", "http://azurite:10000/devstoreaccount1", "weft-private"]
+    networks: [storage]
+    depends_on:
+      azurite: {condition: service_healthy}
+
+  # Namespace for the one-shot storage tools: database access plus the loopback emulator relay.
+  tools-relay:
+    <<: *relay
+    command: ["/opt/acceptance/relay.mjs", "tcp", "127.0.0.1:10000=azurite:10000"]
+    networks: [database, storage]
+    healthcheck: &relay-health
+      test: ["CMD", "node", "-e", "require('net').connect(10000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  storage-init:
+    command: ["storage", "initialize-blob"]
+    environment: *blob
+    volumes: !reset []
+    network_mode: service:tools-relay
+    depends_on:
+      blob-container: {condition: service_completed_successfully}
+      tools-relay: {condition: service_healthy}
+
+  maintenance:
+    environment: *blob
+    volumes: !reset []
+    networks: !reset []
+    network_mode: service:tools-relay
+
+  server:
+    environment:
+      <<: *blob
+      # A null value unsets the inherited root; the harness keeps it out of its own environment.
+      WEFT_PRIVATE_STORAGE_ROOT:
+      SSL_CERT_FILE: /run/weft/secrets/acceptance-trust
+      WEFT_DELIVER_FILE_ACCEPTANCE_TRUST: ${WEFT_ACCEPTANCE_TRUST_PEM:?Set the test certificate authority}
+    volumes: !override
+      - type: volume
+        source: session-keys
+        target: /var/lib/weft/keys
+    networks: [database, egress, ferrule, identity, storage, models]
+
+  server-relay:
+    <<: *relay
+    command: ["/opt/acceptance/relay.mjs", "tcp", "127.0.0.1:10000=azurite:10000", "127.0.0.1:11434=model:11434"]
+    network_mode: service:server
+    depends_on: [server]
+    healthcheck: *relay-health
+
+  runs:
+    environment:
+      <<: *blob
+      # A null value unsets the inherited root; the harness keeps it out of its own environment.
+      WEFT_PRIVATE_STORAGE_ROOT:
+    volumes: !reset []
+    networks: [database, ferrule, storage]
+
+  runs-relay:
+    <<: *relay
+    command: ["/opt/acceptance/relay.mjs", "tcp", "127.0.0.1:10000=azurite:10000"]
+    network_mode: service:runs
+    depends_on: [runs]
+    healthcheck: *relay-health
+
+  issuer:
+    <<: *relay
+    command: ["/opt/acceptance/issuer.mjs"]
+    environment:
+      WEFT_ACCEPTANCE_TENANT_ID: ${WEFT_ENTRA_TENANT_ID:?}
+      WEFT_ACCEPTANCE_CLIENT_ID: ${WEFT_ENTRA_CLIENT_ID:?}
+      WEFT_ACCEPTANCE_SUBJECT: ${WEFT_ACCEPTANCE_SUBJECT:?Set the signed-in subject}
+      WEFT_ACCEPTANCE_CALLBACK: https://${WEFT_PUBLIC_HOST:?}/api/auth/callback/entra
+      WEFT_ACCEPTANCE_ISSUER_PEM: ${WEFT_ACCEPTANCE_ISSUER_PEM:?Set the issuer TLS PEM}
+      WEFT_ACCEPTANCE_CLIENT_CERTIFICATE: ${WEFT_ACCEPTANCE_CLIENT_CERTIFICATE:?Set the Entra client certificate}
+      WEFT_ACCEPTANCE_SIGNING_KEY: ${WEFT_ACCEPTANCE_SIGNING_KEY:?Set the ID token signing key}
+    # The server reaches the fixed Microsoft name on port 443; the issuer stays non-root.
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 443
+    ports:
+      - 127.0.0.1:${WEFT_ACCEPTANCE_ISSUER_PORT:-0}:443
+    networks:
+      identity:
+        aliases: [login.microsoftonline.com]
+
+  ingress:
+    <<: *relay
+    command: ["/opt/acceptance/relay.mjs", "tls", "0.0.0.0:8443=server:8080"]
+    environment:
+      WEFT_ACCEPTANCE_INGRESS_PEM: ${WEFT_ACCEPTANCE_INGRESS_PEM:?Set the ingress TLS PEM}
+    ports:
+      - 127.0.0.1:${WEFT_ACCEPTANCE_HTTPS_PORT:-0}:8443
+    networks: [egress]
+    depends_on: [server]
+
+  model:
+    image: ${WEFT_ACCEPTANCE_OLLAMA_IMAGE:-docker.io/ollama/ollama@sha256:265409e1d931028a8f7d5a32bcbafddd7bffbc6cc629d77efe9560adf692a5e7}
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - models:/root/.ollama
+    networks: [models]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+networks:
+  storage:
+    internal: true
+  models:
+    internal: true
+  identity: {}
+
+volumes:
+  blob-data:
+  # An existing Ollama model cache with the chat model already pulled; never removed by the harness.
+  models:
+    external: true
+    name: ${WEFT_ACCEPTANCE_OLLAMA_VOLUME:-weft-ollama-models}

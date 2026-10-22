@@ -147,6 +147,17 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   `WEFT_FERRULE_SERVICE_CLIENT_PEM`, and the pins `WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256`
   and `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256`. Use it instead of the worker
   override, not beside it.
+- The override file `deploy/compose/compose.features.yml`, used with the Ferrule service
+  override, enables chat, previews, regression cases and runs, and builds on the Session
+  server, each through its own login delivered as a protected private file
+  (`WEFT_DELIVER_FILE_*`), and adds the `runs` service: a `Weft.Worker` that executes
+  previews and regression runs through the Ferrule service with its own client
+  certificate, on the database and service networks only. It requires
+  `WEFT_CHAT_PROFILES_JSON` (the [chat profile document](chat-http.md#configuration)),
+  `WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM` and that certificate's pin
+  `WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256`, which the service admits beside
+  the server's. Build execution needs the Docker-based compiler worker, so this file
+  composes build environments, approvals and requests but no build executor.
 
 All runtime containers use a read-only root filesystem, drop every capability and
 set `no-new-privileges`. The compose file reads every value from the caller's
@@ -188,7 +199,9 @@ of healthy, read-only, non-root replicas on an internal network, the Session ser
 start with the service selection (also after the restart), and on every replica: admission
 of only the pinned server certificate, its build identity and capabilities, and one exact
 native validation frame. The generated Entra values are placeholders, so
-sign-in and therefore browser upload are not exercised.
+sign-in and therefore browser upload are not exercised; the
+[hosted-shape acceptance](hosted-acceptance.md) runs them, with Blob storage, chat,
+previews, regression runs and recovery, in the same shape.
 
 ## Hosted boundaries
 
@@ -198,6 +211,7 @@ over the [hosted inspection transport](ferrule-worker.md#hosted-inspection-trans
 examples remain a Development feature. Chat
 and preview submission are composed by the Session host with `_FILE` credential
 deliveries (see [feature composition](session-host.md#feature-composition)); preview
-execution additionally needs the separate `Weft.Worker` host.
+execution additionally needs the separate `Weft.Worker` host, which
+`compose.features.yml` runs locally.
 Private storage and the session key ring support one API instance on a persistent
 local filesystem. [Azure deployment](azure-deployment.md) describes the hosted environment.
