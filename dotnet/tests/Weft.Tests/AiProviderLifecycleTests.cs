@@ -484,7 +484,10 @@ public sealed partial class AiProviderTests
             gate.Release.TrySetResult();
             var rejected = Require<RoundRejected>(await opening.WaitAsync(TimeSpan.FromSeconds(5)));
             Assert.Equal(AiFailureCode.Cancelled, rejected.Failure.Code); Assert.Equal(AiDispatchState.Attempted, rejected.Failure.Dispatch);
-            await closed.Task.WaitAsync(TimeSpan.FromSeconds(5)); idle.Add(Turn(client));
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // Socket closure precedes completion of the turn's owned cancellation cleanup.
+            await turn.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            idle.Add(Turn(client));
             Assert.Equal(1, server.RequestCount); Assert.Equal(1, server.ConnectionCount);
         }
         finally
