@@ -5,6 +5,7 @@ export default defineConfig({
   testMatch: [
     "browser-auth-controls.spec.ts",
     "upload-presentation.spec.ts",
+    "upload-retention.spec.ts",
     "workbench.spec.ts",
     "workbench-model.spec.ts",
     "regression.spec.ts",

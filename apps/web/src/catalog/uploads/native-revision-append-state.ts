@@ -27,6 +27,7 @@ import {
   type NativeIngestionSourceErrorKind,
 } from "./native-ingestion-leaves";
 import { NativeRevisionAppendApi } from "./native-revision-append-api";
+import type { RevisionAppendDraftRecovery } from "./unsent-upload-recovery";
 import {
   NativeRevisionAppendError,
   NativeRevisionAppendHead,
@@ -190,6 +191,9 @@ export class NativeRevisionAppendState {
   private observedIdentityVersion = this.contexts.identityVersion();
   private network: Subscription | null = null;
   private captureAbort: AbortController | null = null;
+  private draftRecovery: RevisionAppendDraftRecovery | null = null;
+  private draftContext: CatalogContext | null = null;
+  private sourceFile: File | null = null;
   private captureRunning = false;
   private queuedFile: {
     readonly file: File;
@@ -202,13 +206,14 @@ export class NativeRevisionAppendState {
   readonly leaveRisk = computed<NativeRevisionAppendLeaveRisk>(() => {
     if (this.original() || (this.known() && !this.known()!.terminal))
       return "recovery";
-    return this.dirty() ? "draft" : null;
+    return this.dirty() || this.draftRecovery?.hasWork() ? "draft" : null;
   });
   readonly leavePrompt = this.pendingLeave.asReadonly();
   readonly focusRequest = this.focus.asReadonly();
 
   constructor() {
     const invalidation = this.contexts.invalidated.subscribe(() => {
+      this.suspendDraft();
       this.observedIdentityVersion = this.contexts.identityVersion();
       this.cancelNetwork();
       this.invalidateFile();
@@ -231,6 +236,7 @@ export class NativeRevisionAppendState {
       // Cancel only identity changes not yet handled by that admission.
       if (owner && version !== this.observedIdentityVersion) {
         untracked(() => {
+          this.suspendDraft();
           this.observedIdentityVersion = version;
           this.cancelNetwork();
           this.invalidateFile();
@@ -267,7 +273,12 @@ export class NativeRevisionAppendState {
     });
   }
 
-  select(scope: CatalogMappingScope | null): void {
+  select(
+    scope: CatalogMappingScope | null,
+    recovery: RevisionAppendDraftRecovery,
+  ): void {
+    this.draftRecovery = recovery;
+    recovery.routeScope(scope);
     const previous = this.target();
     if (this.active() && scope && previous && sameScope(scope, previous))
       return;
@@ -300,6 +311,8 @@ export class NativeRevisionAppendState {
     this.cancelNetwork();
     this.invalidateFile();
     if (!this.locked()) this.clearDraft();
+    this.draftRecovery?.discard();
+    this.draftRecovery = null;
     this.active.set(false);
     this.resolveLeave(false);
     this.admitted.set(null);
@@ -336,6 +349,7 @@ export class NativeRevisionAppendState {
 
   setFilename(originalFilename: string): void {
     if (!this.view().canEdit || typeof originalFilename !== "string") return;
+    this.draftContext = this.readAdmission()!.context;
     this.filename.set(originalFilename);
     this.errors.set(noErrors);
   }
@@ -365,11 +379,13 @@ export class NativeRevisionAppendState {
       return;
     }
     const owner = admissionOwner(admission);
+    this.draftContext = admission.context;
     this.draftOwner.set(owner);
     this.filename.set(file.name);
     this.selectedFile.set(
       Object.freeze({ name: file.name, byteCount: file.size }),
     );
+    this.sourceFile = file;
     this.preparing.set(true);
     this.queuedFile = {
       file,
@@ -422,11 +438,14 @@ export class NativeRevisionAppendState {
           crypto.randomUUID(),
         );
         this.original.set(intent);
+        this.draftRecovery?.discard();
         this.source.set(null);
         this.selectedFile.set(null);
         this.filename.set("");
         this.draftOwner.set(null);
         this.queuedFile = null;
+        this.sourceFile = null;
+        this.draftContext = null;
         this.sendOriginal(fresh, intent);
       } catch (error: unknown) {
         const failure = appendError(error);
@@ -538,6 +557,7 @@ export class NativeRevisionAppendState {
   }
   discardDraftAndLeave(): void {
     if (this.pendingLeave() !== "draft" || this.leaveRisk() !== "draft") return;
+    this.draftRecovery?.discard();
     this.cancelNetwork();
     this.invalidateFile();
     this.clearDraft();
@@ -870,7 +890,10 @@ export class NativeRevisionAppendState {
             if (owner && !owns(context, owner)) {
               this.foreign.set(true);
               this.invalidateFile();
-              if (!this.locked()) this.clearDraft();
+              if (!this.locked()) {
+                this.draftRecovery?.discard();
+                this.clearDraft();
+              }
             }
             this.observedIdentityVersion = this.contexts.identityVersion();
             admissionIdentityVersion = this.observedIdentityVersion;
@@ -932,6 +955,10 @@ export class NativeRevisionAppendState {
               this.admissionState.set(
                 canUpload(admission) ? "ready" : "readOnly",
               );
+              if (!this.locked()) {
+                this.draftContext = admission.context;
+                this.restoreDraft(admission);
+              }
               if (!this.locked() && !this.reviewed() && this.safeSlot())
                 this.reviewed.set(candidate);
               if (
@@ -1193,6 +1220,7 @@ export class NativeRevisionAppendState {
     ++this.fileGeneration;
     this.captureAbort?.abort();
     this.queuedFile = null;
+    this.sourceFile = null;
     this.preparing.set(false);
   }
   private cancelNetwork(): void {
@@ -1231,6 +1259,8 @@ export class NativeRevisionAppendState {
     this.contexts.reject(error.status);
   }
   private clearDraft(): void {
+    this.draftContext = null;
+    this.sourceFile = null;
     this.filename.set("");
     this.source.set(null);
     this.selectedFile.set(null);
@@ -1241,6 +1271,7 @@ export class NativeRevisionAppendState {
     this.sourceFailure.set(null);
   }
   private clearSlot(): void {
+    this.draftRecovery?.discard();
     this.cancelNetwork();
     this.invalidateFile();
     this.clearDraft();
@@ -1253,6 +1284,48 @@ export class NativeRevisionAppendState {
     this.foreign.set(false);
     this.failure.set(null);
     this.access.set({ kind: "idle" });
+  }
+
+  private suspendDraft(): void {
+    const context = this.draftContext,
+      scope = this.target();
+    if (this.locked() || !this.dirty() || !context || !scope) return;
+    this.draftRecovery?.keep(context, scope, {
+      filename: this.filename(),
+      source: this.source(),
+      file: this.source() ? null : this.sourceFile,
+      summary: this.selectedFile(),
+      reviewed: this.reviewed(),
+      reviewRequired: this.reviewRequired(),
+    });
+  }
+
+  private restoreDraft(admission: NativeRevisionAppendAdmission): void {
+    if (!canUpload(admission) || !this.contexts.canPresent(admission.context))
+      return;
+    const kept = this.draftRecovery?.take(
+      admission.context,
+      admission.mapping.scope,
+    );
+    if (!kept) return;
+    this.filename.set(kept.filename);
+    this.source.set(kept.source);
+    this.selectedFile.set(kept.summary);
+    this.reviewed.set(kept.reviewed);
+    this.reviewRequired.set(kept.reviewRequired);
+    const owner = admissionOwner(admission);
+    this.draftOwner.set(owner);
+    if (!kept.source && kept.file) {
+      this.sourceFile = kept.file;
+      this.preparing.set(true);
+      this.queuedFile = {
+        file: kept.file,
+        owner,
+        generation: this.fileGeneration,
+        identityVersion: this.contexts.identityVersion(),
+      };
+      void this.captureNext();
+    }
   }
   private resolveLeave(allow: boolean): void {
     const decision = this.leaveDecision;

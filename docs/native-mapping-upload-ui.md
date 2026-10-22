@@ -48,6 +48,18 @@ Stopping the browser wait does not cancel an already dispatched server request.
 
 ## Tab lifetime and navigation
 
+Before sending, a failed, timed-out or negative session check suspends the form
+and selected file in a page-scoped provider. After the same owner (mode,
+principal, organization and Session identity context) passes fresh project
+admission, the form and exact captured bytes are restored. If capture was still
+running, the retained in-memory `File` is captured again after admission; a late
+completion from the retired capture cannot update the form. Nothing is uploaded
+automatically.
+
+Another confirmed owner or project, explicit discard, or leaving the page
+discards this unsent work. These boundaries do not change the existing recovery
+protocol for a request that was already sent.
+
 The client retains one upload intent in private tab memory. It does not save the
 file, key or recovery state in browser storage or navigation URLs. Access and
 identity changes hide private recovery details and invalidate stale callbacks.

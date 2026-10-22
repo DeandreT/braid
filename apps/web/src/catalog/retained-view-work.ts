@@ -1,24 +1,40 @@
-import { DestroyRef, effect, inject, signal, untracked } from "@angular/core";
+import {
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from "@angular/core";
 import { CatalogContextStore } from "./catalog-context";
 import {
   catalogOwner,
   type CatalogContext,
+  type CatalogMappingScope,
+  type CatalogProjectScope,
   type CatalogRevisionScope,
 } from "./catalog-types";
+
+type RetainedScope =
+  CatalogProjectScope | CatalogMappingScope | CatalogRevisionScope;
 
 /**
  * One panel's unsent draft or uncertain request, kept in page memory while that panel is
  * suspended or replaced. A failed, negative or canceled session check confirms no new owner,
- * so it only suspends this work. A fresh context for another owner, another revision or the
+ * so it only suspends this work. A fresh context for another owner, another resource scope or the
  * page's disposal discards it. Subclasses are provided by the page, never the application.
  */
-export abstract class RetainedViewWork<T> {
+export abstract class RetainedViewWork<
+  T,
+  Scope extends RetainedScope = CatalogRevisionScope,
+> {
   private readonly contexts = inject(CatalogContextStore);
   private readonly kept = signal<{
     readonly owner: string;
-    readonly scope: Readonly<CatalogRevisionScope>;
+    readonly scope: Readonly<Scope>;
     readonly work: T;
   } | null>(null);
+  readonly hasWork = computed(() => this.kept() !== null);
 
   constructor() {
     effect(() => {
@@ -28,8 +44,8 @@ export abstract class RetainedViewWork<T> {
     inject(DestroyRef).onDestroy(() => this.discard());
   }
 
-  /** Suspends work admitted under this context and revision, unless a fresh context already names another owner. */
-  keep(context: CatalogContext, scope: CatalogRevisionScope, work: T): void {
+  /** Suspends work under this context and resource scope, unless a fresh context already names another owner. */
+  keep(context: CatalogContext, scope: Scope, work: T): void {
     const owner = catalogOwner(context),
       current = this.contexts.context();
     if (current && catalogOwner(current) !== owner) {
@@ -39,26 +55,26 @@ export abstract class RetainedViewWork<T> {
     this.kept.set({ owner, scope: Object.freeze({ ...scope }), work });
   }
 
-  /** The suspended work, visible only to its own owner on its own revision. */
-  peek(context: CatalogContext, scope: CatalogRevisionScope): T | null {
+  /** The suspended work, visible only to its own owner on its own resource scope. */
+  peek(context: CatalogContext, scope: Scope): T | null {
     const kept = this.kept();
     return kept &&
       kept.owner === catalogOwner(context) &&
-      sameRevision(kept.scope, scope)
+      sameScope(kept.scope, scope)
       ? kept.work
       : null;
   }
 
   /** Hands the work back after the panel's own fresh admission; it is no longer kept here. */
-  take(context: CatalogContext, scope: CatalogRevisionScope): T | null {
+  take(context: CatalogContext, scope: Scope): T | null {
     const work = this.peek(context, scope);
     if (work !== null) this.kept.set(null);
     return work;
   }
 
-  routeScope(scope: CatalogRevisionScope | null): void {
+  routeScope(scope: Scope | null): void {
     const kept = this.kept();
-    if (kept && (!scope || !sameRevision(kept.scope, scope))) this.discard();
+    if (kept && (!scope || !sameScope(kept.scope, scope))) this.discard();
   }
 
   discard(): void {
@@ -71,14 +87,13 @@ export abstract class RetainedViewWork<T> {
   }
 }
 
-function sameRevision(
-  left: CatalogRevisionScope,
-  right: CatalogRevisionScope,
-): boolean {
+function sameScope(left: RetainedScope, right: RetainedScope): boolean {
   return (
     left.organizationId === right.organizationId &&
     left.projectId === right.projectId &&
-    left.mappingId === right.mappingId &&
-    left.revisionId === right.revisionId
+    ("mappingId" in left ? left.mappingId : null) ===
+      ("mappingId" in right ? right.mappingId : null) &&
+    ("revisionId" in left ? left.revisionId : null) ===
+      ("revisionId" in right ? right.revisionId : null)
   );
 }

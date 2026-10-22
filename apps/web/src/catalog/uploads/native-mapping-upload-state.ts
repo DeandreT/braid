@@ -20,6 +20,7 @@ import {
   type CatalogRevision,
 } from "../catalog-types";
 import { NativeMappingUploadApi } from "./native-mapping-upload-api";
+import type { MappingUploadDraftRecovery } from "./unsent-upload-recovery";
 import {
   NativeMappingUploadError,
   NativeMappingUploadIntent,
@@ -93,6 +94,9 @@ export class NativeMappingUploadState {
   private readonly access = signal<RevisionAccess>({ kind: "idle" });
   private readonly preparing = signal(false);
   private captureAbort: AbortController | null = null;
+  private draftRecovery: MappingUploadDraftRecovery | null = null;
+  private draftContext: CatalogContext | null = null;
+  private sourceFile: File | null = null;
   private queuedFile: {
     readonly file: File;
     readonly owner: Owner;
@@ -316,11 +320,12 @@ export class NativeMappingUploadState {
       (this.known() !== null && !this.known()!.terminal)
     )
       return "recovery";
-    return this.dirtyDraft() ? "draft" : null;
+    return this.dirtyDraft() || this.draftRecovery?.hasWork() ? "draft" : null;
   });
 
   constructor() {
     const invalidation = this.contexts.invalidated.subscribe(() => {
+      this.suspendDraft();
       this.cancelNetwork();
       this.invalidateFile();
       if (!this.locked()) this.clearDraft();
@@ -338,7 +343,10 @@ export class NativeMappingUploadState {
         untracked(() => {
           this.cancelNetwork();
           this.invalidateFile();
-          if (!this.locked()) this.clearDraft();
+          if (!this.locked()) {
+            this.draftRecovery?.discard();
+            this.clearDraft();
+          }
           this.foreignOwner.set(true);
           this.presenting.set(false);
           this.admitted.set(null);
@@ -359,7 +367,12 @@ export class NativeMappingUploadState {
     });
   }
 
-  select(scope: CatalogProjectScope | null): void {
+  select(
+    scope: CatalogProjectScope | null,
+    recovery: MappingUploadDraftRecovery,
+  ): void {
+    this.draftRecovery = recovery;
+    recovery.routeScope(scope);
     const selected = this.scope();
     if (this.active() && scope && selected && sameScope(scope, selected))
       return;
@@ -395,6 +408,8 @@ export class NativeMappingUploadState {
     this.cancelNetwork();
     this.invalidateFile();
     if (!this.locked()) this.clearDraft();
+    this.draftRecovery?.discard();
+    this.draftRecovery = null;
     this.active.set(false);
     this.admitted.set(null);
     this.presenting.set(false);
@@ -416,6 +431,7 @@ export class NativeMappingUploadState {
 
   setDraft(name: string, description: string, originalFilename: string): void {
     if (!this.canEdit()) return;
+    this.draftContext = this.view()!.context;
     this.rawDraft.set({ name, description, originalFilename });
     this.inputErrors.set(noErrors);
   }
@@ -438,12 +454,14 @@ export class NativeMappingUploadState {
       return;
     }
     const owner = ownerOf(admission);
+    this.draftContext = admission.context;
     this.draftOwner.set(owner);
     this.rawDraft.update((draft) => ({
       ...draft,
       originalFilename: file.name,
     }));
     this.selectedFile.set({ name: file.name, byteCount: file.size });
+    this.sourceFile = file;
     this.preparing.set(true);
     this.queuedFile = { file, owner, generation: this.fileGeneration };
     void this.captureNext();
@@ -474,11 +492,14 @@ export class NativeMappingUploadState {
           crypto.randomUUID(),
         );
         this.original.set(intent);
+        this.draftRecovery?.discard();
         this.source.set(null);
         this.selectedFile.set(null);
         this.rawDraft.set(blank);
         this.draftOwner.set(null);
         this.queuedFile = null;
+        this.sourceFile = null;
+        this.draftContext = null;
         this.sendOriginal(fresh, intent);
       } catch (error: unknown) {
         this.failure.set(uploadError(error));
@@ -551,6 +572,7 @@ export class NativeMappingUploadState {
 
   discardDraft(): void {
     if (!this.locked()) {
+      this.draftRecovery?.discard();
       this.cancelNetwork();
       this.invalidateFile();
       this.clearDraft();
@@ -629,7 +651,10 @@ export class NativeMappingUploadState {
             this.foreignOwner.set(true);
             this.presenting.set(false);
             this.invalidateFile();
-            if (!this.locked()) this.clearDraft();
+            if (!this.locked()) {
+              this.draftRecovery?.discard();
+              this.clearDraft();
+            }
           }
           if (context.allowedOrganizationId !== scope.organizationId)
             throw new NativeMappingUploadError("notFound");
@@ -671,6 +696,10 @@ export class NativeMappingUploadState {
           this.admitted.set(admission);
           this.presenting.set(canUpload(admission));
           this.admissionState.set(canUpload(admission) ? "ready" : "readOnly");
+          if (!this.locked()) {
+            this.draftContext = admission.context;
+            this.restoreDraft(admission);
+          }
           if (requireUpload && (!canUpload(admission) || this.quarantined())) {
             this.failure.set(
               new NativeMappingUploadError(
@@ -910,6 +939,7 @@ export class NativeMappingUploadState {
     ++this.fileGeneration;
     this.captureAbort?.abort();
     this.queuedFile = null;
+    this.sourceFile = null;
     this.preparing.set(false);
   }
 
@@ -926,6 +956,8 @@ export class NativeMappingUploadState {
   }
 
   private clearDraft(): void {
+    this.draftContext = null;
+    this.sourceFile = null;
     this.rawDraft.set(blank);
     this.draftOwner.set(null);
     this.source.set(null);
@@ -935,6 +967,7 @@ export class NativeMappingUploadState {
   }
 
   private clearSlot(): void {
+    this.draftRecovery?.discard();
     this.invalidateFile();
     this.clearDraft();
     this.original.set(null);
@@ -945,6 +978,43 @@ export class NativeMappingUploadState {
     this.foreignOwner.set(false);
     this.failure.set(null);
     this.access.set({ kind: "idle" });
+  }
+
+  private suspendDraft(): void {
+    const context = this.draftContext,
+      scope = this.scope();
+    if (this.locked() || !this.dirtyDraft() || !context || !scope) return;
+    this.draftRecovery?.keep(context, scope, {
+      input: Object.freeze({ ...this.rawDraft() }),
+      source: this.source(),
+      file: this.source() ? null : this.sourceFile,
+      summary: this.selectedFile(),
+    });
+  }
+
+  private restoreDraft(admission: NativeMappingUploadAdmission): void {
+    if (!canUpload(admission) || !this.contexts.canPresent(admission.context))
+      return;
+    const kept = this.draftRecovery?.take(
+      admission.context,
+      admission.project.scope,
+    );
+    if (!kept) return;
+    this.rawDraft.set(kept.input);
+    this.source.set(kept.source);
+    this.selectedFile.set(kept.summary);
+    const owner = ownerOf(admission);
+    this.draftOwner.set(owner);
+    if (!kept.source && kept.file) {
+      this.sourceFile = kept.file;
+      this.preparing.set(true);
+      this.queuedFile = {
+        file: kept.file,
+        owner,
+        generation: this.fileGeneration,
+      };
+      void this.captureNext();
+    }
   }
 }
 

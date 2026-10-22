@@ -37,6 +37,17 @@ save, and a later refusal cannot prove an unknown request failed to commit.
 
 ## Identity and tab lifetime
 
+An unsent filename, selected file and reviewed head survive a failed, timed-out
+or negative session check in page-scoped memory. The same owner (mode, principal,
+organization and Session identity context) must pass fresh mapping admission
+before the work is restored. An unfinished file capture restarts from its
+retained in-memory `File` only after admission. Old capture callbacks stay fenced.
+No append is sent automatically, and a changed mapping head still requires
+explicit review before a new append intent can be allocated.
+
+Another confirmed owner or mapping, explicit discard, or leaving the page clears
+the unsent work. Sent-request recovery remains separate and unchanged.
+
 Identity or scope changes hide private recovery material and invalidate late
 callbacks. Returning to the original owner requires fresh complete mapping
 admission before private details or deliberate recovery become available. A

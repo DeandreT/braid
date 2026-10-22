@@ -15,6 +15,7 @@ import { ActivatedRoute, RouterLink } from "@angular/router";
 import { Observable, combineLatest, of, type Subscriber } from "rxjs";
 import { catalogRoutes, isCatalogId } from "../catalog-types";
 import { CatalogContextStore } from "../catalog-context";
+import { MappingUploadDraftRecovery } from "./unsent-upload-recovery";
 import {
   NativeMappingUploadState,
   type NativeMappingUploadLeaveRisk,
@@ -28,11 +29,13 @@ import type {
 @Component({
   selector: "weft-upload-mapping-page",
   imports: [ReactiveFormsModule, RouterLink],
+  providers: [MappingUploadDraftRecovery],
   templateUrl: "./upload-mapping-page.component.html",
   styleUrl: "./upload-mapping-page.component.css",
 })
 export class UploadMappingPageComponent {
   readonly state = inject(NativeMappingUploadState);
+  private readonly draftRecovery = inject(MappingUploadDraftRecovery);
   readonly routes = catalogRoutes;
   readonly leaveDecision = signal<NativeMappingUploadLeaveRisk>(null);
   readonly abandonDecision = signal(false);
@@ -77,6 +80,7 @@ export class UploadMappingPageComponent {
             isCatalogId(projectId)
             ? { organizationId, projectId }
             : null,
+          this.draftRecovery,
         );
       });
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {

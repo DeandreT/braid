@@ -115,6 +115,14 @@ differs discards it, as does another revision, explicit abandonment or leaving
 the page. The panel restores it to the same owner only after its own fresh
 admission.
 
+Upload and revision-append pages use the same page-scoped ownership rule for
+unsent fields and selected files. They retain either the captured immutable
+source or the in-memory `File` needed to restart an interrupted capture. Fresh
+project or mapping admission is required before restoration. A changed append
+head still requires review; no request is allocated or sent merely because a
+draft was restored. Leaving the page discards unsent work without changing the
+separate tab-memory protocol for already-sent requests.
+
 There is no durable draft storage, cross-tab registry, account-sharing mechanism,
 provider SDK, automatic mutation retry or sign-in/out control in this state
 increment. Sign-in controls compose this boundary separately.

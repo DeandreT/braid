@@ -16,6 +16,7 @@ import { ActivatedRoute, RouterLink } from "@angular/router";
 import { combineLatest, type Observable } from "rxjs";
 import { catalogRoutes, isCatalogId } from "../catalog-types";
 import { CatalogContextStore } from "../catalog-context";
+import { RevisionAppendDraftRecovery } from "./unsent-upload-recovery";
 import type { NativeIngestionSourceErrorKind } from "./native-ingestion-leaves";
 import { NativeRevisionAppendState } from "./native-revision-append-state";
 import type {
@@ -28,11 +29,13 @@ import type {
 @Component({
   selector: "weft-append-revision-page",
   imports: [ReactiveFormsModule, RouterLink],
+  providers: [RevisionAppendDraftRecovery],
   templateUrl: "./append-revision-page.component.html",
   styleUrl: "./append-revision-page.component.css",
 })
 export class AppendRevisionPageComponent {
   readonly state = inject(NativeRevisionAppendState);
+  private readonly draftRecovery = inject(RevisionAppendDraftRecovery);
   readonly routes = catalogRoutes;
   readonly abandonDecision = signal(false);
   readonly abandonAcknowledged = signal(false);
@@ -78,6 +81,7 @@ export class AppendRevisionPageComponent {
             isCatalogId(mappingId)
             ? { organizationId, projectId, mappingId }
             : null,
+          this.draftRecovery,
         );
       });
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {

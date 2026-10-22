@@ -627,28 +627,76 @@ async function runCase(target: Page): Promise<string> {
 let caseRuns: string[] = [];
 let buildId = "";
 
-/**
- * Enters the fixture in the case editor. The editor deliberately discards drafts when the
- * catalog context or session observation changes underneath it; returns false if an entered
- * value did not stay.
- */
-async function enterCase(region: Locator, final: boolean): Promise<boolean> {
-  try {
-    return await enterCaseFields(region);
-  } catch (error) {
-    // A cleared editor removes its fields; only the last attempt reports why.
-    if (final) throw error;
-    return false;
-  }
-}
-
-async function enterCaseFields(region: Locator): Promise<boolean> {
+/** Enters once; failed checks recover the retained editor without reloading or rebuilding it. */
+async function enterCaseFields(region: Locator): Promise<void> {
   const entered: [Locator, string][] = [];
+  let recoveriesUsed = 0;
+  const assertEntered = async () => {
+    for (const [field, value] of entered)
+      await expect(field).toHaveValue(value);
+  };
+  const recoverEditor = async (): Promise<boolean> => {
+    const workspace = page
+      .getByRole("alert")
+      .filter({ hasText: "Workspace access unavailable" });
+    const catalog = page
+      .getByRole("alert")
+      .filter({ hasText: "Catalog unavailable" });
+    if (!(await workspace.isVisible()) && !(await catalog.isVisible()))
+      return false;
+    expect(++recoveriesUsed).toBeLessThanOrEqual(3);
+    recoveries.push("retained regression editor");
+    if (await workspace.isVisible())
+      await workspace
+        .getByRole("button", { name: "Retry", exact: true })
+        .click();
+    await expect(revisionReady(page).or(catalog).first()).toBeVisible();
+    if (await catalog.isVisible())
+      await catalog.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(revisionReady(page)).toBeVisible();
+    await workflow(page, "Tests").click();
+    const load = region.getByRole("button", {
+      name: "Load regression cases",
+      exact: true,
+    });
+    if (await load.isVisible()) await load.click();
+    await expect(
+      region.getByRole("button", { name: "New test case", exact: true }),
+    ).toBeVisible();
+    await assertEntered();
+    return true;
+  };
+  const step = async (
+    action: () => Promise<unknown>,
+    completed: () => Promise<boolean>,
+  ) => {
+    for (;;) {
+      try {
+        await action();
+        return;
+      } catch (error) {
+        if (!(await recoverEditor())) throw error;
+        if (await completed()) return;
+      }
+    }
+  };
   const enter = async (field: Locator, value: string) => {
-    await field.fill(value);
+    await step(
+      () => field.fill(value),
+      async () =>
+        (await field.isVisible()) && (await field.inputValue()) === value,
+    );
     entered.push([field, value]);
   };
-  await region.getByRole("button", { name: "New test case" }).click();
+  await step(
+    async () => {
+      await region.getByRole("button", { name: "New test case" }).click();
+      await expect(
+        region.getByLabel("Test name", { exact: true }),
+      ).toBeVisible();
+    },
+    () => region.getByLabel("Test name", { exact: true }).isVisible(),
+  );
   await enter(
     region.getByLabel("Test name", { exact: true }),
     "SO-1 west express",
@@ -659,9 +707,21 @@ async function enterCaseFields(region: Locator): Promise<boolean> {
   );
   const documents = region.locator(".regression-document");
   await expect(documents).toHaveCount(2);
-  await region.getByRole("button", { name: "Add named input" }).click();
+  await step(
+    async () => {
+      await region.getByRole("button", { name: "Add named input" }).click();
+      await expect(documents).toHaveCount(3);
+    },
+    async () => (await documents.count()) === 3,
+  );
   await expect(documents).toHaveCount(3);
-  await region.getByRole("button", { name: "Add expected output" }).click();
+  await step(
+    async () => {
+      await region.getByRole("button", { name: "Add expected output" }).click();
+      await expect(documents).toHaveCount(4);
+    },
+    async () => (await documents.count()) === 4,
+  );
   await expect(documents).toHaveCount(4);
   await enter(documents.nth(0).getByLabel("Input UTF-8 text"), order);
   await enter(documents.nth(1).getByLabel("Document name"), "rates");
@@ -681,31 +741,36 @@ async function enterCaseFields(region: Locator): Promise<boolean> {
     ["region", "string", "west"],
     ["express", "boolean", "true"],
   ].entries()) {
-    await region.getByRole("button", { name: "Add parameter" }).click();
+    await step(
+      async () => {
+        await region.getByRole("button", { name: "Add parameter" }).click();
+        await expect(parameters).toHaveCount(index + 1);
+      },
+      async () => (await parameters.count()) === index + 1,
+    );
     await expect(parameters).toHaveCount(index + 1);
     const row = parameters.nth(index);
     await enter(row.getByLabel("Parameter name"), name);
-    await row.getByLabel("Parameter type").selectOption(kind);
+    await step(
+      () => row.getByLabel("Parameter type").selectOption(kind),
+      async () =>
+        (await row.getByLabel("Parameter type").inputValue()) === kind,
+    );
+    entered.push([row.getByLabel("Parameter type"), kind]);
     await enter(row.getByLabel("Exact parameter value"), value);
   }
-  for (const [field, value] of entered)
-    if (
-      (await field.count()) !== 1 ||
-      (await field.inputValue({ timeout: 5_000 })) !== value
-    )
-      return false;
-  return true;
+  try {
+    await assertEntered();
+  } catch (error) {
+    if (!(await recoverEditor())) throw error;
+  }
 }
 
 test("saves a regression case with an authored baseline and runs it", async () => {
   test.setTimeout(900_000);
   await openTests(page);
   const region = tests(page);
-  for (let attempt = 1; !(await enterCase(region, attempt === 3)); attempt++) {
-    expect(attempt).toBeLessThan(3);
-    recoveries.push("regression editor");
-    await openTests(page);
-  }
+  await enterCaseFields(region);
   const saved = page.waitForResponse(
     (response) =>
       response.request().method() === "PUT" &&
