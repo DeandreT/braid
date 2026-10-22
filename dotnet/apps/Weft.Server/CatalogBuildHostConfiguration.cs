@@ -7,10 +7,11 @@ using Weft.Deployment;
 using Weft.MappingBackends;
 using Weft.Persistence.Postgres;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 namespace Weft.Server;
 
-internal sealed record BuildHostRuntime(bool Enabled, string? Image = null, string? StorageRoot = null,
+internal sealed record BuildHostRuntime(bool Enabled, string? Image = null, PrivateStorageSettings? Storage = null,
     int DerivedReadLimit = Weft.Domain.RevisionReportPolicy.MaximumStoredObjectByteLimit);
 
 /// <summary>Explicit control/query composition. It registers no compiler, dispatcher, publication or derivation service.</summary>
@@ -31,13 +32,10 @@ public static class CatalogBuildHostConfiguration
         var image = environment("WEFT_FERRULE_WORKER_IMAGE");
         if (image is null || image.Length != 71 || !image.StartsWith("sha256:", StringComparison.Ordinal) || image[7..].Any(c => c is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))
             throw new ArgumentException("Build API requires the exact configured immutable image.");
-        var root = environment("WEFT_PRIVATE_STORAGE_ROOT");
-        if (string.IsNullOrWhiteSpace(root)) throw new ArgumentException("Build API requires its private report storage root.");
-        if (!root.StartsWith('/') || root.EndsWith('/') || root.Contains('\\') || root.Any(char.IsControl) ||
-            root.Split('/').Skip(1).Any(value => value.Length == 0 || value is "." or "..") ||
-            System.Text.Encoding.UTF8.GetByteCount(root) > 4095 || root.Split('/').Any(value => System.Text.Encoding.UTF8.GetByteCount(value) > 255))
-            throw new ArgumentException("Build report storage requires a canonical private Unix path.");
-        return new(true, image, root, CatalogRevisionReportHostConfiguration.DerivedReadLimit(environment("WEFT_DERIVED_READ_BYTE_LIMIT")));
+        PrivateStorageSettings storage;
+        try { storage = PrivateStorageSettings.Read(environment); }
+        catch (InvalidOperationException) { throw new ArgumentException("Build API requires its private report storage."); }
+        return new(true, image, storage, CatalogRevisionReportHostConfiguration.DerivedReadLimit(environment("WEFT_DERIVED_READ_BYTE_LIMIT")));
     }
 
     internal static void Configure(IServiceCollection services, IWebHostEnvironment environment, Func<string, string?> read,
@@ -86,7 +84,7 @@ public static class CatalogBuildHostConfiguration
             return new RevisionReportService(provider.GetRequiredKeyedService<IRevisionReportMetadataReader>(Key),
                 new UnavailableRevisionReportMetadataStore(), registry, storage, Guid.NewGuid(), policy);
         });
-        services.AddKeyedSingleton<LazyPrivateObjectStore>(Key, (_, _) => new(new FileSystemStorageOptions(runtime.StorageRoot!,
+        services.AddKeyedSingleton<LazyPrivateObjectStore>(Key, (_, _) => new(runtime.Storage!.Bind(
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(environment.ContentRootPath))),
             () => throw new InvalidOperationException("Build HTTP does not publish private objects.")));
         services.AddKeyedSingleton<PersistedBuildIntentFactory>(Key, (provider, _) => new(provider.GetRequiredService<IBuildMetadataReader>(),

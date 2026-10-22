@@ -7,6 +7,7 @@ using Weft.Domain;
 using Weft.Persistence.Postgres;
 using Weft.Server;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 namespace Weft.Tests;
 

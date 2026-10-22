@@ -7,5 +7,6 @@
     <ProjectReference Include="../../src/Weft.Domain/Weft.Domain.csproj" />
     <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
     <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+    <ProjectReference Include="../../src/Weft.Storage.Hosting/Weft.Storage.Hosting.csproj" />
   </ItemGroup>
 </Project>

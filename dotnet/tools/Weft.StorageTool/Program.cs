@@ -1,7 +1,10 @@
 using Weft.Application;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 var command = args.Length == 0 ? null : args[0];
+if (command == "initialize-blob")
+    return await InitializeBlobAsync(args);
 var activation = command == "activate-v2";
 if (activation && (args.Length < 2 || args[1] != "--offline"))
 {
@@ -57,4 +60,41 @@ catch (Exception)
 {
     Console.Error.WriteLine(activation ? "ActivationFailure" : "InitializationFailure");
     return 1;
+}
+
+// Provisions a fresh claim-aware store in the explicitly selected, existing private container.
+static async Task<int> InitializeBlobAsync(string[] args)
+{
+    if (args.Length != 1)
+    {
+        Console.Error.WriteLine("Usage: Weft.StorageTool initialize-blob (with WEFT_PRIVATE_STORAGE_KIND=azure-blob)");
+        return 2;
+    }
+    PrivateStorageConfiguration configuration;
+    try
+    {
+        configuration = PrivateStorageConfiguration.ForBlob(PrivateStorageSettings.ReadBlob(Environment.GetEnvironmentVariable).Blob!);
+    }
+    catch (Exception error) when (error is ArgumentException or InvalidOperationException)
+    {
+        Console.Error.WriteLine("InvalidConfiguration");
+        return 2;
+    }
+    try
+    {
+        await configuration.InitializeAsync();
+        Console.WriteLine("InitializedBlob");
+        return 0;
+    }
+    catch (PrivateObjectStorageException error)
+    {
+        // The closed category never contains endpoints, container names or provider messages.
+        Console.Error.WriteLine(error.Error.ToString());
+        return 1;
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("InitializationFailure");
+        return 1;
+    }
 }

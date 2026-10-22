@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Weft.Application/Weft.Application.csproj" />
+    <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
+    <ProjectReference Include="../Weft.Storage.Blob/Weft.Storage.Blob.csproj" />
+    <ProjectReference Include="../Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+  </ItemGroup>
+</Project>

@@ -3,6 +3,7 @@ using Weft.Application;
 using Weft.Domain;
 using Weft.Server;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 namespace Weft.Tests;
 

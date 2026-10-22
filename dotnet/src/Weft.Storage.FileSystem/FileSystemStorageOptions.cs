@@ -36,6 +36,9 @@ public sealed record FileSystemStorageOptions
     public long DerivedByteLimit { get; }
     public int MaximumConcurrency { get; }
 
+    /// <summary>Checks one configured root's canonical spelling without consulting the filesystem.</summary>
+    public static string RequireCanonicalRoot(string rootPath) => RequireCanonicalPath(rootPath, nameof(rootPath));
+
     private static string RequireCanonicalPath(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);

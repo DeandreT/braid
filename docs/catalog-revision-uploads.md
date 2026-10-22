@@ -103,8 +103,10 @@ requires the admitted Development catalog configuration described in
 - `WEFT_REVISION_INGESTION_ENABLED=true`.
 - A dedicated `WEFT_POSTGRES_INGESTION_CONNECTION_STRING`; reader, editor and owner
   credentials are never substituted.
-- `WEFT_PRIVATE_STORAGE_ROOT`, a canonical private Linux root outside application
-  and detected Git trees, explicitly initialized by its owner.
+- Private storage, explicitly initialized by its owner: `WEFT_PRIVATE_STORAGE_ROOT`,
+  a canonical private Linux root outside application and detected Git trees, or
+  the Azure Blob settings selected by `WEFT_PRIVATE_STORAGE_KIND=azure-blob`
+  ([host selection](private-storage-blob.md#host-selection)).
 - Optional `WEFT_NATIVE_BYTE_LIMIT`, a canonical positive decimal no greater than
   4,194,304. It reduces new-request application admission. The actual storage
   adapter retains its hard 4 MiB cap so earlier reserved source objects remain

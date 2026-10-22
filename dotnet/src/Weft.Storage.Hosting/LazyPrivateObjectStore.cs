@@ -2,27 +2,33 @@ using Weft.Application;
 using Weft.Domain;
 using Weft.Storage.FileSystem;
 
-namespace Weft.Server;
+namespace Weft.Storage.Hosting;
 
 /// <summary>Opens only at actual object I/O; metadata receipt and replay resolution perform no root probes.</summary>
 public sealed class LazyPrivateObjectStore : IPrivateObjectPublicationStore, IDisposable, IAsyncDisposable
 {
-    private readonly FileSystemStorageOptions options;
+    private readonly PrivateStorageConfiguration configuration;
     private readonly Func<IPrivateObjectPublicationRegistry>? registryFactory;
     private readonly SemaphoreSlim opening = new(1, 1);
     private readonly object lifetime = new();
     private readonly TaskCompletionSource drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private FileSystemV2PrivateObjectStore? store;
+    private PrivateObjectStoreHandle? store;
     private int operations;
     private bool disposing;
     private Task? disposal;
 
-    public LazyPrivateObjectStore(FileSystemStorageOptions options,
+    public LazyPrivateObjectStore(PrivateStorageConfiguration configuration,
         Func<IPrivateObjectPublicationRegistry>? registryFactory = null)
     {
-        this.options = options ?? throw new ArgumentNullException(nameof(options));
+        this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         this.registryFactory = registryFactory;
     }
+
+    public LazyPrivateObjectStore(FileSystemStorageOptions options,
+        Func<IPrivateObjectPublicationRegistry>? registryFactory = null)
+        : this(PrivateStorageConfiguration.ForFileSystem(options), registryFactory) { }
+
+    public PrivateStorageConfiguration Configuration => configuration;
 
     public Task<PrivateObjectPublishResult> PublishCreateOnlyAsync(RevisionScope expectedScope,
         PrivateObjectReference reference, Stream source, CancellationToken cancellationToken = default)
@@ -51,9 +57,9 @@ public sealed class LazyPrivateObjectStore : IPrivateObjectPublicationStore, IDi
         BeginOperation(cancellationToken);
         try
         {
-            var current = await OpenAsync(cancellationToken);
+            var current = await OpenAsync(cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            return await current.PublishCreateOnlyAsync(owner, expectedScope, reference, source, cancellationToken);
+            return await current.PublishCreateOnlyAsync(owner, expectedScope, reference, source, cancellationToken).ConfigureAwait(false);
         }
         finally { EndOperation(); }
     }
@@ -65,9 +71,9 @@ public sealed class LazyPrivateObjectStore : IPrivateObjectPublicationStore, IDi
         BeginOperation(cancellationToken);
         try
         {
-            var current = await OpenAsync(cancellationToken);
+            var current = await OpenAsync(cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            return await current.ReadVerifiedAsync(expectedScope, reference, cancellationToken);
+            return await current.ReadVerifiedAsync(expectedScope, reference, cancellationToken).ConfigureAwait(false);
         }
         finally { EndOperation(); }
     }
@@ -78,7 +84,7 @@ public sealed class LazyPrivateObjectStore : IPrivateObjectPublicationStore, IDi
         ArgumentNullException.ThrowIfNull(reference);
         if (scope != reference.Id.Scope)
             throw new PrivateObjectStorageException(PrivateObjectStorageError.ScopeMismatch);
-        var limit = reference.Id.Class == PrivateObjectClass.NativeArtifact ? options.NativeByteLimit : options.DerivedByteLimit;
+        var limit = reference.Id.Class == PrivateObjectClass.NativeArtifact ? configuration.NativeByteLimit : configuration.DerivedByteLimit;
         if (reference.ByteCount > limit || (reference.Id.Class == PrivateObjectClass.NativeArtifact && reference.ByteCount == 0))
             throw new PrivateObjectStorageException(PrivateObjectStorageError.Limit);
     }
@@ -102,15 +108,15 @@ public sealed class LazyPrivateObjectStore : IPrivateObjectPublicationStore, IDi
         }
     }
 
-    private async Task<FileSystemV2PrivateObjectStore> OpenAsync(CancellationToken cancellationToken)
+    private async Task<PrivateObjectStoreHandle> OpenAsync(CancellationToken cancellationToken)
     {
-        await opening.WaitAsync(cancellationToken);
+        await opening.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             // Assignment happens only after a complete successful Open. Failed
-            // validation is not cached, and the web host never initializes/adopts.
-            return store ??= FileSystemV2PrivateObjectStore.Open(options, registryFactory);
+            // validation is not cached, and a host never initializes/adopts.
+            return store ??= await configuration.OpenAsync(registryFactory, cancellationToken).ConfigureAwait(false);
         }
         finally { opening.Release(); }
     }
@@ -131,8 +137,8 @@ public sealed class LazyPrivateObjectStore : IPrivateObjectPublicationStore, IDi
 
     private async Task DisposeAfterOperationsAsync()
     {
-        await drained.Task;
-        if (store is not null) await store.DisposeAsync();
+        await drained.Task.ConfigureAwait(false);
+        if (store is not null) await store.DisposeAsync().ConfigureAwait(false);
         opening.Dispose();
     }
 

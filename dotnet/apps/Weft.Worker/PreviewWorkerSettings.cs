@@ -1,4 +1,5 @@
 using Weft.Application;
+using Weft.Storage.Hosting;
 
 namespace Weft.Worker;
 
@@ -6,7 +7,7 @@ namespace Weft.Worker;
 internal sealed record PreviewWorkerSettings(
     bool PreviewEnabled,
     string? WriterConnectionString,
-    string? StorageRoot,
+    PrivateStorageSettings? Storage,
     string WorkerImage,
     string DockerExecutable,
     TimeSpan Lease)
@@ -28,7 +29,8 @@ internal sealed record PreviewWorkerSettings(
             throw new InvalidOperationException("Regression and build execution require the preview worker.");
         return new(preview,
             preview ? Required("WEFT_PREVIEW_WRITER_CONNECTION_STRING") : null,
-            preview ? Required("WEFT_PRIVATE_STORAGE_ROOT") : null,
+            // Previews read native objects from the explicitly selected private store.
+            preview ? PrivateStorageSettings.Read(environment) : null,
             Required("WEFT_FERRULE_WORKER_IMAGE"),
             environment("WEFT_DOCKER_EXECUTABLE") is { Length: > 0 } docker ? docker : "/usr/bin/docker",
             preview && environment("WEFT_PREVIEW_LEASE_SECONDS") is { Length: > 0 } lease

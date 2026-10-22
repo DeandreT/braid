@@ -12,6 +12,7 @@ using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 using Weft.Server;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 namespace Weft.Tests;
 
@@ -116,7 +117,7 @@ public sealed class CatalogRevisionIngestionHostTests(PostgresFixture fixture)
         var services = app.Services;
         Assert.Equal(1, services.GetRequiredService<RevisionIngestionOptions>().NativeByteLimit);
         var registration = services.GetRequiredService<IngestionPrivateStoreRegistration>();
-        var storage = services.GetRequiredService<FileSystemStorageOptions>();
+        var storage = services.GetRequiredService<PrivateStorageConfiguration>();
         Assert.Equal(FileSystemStorageOptions.NativeHardMaximum, storage.NativeByteLimit);
         Assert.Equal(storage.NativeByteLimit, registration.NativeByteLimit);
         Assert.Equal(bytes, await registration.Store.ReadVerifiedAsync(reference.Id.Scope, reference));

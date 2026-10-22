@@ -9,6 +9,7 @@ using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 namespace Weft.Server;
 
@@ -58,7 +59,7 @@ internal static class CatalogRevisionReportHostConfiguration
             {
                 // Pure configuration checks precede the first claim. They neither open
                 // the root nor create a container, and never run for a cached Ensure.
-                _ = provider.GetRequiredService<FileSystemStorageOptions>();
+                _ = provider.GetRequiredService<PrivateStorageConfiguration>();
                 var registry = provider.GetRequiredService<IRevisionReportProfileRegistry>();
                 if (registry.FindCurrent("ferrule", RevisionReportOperation.Projection) is null)
                     throw Unavailable(RevisionReportFailureCategory.ProfileUnavailable);
@@ -104,14 +105,12 @@ internal static class CatalogRevisionReportHostConfiguration
         return new RevisionReportProfileRegistry([], [new(projection, validator), new(validation, validator)]);
     }
 
-    internal static FileSystemStorageOptions CreateStorageOptions(string contentRoot, Func<string, string?> readEnvironment)
+    internal static PrivateStorageConfiguration CreateStorageConfiguration(string contentRoot, Func<string, string?> readEnvironment)
     {
         try
         {
-            var root = readEnvironment("WEFT_PRIVATE_STORAGE_ROOT");
-            if (string.IsNullOrWhiteSpace(root))
-                throw Unavailable(RevisionReportFailureCategory.StorageIo);
-            return new(root, Path.TrimEndingDirectorySeparator(Path.GetFullPath(contentRoot)));
+            return PrivateStorageSettings.Read(readEnvironment)
+                .Bind(Path.TrimEndingDirectorySeparator(Path.GetFullPath(contentRoot)));
         }
         catch (RevisionReportServiceException) { throw; }
         catch (Exception) { throw Unavailable(RevisionReportFailureCategory.StorageIo); }

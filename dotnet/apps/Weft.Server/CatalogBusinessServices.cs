@@ -7,6 +7,7 @@ using Weft.MappingBackends.Ingestion;
 using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 namespace Weft.Server;
 
@@ -43,17 +44,16 @@ internal static class CatalogBusinessServices
             services.AddSingleton<IMappingMetadataWriter>(provider =>
                 new PostgresMappingMetadataWriter(provider.GetRequiredService<PostgresMappingMetadataDatabase>()));
         }
-        FileSystemStorageOptions? storageOptions = null;
+        PrivateStorageConfiguration? storageConfiguration = null;
         if (ingestionOptions.Enabled)
         {
             var ingestionConnectionString = readEnvironment("WEFT_POSTGRES_INGESTION_CONNECTION_STRING");
             if (string.IsNullOrWhiteSpace(ingestionConnectionString))
                 throw new InvalidOperationException("Enabled revision ingestion requires its dedicated ingestion connection configuration.");
-            var root = readEnvironment("WEFT_PRIVATE_STORAGE_ROOT");
-            if (string.IsNullOrWhiteSpace(root))
-                throw new InvalidOperationException("Enabled revision ingestion requires an explicit private storage root.");
+            // The explicit storage selection is checked here, before any service is built.
+            var storageSettings = PrivateStorageSettings.Read(readEnvironment);
             var nativeLimit = nativeByteLimit ?? NativeLimit(readEnvironment("WEFT_NATIVE_BYTE_LIMIT"));
-            storageOptions = new FileSystemStorageOptions(root,
+            storageConfiguration = storageSettings.Bind(
                 Path.TrimEndingDirectorySeparator(Path.GetFullPath(environment.ContentRootPath)));
             // Current admission reductions must not prevent verification of an
             // original reserved object. Physical and registration caps stay equal.
@@ -63,9 +63,9 @@ internal static class CatalogBusinessServices
             services.AddSingleton<IIngestionMetadataStore>(provider => provider.GetRequiredService<PostgresRevisionIngestionStore>());
             services.AddSingleton<IIngestionWorkflowReader>(provider => provider.GetRequiredService<PostgresRevisionIngestionStore>());
             services.AddSingleton<IProjectReader>(provider => provider.GetRequiredService<PostgresCatalogReader>());
-            var ingestionStorageOptions = storageOptions;
+            var ingestionStorage = storageConfiguration;
             services.AddSingleton(provider => new IngestionPrivateStoreRegistration(
-                provider.GetRequiredService<IPrivateObjectStore>(), ingestionStorageOptions.NativeByteLimit));
+                provider.GetRequiredService<IPrivateObjectStore>(), ingestionStorage.NativeByteLimit));
             services.AddSingleton<IIngestionBackendRegistry>(provider =>
             {
                 var runner = provider.GetService<IInspectionWorkerRunner>();
@@ -76,16 +76,16 @@ internal static class CatalogBusinessServices
         }
         if (ingestionOptions.Enabled || reportOptions.Enabled)
         {
-            if (storageOptions is not null)
-                services.AddSingleton(storageOptions);
+            if (storageConfiguration is not null)
+                services.AddSingleton(storageConfiguration);
             else
-                services.AddSingleton(_ => CatalogRevisionReportHostConfiguration.CreateStorageOptions(
+                services.AddSingleton(_ => CatalogRevisionReportHostConfiguration.CreateStorageConfiguration(
                     environment.ContentRootPath, readEnvironment));
             services.AddSingleton(provider => new LazyPrivateObjectPublicationRegistry(
                 () => provider.GetRequiredService<PostgresIngestionPublicationRegistry>(),
                 () => provider.GetRequiredService<PostgresRevisionReportPublicationRegistry>()));
             services.AddSingleton(provider => new LazyPrivateObjectStore(
-                provider.GetRequiredService<FileSystemStorageOptions>(),
+                provider.GetRequiredService<PrivateStorageConfiguration>(),
                 () => provider.GetRequiredService<LazyPrivateObjectPublicationRegistry>()));
             services.AddSingleton<IPrivateObjectStore>(provider => provider.GetRequiredService<LazyPrivateObjectStore>());
             services.AddSingleton<IPrivateObjectPublicationStore>(provider => provider.GetRequiredService<LazyPrivateObjectStore>());

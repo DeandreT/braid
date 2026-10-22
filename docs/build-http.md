@@ -81,7 +81,8 @@ scope are checked again before response delivery. Responses are `no-store` with
 no ETag and closed error categories.
 
 `WEFT_BUILDS_ENABLED=true` requires enabled catalog, the exact immutable
-`WEFT_FERRULE_WORKER_IMAGE` and a canonical `WEFT_PRIVATE_STORAGE_ROOT` for
+`WEFT_FERRULE_WORKER_IMAGE` and the [private storage selection](private-storage-blob.md#host-selection)
+(a canonical `WEFT_PRIVATE_STORAGE_ROOT`, or the Azure Blob settings) for
 authorized stored-report reads. Session startup snapshots those scalars before
 opening protected resources. Disabled mode delivers no build credentials or
 services. Enabled composition uses these independent connection inputs:

@@ -15,7 +15,8 @@ namespace Weft.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class PostgresMaintenanceCommandToolProcessTests(PostgresFixture fixture)
 {
-    private const string Usage = "Usage: Weft.MaintenanceTool run-once ORGANIZATION_ID PROJECT_ID ROOT APPLICATION_ROOT [--repository-root REPOSITORY_ROOT] [--cleanup-after JSON] [--status-after JSON]";
+    private const string Usage = "Usage: Weft.MaintenanceTool run-once ORGANIZATION_ID PROJECT_ID ROOT APPLICATION_ROOT [--repository-root REPOSITORY_ROOT] [--cleanup-after JSON] [--status-after JSON]\n" +
+        "       With WEFT_PRIVATE_STORAGE_KIND=azure-blob: Weft.MaintenanceTool run-once ORGANIZATION_ID PROJECT_ID [--cleanup-after JSON] [--status-after JSON]";
     private static readonly JsonSerializerOptions WireOptions = CreateWireOptions();
 
     [Fact]
@@ -252,6 +253,8 @@ public sealed class PostgresMaintenanceCommandToolProcessTests(PostgresFixture f
         start.ArgumentList.Add(dll);
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         start.Environment.Remove("WEFT_MAINTENANCE_CONNECTION_STRING");
+        foreach (var name in start.Environment.Keys.Where(name => name.StartsWith("WEFT_PRIVATE_STORAGE_", StringComparison.Ordinal)).ToArray())
+            start.Environment.Remove(name);
         // Wrong-purpose credentials cannot serve as a fallback.
         start.Environment["WEFT_CONNECTION_STRING"] = "UnsupportedCredentialKeyword=wrong-purpose-owned-sentinel";
         start.Environment["WEFT_INGESTION_CONNECTION_STRING"] = "UnsupportedCredentialKeyword=wrong-purpose-owned-sentinel";

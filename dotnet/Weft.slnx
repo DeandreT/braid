@@ -20,6 +20,7 @@
     <Project Path="src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
     <Project Path="src/Weft.Storage.Blob/Weft.Storage.Blob.csproj" />
     <Project Path="src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+    <Project Path="src/Weft.Storage.Hosting/Weft.Storage.Hosting.csproj" />
     <Project Path="src/Weft.WorkerTransport/Weft.WorkerTransport.csproj" />
   </Folder>
   <Folder Name="/tests/">

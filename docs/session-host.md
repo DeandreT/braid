@@ -36,12 +36,14 @@ Each business feature stays off until its own flag is `true`. The table lists wh
 | OpenAPI document | `DOTNET_ENVIRONMENT=Development` | yes | yes | no |
 | Catalog reads | `WEFT_CATALOG_ENABLED`, `WEFT_CATALOG_CONNECTION_STRING` | no | yes | yes |
 | Metadata edits, project creation | `WEFT_METADATA_EDITS_ENABLED`, `WEFT_PROJECT_CREATION_ENABLED` and their connection strings | no | yes | yes |
-| Retained report reads and revision comparison | `WEFT_REVISION_REPORTS_ENABLED`, `WEFT_POSTGRES_REPORT_CONNECTION_STRING`, `WEFT_PRIVATE_STORAGE_ROOT` | no | yes | yes |
+| Retained report reads and revision comparison | `WEFT_REVISION_REPORTS_ENABLED`, `WEFT_POSTGRES_REPORT_CONNECTION_STRING`, private storage | no | yes | yes |
 | Native upload and report derivation | `WEFT_REVISION_INGESTION_ENABLED`, `WEFT_REVISION_REPORT_DERIVATION_ENABLED` and their connection strings | no | yes; native work needs the Development worker runner (`WEFT_FERRULE_WORKER_IMAGE` in the Development environment) | yes, through the hosted inspection worker (below); startup refuses without it |
 | Chat | `WEFT_CHAT_ENABLED`, `WEFT_CHAT_PROFILES_FILE`, chat reader/writer | no | connection strings | Session `_FILE` |
 | Previews (submission, reads, cancel) | `WEFT_PREVIEWS_ENABLED`, preview reader/writer | no | connection strings | Session `_FILE` |
 | Regression cases and runs | `WEFT_REGRESSIONS_ENABLED`, `WEFT_FERRULE_WORKER_IMAGE`, four regression logins | no | connection strings | Session `_FILE` |
-| Builds | `WEFT_BUILDS_ENABLED`, `WEFT_FERRULE_WORKER_IMAGE`, `WEFT_PRIVATE_STORAGE_ROOT`, eight build logins | no | connection strings | Session `_FILE` |
+| Builds | `WEFT_BUILDS_ENABLED`, `WEFT_FERRULE_WORKER_IMAGE`, private storage, eight build logins | no | connection strings | Session `_FILE` |
+
+"Private storage" is `WEFT_PRIVATE_STORAGE_ROOT`, or the Azure Blob settings selected by `WEFT_PRIVATE_STORAGE_KIND=azure-blob` (see [host selection](private-storage-blob.md#host-selection)); the Blob settings carry no secret, so they are plain environment values in both profiles.
 
 Preview, regression and build execution always runs in the separate `Weft.Worker` host; the web host only records runs and their durable commands. Revision comparison has no setting of its own: it reads the two retained reports through the same admitted report reader.
 

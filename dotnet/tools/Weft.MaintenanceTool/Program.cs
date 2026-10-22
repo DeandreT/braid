@@ -5,12 +5,14 @@ using Weft.Application;
 using Weft.Domain;
 using Weft.Persistence.Postgres;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 namespace Weft.MaintenanceTool;
 
 internal static class Program
 {
-    private const string Usage = "Usage: Weft.MaintenanceTool run-once ORGANIZATION_ID PROJECT_ID ROOT APPLICATION_ROOT [--repository-root REPOSITORY_ROOT] [--cleanup-after JSON] [--status-after JSON]";
+    private const string Usage = "Usage: Weft.MaintenanceTool run-once ORGANIZATION_ID PROJECT_ID ROOT APPLICATION_ROOT [--repository-root REPOSITORY_ROOT] [--cleanup-after JSON] [--status-after JSON]\n" +
+        "       With WEFT_PRIVATE_STORAGE_KIND=azure-blob: Weft.MaintenanceTool run-once ORGANIZATION_ID PROJECT_ID [--cleanup-after JSON] [--status-after JSON]";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     private static async Task<int> Main(string[] args)
@@ -20,8 +22,15 @@ internal static class Program
             Console.Out.WriteLine(Usage);
             return 0;
         }
+        PrivateStorageKind kind;
+        try { kind = PrivateStorageSettings.ReadKind(Environment.GetEnvironmentVariable); }
+        catch (ArgumentException)
+        {
+            Console.Error.WriteLine("InvalidConfiguration");
+            return 2;
+        }
         Command command;
-        try { command = Parse(args); }
+        try { command = Parse(args, kind == PrivateStorageKind.AzureBlob); }
         catch (UsageException)
         {
             Console.Error.WriteLine("Usage");
@@ -47,8 +56,12 @@ internal static class Program
             // the dedicated admitted maintenance methods ever open a connection.
             await using (var database = new PostgresPrivateObjectMaintenanceDatabase(connectionString))
             {
-                var storageOptions = new FileSystemStorageOptions(command.Root, command.ApplicationRoot, command.RepositoryRoot);
-                await using var storage = FileSystemV2PrivateObjectStore.Open(storageOptions);
+                // The explicitly selected existing store; the tool never initializes, activates or falls back.
+                var configuration = kind == PrivateStorageKind.AzureBlob
+                    ? PrivateStorageConfiguration.ForBlob(PrivateStorageSettings.ReadBlob(Environment.GetEnvironmentVariable).Blob!)
+                    : PrivateStorageConfiguration.ForFileSystem(
+                        new FileSystemStorageOptions(command.Root!, command.ApplicationRoot!, command.RepositoryRoot));
+                await using var storage = await configuration.OpenAsync(cancellationToken: canceled.Token).ConfigureAwait(false);
                 var metadata = new PostgresPrivateObjectMaintenanceStore(database);
                 var service = new PrivateObjectMaintenanceService(metadata, metadata, metadata,
                     storage, storage, Guid.NewGuid());
@@ -70,7 +83,7 @@ internal static class Program
             Console.Out.WriteLine(StrictUtf8.GetString(bytes));
             return ExitCode(result);
         }
-        catch (ArgumentException) when (configuring)
+        catch (Exception error) when (configuring && error is ArgumentException or InvalidOperationException)
         {
             Console.Error.WriteLine("InvalidConfiguration");
             return 2;
@@ -104,9 +117,11 @@ internal static class Program
         return 0;
     }
 
-    private static Command Parse(string[] args)
+    private static Command Parse(string[] args, bool blob)
     {
-        if (args.Length is < 5 or > 11 || args[0] != "run-once" || (args.Length - 5) % 2 != 0)
+        // Blob storage takes no filesystem ROOT/APPLICATION_ROOT operands or repository option.
+        var options = blob ? 3 : 5;
+        if (args.Length < options || args.Length > options + 6 || args[0] != "run-once" || (args.Length - options) % 2 != 0)
             throw new UsageException();
         try
         {
@@ -115,18 +130,18 @@ internal static class Program
             ObjectCleanupScanCursor? cleanup = null;
             ObjectCleanupStatusCursor? status = null;
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            for (var index = 5; index < args.Length; index += 2)
+            for (var index = options; index < args.Length; index += 2)
             {
                 if (!seen.Add(args[index])) throw new UsageException();
                 switch (args[index])
                 {
-                    case "--repository-root": repository = args[index + 1]; break;
+                    case "--repository-root" when !blob: repository = args[index + 1]; break;
                     case "--cleanup-after": cleanup = CleanupCursor(args[index + 1], project); break;
                     case "--status-after": status = StatusCursor(args[index + 1], project); break;
                     default: throw new UsageException();
                 }
             }
-            return new(project, args[3], args[4], repository, cleanup, status);
+            return blob ? new(project, null, null, null, cleanup, status) : new(project, args[3], args[4], repository, cleanup, status);
         }
         catch (ArgumentException) { throw new UsageException(); }
         catch (JsonException) { throw new UsageException(); }
@@ -230,7 +245,7 @@ internal static class Program
         if (remaining.Count != 0) throw new UsageException();
     }
 
-    private sealed record Command(ProjectScope Project, string Root, string ApplicationRoot, string? RepositoryRoot,
+    private sealed record Command(ProjectScope Project, string? Root, string? ApplicationRoot, string? RepositoryRoot,
         ObjectCleanupScanCursor? CleanupAfter, ObjectCleanupStatusCursor? StatusAfter);
 
     private sealed class UsageException : Exception { }

@@ -28,6 +28,29 @@ The identity needs the `Storage Blob Data Contributor` data-plane role on the co
 cannot observe, such as disabled shared-key access, public network access and anonymous
 access at the account level, belong to the deployment.
 
+## Host selection
+
+The Server, `Weft.Worker`, `Weft.MaintenanceTool` and `Weft.StorageTool` select private
+storage with the same settings, parsed by `Weft.Storage.Hosting`:
+
+| Setting | Value |
+| --- | --- |
+| `WEFT_PRIVATE_STORAGE_KIND` | Absent or `filesystem` (the default) selects the v2 filesystem store; `azure-blob` selects this store. Anything else is refused. |
+| `WEFT_PRIVATE_STORAGE_ROOT` | Filesystem only: the canonical root. Refused under `azure-blob`. |
+| `WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT` | The account's blob service endpoint. |
+| `WEFT_PRIVATE_STORAGE_BLOB_CONTAINER` | The private container. |
+| `WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL` | `managed-identity`, `workload-identity` or `emulator`. |
+| `WEFT_PRIVATE_STORAGE_BLOB_CLIENT_ID` | Optional: the user-assigned managed identity's client ID, canonical lowercase. |
+
+The Blob settings are refused under the filesystem kind, so a mixed or partial
+configuration never selects storage by accident. A missing or malformed setting fails
+host startup wherever the host reads storage at startup (native upload, builds, the worker
+and the tools); retained report reads alone keep their existing deferred, fail-closed
+storage resolution. Hosts open the store lazily at the first object operation, never
+initialize it, and refuse ownerless publication. The tools refuse filesystem operands
+under the Blob kind. Provision a new Blob store once with
+`Weft.StorageTool initialize-blob` (see [offline activation](private-storage-activation.md#explicit-provisioning)).
+
 ## Admission
 
 `InitializeAsync` and `OpenAsync` fail closed with `UnsafeStorage` unless:

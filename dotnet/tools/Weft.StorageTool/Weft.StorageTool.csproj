@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+    <ProjectReference Include="../../src/Weft.Storage.Hosting/Weft.Storage.Hosting.csproj" />
   </ItemGroup>
 </Project>

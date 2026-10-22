@@ -6,7 +6,7 @@ using Weft.Jobs;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
-using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 using Weft.Worker;
 using Wolverine;
 
@@ -25,8 +25,9 @@ if (settings.PreviewEnabled)
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton(_ => new PostgresPreviewDatabase(settings.WriterConnectionString!, PreviewDatabaseProfile.Writer));
     builder.Services.AddSingleton(provider => new PostgresPreviewRunStore(provider.GetRequiredService<PostgresPreviewDatabase>()));
-    builder.Services.AddSingleton<IPrivateObjectStore>(_ =>
-        FileSystemPrivateObjectStore.OpenV2(new FileSystemStorageOptions(settings.StorageRoot!, contentRoot)));
+    // Read-only: no publication registry, so publication refuses. The store is admitted at first read.
+    var storage = settings.Storage!.Bind(contentRoot);
+    builder.Services.AddSingleton<IPrivateObjectStore>(_ => new LazyPrivateObjectStore(storage));
     builder.Services.AddKeyedSingleton(previewRunnerKey, (_, _) => previewRunner.CreateRunner(settings));
     builder.Services.AddSingleton<IMappingPreviewBackend>(provider =>
         new FerrulePreviewBackend(provider.GetRequiredKeyedService<IInspectionWorkerRunner>(previewRunnerKey)));

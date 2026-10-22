@@ -9,6 +9,7 @@ using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 using Weft.Server;
 using Weft.Storage.FileSystem;
+using Weft.Storage.Hosting;
 
 namespace Weft.Tests;
 
@@ -23,7 +24,9 @@ public sealed class CatalogRevisionReportHostConfigurationTests
     private const string Secret = "synthetic-never-connected-report-secret";
     private const string Connection = "Host=127.0.0.1;Database=weft;Username=weft_report_reader;Password=" + Secret;
     private static readonly string[] ReportDependencies = [ReaderCredential, WriterCredential,
-        "WEFT_PRIVATE_STORAGE_ROOT", "WEFT_DERIVED_READ_BYTE_LIMIT", "WEFT_FERRULE_WORKER_IMAGE"];
+        "WEFT_PRIVATE_STORAGE_ROOT", "WEFT_PRIVATE_STORAGE_KIND", "WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT",
+        "WEFT_PRIVATE_STORAGE_BLOB_CONTAINER", "WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL", "WEFT_PRIVATE_STORAGE_BLOB_CLIENT_ID",
+        "WEFT_DERIVED_READ_BYTE_LIMIT", "WEFT_FERRULE_WORKER_IMAGE"];
 
     [Theory]
     [InlineData(null)]
@@ -241,11 +244,12 @@ public sealed class CatalogRevisionReportHostConfigurationTests
         configuration["WEFT_DERIVED_READ_BYTE_LIMIT"] = "invalid-unused-report-cap";
         var builder = Builder();
         Configure(builder, configuration);
-        Assert.Single(builder.Services, item => item.ServiceType == typeof(FileSystemStorageOptions));
+        Assert.Single(builder.Services, item => item.ServiceType == typeof(PrivateStorageConfiguration));
         Assert.Single(builder.Services, item => item.ServiceType == typeof(LazyPrivateObjectStore));
         Assert.Single(builder.Services, item => item.ServiceType == typeof(IPrivateObjectStore));
         await using var provider = builder.Services.BuildServiceProvider();
-        var physicalOptions = provider.GetRequiredService<FileSystemStorageOptions>();
+        var physicalOptions = provider.GetRequiredService<PrivateStorageConfiguration>();
+        Assert.Equal(PrivateStorageKind.FileSystem, physicalOptions.Kind);
         Assert.Equal(4194304L, physicalOptions.NativeByteLimit);
         Assert.Equal(16777216L, physicalOptions.DerivedByteLimit);
         Assert.Same(provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<LazyPrivateObjectStore>());

@@ -14,6 +14,18 @@ Run the published tool under the identity that owns the existing private root:
 dotnet Weft.MaintenanceTool.dll run-once ORGANIZATION_ID PROJECT_ID ROOT APPLICATION_ROOT [--repository-root REPOSITORY_ROOT] [--cleanup-after JSON] [--status-after JSON]
 ```
 
+For an [Azure Blob store](private-storage-blob.md), set `WEFT_PRIVATE_STORAGE_KIND=azure-blob`
+and the Blob settings described in its [host selection](private-storage-blob.md#host-selection);
+the command then takes no filesystem operands:
+
+```text
+dotnet Weft.MaintenanceTool.dll run-once ORGANIZATION_ID PROJECT_ID [--cleanup-after JSON] [--status-after JSON]
+```
+
+An unknown kind, a missing Blob setting, or filesystem operands or a filesystem root
+under the Blob selection are usage or configuration errors (exit 2) before any database
+or storage access.
+
 Organization/project IDs must be nonzero UUIDs in canonical lowercase D format.
 Each named option may occur once. ROOT, APPLICATION_ROOT and optional
 REPOSITORY_ROOT use the existing storage path/exclusion rules. The root must

@@ -4,6 +4,7 @@ using Microsoft.Extensions.FileProviders;
 using Weft.Application;
 using Weft.Deployment;
 using Weft.Server;
+using Weft.Storage.Hosting;
 
 namespace Weft.Tests;
 
@@ -44,7 +45,7 @@ public sealed class BuildHostConfigurationTests
     public async Task Historical_recovery_composition_does_not_resolve_active_admission_private_storage_or_report_workers()
     {
         var services = new ServiceCollection();
-        var runtime = new BuildHostRuntime(true, "sha256:" + new string('a', 64), "/private/build-reports");
+        var runtime = new BuildHostRuntime(true, "sha256:" + new string('a', 64), PrivateStorageSettings.ForFileSystem("/private/build-reports"));
         CatalogBuildHostConfiguration.Configure(services, new Environment(), name => name == "WEFT_CATALOG_AUTH_MODE" ? "development" :
             "Host=127.0.0.1;Database=weft;Username=fixture;Password=configuration-only", runtime);
         services.AddKeyedSingleton<BuildControlService>("build-http", (_, _) => throw new InvalidOperationException("Unexpected active admission resolution."));

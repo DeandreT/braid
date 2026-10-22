@@ -1,7 +1,9 @@
 # Offline activation of private storage
 
-The configured application host opens only v2 storage. It passes the actual
-ingestion or report claim to the corresponding restricted publication registry.
+The configured application host opens only claim-aware storage: a v2 filesystem
+root, or an [Azure Blob store](private-storage-blob.md) when
+`WEFT_PRIVATE_STORAGE_KIND=azure-blob`. It passes the actual ingestion or report
+claim to the corresponding restricted publication registry.
 Opening a root, verified reads, cached reports and receipt replay do not resolve
 that registry. The host never initializes, adopts or activates a root.
 
@@ -16,6 +18,18 @@ For a genuinely new root, use the published storage tool:
 ```sh
 dotnet Weft.StorageTool.dll initialize-v2 ROOT APPLICATION_ROOT [REPOSITORY_ROOT]
 ```
+
+For a Blob store, create the private container first (the tool never creates it),
+then run the tool with the same Blob settings as the hosts:
+
+```sh
+WEFT_PRIVATE_STORAGE_KIND=azure-blob WEFT_PRIVATE_STORAGE_BLOB_ENDPOINT=... \
+WEFT_PRIVATE_STORAGE_BLOB_CONTAINER=... WEFT_PRIVATE_STORAGE_BLOB_CREDENTIAL=managed-identity \
+  dotnet Weft.StorageTool.dll initialize-blob
+```
+
+It prints `InitializedBlob`; an existing marker or any other content prints
+`UnsafeStorage`. Blob stores have no v1 profile and need no activation.
 
 The existing `initialize` command continues to create the original v1 library
 profile. It does not provision a root for the configured v2 application host.
