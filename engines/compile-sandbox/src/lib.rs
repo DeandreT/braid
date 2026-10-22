@@ -530,6 +530,17 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
         )?);
     }
     denied.insert(libc::SYS_clone, clone);
+    // Inode flags, project attributes and versions also change through ioctl on any descriptor of the owner;
+    // every other ioctl stays available.
+    let mut ioctl = Vec::new();
+    for request in METADATA_IOCTLS {
+        ioctl.push(
+            SeccompCondition::new(1, SeccompCmpArgLen::Dword, SeccompCmpOp::Eq, request)
+                .and_then(|condition| SeccompRule::new(vec![condition]))
+                .map_err(|_| invalid())?,
+        );
+    }
+    denied.insert(libc::SYS_ioctl, ioctl);
 
     let mut programs = vec![
         compile(denied, libc::EPERM)?,
@@ -565,6 +576,26 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
     Ok(programs)
 }
 
+// Calls newer than the pinned libc's tables; a kernel without them reports ENOSYS.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const SYS_SETXATTRAT: i64 = 463;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const SYS_REMOVEXATTRAT: i64 = 466;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const SYS_OPEN_TREE_ATTR: i64 = 467;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const SYS_FILE_SETATTR: i64 = 469;
+
+/// `FS_IOC_SETFLAGS`, `FS_IOC32_SETFLAGS`, `FS_IOC_SETVERSION`, `FS_IOC32_SETVERSION` and `FS_IOC_FSSETXATTR`.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const METADATA_IOCTLS: [u64; 5] = [
+    0x4008_6602,
+    0x4004_6602,
+    0x4008_7602,
+    0x4004_7602,
+    0x401c_5820,
+];
+
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const DENIED: &[i64] = &[
     libc::SYS_socket,
@@ -596,6 +627,7 @@ const DENIED: &[i64] = &[
     libc::SYS_pivot_root,
     libc::SYS_chroot,
     libc::SYS_open_tree,
+    SYS_OPEN_TREE_ATTR,
     libc::SYS_move_mount,
     libc::SYS_fsopen,
     libc::SYS_fsconfig,
@@ -631,7 +663,8 @@ const DENIED: &[i64] = &[
     libc::SYS_sched_setattr,
     libc::SYS_sched_setscheduler,
     libc::SYS_sched_setparam,
-    // Landlock does not cover ownership, mode or extended attributes of paths.
+    // Landlock does not cover inode metadata: mode, ownership, extended attributes, attributes and timestamps, by
+    // path or by descriptor (a read-only descriptor suffices for the descriptor variants).
     libc::SYS_chmod,
     libc::SYS_fchmod,
     libc::SYS_fchmodat,
@@ -646,6 +679,9 @@ const DENIED: &[i64] = &[
     libc::SYS_removexattr,
     libc::SYS_fremovexattr,
     libc::SYS_lremovexattr,
+    SYS_SETXATTRAT,
+    SYS_REMOVEXATTRAT,
+    SYS_FILE_SETATTR,
     libc::SYS_utime,
     libc::SYS_utimes,
     libc::SYS_futimesat,
@@ -694,6 +730,9 @@ mod tests {
             libc::SYS_utimes,
             libc::SYS_futimesat,
             libc::SYS_utimensat,
+            super::SYS_SETXATTRAT,
+            super::SYS_REMOVEXATTRAT,
+            super::SYS_FILE_SETATTR,
         ] {
             assert!(super::DENIED.contains(&syscall));
         }

@@ -370,6 +370,11 @@ fn program_runs_confined_after_execve() {
         "execute-other=EACCES",
         "change-mode=EPERM",
         "change-read-grant-mode-by-fd=EPERM",
+        "set-read-grant-attribute-at=EPERM",
+        "remove-read-grant-attribute-at=EPERM",
+        "set-read-grant-file-attributes=EPERM",
+        "set-read-grant-flags-by-ioctl=EPERM",
+        "set-read-grant-extended-flags-by-ioctl=EPERM",
         "other-process-limits=EPERM",
         "shared-memory=EPERM",
         "signal-parent=EPERM",
@@ -593,6 +598,12 @@ fn helper(scenario: &str) {
 }
 
 /// Runs inside the launched program, after `execve`, and reports each attempted operation.
+// Calls newer than the pinned libc's tables.
+const SYS_SETXATTRAT: libc::c_long = 463;
+const SYS_REMOVEXATTRAT: libc::c_long = 466;
+const SYS_FILE_GETATTR: libc::c_long = 468;
+const SYS_FILE_SETATTR: libc::c_long = 469;
+
 fn probe() {
     let parent = rustix::process::getppid().unwrap();
     let mut report = String::new();
@@ -709,6 +720,78 @@ fn probe() {
     line(
         "change-read-grant-mode-by-fd",
         errno(unsafe { libc::fchmod(reference.as_raw_fd(), 0o600) }),
+    );
+    // The newer *at and attribute calls and the inode-flag ioctls also need only a read-only descriptor.
+    let empty = CString::new("").unwrap();
+    let attribute = CString::new("user.weft").unwrap();
+    // struct xattr_args { u64 value; u32 size; u32 flags; }
+    let value = *b"x";
+    let attribute_value: [u64; 2] = [value.as_ptr() as u64, 1];
+    let call = |result: libc::c_long| errno(if result == 0 { 0 } else { -1 });
+    line(
+        "set-read-grant-attribute-at",
+        call(unsafe {
+            libc::syscall(
+                SYS_SETXATTRAT,
+                reference.as_raw_fd(),
+                empty.as_ptr(),
+                libc::AT_EMPTY_PATH,
+                attribute.as_ptr(),
+                attribute_value.as_ptr(),
+                size_of_val(&attribute_value),
+            )
+        }),
+    );
+    line(
+        "remove-read-grant-attribute-at",
+        call(unsafe {
+            libc::syscall(
+                SYS_REMOVEXATTRAT,
+                reference.as_raw_fd(),
+                empty.as_ptr(),
+                libc::AT_EMPTY_PATH,
+                attribute.as_ptr(),
+            )
+        }),
+    );
+    // struct file_attr { u64 fa_xflags; u32 fa_extsize; u32 fa_nextents; u32 fa_projid; u32 fa_cowextsize; }
+    let mut file_attributes = [0u8; 24];
+    let size = file_attributes.len();
+    unsafe {
+        libc::syscall(
+            SYS_FILE_GETATTR,
+            reference.as_raw_fd(),
+            empty.as_ptr(),
+            file_attributes.as_mut_ptr(),
+            size,
+            libc::AT_EMPTY_PATH,
+        );
+    }
+    line(
+        "set-read-grant-file-attributes",
+        call(unsafe {
+            libc::syscall(
+                SYS_FILE_SETATTR,
+                reference.as_raw_fd(),
+                empty.as_ptr(),
+                file_attributes.as_ptr(),
+                size,
+                libc::AT_EMPTY_PATH,
+            )
+        }),
+    );
+    let mut flags: libc::c_long = 0;
+    unsafe { libc::ioctl(reference.as_raw_fd(), libc::FS_IOC_GETFLAGS, &raw mut flags) };
+    line(
+        "set-read-grant-flags-by-ioctl",
+        errno(unsafe { libc::ioctl(reference.as_raw_fd(), libc::FS_IOC_SETFLAGS, &raw mut flags) }),
+    );
+    // struct fsxattr is 28 bytes; FS_IOC_FSGETXATTR and FS_IOC_FSSETXATTR.
+    let mut extended = [0u8; 28];
+    unsafe { libc::ioctl(reference.as_raw_fd(), 0x801c_581f, extended.as_mut_ptr()) };
+    line(
+        "set-read-grant-extended-flags-by-ioctl",
+        errno(unsafe { libc::ioctl(reference.as_raw_fd(), 0x401c_5820, extended.as_mut_ptr()) }),
     );
     let mut limits = std::mem::MaybeUninit::<libc::rlimit64>::uninit();
     line(
