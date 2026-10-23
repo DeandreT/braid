@@ -13,6 +13,11 @@ adapters and their own capability checks.
 - Revision-pinned AI chat with permission-controlled mapping tools and verified citations.
 - Bounded sample previews, revision comparison and saved regression cases.
 - Immutable build preparation, qualification, and local release activation, audit and rollback.
+- A machine-facing mapping endpoint that serves the active qualified release to callers
+  authorized by app-only tokens and per-target invocation grants, with idempotent retries.
+- Hosted execution through the platform-agnostic Ferrule service: inspection, previews,
+  regression runs, builds and compiled mappings run in isolated sandboxes without Docker,
+  and private objects can be kept in Azure Blob storage.
 - Microsoft Entra sign-in, server sessions and project-scoped application permissions.
 
 Other mapping engines, identity providers, and AI model providers will integrate
@@ -32,9 +37,10 @@ source code, local qualification and actual hosted/provider qualification are
 separate gates. Templates do not establish a working Azure deployment or mapping
 endpoint. See [Delivery plan](ROADMAP.md) for the acceptance requirements.
 
-Preparing a build or using the [local release adapter](docs/local-releases.md)
-does not deploy an HTTP endpoint. The local adapter changes a retained release
-pointer and invokes an already qualified artifact through the restricted runtime.
+Preparing a build does not publish it. The [local release adapter](docs/local-releases.md)
+changes a retained release pointer to an already qualified artifact, and the separate
+[mapping endpoint](docs/mapping-endpoint.md) host invokes the current release through the
+restricted runtime for callers admitted by [machine authorization](docs/machine-authorization.md).
 
 Conditional revision append is implemented in
 [PR #96](https://github.com/DeandreT/weft/pull/96), completing
@@ -115,6 +121,12 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Regression cases](docs/regression-cases.md): saved inputs, expected output and immutable case versions.
 - [Build workflow](docs/build-workflow.md) and [compiled runtime](docs/compiled-runtime.md): capability admission, immutable artifacts and restricted execution.
 - [Local releases](docs/local-releases.md): atomic activation, retained audit, explicit rollback and current-release invocation.
+- [Release qualification](docs/release-qualification.md): exact-baseline qualification evidence for builds.
+- [Mapping endpoint](docs/mapping-endpoint.md) and [machine authorization](docs/machine-authorization.md): the machine-facing HTTP host, app-only tokens, invocation grants and idempotent calls.
+- [Ferrule service](docs/ferrule-service.md), [build compiler](docs/build-compiler.md) and [compiled service runtime](docs/compiled-service-runtime.md): sandboxed hosted inspection, compilation and compiled execution without Docker.
+- [Azure Blob private storage](docs/private-storage-blob.md): the Blob object store and its publication format.
+- [Hosted acceptance](docs/hosted-acceptance.md): the packaged signed-in stack exercised end to end.
+- [Revision comparison](docs/revision-comparison.md) and [compact workbench](docs/compact-workbench.md): semantic differences between revisions and the workbench layout.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 
