@@ -13,7 +13,8 @@ public sealed class FerruleCompiledBuildRuntime : ICompiledBuildRuntime
     public FerruleCompiledBuildRuntime(IInspectionWorkerRunner runner, BuildBackendIdentity compiler)
     {
         ArgumentNullException.ThrowIfNull(runner); ArgumentNullException.ThrowIfNull(compiler);
-        if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Compiled)
+        if ((runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Compiled) ||
+            (runner is FerruleServiceRunner service && service.ProfileName != FerruleServiceProtocol.CompiledProfile))
             throw new ArgumentException("Compiled execution requires its dedicated sandbox profile.", nameof(runner));
         if (compiler.BackendId != "ferrule" || compiler.EngineRevision != BuildWorkerProtocol.Engine || compiler.AdapterVersion != FerruleBuildCompiler.Adapter)
             throw new ArgumentException("A qualified compiler identity is required.", nameof(compiler));

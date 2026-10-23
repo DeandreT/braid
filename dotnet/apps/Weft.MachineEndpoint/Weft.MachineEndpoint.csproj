@@ -9,6 +9,8 @@
     <ProjectReference Include="../../src/Weft.Deployment/Weft.Deployment.csproj" />
     <ProjectReference Include="../../src/Weft.Identity/Weft.Identity.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Weft.MappingBackends.AzureSessions/Weft.MappingBackends.AzureSessions.csproj" />
+    <ProjectReference Include="../../src/Weft.WorkerTransport/Weft.WorkerTransport.csproj" />
     <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
     <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
   </ItemGroup>

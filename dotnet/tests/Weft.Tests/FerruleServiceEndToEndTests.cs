@@ -148,7 +148,7 @@ public sealed class FerruleServiceEndToEndTests
             {
                 var compile = document.RootElement.GetProperty("profiles").EnumerateArray().Single(profile => profile.GetProperty("name").GetString() == "compile");
                 Assert.Equal(direct.ToolchainIdentity, compile.GetProperty("toolchain").GetProperty("identity").GetString());
-                Assert.Empty(document.RootElement.GetProperty("reserved").EnumerateArray());
+                Assert.Equal(["execute"], document.RootElement.GetProperty("reserved").EnumerateArray().Select(value => value.GetString()));
             }
 
             Assert.Equal(0, await service.StopAsync());

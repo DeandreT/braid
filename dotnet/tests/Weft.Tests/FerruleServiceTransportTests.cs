@@ -80,7 +80,7 @@ public sealed class FerruleServiceTransportTests
         Assert.Equal(DockerWorkerProfile.Preview.MaximumRequestBytes, profiles[1].GetProperty("maximumRequestBytes").GetInt32());
         Assert.Equal(268_435_456, profiles[0].GetProperty("memoryBytes").GetInt64());
         Assert.Equal(30, profiles[1].GetProperty("wallSeconds").GetInt32());
-        Assert.Equal(["compile"], root.GetProperty("reserved").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(["compile", "execute"], root.GetProperty("reserved").EnumerateArray().Select(value => value.GetString()));
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class FerruleServiceTransportTests
         Assert.Equal(ServiceCase.Toolchain, toolchain.GetProperty("identity").GetString());
         Assert.Equal(CompileWorkerIdentity.Combine(Identity, ServiceCase.Toolchain), toolchain.GetProperty("buildIdentity").GetString());
         Assert.False(profiles[1].TryGetProperty("toolchain", out _));
-        Assert.Empty(root.GetProperty("reserved").EnumerateArray());
+        Assert.Equal(["execute"], root.GetProperty("reserved").EnumerateArray().Select(value => value.GetString()));
     }
 
     [Fact]
@@ -434,6 +434,8 @@ public sealed class FerruleServiceTransportTests
         request.Headers.TryAddWithoutValidation(InspectionTransport.ImageHeader, Identity);
         if (profile == FerruleServiceProtocol.CompileProfile)
             request.Headers.TryAddWithoutValidation(FerruleServiceProtocol.CompileToolchainHeader, ServiceCase.Toolchain);
+        if (profile == FerruleServiceProtocol.CompiledProfile)
+            request.Headers.TryAddWithoutValidation(FerruleServiceProtocol.CompiledRuntimeHeader, ServiceCase.RuntimeIdentity);
         return request;
     }
 
@@ -484,7 +486,7 @@ public sealed class FerruleServiceTransportTests
 
         private ServiceCase(WorkerTransportServer server, System.Security.Cryptography.X509Certificates.X509Certificate2 serverCertificate,
             System.Security.Cryptography.X509Certificates.X509Certificate2 client, ScriptedRunner inspection, ScriptedRunner preview,
-            ScriptedRunner compile, bool ownsCertificates)
+            ScriptedRunner compile, ScriptedRunner runtime, bool ownsCertificates)
         {
             this.ownsCertificates = ownsCertificates;
             Server = server;
@@ -493,9 +495,11 @@ public sealed class FerruleServiceTransportTests
             Inspection = inspection;
             Preview = preview;
             Compile = compile;
+            Runtime = runtime;
         }
 
         internal const string Toolchain = "sha256:3333333333333333333333333333333333333333333333333333333333333333";
+        internal const string RuntimeIdentity = "sha256:4444444444444444444444444444444444444444444444444444444444444444";
 
         internal WorkerTransportServer Server { get; }
         internal System.Security.Cryptography.X509Certificates.X509Certificate2 ServerCertificate { get; }
@@ -504,13 +508,15 @@ public sealed class FerruleServiceTransportTests
         internal ScriptedRunner Preview { get; }
         /// <summary>The compile profile's runner; it is served only by a case started with compilation.</summary>
         internal ScriptedRunner Compile { get; }
+        internal ScriptedRunner Runtime { get; }
         internal Uri Endpoint => new("https://127.0.0.1:" + Server.Port);
         internal string ServerPin => TransportCase.Pin(ServerCertificate);
 
         internal static async Task<ServiceCase> StartAsync(int concurrency = 2, int capacity = 4, TimeSpan? admissionWait = null,
             bool health = false, Func<bool>? healthy = null, System.Security.Cryptography.X509Certificates.X509Certificate2? extraClient = null,
             System.Security.Cryptography.X509Certificates.X509Certificate2? serverCertificate = null,
-            System.Security.Cryptography.X509Certificates.X509Certificate2? clientCertificate = null, bool compile = false, string? compileToolchain = null)
+            System.Security.Cryptography.X509Certificates.X509Certificate2? clientCertificate = null, bool compile = false, string? compileToolchain = null,
+            bool execute = false, string? runtimeIdentity = null)
         {
             // Replicas of one service share its certificate and admit the same clients.
             var owned = serverCertificate is null;
@@ -519,6 +525,14 @@ public sealed class FerruleServiceTransportTests
             var inspection = new ScriptedRunner();
             var preview = new ScriptedRunner();
             var compiler = new ScriptedRunner();
+            var runtime = new ScriptedRunner();
+            var served = new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
+            {
+                [FerruleServiceProtocol.InspectionProfile] = inspection,
+                [FerruleServiceProtocol.PreviewProfile] = preview
+            };
+            if (compile) served[FerruleServiceProtocol.CompileProfile] = compiler;
+            if (execute) served[FerruleServiceProtocol.CompiledProfile] = runtime;
             string[] pins = extraClient is null ? [TransportCase.Pin(client)] : [TransportCase.Pin(client), TransportCase.Pin(extraClient)];
             var server = new WorkerTransportServer(new WorkerTransportServerOptions(new IPEndPoint(IPAddress.Loopback, 0), serverCertificate, pins)
             {
@@ -529,19 +543,11 @@ public sealed class FerruleServiceTransportTests
                 HealthListen = health ? new IPEndPoint(IPAddress.Loopback, 0) : null,
                 Healthy = healthy,
                 EngineRevision = "577359a991a7dd44172a3c4af91fdcab7592457c",
-                CompileToolchain = compile ? compileToolchain ?? Toolchain : null
-            }, compile ? new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
-            {
-                [FerruleServiceProtocol.InspectionProfile] = inspection,
-                [FerruleServiceProtocol.PreviewProfile] = preview,
-                [FerruleServiceProtocol.CompileProfile] = compiler
-            } : new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
-            {
-                [FerruleServiceProtocol.InspectionProfile] = inspection,
-                [FerruleServiceProtocol.PreviewProfile] = preview
-            });
+                CompileToolchain = compile ? compileToolchain ?? Toolchain : null,
+                CompiledRuntimeIdentity = execute ? runtimeIdentity ?? RuntimeIdentity : null
+            }, served);
             await server.StartAsync(CancellationToken.None);
-            return new(server, serverCertificate, client, inspection, preview, compiler, owned);
+            return new(server, serverCertificate, client, inspection, preview, compiler, runtime, owned);
         }
 
         /// <summary>An HTTP/2 client that pins the service and presents a client certificate.</summary>

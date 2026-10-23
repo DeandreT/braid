@@ -10,6 +10,9 @@ public sealed partial class DockerInspectionWorkerRunner
     private int lifetimeDisposed;
     private bool stopping;
 
+    /// <summary>False once admission closed: stopping, or unconfirmed cleanup, which keeps the runner closed until restart.</summary>
+    public bool Available { get { lock (lifetimeGate) return !stopping && Volatile.Read(ref unavailable) == 0; } }
+
     public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
     {
         if (requestFrame.Length > options.Profile.MaximumRequestBytes)

@@ -77,6 +77,7 @@ public sealed class WorkerTransportServerOptions
 
     /// <summary>The compile toolchain identity, reported with a served compile profile.</summary>
     public string? CompileToolchain { get; init; }
+    public string? CompiledRuntimeIdentity { get; init; }
 
     /// <summary>Readiness also requires this host-supplied check, for example that no cleanup is unconfirmed.</summary>
     public Func<bool>? Healthy { get; init; }

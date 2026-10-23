@@ -45,11 +45,12 @@ internal sealed class MappingEndpointSettings
 
     private MappingEndpointSettings(IPEndPoint listen, X509Certificate2? certificate, X509Certificate2Collection chain, int concurrency,
         ReleaseTargetReference target, Guid tenant, Guid audience, string runtimeImage, string compilerImage, string docker,
-        IReadOnlyDictionary<string, string> connections)
+        IReadOnlyDictionary<string, string> connections, MappingRuntimeSelection runner)
     {
         ListenEndpoint = listen; Certificate = certificate; Chain = chain; ConcurrencyLimit = concurrency; TargetReference = target;
         TenantId = tenant; Audience = audience; RuntimeImage = runtimeImage; CompilerImage = compilerImage; DockerExecutable = docker;
         Connections = connections;
+        Runner = runner;
     }
 
     internal IPEndPoint ListenEndpoint { get; }
@@ -64,6 +65,7 @@ internal sealed class MappingEndpointSettings
     internal string CompilerImage { get; }
     internal string DockerExecutable { get; }
     internal IReadOnlyDictionary<string, string> Connections { get; }
+    internal MappingRuntimeSelection Runner { get; }
 
     internal static MappingEndpointSettings Read(Func<string, string?> environment)
     {
@@ -111,8 +113,7 @@ internal sealed class MappingEndpointSettings
         catch (ArgumentException) { throw Failure(); }
         var runtimeImage = Image(Required(RuntimeImageSetting));
         var compilerImage = Image(Required(CompilerImageSetting));
-        var docker = Optional(DockerSetting) ?? "/usr/bin/docker";
-        if (!Path.IsPathFullyQualified(docker) || docker != Path.GetFullPath(docker)) throw Failure();
+        var selection = MappingRuntimeSelection.Read(environment, runtimeImage, compilerImage);
         var connections = new Dictionary<string, string>(StringComparer.Ordinal);
         var paths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (setting, role) in Logins)
@@ -120,7 +121,8 @@ internal sealed class MappingEndpointSettings
             if (environment(setting) is not null || !paths.Add(Required(setting + "_FILE"))) throw Failure();
             connections[role] = Connection(Required(setting + "_FILE"), role, environment);
         }
-        return new(listen, certificate, chain, concurrency, target, tenant, audience, runtimeImage, compilerImage, docker, connections);
+        return new(listen, certificate, chain, concurrency, target, tenant, audience, runtimeImage,
+            selection.CompilerIdentity, selection.Docker, connections, selection);
     }
 
     private static string Connection(string path, string role, Func<string, string?> environment)

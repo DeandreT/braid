@@ -57,6 +57,9 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         if (runners.ContainsKey(FerruleServiceProtocol.CompileProfile) != options.CompileToolchain is not null)
             throw new ArgumentException("A served compile profile reports exactly one toolchain identity.", nameof(runners));
         if (options.CompileToolchain is { } toolchain) InspectionTransport.RequireImage(toolchain);
+        if (runners.ContainsKey(FerruleServiceProtocol.CompiledProfile) != options.CompiledRuntimeIdentity is not null)
+            throw new ArgumentException("A served execution profile reports its runtime identity.", nameof(runners));
+        if (options.CompiledRuntimeIdentity is { } runtime) InspectionTransport.RequireImage(runtime);
         // One service runs one worker build; every profile reports the same identity.
         var identities = runners.Values.Select(runner => runner.BuildIdentity).Distinct(StringComparer.Ordinal).ToArray();
         if (identities.Length != 1)
@@ -195,6 +198,8 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         if (service) context.Response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
         if (service && options.CompileToolchain is { } toolchain)
             context.Response.Headers[FerruleServiceProtocol.CompileToolchainHeader] = toolchain;
+        if (service && options.CompiledRuntimeIdentity is { } runtime)
+            context.Response.Headers[FerruleServiceProtocol.CompiledRuntimeHeader] = runtime;
         return Task.CompletedTask;
     }
 
@@ -247,6 +252,16 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                     writer.WriteString("buildIdentity", CompileWorkerIdentity.Combine(identity, options.CompileToolchain!));
                     writer.WriteEndObject();
                 }
+                if (name == FerruleServiceProtocol.CompiledProfile)
+                {
+                    writer.WriteStartObject("runtime");
+                    writer.WriteString("protocol", CompiledRuntimeProtocol.Protocol);
+                    writer.WriteString("version", BuildWorkerProtocol.RuntimeVersion);
+                    writer.WriteString("identity", options.CompiledRuntimeIdentity);
+                    writer.WriteNumber("managedHeapBytes", ProcessCompiledRuntimeOptions.Profile.MemoryBytes);
+                    writer.WriteNumber("maximumAddressSpaceBytes", ProcessCompiledRuntimeOptions.AddressSpaceBytes);
+                    writer.WriteEndObject();
+                }
 
                 writer.WriteEndObject();
             }
@@ -255,6 +270,8 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
             writer.WriteStartArray("reserved");
             if (!runners.ContainsKey(FerruleServiceProtocol.CompileProfile))
                 writer.WriteStringValue(FerruleServiceProtocol.CompileProfile);
+            if (!runners.ContainsKey(FerruleServiceProtocol.CompiledProfile))
+                writer.WriteStringValue(FerruleServiceProtocol.CompiledProfile);
             writer.WriteEndArray();
             writer.WriteEndObject();
         }
@@ -274,7 +291,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         if (service) context.Response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
         if (profileName is null || !runners.TryGetValue(profileName, out var runner))
         {
-            context.Response.StatusCode = profileName == FerruleServiceProtocol.CompileProfile
+            context.Response.StatusCode = profileName is FerruleServiceProtocol.CompileProfile or FerruleServiceProtocol.CompiledProfile
                 ? StatusCodes.Status501NotImplemented : StatusCodes.Status404NotFound;
             return;
         }
@@ -298,6 +315,15 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         {
             var toolchain = request.Headers[FerruleServiceProtocol.CompileToolchainHeader];
             if (toolchain.Count != 1 || toolchain[0] != options.CompileToolchain)
+            {
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                return;
+            }
+        }
+        if (profileName == FerruleServiceProtocol.CompiledProfile || request.Headers.ContainsKey(FerruleServiceProtocol.CompiledRuntimeHeader))
+        {
+            var runtime = request.Headers[FerruleServiceProtocol.CompiledRuntimeHeader];
+            if (profileName != FerruleServiceProtocol.CompiledProfile || runtime.Count != 1 || runtime[0] != options.CompiledRuntimeIdentity)
             {
                 context.Response.StatusCode = StatusCodes.Status409Conflict;
                 return;
@@ -469,6 +495,8 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         response.Headers[InspectionTransport.ImageHeader] = identity;
         if (service) response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
         if (compileToolchain is not null) response.Headers[FerruleServiceProtocol.CompileToolchainHeader] = compileToolchain;
+        if (context.Request.RouteValues["profile"] as string == FerruleServiceProtocol.CompiledProfile && options.CompiledRuntimeIdentity is { } runtime)
+            response.Headers[FerruleServiceProtocol.CompiledRuntimeHeader] = runtime;
         try
         {
             await response.Body.WriteAsync(body, context.RequestAborted).ConfigureAwait(false);

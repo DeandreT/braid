@@ -25,7 +25,7 @@ internal sealed class MappingEndpointResources : IAsyncDisposable
     private readonly PostgresRevisionReportDatabase reports;
     private readonly PostgresRegressionRunStore regressionRuns;
     private readonly PostgresRegressionCaseStore cases;
-    private readonly DockerInspectionWorkerRunner runner;
+    private readonly MappingRuntimeSelection.Owned runner;
     private readonly IMachineTokenValidator validator;
 
     internal MappingEndpointResources(MappingEndpointSettings settings, IMachineTokenValidator validator, TimeProvider time)
@@ -41,14 +41,16 @@ internal sealed class MappingEndpointResources : IAsyncDisposable
         reports = new(settings.Connections["weft_report_reader"]);
         regressionRuns = new(settings.Connections["weft_run_reader"], writer: false);
         cases = new(settings.Connections["weft_case_reader"], RegressionCaseDatabaseProfile.Reader);
-        runner = new(new(settings.DockerExecutable, settings.RuntimeImage, profile: DockerWorkerProfile.Compiled));
-        var runtime = new FerruleCompiledBuildRuntime(runner,
+        runner = settings.Runner.CreateRunner(MappingEndpointRoutes.Settlement(MappingEndpointRoutes.Work, MappingEndpointRoutes.Deadline));
+        var runtime = new FerruleCompiledBuildRuntime(runner.Runner,
             new("ferrule", FerruleInspectionBackend.EngineRevision, settings.CompilerImage, FerrulePreviewBackend.AdapterBuild));
         var admissions = new BuildControlService(builds, new PostgresProjectReader(access), new PostgresRevisionReportMetadataReader(reports),
             new RegressionRunReadService(regressionRuns, cases));
         Service = new(ledger, releases, actor => new LocalReleaseInvocation(releases,
-            new CompiledBuildExecution(runs, admissions, builds, new PostgresBuildObjectStore(builds, NoNativeObjects.Instance, actor), runtime)), time, Limits);
-        Calls = new(settings.TargetReference, settings.ConcurrencyLimit, validator, Service, time, MappingEndpointRoutes.Work, MappingEndpointRoutes.Deadline);
+            new CompiledBuildExecution(runs, admissions, builds, new PostgresBuildObjectStore(builds, NoNativeObjects.Instance, actor), runtime)), time, Limits,
+            MappingEndpointRoutes.Release);
+        Calls = new(settings.TargetReference, settings.ConcurrencyLimit, validator, Service, time, MappingEndpointRoutes.Work, MappingEndpointRoutes.Deadline,
+            () => runner.Available);
     }
 
     internal MappingEndpointSettings Settings { get; }

@@ -21,14 +21,15 @@ internal static class FerruleServiceRegistration
         services.AddSingleton<IHostedService>(new RunnerLifetime(runners));
         services.AddSingleton<IHostedService>(_ =>
         {
-            var transport = settings.Transport(() => runners.Inspection.Available && runners.Preview.Available && runners.Compile?.Available != false,
-                FerruleInspectionBackend.EngineRevision, runners.Compile?.ToolchainIdentity);
+            var transport = settings.Transport(() => runners.Inspection.Available && runners.Preview.Available && runners.Compile?.Available != false && runners.Runtime?.Available != false,
+                FerruleInspectionBackend.EngineRevision, runners.Compile?.ToolchainIdentity, runners.Runtime?.RuntimeIdentity);
             var served = new Dictionary<string, IInspectionWorkerRunner>(StringComparer.Ordinal)
             {
                 [FerruleServiceProtocol.InspectionProfile] = runners.Inspection,
                 [FerruleServiceProtocol.PreviewProfile] = runners.Preview
             };
             if (runners.Compile is { } compile) served[FerruleServiceProtocol.CompileProfile] = compile;
+            if (runners.Runtime is { } runtime) served[FerruleServiceProtocol.CompiledProfile] = runtime;
             return new WorkerTransportServer(transport, served);
         });
         return services;
@@ -41,21 +42,42 @@ internal static class FerruleServiceRegistration
     internal static async Task<ServiceRunners> CreateRunnersAsync(FerruleServiceSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        var inspection = new ProcessWorkerRunner(new ProcessWorkerOptions(settings.WorkerExecutable, DockerWorkerProfile.Inspection, settings.TemporaryRoot));
-        var preview = new ProcessWorkerRunner(new ProcessWorkerOptions(settings.WorkerExecutable, DockerWorkerProfile.Preview, settings.TemporaryRoot));
-        if (settings.Compile is not { } installation) return new(inspection, preview, null);
-        var compile = new ProcessCompileRunner(new ProcessCompileOptions(settings.WorkerExecutable, installation.Launcher, settings.TemporaryRoot,
-            installation.Toolchain));
-        if (!await compile.ProbeAsync(cancellationToken).ConfigureAwait(false))
+        var owned = new List<IAsyncDisposable>();
+        try
         {
-            await compile.DisposeAsync().ConfigureAwait(false);
-            throw new InvalidOperationException("The compile sandbox is unavailable on this platform.");
+            var inspection = new ProcessWorkerRunner(new ProcessWorkerOptions(settings.WorkerExecutable, DockerWorkerProfile.Inspection, settings.TemporaryRoot));
+            owned.Add(inspection);
+            var preview = new ProcessWorkerRunner(new ProcessWorkerOptions(settings.WorkerExecutable, DockerWorkerProfile.Preview, settings.TemporaryRoot));
+            owned.Add(preview);
+            ProcessCompileRunner? compile = null;
+            if (settings.Compile is { } installation)
+            {
+                compile = new(new(settings.WorkerExecutable, installation.Launcher, settings.TemporaryRoot, installation.Toolchain));
+                owned.Add(compile);
+                if (!await compile.ProbeAsync(cancellationToken).ConfigureAwait(false)) throw new InvalidOperationException("The compile sandbox is unavailable.");
+            }
+            ProcessCompiledRuntimeRunner? runtime = null;
+            if (settings.Runtime is { } installed)
+            {
+                runtime = new(new(inspection.BuildIdentity, installed.Assembly, installed.Launcher, settings.TemporaryRoot, installed.DotnetRoot));
+                owned.Add(runtime);
+                if (!await runtime.ProbeAsync(cancellationToken).ConfigureAwait(false)) throw new InvalidOperationException("The runtime sandbox is unavailable.");
+            }
+            return new(inspection, preview, compile, runtime);
         }
-
-        return new(inspection, preview, compile);
+        catch (Exception original)
+        {
+            var failures = new List<Exception> { original };
+            foreach (var value in owned.AsEnumerable().Reverse())
+                try { await value.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception error) when (error is not (OutOfMemoryException or StackOverflowException or AccessViolationException)) { failures.Add(error); }
+            if (failures.Count > 1) throw new AggregateException("Service startup and cleanup failed.", failures);
+            throw;
+        }
     }
 
-    internal sealed record ServiceRunners(ProcessWorkerRunner Inspection, ProcessWorkerRunner Preview, ProcessCompileRunner? Compile);
+    internal sealed record ServiceRunners(ProcessWorkerRunner Inspection, ProcessWorkerRunner Preview, ProcessCompileRunner? Compile,
+        ProcessCompiledRuntimeRunner? Runtime = null);
 
     /// <summary>Joins every child; unconfirmed cleanup faults the service's shutdown.</summary>
     private sealed class RunnerLifetime(ServiceRunners runners) : IHostedService
@@ -63,7 +85,8 @@ internal static class FerruleServiceRegistration
         public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task StopAsync(CancellationToken cancellationToken) =>
-            Task.WhenAll(runners.Inspection.StopAsync(), runners.Preview.StopAsync(), runners.Compile?.StopAsync() ?? Task.CompletedTask)
+            Task.WhenAll(runners.Inspection.StopAsync(), runners.Preview.StopAsync(), runners.Compile?.StopAsync() ?? Task.CompletedTask,
+                runners.Runtime?.StopAsync() ?? Task.CompletedTask)
                 .WaitAsync(cancellationToken);
     }
 }

@@ -28,6 +28,7 @@
     <Project Path="tests/Weft.Tests/Weft.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/Weft.CompiledSandboxProbe/Weft.CompiledSandboxProbe.csproj" />
     <Project Path="tools/Weft.DatabaseTool/Weft.DatabaseTool.csproj" />
     <Project Path="tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj" />
     <Project Path="tools/Weft.IngestionProbe/Weft.IngestionProbe.csproj" />

@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Weft.Application;
 using Weft.Deployment;
 using Weft.MachineEndpoint;
+using Weft.MappingBackends.Workers;
 
 namespace Weft.Tests;
 
@@ -40,6 +42,79 @@ public sealed class MappingEndpointRouteTests
         test.Data.Caller = new(test.Data.Caller.Principal, test.Data.Caller.ApplicationId, DateTimeOffset.UtcNow.AddHours(1));
         var retry = await test.CallAsync(new MemoryStream(test.Body));
         Assert.Equal(200, retry.Status); Assert.Equal(2, test.Data.RuntimeCalls);
+    }
+
+    [Fact]
+    public async Task A_closed_runtime_fails_readiness_while_a_recorded_result_still_replays()
+    {
+        var test = await Harness.StartAsync(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60), expiresIn: TimeSpan.FromHours(1));
+        Assert.Equal(204, await test.ReadyAsync());
+        Assert.Equal(200, (await test.CallAsync(new MemoryStream(test.Body))).Status);
+        test.RuntimeAvailable = () => false;
+        Assert.Equal(503, await test.ReadyAsync());
+        // Readiness alone reports the closed runtime; a retry of a recorded call needs no execution.
+        var replay = await test.CallAsync(new MemoryStream(test.Body));
+        Assert.Equal(200, replay.Status);
+        Assert.Equal("true", replay.Context.Response.Headers[MappingEndpointRoutes.ReplayedHeader].ToString());
+        Assert.Equal(1, test.Data.RuntimeCalls);
+    }
+
+    [MappingEndpointLinuxFact]
+    [SupportedOSPlatform("linux")]
+    public async Task A_stalled_service_execution_settles_within_the_call_deadline_as_an_unknown_outcome()
+    {
+        // Shortened clocks: the work bound cancels the call at 2 s and its deadline is 4 s.
+        var work = TimeSpan.FromSeconds(2);
+        var deadline = TimeSpan.FromSeconds(4);
+        await using var service = await FerruleServiceTransportTests.ServiceCase.StartAsync(execute: true);
+        var delivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // The service takes the frame and then never answers, not even its cancellation.
+        service.Runtime.Behavior = async (_, _) =>
+        {
+            delivered.TrySetResult();
+            await release.Task;
+            return new WorkerProcessResult([], WorkerProcessFailure.Canceled);
+        };
+        var root = FerruleServiceTestSupport.TemporaryRoot();
+        MappingRuntimeSelection.Owned? owned = null;
+        try
+        {
+            owned = HostedCompiledSettingsTests.ServiceSelection(service, root).CreateRunner(MappingEndpointRoutes.Settlement(work, deadline));
+            var runner = owned.Runner;
+            var test = await Harness.StartAsync(work, deadline, expiresIn: TimeSpan.FromHours(1));
+            test.RuntimeAvailable = () => owned.Available;
+            test.Data.Execute = async token =>
+            {
+                // As the compiled runtime does: a cancellation propagates and any failure is unavailable.
+                var reply = await runner.RunAsync(new byte[] { 1 }, token);
+                token.ThrowIfCancellationRequested();
+                return new(reply.Failure == WorkerProcessFailure.None ? CompiledBuildOutcome.Completed : CompiledBuildOutcome.Unavailable);
+            };
+            Assert.Equal(204, await test.ReadyAsync());
+            var timer = Stopwatch.StartNew();
+            var call = await test.CallAsync(new MemoryStream(test.Body));
+            var held = timer.Elapsed;
+            Assert.True(delivered.Task.IsCompleted);
+            Assert.True(held < deadline + TimeSpan.FromSeconds(1), $"The stalled call held its slot for {held}.");
+            Assert.Equal(503, call.Status); Assert.Equal("deadline", call.Outcome);
+
+            // The outcome is unknown: the runner closes, readiness fails and the attempt is released for a retry.
+            Assert.False(owned.Available);
+            Assert.Equal(503, await test.ReadyAsync());
+            Assert.Equal(MachineInvocationOutcome.Unavailable, Assert.Single(test.Data.Finishes).Outcome);
+            Assert.Single(service.Runtime.Frames);
+            // The slot is free again, and the closed runner delivers no second frame.
+            var retry = await test.CallAsync(new MemoryStream(test.Body));
+            Assert.Equal(503, retry.Status); Assert.Equal("unavailable", retry.Outcome);
+            Assert.Single(service.Runtime.Frames);
+        }
+        finally
+        {
+            release.TrySetResult();
+            if (owned is not null) await Assert.ThrowsAsync<InvalidOperationException>(async () => await owned.DisposeAsync());
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]
@@ -107,7 +182,7 @@ public sealed class MappingEndpointRouteTests
         private Harness(MachineInvocationServiceTests.Fixture data, TimeSpan work, TimeSpan deadline)
         {
             Data = data;
-            routes = new(new(data.Target.Reference, 1, new Validator(data), data.Service, TimeProvider.System, work, deadline));
+            routes = new(new(data.Target.Reference, 1, new Validator(data), data.Service, TimeProvider.System, work, deadline, () => RuntimeAvailable()));
             routes.MarkReady();
             var replay = data.Data.Case.Replay;
             Body = JsonSerializer.SerializeToUtf8Bytes(new
@@ -120,6 +195,7 @@ public sealed class MappingEndpointRouteTests
 
         internal MachineInvocationServiceTests.Fixture Data { get; }
         internal byte[] Body { get; }
+        internal Func<bool> RuntimeAvailable { get; set; } = () => true;
 
         internal static async Task<Harness> StartAsync(TimeSpan work, TimeSpan deadline, TimeSpan expiresIn)
         {
@@ -127,6 +203,15 @@ public sealed class MappingEndpointRouteTests
             await data.Activate();
             data.Caller = new(data.Caller.Principal, data.Caller.ApplicationId, DateTimeOffset.UtcNow + expiresIn);
             return new(data, work, deadline);
+        }
+
+        internal async Task<int> ReadyAsync()
+        {
+            var context = new DefaultHttpContext();
+            context.Request.Method = "GET";
+            context.Request.Path = MappingEndpointRoutes.ReadyPath;
+            await routes.HandleAsync(context);
+            return context.Response.StatusCode;
         }
 
         internal async Task<Call> CallAsync(Stream body, Stream? response = null)

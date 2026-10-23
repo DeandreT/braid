@@ -122,10 +122,13 @@ public sealed class ProcessCompileOptions
         private static readonly string[] SystemLibraries = ["/lib", "/lib64", "/usr/lib", "/usr/lib64"];
 
         internal static ToolchainGrants Resolve(ProcessCompileOptions options)
+            => ResolveRoot(options.ToolchainRoot);
+
+        internal static ToolchainGrants ResolveRoot(string root)
         {
-            var host = BuildCompilation.Host(options.ToolchainRoot);
+            var host = BuildCompilation.Host(root);
             var interpreter = Interpreter(host) ?? throw new ArgumentException("The .NET host has no admissible ELF interpreter.");
-            var read = new List<string> { options.ToolchainRoot };
+            var read = new List<string> { root };
             read.AddRange(SystemLibraries.Where(Directory.Exists));
             if (File.Exists("/dev/urandom")) read.Add("/dev/urandom");
             return new(read, [ProcessWorkerOptions.AbsolutePath(interpreter, nameof(interpreter))]);

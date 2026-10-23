@@ -92,6 +92,19 @@ public sealed class MachineInvocationServiceTests
     }
 
     [Fact]
+    public async Task A_stalled_release_holds_a_canceled_call_only_for_the_hosts_release_bound()
+    {
+        var test = new Fixture(TimeSpan.FromMilliseconds(300)) { CancelAtRuntime = true, StallRelease = true }; await test.Activate();
+        using var cancellation = new CancellationTokenSource();
+        test.Cancellation = cancellation;
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => test.InvokeAsync(token: cancellation.Token));
+        Assert.True(timer.Elapsed < TimeSpan.FromSeconds(5), $"The release held the call for {timer.Elapsed}.");
+        Assert.Equal(MachineInvocationOutcome.Unavailable, Assert.Single(test.Finishes).Outcome);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new Fixture(TimeSpan.Zero));
+    }
+
+    [Fact]
     public async Task Inputs_the_replay_contract_refuses_are_recorded_as_invalid_without_running()
     {
         var test = new Fixture(); await test.Activate();
@@ -136,20 +149,22 @@ public sealed class MachineInvocationServiceTests
         internal List<Finish> Finishes { get; } = [];
         internal MachineInvocationService Service { get; }
         internal int RuntimeCalls, Claims;
-        internal bool Enabled = true, Unauthorized, CancelAtRuntime, BlockAtRuntime;
+        internal bool Enabled = true, Unauthorized, CancelAtRuntime, BlockAtRuntime, StallRelease;
         internal MachineInvocationFinishStatus? ForcedFinish;
         internal string? ChangePointerAt;
         internal MachineInvocationClaimStatus? ForcedClaim;
         internal CancellationTokenSource? Cancellation;
+        /// <summary>Replaces the scripted execution, for a test that runs an actual runtime transport.</summary>
+        internal Func<CancellationToken, Task<CompiledBuildResult>>? Execute;
         public string RuntimeImage => Data.Runtime;
 
-        internal Fixture()
+        internal Fixture(TimeSpan? releaseBound = null)
         {
             var revision = Data.Build.Intent.Revision;
             Target = new(new(new(revision.OrganizationId, revision.ProjectId, revision.MappingId), Data.Build.Intent.Environment, Guid.NewGuid()),
                 Data.Build.Intent.Profile, Data.Runtime);
             Service = new(this, this, _ => new LocalReleaseInvocation(this, new(this, this, this, this, this)), TimeProvider.System,
-                new(1024 * 1024, 1024 * 1024, PreviewPolicy.MaximumArtifacts, PreviewPolicy.MaximumTextBytes));
+                new(1024 * 1024, 1024 * 1024, PreviewPolicy.MaximumArtifacts, PreviewPolicy.MaximumTextBytes), releaseBound);
         }
 
         internal Task Activate()
@@ -176,14 +191,15 @@ public sealed class MachineInvocationServiceTests
             return Task.FromResult(new MachineInvocationClaim(MachineInvocationClaimStatus.Claimed, 1, Guid.NewGuid(), saved!.Intent.Actor));
         }
 
-        public Task<MachineInvocationFinishStatus> FinishAsync(MachineInvocationKey key, Guid claimId, Guid applicationId, MachineInvocationOutcome outcome,
+        public async Task<MachineInvocationFinishStatus> FinishAsync(MachineInvocationKey key, Guid claimId, Guid applicationId, MachineInvocationOutcome outcome,
             MachineInvocationProvenance? provenance, string? clock, byte[]? response, CancellationToken token)
         {
             Finishes.Add(new(outcome, provenance, clock, response));
-            if (ForcedFinish is { } forced) return Task.FromResult(forced);
+            if (StallRelease && outcome == MachineInvocationOutcome.Unavailable) await Task.Delay(Timeout.Infinite, token);
+            if (ForcedFinish is { } forced) return forced;
             if (outcome is not (MachineInvocationOutcome.Unavailable or MachineInvocationOutcome.Busy or MachineInvocationOutcome.ReleaseChanged))
                 recorded[key] = new(outcome, provenance, clock, response);
-            return Task.FromResult(MachineInvocationFinishStatus.Recorded);
+            return MachineInvocationFinishStatus.Recorded;
         }
 
         public Task<int> PurgeExpiredAsync(ReleaseTargetReference target, int maximum, CancellationToken token) => Task.FromResult(0);
@@ -208,6 +224,7 @@ public sealed class MachineInvocationServiceTests
         public async Task<CompiledBuildResult> ExecuteAsync(BuildArtifactReference artifact, BuildBytes verifiedArtifact, RegressionReplay replay, CancellationToken token)
         {
             RuntimeCalls++;
+            if (Execute is { } execute) return await execute(token);
             if (ChangePointerAt == "runtime") active = Guid.NewGuid();
             if (CancelAtRuntime) { await Cancellation!.CancelAsync(); token.ThrowIfCancellationRequested(); }
             if (BlockAtRuntime) await Task.Delay(Timeout.Infinite, token);

@@ -211,6 +211,41 @@ public sealed class FerruleServiceRunnerTests
     }
 
     [Fact]
+    public async Task TheCallersCancellationSettlementBoundsTheRequestAndTheWaitTogether()
+    {
+        await using var service = await ServiceCase.StartAsync();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.Inspection.Behavior = async (_, _) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return new WorkerProcessResult([], WorkerProcessFailure.Canceled);
+        };
+        // The default settlement would wait out a full execution wall; the caller's margin is shorter.
+        var options = new FerruleServiceRunnerOptions(Connector(service), FerruleServiceProtocol.InspectionProfile, Identity)
+        {
+            CancellationSettlement = TimeSpan.FromMilliseconds(600)
+        };
+        Assert.True(options.SettlementBound > TimeSpan.FromSeconds(10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new FerruleServiceRunnerOptions(Connector(service), FerruleServiceProtocol.InspectionProfile, Identity)
+        {
+            CancellationSettlement = TimeSpan.Zero
+        });
+        var runner = new FerruleServiceRunner(options);
+        using var cancellation = new CancellationTokenSource();
+        var running = runner.RunAsync(new byte[] { 1 }, cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        await cancellation.CancelAsync();
+        Assert.Equal(WorkerProcessFailure.CleanupFailed, (await running.WaitAsync(TimeSpan.FromSeconds(10))).Failure);
+        Assert.True(timer.Elapsed < TimeSpan.FromSeconds(5), $"Settlement took {timer.Elapsed}.");
+        Assert.False(runner.Available);
+        release.TrySetResult();
+        await Assert.ThrowsAsync<InvalidOperationException>(runner.StopAsync);
+    }
+
+    [Fact]
     public async Task UnconfirmedSettlementIsCleanupFailureThatClosesAdmissionAndFaultsStop()
     {
         await using var service = await ServiceCase.StartAsync();

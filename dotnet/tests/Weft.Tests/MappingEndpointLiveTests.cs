@@ -30,7 +30,12 @@ public sealed class MappingEndpointLiveTests(PostgresFixture fixture, ITestOutpu
     private static readonly byte[] Expected = Encoding.UTF8.GetBytes("{\n  \"code\": \"A1\",\n  \"dotted\": \"dot\",\n  \"nestedOutput\": {\n    \"b\": \"x\"\n  }\n}\n");
 
     [CompiledRuntimeDispatchFact]
-    public async Task Machine_callers_invoke_the_current_release_retry_roll_back_and_lose_access_on_revocation()
+    public Task Machine_callers_invoke_the_current_release_retry_roll_back_and_lose_access_on_revocation() => RunAsync(hosted: false);
+
+    [HostedMachineEndpointFact]
+    public Task Hosted_machine_callers_use_the_pinned_service_for_invocation_retry_rollback_and_revocation() => RunAsync(hosted: true);
+
+    private async Task RunAsync(bool hosted)
     {
         var image = Environment.GetEnvironmentVariable("WEFT_BUILD_WORKER_IMAGE")!;
         Assert.Equal(image, Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE"));
@@ -102,7 +107,12 @@ public sealed class MappingEndpointLiveTests(PostgresFixture fixture, ITestOutpu
 
         // Qualify both builds by actual isolated execution, then register the target and activate the first.
         var objects = new PostgresBuildObjectStore(controls, native.Physical, native.Actor);
-        await using var qualifyRunner = new DockerInspectionWorkerRunner(new("/usr/bin/docker", runtimeImage, profile: DockerWorkerProfile.Compiled));
+        await using var hostedRuntime = hosted ? await HostedCompiledRuntimeTestSupport.StartAsync() : null;
+        if (hostedRuntime is not null) runtimeImage = hostedRuntime.RuntimeIdentity;
+        await using var hostedRunner = hostedRuntime?.CreateRunner(image);
+        await using var dockerRunner = hostedRunner is null
+            ? new DockerInspectionWorkerRunner(new("/usr/bin/docker", runtimeImage, profile: DockerWorkerProfile.Compiled)) : null;
+        var qualifyRunner = hostedRunner?.Runner ?? dockerRunner!;
         var execution = new CompiledBuildExecution(history, new BuildControlService(controls, new PostgresProjectReader(native.Native.ReaderDatabase),
             native.ReportReader, evidence), controls, objects, new FerruleCompiledBuildRuntime(qualifyRunner, first.Backend));
         await using var qualifications = new PostgresBuildQualificationStore(native.Case.RegressionConnectionString("weft_qualification_writer"), true);
@@ -140,7 +150,7 @@ public sealed class MappingEndpointLiveTests(PostgresFixture fixture, ITestOutpu
         Assert.Equal(InvocationGrantOutcome.Applied, await grants.GrantAsync(native.Actor, grant));
         using var files = new PrivateFiles(native.Root.NewDirectory("endpoint-" + Guid.NewGuid().ToString("N")));
         var port = FreePort();
-        var settings = MappingEndpointSettings.Read(files.Environment(new Dictionary<string, string>
+        var endpointValues = new Dictionary<string, string>
         {
             [MappingEndpointSettings.Listen] = "127.0.0.1:" + port,
             [MappingEndpointSettings.Transport] = "platformIngress",
@@ -155,7 +165,9 @@ public sealed class MappingEndpointLiveTests(PostgresFixture fixture, ITestOutpu
             [MappingEndpointSettings.AudienceSetting] = EntraProtocolFixturePolicy.Client.ToString("D"),
             [MappingEndpointSettings.RuntimeImageSetting] = runtimeImage,
             [MappingEndpointSettings.CompilerImageSetting] = image
-        }, MappingEndpointSettings.Logins.ToDictionary(login => login.Setting, login => login.Role switch
+        };
+        hostedRuntime?.Configure(endpointValues, image);
+        var settings = MappingEndpointSettings.Read(files.Environment(endpointValues, MappingEndpointSettings.Logins.ToDictionary(login => login.Setting, login => login.Role switch
         {
             "weft_runtime" => native.Case.RuntimeConnectionString,
             "weft_report_reader" => native.Case.ReportConnectionString,

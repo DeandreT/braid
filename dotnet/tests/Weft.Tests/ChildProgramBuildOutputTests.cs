@@ -7,6 +7,7 @@ public sealed class ChildProgramBuildOutputTests
     [Theory]
     [InlineData("PreviewWorker", "Weft.Worker")]
     [InlineData("FerruleService", "weft-ferrule-service")]
+    [InlineData("CompiledRuntime", "weft-compiled-runtime")]
     [InlineData("StorageProbe", "Weft.StorageProbe")]
     [InlineData("StorageProtocolProbe", "Weft.StorageProtocolProbe")]
     [InlineData("IngestionProbe", "Weft.IngestionProbe")]

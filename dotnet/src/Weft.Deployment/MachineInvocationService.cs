@@ -81,15 +81,22 @@ public sealed class MachineInvocationService
     private readonly Func<ActorContext, LocalReleaseInvocation> invocations;
     private readonly TimeProvider time;
     private readonly PreviewLimits limits;
+    private readonly TimeSpan releaseBound;
 
+    /// <param name="releaseBound">
+    /// How long releasing a canceled call's attempt may take (10 seconds by default); a lost release expires with the
+    /// lease. A host with a fixed call deadline passes what its deadline leaves for it.
+    /// </param>
     public MachineInvocationService(IMachineInvocationLedger ledger, ILocalReleaseStore releases, Func<ActorContext, LocalReleaseInvocation> invocations,
-        TimeProvider time, PreviewLimits limits)
+        TimeProvider time, PreviewLimits limits, TimeSpan? releaseBound = null)
     {
         ArgumentNullException.ThrowIfNull(ledger); ArgumentNullException.ThrowIfNull(releases); ArgumentNullException.ThrowIfNull(invocations);
         ArgumentNullException.ThrowIfNull(time); ArgumentNullException.ThrowIfNull(limits);
         if (limits.MaximumOutputBytes > (MachineInvocationPolicy.MaximumRetainedBytes - 64 * 1024) / 4 * 3)
             throw new ArgumentException("The output limit must fit the retained response bound.", nameof(limits));
+        if (releaseBound is { } bound && bound <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(releaseBound));
         this.ledger = ledger; this.releases = releases; this.invocations = invocations; this.time = time; this.limits = limits;
+        this.releaseBound = releaseBound ?? TimeSpan.FromSeconds(10);
     }
 
     public async Task<MachineInvocationResult> InvokeAsync(ReleaseTargetReference target, MachineCaller caller, Guid requestId,
@@ -114,7 +121,7 @@ public sealed class MachineInvocationService
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             // Release the attempt so the caller can retry under the same ID; a lost release expires with the lease.
-            using var release = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var release = new CancellationTokenSource(releaseBound);
             try { await ledger.FinishAsync(key, claim.ClaimId, caller.ApplicationId, MachineInvocationOutcome.Unavailable, null, null, null, release.Token).ConfigureAwait(false); }
             catch (Exception error) when (error is not (OutOfMemoryException or StackOverflowException)) { }
             throw;

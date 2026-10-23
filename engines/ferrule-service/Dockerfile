@@ -27,7 +27,10 @@ COPY global.json ./
 COPY dotnet dotnet
 RUN /usr/share/dotnet/dotnet restore dotnet/apps/Weft.FerruleService/Weft.FerruleService.csproj --locked-mode \
     && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.FerruleService/Weft.FerruleService.csproj -c Release --no-restore \
-       --output /out/app -p:UseSharedCompilation=false \
+        --output /out/app -p:UseSharedCompilation=false \
+    && /usr/share/dotnet/dotnet restore dotnet/apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj --locked-mode \
+    && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj -c Release --no-restore \
+        --output /out/runtime -p:UseSharedCompilation=false \
     && install -d -m 1777 /out/tmp
 
 FROM ubuntu@sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb646106b AS launcher
@@ -130,6 +133,7 @@ COPY --from=sdk /usr/share/dotnet/LICENSE.txt /usr/share/dotnet/ThirdPartyNotice
 COPY --from=launcher /out/weft-compile-sandbox /weft-compile-sandbox
 COPY --from=sdk /etc/os-release /etc/os-release
 COPY --from=sdk /out/app /app
+COPY --from=sdk /out/runtime /runtime
 COPY --from=sdk /out/tmp /tmp
 ENV DOTNET_ROOT=/usr/share/dotnet DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     WEFT_FERRULE_SERVICE_WORKER_EXECUTABLE=/ferrule-host WEFT_FERRULE_SERVICE_TEMPORARY_ROOT=/tmp

@@ -82,6 +82,9 @@ public sealed class AzureSessionsConnector : IFerruleServiceConnector, IDisposab
 
     public IFerruleServiceChannel Open() => new Channel(this, "weft-" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)));
 
+    /// <summary>How long closing a channel may wait for its session's stop request.</summary>
+    public TimeSpan StopBound => options.StopBound;
+
     private Uri Address(string path, string identifier, bool management) => new(options.PoolManagementEndpoint,
         path + (management ? "?api-version=" + AzureSessionsConnectorOptions.ManagementApiVersion + "&" : "?") + "identifier=" + identifier);
 

@@ -6,6 +6,8 @@ if (args is ["probe"])
     return await FerruleServiceProbe.RunAsync(Environment.GetEnvironmentVariable);
 if (args is ["identity"])
     return await FerruleServiceIdentity.RunAsync(Environment.GetEnvironmentVariable);
+if (args is ["runtime-identity"])
+    return await FerruleRuntimeIdentity.RunAsync(Environment.GetEnvironmentVariable);
 
 FerruleServiceSettings settings;
 FerruleServiceRegistration.ServiceRunners runners;

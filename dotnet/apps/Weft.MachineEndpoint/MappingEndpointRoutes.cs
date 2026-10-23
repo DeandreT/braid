@@ -10,10 +10,11 @@ namespace Weft.MachineEndpoint;
 /// <summary>
 /// What one call needs: the configured target, the admission bound, the token validator, the invocation service and
 /// the clock. <paramref name="Work"/> bounds validation, the body, the ledger and execution; <paramref name="Deadline"/>
-/// also bounds the response, so an admitted call holds its slot for at most the deadline.
+/// also bounds the response, so an admitted call holds its slot for at most the deadline. <paramref name="RuntimeAvailable"/>
+/// reports whether the compiled runtime still admits work; a closed runner fails readiness until restart.
 /// </summary>
 internal sealed record MappingEndpointCalls(ReleaseTargetReference Target, int ConcurrencyLimit, IMachineTokenValidator Validator,
-    MachineInvocationService Service, TimeProvider Time, TimeSpan Work, TimeSpan Deadline);
+    MachineInvocationService Service, TimeProvider Time, TimeSpan Work, TimeSpan Deadline, Func<bool> RuntimeAvailable);
 
 /// <summary>
 /// The machine-facing HTTP contract: <c>POST /v1/invocations</c> for the configured target, and health probes.
@@ -31,6 +32,12 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
     internal static readonly TimeSpan Deadline = TimeSpan.FromSeconds(90);
     /// <summary>Work stops here, leaving the rest of the deadline for the response.</summary>
     internal static readonly TimeSpan Work = TimeSpan.FromSeconds(85);
+    /// <summary>Of the rest: the bound on releasing a canceled call's attempt, whose lease expires if the release is lost.</summary>
+    internal static readonly TimeSpan Release = TimeSpan.FromSeconds(1);
+    /// <summary>Of the rest: kept for writing the response.</summary>
+    internal static readonly TimeSpan ResponseReserve = TimeSpan.FromMilliseconds(500);
+    /// <summary>Of the rest: what a canceled execution may spend settling and closing its channel.</summary>
+    internal static TimeSpan Settlement(TimeSpan work, TimeSpan deadline) => deadline - work - Release - ResponseReserve;
     private static readonly JsonDocumentOptions JsonOptions = new() { MaxDepth = 8 };
     private readonly SemaphoreSlim slots = new(calls.ConcurrencyLimit, calls.ConcurrencyLimit);
     private int ready;
@@ -49,7 +56,7 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
             case LivePath when HttpMethods.IsGet(request.Method):
                 await Status(context, 204); return;
             case ReadyPath when HttpMethods.IsGet(request.Method):
-                await Status(context, Volatile.Read(ref ready) == 1 ? 204 : 503); return;
+                await Status(context, Volatile.Read(ref ready) == 1 && calls.RuntimeAvailable() ? 204 : 503); return;
             case InvocationsPath when HttpMethods.IsPost(request.Method):
                 break;
             case InvocationsPath or LivePath or ReadyPath:

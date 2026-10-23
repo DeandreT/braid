@@ -17,6 +17,7 @@ public static class FerruleServiceProtocol
     public const string ReadinessPath = "/v1/health/ready";
     public const string ProtocolHeader = "Weft-Service-Protocol";
     public const string CompileToolchainHeader = "Weft-Compile-Toolchain";
+    public const string CompiledRuntimeHeader = "Weft-Compiled-Runtime";
 
     /// <summary>Read-only inspection, validation and projection frames (<c>weft.ferrule-host.v1</c>).</summary>
     public const string InspectionProfile = "inspection";
@@ -29,6 +30,7 @@ public static class FerruleServiceProtocol
     /// compilation is enabled; otherwise it remains reserved and is refused with <c>501</c>.
     /// </summary>
     public const string CompileProfile = "compile";
+    public const string CompiledProfile = "execute";
 
     /// <summary>The fixed limits behind a profile name; the service and its clients derive bounds from the same table.</summary>
     public static DockerWorkerProfile? Profile(string? name) => name switch
@@ -36,6 +38,7 @@ public static class FerruleServiceProtocol
         InspectionProfile => DockerWorkerProfile.Inspection,
         PreviewProfile => DockerWorkerProfile.Preview,
         CompileProfile => DockerWorkerProfile.Build,
+        CompiledProfile => DockerWorkerProfile.Compiled,
         _ => null
     };
 

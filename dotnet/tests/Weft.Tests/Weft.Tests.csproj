@@ -46,6 +46,8 @@
     <ProjectReference Include="../../tools/Weft.WorkerShutdownProbe/Weft.WorkerShutdownProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" />
+    <ProjectReference Include="../../apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../tools/Weft.CompiledSandboxProbe/Weft.CompiledSandboxProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.FerruleService/Weft.FerruleService.csproj" />
     <ProjectReference Include="../../apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj" />
     <ProjectReference Include="../../tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj" />
@@ -84,6 +86,24 @@
       <FerruleServiceFiles Include="$(FerruleServiceDirectory)**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(FerruleServiceFiles)" DestinationFiles="@(FerruleServiceFiles->'$(OutDir)FerruleService/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyCompiledRuntime" AfterTargets="Build">
+    <MSBuild Projects="../../apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="CompiledRuntimeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(CompiledRuntimeTarget)')" Text="The built compiled runtime is missing: @(CompiledRuntimeTarget)" />
+    <PropertyGroup><CompiledRuntimeDirectory>@(CompiledRuntimeTarget->'%(RootDir)%(Directory)')</CompiledRuntimeDirectory></PropertyGroup>
+    <ItemGroup><CompiledRuntimeFiles Include="$(CompiledRuntimeDirectory)**/*" /></ItemGroup>
+    <Copy SourceFiles="@(CompiledRuntimeFiles)" DestinationFiles="@(CompiledRuntimeFiles->'$(OutDir)CompiledRuntime/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyCompiledSandboxProbe" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Weft.CompiledSandboxProbe/Weft.CompiledSandboxProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="CompiledSandboxProbeTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(CompiledSandboxProbeTarget)')" Text="The built sandbox probe is missing." />
+    <PropertyGroup><CompiledSandboxProbeDirectory>@(CompiledSandboxProbeTarget->'%(RootDir)%(Directory)')</CompiledSandboxProbeDirectory></PropertyGroup>
+    <ItemGroup><CompiledSandboxProbeFiles Include="$(CompiledSandboxProbeDirectory)**/*" /></ItemGroup>
+    <Copy SourceFiles="@(CompiledSandboxProbeFiles)" DestinationFiles="@(CompiledSandboxProbeFiles->'$(OutDir)CompiledSandboxProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopyMappingEndpoint" AfterTargets="Build">
     <MSBuild Projects="../../apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">

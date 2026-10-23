@@ -177,7 +177,7 @@ public sealed class CompileWorkerIdentityTests
     }
 
     /// <summary>A minimal x86-64 ELF shared object: one load segment holding its dynamic section and string table.</summary>
-    private static byte[] Elf(string[] needed, string[]? rPath = null, string[]? runPath = null)
+    internal static byte[] Elf(string[] needed, string[]? rPath = null, string[]? runPath = null)
     {
         var strings = new List<byte> { 0 };
         int Intern(string value)

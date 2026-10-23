@@ -36,6 +36,10 @@ label. Clients configure that identity and refuse a service reporting another.
 
 ## API: `weft.ferrule-service.v1`
 
+An independently enabled [compiled execution profile](compiled-service-runtime.md)
+serves verified release invocations in read-only children and uses a separate
+runtime identity from compilation.
+
 The image's `identity` command reports its measured native, toolchain and combined
 build identities as `weft.compiler-image-identity.v1`, after proving the compiler
 sandbox. Run it against the trusted image with a private writable `/tmp`; it needs

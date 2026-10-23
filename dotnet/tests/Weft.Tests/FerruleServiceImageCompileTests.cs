@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using Weft.Deployment;
+using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using static Weft.Tests.FerruleServiceTestSupport;
 
@@ -68,6 +69,65 @@ public sealed class FerruleServiceImageCompileTests
 
             Assert.True(compiled >= 2, "At least two fixtures must compile to artifacts.");
             await service.StopAsync();
+        }
+        finally
+        {
+            await DockerAsync("rm", "--force", name).ContinueWith(_ => { }, TaskScheduler.Default);
+        }
+    }
+
+    /// <summary>
+    /// Execution enabled in the image as a platform runs it: startup probes the installed <c>/runtime</c> host in the
+    /// launcher before readiness, and bytes the image's own compile profile produced run in a fresh child.
+    /// </summary>
+    [ServiceImageFact]
+    public async Task ServiceImageExecutesCompiledBytesInAFreshRuntimeChild()
+    {
+        var image = Environment.GetEnvironmentVariable("WEFT_FERRULE_SERVICE_IMAGE")!;
+        var name = "weft-compiled-execution-" + Guid.NewGuid().ToString("N")[..12];
+        try
+        {
+            var identity = await NativeIdentityAsync(image);
+            await DockerAsync("run", "--detach", "--name", name, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+                "--user", "65532:65532", "--tmpfs", "/tmp:size=1g,mode=1777", "--publish", "127.0.0.1::8080",
+                "--env", "WEFT_FERRULE_SERVICE_AUTHENTICATION=platformSandbox", "--env", "WEFT_FERRULE_SERVICE_LISTEN_ADDR=0.0.0.0:8080",
+                "--env", "WEFT_FERRULE_SERVICE_CONCURRENCY=1", "--env", "WEFT_FERRULE_SERVICE_QUEUE=0",
+                "--env", "WEFT_FERRULE_SERVICE_COMPILE_ENABLED=true", "--env", "WEFT_FERRULE_SERVICE_EXECUTION_ENABLED=true", image);
+            var port = int.Parse((await DockerAsync("port", name, "8080/tcp")).Split('\n')[0].Split(':')[^1], CultureInfo.InvariantCulture);
+            var endpoint = new Uri("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture));
+            await WaitForReadinessAsync(endpoint, name);
+
+            using var metadata = new HttpClient { BaseAddress = endpoint };
+            using var capabilities = JsonDocument.Parse(await metadata.GetStringAsync(FerruleServiceProtocol.CapabilitiesPath));
+            var profiles = capabilities.RootElement.GetProperty("profiles").EnumerateArray().ToArray();
+            Assert.Empty(capabilities.RootElement.GetProperty("reserved").EnumerateArray());
+            var toolchain = profiles.Single(profile => profile.GetProperty("name").GetString() == FerruleServiceProtocol.CompileProfile)
+                .GetProperty("toolchain").GetProperty("identity").GetString()!;
+            var execution = profiles.Single(profile => profile.GetProperty("name").GetString() == FerruleServiceProtocol.CompiledProfile).GetProperty("runtime");
+            var runtimeIdentity = execution.GetProperty("identity").GetString()!;
+            Assert.Equal(BuildWorkerProtocol.RuntimeVersion, execution.GetProperty("version").GetString());
+            Assert.NotEqual(identity, runtimeIdentity);
+
+            await using var compile = new FerruleServiceRunner(new(new LoopbackConnector(endpoint), FerruleServiceProtocol.CompileProfile, identity, toolchain));
+            var (compiler, intent, native) = FerruleServiceCompileTests.Compiler(compile, "valid-basic");
+            var capability = await compiler.InspectAsync(intent);
+            var bytes = await compiler.BuildAsync(intent, new(native, native.Length));
+            var artifact = BuildArtifactReference.Create(intent, capability, bytes.Digest, bytes.Length);
+            await using var execute = new FerruleServiceRunner(new(new LoopbackConnector(endpoint), FerruleServiceProtocol.CompiledProfile, identity,
+                compiledRuntimeIdentity: runtimeIdentity));
+            var runtime = new FerruleCompiledBuildRuntime(execute, compiler.Backend);
+            var replay = new Weft.Application.Regression.RegressionReplay(Weft.Application.PreviewTargetSelection.All, "2026-10-22T00:00:00Z",
+                Weft.Application.PreviewLimits.Default, new(null, "{\"code\":\"A1\",\"a.b\":\"dot\",\"nested\":{\"b\":\"x\"}}"u8), [], []);
+            var result = await runtime.ExecuteAsync(artifact, bytes, replay);
+            Assert.Equal(CompiledBuildOutcome.Completed, result.Outcome);
+            Assert.Equal("{\n  \"code\": \"A1\",\n  \"dotted\": \"dot\",\n  \"nestedOutput\": {\n    \"b\": \"x\"\n  }\n}\n"u8.ToArray(),
+                Assert.Single(result.Outputs!.Outputs).CopyBytes());
+            Assert.Equal(WorkerProcessFailure.WorkerFailed, (await execute.RunAsync(new byte[] { 0 }, CancellationToken.None)).Failure);
+            Assert.Equal(CompiledBuildOutcome.Completed, (await runtime.ExecuteAsync(artifact, bytes, replay)).Outcome);
+            using (var ready = await metadata.GetAsync(FerruleServiceProtocol.ReadinessPath))
+                Assert.Equal(HttpStatusCode.NoContent, ready.StatusCode);
+            await execute.StopAsync();
+            await compile.StopAsync();
         }
         finally
         {

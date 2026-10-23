@@ -7,11 +7,12 @@ namespace Weft.MappingBackends.Workers;
 /// <summary>Trusted host configuration for one profile of a Ferrule service, never supplied by a mapping or browser.</summary>
 public sealed class FerruleServiceRunnerOptions
 {
-    public FerruleServiceRunnerOptions(IFerruleServiceConnector connector, string profile, string buildIdentity, string? compileToolchainIdentity = null)
+    public FerruleServiceRunnerOptions(IFerruleServiceConnector connector, string profile, string buildIdentity,
+        string? compileToolchainIdentity = null, string? compiledRuntimeIdentity = null)
     {
         ArgumentNullException.ThrowIfNull(connector);
         Profile = FerruleServiceProtocol.Profile(profile) ??
-            throw new ArgumentException("The Ferrule service profile must be inspection, preview or compile.", nameof(profile));
+            throw new ArgumentException("The Ferrule service profile must be inspection, preview, compile or execute.", nameof(profile));
         Connector = connector;
         ProfileName = profile;
         BuildIdentity = InspectionTransport.RequireImage(buildIdentity);
@@ -23,9 +24,19 @@ public sealed class FerruleServiceRunnerOptions
         }
         else if (profile == FerruleServiceProtocol.CompileProfile)
             throw new ArgumentException("Compilation requires an explicitly pinned toolchain identity.", nameof(compileToolchainIdentity));
+        if (profile == FerruleServiceProtocol.CompiledProfile)
+        {
+            if (compileToolchainIdentity is not null) throw new ArgumentException("Execution pins its runtime independently from the compiler.");
+            CompiledRuntimeIdentity = InspectionTransport.RequireImage(compiledRuntimeIdentity ??
+                throw new ArgumentException("Execution requires an explicitly pinned runtime identity."));
+        }
+        else if (compiledRuntimeIdentity is not null) throw new ArgumentException("Only execution accepts a compiled runtime pin.");
         ResponseBound = MaximumServiceAdmissionWait + Profile.MaximumWallTimeout * 2 + ProcessWorkerOptions.KillTimeout + TimeSpan.FromSeconds(5);
         SettlementBound = Profile.MaximumWallTimeout + ProcessWorkerOptions.KillTimeout + TimeSpan.FromSeconds(3);
+        cancellationSettlement = CancelRequestBound + SettlementBound;
     }
+
+    private readonly TimeSpan cancellationSettlement;
 
     /// <summary>The longest wait a service may queue an operation before it starts or refuses it.</summary>
     public static readonly TimeSpan MaximumServiceAdmissionWait = TimeSpan.FromSeconds(20);
@@ -37,6 +48,7 @@ public sealed class FerruleServiceRunnerOptions
     public string BuildIdentity { get; }
     public string? CompileToolchainIdentity { get; }
     public string? CompilationBuildIdentity { get; }
+    public string? CompiledRuntimeIdentity { get; }
 
     /// <summary>Bounded body transfer, service admission, execution, child reaping, and transport margin.</summary>
     internal TimeSpan ResponseBound { get; init; }
@@ -45,6 +57,19 @@ public sealed class FerruleServiceRunnerOptions
     internal TimeSpan SettlementBound { get; init; }
 
     internal TimeSpan CancelRequestBound { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// The longest a canceled operation may take from its cancellation to its settled answer: the remote cancellation
+    /// request and the wait for the original answer share it. The default lets a service that never sees the request
+    /// reach its own wall deadline. A caller whose deadline leaves less, such as the machine endpoint, sets that
+    /// margin; an operation not settled within it has an unknown outcome and closes admission, like any unconfirmed
+    /// settlement.
+    /// </summary>
+    public TimeSpan CancellationSettlement
+    {
+        get => cancellationSettlement;
+        init => cancellationSettlement = value > TimeSpan.Zero ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
 
     /// <summary>Operations sent for one call when refusals prove that nothing ran; each uses a fresh identity and channel.</summary>
     internal int Attempts { get; init; } = 3;
@@ -77,12 +102,15 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
         this.options = options;
     }
 
-    public string BuildIdentity => options.CompileToolchainIdentity is { } toolchain
-        ? CompileWorkerIdentity.Combine(options.BuildIdentity, toolchain) : options.BuildIdentity;
+    public string BuildIdentity => options.CompiledRuntimeIdentity ?? (options.CompileToolchainIdentity is { } toolchain
+        ? CompileWorkerIdentity.Combine(options.BuildIdentity, toolchain) : options.BuildIdentity);
     public string? CompilationBuildIdentity => options.CompilationBuildIdentity;
 
     /// <summary>The service profile every operation of this runner is sent to.</summary>
     public string ProfileName => options.ProfileName;
+
+    /// <summary>False once admission closed: stopping, or an unconfirmed settlement, which keeps the runner closed until restart.</summary>
+    public bool Available { get { lock (lifetimeGate) return !stopping && Volatile.Read(ref unavailable) == 0; } }
 
     public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
     {
@@ -165,10 +193,12 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
             }
 
             // The instance cancels the operation, or refuses it if the cancellation arrives first, then answers the
-            // original request once its child has settled.
-            await CancelAsync(channel, operation).ConfigureAwait(false);
-            using (var settlement = new CancellationTokenSource(options.SettlementBound))
+            // original request once its child has settled. The request and that wait share one settlement bound.
+            using var settling = new CancellationTokenSource(options.CancellationSettlement);
+            await CancelAsync(channel, operation, settling.Token).ConfigureAwait(false);
+            using (var settlement = CancellationTokenSource.CreateLinkedTokenSource(settling.Token))
             {
+                settlement.CancelAfter(options.SettlementBound);
                 var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 using (settlement.Token.Register(() => settled.TrySetResult()))
                 {
@@ -219,6 +249,9 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
             if (options.CompileToolchainIdentity is { } expected &&
                 (!Single(admitted.Headers, FerruleServiceProtocol.CompileToolchainHeader, out var toolchain) || toolchain != expected))
                 return (Failed(WorkerProcessFailure.SandboxUnavailable), false);
+            if (options.CompiledRuntimeIdentity is { } runtime &&
+                (!Single(admitted.Headers, FerruleServiceProtocol.CompiledRuntimeHeader, out var receivedRuntime) || receivedRuntime != runtime))
+                return (Failed(WorkerProcessFailure.SandboxUnavailable), false);
         }
 
         // The frame travels on the same channel, which reaches the instance that just answered.
@@ -227,6 +260,8 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
         request.Headers.TryAddWithoutValidation(InspectionTransport.ImageHeader, options.BuildIdentity);
         if (options.CompileToolchainIdentity is { } pinnedToolchain)
             request.Headers.TryAddWithoutValidation(FerruleServiceProtocol.CompileToolchainHeader, pinnedToolchain);
+        if (options.CompiledRuntimeIdentity is { } runtimeIdentity)
+            request.Headers.TryAddWithoutValidation(FerruleServiceProtocol.CompiledRuntimeHeader, runtimeIdentity);
         content.Headers.ContentType = new MediaTypeHeaderValue(InspectionTransport.MediaType);
         using var response = await channel.SendAsync(request, abort).ConfigureAwait(false);
         if (response.StatusCode != HttpStatusCode.OK)
@@ -247,6 +282,8 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
             !string.Equals(image, options.BuildIdentity, StringComparison.Ordinal) ||
             options.CompileToolchainIdentity is { } expectedToolchain &&
                 (!Single(response.Headers, FerruleServiceProtocol.CompileToolchainHeader, out var responseToolchain) || responseToolchain != expectedToolchain) ||
+            options.CompiledRuntimeIdentity is { } expectedRuntime &&
+                (!Single(response.Headers, FerruleServiceProtocol.CompiledRuntimeHeader, out var responseRuntime) || responseRuntime != expectedRuntime) ||
             response.Content.Headers.ContentEncoding.Count != 0 ||
             response.Content.Headers.ContentType?.MediaType != InspectionTransport.MediaType ||
             response.Content.Headers.ContentType.Parameters.Count != 0 ||
@@ -266,11 +303,12 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
         return (new WorkerProcessResult(failure == WorkerProcessFailure.None ? output : [], failure), false);
     }
 
-    private async Task CancelAsync(IFerruleServiceChannel channel, string operation)
+    private async Task CancelAsync(IFerruleServiceChannel channel, string operation, CancellationToken settling)
     {
         try
         {
-            using var bound = new CancellationTokenSource(options.CancelRequestBound);
+            using var bound = CancellationTokenSource.CreateLinkedTokenSource(settling);
+            bound.CancelAfter(options.CancelRequestBound);
             var path = new Uri(FerruleServiceProtocol.CancelPath(options.ProfileName, operation), UriKind.Relative);
             using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = new ByteArrayContent([]) };
             using var response = await channel.SendAsync(request, bound.Token).ConfigureAwait(false);

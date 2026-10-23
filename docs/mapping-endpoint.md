@@ -1,5 +1,8 @@
 # Mapping endpoint
 
+The optional [service compiled runtime](compiled-service-runtime.md) removes the
+Docker socket requirement without changing the invocation or release contract.
+
 `Weft.MachineEndpoint` (`weft-mapping-endpoint`) is the machine-facing HTTP host for one
 registered release target. Machine callers send mapping inputs and receive the outputs
 of the target's current release. It is separate from the Session host: it serves no
@@ -17,7 +20,7 @@ ledger, and [Local release activation](local-releases.md) for the release pointe
 | --- | --- |
 | `POST /v1/invocations` | Invoke the target's current release. |
 | `GET /v1/health/live` | `204` while the process serves requests. |
-| `GET /v1/health/ready` | `204` once started; `503` before start and while stopping. |
+| `GET /v1/health/ready` | `204` once started; `503` before start, while stopping and once the compiled runtime has closed. |
 
 An invocation needs these request headers:
 
