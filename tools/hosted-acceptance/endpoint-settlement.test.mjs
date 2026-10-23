@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -10,11 +11,29 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-const helper = new URL(
-  "../../deploy/compose/endpoint-settlement.sh",
-  import.meta.url,
-).pathname;
+const helper = fileURLToPath(
+  new URL("../../deploy/compose/endpoint-settlement.sh", import.meta.url),
+);
+const windows = process.platform === "win32";
+// Bare `bash` on Windows can resolve to the WSL alias, which cannot use the
+// native fixture's files or environment. These tests need only Git Bash.
+const bash =
+  process.env.WEFT_TEST_BASH ??
+  (windows
+    ? join(process.env.ProgramFiles ?? "C:\\Program Files", "Git/bin/bash.exe")
+    : "bash");
+assert.ok(
+  !windows || existsSync(bash),
+  "Install Git for Windows or set WEFT_TEST_BASH to its native bash.exe.",
+);
+const bashPath = (path) =>
+  windows
+    ? path
+        .replaceAll("\\", "/")
+        .replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`)
+    : path;
 
 // A fake Docker CLI over a state file of container IDs. It answers `ps` only for the run's label
 // filter and refuses every other selector, so an ancestor or name filter fails the test.
@@ -38,16 +57,35 @@ function settle(containers, commands) {
     const state = join(directory, "state");
     writeFileSync(state, containers.map((id) => `${id}\n`).join(""));
     const result = spawnSync(
-      "bash",
-      ["-c", `set -u; source "$1"; ${commands}`, "settlement", helper],
+      bash,
+      [
+        "--noprofile",
+        "--norc",
+        "-c",
+        `set -u; source "$1"; ${commands}`,
+        "settlement",
+        bashPath(helper),
+      ],
       {
         encoding: "utf8",
         env: {
-          PATH: `${directory}:${process.env.PATH}`,
-          FAKE_DOCKER_STATE: state,
+          PATH: windows
+            ? `${bashPath(directory)}:/usr/bin:/bin`
+            : `${directory}:${process.env.PATH}`,
+          ...(windows ? { SystemRoot: process.env.SystemRoot } : {}),
+          FAKE_DOCKER_STATE: bashPath(state),
           FAKE_RUN: "weft-accept-run",
         },
       },
+    );
+    assert.equal(
+      result.error,
+      undefined,
+      "The native settlement shell must start.",
+    );
+    assert.ok(
+      existsSync(`${state}.calls`),
+      `The settlement fixture did not reach its fake Docker CLI: ${result.stderr}`,
     );
     const calls = readFileSync(`${state}.calls`, "utf8");
     return { ...result, remaining: readFileSync(state, "utf8"), calls };
