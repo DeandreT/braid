@@ -150,9 +150,52 @@ deploy/compose/acceptance-test.sh
 | `WEFT_IMAGE`, `WEFT_EDGE_IMAGE`, `WEFT_WORKER_IMAGE`, `WEFT_FERRULE_SERVICE_IMAGE` | Prebuilt images to use instead of building them; they are not removed. |
 | `WEFT_ACCEPTANCE_LOG_DIRECTORY` | On failure, keep the service logs and the browser failure context there. |
 | `WEFT_ACCEPTANCE_HOLD` | Debugging aid: stop after provisioning, write the run's environment to a private file and wait for a release file before cleaning up. |
+| `WEFT_ACCEPTANCE_STAGE` | An executable to run after the hosted checks pass and before cleanup, with the run's environment; its failure fails the run. The [mapping endpoint stage](#mapping-endpoint-stage) uses it. |
 
 Generated passwords, keys and certificates stay in a private temporary directory and are
 never printed. The script removes every container, network, volume and image tag it
 created, falling back to the compose project's labels when compose cannot render the
 stack; a failed cleanup or a remaining owned object fails the run. The model cache volume
 and pulled base images are left in place.
+
+## Mapping endpoint stage
+
+`deploy/compose/endpoint-acceptance-test.sh` runs this acceptance with a follow-on stage for
+the packaged [mapping endpoint](mapping-endpoint.md). It takes the same settings, plus
+`WEFT_ENDPOINT_IMAGE` and `WEFT_COMPILED_RUNTIME_IMAGE` (an image ID) to use prebuilt images
+instead of building them. Before the stack starts, it registers two machine clients with the
+run's issuer, which then issues app-only v2 access tokens through a client-credentials grant;
+one client's tokens expire after two seconds. Once the hosted checks pass, the stage:
+
+1. Builds `weft-mapping-endpoint-local-docker`, and the compiled runtime from
+   `engines/build-worker` with the run's native image. A reproducible build can share its image
+   ID with other users of the same sources, so the stage registers a run-unique child image that
+   differs only by a label. Its runtime containers inherit that label, and only containers
+   carrying it are ever checked or removed.
+2. Names the build the browser run completed. The build must name the Ferrule service's
+   combined compiler identity, which must equal the identity measured from the service image.
+3. Qualifies the build with `endpoint-release qualify-build`, which replays its saved regression
+   case through the compiled runtime. It then registers a target, activates a release and grants
+   one caller with `endpoint-grants`, each as the signed-in principal.
+4. Starts `endpoint` from `compose.endpoint.yml` and the test-only
+   `compose.endpoint-acceptance.yml`, which gives it the issuer's network alias and the run's
+   certificate authority, as `compose.acceptance.yml` does for the server. The container must be
+   healthy, run as UID 1654 with a read-only root filesystem, no capabilities and
+   `no-new-privileges`, and print `WeftMappingEndpointReady`.
+5. Calls it with the regression case's inputs and parameters. Each completed call must name its
+   release, build and artifact, and both outputs must equal independently authored bytes at the
+   call's own clock. A retry under the same request ID must return identical bytes, marked as
+   replayed, with no new ledger audit. A second activation and then a rollback to the first
+   release must each serve the next call. Tokens for another audience and expired tokens are
+   refused with `401`. After the grant is revoked, a new call and a replay are refused with `403`.
+6. Stops the endpoint. It must exit 0 with no compiled-runtime container left.
+
+A `503` answer records nothing final, so the stage retries that request with the same ID a
+bounded number of times and reports the count. Qualification is tried again with the same ID
+only when it answered `unavailable` and left no runtime container. Any runtime container that
+the stage has to remove itself, whether from a failed qualification, after the stop or during
+cleanup, is printed with its state and times, and the run fails: a clean result needs a new run
+(`deploy/compose/endpoint-settlement.sh`). The endpoint and `endpoint-release` receive the
+Docker socket for the local Docker compiled runtime only; the hosted stack's socket check runs
+before the stage. The stage removes its containers and images, and the hosted cleanup then
+requires that no owned object remains.

@@ -5,6 +5,7 @@
 # - A test-owned issuer for the fixed Microsoft organizational endpoints: the server resolves
 #   login.microsoftonline.com to it through a network alias and trusts only the run's test
 #   certificate authority (SSL_CERT_FILE). The Session host's identity validation is unchanged.
+#   It also issues app-only access tokens to the machine clients an endpoint acceptance registers.
 # - A TLS ingress for the public host in front of the edge, as the platform ingress would be.
 # - A local Ollama model for chat on an internal network, reached through the server's relay.
 # Use with: compose.yml, compose.ferrule-service.yml and compose.features.yml. See docs/hosted-acceptance.md.
@@ -119,6 +120,8 @@ services:
       WEFT_ACCEPTANCE_ISSUER_PEM: ${WEFT_ACCEPTANCE_ISSUER_PEM:?Set the issuer TLS PEM}
       WEFT_ACCEPTANCE_CLIENT_CERTIFICATE: ${WEFT_ACCEPTANCE_CLIENT_CERTIFICATE:?Set the Entra client certificate}
       WEFT_ACCEPTANCE_SIGNING_KEY: ${WEFT_ACCEPTANCE_SIGNING_KEY:?Set the ID token signing key}
+      # Optional machine clients for the mapping endpoint acceptance; none by default.
+      WEFT_ACCEPTANCE_MACHINE_CLIENTS: ${WEFT_ACCEPTANCE_MACHINE_CLIENTS:-[]}
     # The server reaches the fixed Microsoft name on port 443; the issuer stays non-root.
     sysctls:
       net.ipv4.ip_unprivileged_port_start: 443

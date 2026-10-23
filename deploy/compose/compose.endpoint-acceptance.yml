@@ -1,0 +1,10 @@
+# Test-only plumbing for deploy/compose/endpoint-acceptance-test.sh; never part of a deployment. The endpoint
+# reaches the run's issuer as login.microsoftonline.com on the identity network and trusts only the run's test
+# certificate authority, as the Session server does in compose.acceptance.yml. Its token validation is unchanged.
+# Use with: the hosted acceptance files and compose.endpoint.yml. See docs/hosted-acceptance.md.
+services:
+  endpoint:
+    environment:
+      SSL_CERT_FILE: /run/weft/secrets/acceptance-trust
+      WEFT_DELIVER_FILE_ACCEPTANCE_TRUST: ${WEFT_ACCEPTANCE_TRUST_PEM:?Set the test certificate authority}
+    networks: [database, egress, identity]

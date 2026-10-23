@@ -94,6 +94,17 @@ public sealed class MappingEndpointHostTests
             {
                 var ready = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromMinutes(2));
                 Assert.Equal("WeftMappingEndpointReady", ready);
+                // The container health probe reaches both routes on the loopback listener, also from a wildcard
+                // setting, and ignores the base image's ambient listener port.
+                var probe = new Dictionary<string, string>
+                {
+                    [MappingEndpointSettings.Listen] = "127.0.0.1:" + port,
+                    [MappingEndpointSettings.Transport] = "platformIngress",
+                    ["ASPNETCORE_HTTP_PORTS"] = "8080"
+                };
+                Assert.Equal(0, await ProbeAsync(probe, "probe", "live"));
+                Assert.Equal(0, await ProbeAsync(probe, "probe", "ready"));
+                Assert.Equal(0, await ProbeAsync(new Dictionary<string, string>(probe) { [MappingEndpointSettings.Listen] = "0.0.0.0:" + port }, "probe", "ready"));
                 using var client = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:" + port), Timeout = TimeSpan.FromSeconds(30) };
                 Assert.Equal(HttpStatusCode.NoContent, (await client.GetAsync(MappingEndpointRoutes.LivePath)).StatusCode);
                 Assert.Equal(HttpStatusCode.NoContent, (await client.GetAsync(MappingEndpointRoutes.ReadyPath)).StatusCode);
@@ -114,12 +125,48 @@ public sealed class MappingEndpointHostTests
                 Assert.Equal(0, Signal(process.Id, 15));
                 Assert.True(process.WaitForExit(TimeSpan.FromMinutes(2)));
                 Assert.Equal(0, process.ExitCode);
+                Assert.Equal(1, await ProbeAsync(probe, "probe", "ready"));
                 Assert.Equal("", (await process.StandardOutput.ReadToEndAsync()).Trim());
                 Assert.Equal("", (await process.StandardError.ReadToEndAsync()).Trim());
             }
             finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
         }
         finally { root.Delete(recursive: true); }
+    }
+
+    [MappingEndpointLinuxFact]
+    public async Task The_probe_refuses_other_arguments_and_incomplete_listener_settings()
+    {
+        var listener = new Dictionary<string, string>
+        {
+            [MappingEndpointSettings.Listen] = "127.0.0.1:" + MappingEndpointLiveTests.FreePort(),
+            [MappingEndpointSettings.Transport] = "platformIngress"
+        };
+        // Nothing listens: the probe fails without a configuration failure.
+        Assert.Equal(1, await ProbeAsync(listener, "probe", "live"));
+        Assert.Equal(2, await ProbeAsync(listener, "probe", "started"));
+        Assert.Equal(2, await ProbeAsync(listener, "serve"));
+        Assert.Equal(2, await ProbeAsync(listener, "probe", "live", "again"));
+        Assert.Equal(2, await ProbeAsync(new Dictionary<string, string>(), "probe", "live"));
+        Assert.Equal(2, await ProbeAsync(new Dictionary<string, string>(listener) { [MappingEndpointSettings.Listen] = "127.0.0.1:0" }, "probe", "live"));
+        Assert.Equal(2, await ProbeAsync(new Dictionary<string, string>(listener) { [MappingEndpointSettings.Listen] = "localhost:8080" }, "probe", "live"));
+        // A direct HTTPS probe pins the host's own certificate, which it must be able to read.
+        Assert.Equal(2, await ProbeAsync(new Dictionary<string, string>(listener) { [MappingEndpointSettings.Transport] = "directHttps" }, "probe", "live"));
+    }
+
+    private static async Task<int> ProbeAsync(IReadOnlyDictionary<string, string> environment, params string[] arguments)
+    {
+        using var process = Start(environment, arguments);
+        try
+        {
+            Assert.True(process.WaitForExit(TimeSpan.FromMinutes(1)));
+            // The probe prints no value; only a usage or configuration line on refusal.
+            Assert.Equal("", await process.StandardOutput.ReadToEndAsync());
+            var error = (await process.StandardError.ReadToEndAsync()).Trim();
+            Assert.True(process.ExitCode == 2 ? error.Length > 0 : error.Length == 0, error);
+            return process.ExitCode;
+        }
+        finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
     }
 
     private static Dictionary<string, string> Settings(int port) => new()
@@ -143,7 +190,7 @@ public sealed class MappingEndpointHostTests
         MappingEndpointSettings.Logins.ToDictionary(login => login.Setting, login =>
             $"Host=127.0.0.1;Port=1;Database=weft;Username={overrides.FirstOrDefault(item => item.Role == login.Role).Username ?? login.Role};Password=p-{Guid.NewGuid():N}");
 
-    private static Process Start(IReadOnlyDictionary<string, string> environment)
+    private static Process Start(IReadOnlyDictionary<string, string> environment, params string[] arguments)
     {
         var dll = Path.Combine(AppContext.BaseDirectory, "MappingEndpoint", "weft-mapping-endpoint.dll");
         Assert.True(File.Exists(dll), "The mapping endpoint must be copied into the test output.");
@@ -151,6 +198,7 @@ public sealed class MappingEndpointHostTests
         if (string.IsNullOrWhiteSpace(host)) host = Environment.ProcessPath is { } current && Path.GetFileName(current) == "dotnet" ? current : "dotnet";
         var start = new ProcessStartInfo(host) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8 };
         start.ArgumentList.Add(dll);
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
         var inherited = new[] { "PATH", "DOTNET_ROOT", "HOME", "LANG" }.Where(start.Environment.ContainsKey).ToDictionary(key => key, key => start.Environment[key]);
         start.Environment.Clear();
         foreach (var (key, value) in inherited) start.Environment[key] = value;

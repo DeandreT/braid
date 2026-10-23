@@ -33,6 +33,7 @@
     <Project Path="tools/Weft.IngestionProbe/Weft.IngestionProbe.csproj" />
     <Project Path="tools/Weft.MaintenanceProbe/Weft.MaintenanceProbe.csproj" />
     <Project Path="tools/Weft.MaintenanceTool/Weft.MaintenanceTool.csproj" />
+    <Project Path="tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj" />
     <Project Path="tools/Weft.RevisionReportMetadataProbe/Weft.RevisionReportMetadataProbe.csproj" />
     <Project Path="tools/Weft.RevisionReportWorkflowProbe/Weft.RevisionReportWorkflowProbe.csproj" />
     <Project Path="tools/Weft.SessionKeyTool/Weft.SessionKeyTool.csproj" />

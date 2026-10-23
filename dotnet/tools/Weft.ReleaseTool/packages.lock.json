@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "L3AdmZ1WOK4XXT5YFPEwyt0ep6l8lGIPs7F5OOBZc77Zqeo01Of7XXICy47628sdVl0v/owxYJTe86DTgFwKCA=="
+      },
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "FU/IfjDfwaMuKr414SSQNTIti/69bHEMb+QKrskRb26oVqpx3lNFXMjs/RC9ZUuhBhcwDM2BwOgoMw+PZ+beqQ==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.0"
+        }
+      },
+      "Npgsql": {
+        "type": "Transitive",
+        "resolved": "10.0.3",
+        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
+        }
+      },
+      "weft.ai": {
+        "type": "Project"
+      },
+      "weft.application": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Ai": "[1.0.0, )",
+          "Weft.Contracts": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
+      },
+      "weft.contracts": {
+        "type": "Project"
+      },
+      "weft.deployment": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Application": "[1.0.0, )",
+          "Weft.Contracts": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
+      },
+      "weft.domain": {
+        "type": "Project"
+      },
+      "weft.mappingbackends": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Application": "[1.0.0, )",
+          "Weft.Contracts": "[1.0.0, )",
+          "Weft.Deployment": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
+      },
+      "weft.persistence.postgres": {
+        "type": "Project",
+        "dependencies": {
+          "Npgsql": "[10.0.3, )",
+          "Weft.Application": "[1.0.0, )",
+          "Weft.Deployment": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

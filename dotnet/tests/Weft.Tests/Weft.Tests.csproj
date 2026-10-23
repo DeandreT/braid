@@ -48,6 +48,7 @@
     <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" />
     <ProjectReference Include="../../apps/Weft.FerruleService/Weft.FerruleService.csproj" />
     <ProjectReference Include="../../apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj" />
+    <ProjectReference Include="../../tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj" />
     <ProjectReference Include="../../src/Weft.WorkerTransport/Weft.WorkerTransport.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends.AzureSessions/Weft.MappingBackends.AzureSessions.csproj" />
     <Using Include="Xunit" />
@@ -94,6 +95,17 @@
       <MappingEndpointFiles Include="$(MappingEndpointDirectory)**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(MappingEndpointFiles)" DestinationFiles="@(MappingEndpointFiles->'$(OutDir)MappingEndpoint/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyReleaseTool" AfterTargets="Build">
+    <MSBuild Projects="../../tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="ReleaseToolTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(ReleaseToolTarget)')" Text="The built release tool is missing: @(ReleaseToolTarget)" />
+    <PropertyGroup><ReleaseToolDirectory>@(ReleaseToolTarget->'%(RootDir)%(Directory)')</ReleaseToolDirectory></PropertyGroup>
+    <ItemGroup>
+      <ReleaseToolFiles Include="$(ReleaseToolDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ReleaseToolFiles)" DestinationFiles="@(ReleaseToolFiles->'$(OutDir)ReleaseTool/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopyStorageProbe" AfterTargets="Build">
     <MSBuild Projects="../../tools/Weft.StorageProbe/Weft.StorageProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">

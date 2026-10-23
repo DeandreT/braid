@@ -123,6 +123,17 @@ case $command in
     unset ASPNETCORE_HTTP_PORTS
     exec "$dotnet" /app/worker/Weft.Worker.dll
     ;;
+  endpoint)
+    (($# == 0)) || refuse 'WeftEndpointTakesNoArguments'
+    # Only the endpoint image contains the mapping endpoint. Its listener is explicit configuration.
+    [[ -f /app/endpoint/weft-mapping-endpoint.dll ]] || refuse 'WeftEndpointUnavailable'
+    unset ASPNETCORE_HTTP_PORTS
+    exec "$dotnet" /app/endpoint/weft-mapping-endpoint.dll
+    ;;
+  release)
+    [[ -f $tools/release/Weft.ReleaseTool.dll ]] || refuse 'WeftReleaseToolUnavailable'
+    exec "$dotnet" "$tools/release/Weft.ReleaseTool.dll" "$@"
+    ;;
   migrate)
     (($# == 0)) || refuse 'WeftMigrateTakesNoArguments'
     exec "$dotnet" "$tools/database/Weft.DatabaseTool.dll" migrate
@@ -162,5 +173,5 @@ case $command in
       "$WEFT_SESSION_APPLICATION_NAME" "$ring" "$WEFT_SESSION_KEY_CERTIFICATE_FILE" \
       "$WEFT_SESSION_KEY_PRIVATE_KEY_FILE" "${WEFT_SESSION_KEY_LIFETIME_DAYS:-90}"
     ;;
-  *) refuse 'Usage: weft-entrypoint server|worker|migrate|database|storage|maintenance|session-keys|initialize-storage|bootstrap-session-keys' ;;
+  *) refuse 'Usage: weft-entrypoint server|worker|endpoint|release|migrate|database|storage|maintenance|session-keys|initialize-storage|bootstrap-session-keys' ;;
 esac

@@ -2,6 +2,7 @@
 #   docker build -f deploy/container/Dockerfile --target weft -t weft:local .
 #   docker build -f deploy/container/Dockerfile --target edge -t weft-edge:local .
 #   docker build -f deploy/container/Dockerfile --target weft-worker -t weft-worker:local .
+#   docker build -f deploy/container/Dockerfile --target weft-mapping-endpoint -t weft-mapping-endpoint:local .
 # See docs/runtime-packaging.md. Every base image is pinned by digest.
 
 ARG NODE_IMAGE=docker.io/library/node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
@@ -95,3 +96,29 @@ USER 1654:1654
 WORKDIR /app
 ENTRYPOINT ["/app/bin/weft-entrypoint"]
 CMD ["worker"]
+
+# Machine-facing mapping endpoint for one registered target, with the release operator tool that qualifies
+# builds and activates releases for it. No Docker CLI, curl or package manager: health is the host's own
+# HTTP probe of /v1/health/live and /v1/health/ready.
+FROM build AS endpoint-build
+RUN dotnet restore dotnet/apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj --locked-mode \
+    && dotnet restore dotnet/tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj --locked-mode \
+    && dotnet publish dotnet/apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj --configuration Release --no-restore \
+        --output /out/endpoint -p:UseAppHost=false \
+    && dotnet publish dotnet/tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj --configuration Release --no-restore \
+        --output /out/tools/release -p:UseAppHost=false
+
+FROM ${ASPNET_IMAGE} AS weft-mapping-endpoint
+COPY --from=endpoint-build /out/endpoint /app/endpoint
+COPY --from=endpoint-build /out/tools /app/tools
+COPY deploy/container/weft-entrypoint.sh /app/bin/weft-entrypoint
+COPY --from=build --chown=1654:1654 /out/state/run /run/weft
+USER 1654:1654
+WORKDIR /app
+EXPOSE 8080
+ENTRYPOINT ["/app/bin/weft-entrypoint"]
+CMD ["endpoint"]
+
+# Local profile only: the Docker compiled runtime drives the host Docker daemon, which is equivalent to host root.
+FROM weft-mapping-endpoint AS weft-mapping-endpoint-local-docker
+COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker

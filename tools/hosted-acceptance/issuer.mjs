@@ -3,14 +3,17 @@
 // test certificate authority; the Session host's identity code and validation are unchanged.
 // It implements only what the Weft Entra client uses: discovery, signing keys, an
 // authorization page with one sign-in button, and code redemption with a PS256 certificate
-// assertion, PKCE (S256), single-use codes and RS256 ID tokens. It logs one fixed event
-// name per protocol step and never logs codes, tokens, assertions or keys.
+// assertion, PKCE (S256), single-use codes and RS256 ID tokens. For mapping endpoint callers
+// it also issues app-only v2 access tokens to registered machine clients (client credentials).
+// It logs one fixed event name per protocol step and never logs codes, tokens, assertions,
+// secrets or keys.
 import {
   createHash,
   createPrivateKey,
   createPublicKey,
   randomBytes,
   sign,
+  timingSafeEqual,
   verify,
   constants,
   X509Certificate,
@@ -35,6 +38,14 @@ const clientCertificate = new X509Certificate(
 // The run's ID-token signing key, stable across issuer restarts so cached keys stay valid.
 const signingKey = createPrivateKey(take("WEFT_ACCEPTANCE_SIGNING_KEY"));
 const tokenLifetimeSeconds = 3600;
+// Optional machine clients: [{clientId, objectId, secretSha256, lifetimeSeconds}], each a client
+// application with its service principal's object ID and the SHA-256 of its client secret.
+const machineClients = new Map(
+  JSON.parse(process.env.WEFT_ACCEPTANCE_MACHINE_CLIENTS || "[]").map(
+    (machine) => [machine.clientId, machine],
+  ),
+);
+delete process.env.WEFT_ACCEPTANCE_MACHINE_CLIENTS;
 
 const issuer = `https://${host}/${tenant}/v2.0`;
 const paths = {
@@ -237,34 +248,97 @@ function assertionValid(assertion) {
   return true;
 }
 
-function idToken(nonce) {
-  const now = Math.floor(Date.now() / 1000);
+function signed(claims) {
   const header = base64url(
     JSON.stringify({ alg: "RS256", typ: "JWT", kid: keyId }),
   );
-  const claims = base64url(
-    JSON.stringify({
-      iss: issuer,
-      aud: client,
-      tid: tenant,
-      sub: subject,
-      iat: now - 1,
-      nbf: now - 1,
-      exp: now + tokenLifetimeSeconds,
-      nonce,
-      ver: "2.0",
-    }),
-  );
+  const body = base64url(JSON.stringify(claims));
   const signature = sign(
     "sha256",
-    Buffer.from(`${header}.${claims}`, "ascii"),
+    Buffer.from(`${header}.${body}`, "ascii"),
     signingKey,
   );
-  return `${header}.${claims}.${base64url(signature)}`;
+  return `${header}.${body}.${base64url(signature)}`;
+}
+
+function idToken(nonce) {
+  const now = Math.floor(Date.now() / 1000);
+  return signed({
+    iss: issuer,
+    aud: client,
+    tid: tenant,
+    sub: subject,
+    iat: now - 1,
+    nbf: now - 1,
+    exp: now + tokenLifetimeSeconds,
+    nonce,
+    ver: "2.0",
+  });
+}
+
+// An app-only v2 access token with the claims Entra issues to a client-credentials
+// application: the requested resource as the audience, idtyp app and no scp.
+function accessToken(machine, audience) {
+  const now = Math.floor(Date.now() / 1000);
+  return signed({
+    aud: audience,
+    iss: issuer,
+    iat: now - 1,
+    nbf: now - 1,
+    exp: now + machine.lifetimeSeconds,
+    aio: base64url(randomBytes(16)),
+    azp: machine.clientId,
+    azpacr: "1",
+    idtyp: "app",
+    oid: machine.objectId,
+    rh: base64url(randomBytes(16)),
+    sub: machine.objectId,
+    tid: tenant,
+    uti: base64url(randomBytes(16)),
+    ver: "2.0",
+  });
+}
+
+function secretValid(machine, secret) {
+  const presented = createHash("sha256").update(secret, "utf8").digest();
+  const expected = Buffer.from(machine.secretSha256, "hex");
+  return (
+    expected.length === presented.length && timingSafeEqual(presented, expected)
+  );
+}
+
+// Client credentials for a registered machine client authenticated by its client secret.
+function clientCredentials(form, response) {
+  const fields = singletons(form, [
+    "grant_type",
+    "client_id",
+    "client_secret",
+    "scope",
+  ]);
+  const machine =
+    fields !== null &&
+    [...form.keys()].length === 4 &&
+    machineClients.get(fields.client_id);
+  if (!machine || !secretValid(machine, fields.client_secret))
+    return refuse(response, "invalid_client", "machine-client");
+  const resource =
+    /^(?:api:\/\/)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/\.default$/.exec(
+      fields.scope,
+    );
+  if (!resource) return refuse(response, "invalid_scope", "machine-scope");
+  event("machine-token");
+  json(response, 200, {
+    token_type: "Bearer",
+    expires_in: machine.lifetimeSeconds,
+    ext_expires_in: machine.lifetimeSeconds,
+    access_token: accessToken(machine, resource[1]),
+  });
 }
 
 async function redeem(request, response) {
   const form = new URLSearchParams(await readBody(request, 16384));
+  if (form.get("grant_type") === "client_credentials")
+    return clientCredentials(form, response);
   const fields = singletons(form, [
     "grant_type",
     "client_id",
@@ -335,7 +409,10 @@ const server = createServer(tls, async (request, response) => {
         subject_types_supported: ["pairwise"],
         scopes_supported: ["openid"],
         id_token_signing_alg_values_supported: ["RS256"],
-        token_endpoint_auth_methods_supported: ["private_key_jwt"],
+        token_endpoint_auth_methods_supported: [
+          "private_key_jwt",
+          "client_secret_post",
+        ],
         code_challenge_methods_supported: ["S256"],
       });
     if (

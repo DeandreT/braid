@@ -289,3 +289,11 @@ compose run --rm --no-deps -T maintenance run-once "$WEFT_SESSION_ORGANIZATION_I
 grep -q '"outcome":"finished","failure":null' "$work/maintenance.out" || fail 'maintenance outcome'
 grep -q '"filesystemTraversalComplete":true' "$work/maintenance.out" || fail 'maintenance observation of the Blob store'
 echo "ok - maintenance observed the project's Blob objects: $(grep -o '"publicationSlotsExamined":[0-9]*,"boundPublicationMatchesObserved":[0-9]*' "$work/maintenance.out")"
+
+# An optional follow-on stage on this run's stack before cleanup, for example
+# deploy/compose/endpoint-acceptance-test.sh. It inherits the run's environment, and its failure
+# fails the run; the run's cleanup still removes the stack.
+if [[ -n ${WEFT_ACCEPTANCE_STAGE:-} ]]; then
+  echo "Running the follow-on stage $(basename -- "$WEFT_ACCEPTANCE_STAGE")"
+  "$WEFT_ACCEPTANCE_STAGE" || fail 'follow-on stage'
+fi

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Weft.Deployment/Weft.Deployment.csproj" />
+    <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Weft.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

@@ -11,11 +11,14 @@ syntax, so the classic Docker builder also builds it. Tracking work is [#137](ht
 | `edge` | The same-replica reverse proxy for the `trustedProxyOneHop` host transport. |
 | `weft-local-docker` | `weft` plus the Docker CLI for the local Development worker runner only. |
 | `weft-worker` | `Weft.Worker`, the same entrypoint and the Docker CLI, for the hosted inspection service. |
+| `weft-mapping-endpoint` | The [mapping endpoint](mapping-endpoint.md) host and the release operator tool (`Weft.ReleaseTool`), with the same entrypoint and no Docker CLI. |
+| `weft-mapping-endpoint-local-docker` | `weft-mapping-endpoint` plus the Docker CLI, for the local Docker compiled runtime only. |
 
 ```sh
 docker build -f deploy/container/Dockerfile --target weft -t weft:local .
 docker build -f deploy/container/Dockerfile --target edge -t weft-edge:local .
 docker build -f deploy/container/Dockerfile --target weft-worker -t weft-worker:local .
+docker build -f deploy/container/Dockerfile --target weft-mapping-endpoint -t weft-mapping-endpoint:local .
 ```
 
 ## Application image
@@ -49,6 +52,8 @@ loopback, so health is checked through the edge: `GET /api/v1/health` returns
 | --- | --- |
 | `server` | Delivers private files, removes the base image's default `ASPNETCORE_HTTP_PORTS`, then runs the server. |
 | `worker` | The same for `Weft.Worker`; only the `weft-worker` image contains it, and it is that image's default command. |
+| `endpoint` | The same for the mapping endpoint; only the endpoint images contain it, and it is their default command. |
+| `release ARGS` | Runs `Weft.ReleaseTool` (see [local release activation](local-releases.md#operator-commands)); endpoint images only. |
 | `migrate` | Applies migrations with `WEFT_MIGRATION_CONNECTION_STRING` (the migrator login). |
 | `database ARGS` | Runs `Weft.DatabaseTool` owner commands. A delivered `WEFT_DELIVER_OWNER_INPUT` becomes its standard input. |
 | `storage ARGS`, `maintenance ARGS`, `session-keys ARGS` | Run `Weft.StorageTool`, `Weft.MaintenanceTool` and `Weft.SessionKeyTool`. |
@@ -175,6 +180,26 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   limits each service replica to one child operation and gives it 3 GiB for the
   compiler and transport. The `identity` image command can measure and check the
   installed toolchain before the stack starts. No host receives the Docker socket.
+- The override file `deploy/compose/compose.endpoint.yml` adds the
+  [mapping endpoint](mapping-endpoint.md) for one registered target, after `migrate`, and two
+  one-shots in the `operator` profile: `endpoint-grants` runs the `Weft.DatabaseTool` grant
+  commands through `weft_invocation_grant_writer`, and `endpoint-release` runs
+  `Weft.ReleaseTool` to qualify a completed build, register the target, and activate or roll
+  back a release. Each of the endpoint's eight logins is delivered as a protected private
+  file (`WEFT_DELIVER_FILE_ENDPOINT_*`, named by its `_FILE` setting). The endpoint listens
+  with the `platformIngress` transport on `127.0.0.1:${WEFT_ENDPOINT_PORT}` (default 8490),
+  answers health through its own `probe ready` command, and has 100 s to stop, so calls drain
+  within their deadline before it joins its runtime containers. It requires the target
+  settings `WEFT_ENDPOINT_ORGANIZATION_ID`, `_PROJECT_ID`, `_MAPPING_ID`, `_ENVIRONMENT_ID`,
+  `_ENVIRONMENT_VERSION` and `_TARGET_ID`, the callers' tenant `WEFT_ENDPOINT_ENTRA_TENANT_ID`,
+  the audience `WEFT_ENDPOINT_ENTRA_AUDIENCE`, the image ID of an `engines/build-worker` build
+  as `WEFT_COMPILED_RUNTIME_IMAGE`, the compiler identity that the target's builds name as
+  `WEFT_ENDPOINT_COMPILER_IDENTITY`, and `WEFT_DOCKER_GID`. This profile is local only: the
+  endpoint and `endpoint-release` run compiled artifacts through the Docker compiled runtime,
+  so both receive the Docker socket, which is equivalent to host root access. A hosted
+  deployment needs a compiled runtime that does not use Docker. `postgres-init.sh` creates
+  every login the endpoint and its tools use; existing volumes need the explicit
+  `postgres-add-*-roles.sh` steps for the qualification, release and invocation logins.
 
 All runtime containers use a read-only root filesystem, drop every capability and
 set `no-new-privileges`. The compose file reads every value from the caller's
@@ -187,8 +212,8 @@ those two plus `WEFT_INSPECTION_WORKER_PEM` and `WEFT_INSPECTION_CLIENT_PEM` (se
 PEM bundles) and each certificate's pin, `WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256` and
 `WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256`: the lowercase SHA-256 of the DER
 certificate, for example `openssl x509 -in worker.crt -outform DER | openssl dgst -sha256 -r`.
-Image names default to `weft:local`, `weft-edge:local`, `weft-local-docker:local` and
-`weft-worker:local`; `WEFT_COMPOSE_PORT` and `WEFT_COMPOSE_EXAMPLES_PORT` choose the
+Image names default to `weft:local`, `weft-edge:local`, `weft-local-docker:local`,
+`weft-worker:local` and `weft-mapping-endpoint-local-docker:local` (`WEFT_ENDPOINT_IMAGE`); `WEFT_COMPOSE_PORT` and `WEFT_COMPOSE_EXAMPLES_PORT` choose the
 loopback ports (`0` selects a free one).
 
 The smoke test builds uniquely tagged images, generates throwaway passwords and

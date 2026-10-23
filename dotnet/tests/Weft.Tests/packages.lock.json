@@ -1057,6 +1057,14 @@
           "Weft.Domain": "[1.0.0, )"
         }
       },
+      "weft.releasetool": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Deployment": "[1.0.0, )",
+          "Weft.MappingBackends": "[1.0.0, )",
+          "Weft.Persistence.Postgres": "[1.0.0, )"
+        }
+      },
       "weft.server": {
         "type": "Project",
         "dependencies": {
