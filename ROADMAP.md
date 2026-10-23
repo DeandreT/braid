@@ -399,8 +399,23 @@ grants with idempotent, expiry-safe invocation tracking
 [mapping endpoint](docs/mapping-endpoint.md) host invokes the current qualified release
 ([#259](https://github.com/DeandreT/weft/issues/259),
 [#279](https://github.com/DeandreT/weft/pull/279)); see
-[Machine authorization](docs/machine-authorization.md). Azure
-resources are provisioned only from an operator-approved environment.
+[Machine authorization](docs/machine-authorization.md). Qualified mappings execute in the
+Ferrule service sandbox, bound to a runtime identity that covers its loader and system
+libraries ([#282](https://github.com/DeandreT/weft/issues/282),
+[#293](https://github.com/DeandreT/weft/pull/293); see
+[Compiled service runtime](docs/compiled-service-runtime.md)). The shared launcher denies
+cross-process signal and memory routes on every admitted kernel
+([#290](https://github.com/DeandreT/weft/issues/290),
+[#291](https://github.com/DeandreT/weft/pull/291)). The endpoint is packaged for Compose
+in a hosted service profile and a local Docker profile, with a release operator tool,
+an endpoint acceptance run and Azure endpoint templates
+([#289](https://github.com/DeandreT/weft/issues/289),
+[#294](https://github.com/DeandreT/weft/pull/294),
+[#295](https://github.com/DeandreT/weft/pull/295)), and the hosted acceptance checks
+completed build provenance ([#287](https://github.com/DeandreT/weft/issues/287),
+[#288](https://github.com/DeandreT/weft/pull/288)). Azure resources are provisioned only
+from an operator-approved environment, and live Azure qualification of the endpoint is a
+separate gate from these local and template ones.
 
 Queue triggers, scheduled execution, additional preview formats, model providers,
 identity providers, and production mapping engines each get their own scoped
