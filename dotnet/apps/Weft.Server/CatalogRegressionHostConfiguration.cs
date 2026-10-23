@@ -3,6 +3,7 @@ using Weft.Api.Catalog;
 using Weft.Application;
 using Weft.Application.Regression;
 using Weft.MappingBackends;
+using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 
 namespace Weft.Server;
@@ -28,6 +29,7 @@ public static class CatalogRegressionHostConfiguration
         if (image.Length != 71 || !image.StartsWith("sha256:", StringComparison.Ordinal) || image[7..].Any(c => c is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))
             throw new ArgumentException("Regression APIs require the exact immutable worker image.");
         var session = environment("WEFT_CATALOG_AUTH_MODE") == "session";
+        image = FerruleRunnerSelection.ProfileIdentity(environment, session ? FerruleRunnerKind.InspectionWorker : FerruleRunnerKind.Docker);
         string Connection(string name) => session ? SessionHostResources.ReadConnection(environment, name + "_FILE") : Required(name);
         var caseReader = Connection("WEFT_REGRESSION_CASE_READER_CONNECTION_STRING");
         var caseWriter = Connection("WEFT_REGRESSION_CASE_WRITER_CONNECTION_STRING");

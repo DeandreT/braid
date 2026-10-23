@@ -219,7 +219,7 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
         }
     }
 
-    private sealed class Child : IAsyncDisposable
+    internal sealed class Child : IAsyncDisposable
     {
         private readonly Process process;
         private readonly string startTicks;
@@ -232,7 +232,8 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
             output = Drain(process.StandardOutput); error = Drain(process.StandardError);
         }
         internal bool HasExited => process.HasExited;
-        internal static Child Start(PostgresClaimAwareStorageIntegrationSupport test, string image)
+        internal static Child Start(PostgresClaimAwareStorageIntegrationSupport test, string image,
+            IReadOnlyDictionary<string, string>? runnerSettings = null)
         {
             var dll = Path.Combine(AppContext.BaseDirectory, "PreviewWorker", "Weft.Worker.dll");
             if (!File.Exists(dll)) throw new InvalidOperationException("The ordinary worker publication is required.");
@@ -267,6 +268,8 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
             start.Environment["WEFT_BUILD_REPORT_READER_CONNECTION_STRING"] = test.Case.ReportConnectionString;
             start.Environment["WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING"] = test.Case.RegressionConnectionString("weft_run_reader");
             start.Environment["WEFT_BUILD_CASE_READER_CONNECTION_STRING"] = test.Case.RegressionConnectionString("weft_case_reader");
+            if (runnerSettings is not null)
+                foreach (var (key, value) in runnerSettings) start.Environment[key] = value;
             return new(Process.Start(start) ?? throw new InvalidOperationException("The build worker did not start."));
         }
         private async Task Drain(StreamReader stream)

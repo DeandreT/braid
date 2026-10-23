@@ -37,10 +37,9 @@ if (settings.PreviewEnabled)
     builder.Services.AddWolverine(options => PreviewJobs.Configure(options, settings.WriterConnectionString!, PreviewJobRole.Worker));
 }
 builder.Services.AddWeftRegressionWorker(Environment.GetEnvironmentVariable, () =>
-    new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, settings.WorkerImage.ToLowerInvariant(),
+    new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, previewRunner.ProfileIdentity(settings),
         FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile));
-builder.Services.AddWeftBuildWorker(Environment.GetEnvironmentVariable, () =>
-    new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage, profile: DockerWorkerProfile.Build));
+builder.Services.AddWeftBuildWorkerWithRunner(Environment.GetEnvironmentVariable, () => previewRunner.CreateBuildRunner(settings));
 if (inspection is { } hosted)
     builder.Services.AddWeftInspectionWorker(hosted.Transport, hosted.Runner);
 await builder.Build().RunAsync();

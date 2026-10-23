@@ -16,9 +16,29 @@ public static class BuildWorkerRegistration
     public static IServiceCollection AddWeftBuildWorker(this IServiceCollection services,
         Func<string, string?> environment, Func<DockerInspectionWorkerOptions> options)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        return Register(services, environment, () =>
+        {
+            var configured = options();
+            if (configured is null || configured.Profile != DockerWorkerProfile.Build)
+                throw new ArgumentException("The build worker requires the fixed compiler profile.");
+            return () => new DockerInspectionWorkerRunner(configured);
+        });
+    }
+
+    /// <summary>The host supplies an explicitly configured compile-profile runner; disabled workers never create it.</summary>
+    public static IServiceCollection AddWeftBuildWorkerWithRunner(this IServiceCollection services,
+        Func<string, string?> environment, Func<IInspectionWorkerRunner> createRunner)
+    {
+        ArgumentNullException.ThrowIfNull(createRunner);
+        return Register(services, environment, () => createRunner);
+    }
+
+    private static IServiceCollection Register(IServiceCollection services,
+        Func<string, string?> environment, Func<Func<IInspectionWorkerRunner>> prepareRunner)
+    {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(environment);
-        ArgumentNullException.ThrowIfNull(options);
         var enabled = environment("WEFT_BUILD_WORKER_ENABLED") switch
         {
             null or "false" => false,
@@ -34,9 +54,7 @@ public static class BuildWorkerRegistration
         var reports = Required("WEFT_BUILD_REPORT_READER_CONNECTION_STRING");
         var runs = Required("WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING");
         var cases = Required("WEFT_BUILD_CASE_READER_CONNECTION_STRING");
-        var configured = options();
-        if (configured is null || configured.Profile != DockerWorkerProfile.Build)
-            throw new ArgumentException("The build worker requires the fixed compiler profile.");
+        var createRunner = prepareRunner();
 
         services.AddKeyedSingleton<PostgresBuildRunStore>(Key, (_, _) => new(dispatcher, BuildRunDatabaseProfile.Dispatcher));
         services.AddSingleton<IBuildRunStore>(provider => provider.GetRequiredKeyedService<PostgresBuildRunStore>(Key));
@@ -46,7 +64,7 @@ public static class BuildWorkerRegistration
         services.AddKeyedSingleton<PostgresRegressionRunStore>(Key, (_, _) => new(runs, writer: false));
         services.AddKeyedSingleton<PostgresRegressionCaseStore>(Key, (_, _) => new(cases, RegressionCaseDatabaseProfile.Reader));
         // Shared runner ownership and cleanup-failure latching apply across every claimed build.
-        services.AddKeyedSingleton<IInspectionWorkerRunner>(Key, (_, _) => new DockerInspectionWorkerRunner(configured));
+        services.AddKeyedSingleton<IInspectionWorkerRunner>(Key, (_, _) => createRunner());
         services.AddSingleton<IBuildRunExecution>(provider => new Execution(writer,
             provider.GetRequiredService<IBuildRunStore>(), provider.GetRequiredService<IPrivateObjectStore>(),
             new PostgresProjectReader(provider.GetRequiredKeyedService<PostgresDatabase>(Key)),

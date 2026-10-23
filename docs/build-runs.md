@@ -73,8 +73,21 @@ default and reads no build credentials or creates build services until
 | `WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING` | `weft_run_reader` |
 | `WEFT_BUILD_CASE_READER_CONNECTION_STRING` | `weft_case_reader` |
 
-The configured `WEFT_FERRULE_WORKER_IMAGE` must be the exact qualified combined
-image used by the approval's regression evidence. The build component shares one
+With the default Docker runner, `WEFT_FERRULE_WORKER_IMAGE` is the exact qualified
+combined image used by the approval's regression evidence. With
+`WEFT_FERRULE_RUNNER=service` or `azureContainerAppsSessions`, the build component
+uses that runner's compile profile instead and requires
+`WEFT_FERRULE_COMPILE_TOOLCHAIN=sha256:<digest>`. The service must explicitly enable
+compilation, and the configured pin must match its complete toolchain identity.
+No Docker socket is needed for these service-backed builds.
+
+The native worker setting stays the service's native identity. Every participating
+Server and Worker uses the same compile-toolchain pin: report provenance,
+regression evidence, build approvals and artifacts all use the combined native
+and toolchain identity. A toolchain pin with a Docker or inspection-worker
+selection is refused. A different pin is not adopted from the service's response.
+
+The build component shares one
 compiler-profile runner for process-wide concurrency and cleanup ownership, while
 constructing controls and private-object wrappers for each claimed actor.
 Successful process startup alone is not build readiness: qualify a real queued

@@ -30,7 +30,7 @@ internal sealed class BuildApiLiveHost : IAsyncDisposable
     { this.app = app; this.client = client; this.token = token; this.actor = actor; }
 
     internal static async Task<BuildApiLiveHost> StartAsync(PostgresClaimAwareStorageIntegrationSupport test, string image,
-        int reportLimit = RevisionReportPolicy.MaximumStoredObjectByteLimit)
+        int reportLimit = RevisionReportPolicy.MaximumStoredObjectByteLimit, IReadOnlyDictionary<string, string>? runnerSettings = null)
     {
         var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start();
         var port = ((IPEndPoint)reservation.LocalEndpoint).Port;
@@ -59,6 +59,8 @@ internal sealed class BuildApiLiveHost : IAsyncDisposable
             ["WEFT_BUILD_RUN_READER_CONNECTION_STRING"] = test.Case.RegressionConnectionString("weft_build_run_reader"),
             ["WEFT_BUILD_RUN_WRITER_CONNECTION_STRING"] = test.Case.RegressionConnectionString("weft_build_run_writer")
         };
+        if (runnerSettings is not null)
+            foreach (var (key, value) in runnerSettings) values[key] = value;
         CatalogHostConfiguration.Configure(builder, new(IPAddress.Loopback, port), values.GetValueOrDefault);
         var app = builder.Build();
         var lookup = app.Services.GetRequiredService<IServiceProviderIsService>();

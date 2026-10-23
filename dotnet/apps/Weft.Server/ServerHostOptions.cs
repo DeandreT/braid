@@ -124,6 +124,7 @@ internal sealed class ServerHostOptions
             {
                 var runner = FerruleRunnerSelection.Read(read, FerruleRunnerKind.InspectionWorker, FerruleRunnerKind.InspectionWorker,
                     FerruleRunnerKind.Service, FerruleRunnerKind.AzureContainerAppsSessions);
+                _ = FerruleRunnerSelection.ReadCompileToolchain(read, runner);
                 // Settings of a runner that is not selected are ambiguous, not ignored.
                 var worker = read("WEFT_INSPECTION_WORKER_URL") is not null || read("WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256") is not null;
                 if ((runner != FerruleRunnerKind.InspectionWorker && worker) ||

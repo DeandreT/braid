@@ -40,20 +40,23 @@ public static class InspectionWorkerHostConfiguration
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(clientCertificate);
         ConfigureConnector(services,
-            _ => new PinnedServiceConnector(new(service.Endpoint, service.ServiceCertificateSha256, clientCertificate)), service.BuildIdentity);
+            _ => new PinnedServiceConnector(new(service.Endpoint, service.ServiceCertificateSha256, clientCertificate)), service.BuildIdentity,
+            service.CompileToolchainIdentity);
     }
 
     /// <summary>
     /// Exact inspection frames sent to the Ferrule service through a connector, for example a platform sandbox. The
     /// container owns the connector and disposes it after the runner has stopped.
     /// </summary>
-    internal static void ConfigureConnector(IServiceCollection services, Func<IServiceProvider, IFerruleServiceConnector> connector, string buildIdentity)
+    internal static void ConfigureConnector(IServiceCollection services, Func<IServiceProvider, IFerruleServiceConnector> connector, string buildIdentity,
+        string? compileToolchainIdentity = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(connector);
         services.AddKeyedSingleton(nameof(IFerruleServiceConnector), (provider, _) => connector(provider));
         services.AddSingleton(provider => new FerruleServiceRunner(new(
-            provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)), FerruleServiceProtocol.InspectionProfile, buildIdentity)));
+            provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)), FerruleServiceProtocol.InspectionProfile,
+            buildIdentity, compileToolchainIdentity)));
         services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<FerruleServiceRunner>());
         services.AddSingleton<IHostedService>(provider =>
             new InspectionWorkerHostLifetime(provider.GetRequiredService<FerruleServiceRunner>().StopAsync));

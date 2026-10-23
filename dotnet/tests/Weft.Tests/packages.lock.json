@@ -1086,6 +1086,18 @@
           "Weft.Storage.FileSystem": "[1.0.0, )"
         }
       },
+      "weft.worker": {
+        "type": "Project",
+        "dependencies": {
+          "Weft.Application": "[1.0.0, )",
+          "Weft.Jobs": "[1.0.0, )",
+          "Weft.MappingBackends": "[1.0.0, )",
+          "Weft.MappingBackends.AzureSessions": "[1.0.0, )",
+          "Weft.Persistence.Postgres": "[1.0.0, )",
+          "Weft.Storage.FileSystem": "[1.0.0, )",
+          "Weft.Storage.Hosting": "[1.0.0, )"
+        }
+      },
       "weft.workertransport": {
         "type": "Project",
         "dependencies": {

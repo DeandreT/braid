@@ -5,6 +5,7 @@ using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Deployment;
 using Weft.MappingBackends;
+using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 using Weft.Storage.FileSystem;
 using Weft.Storage.Hosting;
@@ -32,6 +33,8 @@ public static class CatalogBuildHostConfiguration
         var image = environment("WEFT_FERRULE_WORKER_IMAGE");
         if (image is null || image.Length != 71 || !image.StartsWith("sha256:", StringComparison.Ordinal) || image[7..].Any(c => c is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))
             throw new ArgumentException("Build API requires the exact configured immutable image.");
+        image = FerruleRunnerSelection.ProfileIdentity(environment, environment("WEFT_CATALOG_AUTH_MODE") == "session"
+            ? FerruleRunnerKind.InspectionWorker : FerruleRunnerKind.Docker);
         PrivateStorageSettings storage;
         try { storage = PrivateStorageSettings.Read(environment); }
         catch (InvalidOperationException) { throw new ArgumentException("Build API requires its private report storage."); }

@@ -17,13 +17,14 @@ internal static class DevelopmentFerruleRunner
         ArgumentNullException.ThrowIfNull(read);
         var runner = FerruleRunnerSelection.Read(read, FerruleRunnerKind.Docker, FerruleRunnerKind.Docker, FerruleRunnerKind.Service,
             FerruleRunnerKind.AzureContainerAppsSessions);
+        _ = FerruleRunnerSelection.ReadCompileToolchain(read, runner);
         if ((runner != FerruleRunnerKind.Service && FerruleServiceEndpoint.Configured(read)) ||
             (runner != FerruleRunnerKind.AzureContainerAppsSessions && AzureSessionsRunnerSettings.Configured(read)))
             throw new InvalidOperationException("The Ferrule runner selection is ambiguous.");
         if (runner == FerruleRunnerKind.AzureContainerAppsSessions)
         {
             var sessions = AzureSessionsRunnerSettings.Read(read);
-            InspectionWorkerHostConfiguration.ConfigureConnector(services, _ => sessions.CreateConnector(), sessions.BuildIdentity);
+            InspectionWorkerHostConfiguration.ConfigureConnector(services, _ => sessions.CreateConnector(), sessions.BuildIdentity, sessions.CompileToolchainIdentity);
             return;
         }
 

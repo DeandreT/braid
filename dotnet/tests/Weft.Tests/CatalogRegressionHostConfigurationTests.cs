@@ -42,6 +42,7 @@ public sealed class CatalogRegressionHostConfigurationTests
             "WEFT_REGRESSIONS_ENABLED" => "true",
             "WEFT_FERRULE_WORKER_IMAGE" => "sha256:" + new string('a', 64),
             "WEFT_CATALOG_AUTH_MODE" => "development",
+            "WEFT_FERRULE_RUNNER" or "WEFT_FERRULE_COMPILE_TOOLCHAIN" => null,
             _ => "private-synthetic"
         }, true);
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRegressionRunReader));

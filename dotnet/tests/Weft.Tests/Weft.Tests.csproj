@@ -45,7 +45,7 @@
     <ProjectReference Include="../../tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.WorkerShutdownProbe/Weft.WorkerShutdownProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
-    <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" />
     <ProjectReference Include="../../apps/Weft.FerruleService/Weft.FerruleService.csproj" />
     <ProjectReference Include="../../src/Weft.WorkerTransport/Weft.WorkerTransport.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends.AzureSessions/Weft.MappingBackends.AzureSessions.csproj" />

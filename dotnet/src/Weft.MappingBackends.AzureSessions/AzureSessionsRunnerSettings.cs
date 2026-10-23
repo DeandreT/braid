@@ -8,8 +8,10 @@ namespace Weft.MappingBackends.AzureSessions;
 /// (<c>WEFT_FERRULE_WORKER_IMAGE</c>) and an optional user-assigned managed identity. No secret is configured; the host's
 /// managed identity needs the Azure ContainerApps Session Executor role on the pool.
 /// </summary>
-public sealed record AzureSessionsRunnerSettings(Uri PoolManagementEndpoint, string BuildIdentity, Guid? ManagedIdentityClientId)
+public sealed record AzureSessionsRunnerSettings(Uri PoolManagementEndpoint, string BuildIdentity, Guid? ManagedIdentityClientId,
+    string? CompileToolchainIdentity = null)
 {
+    public string ProfileIdentity => CompileToolchainIdentity is { } toolchain ? CompileWorkerIdentity.Combine(BuildIdentity, toolchain) : BuildIdentity;
     public const string PoolEndpoint = "WEFT_FERRULE_SESSIONS_POOL_ENDPOINT";
     public const string ClientId = "WEFT_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID";
     public const string Identity = "WEFT_FERRULE_WORKER_IMAGE";
@@ -27,7 +29,8 @@ public sealed record AzureSessionsRunnerSettings(Uri PoolManagementEndpoint, str
                 var text when Guid.TryParseExact(text, "D", out var id) && id != Guid.Empty && text == id.ToString("D") => id,
                 _ => throw Failure()
             };
-            return new(endpoint, InspectionTransport.RequireImage(Required(Identity)), clientId);
+            return new(endpoint, InspectionTransport.RequireImage(Required(Identity)), clientId,
+                FerruleRunnerSelection.ReadCompileToolchain(read, FerruleRunnerKind.AzureContainerAppsSessions));
         }
         catch (Exception error) when (error is ArgumentException or UriFormatException) { throw Failure(); }
     }

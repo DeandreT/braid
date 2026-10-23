@@ -60,6 +60,12 @@ label, length and SHA-256 in ordinal order). The client checks the configured pi
 before sending bytes, the service checks it before admission, and the client
 checks it again on the response. An unknown or changed toolchain is not adopted.
 
+Configure `WEFT_FERRULE_COMPILE_TOOLCHAIN` with the admitted toolchain digest on
+the Server and ordinary Worker when using service-backed builds. It is required
+for the service/Sessions build runner and optional for inspection-only or
+preview-only configurations. It is invalid with Docker or the inspection-worker
+transport; `WEFT_FERRULE_WORKER_IMAGE` retains its native identity.
+
 Compilation provenance uses `weft.compiler-identity.v1`, a digest binding the native
 and toolchain identities. Build-related inspection and preview clients use the
 same pin so their report and regression evidence has that same combined identity.

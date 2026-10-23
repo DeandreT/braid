@@ -20,6 +20,28 @@ public enum FerruleRunnerKind
 public static class FerruleRunnerSelection
 {
     public const string Setting = "WEFT_FERRULE_RUNNER";
+    public const string CompileToolchainSetting = "WEFT_FERRULE_COMPILE_TOOLCHAIN";
+
+    public static string? ReadCompileToolchain(Func<string, string?> read, FerruleRunnerKind kind, bool required = false)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        var value = read(CompileToolchainSetting);
+        if (value is null)
+        {
+            if (required && kind is FerruleRunnerKind.Service or FerruleRunnerKind.AzureContainerAppsSessions) throw Failure();
+            return null;
+        }
+        if (kind is not (FerruleRunnerKind.Service or FerruleRunnerKind.AzureContainerAppsSessions)) throw Failure();
+        return InspectionTransport.RequireImage(value);
+    }
+
+    public static string ProfileIdentity(Func<string, string?> read, FerruleRunnerKind defaultKind)
+    {
+        var kind = Read(read, defaultKind, FerruleRunnerKind.Docker, FerruleRunnerKind.InspectionWorker,
+            FerruleRunnerKind.Service, FerruleRunnerKind.AzureContainerAppsSessions);
+        var native = InspectionTransport.RequireImage(read("WEFT_FERRULE_WORKER_IMAGE") ?? throw Failure());
+        return ReadCompileToolchain(read, kind) is { } toolchain ? CompileWorkerIdentity.Combine(native, toolchain) : native;
+    }
 
     public static FerruleRunnerKind Read(Func<string, string?> read, FerruleRunnerKind defaultKind, params FerruleRunnerKind[] admitted)
     {
@@ -45,8 +67,9 @@ public static class FerruleRunnerSelection
 /// certificate's SHA-256 pin and the expected worker build identity (<c>WEFT_FERRULE_WORKER_IMAGE</c>). The client
 /// certificate is admitted separately with each host's protected deliveries.
 /// </summary>
-public sealed record FerruleServiceEndpoint(Uri Endpoint, string ServiceCertificateSha256, string BuildIdentity)
+public sealed record FerruleServiceEndpoint(Uri Endpoint, string ServiceCertificateSha256, string BuildIdentity, string? CompileToolchainIdentity = null)
 {
+    public string ProfileIdentity => CompileToolchainIdentity is { } toolchain ? CompileWorkerIdentity.Combine(BuildIdentity, toolchain) : BuildIdentity;
     public const string Url = "WEFT_FERRULE_SERVICE_URL";
     public const string CertificatePin = "WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256";
     public const string Identity = "WEFT_FERRULE_WORKER_IMAGE";
@@ -62,7 +85,8 @@ public sealed record FerruleServiceEndpoint(Uri Endpoint, string ServiceCertific
             var endpoint = RemoteInspectionWorkerOptions.RequireEndpoint(new Uri(Required(Url), UriKind.Absolute));
             var pin = Required(CertificatePin);
             if (!InspectionTransport.IsCertificateDigest(pin)) throw Failure();
-            return new(endpoint, pin, InspectionTransport.RequireImage(Required(Identity)));
+            return new(endpoint, pin, InspectionTransport.RequireImage(Required(Identity)),
+                FerruleRunnerSelection.ReadCompileToolchain(read, FerruleRunnerKind.Service));
         }
         catch (Exception error) when (error is ArgumentException or UriFormatException) { throw Failure(); }
     }
