@@ -340,7 +340,12 @@ The [hosted acceptance](docs/hosted-acceptance.md) run
 end to end with the Ferrule service and Blob storage: upload, reports, chat with verified
 citations, preview, comparison and regression runs, through server restart and service
 replica scaling. Its identity provider, Blob endpoint and model are local stand-ins;
-an operator-approved Azure environment and Entra registration replace them.
+an operator-approved Azure environment and Entra registration replace them. The
+[Azure templates](docs/azure-deployment.md) run the same feature set: a `Weft.Worker` app for
+previews, regression runs and builds, native work and chat through the Ferrule service, and
+keyless Azure OpenAI chat through the application's managed identity
+([#302](https://github.com/DeandreT/weft/issues/302),
+[#303](https://github.com/DeandreT/weft/pull/303)).
 
 The first hosted release is admitted only when P0-P8 are implemented and
 qualified. Local-only viewer prototypes can be demonstrated earlier. Entra or
