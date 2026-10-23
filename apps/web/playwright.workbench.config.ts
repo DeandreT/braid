@@ -9,6 +9,7 @@ export default defineConfig({
     "workbench.spec.ts",
     "workbench-model.spec.ts",
     "hosted-mutation.spec.ts",
+    "hosted-read.spec.ts",
     "regression.spec.ts",
     "builds.spec.ts",
     "revision-preview.spec.ts",

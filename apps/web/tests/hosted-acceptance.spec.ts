@@ -11,6 +11,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { confirmAction } from "./confirmation.fixture";
 import { confirmHostedMutation } from "./hosted-mutation.fixture";
+import { readHostedState } from "./hosted-read.fixture";
 
 /**
  * P8 local acceptance on the packaged Session stack owned by deploy/compose/acceptance-test.sh:
@@ -207,6 +208,33 @@ const projectReady = (target: Page) =>
   target.getByRole("link", { name: "Upload mapping" });
 const revisionReady = (target: Page) =>
   target.getByRole("tablist", { name: "Version workflows" });
+
+/** Restore admission only through the visible read-recovery controls. */
+async function recoverReadAdmission(target: Page): Promise<boolean> {
+  const workspace = target
+    .getByRole("alert")
+    .filter({ hasText: "Workspace access unavailable" })
+    .first();
+  const catalog = target
+    .getByRole("alert")
+    .filter({ hasText: "Catalog unavailable" })
+    .first();
+  const changed = target
+    .getByRole("alert")
+    .filter({ hasText: "Your access changed" })
+    .first();
+  if (await workspace.isVisible())
+    await workspace.getByRole("button", { name: "Retry", exact: true }).click();
+  else if (await catalog.isVisible())
+    await catalog.getByRole("button", { name: "Retry", exact: true }).click();
+  else if (await changed.isVisible())
+    await target
+      .getByRole("button", { name: "Refresh catalog", exact: true })
+      .click();
+  else return false;
+  await expect(revisionReady(target)).toBeVisible();
+  return true;
+}
 const appendReady = (target: Page) =>
   target.getByRole("region", { name: "Reviewed head for this append" });
 const comparisonReady = (target: Page) =>
@@ -849,9 +877,44 @@ test("saves a regression case with an authored baseline and runs it", async () =
     "express",
     "region",
   ]);
-  await expect(
-    region.getByRole("heading", { name: "SO-1 west express · Version 1" }),
-  ).toBeVisible();
+  const savedCaseId = /\/regression-cases\/([a-f0-9-]{36})\/versions\/1$/.exec(
+    new URL(response.request().url()).pathname,
+  )![1];
+  let reopen = false;
+  await readHostedState(
+    page,
+    async () => {
+      if (reopen) {
+        await workflow(page, "Tests").click();
+        const load = region.getByRole("button", {
+          name: "Load regression cases",
+          exact: true,
+        });
+        if (await load.isVisible()) await load.click();
+        else
+          await region
+            .getByRole("button", { name: "Refresh test access", exact: true })
+            .click();
+        await region
+          .getByRole("button", { name: "Open SO-1 west express", exact: true })
+          .click();
+      }
+      await expect(
+        region.getByRole("heading", { name: "SO-1 west express · Version 1" }),
+      ).toBeVisible();
+      await expect(
+        region.getByText(savedCaseId, { exact: true }),
+      ).toBeVisible();
+    },
+    {
+      recover: async () => {
+        if (!(await recoverReadAdmission(page))) return false;
+        reopen = true;
+        return true;
+      },
+      onRecovery: () => recoveries.push("saved regression read"),
+    },
+  );
   caseRuns = [await runCase(page)];
 });
 
@@ -1137,26 +1200,54 @@ test("recovers retained work across a server restart and Ferrule service scaling
     await expect(
       page.getByRole("table", { name: "Mapping field connections" }),
     ).toContainText('["orderId"]');
-    await page.getByRole("tab", { name: "Ask Weft", exact: true }).click();
     const conversations = chat.getByRole("combobox", {
       name: "Saved conversations",
     });
-    await expect(
-      conversations.locator(`option[value="${conversationId}"]`),
-    ).toHaveCount(1);
-    await conversations.selectOption(conversationId);
     const interrupted = chat
       .getByRole("region", { name: "Selected answer" })
       .getByRole("status");
-    await chat
-      .getByRole("list", { name: "Questions" })
-      .getByRole("button")
-      .last()
-      .click();
     // The turn the stopped replica was running settles once, without another provider call.
-    await expect(interrupted).toHaveText(
-      /^Answer (interrupted|failed|cancelled)\b/,
-      { timeout: 120_000 },
+    let reopen = false;
+    await readHostedState(
+      page,
+      async () => {
+        await page.getByRole("tab", { name: "Ask Weft", exact: true }).click();
+        if (reopen) {
+          await chat
+            .getByRole("button", { name: "Refresh chat", exact: true })
+            .click();
+        }
+        await expect(
+          conversations.locator(`option[value="${conversationId}"]`),
+        ).toHaveCount(1);
+        await conversations.selectOption(conversationId);
+        await Promise.all([
+          page.waitForRequest(
+            (request) =>
+              request.method() === "GET" &&
+              new URL(request.url()).pathname.endsWith(
+                `/conversations/${conversationId}/turns/${turnId}/events`,
+              ),
+          ),
+          chat
+            .getByRole("list", { name: "Questions" })
+            .getByRole("button")
+            .last()
+            .click(),
+        ]);
+        await expect(interrupted).toHaveText(
+          /^Answer (interrupted|failed|cancelled)\b/,
+          { timeout: 120_000 },
+        );
+      },
+      {
+        recover: async () => {
+          if (!(await recoverReadAdmission(page))) return false;
+          reopen = true;
+          return true;
+        },
+        onRecovery: () => recoveries.push("retained chat read"),
+      },
     );
     expect(
       sql(`select phase <> 1 from weft.chat_turns where turn_id = '${turnId}'`),
