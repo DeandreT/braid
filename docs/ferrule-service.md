@@ -34,18 +34,18 @@ SHA-256 of the exact `/ferrule-host` it runs. The service computes it at startup
 and the image records the expected digest in its `io.weft.ferrule.worker-sha256`
 label. Clients configure that identity and refuse a service reporting another.
 
-## API: `weft.ferrule-service.v1`
-
-An independently enabled [compiled execution profile](compiled-service-runtime.md)
-serves verified release invocations in read-only children and uses a separate
-runtime identity from compilation.
-
 The image's `identity` command reports its measured native, toolchain and combined
 build identities as `weft.compiler-image-identity.v1`, after proving the compiler
 sandbox. Run it against the trusted image with a private writable `/tmp`; it needs
 no listener, caller certificate or network. This supports explicit operator
 pinning before starting a hosted build stack. It does not adopt an unknown
 remote replica's capabilities or change a saved build's identity.
+
+## API: `weft.ferrule-service.v1`
+
+An independently enabled [compiled execution profile](compiled-service-runtime.md)
+serves verified release invocations in read-only children and uses a separate
+runtime identity from compilation.
 
 The protocol extends `weft.inspection-transport.v1` (see
 [Ferrule worker](ferrule-worker.md#hosted-inspection-transport)) for a horizontally
@@ -243,7 +243,7 @@ Hosts select the runner explicitly with `WEFT_FERRULE_RUNNER`:
 | --- | --- |
 | Development host (`DOTNET_ENVIRONMENT=Development`) | `docker`, `service`, `azureContainerAppsSessions` |
 | Session host (native upload and report derivation) | `worker` (the hosted inspection transport), `service`, `azureContainerAppsSessions` |
-| `Weft.Worker` previews (and the regressions that run them) | `docker`, `service`, `azureContainerAppsSessions` |
+| `Weft.Worker` previews, the regressions that run them, and builds | `docker`, `service`, `azureContainerAppsSessions` |
 
 With `service`, the host requires:
 
@@ -257,8 +257,9 @@ With `service`, the host requires:
 Settings for a runner that is not selected are refused as ambiguous: for example, service
 scalars beside the default hosted worker, or `WEFT_INSPECTION_WORKER_*` beside
 `service` on the Session host. Startup does not contact the service; an unreachable
-service fails operations as a retryable unavailable backend. `Weft.Worker`'s own
-inspection transport and build execution keep using Docker.
+service fails operations as a retryable unavailable backend. `Weft.Worker`'s builds
+use the selected runner's compile profile (see [build runs](build-runs.md)); its own
+inspection transport keeps using Docker.
 
 ## Isolation adapters
 
