@@ -261,12 +261,13 @@ previews, regression runs and recovery, in the same shape.
 ## Hosted boundaries
 
 The Session host does not register a Docker worker runner. Native ingestion and
-report derivation run through the inspection service of a separate `Weft.Worker`
-over the [hosted inspection transport](ferrule-worker.md#hosted-inspection-transport);
-examples remain a Development feature. Chat
-and preview submission are composed by the Session host with `_FILE` credential
-deliveries (see [feature composition](session-host.md#feature-composition)); preview
-execution additionally needs the separate `Weft.Worker` host, which
-`compose.features.yml` runs locally.
-Private storage and the session key ring support one API instance on a persistent
-local filesystem. [Azure deployment](azure-deployment.md) describes the hosted environment.
+report derivation run through the [Ferrule service](ferrule-service.md), or through the
+inspection service of a separate `Weft.Worker` over the
+[hosted inspection transport](ferrule-worker.md#hosted-inspection-transport); examples
+remain a Development feature. Chat, preview, regression and build submission are composed
+by the Session host with `_FILE` credential deliveries (see
+[feature composition](session-host.md#feature-composition)). Previews, regression runs and
+builds execute in the separate `Weft.Worker` `runs` host through the Ferrule service, which
+`compose.features.yml` runs locally, and the [mapping endpoint](mapping-endpoint.md) is its
+own host. The session key ring supports one API instance on a persistent local filesystem;
+private objects use that filesystem or [Azure Blob storage](private-storage-blob.md). [Azure deployment](azure-deployment.md) describes the hosted environment.
