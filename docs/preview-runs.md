@@ -75,7 +75,8 @@ kill is claimed again after its lease expires. P7 runs a single worker host;
 several hosts need Wolverine's balanced durability mode.
 
 The worker reads its configuration from the environment:
-`WEFT_PREVIEW_WRITER_CONNECTION_STRING`,
+`WEFT_PREVIEW_WRITER_CONNECTION_STRING` (or `WEFT_PREVIEW_WRITER_CONNECTION_STRING_FILE`,
+a [protected private file](runtime-packaging.md#private-delivery)),
 the [private storage selection](private-storage-blob.md#host-selection)
 (`WEFT_PRIVATE_STORAGE_ROOT` for an existing v2 root, or the Azure Blob settings;
 opened read-only),

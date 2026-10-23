@@ -73,6 +73,9 @@ default and reads no build credentials or creates build services until
 | `WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING` | `weft_run_reader` |
 | `WEFT_BUILD_CASE_READER_CONNECTION_STRING` | `weft_case_reader` |
 
+Each can instead be supplied as `<NAME>_FILE`, a
+[protected private file](runtime-packaging.md#private-delivery), but not both.
+
 With the default Docker runner, `WEFT_FERRULE_WORKER_IMAGE` is the exact qualified
 combined image used by the approval's regression evidence. With
 `WEFT_FERRULE_RUNNER=service` or `azureContainerAppsSessions`, the build component

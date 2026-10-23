@@ -101,6 +101,9 @@ provide four explicit restricted connection strings:
 - `WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING`: `weft_report_reader`, for
   trusted native-object references.
 
+Each can instead be supplied as `<NAME>_FILE`, a
+[protected private file](runtime-packaging.md#private-delivery), but not both.
+
 The worker reuses its configured private storage and serialized preview
 backend. Its exact runtime selection comes from that backend's image, engine
 and adapter identities, not the submitted case. Disabled mode reads none of

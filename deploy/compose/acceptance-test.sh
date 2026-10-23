@@ -170,16 +170,20 @@ worker_digest=$(docker image inspect --format '{{index .Config.Labels "io.weft.f
 [[ $worker_digest =~ ^[0-9a-f]{64}$ ]] || fail 'service image identity label'
 WEFT_FERRULE_SERVICE_IDENTITY=sha256:$worker_digest
 # Measure the trusted local image, including its installed compiler implementation. This is
-# not an automatic adoption of an unknown remote replica's advertised identity.
+# not an automatic adoption of an unknown remote replica's advertised identity. The browser run
+# checks the build's provenance against the combined identity recorded here.
 docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
   --label "com.docker.compose.project=$project" --tmpfs /tmp:size=256m,mode=1777 \
   --memory 3g --pids-limit 256 "$WEFT_FERRULE_SERVICE_IMAGE" identity >"$work/compiler-identity.json"
 WEFT_FERRULE_COMPILE_TOOLCHAIN=$(node -e '
   const fs = require("node:fs");
   const value = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-  if (value.schema !== "weft.compiler-image-identity.v1" || !/^sha256:[a-f0-9]{64}$/.test(value.toolchain)) process.exit(1);
+  const pin = /^sha256:[a-f0-9]{64}$/;
+  if (value.schema !== "weft.compiler-image-identity.v1" || Object.keys(value).length !== 4 ||
+    value.native !== process.argv[2] || !pin.test(value.toolchain) || !pin.test(value.build) ||
+    value.build === value.native) process.exit(1);
   process.stdout.write(value.toolchain);
-' "$work/compiler-identity.json") || fail 'service compiler identity'
+' "$work/compiler-identity.json" "$WEFT_FERRULE_SERVICE_IDENTITY") || fail 'service compiler identity'
 export WEFT_FERRULE_COMPILE_TOOLCHAIN
 WEFT_FERRULE_SERVICE_PEM=$(new_pem weft-ferrule-service)
 WEFT_FERRULE_SERVICE_CLIENT_PEM=$(new_pem weft-ferrule-service-client)
@@ -264,8 +268,9 @@ echo 'Running the browser flows'
 read -r -a wrapper <<<"${WEFT_ACCEPTANCE_BROWSER_WRAPPER:-}"
 (cd "$repository/apps/web" && "${wrapper[@]}" npx playwright test --config playwright.hosted-acceptance.config.ts) ||
   fail 'browser flows'
-# Each use of the application's own recovery controls on a slow host, and the chat attempts
-# the local model needed for a turn with a tool call and verified citations.
+# Each use of the application's own recovery controls on a slow host, the chat attempts the
+# local model needed for a turn with a tool call and verified citations, and the attempt that
+# completed the build.
 echo "ok - browser flows passed: $(cat "$work/acceptance-facts.json")"
 
 # The run's own evidence: sign-in went through the issuer without refusals, every service replica

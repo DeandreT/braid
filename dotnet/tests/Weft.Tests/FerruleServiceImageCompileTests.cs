@@ -19,6 +19,16 @@ public sealed class ServiceImageCompileFactAttribute : FactAttribute
     }
 }
 
+/// <summary>Runs the packaged service image itself.</summary>
+public sealed class ServiceImageFactAttribute : FactAttribute
+{
+    public ServiceImageFactAttribute()
+    {
+        if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEFT_FERRULE_SERVICE_IMAGE")))
+            Skip = "Set WEFT_FERRULE_SERVICE_IMAGE to a built service image.";
+    }
+}
+
 /// <summary>
 /// The service image exactly as a platform runs it (read-only root, no capabilities, no-new-privileges, non-root, a
 /// memory-backed <c>/tmp</c>) in platform-sandbox mode with compilation enabled. Its startup proves the compile
@@ -35,21 +45,10 @@ public sealed class FerruleServiceImageCompileTests
         var name = "weft-compile-equivalence-" + Guid.NewGuid().ToString("N")[..12];
         try
         {
-            var identity = "sha256:" + await DockerAsync("image", "inspect", "--format", "{{index .Config.Labels \"io.weft.ferrule.worker-sha256\"}}", image);
-            await DockerAsync("run", "--detach", "--name", name, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
-                "--user", "65532:65532", "--tmpfs", "/tmp:size=1g,mode=1777", "--publish", "127.0.0.1::8080",
-                "--env", "WEFT_FERRULE_SERVICE_AUTHENTICATION=platformSandbox", "--env", "WEFT_FERRULE_SERVICE_LISTEN_ADDR=0.0.0.0:8080",
-                "--env", "WEFT_FERRULE_SERVICE_CONCURRENCY=1", "--env", "WEFT_FERRULE_SERVICE_QUEUE=0",
-                "--env", "WEFT_FERRULE_SERVICE_COMPILE_ENABLED=true", image);
-            var port = int.Parse((await DockerAsync("port", name, "8080/tcp")).Split('\n')[0].Split(':')[^1], CultureInfo.InvariantCulture);
-            var endpoint = new Uri("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture));
-            await WaitForReadinessAsync(endpoint, name);
-
+            var identity = await NativeIdentityAsync(image);
+            var endpoint = await StartCompileReplicaAsync(image, name);
             using var metadata = new HttpClient { BaseAddress = endpoint };
-            using var capabilities = JsonDocument.Parse(await metadata.GetStringAsync(FerruleServiceProtocol.CapabilitiesPath));
-            var toolchain = capabilities.RootElement.GetProperty("profiles").EnumerateArray()
-                .Single(profile => profile.GetProperty("name").GetString() == FerruleServiceProtocol.CompileProfile)
-                .GetProperty("toolchain").GetProperty("identity").GetString()!;
+            var toolchain = await AdvertisedToolchainAsync(metadata);
             await using var service = new FerruleServiceRunner(new(new LoopbackConnector(endpoint), FerruleServiceProtocol.CompileProfile, identity, toolchain));
             var compiled = 0;
             foreach (var fixture in Fixtures())
@@ -74,6 +73,68 @@ public sealed class FerruleServiceImageCompileTests
         {
             await DockerAsync("rm", "--force", name).ContinueWith(_ => { }, TaskScheduler.Default);
         }
+    }
+
+    /// <summary>
+    /// The image's <c>identity</c> command, run as the acceptance harness and an operator run it before starting a
+    /// stack, measures the same toolchain that a compile-enabled replica of that image advertises and admits.
+    /// </summary>
+    [ServiceImageFact]
+    public async Task TheIdentityCommandMeasuresTheToolchainAReplicaOfTheSameImageAdvertises()
+    {
+        var image = Environment.GetEnvironmentVariable("WEFT_FERRULE_SERVICE_IMAGE")!;
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var name = "weft-compile-replica-" + suffix;
+        var measurement = "weft-compile-identity-" + suffix;
+        try
+        {
+            var native = await NativeIdentityAsync(image);
+            using var measured = JsonDocument.Parse(await DockerAsync("run", "--rm", "--name", measurement, "--network", "none", "--read-only",
+                "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", "--tmpfs", "/tmp:size=256m,mode=1777",
+                "--memory", "3g", "--pids-limit", "256", image, "identity"));
+            var endpoint = await StartCompileReplicaAsync(image, name);
+            using var metadata = new HttpClient { BaseAddress = endpoint };
+            using var ready = await metadata.GetAsync(FerruleServiceProtocol.ReadyPath);
+            Assert.Equal(HttpStatusCode.NoContent, ready.StatusCode);
+            var advertised = Assert.Single(ready.Headers.GetValues(FerruleServiceProtocol.CompileToolchainHeader));
+            Assert.Equal(native, Assert.Single(ready.Headers.GetValues(InspectionTransport.ImageHeader)));
+            Assert.Equal(advertised, await AdvertisedToolchainAsync(metadata));
+
+            Assert.Equal(4, measured.RootElement.EnumerateObject().Count());
+            Assert.Equal("weft.compiler-image-identity.v1", measured.RootElement.GetProperty("schema").GetString());
+            Assert.Equal(native, measured.RootElement.GetProperty("native").GetString());
+            Assert.Equal(advertised, measured.RootElement.GetProperty("toolchain").GetString());
+            Assert.Equal(CompileWorkerIdentity.Combine(native, advertised), measured.RootElement.GetProperty("build").GetString());
+        }
+        finally
+        {
+            await DockerAsync("rm", "--force", name, measurement).ContinueWith(_ => { }, TaskScheduler.Default);
+        }
+    }
+
+    private static async Task<string> NativeIdentityAsync(string image) =>
+        "sha256:" + await DockerAsync("image", "inspect", "--format", "{{index .Config.Labels \"io.weft.ferrule.worker-sha256\"}}", image);
+
+    /// <summary>One compile-enabled replica in platform-sandbox mode, published on a loopback port once ready.</summary>
+    private static async Task<Uri> StartCompileReplicaAsync(string image, string name)
+    {
+        await DockerAsync("run", "--detach", "--name", name, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+            "--user", "65532:65532", "--tmpfs", "/tmp:size=1g,mode=1777", "--publish", "127.0.0.1::8080",
+            "--env", "WEFT_FERRULE_SERVICE_AUTHENTICATION=platformSandbox", "--env", "WEFT_FERRULE_SERVICE_LISTEN_ADDR=0.0.0.0:8080",
+            "--env", "WEFT_FERRULE_SERVICE_CONCURRENCY=1", "--env", "WEFT_FERRULE_SERVICE_QUEUE=0",
+            "--env", "WEFT_FERRULE_SERVICE_COMPILE_ENABLED=true", image);
+        var port = int.Parse((await DockerAsync("port", name, "8080/tcp")).Split('\n')[0].Split(':')[^1], CultureInfo.InvariantCulture);
+        var endpoint = new Uri("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture));
+        await WaitForReadinessAsync(endpoint, name);
+        return endpoint;
+    }
+
+    private static async Task<string> AdvertisedToolchainAsync(HttpClient metadata)
+    {
+        using var capabilities = JsonDocument.Parse(await metadata.GetStringAsync(FerruleServiceProtocol.CapabilitiesPath));
+        return capabilities.RootElement.GetProperty("profiles").EnumerateArray()
+            .Single(profile => profile.GetProperty("name").GetString() == FerruleServiceProtocol.CompileProfile)
+            .GetProperty("toolchain").GetProperty("identity").GetString()!;
     }
 
     private static async Task WaitForReadinessAsync(Uri endpoint, string name)

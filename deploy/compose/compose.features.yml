@@ -1,8 +1,9 @@
 # Session features beyond catalog, upload and reports: chat, previews, regression cases and runs,
 # and builds, each through its own login delivered as a protected private file. The separate
-# `runs` Weft.Worker executes previews and regression runs through the Ferrule service; like the
-# service override, nothing here needs the Docker socket. Builds run through the service's
-# explicitly enabled compiler profile with the same toolchain pin as their saved evidence.
+# `runs` Weft.Worker executes previews, regression runs and approved builds through the Ferrule
+# service with its own logins, also delivered as private files; like the service override,
+# nothing here needs the Docker socket. Builds run through the service's explicitly enabled
+# compiler profile with the same toolchain pin as their saved evidence.
 # See docs/runtime-packaging.md.
 # Use with: docker compose -f compose.yml -f compose.ferrule-service.yml -f compose.features.yml
 services:
@@ -48,8 +49,9 @@ services:
       WEFT_BUILD_RUN_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/build-run-writer
       WEFT_DELIVER_FILE_BUILD_RUN_WRITER: Host=postgres;Database=weft;Username=weft_build_run_writer;Password=${WEFT_LOCAL_BUILD_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
 
-  # Previews and the regression runs that execute them, through the Ferrule service with this
-  # worker's own pinned client certificate. No Docker socket, egress or published port.
+  # Previews, the regression runs that execute them and approved builds, through the Ferrule
+  # service with this worker's own pinned client certificate. No Docker socket, egress or
+  # published port.
   runs:
     image: ${WEFT_WORKER_IMAGE:-weft-worker:local}
     restart: unless-stopped
@@ -61,19 +63,30 @@ services:
       - /run/weft/secrets:uid=1654,gid=1654,mode=0700,size=1m
     environment:
       WEFT_PREVIEW_WORKER_ENABLED: "true"
-      WEFT_PREVIEW_WRITER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_preview_writer;Password=${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_PREVIEW_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/preview-writer
+      WEFT_DELIVER_FILE_PREVIEW_WRITER: Host=postgres;Database=weft;Username=weft_preview_writer;Password=${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_REGRESSION_WORKER_ENABLED: "true"
-      WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_run_writer;Password=${WEFT_LOCAL_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_CASE_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_ACCESS_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/run-writer
+      WEFT_DELIVER_FILE_RUN_WRITER: Host=postgres;Database=weft;Username=weft_run_writer;Password=${WEFT_LOCAL_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_REGRESSION_CASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/case-reader
+      WEFT_DELIVER_FILE_CASE_READER: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_REGRESSION_ACCESS_CONNECTION_STRING_FILE: /run/weft/secrets/regression-access
+      WEFT_DELIVER_FILE_REGRESSION_ACCESS: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING_FILE: /run/weft/secrets/regression-report
+      WEFT_DELIVER_FILE_REGRESSION_REPORT: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_BUILD_WORKER_ENABLED: "true"
-      WEFT_BUILD_DISPATCHER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_build_dispatcher;Password=${WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_WRITER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_build_writer;Password=${WEFT_LOCAL_BUILD_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_ACCESS_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_REPORT_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
-      WEFT_BUILD_CASE_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_DISPATCHER_CONNECTION_STRING_FILE: /run/weft/secrets/build-dispatcher
+      WEFT_DELIVER_FILE_BUILD_DISPATCHER: Host=postgres;Database=weft;Username=weft_build_dispatcher;Password=${WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/build-writer
+      WEFT_DELIVER_FILE_BUILD_WRITER: Host=postgres;Database=weft;Username=weft_build_writer;Password=${WEFT_LOCAL_BUILD_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_ACCESS_CONNECTION_STRING_FILE: /run/weft/secrets/build-access
+      WEFT_DELIVER_FILE_BUILD_ACCESS: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_REPORT_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-report
+      WEFT_DELIVER_FILE_BUILD_REPORT: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-evidence
+      WEFT_DELIVER_FILE_BUILD_EVIDENCE: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_CASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/build-case-reader
+      WEFT_DELIVER_FILE_BUILD_CASE_READER: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_PRIVATE_STORAGE_ROOT: /var/lib/weft/storage/root
       WEFT_FERRULE_RUNNER: service
       WEFT_FERRULE_COMPILE_TOOLCHAIN: ${WEFT_FERRULE_COMPILE_TOOLCHAIN:?Set the verified service toolchain pin}

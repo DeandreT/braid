@@ -10,9 +10,11 @@ using Weft.Storage.Hosting;
 using Weft.Worker;
 using Wolverine;
 
-var settings = PreviewWorkerSettings.Read(Environment.GetEnvironmentVariable);
-var inspection = InspectionWorkerSettings.Read(Environment.GetEnvironmentVariable, settings.WorkerImage, settings.DockerExecutable);
-var previewRunner = PreviewRunnerSettings.Read(Environment.GetEnvironmentVariable, settings);
+// Database credentials may arrive as protected private files; every other setting is read unchanged.
+var read = WorkerCredentialSettings.Resolve(Environment.GetEnvironmentVariable);
+var settings = PreviewWorkerSettings.Read(read);
+var inspection = InspectionWorkerSettings.Read(read, settings.WorkerImage, settings.DockerExecutable);
+var previewRunner = PreviewRunnerSettings.Read(read, settings);
 const string previewRunnerKey = "preview-runner";
 if (!settings.PreviewEnabled && inspection is null)
     throw new InvalidOperationException("The worker requires preview execution or the inspection service.");
@@ -36,10 +38,10 @@ if (settings.PreviewEnabled)
         provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<PreviewRunOptions>()));
     builder.Services.AddWolverine(options => PreviewJobs.Configure(options, settings.WriterConnectionString!, PreviewJobRole.Worker));
 }
-builder.Services.AddWeftRegressionWorker(Environment.GetEnvironmentVariable, () =>
+builder.Services.AddWeftRegressionWorker(read, () =>
     new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, previewRunner.ProfileIdentity(settings),
         FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile));
-builder.Services.AddWeftBuildWorkerWithRunner(Environment.GetEnvironmentVariable, () => previewRunner.CreateBuildRunner(settings));
+builder.Services.AddWeftBuildWorkerWithRunner(read, () => previewRunner.CreateBuildRunner(settings));
 if (inspection is { } hosted)
     builder.Services.AddWeftInspectionWorker(hosted.Transport, hosted.Runner);
 await builder.Build().RunAsync();

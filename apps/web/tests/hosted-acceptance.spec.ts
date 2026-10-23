@@ -220,12 +220,17 @@ async function awaitSaved(
   unknown: Locator,
   resend: RegExp,
 ): Promise<void> {
+  const retry = page.getByRole("button", { name: resend });
   for (let attempt = 1; ; attempt++) {
-    await expect(saved.or(unknown)).toBeVisible({ timeout: 180_000 });
+    await expect(saved.or(unknown).first()).toBeVisible({ timeout: 180_000 });
+    if (await saved.isVisible()) return;
+    // While the page still waits on the original call, that call can confirm the save; the
+    // resend is offered only once waiting has ended.
+    await expect(saved.or(retry).first()).toBeVisible({ timeout: 180_000 });
     if (await saved.isVisible()) return;
     expect(attempt).toBeLessThan(4);
     recoveries.push("unconfirmed upload");
-    await page.getByRole("button", { name: resend }).click();
+    await retry.click();
   }
 }
 
@@ -254,6 +259,7 @@ test.afterAll(async () => {
     JSON.stringify({
       recoveries,
       chatAttempts,
+      buildAttempt,
       modelFixture: process.env.WEFT_ACCEPTANCE_MODEL_FIXTURE === "true",
     }),
   );
@@ -648,10 +654,33 @@ let caseRuns: string[] = [];
 let buildId = "";
 interface BuildRunView {
   state: string;
+  outcome: string | null;
   attempt: number;
   artifact: { sha256: string; byteCount: number; format: string } | null;
 }
+interface BuildApprovalView {
+  approvalId: string;
+  buildId: string;
+  backend: { engineBuild: string };
+  profile: { artifactFormat: string };
+}
 let buildArtifact: BuildRunView["artifact"] = null;
+/** The attempt that completed the build; a retry within the attempt budget is designed behaviour. */
+let buildAttempt = 0;
+const buildAttemptBudget = 3;
+const activeBuildStates = ["queued", "running"];
+
+/**
+ * The trusted service image's identities, measured by the harness with the image's own
+ * `identity` command before the stack started.
+ */
+function measuredCompiler(): {
+  native: string;
+  toolchain: string;
+  build: string;
+} {
+  return JSON.parse(readFileSync(`${work}/compiler-identity.json`, "utf8"));
+}
 
 /** Enters once; failed checks recover the retained editor without reloading or rebuilding it. */
 async function enterCaseFields(region: Locator): Promise<void> {
@@ -848,6 +877,8 @@ async function confirmed(
 }
 
 test("prepares and completes a build through the Ferrule service", async () => {
+  // Each attempt may run for up to six minutes, and the run may use every attempt of its budget.
+  test.setTimeout(1_500_000);
   const first = scopes.first!;
   const mapping = `/api/v1/organizations/${organization}/projects/${first.projectId}/mappings/${first.mappingId}`;
   await openCatalog(revisionPath(scopes.first!), revisionReady);
@@ -903,7 +934,7 @@ test("prepares and completes a build through the Ferrule service", async () => {
   const approved = await confirmed(page, /\/build-approvals\/[^/]+$/, () =>
     panel.getByRole("button", { name: "Approve preparation" }).click(),
   );
-  const approval = await read<{ buildId: string }>(
+  const approval = await read<BuildApprovalView>(
     page,
     new URL(approved.url()).pathname,
   );
@@ -911,6 +942,11 @@ test("prepares and completes a build through the Ferrule service", async () => {
   expect(buildId).toBe(
     (approved.request().postDataJSON() as { buildId: string }).buildId,
   );
+  // The approval binds the combined native and toolchain identity measured from the trusted
+  // service image, not the native identity alone.
+  const measured = measuredCompiler();
+  expect(measured.build).not.toBe(measured.native);
+  expect(approval.backend.engineBuild).toBe(measured.build);
   const submitted = await confirmed(
     page,
     new RegExp(`/build-runs/${buildId}$`),
@@ -919,18 +955,56 @@ test("prepares and completes a build through the Ferrule service", async () => {
   );
   expect(submitted.status()).toBe(201);
   const path = `${mapping}/build-runs/${buildId}`;
+  // Wait for any terminal state, so a failed, exhausted, uncertain, canceled or revoked run
+  // reports its own state and outcome rather than a timeout.
+  let completed: BuildRunView | undefined;
   await expect
-    .poll(async () => (await read<BuildRunView>(page, path)).state, {
-      timeout: 600_000,
-      intervals: [2_000],
-    })
-    .toBe("succeeded");
-  const completed = await read<BuildRunView>(page, path);
-  expect(completed.attempt).toBe(1);
-  expect(completed.artifact).not.toBeNull();
-  expect(completed.artifact!.byteCount).toBeGreaterThan(0);
-  expect(completed.artifact!.sha256).toMatch(/^[0-9a-f]{64}$/);
-  buildArtifact = completed.artifact;
+    .poll(
+      async () => {
+        completed = await read<BuildRunView>(page, path);
+        return activeBuildStates.includes(completed.state);
+      },
+      { timeout: 1_320_000, intervals: [2_000] },
+    )
+    .toBe(false);
+  expect(completed).toMatchObject({ state: "succeeded" });
+  buildAttempt = completed!.attempt;
+  expect(buildAttempt).toBeGreaterThanOrEqual(1);
+  expect(buildAttempt).toBeLessThanOrEqual(buildAttemptBudget);
+  const artifact = completed!.artifact;
+  expect(artifact).not.toBeNull();
+  expect(artifact!.byteCount).toBeGreaterThan(0);
+  expect(artifact!.sha256).toMatch(/^[0-9a-f]{64}$/);
+  expect(artifact!.format).toBe(approval.profile.artifactFormat);
+  // The published private body is exactly the artifact the run reports, for this approval.
+  expect(
+    sql(
+      `select artifact_digest, octet_length(artifact_body), approval_id, state from weft.build_publications where build_id = '${buildId}'`,
+    ),
+  ).toEqual([
+    `${artifact!.sha256}|${artifact!.byteCount}|${approval.approvalId}|2`,
+  ]);
+  buildArtifact = artifact;
+
+  // The panel shows the same completed result after a refresh through its own control.
+  await panel
+    .getByRole("button", { name: "Refresh preparation result" })
+    .click();
+  const result = panel.locator(".builds-result");
+  const heading = result.getByRole("heading", { level: 4 });
+  await expect(heading).toContainText("Preparation complete");
+  await expect(heading).toContainText(
+    `Attempt ${buildAttempt} of ${buildAttemptBudget}`,
+  );
+  await result.locator(".builds-result-details > summary").click();
+  await expect(
+    result.locator(".builds-result-details").getByText(artifact!.sha256, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(result.locator(".builds-result-details")).toContainText(
+    `State: succeeded · Outcome: ${completed!.outcome ?? "not returned"}`,
+  );
 });
 
 interface PreviewRunView {
@@ -1129,7 +1203,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
       page,
       `${mapping}/build-runs/${buildId}`,
     );
-    expect(build).toMatchObject({ state: "succeeded", attempt: 1 });
+    expect(build).toMatchObject({ state: "succeeded", attempt: buildAttempt });
     expect(build.artifact).toEqual(buildArtifact);
 
     // The browser kept its session: the restart needed no new sign-in at the issuer.

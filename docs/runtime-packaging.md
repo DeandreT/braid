@@ -90,6 +90,18 @@ first; this is the format of an exported Key Vault PEM certificate secret. Other
 connection strings, such as `WEFT_CATALOG_CONNECTION_STRING`, remain ordinary
 environment settings read by the host.
 
+`Weft.Worker` takes each of its database credentials either as the plain setting or as
+`<NAME>_FILE`, the path of a protected private file holding the connection string;
+supplying both refuses startup. This covers `WEFT_PREVIEW_WRITER_CONNECTION_STRING`, the
+four `WEFT_REGRESSION_*_CONNECTION_STRING` settings of the
+[regression worker](regression-runs.md) and the six `WEFT_BUILD_*_CONNECTION_STRING`
+settings of the [build worker](build-runs.md). The worker admits the file as it admits its
+certificate files: an owned, regular, single-link 0600 file under protected parent
+directories, holding strict UTF-8 of at most 16 KiB; one final line feed is removed. It
+reads a credential only when the enabled component needs it. With the entrypoint, deliver
+each value as `WEFT_DELIVER_FILE_<NAME>` and point the `_FILE` setting at the resulting
+file, as `compose.features.yml` does for the `runs` worker.
+
 ## Edge
 
 The server's proxy transport accepts only a loopback backend and a loopback peer.
@@ -152,7 +164,9 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   server, each through its own login delivered as a protected private file
   (`WEFT_DELIVER_FILE_*`), and adds the `runs` service: a `Weft.Worker` that executes
   previews, regression runs and approved builds through the Ferrule service with its own client
-  certificate, on the database and service networks only. It requires
+  certificate, on the database and service networks only. Its own logins are delivered as
+  private files in the same way, so no connection string stays in its process environment.
+  It requires
   `WEFT_CHAT_PROFILES_JSON` (the [chat profile document](chat-http.md#configuration)),
   `WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM` and that certificate's pin
   `WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256`, which the service admits beside

@@ -17,10 +17,16 @@ compose files from new volumes:
 | --- | --- |
 | `compose.yml` | PostgreSQL, the migration, storage and key-ring steps, and the Session server behind its edge. |
 | `compose.ferrule-service.yml` | Native upload and report derivation through two or more service replicas. |
-| `compose.features.yml` | Chat, previews, regression cases and runs, and builds on the server, plus the `runs` Weft.Worker (see [runtime packaging](runtime-packaging.md)). |
+| `compose.features.yml` | Chat, previews, regression cases and runs, and build approval and submission on the server, plus the `runs` Weft.Worker that executes previews, regression runs and builds (see [runtime packaging](runtime-packaging.md)). |
 | `compose.acceptance.yml` | Test-only plumbing, described below. Never part of a deployment. |
+| `compose.model-fixture.yml` | Only with `WEFT_ACCEPTANCE_MODEL_FIXTURE=true`: the test-only provider emulator in place of the Ollama model (see [Running it](#running-it)). |
 
-No container receives the Docker socket; the script checks every container's mounts.
+Before starting the stack, the script runs the service image's `identity` command with no
+network, mounts or capabilities. It requires the measured native identity to equal the
+image's recorded build identity, pins the measured toolchain identity as
+`WEFT_FERRULE_COMPILE_TOOLCHAIN` on the server and the `runs` worker, and keeps the
+combined identity for the build checks below. No container receives the Docker socket; the
+script checks every container's mounts.
 
 `compose.acceptance.yml` supplies what a hosted environment provides by other means:
 
@@ -74,8 +80,12 @@ listener, and admits only the run's two TLS keys.
 8. Save a regression case with an independently authored baseline and run it to a
    passing comparison.
 9. Register a build environment, verify the regression evidence, approve and request a
-    build. The ordinary worker compiles through the pinned Ferrule service, and the
-    run must finish with a nonempty artifact on its first attempt.
+    build. The approval must name the combined identity measured by the `identity` step.
+    The ordinary worker compiles through the pinned Ferrule service. The spec waits for a
+    terminal state and requires success within the run's three-attempt budget; a retry is
+    designed behaviour and is recorded. The artifact must be nonempty and in the approval
+    profile's format, the published private body must have the run's digest and length,
+    and the panel must show the completed attempt and digest after a refresh.
 10. With the `runs` worker stopped, queue three previews from three tabs. Scale the service
     to three replicas, stop the server replica while a chat turn is streaming, and start
     it again. The same browser session reopens the reports, conversations and queued
@@ -92,16 +102,16 @@ On a slow host the application can report a read as timed out or unavailable, or
 an editor draft when a background session check fails. The spec then uses only the
 application's own recovery controls (Retry, read again, resend the original request, try
 derivation again after the server's retry delay), a bounded number of times, and records
-each use; the summary line prints them with the number of chat attempts. A small local
-model does not always call a tool; each chat attempt is a new conversation.
+each use; the summary line prints them with the number of chat attempts and the build's
+completing attempt. A small local model does not always call a tool; each chat attempt is
+a new conversation.
 
 ## Not composed in the Session profile
 
-- Qualification and release activation do not follow automatically from a completed
-  build; they remain separate explicit operations.
 - Native examples and projection fixtures, which are Development features.
 - Release status, qualification and activation, which the browser API does not provide in
-  any profile; the In use and Change history views state that limitation.
+  any profile and which never follow automatically from a completed build; the In use and
+  Change history views state that limitation.
 
 ## Running it
 
@@ -135,7 +145,7 @@ deploy/compose/acceptance-test.sh
 | `WEFT_ACCEPTANCE_BROWSER_WRAPPER` | Command prefix for the browser run, for example `xvfb-run -a`. |
 | `WEFT_ACCEPTANCE_MODEL_FIXTURE` | Explicit `true` selects the deterministic provider emulator; the default is `false`. |
 | `WEFT_ACCEPTANCE_OLLAMA_VOLUME`, `WEFT_ACCEPTANCE_CHAT_MODEL` | The model cache volume and model name. |
-| `WEFT_ACCEPTANCE_NODE_IMAGE` | The Node image for the issuer and relays (pinned by digest by default). |
+| `WEFT_ACCEPTANCE_NODE_IMAGE` | The Node image for the issuer, the relays and the model fixture (pinned by digest by default). |
 | `WEFT_FERRULE_NATIVE_IMAGE` | A tag or registry digest of an `engines/ferrule-host` build to use instead of building it. |
 | `WEFT_IMAGE`, `WEFT_EDGE_IMAGE`, `WEFT_WORKER_IMAGE`, `WEFT_FERRULE_SERVICE_IMAGE` | Prebuilt images to use instead of building them; they are not removed. |
 | `WEFT_ACCEPTANCE_LOG_DIRECTORY` | On failure, keep the service logs and the browser failure context there. |
