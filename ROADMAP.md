@@ -384,7 +384,22 @@ compiled-runtime invocation ([#216](https://github.com/DeandreT/weft/issues/216)
 
 P12 ([#159](https://github.com/DeandreT/weft/issues/159)) targets the first Azure mapping endpoint; its first increment is
 durable qualified release activation, audit and rollback ([#222](https://github.com/DeandreT/weft/issues/222),
-[#225](https://github.com/DeandreT/weft/pull/225)). Azure
+[#225](https://github.com/DeandreT/weft/pull/225)). Hosted builds compile in the Ferrule
+service's own sandbox with a pinned compiler toolchain, so no Docker is needed
+([#256](https://github.com/DeandreT/weft/issues/256),
+[#272](https://github.com/DeandreT/weft/pull/272),
+[#274](https://github.com/DeandreT/weft/pull/274),
+[#280](https://github.com/DeandreT/weft/pull/280),
+[#285](https://github.com/DeandreT/weft/pull/285)); see
+[Ferrule service](docs/ferrule-service.md) and [Build compiler](docs/build-compiler.md).
+Machine callers are authorized by fixed-tenant app-only tokens and per-target invocation
+grants with idempotent, expiry-safe invocation tracking
+([#258](https://github.com/DeandreT/weft/issues/258),
+[#269](https://github.com/DeandreT/weft/pull/269)), and a separate machine-facing
+[mapping endpoint](docs/mapping-endpoint.md) host invokes the current qualified release
+([#259](https://github.com/DeandreT/weft/issues/259),
+[#279](https://github.com/DeandreT/weft/pull/279)); see
+[Machine authorization](docs/machine-authorization.md). Azure
 resources are provisioned only from an operator-approved environment.
 
 Queue triggers, scheduled execution, additional preview formats, model providers,
