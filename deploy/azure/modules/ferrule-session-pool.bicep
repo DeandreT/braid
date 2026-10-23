@@ -14,6 +14,8 @@ param image string
 param maxSessions int = 20
 @description('Sessions kept ready to absorb bursts.')
 param readySessions int = 2
+@description('Serve the compile profile for hosted builds. The platform kernel must provide Landlock ABI 3 (Linux 6.2); otherwise the service does not start.')
+param compile bool = false
 param cpu string = '1.0'
 param memory string = '2Gi'
 param tags object
@@ -80,6 +82,7 @@ resource pool 'Microsoft.App/sessionPools@2026-07-01' = {
             { name: 'WEFT_FERRULE_SERVICE_LISTEN_ADDR', value: '0.0.0.0:${port}' }
             { name: 'WEFT_FERRULE_SERVICE_CONCURRENCY', value: '1' }
             { name: 'WEFT_FERRULE_SERVICE_QUEUE', value: '0' }
+            { name: 'WEFT_FERRULE_SERVICE_COMPILE_ENABLED', value: compile ? 'true' : 'false' }
           ]
           resources: {
             cpu: json(cpu)

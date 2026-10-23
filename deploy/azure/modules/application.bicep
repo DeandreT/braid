@@ -29,6 +29,8 @@ param ferruleServiceUrl string
 param ferruleServiceCertificateSha256 string
 param ferruleSessionsEndpoint string
 param ferruleServiceIdentity string
+@description('Optional compile toolchain pin beside the service and sessions runners; empty keeps the native identity.')
+param ferruleCompileToolchain string = ''
 param privateObjectsEndpoint string
 param privateObjectsContainer string
 param tags object
@@ -171,6 +173,8 @@ var serverEnvironment = concat([
   { name: 'WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256', value: ferruleServiceCertificateSha256 }
   { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
   { name: 'WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM', secretRef: 'ferrule-service-client-pem' }
+] : [], ferruleRunner != 'worker' && !empty(ferruleCompileToolchain) ? [
+  { name: 'WEFT_FERRULE_COMPILE_TOOLCHAIN', value: ferruleCompileToolchain }
 ] : [], ferruleRunner == 'sessions' ? [
   // Dynamic sessions with this app's managed identity; no credential is configured.
   { name: 'WEFT_FERRULE_RUNNER', value: 'azureContainerAppsSessions' }

@@ -82,6 +82,12 @@ param ferruleServiceMaxReplicas int = 10
 @description('Most concurrent dynamic sessions, which bounds concurrent Ferrule operations with the sessions runner.')
 param ferruleSessionsMax int = 20
 
+@description('Serve the Ferrule service compile profile for hosted builds; a compiler may use a 2 GiB managed heap. Each replica then gets ferruleServiceConcurrency + 1 vCPU and twice as many GiB (so at most concurrency 3 on the Consumption profile), and each session 2 vCPU and 4 GiB. The platform kernel must provide Landlock ABI 3 (Linux 6.2); otherwise the service does not start.')
+param ferruleServiceCompile bool = false
+
+@description('Compile toolchain identity of the Ferrule service image, as the service reports it for its compile profile (see docs/ferrule-service.md). With it, the Session host pins that toolchain and its reports record the combined compiler identity that builds through the service bind. Requires ferruleServiceCompile; empty keeps the native identity.')
+param ferruleCompileToolchain string = ''
+
 @description('Object ID of a separately hosted Weft.Worker managed identity, granted the same data-plane role on the private object container. Empty grants none.')
 param workerPrincipalId string = ''
 
@@ -249,6 +255,9 @@ module ferruleService 'modules/ferrule-service.bicep' = if (deployApplication &&
     concurrency: ferruleServiceConcurrency
     queue: ferruleServiceConcurrency
     maxReplicas: ferruleServiceMaxReplicas
+    compile: ferruleServiceCompile
+    cpu: ferruleServiceCompile ? '${ferruleServiceConcurrency + 1}.0' : '1.0'
+    memory: ferruleServiceCompile ? '${2 * (ferruleServiceConcurrency + 1)}Gi' : '2Gi'
     tags: tags
   }
 }
@@ -264,6 +273,9 @@ module ferruleSessions 'modules/ferrule-session-pool.bicep' = if (deployApplicat
     registryServer: registry.outputs.loginServer
     image: ferruleServiceImage
     maxSessions: ferruleSessionsMax
+    compile: ferruleServiceCompile
+    cpu: ferruleServiceCompile ? '2.0' : '1.0'
+    memory: ferruleServiceCompile ? '4Gi' : '2Gi'
     tags: tags
   }
 }
@@ -299,6 +311,7 @@ module application 'modules/application.bicep' = if (deployApplication) {
     ferruleServiceCertificateSha256: ferruleServiceCertificateSha256
     ferruleSessionsEndpoint: ferruleSessions.?outputs.poolManagementEndpoint ?? ''
     ferruleServiceIdentity: ferruleServiceIdentity
+    ferruleCompileToolchain: ferruleServiceCompile ? ferruleCompileToolchain : ''
     privateObjectsEndpoint: objects.outputs.blobEndpoint
     privateObjectsContainer: objects.outputs.containerName
     tags: tags

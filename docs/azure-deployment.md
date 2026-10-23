@@ -237,7 +237,17 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   `ferruleServiceImage` (pushed to the registry, preferably by digest) and
   `ferruleServiceIdentity`. Container Apps does not offer a read-only root filesystem; the
   children's own controls apply regardless. The settings stay dormant until native work is
-  enabled.
+  enabled. `ferruleServiceCompile=true` also serves the service's `compile` profile, where
+  a compiler may use a 2 GiB managed heap: each replica gets `ferruleServiceConcurrency + 1`
+  vCPU and twice as many GiB (at most concurrency 3 on the Consumption profile), and each
+  session 2 vCPU and 4 GiB. The platform kernel must provide Landlock ABI 3 (Linux 6.2), or
+  the service does not start. Builds then compile there, but their `Weft.Worker` host is
+  separate, like previews below. Set `ferruleCompileToolchain` to the image's compile
+  toolchain identity (see [Ferrule service](ferrule-service.md#compile-operations)), so
+  that the Session host's reports record the combined compiler identity that those builds
+  bind; the separate worker uses the same `WEFT_FERRULE_COMPILE_TOOLCHAIN`. For the
+  session pool, the toggle adds `WEFT_FERRULE_SERVICE_COMPILE_ENABLED=true` to each
+  session.
 - **Chat.** [Chat](chat-http.md) requires revision report reads, and reports exist only once
   derivation runs, so it stays disabled until the worker limit above is resolved. Enabling it
   then means `WEFT_CHAT_ENABLED=true`, the `pg-chat-reader-connection` and `pg-chat-writer-connection`

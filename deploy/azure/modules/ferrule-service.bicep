@@ -13,8 +13,10 @@ param image string
 param clientCertificatePins string
 param port int = 8443
 param healthPort int = 8080
-@description('Child processes per replica; size memory at 512 MiB per child, plus one request frame per capacity slot and the service.')
+@description('Child processes per replica; size memory at 512 MiB per child (2 GiB more per child with compilation), plus one request frame per capacity slot and the service.')
 param concurrency int = 2
+@description('Serve the compile profile for hosted builds. The platform kernel must provide Landlock ABI 3 (Linux 6.2); otherwise the service does not start.')
+param compile bool = false
 param queue int = 2
 param minReplicas int = 1
 param maxReplicas int = 10
@@ -79,6 +81,7 @@ resource service 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256', value: clientCertificatePins }
             { name: 'WEFT_FERRULE_SERVICE_CONCURRENCY', value: string(concurrency) }
             { name: 'WEFT_FERRULE_SERVICE_QUEUE', value: string(queue) }
+            { name: 'WEFT_FERRULE_SERVICE_COMPILE_ENABLED', value: compile ? 'true' : 'false' }
           ]
           resources: {
             cpu: json(cpu)
