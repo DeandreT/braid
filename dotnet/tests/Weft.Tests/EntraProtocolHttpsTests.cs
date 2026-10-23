@@ -333,7 +333,7 @@ public sealed partial class EntraProtocolHttpsTests
                 var pending = test.CompleteAsync(flow, operation, record);
                 try
                 {
-                    await Task.WhenAll(gate.Entered.Task, record.OverlapCompleted.Task).WaitAsync(TimeSpan.FromSeconds(10));
+                    await Task.WhenAll(gate.Entered.Task, record.OverlapCompleted.Task, record.OwnedStarted.Task).WaitAsync(TimeSpan.FromSeconds(10));
                     EntraProtocolFixturePolicy.Check(record.SecondFailure == ServerSessionIdentityFailureKind.UntrustedIssuance
                         && record.OwnedWork is { IsCompleted: false } && record.EvidencePublished == 0,
                         "A forbidden context overlap joined/released ownership or published evidence.");

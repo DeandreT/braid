@@ -20,7 +20,9 @@ public sealed partial class EntraProtocolHttpsTests
                 Task? disposal = null;
                 try
                 {
-                    await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    // The facade's task is recorded only once its synchronous part returns,
+                    // which can be after the issuer has already entered the stalled body.
+                    await Task.WhenAll(gate.Entered.Task, record.OwnedStarted.Task).WaitAsync(TimeSpan.FromSeconds(10));
                     PartialBodyIsOutstanding(gate);
                     EntraProtocolFixturePolicy.Check(record.OwnedWork is { IsCompleted: false } && !pending.IsCompleted
                         && record.EvidencePublished == 0 && record.Challenge is null && record.Verified is null,
@@ -56,7 +58,7 @@ public sealed partial class EntraProtocolHttpsTests
         var pending = test.CompleteAsync(flow, record: record); Task? disposal = null;
         try
         {
-            await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10)); PartialBodyIsOutstanding(gate);
+            await Task.WhenAll(gate.Entered.Task, record.OwnedStarted.Task).WaitAsync(TimeSpan.FromSeconds(10)); PartialBodyIsOutstanding(gate);
             EntraProtocolFixturePolicy.Check(record.OwnedWork is { IsCompleted: false } && !pending.IsCompleted && record.EvidencePublished == 0,
                 "A partial token response published evidence or released the original callback before cancellation.");
             record.OriginalCancellation!.Cancel();
