@@ -63,6 +63,13 @@ active pointer around private reads, immediately before dispatch and before
 delivering output. A concurrent activation, rollback or disable prevents stale
 output delivery. Mapping assemblies are never loaded into the server process.
 
+The [mapping endpoint](mapping-endpoint.md) serves machine callers through this
+invocation path, under the authority of the current release's publisher, after
+[machine authorization](machine-authorization.md) admits the caller's token and grant.
+The invocation ledger reads only which publisher's release is current, to select that
+authority; the pointer, release and build are read and checked by this path. Activation,
+rollback and their audit are unchanged.
+
 Database tests use synthetic artifact bytes to exercise transaction and authority
 rules. Actual mapping invocation and release/rollback selection must also be
 qualified against real compiler/runtime output; synthetic metadata alone is not

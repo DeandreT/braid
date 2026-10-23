@@ -204,7 +204,7 @@ public sealed class BuildDispatchLiveTests(PostgresFixture fixture, ITestOutputH
         }
     }
 
-    private static async Task<BuildRunSnapshot> UntilAsync(PostgresBuildRunStore history, ActorContext actor, BuildIntent intent, Child worker)
+    internal static async Task<BuildRunSnapshot> UntilAsync(PostgresBuildRunStore history, ActorContext actor, BuildIntent intent, Child worker)
     {
         var deadline = Stopwatch.StartNew();
         while (true)

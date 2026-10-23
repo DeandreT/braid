@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>weft-mapping-endpoint</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../../src/Weft.Deployment/Weft.Deployment.csproj" />
+    <ProjectReference Include="../../src/Weft.Identity/Weft.Identity.csproj" />
+    <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />
+    <ProjectReference Include="../../src/Weft.Persistence.Postgres/Weft.Persistence.Postgres.csproj" />
+    <ProjectReference Include="../../src/Weft.Storage.FileSystem/Weft.Storage.FileSystem.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Weft.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

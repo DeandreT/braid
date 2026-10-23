@@ -47,6 +47,7 @@
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
     <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" />
     <ProjectReference Include="../../apps/Weft.FerruleService/Weft.FerruleService.csproj" />
+    <ProjectReference Include="../../apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj" />
     <ProjectReference Include="../../src/Weft.WorkerTransport/Weft.WorkerTransport.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends.AzureSessions/Weft.MappingBackends.AzureSessions.csproj" />
     <Using Include="Xunit" />
@@ -82,6 +83,17 @@
       <FerruleServiceFiles Include="$(FerruleServiceDirectory)**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(FerruleServiceFiles)" DestinationFiles="@(FerruleServiceFiles->'$(OutDir)FerruleService/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyMappingEndpoint" AfterTargets="Build">
+    <MSBuild Projects="../../apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="MappingEndpointTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(MappingEndpointTarget)')" Text="The built mapping endpoint is missing: @(MappingEndpointTarget)" />
+    <PropertyGroup><MappingEndpointDirectory>@(MappingEndpointTarget->'%(RootDir)%(Directory)')</MappingEndpointDirectory></PropertyGroup>
+    <ItemGroup>
+      <MappingEndpointFiles Include="$(MappingEndpointDirectory)**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MappingEndpointFiles)" DestinationFiles="@(MappingEndpointFiles->'$(OutDir)MappingEndpoint/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopyStorageProbe" AfterTargets="Build">
     <MSBuild Projects="../../tools/Weft.StorageProbe/Weft.StorageProbe.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">

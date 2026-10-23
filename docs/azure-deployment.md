@@ -261,6 +261,14 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   `WEFT_DELIVER_FILE_PREVIEW_WRITER_CONNECTION` and `WEFT_DELIVER_FILE_PREVIEW_READER_CONNECTION`
   and named by `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE` and
   `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE`.
+- **Mapping endpoint.** The [mapping endpoint](mapping-endpoint.md) runs a release's compiled
+  artifact through the Docker compiled runtime, which Container Apps cannot provide, so these
+  templates do not deploy it. The database provisioning creates its two invocation logins
+  (`invocation-grant-writer` and `invocation-writer` in Key Vault), so migration 0024 applies.
+  Hosting the endpoint also needs a sandbox runtime that does not need Docker, its own Entra app
+  registration that accepts v2 access tokens (the endpoint's audience), internal ingress, the
+  eight restricted logins delivered as protected files, and grants created with
+  `Weft.DatabaseTool` (see [machine authorization](machine-authorization.md)).
 - **Provisioning connection.** The provisioning job's PostgreSQL client image has no CA
   bundle, so it uses `sslmode=require` inside the virtual network. Application and migration
   connections use `SSL Mode=VerifyFull`.
