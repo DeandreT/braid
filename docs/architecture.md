@@ -273,6 +273,8 @@ The first Azure environment, in [Azure deployment](azure-deployment.md), runs th
 API container on Container Apps and serves the built frontend from the same origin,
 with private PostgreSQL Flexible Server, Key Vault and a managed identity. It runs one
 instance; scale-out needs the session key ring and private storage qualified for it.
+With native work enabled, a separate worker app executes previews, regression runs and
+builds through the Ferrule service below, with its own identity and database logins.
 
 Hosted platforms without Docker run native work through the platform-agnostic
 [Ferrule service](ferrule-service.md): every inspection, preview, compilation and

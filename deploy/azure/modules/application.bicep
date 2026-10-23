@@ -31,6 +31,10 @@ param ferruleSessionsEndpoint string
 param ferruleServiceIdentity string
 @description('Optional compile toolchain pin beside the service and sessions runners; empty keeps the native identity.')
 param ferruleCompileToolchain string = ''
+@description('Native upload, report reads and derivation through the selected Ferrule runner, with previews, regression runs and builds recorded for the worker app.')
+param nativeWorkEnabled bool = false
+@description('Revision chat; requires nativeWorkEnabled.')
+param chatEnabled bool = false
 param privateObjectsEndpoint string
 param privateObjectsContainer string
 param tags object
@@ -114,7 +118,32 @@ var privateStorageEnvironment = [
   { name: 'WEFT_PRIVATE_STORAGE_BLOB_CLIENT_ID', value: identityClientId }
 ]
 
-var serverSecretNames = concat([
+// Previews, regression cases and runs, and builds: each login reaches the Session host only as an owner-only
+// file that the entrypoint writes (Key Vault login key, host setting and private file name).
+var nativeWorkFiles = [
+  { key: 'preview-reader', setting: 'WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING', file: 'preview-reader' }
+  { key: 'preview-writer', setting: 'WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING', file: 'preview-writer' }
+  { key: 'case-reader', setting: 'WEFT_REGRESSION_CASE_READER_CONNECTION_STRING', file: 'case-reader' }
+  { key: 'case-writer', setting: 'WEFT_REGRESSION_CASE_WRITER_CONNECTION_STRING', file: 'case-writer' }
+  { key: 'run-reader', setting: 'WEFT_REGRESSION_RUN_READER_CONNECTION_STRING', file: 'run-reader' }
+  { key: 'run-writer', setting: 'WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING', file: 'run-writer' }
+  { key: 'build-metadata', setting: 'WEFT_BUILD_METADATA_CONNECTION_STRING', file: 'build-metadata' }
+  { key: 'build-writer', setting: 'WEFT_BUILD_CONTROL_CONNECTION_STRING', file: 'build-control' }
+  { key: 'runtime', setting: 'WEFT_BUILD_ACCESS_CONNECTION_STRING', file: 'build-access' }
+  { key: 'report', setting: 'WEFT_BUILD_REPORT_CONNECTION_STRING', file: 'build-report' }
+  { key: 'case-reader', setting: 'WEFT_BUILD_CASE_READER_CONNECTION_STRING', file: 'build-case-reader' }
+  { key: 'run-reader', setting: 'WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING', file: 'build-evidence' }
+  { key: 'build-run-reader', setting: 'WEFT_BUILD_RUN_READER_CONNECTION_STRING', file: 'build-run-reader' }
+  { key: 'build-run-writer', setting: 'WEFT_BUILD_RUN_WRITER_CONNECTION_STRING', file: 'build-run-writer' }
+]
+var chatFiles = [
+  { key: 'chat-reader', setting: 'WEFT_CHAT_READER_CONNECTION_STRING', file: 'chat-reader-connection' }
+  { key: 'chat-writer', setting: 'WEFT_CHAT_WRITER_CONNECTION_STRING', file: 'chat-writer-connection' }
+]
+var serverFiles = concat(nativeWorkEnabled ? nativeWorkFiles : [], chatEnabled ? chatFiles : [])
+
+// Container app secret names; `<key>-connection` resolves `pg-<key>-connection`, the rest are named below.
+var serverSecretNames = union([
   'session-key-pem'
   'entra-client-pem'
   'catalog-connection'
@@ -122,18 +151,16 @@ var serverSecretNames = concat([
   'session-writer-connection'
   'identity-connection'
 ], enableMetadataEdits ? ['metadata-connection'] : [], enableProjectCreation ? ['creator-connection'] : [],
-  inspectionWorker ? ['inspection-client-pem'] : [], ferruleRunner == 'service' ? ['ferrule-service-client-pem'] : [])
+  inspectionWorker ? ['inspection-client-pem'] : [], ferruleRunner == 'service' ? ['ferrule-service-client-pem'] : [],
+  nativeWorkEnabled ? ['ingest-connection', 'report-connection', 'derivation-connection'] : [],
+  chatEnabled ? ['chat-profiles', 'model-provider-credential'] : [], map(serverFiles, login => '${login.key}-connection'))
 var vaultNames = {
   'session-key-pem': 'weft-session-key'
   'entra-client-pem': 'weft-entra-client'
-  'catalog-connection': 'pg-catalog-connection'
-  'session-reader-connection': 'pg-session-reader-connection'
-  'session-writer-connection': 'pg-session-writer-connection'
-  'identity-connection': 'pg-identity-connection'
-  'metadata-connection': 'pg-metadata-connection'
-  'creator-connection': 'pg-creator-connection'
   'inspection-client-pem': 'weft-inspection-client'
   'ferrule-service-client-pem': 'weft-ferrule-service-client'
+  'chat-profiles': 'weft-chat-profiles'
+  'model-provider-credential': 'weft-model-provider-credential'
 }
 
 var serverEnvironment = concat([
@@ -181,7 +208,29 @@ var serverEnvironment = concat([
   { name: 'WEFT_FERRULE_SESSIONS_POOL_ENDPOINT', value: ferruleSessionsEndpoint }
   { name: 'WEFT_FERRULE_SESSIONS_MANAGED_IDENTITY_CLIENT_ID', value: identityClientId }
   { name: 'WEFT_FERRULE_WORKER_IMAGE', value: ferruleServiceIdentity }
-] : [])
+] : [], nativeWorkEnabled ? [
+  // Native upload, report reads and derivation run here through the selected runner; previews, regression runs
+  // and builds are recorded here and executed by the worker app.
+  { name: 'WEFT_REVISION_INGESTION_ENABLED', value: 'true' }
+  { name: 'WEFT_POSTGRES_INGESTION_CONNECTION_STRING', secretRef: 'ingest-connection' }
+  { name: 'WEFT_REVISION_REPORTS_ENABLED', value: 'true' }
+  { name: 'WEFT_POSTGRES_REPORT_CONNECTION_STRING', secretRef: 'report-connection' }
+  { name: 'WEFT_REVISION_REPORT_DERIVATION_ENABLED', value: 'true' }
+  { name: 'WEFT_POSTGRES_DERIVATION_CONNECTION_STRING', secretRef: 'derivation-connection' }
+  { name: 'WEFT_PREVIEWS_ENABLED', value: 'true' }
+  { name: 'WEFT_REGRESSIONS_ENABLED', value: 'true' }
+  { name: 'WEFT_BUILDS_ENABLED', value: 'true' }
+] : [], chatEnabled ? [
+  // The profile document and the model credential are private files; the profile's credential entry names
+  // /run/weft/secrets/model-provider-credential or a managed-identity token.
+  { name: 'WEFT_CHAT_ENABLED', value: 'true' }
+  { name: 'WEFT_CHAT_PROFILES_FILE', value: '/run/weft/secrets/chat-profiles' }
+  { name: 'WEFT_DELIVER_FILE_CHAT_PROFILES', secretRef: 'chat-profiles' }
+  { name: 'WEFT_DELIVER_FILE_MODEL_PROVIDER_CREDENTIAL', secretRef: 'model-provider-credential' }
+] : [], flatten(map(serverFiles, login => [
+  { name: 'WEFT_DELIVER_FILE_${toUpper(replace(login.file, '-', '_'))}', secretRef: '${login.key}-connection' }
+  { name: '${login.setting}_FILE', value: '/run/weft/secrets/${login.file}' }
+])))
 
 var healthProbe = {
   path: '/api/v1/health'
@@ -217,7 +266,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
         ]
       }
       registries: registries
-      secrets: [for secret in serverSecretNames: vaultSecret(vaultUri, identityId, secret, vaultNames[secret])]
+      secrets: [for secret in serverSecretNames: vaultSecret(vaultUri, identityId, secret, vaultNames[?secret] ?? 'pg-${secret}')]
     }
     template: {
       containers: [

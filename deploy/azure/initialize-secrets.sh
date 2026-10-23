@@ -5,9 +5,10 @@
 # - the self-signed session key-protection and Entra client certificates (kept when present);
 # - the self-signed inspection client and worker certificates for a separately hosted inspection
 #   worker (kept when present), with each certificate's SHA-256 pin written to OUTPUT_DIRECTORY;
-# - the self-signed Ferrule service, service client and mapping endpoint client certificates (kept
-#   when present), with each certificate's SHA-256 pin written to OUTPUT_DIRECTORY;
-# - the owner-job input placeholder.
+# - the self-signed Ferrule service, service client, worker client and mapping endpoint client
+#   certificates (kept when present), with each certificate's SHA-256 pin written to OUTPUT_DIRECTORY;
+# - the owner-job input placeholder, and the chat profile document and model credential placeholders
+#   (kept when present; replace them before enabling chat).
 # Values travel only through private temporary files; the script prints secret names, never
 # values. Writes the Entra client's public certificate to OUTPUT_DIRECTORY for the app registration.
 # Usage: initialize-secrets.sh VAULT_NAME DATABASE_HOST OUTPUT_DIRECTORY
@@ -22,8 +23,20 @@ output=$3
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 
+# Succeeds for an existing item and fails only when Key Vault reports it absent. Any other failure
+# (authorization, network, timeout) stops the script, so an unconfirmed absence never leads to a
+# write that would replace a password, placeholder or certificate.
+item_exists() { # secret|certificate name
+  local kind=$1 name=$2
+  az keyvault "$kind" show --vault-name "$vault" --name "$name" --query id --output none >/dev/null 2>"$work/lookup" &&
+    return 0
+  if grep -q "${kind^}NotFound" "$work/lookup"; then return 1; fi
+  echo "Could not establish whether $kind $name exists; nothing was written for it." >&2
+  exit 1
+}
+
 secret_exists() {
-  az keyvault secret show --vault-name "$vault" --name "$1" --query id --output none >/dev/null 2>&1
+  item_exists secret "$1"
 }
 
 set_secret() { # name file content-type
@@ -66,7 +79,7 @@ for key in "${!logins[@]}"; do
 done
 
 create_certificate() { # name subject
-  if az keyvault certificate show --vault-name "$vault" --name "$1" --query id --output none >/dev/null 2>&1; then
+  if item_exists certificate "$1"; then
     echo "Kept $1"
     return
   fi
@@ -99,12 +112,14 @@ echo "Wrote $output/weft-entra-client.pem (public certificate for the app regist
 # The Session host and the inspection worker each admit only the other's pinned certificate.
 create_certificate weft-inspection-client 'CN=Weft inspection client'
 create_certificate weft-inspection-worker 'CN=Weft inspection worker'
-# The Session host and the Ferrule service likewise pin each other; the mapping endpoints and their
-# release job use their own client certificate.
+# The Session host and the Ferrule service likewise pin each other; the worker app, the mapping
+# endpoints and their release job each use their own client certificate.
 create_certificate weft-ferrule-service-client 'CN=Weft Ferrule service client'
 create_certificate weft-ferrule-service 'CN=Weft Ferrule service'
+create_certificate weft-ferrule-worker-client 'CN=Weft worker Ferrule client'
 create_certificate weft-ferrule-endpoint-client 'CN=Weft mapping endpoint Ferrule client'
-for certificate in weft-inspection-client weft-inspection-worker weft-ferrule-service-client weft-ferrule-service weft-ferrule-endpoint-client; do
+for certificate in weft-inspection-client weft-inspection-worker weft-ferrule-service-client weft-ferrule-service \
+  weft-ferrule-worker-client weft-ferrule-endpoint-client; do
   rm -f -- "$work/$certificate.der"
   az keyvault certificate download --vault-name "$vault" --name "$certificate" --encoding DER --file "$work/$certificate.der"
   sha256sum "$work/$certificate.der" | cut -d' ' -f1 >"$output/$certificate.sha256"
@@ -114,4 +129,15 @@ done
 if ! secret_exists weft-owner-input; then
   printf '{}' >"$work/owner-input"
   set_secret weft-owner-input "$work/owner-input" application/json
+fi
+
+# Chat reads both as private files. The placeholder document refuses chat startup until it is replaced;
+# the credential placeholder stays unused when the profile names a managed-identity token instead.
+if ! secret_exists weft-chat-profiles; then
+  printf '{}' >"$work/chat-profiles"
+  set_secret weft-chat-profiles "$work/chat-profiles" application/json
+fi
+if ! secret_exists weft-model-provider-credential; then
+  printf 'unset' >"$work/model-provider-credential"
+  set_secret weft-model-provider-credential "$work/model-provider-credential" text/plain
 fi

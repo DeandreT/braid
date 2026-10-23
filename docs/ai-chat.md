@@ -96,6 +96,52 @@ streaming belong to the application layers above this module. The routes, server
 profile configuration and SSE event stream are described in
 [Chat turn HTTP API](chat-http.md).
 
+### Azure OpenAI profiles
+
+Azure OpenAI's v1 API speaks the Chat Completions dialect at
+`https://<resource>.openai.azure.com/openai/v1/chat/completions`; `model` is the
+deployment name. Its streams also carry content-filter annotations: a prompt
+annotation before the completion, `content_filter_results` on chunks and, with an
+asynchronous filter, annotation chunks for text already sent. They have an empty
+`object` and carry no text, tool call or usage. A `content_filter` finish,
+including one that arrives after another finish, ends the round as
+`ContentFiltered`. A prompt the filter rejects is an HTTP 400, which the round
+reports as `providerRejected`.
+
+In a Session host on Azure Container Apps, a profile can authenticate with the
+app's managed identity instead of a key (see [Azure deployment](azure-deployment.md#chat)):
+
+```json
+{
+  "version": 1,
+  "retentionDays": 30,
+  "profiles": [
+    {
+      "id": "azure-openai",
+      "version": 1,
+      "displayName": "Azure OpenAI",
+      "provider": "azure-openai",
+      "dialect": "chatCompletionsSse",
+      "model": "<deployment name>",
+      "endpoint": "https://<resource>.openai.azure.com/openai/v1/chat/completions",
+      "credentialReference": "azure-openai",
+      "capabilities": ["text", "functionTools"],
+      "metadataPolicy": { "id": "mapping-metadata", "version": 1, "mappingMetadataAllowed": true }
+    }
+  ],
+  "credentials": [
+    { "reference": "azure-openai", "managedIdentity": { "clientId": "<identity client ID>" } }
+  ]
+}
+```
+
+The identity needs the `Cognitive Services OpenAI User` role on the resource. With
+an API key, the credential is a private file instead,
+`{ "reference": "azure-openai", "file": "/run/weft/secrets/model-provider-credential" }`,
+and the key is sent as the Bearer value. A profile's `mappingMetadataAllowed`
+records that the deployment may receive mapping metadata; set it only when the
+resource's data handling permits that.
+
 ### Live provider check
 
 Ordinary test runs use the owned HTTP fixtures only. `AiProviderLiveTests` runs a

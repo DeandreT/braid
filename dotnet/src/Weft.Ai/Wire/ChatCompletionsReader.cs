@@ -68,6 +68,7 @@ internal sealed class ChatCompletionsReader
         if (root.TryGetProperty("object", out JsonElement kind))
         {
             if (kind.ValueKind != JsonValueKind.String) throw AiGuard.Protocol();
+            if (kind.GetString() == "") return ParseAnnotation(root);
             if (kind.GetString() != "chat.completion.chunk") throw AiGuard.Protocol(AiFailureCode.UnsupportedResponse);
         }
         if (root.TryGetProperty("id", out JsonElement identity) && identity.ValueKind != JsonValueKind.String) throw AiGuard.Protocol();
@@ -110,6 +111,25 @@ internal sealed class ChatCompletionsReader
         if (observed) decoded.Add(new AiDecodedUsage(_usage));
         if (text is { Length: > 0 }) decoded.Add(new AiDecodedText(text));
         return decoded.ToImmutable();
+    }
+    // Azure OpenAI content-filter annotations have an empty object type: prompt results before the completion and,
+    // with an asynchronous filter, results for text already sent. They carry no text, tool call or usage; one that
+    // ends the completion as filtered replaces an earlier finish, since its text was already streamed.
+    private ImmutableArray<AiDecoded> ParseAnnotation(JsonElement root)
+    {
+        if (root.TryGetProperty("usage", out JsonElement usage) && usage.ValueKind != JsonValueKind.Null) throw AiGuard.Protocol();
+        if (!root.TryGetProperty("choices", out JsonElement choices) || choices.ValueKind != JsonValueKind.Array) throw AiGuard.Protocol();
+        if (choices.GetArrayLength() > 1) throw AiGuard.Protocol(AiFailureCode.UnsupportedResponse);
+        if (choices.GetArrayLength() == 0) return ImmutableArray<AiDecoded>.Empty;
+        JsonElement choice = choices[0];
+        if (choice.ValueKind != JsonValueKind.Object || !choice.TryGetProperty("index", out JsonElement index)
+            || index.ValueKind != JsonValueKind.Number || !index.TryGetInt32(out int ordinal)) throw AiGuard.Protocol();
+        if (ordinal != 0) throw AiGuard.Protocol(AiFailureCode.UnsupportedResponse);
+        if (choice.TryGetProperty("delta", out JsonElement delta) && delta.ValueKind != JsonValueKind.Null) throw AiGuard.Protocol();
+        string? finish = AiJson.OptionalString(choice, "finish_reason");
+        if (finish is not null && finish != "content_filter") throw AiGuard.Protocol();
+        if (finish is not null) _finish = AiFinishReason.ContentFiltered;
+        return ImmutableArray<AiDecoded>.Empty;
     }
     private string? ParseDelta(JsonElement delta)
     {

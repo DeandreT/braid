@@ -136,6 +136,7 @@ internal sealed class AiHttpFixture : IAsyncDisposable
         private Dictionary<string, string> Headers { get; }
         private byte[] Body { get; }
         internal bool IsPostAt(string path) => Method == "POST" && Target == path && Version == "HTTP/1.1";
+        internal bool IsGetAt(string target) => Method == "GET" && Target == target && Version == "HTTP/1.1" && Body.Length == 0;
         internal bool HeaderIs(string name, string value) => Headers.TryGetValue(name, out var actual) && string.Equals(actual, value, StringComparison.Ordinal);
         internal bool HasHeader(string name) => Headers.ContainsKey(name);
         internal JsonDocument Json()
@@ -191,6 +192,7 @@ internal sealed class AiHttpFixture : IAsyncDisposable
                 }
                 body = buffer.ToArray();
             }
+            else if (start[0] == "GET") body = [];
             else throw new IOException("Missing fixture request framing.");
             return new(start[0], start[1], start[2], headers, body);
         }

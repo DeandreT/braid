@@ -51,7 +51,8 @@ The profile document is strict JSON; unknown or duplicate properties are refused
   retention deadline. There is no built-in default. `turnSeconds` (10–180,
   default 120) bounds a turn; `maxOutputTokens` (1–2048, default 1024) bounds
   each provider round.
-- `dialect` is `chatCompletionsSse` (`/v1/chat/completions`) or
+- `dialect` is `chatCompletionsSse` (`/v1/chat/completions`, or
+  `/openai/v1/chat/completions` for [Azure OpenAI](ai-chat.md#azure-openai-profiles)) or
   `ollamaChatNdjson` (`/api/chat`). Endpoints are fixed HTTPS URLs; a plain HTTP
   loopback endpoint requires `"loopbackFixture": true`. `requestThinkFalse` is
   allowed only for the Ollama dialect. Up to 16 profiles with distinct IDs.
@@ -61,6 +62,16 @@ The profile document is strict JSON; unknown or duplicate properties are refused
   only the bearer value (one optional trailing LF) and is read with the same
   private-file admission at dispatch time, so rotation needs no restart. An
   unreadable credential fails that turn as `credentialUnavailable`.
+- A credential can instead name a managed identity,
+  `{ "reference": "azure-openai", "managedIdentity": { "clientId": "<uuid>" } }`
+  (an empty object selects the system-assigned identity). Its bearer value is a
+  Microsoft Entra access token for Azure OpenAI (`https://ai.azure.com/.default`)
+  from the Azure Container Apps managed-identity endpoint, which the host admits
+  at startup only as plain HTTP on loopback (`IDENTITY_ENDPOINT`, with
+  `IDENTITY_HEADER`). The token is cached in memory until five minutes before it
+  expires, for at most an hour, with one refresh at a time per identity. A failed
+  refresh keeps the current token until a minute before it expires; after that the
+  turn fails as `credentialUnavailable`.
 - A profile whose metadata policy disallows mapping metadata is never offered.
   Changing any nonsecret profile field under an existing ID/version changes its
   pinned fingerprint; bump the version when changing a profile.

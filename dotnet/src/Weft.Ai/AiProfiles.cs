@@ -69,9 +69,11 @@ public sealed class AiProfileSpec
     {
         if (endpoint is null || !endpoint.IsAbsoluteUri) throw AiGuard.Invalid();
         AiGuard.Token(endpoint.OriginalString, 2048);
-        string path = dialect == AiDialect.ChatCompletionsSseV1 ? "/v1/chat/completions" : "/api/chat";
+        // Azure OpenAI serves the same Chat Completions dialect under /openai/v1.
+        bool path = dialect == AiDialect.ChatCompletionsSseV1
+            ? endpoint.AbsolutePath is "/v1/chat/completions" or "/openai/v1/chat/completions" : endpoint.AbsolutePath == "/api/chat";
         if (endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0
-            || endpoint.OriginalString.Contains('\\') || endpoint.AbsolutePath != path || endpoint.Port <= 0) throw AiGuard.Invalid();
+            || endpoint.OriginalString.Contains('\\') || !path || endpoint.Port <= 0) throw AiGuard.Invalid();
         if (fixture)
         {
             string host = endpoint.Host.Trim('[', ']');
@@ -133,6 +135,15 @@ public sealed class AiBearerSecret : IDisposable
         if (value.Length is < 1 or > 4096) throw AiGuard.Invalid();
         foreach (char c in value) if (c is < '!' or > '~') throw AiGuard.Invalid();
         return new AiBearerSecret(value.ToArray());
+    }
+    /// <summary>An independent copy, for example of a cached token for one dispatch; its receiver disposes it.</summary>
+    public AiBearerSecret Copy()
+    {
+        lock (_gate)
+        {
+            if (_characters is null) throw new ObjectDisposedException(nameof(AiBearerSecret));
+            return new AiBearerSecret((char[])_characters.Clone());
+        }
     }
     internal string HeaderValue()
     {

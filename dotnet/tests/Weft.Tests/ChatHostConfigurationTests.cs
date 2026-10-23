@@ -130,6 +130,57 @@ public sealed class ChatHostConfigurationTests : IDisposable
         Assert.Equal(nameof(ChatHostCredentialResolver), resolver.ToString());
     }
 
+    [Fact]
+    public void Managed_identity_credentials_are_strict_and_exclusive_of_files()
+    {
+        const string clientId = "11111111-2222-3333-4444-55555555abcd";
+        var user = ChatHostConfiguration.Parse(ManagedProfiles("{\"reference\":\"hosted-key\",\"managedIdentity\":{\"clientId\":\"" + clientId + "\"}}"));
+        Assert.Equal(Guid.Parse(clientId), user.ManagedIdentities["hosted-key"]);
+        Assert.Empty(user.Credentials);
+        Assert.Null(ChatHostConfiguration.Parse(ManagedProfiles("{\"reference\":\"hosted-key\",\"managedIdentity\":{}}")).ManagedIdentities["hosted-key"]);
+        var file = "{\"reference\":\"hosted-key\",\"file\":\"" + Secret("token") + "\"}";
+        foreach (var credentials in new[]
+        {
+            "{\"reference\":\"hosted-key\",\"file\":\"/run/weft/secrets/key\",\"managedIdentity\":{}}",
+            "{\"reference\":\"hosted-key\"}",
+            "{\"reference\":\"hosted-key\",\"managedIdentity\":{\"clientId\":\"" + clientId.ToUpperInvariant() + "\"}}",
+            "{\"reference\":\"hosted-key\",\"managedIdentity\":{\"clientId\":\"00000000-0000-0000-0000-000000000000\"}}",
+            "{\"reference\":\"hosted-key\",\"managedIdentity\":{\"clientId\":\"" + clientId + "\",\"scope\":\"https://other.example/.default\"}}",
+            "{\"reference\":\"hosted-key\",\"managedIdentity\":\"" + clientId + "\"}",
+            file + ",{\"reference\":\"hosted-key\",\"managedIdentity\":{}}",
+            file + ",{\"reference\":\"unused-key\",\"managedIdentity\":{}}"
+        })
+            Assert.Throws<InvalidOperationException>(() => ChatHostConfiguration.Parse(ManagedProfiles(credentials)));
+    }
+
+    [Fact]
+    public void Keyless_chat_admits_the_platform_identity_endpoint_and_composes_one_resolver()
+    {
+        var configuration = Catalog();
+        configuration["WEFT_REVISION_REPORTS_ENABLED"] = "true";
+        configuration["WEFT_POSTGRES_REPORT_CONNECTION_STRING"] = Connection;
+        configuration["WEFT_CHAT_ENABLED"] = "true";
+        Enabled(configuration);
+        configuration["WEFT_CHAT_PROFILES_FILE"] = Private("keyless.json", ManagedProfiles("{\"reference\":\"hosted-key\",\"managedIdentity\":{}}"));
+        Assert.Throws<InvalidOperationException>(() => Configure(configuration));
+        configuration["IDENTITY_ENDPOINT"] = "http://localhost:42356/msi/token";
+        configuration["IDENTITY_HEADER"] = "synthetic-identity-header";
+        var builder = Configure(configuration);
+        var descriptor = Assert.Single(builder.Services, item => item.ServiceType == typeof(IAiCredentialResolver));
+        Assert.Null(descriptor.ImplementationInstance);
+        IServiceCollection services = new ServiceCollection();
+        services.Add(descriptor);
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<ChatHostCredentialResolver>(provider.GetRequiredService<IAiCredentialResolver>());
+    }
+
+    private static string ManagedProfiles(string credentials) =>
+        "{\"version\":1,\"retentionDays\":30,\"profiles\":[{\"id\":\"azure-openai\",\"version\":1,\"displayName\":\"Azure OpenAI\"," +
+        "\"provider\":\"azure-openai\",\"dialect\":\"chatCompletionsSse\",\"model\":\"deployment-name\"," +
+        "\"endpoint\":\"https://resource.openai.azure.com/openai/v1/chat/completions\",\"credentialReference\":\"hosted-key\"," +
+        "\"capabilities\":[\"text\",\"functionTools\"],\"metadataPolicy\":{\"id\":\"mapping-metadata\",\"version\":1,\"mappingMetadataAllowed\":true}}]," +
+        "\"credentials\":[" + credentials + "]}";
+
     private void Enabled(Dictionary<string, string> configuration)
     {
         configuration["WEFT_CHAT_PROFILES_FILE"] = Private("profiles.json", Profiles(Secret("token")));

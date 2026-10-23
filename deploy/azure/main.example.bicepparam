@@ -21,6 +21,13 @@ param ferruleServiceImage = ''
 param ferruleServiceIdentity = ''
 param ferruleServiceCertificateSha256 = ''
 param ferruleServiceClientCertificateSha256 = ''
+// Native upload and derivation, previews, regression runs and builds through the Ferrule service, with
+// the worker app; builds need the compile profile and its toolchain pin. Chat requires native work.
+param nativeWorkEnabled = false
+param ferruleServiceCompile = false
+param ferruleCompileToolchain = ''
+param ferruleServiceWorkerClientCertificateSha256 = ''
+param chatEnabled = false
 // Mapping endpoints execute through the Ferrule service runner: one entry per registered target,
 // for example { name: 'orders', projectId: '…', mappingId: '…', environmentId: '…',
 // environmentVersion: 1, targetId: '…', callers: [{ grantId: '…', objectId: '…' }] }.

@@ -44,7 +44,10 @@ internal static class ChatHostConfiguration
             var writer = new PostgresChatStore(databases.Writer);
             return new ChatPersistencePorts(reader, reader, writer, writer);
         });
-        services.AddSingleton<IAiCredentialResolver>(new ChatHostCredentialResolver(configuration.Credentials));
+        // Keyless profiles read the platform's managed-identity endpoint; it is admitted only when one is configured.
+        var tokenEndpoint = configuration.ManagedIdentities.Count == 0 ? null : ManagedIdentityCredentialResolver.ReadEndpoint(read);
+        services.AddSingleton<IAiCredentialResolver>(_ => new ChatHostCredentialResolver(configuration.Credentials, tokenEndpoint is null ? null
+            : new ManagedIdentityCredentialResolver(configuration.ManagedIdentities, tokenEndpoint, read, TimeProvider.System)));
         // One shared read-only tool service bounds its own concurrent report reads and citation checks for the whole host.
         services.AddSingleton(provider =>
         {
@@ -76,19 +79,31 @@ internal static class ChatHostConfiguration
             var tokens = root.TryGetValue("maxOutputTokens", out var output) ? Int(output) : 1024;
             if (retention is < 1 or > 3650) throw ServerHostOptions.Failure();
             var credentials = new Dictionary<string, string>(StringComparer.Ordinal);
+            var identities = new Dictionary<string, Guid?>(StringComparer.Ordinal);
             foreach (var item in Array(root["credentials"], 16))
             {
-                var credential = Object(item, ["reference", "file"], ["reference", "file"]);
+                // A credential is either a private bearer file or a managed-identity token, never both.
+                var credential = Object(item, ["reference", "file", "managedIdentity"], ["reference"]);
                 var reference = ChatBounds.Identifier(String(credential["reference"]));
-                var file = String(credential["file"]);
-                if (!Path.IsPathFullyQualified(file) || file != Path.GetFullPath(file) || !credentials.TryAdd(reference, file))
+                if (credential.ContainsKey("file") == credential.ContainsKey("managedIdentity") || credentials.ContainsKey(reference) ||
+                    identities.ContainsKey(reference))
                     throw ServerHostOptions.Failure();
+                if (credential.TryGetValue("managedIdentity", out var managed))
+                {
+                    var identity = Object(managed, ["clientId"], []);
+                    identities.Add(reference, identity.TryGetValue("clientId", out var clientId) ? ClientId(String(clientId)) : null);
+                    continue;
+                }
+                var file = String(credential["file"]);
+                if (!Path.IsPathFullyQualified(file) || file != Path.GetFullPath(file)) throw ServerHostOptions.Failure();
+                credentials.Add(reference, file);
             }
             var profiles = Array(root["profiles"], 16).Select(Profile).ToArray();
             var used = profiles.Select(profile => profile.Spec.CredentialReference).OfType<string>().ToHashSet(StringComparer.Ordinal);
-            // Every bearer reference resolves, and no unused secret file is admitted.
-            if (!used.SetEquals(credentials.Keys)) throw ServerHostOptions.Failure();
-            return new(new ChatApiOptions(profiles, TimeSpan.FromDays(retention), TimeSpan.FromSeconds(seconds), tokens), credentials);
+            // Every bearer reference resolves, and no unused secret file or identity is admitted.
+            if (!used.SetEquals(credentials.Keys.Concat(identities.Keys))) throw ServerHostOptions.Failure();
+            return new(new ChatApiOptions(profiles, TimeSpan.FromDays(retention), TimeSpan.FromSeconds(seconds), tokens), credentials,
+                identities);
         }
         catch (Exception error) when (SessionHostResources.Nonfatal(error)) { throw ServerHostOptions.Failure(); }
     }
@@ -138,6 +153,9 @@ internal static class ChatHostConfiguration
         return result;
     }
 
+    private static Guid ClientId(string text) =>
+        Guid.TryParseExact(text, "D", out var id) && id != Guid.Empty && text == id.ToString("D") ? id : throw ServerHostOptions.Failure();
+
     private static JsonElement[] Array(JsonElement element, int maximum) =>
         element.ValueKind == JsonValueKind.Array && element.GetArrayLength() <= maximum
             ? element.EnumerateArray().ToArray() : throw ServerHostOptions.Failure();
@@ -155,7 +173,9 @@ internal static class ChatHostConfiguration
             ? value : throw ServerHostOptions.Failure();
 }
 
-internal sealed record ChatHostProfiles(ChatApiOptions Options, IReadOnlyDictionary<string, string> Credentials)
+/// <summary>The admitted profiles; each bearer reference names a private file or a managed identity (null: system-assigned).</summary>
+internal sealed record ChatHostProfiles(ChatApiOptions Options, IReadOnlyDictionary<string, string> Credentials,
+    IReadOnlyDictionary<string, Guid?> ManagedIdentities)
 {
     public override string ToString() => nameof(ChatHostProfiles);
 }
@@ -177,13 +197,16 @@ internal sealed class ChatHostDatabases(string readerConnection, string writerCo
 
 /// <summary>
 /// Resolves a configured credential reference by reading its protected file at dispatch time, so rotation
-/// needs no restart. Any refusal is categorical; the secret never enters configuration, logs or errors.
+/// needs no restart, or through the managed-identity resolver that owns its token. Any refusal is categorical;
+/// the secret never enters configuration, logs or errors.
 /// </summary>
-internal sealed class ChatHostCredentialResolver(IReadOnlyDictionary<string, string> files) : IAiCredentialResolver
+internal sealed class ChatHostCredentialResolver(IReadOnlyDictionary<string, string> files,
+    ManagedIdentityCredentialResolver? tokens = null) : IAiCredentialResolver, IDisposable
 {
     public ValueTask<AiCredentialResult> ResolveAsync(string reference, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        if (reference is not null && tokens is not null && tokens.Resolves(reference)) return tokens.ResolveAsync(reference, ct);
         if (reference is null || !files.TryGetValue(reference, out var path))
             return ValueTask.FromResult<AiCredentialResult>(CredentialUnavailable.Instance);
         try
@@ -196,6 +219,8 @@ internal sealed class ChatHostCredentialResolver(IReadOnlyDictionary<string, str
             return ValueTask.FromResult<AiCredentialResult>(CredentialUnavailable.Instance);
         }
     }
+
+    public void Dispose() => tokens?.Dispose();
 
     public override string ToString() => nameof(ChatHostCredentialResolver);
 }

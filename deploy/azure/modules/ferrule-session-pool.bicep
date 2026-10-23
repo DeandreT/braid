@@ -5,8 +5,8 @@ param location string
 param name string
 param environmentName string
 param identityId string
-@description('Principal ID of the Weft host identity that calls the pool.')
-param callerPrincipalId string
+@description('Principal IDs of the Weft host identities that call the pool.')
+param callerPrincipalIds array
 param registryServer string
 @description('Service image reference in the registry, preferably by digest (repository@sha256:...).')
 param image string
@@ -114,14 +114,14 @@ resource pool 'Microsoft.App/sessionPools@2026-07-01' = {
 // Azure ContainerApps Session Executor: send requests to the pool's sessions, nothing else.
 var sessionExecutorRoleId = '0fb8eba5-a2bb-4abe-b1c1-49dfad359bb0'
 
-resource executor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource executors 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for principalId in callerPrincipalIds: {
   scope: pool
-  name: guid(pool.id, callerPrincipalId, sessionExecutorRoleId)
+  name: guid(pool.id, principalId, sessionExecutorRoleId)
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', sessionExecutorRoleId)
-    principalId: callerPrincipalId
+    principalId: principalId
     principalType: 'ServicePrincipal'
   }
-}
+}]
 
 output poolManagementEndpoint string = pool.properties.poolManagementEndpoint

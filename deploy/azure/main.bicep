@@ -57,7 +57,7 @@ param inspectionWorkerCertificateSha256 string = ''
 @description('Immutable lowercase sha256 image ID of the Ferrule worker image that the inspection worker runs. Required with inspectionWorkerUrl.')
 param ferruleWorkerImage string = ''
 
-@description('Where the Session host runs native upload and report derivation: worker (a separately hosted Weft.Worker with Docker, see inspectionWorkerUrl), service (the Ferrule service container app in this environment) or sessions (the Ferrule service in a dynamic-sessions pool). Native work stays dormant until it is enabled.')
+@description('Where native work runs: worker (a separately hosted Weft.Worker with Docker, see inspectionWorkerUrl), service (the Ferrule service container app in this environment) or sessions (the Ferrule service in a dynamic-sessions pool). Native work stays dormant until nativeWorkEnabled, which requires service or sessions.')
 @allowed(['worker', 'service', 'sessions'])
 param ferruleRunner string = 'worker'
 
@@ -87,6 +87,15 @@ param ferruleServiceCompile bool = false
 
 @description('Compile toolchain identity of the Ferrule service image, as the service reports it for its compile profile (see docs/ferrule-service.md). With it, the Session host pins that toolchain and its reports record the combined compiler identity that builds through the service bind. Requires ferruleServiceCompile; empty keeps the native identity.')
 param ferruleCompileToolchain string = ''
+
+@description('Enable native work through the Ferrule service: native upload and report derivation in the Session host, and previews, regression runs and builds executed by the <name>-worker app. Requires ferruleRunner = service or sessions, ferruleServiceCompile and ferruleCompileToolchain, and with the service runner ferruleServiceWorkerClientCertificateSha256.')
+param nativeWorkEnabled bool = false
+
+@description('Lowercase SHA-256 of the weft-ferrule-worker-client certificate (DER), from initialize-secrets.sh, which the Ferrule service admits for the worker app. Required with nativeWorkEnabled and the service runner.')
+param ferruleServiceWorkerClientCertificateSha256 string = ''
+
+@description('Enable revision chat in the Session host. Requires nativeWorkEnabled, and the weft-chat-profiles and weft-model-provider-credential Key Vault secrets (see docs/azure-deployment.md).')
+param chatEnabled bool = false
 
 @description('Machine-facing mapping endpoints, one internal container app per registered release target: name (2-12 lowercase characters), projectId, mappingId, environmentId, environmentVersion, targetId, and optional concurrency (1-4, default 4), maxReplicas (default 4) and callers ([{ grantId, objectId }]). They execute through the Ferrule service, so they require ferruleRunner = service. Empty deploys none.')
 param mappingEndpoints array = []
@@ -139,6 +148,7 @@ var names = {
   logs: '${name}-logs'
   network: '${name}-vnet'
   identity: '${name}-identity'
+  workerIdentity: '${name}-worker-identity'
   registry: take('${name}acr${compactSuffix}', 50)
   vault: take('${name}-kv-${compactSuffix}', 24)
   storage: take('${name}st${compactSuffix}', 24)
@@ -148,10 +158,21 @@ var names = {
   app: '${name}-app'
   ferrule: '${name}-ferrule'
   ferruleSessions: '${name}-ferrule-sessions'
+  worker: '${name}-worker'
 }
 
 // Mapping endpoints run their compiled artifacts through the Ferrule service container app.
 var mappingEndpointsEnabled = deployApplication && ferruleRunner == 'service' && !empty(mappingEndpoints)
+
+// Explicit feature combinations: an inconsistent request fails the deployment with its reason rather than
+// deploying hosts that refuse to start. Each branch is evaluated only when selected.
+var featureRequirements = !nativeWorkEnabled && !chatEnabled ? true
+  : !nativeWorkEnabled ? fail('chatEnabled requires nativeWorkEnabled: conversations pin reports that derivation produces')
+  : ferruleRunner == 'worker' ? fail('nativeWorkEnabled requires ferruleRunner = service or sessions')
+  : !ferruleServiceCompile || empty(ferruleCompileToolchain) ? fail('nativeWorkEnabled requires ferruleServiceCompile = true and ferruleCompileToolchain: builds compile through the Ferrule service')
+  : ferruleRunner == 'service' && empty(ferruleServiceWorkerClientCertificateSha256) ? fail('nativeWorkEnabled with ferruleRunner = service requires ferruleServiceWorkerClientCertificateSha256')
+  : true
+var workerEnabled = deployApplication && nativeWorkEnabled && featureRequirements
 
 module network 'modules/network.bicep' = {
   name: 'network'
@@ -178,6 +199,13 @@ module monitoring 'modules/monitoring.bicep' = {
 
 resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: names.identity
+  location: location
+  tags: tags
+}
+
+// The worker app's own identity: the private object container and, with the sessions runner, the session pool.
+resource workerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: names.workerIdentity
   location: location
   tags: tags
 }
@@ -226,7 +254,10 @@ module objects 'modules/objects.bicep' = {
     containerName: 'weft-private-objects'
     endpointsSubnetId: network.outputs.endpointsSubnetId
     privateDnsZoneId: network.outputs.blobZoneId
-    contributorPrincipalIds: concat([identity.properties.principalId], empty(workerPrincipalId) ? [] : [workerPrincipalId])
+    // Admitting the store proves the credential can create, lease and delete a probe blob, so every
+    // consumer, even one that only reads objects, holds the contributor role on the container.
+    contributorPrincipalIds: concat([identity.properties.principalId], empty(workerPrincipalId) ? [] : [workerPrincipalId],
+      nativeWorkEnabled ? [workerIdentity.properties.principalId] : [])
     tags: tags
   }
 }
@@ -272,9 +303,10 @@ module ferruleService 'modules/ferrule-service.bicep' = if (deployApplication &&
     registryServer: registry.outputs.loginServer
     vaultUri: vault.outputs.uri
     image: ferruleServiceImage
-    clientCertificatePins: mappingEndpointsEnabled
-      ? '${ferruleServiceClientCertificateSha256},${ferruleServiceEndpointClientCertificateSha256}'
-      : ferruleServiceClientCertificateSha256
+    // The Session host's client, then the worker's and the mapping endpoints' when they are deployed.
+    clientCertificatePins: join(concat([ferruleServiceClientCertificateSha256],
+      workerEnabled ? [ferruleServiceWorkerClientCertificateSha256] : [],
+      mappingEndpointsEnabled ? [ferruleServiceEndpointClientCertificateSha256] : []), ',')
     concurrency: ferruleServiceConcurrency
     queue: ferruleServiceConcurrency
     maxReplicas: ferruleServiceMaxReplicas
@@ -293,7 +325,7 @@ module ferruleSessions 'modules/ferrule-session-pool.bicep' = if (deployApplicat
     name: names.ferruleSessions
     environmentName: environment.outputs.name
     identityId: identity.id
-    callerPrincipalId: identity.properties.principalId
+    callerPrincipalIds: concat([identity.properties.principalId], workerEnabled ? [workerIdentity.properties.principalId] : [])
     registryServer: registry.outputs.loginServer
     image: ferruleServiceImage
     maxSessions: ferruleSessionsMax
@@ -304,7 +336,7 @@ module ferruleSessions 'modules/ferrule-session-pool.bicep' = if (deployApplicat
   }
 }
 
-module application 'modules/application.bicep' = if (deployApplication) {
+module application 'modules/application.bicep' = if (deployApplication && featureRequirements) {
   name: 'application'
   params: {
     location: location
@@ -336,6 +368,33 @@ module application 'modules/application.bicep' = if (deployApplication) {
     ferruleSessionsEndpoint: ferruleSessions.?outputs.poolManagementEndpoint ?? ''
     ferruleServiceIdentity: ferruleServiceIdentity
     ferruleCompileToolchain: ferruleServiceCompile ? ferruleCompileToolchain : ''
+    nativeWorkEnabled: nativeWorkEnabled
+    chatEnabled: chatEnabled
+    privateObjectsEndpoint: objects.outputs.blobEndpoint
+    privateObjectsContainer: objects.outputs.containerName
+    tags: tags
+  }
+}
+
+// Previews, regression runs and builds that the Session host records, executed through the same Ferrule runner.
+module worker 'modules/worker.bicep' = if (workerEnabled) {
+  name: 'worker'
+  params: {
+    location: location
+    name: names.worker
+    environmentName: environment.outputs.name
+    identityId: identity.id
+    workerIdentityId: workerIdentity.id
+    workerIdentityClientId: workerIdentity.properties.clientId
+    registryServer: registry.outputs.loginServer
+    image: 'weft-worker:${imageTag}'
+    vaultUri: vault.outputs.uri
+    ferruleRunner: ferruleRunner == 'sessions' ? 'sessions' : 'service'
+    ferruleServiceUrl: ferruleService.?outputs.url ?? ''
+    ferruleServiceCertificateSha256: ferruleServiceCertificateSha256
+    ferruleSessionsEndpoint: ferruleSessions.?outputs.poolManagementEndpoint ?? ''
+    ferruleServiceIdentity: ferruleServiceIdentity
+    compileToolchain: ferruleCompileToolchain
     privateObjectsEndpoint: objects.outputs.blobEndpoint
     privateObjectsContainer: objects.outputs.containerName
     tags: tags
@@ -379,5 +438,7 @@ output applicationName string = names.app
 output privateObjectsEndpoint string = objects.outputs.blobEndpoint
 output privateObjectsContainer string = objects.outputs.containerName
 output identityClientId string = identity.properties.clientId
+output identityPrincipalId string = identity.properties.principalId
+output workerName string = worker.?outputs.name ?? ''
 output mappingEndpointOrigins array = mappingEndpoint.?outputs.origins ?? []
 output mappingEndpointGrantArguments array = mappingEndpoint.?outputs.grantArguments ?? []
