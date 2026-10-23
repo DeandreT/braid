@@ -223,7 +223,7 @@ internal sealed class PackagedFerruleService : IAsyncDisposable
     /// <summary>The build identity the service reports for the configured worker executable.</summary>
     internal static string Identity => "sha256:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(FerruleServiceTestSupport.Executable!)));
 
-    internal static System.Diagnostics.Process Launch(IReadOnlyDictionary<string, string> environment)
+    internal static System.Diagnostics.Process Launch(IReadOnlyDictionary<string, string> environment, params string[] arguments)
     {
         var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT") ?? "/usr/share/dotnet";
         var start = new System.Diagnostics.ProcessStartInfo(System.IO.Path.Combine(dotnetRoot, "dotnet"))
@@ -233,6 +233,7 @@ internal sealed class PackagedFerruleService : IAsyncDisposable
             RedirectStandardError = true
         };
         start.ArgumentList.Add(Path);
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
         start.Environment.Clear();
         start.Environment["DOTNET_ROOT"] = dotnetRoot;
         start.Environment["DOTNET_NOLOGO"] = "1";

@@ -74,15 +74,15 @@ listener, and admits only the run's two TLS keys.
 8. Save a regression case with an independently authored baseline and run it to a
    passing comparison.
 9. Register a build environment, verify the regression evidence, approve and request a
-   build. Build execution needs the Docker-based compiler worker, which this shape does
-   not compose, so the build run stays queued and nothing runs it.
+    build. The ordinary worker compiles through the pinned Ferrule service, and the
+    run must finish with a nonempty artifact on its first attempt.
 10. With the `runs` worker stopped, queue three previews from three tabs. Scale the service
     to three replicas, stop the server replica while a chat turn is streaming, and start
     it again. The same browser session reopens the reports, conversations and queued
     work without a new sign-in; the interrupted turn settles once with no further model
     call. Restart the worker while the service scales to one replica: every queued
-    preview completes exactly once, the regression case passes again, and the build
-    request is still queued. The service returns to two replicas.
+    preview completes exactly once, the regression case passes again, and the completed
+    build retains the same artifact digest and byte count. The service returns to two replicas.
 
 The script then requires that every sign-in redeemed its code without an issuer refusal,
 that every service replica is healthy, and that the maintenance tool observes the
@@ -97,13 +97,21 @@ model does not always call a tool; each chat attempt is a new conversation.
 
 ## Not composed in the Session profile
 
-- Build execution (the compiler worker needs Docker), so no artifact, qualification or
-  release activation follows the queued build.
+- Qualification and release activation do not follow automatically from a completed
+  build; they remain separate explicit operations.
 - Native examples and projection fixtures, which are Development features.
 - Release status, qualification and activation, which the browser API does not provide in
   any profile; the In use and Change history views state that limitation.
 
 ## Running it
+
+For explicit provider emulation, set `WEFT_ACCEPTANCE_MODEL_FIXTURE=true`. The
+test-only Node service implements the Ollama wire protocol and requests the real
+`search_mapping` tool; the application still retrieves and verifies its own
+evidence and citations. No model cache or Ollama image is used in this mode.
+The receipt records `modelFixture: true`. This qualifies application orchestration
+and recovery against an emulated provider, not live-model behavior. The default
+remains the real cached Ollama model described below.
 
 Prerequisites:
 
@@ -125,6 +133,7 @@ deploy/compose/acceptance-test.sh
 | Setting | Effect |
 | --- | --- |
 | `WEFT_ACCEPTANCE_BROWSER_WRAPPER` | Command prefix for the browser run, for example `xvfb-run -a`. |
+| `WEFT_ACCEPTANCE_MODEL_FIXTURE` | Explicit `true` selects the deterministic provider emulator; the default is `false`. |
 | `WEFT_ACCEPTANCE_OLLAMA_VOLUME`, `WEFT_ACCEPTANCE_CHAT_MODEL` | The model cache volume and model name. |
 | `WEFT_ACCEPTANCE_NODE_IMAGE` | The Node image for the issuer and relays (pinned by digest by default). |
 | `WEFT_FERRULE_NATIVE_IMAGE` | A tag or registry digest of an `engines/ferrule-host` build to use instead of building it. |

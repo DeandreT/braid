@@ -1,8 +1,8 @@
 # Session features beyond catalog, upload and reports: chat, previews, regression cases and runs,
 # and builds, each through its own login delivered as a protected private file. The separate
 # `runs` Weft.Worker executes previews and regression runs through the Ferrule service; like the
-# service override, nothing here needs the Docker socket. Build execution needs the Docker-based
-# compiler worker, so this file composes build approvals and requests but no build executor.
+# service override, nothing here needs the Docker socket. Builds run through the service's
+# explicitly enabled compiler profile with the same toolchain pin as their saved evidence.
 # See docs/runtime-packaging.md.
 # Use with: docker compose -f compose.yml -f compose.ferrule-service.yml -f compose.features.yml
 services:
@@ -30,6 +30,7 @@ services:
       WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/run-writer
       WEFT_DELIVER_FILE_RUN_WRITER: Host=postgres;Database=weft;Username=weft_run_writer;Password=${WEFT_LOCAL_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_BUILDS_ENABLED: "true"
+      WEFT_FERRULE_COMPILE_TOOLCHAIN: ${WEFT_FERRULE_COMPILE_TOOLCHAIN:?Set the verified service toolchain pin}
       WEFT_BUILD_METADATA_CONNECTION_STRING_FILE: /run/weft/secrets/build-metadata
       WEFT_DELIVER_FILE_BUILD_METADATA: Host=postgres;Database=weft;Username=weft_build_metadata_reader;Password=${WEFT_LOCAL_BUILD_METADATA_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_BUILD_CONTROL_CONNECTION_STRING_FILE: /run/weft/secrets/build-control
@@ -66,8 +67,16 @@ services:
       WEFT_REGRESSION_CASE_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_REGRESSION_ACCESS_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_WORKER_ENABLED: "true"
+      WEFT_BUILD_DISPATCHER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_build_dispatcher;Password=${WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_WRITER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_build_writer;Password=${WEFT_LOCAL_BUILD_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_ACCESS_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_REPORT_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_BUILD_CASE_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_PRIVATE_STORAGE_ROOT: /var/lib/weft/storage/root
       WEFT_FERRULE_RUNNER: service
+      WEFT_FERRULE_COMPILE_TOOLCHAIN: ${WEFT_FERRULE_COMPILE_TOOLCHAIN:?Set the verified service toolchain pin}
       WEFT_FERRULE_WORKER_IMAGE: ${WEFT_FERRULE_SERVICE_IDENTITY:?Set the service build identity}
       WEFT_FERRULE_SERVICE_URL: https://ferrule:8443
       WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256: ${WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256:?Set the service certificate pin}
@@ -76,10 +85,17 @@ services:
       - private-storage:/var/lib/weft/storage
     networks: [database, ferrule]
     depends_on:
-      migrate: {condition: service_completed_successfully}
-      storage-init: {condition: service_completed_successfully}
+      migrate: { condition: service_completed_successfully }
+      storage-init: { condition: service_completed_successfully }
 
   # The service admits the server's and the runs worker's client certificates.
   ferrule:
     environment:
+      WEFT_FERRULE_SERVICE_COMPILE_ENABLED: "true"
+      WEFT_FERRULE_SERVICE_CONCURRENCY: "1"
       WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256: ${WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:?},${WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:?Set the runs worker client certificate pin}
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 3072M

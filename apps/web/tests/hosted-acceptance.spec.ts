@@ -5,6 +5,7 @@ import {
   type BrowserContext,
   type Locator,
   type Page,
+  type Response,
 } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -250,7 +251,11 @@ test.afterAll(async () => {
   // The harness prints these facts; they distinguish documented user recovery from failure.
   writeFileSync(
     `${work}/acceptance-facts.json`,
-    JSON.stringify({ recoveries, chatAttempts }),
+    JSON.stringify({
+      recoveries,
+      chatAttempts,
+      modelFixture: process.env.WEFT_ACCEPTANCE_MODEL_FIXTURE === "true",
+    }),
   );
   expect(pageErrors).toEqual([]);
 });
@@ -310,9 +315,14 @@ test("creates a project", async () => {
   await page.getByRole("button", { name: "Create project" }).click();
   const response = await created;
   expect(response.status()).toBe(201);
-  projectId = (
-    (await response.json()) as { receipt: { project: { projectId: string } } }
-  ).receipt.project.projectId;
+  await expect(
+    page.getByRole("heading", { name: "Project creation confirmed" }),
+  ).toBeVisible();
+  projectId = (await page
+    .locator(".creation-facts code")
+    .first()
+    .textContent())!.trim();
+  expect(projectId).toMatch(/^[a-f0-9-]{36}$/);
   writeFileSync(`${work}/project-id`, projectId);
   await openCatalog(
     `/catalog/organizations/${organization}/projects/${projectId}`,
@@ -513,7 +523,13 @@ async function submitPreview(target: Page): Promise<string> {
   await preview(target).getByRole("button", { name: "Run preview" }).click();
   const response = await answer;
   expect(response.status()).toBe(201);
-  return ((await response.json()) as { run: { runId: string } }).run.runId;
+  const id = preview(target)
+    .locator(".preview-run .catalog-facts code")
+    .first();
+  await expect(id).toBeVisible();
+  const runId = (await id.textContent())!.trim();
+  expect(runId).toMatch(/^[a-f0-9-]{36}$/);
+  return runId;
 }
 
 const shipment = (generatedAt: string) =>
@@ -614,7 +630,11 @@ async function runCase(target: Page): Promise<string> {
     .click();
   const response = await receipt;
   expect(response.status()).toBe(201);
-  const runId = ((await response.json()) as { runId: string }).runId;
+  // Keep the original command identity even if Chromium has retired its response
+  // body from the debugging cache. The UI still has to show this exact run passing.
+  const runId = /\/regression-runs\/([a-f0-9-]{36})$/.exec(
+    new URL(response.request().url()).pathname,
+  )![1];
   const result = tests(target).getByRole("region", {
     name: "Regression run result",
   });
@@ -626,6 +646,12 @@ async function runCase(target: Page): Promise<string> {
 
 let caseRuns: string[] = [];
 let buildId = "";
+interface BuildRunView {
+  state: string;
+  attempt: number;
+  artifact: { sha256: string; byteCount: number; format: string } | null;
+}
+let buildArtifact: BuildRunView["artifact"] = null;
 
 /** Enters once; failed checks recover the retained editor without reloading or rebuilding it. */
 async function enterCaseFields(region: Locator): Promise<void> {
@@ -807,7 +833,7 @@ async function confirmed(
   target: Page,
   suffix: RegExp,
   action: () => Promise<unknown>,
-): Promise<unknown> {
+): Promise<Response> {
   const received = target.waitForResponse(
     (response) =>
       suffix.test(new URL(response.url()).pathname) &&
@@ -818,10 +844,12 @@ async function confirmed(
   await confirmAction(target);
   const response = await received;
   expect([200, 201]).toContain(response.status());
-  return response.json();
+  return response;
 }
 
-test("prepares a build as far as the Session host composes it", async () => {
+test("prepares and completes a build through the Ferrule service", async () => {
+  const first = scopes.first!;
+  const mapping = `/api/v1/organizations/${organization}/projects/${first.projectId}/mappings/${first.mappingId}`;
   await openCatalog(revisionPath(scopes.first!), revisionReady);
   await workflow(page, "Prepare").click();
   const panel = prepare(page);
@@ -872,21 +900,37 @@ test("prepares a build as far as the Session host composes it", async () => {
       hasText: "Result matches the saved expectation, including formatting",
     }),
   ).toBeVisible();
-  const approval = (await confirmed(page, /\/build-approvals\/[^/]+$/, () =>
+  const approved = await confirmed(page, /\/build-approvals\/[^/]+$/, () =>
     panel.getByRole("button", { name: "Approve preparation" }).click(),
-  )) as { approval: { buildId: string } };
-  buildId = approval.approval.buildId;
-  const submitted = (await confirmed(
+  );
+  const approval = await read<{ buildId: string }>(
+    page,
+    new URL(approved.url()).pathname,
+  );
+  buildId = approval.buildId;
+  expect(buildId).toBe(
+    (approved.request().postDataJSON() as { buildId: string }).buildId,
+  );
+  const submitted = await confirmed(
     page,
     new RegExp(`/build-runs/${buildId}$`),
     () =>
       panel.getByRole("button", { name: "Prepare approved version" }).click(),
-  )) as { outcome: string; run: { state: string; attempt: number } };
-  expect(submitted.outcome).toBe("created");
-  // Build execution needs the Docker-based compiler worker, which the Docker-free hosted
-  // shape does not compose: the request is durably queued and nothing runs it.
-  expect(submitted.run).toMatchObject({ state: "queued", attempt: 0 });
-  await expect(panel.locator(".builds-result")).toContainText("Attempt 0 of 3");
+  );
+  expect(submitted.status()).toBe(201);
+  const path = `${mapping}/build-runs/${buildId}`;
+  await expect
+    .poll(async () => (await read<BuildRunView>(page, path)).state, {
+      timeout: 600_000,
+      intervals: [2_000],
+    })
+    .toBe("succeeded");
+  const completed = await read<BuildRunView>(page, path);
+  expect(completed.attempt).toBe(1);
+  expect(completed.artifact).not.toBeNull();
+  expect(completed.artifact!.byteCount).toBeGreaterThan(0);
+  expect(completed.artifact!.sha256).toMatch(/^[0-9a-f]{64}$/);
+  buildArtifact = completed.artifact;
 });
 
 interface PreviewRunView {
@@ -1074,19 +1118,19 @@ test("recovers retained work across a server restart and Ferrule service scaling
       ),
     ).toEqual(["3|1|1"]);
 
-    // Regression evidence keeps passing on one replica; the build request stays queued.
+    // Regression evidence keeps passing on one replica; the completed artifact survives restart.
     await openTests(page);
     await tests(page)
       .getByRole("button", { name: "Open SO-1 west express" })
       .first()
       .click();
     caseRuns.push(await runCase(page));
-    const build = await read<{
-      run?: { state: string; attempt: number };
-      state?: string;
-      attempt?: number;
-    }>(page, `${mapping}/build-runs/${buildId}`);
-    expect(build.run ?? build).toMatchObject({ state: "queued", attempt: 0 });
+    const build = await read<BuildRunView>(
+      page,
+      `${mapping}/build-runs/${buildId}`,
+    );
+    expect(build).toMatchObject({ state: "succeeded", attempt: 1 });
+    expect(build.artifact).toEqual(buildArtifact);
 
     // The browser kept its session: the restart needed no new sign-in at the issuer.
     expect(count(stack("logs", "--no-color", "issuer"), /issuer token/)).toBe(

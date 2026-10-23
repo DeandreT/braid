@@ -36,6 +36,13 @@ label. Clients configure that identity and refuse a service reporting another.
 
 ## API: `weft.ferrule-service.v1`
 
+The image's `identity` command reports its measured native, toolchain and combined
+build identities as `weft.compiler-image-identity.v1`, after proving the compiler
+sandbox. Run it against the trusted image with a private writable `/tmp`; it needs
+no listener, caller certificate or network. This supports explicit operator
+pinning before starting a hosted build stack. It does not adopt an unknown
+remote replica's capabilities or change a saved build's identity.
+
 The protocol extends `weft.inspection-transport.v1` (see
 [Ferrule worker](ferrule-worker.md#hosted-inspection-transport)) for a horizontally
 scaled service. A route selects a trusted profile; the frame's own header selects

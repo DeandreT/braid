@@ -1,0 +1,20 @@
+# Explicit provider emulation for local acceptance, never a production model.
+services:
+  model:
+    image: ${WEFT_ACCEPTANCE_NODE_IMAGE:?Set the pinned Node image}
+    command: [node, /opt/acceptance/model.mjs]
+    environment:
+      WEFT_ACCEPTANCE_CHAT_MODEL: ${WEFT_ACCEPTANCE_CHAT_MODEL:-weft-fixture}
+    volumes: !override
+      - ../../tools/hosted-acceptance/model.mjs:/opt/acceptance/model.mjs:ro
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:11434/api/tags').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 40

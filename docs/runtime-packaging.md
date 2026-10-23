@@ -151,13 +151,16 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   override, enables chat, previews, regression cases and runs, and builds on the Session
   server, each through its own login delivered as a protected private file
   (`WEFT_DELIVER_FILE_*`), and adds the `runs` service: a `Weft.Worker` that executes
-  previews and regression runs through the Ferrule service with its own client
+  previews, regression runs and approved builds through the Ferrule service with its own client
   certificate, on the database and service networks only. It requires
   `WEFT_CHAT_PROFILES_JSON` (the [chat profile document](chat-http.md#configuration)),
   `WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM` and that certificate's pin
   `WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256`, which the service admits beside
-  the server's. Build execution needs the Docker-based compiler worker, so this file
-  composes build environments, approvals and requests but no build executor.
+  the server's. Set `WEFT_FERRULE_COMPILE_TOOLCHAIN` to the trusted service image's
+  measured toolchain identity on both hosts. The override enables compilation,
+  limits each service replica to one child operation and gives it 3 GiB for the
+  compiler and transport. The `identity` image command can measure and check the
+  installed toolchain before the stack starts. No host receives the Docker socket.
 
 All runtime containers use a read-only root filesystem, drop every capability and
 set `no-new-privileges`. The compose file reads every value from the caller's

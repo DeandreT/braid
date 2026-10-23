@@ -4,6 +4,8 @@ using Weft.FerruleService;
 // The shell-less image's own health check for platforms without HTTP probes.
 if (args is ["probe"])
     return await FerruleServiceProbe.RunAsync(Environment.GetEnvironmentVariable);
+if (args is ["identity"])
+    return await FerruleServiceIdentity.RunAsync(Environment.GetEnvironmentVariable);
 
 FerruleServiceSettings settings;
 FerruleServiceRegistration.ServiceRunners runners;

@@ -17,6 +17,9 @@ chmod 0700 "$work"
 built_images=()
 files=(--file "$compose_directory/compose.yml" --file "$compose_directory/compose.ferrule-service.yml"
   --file "$compose_directory/compose.features.yml" --file "$compose_directory/compose.acceptance.yml")
+if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
+  files+=(--file "$compose_directory/compose.model-fixture.yml")
+fi
 
 compose() {
   docker compose --project-name "$project" "${files[@]}" --profile operator "$@"
@@ -78,8 +81,12 @@ fail() {
 [[ -d $repository/node_modules/@playwright/test ]] || fail 'Run npm ci in the repository first.'
 export WEFT_ACCEPTANCE_OLLAMA_VOLUME=${WEFT_ACCEPTANCE_OLLAMA_VOLUME:-weft-ollama-models}
 export WEFT_ACCEPTANCE_CHAT_MODEL=${WEFT_ACCEPTANCE_CHAT_MODEL:-qwen2.5:1.5b}
-docker volume inspect "$WEFT_ACCEPTANCE_OLLAMA_VOLUME" >/dev/null 2>&1 ||
-  fail "Model volume $WEFT_ACCEPTANCE_OLLAMA_VOLUME is missing; see docs/hosted-acceptance.md."
+case ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} in
+  false) docker volume inspect "$WEFT_ACCEPTANCE_OLLAMA_VOLUME" >/dev/null 2>&1 ||
+    fail "Model volume $WEFT_ACCEPTANCE_OLLAMA_VOLUME is missing; see docs/hosted-acceptance.md." ;;
+  true) export WEFT_ACCEPTANCE_MODEL_FIXTURE=true ;;
+  *) fail 'WEFT_ACCEPTANCE_MODEL_FIXTURE must be true or false' ;;
+esac
 export WEFT_ACCEPTANCE_NODE_IMAGE=${WEFT_ACCEPTANCE_NODE_IMAGE:-docker.io/library/node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392}
 
 build() {
@@ -162,6 +169,18 @@ export WEFT_SESSION_KEY_PEM WEFT_ENTRA_CLIENT_PEM WEFT_ACCEPTANCE_CLIENT_CERTIFI
 worker_digest=$(docker image inspect --format '{{index .Config.Labels "io.weft.ferrule.worker-sha256"}}' "$WEFT_FERRULE_SERVICE_IMAGE")
 [[ $worker_digest =~ ^[0-9a-f]{64}$ ]] || fail 'service image identity label'
 WEFT_FERRULE_SERVICE_IDENTITY=sha256:$worker_digest
+# Measure the trusted local image, including its installed compiler implementation. This is
+# not an automatic adoption of an unknown remote replica's advertised identity.
+docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --label "com.docker.compose.project=$project" --tmpfs /tmp:size=256m,mode=1777 \
+  --memory 3g --pids-limit 256 "$WEFT_FERRULE_SERVICE_IMAGE" identity >"$work/compiler-identity.json"
+WEFT_FERRULE_COMPILE_TOOLCHAIN=$(node -e '
+  const fs = require("node:fs");
+  const value = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  if (value.schema !== "weft.compiler-image-identity.v1" || !/^sha256:[a-f0-9]{64}$/.test(value.toolchain)) process.exit(1);
+  process.stdout.write(value.toolchain);
+' "$work/compiler-identity.json") || fail 'service compiler identity'
+export WEFT_FERRULE_COMPILE_TOOLCHAIN
 WEFT_FERRULE_SERVICE_PEM=$(new_pem weft-ferrule-service)
 WEFT_FERRULE_SERVICE_CLIENT_PEM=$(new_pem weft-ferrule-service-client)
 WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM=$(new_pem weft-ferrule-runs-client)
@@ -186,8 +205,10 @@ for service in migrate blob-container storage-init session-keys; do
     fail "$service exit status"
 done
 echo 'ok - migration, Blob container, Blob store and key-ring steps completed'
-compose exec -T model ollama list | grep -q -F "$WEFT_ACCEPTANCE_CHAT_MODEL" ||
-  fail "chat model $WEFT_ACCEPTANCE_CHAT_MODEL is not in $WEFT_ACCEPTANCE_OLLAMA_VOLUME"
+if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} != true ]]; then
+  compose exec -T model ollama list | grep -q -F "$WEFT_ACCEPTANCE_CHAT_MODEL" ||
+    fail "chat model $WEFT_ACCEPTANCE_CHAT_MODEL is not in $WEFT_ACCEPTANCE_OLLAMA_VOLUME"
+fi
 
 # No container of the stack receives the Docker socket.
 for container in $(compose ps --all --quiet); do
@@ -222,6 +243,9 @@ export WEFT_ACCEPTANCE_SPKI
 export WEFT_ACCEPTANCE_COMPOSE_PROJECT=$project
 WEFT_ACCEPTANCE_COMPOSE_FILES=$(printf '%s:' "$compose_directory"/compose.{yml,ferrule-service.yml,features.yml,acceptance.yml})
 export WEFT_ACCEPTANCE_COMPOSE_FILES=${WEFT_ACCEPTANCE_COMPOSE_FILES%:}
+if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
+  export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$compose_directory/compose.model-fixture.yml"
+fi
 export WEFT_ACCEPTANCE_PRINCIPAL_ID=$principal
 export WEFT_ACCEPTANCE_WORK=$work
 export WEFT_ACCEPTANCE_FIXTURES=$repository/engines/ferrule-host/tests/fixtures
