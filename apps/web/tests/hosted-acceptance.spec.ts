@@ -10,6 +10,7 @@ import {
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { confirmAction } from "./confirmation.fixture";
+import { confirmHostedMutation } from "./hosted-mutation.fixture";
 
 /**
  * P8 local acceptance on the packaged Session stack owned by deploy/compose/acceptance-test.sh:
@@ -862,16 +863,13 @@ async function confirmed(
   target: Page,
   suffix: RegExp,
   action: () => Promise<unknown>,
+  recoverUnsentAction?: () => Promise<boolean>,
 ): Promise<Response> {
-  const received = target.waitForResponse(
-    (response) =>
-      suffix.test(new URL(response.url()).pathname) &&
-      ["PUT", "POST"].includes(response.request().method()),
-    { timeout: 120_000 },
-  );
-  await action();
-  await confirmAction(target);
-  const response = await received;
+  const response = await confirmHostedMutation(target, suffix, action, {
+    confirm: () => confirmAction(target),
+    recoverUnsentAction,
+    onRecovery: () => recoveries.push("unsent build action"),
+  });
   expect([200, 201]).toContain(response.status());
   return response;
 }
@@ -889,20 +887,25 @@ test("prepares and completes a build through the Ferrule service", async () => {
   const changed = panel
     .getByRole("alert")
     .filter({ hasText: "Your access changed" });
-  for (let attempt = 1; ; attempt++) {
-    await panel
-      .getByRole("button", { name: "Load preparation controls" })
-      .click();
-    const refresh = panel.getByRole("button", { name: "Refresh environments" });
-    await expect(refresh.or(changed)).toBeVisible();
-    if (!(await changed.isVisible())) {
-      await expect(refresh).toBeEnabled();
-      break;
+  const loadControls = async () => {
+    for (let attempt = 1; ; attempt++) {
+      await panel
+        .getByRole("button", { name: "Load preparation controls" })
+        .click();
+      const refresh = panel.getByRole("button", {
+        name: "Refresh environments",
+      });
+      await expect(refresh.or(changed)).toBeVisible();
+      if (!(await changed.isVisible())) {
+        await expect(refresh).toBeEnabled();
+        return;
+      }
+      expect(attempt).toBeLessThan(4);
+      recoveries.push("build controls");
+      await page.getByRole("button", { name: "Refresh catalog" }).click();
     }
-    expect(attempt).toBeLessThan(4);
-    recoveries.push("build controls");
-    await page.getByRole("button", { name: "Refresh catalog" }).click();
-  }
+  };
+  await loadControls();
   const environment = panel.getByRole("combobox", {
     name: "Environment version",
   });
@@ -912,8 +915,30 @@ test("prepares and completes a build through the Ferrule service", async () => {
     await panel
       .getByRole("button", { name: "Environment administration" })
       .click();
-    await confirmed(page, /\/build-environments\/[^/]+\/versions\/1$/, () =>
-      panel.getByRole("button", { name: "Register new environment" }).click(),
+    await confirmed(
+      page,
+      /\/build-environments\/[^/]+\/versions\/1$/,
+      async () => {
+        const register = panel.getByRole("button", {
+          name: "Register new environment",
+        });
+        await expect(register.or(changed).first()).toBeVisible({
+          timeout: 120_000,
+        });
+        if (await changed.isVisible())
+          throw new Error("Build admission changed before registration.");
+        await register.click({ timeout: 5_000 });
+      },
+      async () => {
+        if (!(await changed.isVisible())) return false;
+        await page.getByRole("button", { name: "Refresh catalog" }).click();
+        await loadControls();
+        if ((await environment.locator("option").count()) !== 1) return false;
+        await panel
+          .getByRole("button", { name: "Environment administration" })
+          .click();
+        return true;
+      },
     );
     await panel.getByRole("button", { name: "Refresh environments" }).click();
   }

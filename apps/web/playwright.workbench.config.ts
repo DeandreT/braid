@@ -8,6 +8,7 @@ export default defineConfig({
     "upload-retention.spec.ts",
     "workbench.spec.ts",
     "workbench-model.spec.ts",
+    "hosted-mutation.spec.ts",
     "regression.spec.ts",
     "builds.spec.ts",
     "revision-preview.spec.ts",
