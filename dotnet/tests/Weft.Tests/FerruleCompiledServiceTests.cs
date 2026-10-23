@@ -232,7 +232,8 @@ public sealed class FerruleCompiledServiceTests
             Write(Path.Combine(multiarch, "libssl.so.3"), CompileWorkerIdentityTests.Elf(["libcrypto.so.3"]));
             Write(Path.Combine(multiarch, "libcrypto.so.3"), "crypto"u8.ToArray());
             Write(Path.Combine(multiarch, "libunrelated.so.1"), "unrelated"u8.ToArray());
-            var options = new ProcessCompiledRuntimeOptions(PackagedFerruleService.Identity, Path.Combine(runtime, "weft-compiled-runtime.dll"),
+            // The native worker identity is a fixed input here; only the runtime's own files vary.
+            var options = new ProcessCompiledRuntimeOptions("sha256:" + new string('a', 64), Path.Combine(runtime, "weft-compiled-runtime.dll"),
                 launcher, root, dotnet);
             string Identity() => ProcessCompiledRuntimeRunner.ComputeIdentity(options, [interpreter], [system]);
 
