@@ -11,6 +11,8 @@ set -euo pipefail
 
 repository=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 compose_directory=$repository/deploy/compose
+# shellcheck source=acceptance-lifecycle.sh
+source "$compose_directory/acceptance-lifecycle.sh"
 project=weft-accept-$(openssl rand -hex 4)
 work=$(mktemp -d "${TMPDIR:-/tmp}/weft-accept.XXXXXXXX")
 chmod 0700 "$work"
@@ -36,6 +38,8 @@ owned_objects() {
 cleanup() {
   local status=$? cleanup_status=0
   set +e
+  acceptance_result "$status"
+  status=$?
   if ((status != 0)) && [[ -n ${WEFT_ACCEPTANCE_LOG_DIRECTORY:-} ]]; then
     # Service logs and browser failure context carry no secrets: the server and tools emit
     # fixed status lines only, and the issuer and relays log no protocol values.
@@ -260,6 +264,7 @@ if [[ -n ${WEFT_ACCEPTANCE_HOLD:-} ]]; then
   chmod 0600 "$work/environment"
   echo "Holding $project: source $work/environment, then touch $work/release to clean up."
   until [[ -e $work/release ]]; do sleep 5; done
+  acceptance_complete=true
   exit 0
 fi
 
@@ -297,3 +302,4 @@ if [[ -n ${WEFT_ACCEPTANCE_STAGE:-} ]]; then
   echo "Running the follow-on stage $(basename -- "$WEFT_ACCEPTANCE_STAGE")"
   "$WEFT_ACCEPTANCE_STAGE" || fail 'follow-on stage'
 fi
+acceptance_complete=true

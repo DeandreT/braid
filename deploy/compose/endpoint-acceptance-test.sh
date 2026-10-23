@@ -38,6 +38,9 @@ if [[ ${WEFT_ENDPOINT_ACCEPTANCE_RUN:-} != stage ]]; then
   exec "$compose_directory/acceptance-test.sh"
 fi
 
+# shellcheck source=acceptance-lifecycle.sh
+source "$compose_directory/acceptance-lifecycle.sh"
+
 # The follow-on stage, inside the hosted acceptance run: its stack, environment and private directory.
 for setting in WEFT_ACCEPTANCE_WORK WEFT_ACCEPTANCE_COMPOSE_PROJECT WEFT_ACCEPTANCE_COMPOSE_FILES WEFT_ACCEPTANCE_PRINCIPAL_ID \
   WEFT_SESSION_ORGANIZATION_ID WEFT_ENTRA_TENANT_ID WEFT_ENTRA_CLIENT_ID WEFT_FERRULE_SERVICE_IDENTITY WEFT_FERRULE_COMPILE_TOOLCHAIN \
@@ -69,6 +72,8 @@ compose() {
 cleanup() {
   local status=$? cleanup_status=0
   set +e
+  acceptance_result "$status"
+  status=$?
   if ((status != 0)) && [[ -n ${WEFT_ACCEPTANCE_LOG_DIRECTORY:-} ]]; then
     # The endpoint and the tools write fixed status lines only.
     mkdir -p "$WEFT_ACCEPTANCE_LOG_DIRECTORY/$project" &&
@@ -413,3 +418,4 @@ compose rm --force endpoint >/dev/null 2>&1 || fail 'endpoint removal'
 compose logs --no-color issuer >"$work/issuer.log" 2>&1
 grep -q 'issuer machine-token' "$work/issuer.log" || fail 'no machine token was issued'
 echo "ok - the endpoint stopped cleanly and joined its compiled runtime ($runtime; 503 retries: $retries)"
+acceptance_complete=true
