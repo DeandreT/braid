@@ -6,8 +6,10 @@
 //! fixed limits and the exact program command. Before the program runs, the launcher applies hard resource limits,
 //! becomes non-dumpable, sets no-new-privileges, confines the filesystem with Landlock (read-only grants and private
 //! directory, write access to at most one existing output file, execute access to the program only, no TCP) and
-//! installs syscall filters (no network sockets, no new processes, no tracing, no signals or limits for other
-//! processes, no System V IPC or message queues, no namespace or mount operations). It then writes
+//! installs syscall filters (no sockets, no new processes, no tracing or memory access, signals, descriptor owners,
+//! scheduling or limits for other processes, no System V IPC or message queues, no namespace or mount operations).
+//! The filters alone keep the program from other processes of the same user wherever Landlock does not scope
+//! signals and abstract sockets (ABI 3 to 5). It then writes
 //! [`READY_MARKER`] and waits for [`GO`], so the service can verify the applied state in procfs before the program
 //! starts. Every control survives `execve`.
 
@@ -491,6 +493,8 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
         .iter()
         .map(|&number| (number, Vec::new()))
         .collect::<BTreeMap<_, _>>();
+    // Landlock scopes signals only from ABI 6, and the service and every child run as one user, so these filters
+    // alone keep a child from signaling them on older kernels.
     // Signals may address only this process; kill(0) and kill(-1) reach other processes.
     let own = u64::from(std::process::id());
     for number in [libc::SYS_kill, libc::SYS_tkill, libc::SYS_tgkill] {
@@ -499,13 +503,44 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
             vec![rule(SeccompCmpArgLen::Dword, SeccompCmpOp::Ne, own)?],
         );
     }
-    // Limits and CPU affinity only of this process (pid 0); other processes of the same user stay untouched.
-    for number in [libc::SYS_prlimit64, libc::SYS_sched_setaffinity] {
+    // Limits, CPU affinity and the robust futex list only of this process (pid 0); other processes of the same user
+    // stay untouched.
+    for number in [
+        libc::SYS_prlimit64,
+        libc::SYS_sched_setaffinity,
+        libc::SYS_get_robust_list,
+    ] {
         denied.insert(
             number,
             vec![rule(SeccompCmpArgLen::Dword, SeccompCmpOp::Ne, 0)?],
         );
     }
+    // A descriptor's owner receives SIGIO, or any signal F_SETSIG selects, whenever the descriptor becomes ready,
+    // sent with this process's credentials; a lease break signals its holder and stalls other openers. No owner can
+    // be set and no descriptor made asynchronous; every other status flag stays settable.
+    let command = |value: libc::c_int| {
+        SeccompCondition::new(1, SeccompCmpArgLen::Dword, SeccompCmpOp::Eq, value as u64)
+            .map_err(|_| invalid())
+    };
+    let mut fcntl = Vec::new();
+    for value in [libc::F_SETOWN, F_SETOWN_EX, F_SETSIG, libc::F_SETLEASE] {
+        fcntl.push(SeccompRule::new(vec![command(value)?]).map_err(|_| invalid())?);
+    }
+    let asynchronous = libc::O_ASYNC as u64;
+    fcntl.push(
+        SeccompRule::new(vec![
+            command(libc::F_SETFL)?,
+            SeccompCondition::new(
+                2,
+                SeccompCmpArgLen::Dword,
+                SeccompCmpOp::MaskedEq(asynchronous),
+                asynchronous,
+            )
+            .map_err(|_| invalid())?,
+        ])
+        .map_err(|_| invalid())?,
+    );
+    denied.insert(libc::SYS_fcntl, fcntl);
     // Threads only: a clone without CLONE_THREAD, or with any namespace flag, would be a new process.
     let thread = libc::CLONE_THREAD as u64;
     let mut clone = vec![rule(
@@ -530,10 +565,11 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
         )?);
     }
     denied.insert(libc::SYS_clone, clone);
-    // Inode flags, project attributes and versions also change through ioctl on any descriptor of the owner;
-    // every other ioctl stays available.
+    // Inode flags, project attributes and versions also change through ioctl on any descriptor of the owner, and
+    // the ioctl forms of the owner and asynchronous controls, a terminal's process group and terminal input reach
+    // other processes; every other ioctl stays available.
     let mut ioctl = Vec::new();
-    for request in METADATA_IOCTLS {
+    for request in METADATA_IOCTLS.into_iter().chain(PROCESS_IOCTLS) {
         ioctl.push(
             SeccompCondition::new(1, SeccompCmpArgLen::Dword, SeccompCmpOp::Eq, request)
                 .and_then(|condition| SeccompRule::new(vec![condition]))
@@ -586,6 +622,16 @@ const SYS_OPEN_TREE_ATTR: i64 = 467;
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const SYS_FILE_SETATTR: i64 = 469;
 
+// fcntl commands missing from the pinned libc's tables.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const F_SETSIG: libc::c_int = 10;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const F_SETOWN_EX: libc::c_int = 15;
+
+/// `FIOSETOWN`, `SIOCSPGRP`, `FIOASYNC`, `TIOCSPGRP` and `TIOCSTI`.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const PROCESS_IOCTLS: [u64; 5] = [0x8901, 0x8902, 0x5452, 0x5410, 0x5412];
+
 /// `FS_IOC_SETFLAGS`, `FS_IOC32_SETFLAGS`, `FS_IOC_SETVERSION`, `FS_IOC32_SETVERSION` and `FS_IOC_FSSETXATTR`.
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const METADATA_IOCTLS: [u64; 5] = [
@@ -612,6 +658,7 @@ const DENIED: &[i64] = &[
     libc::SYS_process_vm_readv,
     libc::SYS_process_vm_writev,
     libc::SYS_process_madvise,
+    libc::SYS_process_mrelease,
     libc::SYS_kcmp,
     libc::SYS_pidfd_open,
     libc::SYS_pidfd_getfd,
@@ -736,5 +783,44 @@ mod tests {
         ] {
             assert!(super::DENIED.contains(&syscall));
         }
+    }
+
+    /// Calls that can reach another process of the same user; before Landlock ABI 6 only the filter refuses those
+    /// that signal it.
+    #[test]
+    fn calls_that_reach_other_processes_are_denied() {
+        for syscall in [
+            libc::SYS_ptrace,
+            libc::SYS_process_vm_readv,
+            libc::SYS_process_vm_writev,
+            libc::SYS_process_madvise,
+            libc::SYS_process_mrelease,
+            libc::SYS_kcmp,
+            libc::SYS_pidfd_open,
+            libc::SYS_pidfd_getfd,
+            libc::SYS_pidfd_send_signal,
+            libc::SYS_rt_sigqueueinfo,
+            libc::SYS_rt_tgsigqueueinfo,
+            libc::SYS_migrate_pages,
+            libc::SYS_move_pages,
+            libc::SYS_setpriority,
+            libc::SYS_ioprio_set,
+            libc::SYS_sched_setattr,
+            libc::SYS_sched_setscheduler,
+            libc::SYS_sched_setparam,
+            libc::SYS_perf_event_open,
+            libc::SYS_userfaultfd,
+            libc::SYS_io_uring_setup,
+            libc::SYS_io_uring_enter,
+            libc::SYS_io_uring_register,
+            libc::SYS_keyctl,
+            libc::SYS_add_key,
+            libc::SYS_request_key,
+            libc::SYS_socket,
+            libc::SYS_socketpair,
+        ] {
+            assert!(super::DENIED.contains(&syscall));
+        }
+        assert_eq!(super::filters().unwrap().len(), super::FILTERS);
     }
 }

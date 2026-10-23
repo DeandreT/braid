@@ -68,8 +68,49 @@ Compile calls require an explicit toolchain pin before dispatch and on the answe
 their build identity binds both digests. Build-related inspection and preview use
 that same pin so saved evidence matches the build intent. The toolchain digest
 includes the .NET host/runtime, compiler, reference assemblies, launcher and shared
-compilation implementation, rather than only a version label.
+compilation implementation, rather than only a version label. It also covers the
+host's ELF interpreter and every system library the host, runtime and launcher can
+load, because the image installs those libraries from unpinned packages. The service
+finds them without running the loader: it follows each `DT_NEEDED` entry and the
+libraries the runtime opens by name (OpenSSL, LTTng and `libgcc_s`), transitively.
+Each name is looked up where glibc's loader searches for it: an object with
+`DT_RUNPATH` searches that run path for its own direct dependencies only and ignores
+every `DT_RPATH`; any other object searches its own `DT_RPATH` and the `DT_RPATH`
+inherited from each object above it in the loading chain and from the executable.
+Every directory the loader may then search beneath the granted system library
+directories counts too (each directory, its `x86_64-linux-gnu` directory and their
+`glibc-hwcaps` subdirectories). Every match counts, so a changed, added or
+alternative copy changes the identity.
 Docker compilation remains the default runner for local development and tests.
+
+### Launcher isolation from other processes
+
+The service and every compiler run as the same user, so the launcher's syscall
+filter, not file permissions, keeps a compiler from other processes. Landlock scopes
+signals and abstract unix sockets only from ABI 6, while the launcher admits ABI 3,
+so on ABI 3 to 5 the filter alone must refuse every route. It refuses with `EPERM`:
+
+- signals to any other process or thread (`kill`, `tkill` and `tgkill` may address
+  only the compiler's own process), queued signals, and every process-descriptor
+  call (`pidfd_open`, `pidfd_send_signal`, `pidfd_getfd`);
+- descriptor owners and asynchronous notification, which deliver a signal chosen by
+  the owner's controller: `fcntl` `F_SETOWN`, `F_SETOWN_EX`, `F_SETSIG`, `F_SETLEASE`
+  and `F_SETFL` with `O_ASYNC`, and the `ioctl` requests `FIOSETOWN`, `SIOCSPGRP`,
+  `FIOASYNC`, `TIOCSPGRP` and `TIOCSTI`;
+- tracing and memory access (`ptrace`, `process_vm_readv`/`writev`, `kcmp`,
+  `process_madvise`, `process_mrelease`, another process's robust futex list);
+- scheduling, priority, I/O priority, limits, CPU affinity and memory placement of
+  any other process;
+- `perf_event_open`, `io_uring`, `userfaultfd`, the key management calls, System V
+  IPC and message queues, and every socket, which also excludes abstract unix sockets.
+
+Landlock grants procfs only beneath the compiler's own `/proc/<pid>`. The runtime's
+own signals keep working: the process may signal itself and its threads. The
+launcher qualification (`engines/compile-sandbox/tests/sandbox_qualification.rs`)
+tries each route against an ordinary process of the same user and against a sibling
+in its own sandbox, at the kernel's Landlock ABI and at simulated ABIs 3, 4 and 5: a
+seccomp user notification answers the launcher's version query with the older ABI,
+so the unmodified launcher applies exactly that ABI's controls on any kernel.
 
 Build the native image first from `engines/ferrule-host`, then use
 `tools/build-worker/build_image.py --native-image sha256:<id> --tag <tag>

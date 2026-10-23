@@ -1,19 +1,26 @@
 //! Compile-sandbox qualification. This target has no libtest harness: each launch runs the real launcher, which
-//! executes a fresh copy of this executable as its program, so every control is observed after `execve`.
+//! executes a fresh copy of this executable as its program, so every control is observed after `execve`. Launches
+//! can also simulate an older kernel's Landlock ABI, so the controls that must hold without Landlock's signal and
+//! abstract-socket scopes (ABI 3 to 5) are qualified on any kernel.
 
 use std::ffi::{CString, OsString};
-use std::io::{Read, Write};
-use std::os::unix::process::ExitStatusExt;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use weft_compile_sandbox::{self as sandbox, FILTERS, GO, READY_MARKER};
+use weft_compile_sandbox::{self as sandbox, FILTERS, GO, MINIMUM_LANDLOCK_ABI, READY_MARKER};
 
 const HELPER: &str = "WEFT_COMPILE_SANDBOX_QUALIFICATION_HELPER";
+const VICTIM: &str = "WEFT_COMPILE_SANDBOX_QUALIFICATION_VICTIM";
 const LAUNCHER: &str = env!("CARGO_BIN_EXE_weft-compile-sandbox");
 const MEMORY_BYTES: u64 = 1 << 30;
 const FILE_BYTES: u64 = 1 << 20;
+/// The kernel's own Landlock ABI, then every admitted ABI before 6, the first that scopes signals and abstract unix
+/// sockets to the sandbox.
+const ABIS: [Option<i64>; 4] = [None, Some(5), Some(4), Some(MINIMUM_LANDLOCK_ABI)];
 
 fn main() {
     if let Ok(scenario) = std::env::var(HELPER) {
@@ -23,6 +30,7 @@ fn main() {
     arguments_have_one_exact_shape();
     launcher_reports_every_control_before_the_program();
     program_runs_confined_after_execve();
+    other_processes_are_unreachable_at_every_landlock_abi();
     without_an_output_grant_nothing_is_writable();
     anything_but_go_never_starts_the_program();
     inherited_descriptor_refuses_the_launch();
@@ -237,16 +245,198 @@ fn launch_arguments(cpu_seconds: u64, memory_bytes: u64, extra: &[String]) -> Ve
 }
 
 fn launcher(scenario: &str, directory: &Path, arguments: &[String]) -> Child {
-    Command::new(LAUNCHER)
+    launcher_at(None, scenario, directory, arguments, &[])
+}
+
+/// Starts the launcher on this kernel, or, given an older Landlock ABI, as on a kernel that reports it. A
+/// user-notification filter installed just before `execve` answers the launcher's version query, so it applies
+/// exactly that ABI's controls; this kernel still creates and enforces its ruleset.
+fn launcher_at(
+    abi: Option<i64>,
+    scenario: &str,
+    directory: &Path,
+    arguments: &[String],
+    environment: &[(&str, String)],
+) -> Child {
+    let mut command = Command::new(LAUNCHER);
+    command
         .args(arguments)
         .env_clear()
         .env(HELPER, scenario)
+        .envs(environment.iter().map(|(name, value)| (name, value)))
         .current_dir(directory)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap()
+        .stderr(Stdio::piped());
+    let Some(abi) = abi else {
+        return command.spawn().unwrap();
+    };
+    let mut pair = [0; 2];
+    assert_eq!(
+        unsafe {
+            libc::socketpair(
+                libc::AF_UNIX,
+                libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC,
+                0,
+                pair.as_mut_ptr(),
+            )
+        },
+        0
+    );
+    let (supervisor, sender) =
+        unsafe { (OwnedFd::from_raw_fd(pair[0]), OwnedFd::from_raw_fd(pair[1])) };
+    let program = version_query_filter();
+    let sending = sender.as_raw_fd();
+    // Runs between fork and execve: system calls only, no allocation.
+    unsafe {
+        command.pre_exec(move || install_version_query_filter(&program, sending));
+    }
+    let child = command.spawn().unwrap();
+    drop(sender);
+    let listener = receive_descriptor(&supervisor);
+    answer_version_query(&listener, abi);
+    child
+}
+
+/// Notifies only `landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)`; everything else proceeds.
+fn version_query_filter() -> Vec<libc::sock_filter> {
+    const AUDIT_ARCH_X86_64: u32 = 0xc000_003e;
+    let statement = |code: u16, jt: u8, jf: u8, k: u32| libc::sock_filter { code, jt, jf, k };
+    vec![
+        // Architecture, system call number and the low word of the third argument.
+        statement(0x20, 0, 0, 4),
+        statement(0x15, 0, 5, AUDIT_ARCH_X86_64),
+        statement(0x20, 0, 0, 0),
+        statement(0x15, 0, 3, libc::SYS_landlock_create_ruleset as u32),
+        statement(0x20, 0, 0, 32),
+        statement(0x15, 0, 1, 1),
+        statement(0x06, 0, 0, libc::SECCOMP_RET_USER_NOTIF),
+        statement(0x06, 0, 0, libc::SECCOMP_RET_ALLOW),
+    ]
+}
+
+fn install_version_query_filter(
+    program: &[libc::sock_filter],
+    sender: RawFd,
+) -> std::io::Result<()> {
+    let failed = || Err(std::io::Error::last_os_error());
+    if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
+        return failed();
+    }
+    let filter = libc::sock_fprog {
+        len: program.len() as u16,
+        filter: program.as_ptr().cast_mut(),
+    };
+    let listener = unsafe {
+        libc::syscall(
+            libc::SYS_seccomp,
+            libc::SECCOMP_SET_MODE_FILTER,
+            libc::SECCOMP_FILTER_FLAG_NEW_LISTENER,
+            &raw const filter,
+        )
+    };
+    if listener < 0 {
+        return failed();
+    }
+    let listener = listener as RawFd;
+    let mut byte = [0u8];
+    let mut vector = libc::iovec {
+        iov_base: byte.as_mut_ptr().cast(),
+        iov_len: 1,
+    };
+    let mut control = [0u64; 4];
+    let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
+    message.msg_iov = &raw mut vector;
+    message.msg_iovlen = 1;
+    message.msg_control = control.as_mut_ptr().cast();
+    message.msg_controllen = unsafe { libc::CMSG_SPACE(size_of::<RawFd>() as u32) } as usize;
+    unsafe {
+        let header = libc::CMSG_FIRSTHDR(&raw const message);
+        (*header).cmsg_level = libc::SOL_SOCKET;
+        (*header).cmsg_type = libc::SCM_RIGHTS;
+        (*header).cmsg_len = libc::CMSG_LEN(size_of::<RawFd>() as u32) as usize;
+        libc::CMSG_DATA(header)
+            .cast::<RawFd>()
+            .write_unaligned(listener);
+    }
+    let sent = unsafe { libc::sendmsg(sender, &raw const message, 0) };
+    // The launcher must inherit nothing beyond the standard streams; the message holds its own reference.
+    unsafe { libc::close(listener) };
+    if sent != 1 {
+        return failed();
+    }
+    Ok(())
+}
+
+fn receive_descriptor(socket: &OwnedFd) -> OwnedFd {
+    let mut byte = [0u8];
+    let mut vector = libc::iovec {
+        iov_base: byte.as_mut_ptr().cast(),
+        iov_len: 1,
+    };
+    let mut control = [0u64; 4];
+    let mut message: libc::msghdr = unsafe { std::mem::zeroed() };
+    message.msg_iov = &raw mut vector;
+    message.msg_iovlen = 1;
+    message.msg_control = control.as_mut_ptr().cast();
+    message.msg_controllen = size_of_val(&control);
+    assert_eq!(
+        unsafe { libc::recvmsg(socket.as_raw_fd(), &raw mut message, libc::MSG_CMSG_CLOEXEC) },
+        1
+    );
+    unsafe {
+        let header = libc::CMSG_FIRSTHDR(&raw const message);
+        assert!(!header.is_null() && (*header).cmsg_type == libc::SCM_RIGHTS);
+        OwnedFd::from_raw_fd(libc::CMSG_DATA(header).cast::<RawFd>().read_unaligned())
+    }
+}
+
+/// Answers the launcher's one version query with `abi`, then closes the listener.
+fn answer_version_query(listener: &OwnedFd, abi: i64) {
+    const SECCOMP_IOCTL_NOTIF_RECV: libc::c_ulong = 0xc050_2100;
+    const SECCOMP_IOCTL_NOTIF_SEND: libc::c_ulong = 0xc018_2101;
+    let mut ready = libc::pollfd {
+        fd: listener.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    assert_eq!(
+        unsafe { libc::poll(&raw mut ready, 1, 30_000) },
+        1,
+        "the launcher never asked for its Landlock ABI"
+    );
+    let mut notification: libc::seccomp_notif = unsafe { std::mem::zeroed() };
+    assert_eq!(
+        unsafe {
+            libc::ioctl(
+                listener.as_raw_fd(),
+                SECCOMP_IOCTL_NOTIF_RECV,
+                &raw mut notification,
+            )
+        },
+        0
+    );
+    assert_eq!(
+        i64::from(notification.data.nr),
+        libc::SYS_landlock_create_ruleset
+    );
+    assert_eq!(notification.data.args[2], 1);
+    let response = libc::seccomp_notif_resp {
+        id: notification.id,
+        val: abi,
+        error: 0,
+        flags: 0,
+    };
+    assert_eq!(
+        unsafe {
+            libc::ioctl(
+                listener.as_raw_fd(),
+                SECCOMP_IOCTL_NOTIF_SEND,
+                &raw const response,
+            )
+        },
+        0
+    );
 }
 
 fn read_marker(child: &mut Child) -> [u8; 4] {
@@ -334,18 +524,26 @@ fn launcher_reports_every_control_before_the_program() {
 }
 
 fn program_runs_confined_after_execve() {
+    for abi in ABIS {
+        program_runs_confined_after_execve_at(abi);
+    }
+}
+
+fn program_runs_confined_after_execve_at(abi: Option<i64>) {
     let directory = private_directory();
-    let mut child = launcher(
+    let mut child = launcher_at(
+        abi,
         "probe",
         &directory,
         &launch_arguments(10, MEMORY_BYTES, &[grant(&directory)]),
+        &[],
     );
     assert_eq!(read_marker(&mut child), READY_MARKER);
     go(&mut child);
     let output = child.wait_with_output().unwrap();
     assert!(
         output.status.success(),
-        "{:?} {}",
+        "Landlock ABI {abi:?}: {:?} {}",
         output.status,
         String::from_utf8_lossy(&output.stderr)
     );
@@ -387,7 +585,8 @@ fn program_runs_confined_after_execve() {
             .unwrap()
             .lines()
             .collect::<Vec<_>>(),
-        expected
+        expected,
+        "Landlock ABI {abi:?}"
     );
     assert_eq!(
         std::fs::read(directory.join("output.dll")).unwrap(),
@@ -397,6 +596,151 @@ fn program_runs_confined_after_execve() {
         std::fs::read(directory.join("input.cs")).unwrap(),
         b"class Input {}"
     );
+}
+
+/// Every route by which a process of the same user can signal, trace, read, reschedule or otherwise affect another
+/// process, tried against the service (an ordinary process of this user) and against a sibling compiler in its
+/// own sandbox. Before Landlock ABI 6 only the syscall filter refuses the signal routes, so each is tried at
+/// every admitted ABI. The victims must survive, and the program's own signals must keep working.
+fn other_processes_are_unreachable_at_every_landlock_abi() {
+    let expected = [
+        "set-owner=EPERM",
+        "set-owner-ex=EPERM",
+        "set-owner-signal=EPERM",
+        "set-asynchronous=EPERM",
+        "set-non-blocking=ok",
+        "set-lease=EPERM",
+        "ioctl-set-owner=EPERM",
+        "ioctl-set-process-group=EPERM",
+        "ioctl-set-asynchronous=EPERM",
+        "ioctl-set-terminal-group=EPERM",
+        "ioctl-inject-terminal-input=EPERM",
+        "signal=EPERM",
+        "signal-thread=EPERM",
+        "signal-group-thread=EPERM",
+        "queue-signal=EPERM",
+        "queue-thread-signal=EPERM",
+        "open-process=EPERM",
+        "signal-process-descriptor=EPERM",
+        "copy-descriptor=EPERM",
+        "advise-memory=EPERM",
+        "release-memory=EPERM",
+        "trace=EPERM",
+        "read-memory=EPERM",
+        "write-memory=EPERM",
+        "compare-resources=EPERM",
+        "robust-list=EPERM",
+        "open-memory=EACCES",
+        "read-status=EACCES",
+        "list-processes=EACCES",
+        "priority=EPERM",
+        "affinity=EPERM",
+        "scheduler=EPERM",
+        "scheduler-parameters=EPERM",
+        "scheduler-attributes=EPERM",
+        "io-priority=EPERM",
+        "limits=EPERM",
+        "migrate-pages=EPERM",
+        "move-pages=EPERM",
+        "performance-events=EPERM",
+        "io-uring=EPERM",
+        "userfaultfd=EPERM",
+        "user-keyring=EPERM",
+        "add-key=EPERM",
+        "unix-socket=EPERM",
+        "socket-pair=EPERM",
+        "own-robust-list=ok",
+        "read-own-thread=ok",
+        "signal-self=ok",
+        "signal-own-thread=ok",
+        "signal-other-own-thread=ok",
+        "raise-self=handled",
+    ];
+    let mut failures = Vec::new();
+    for abi in ABIS {
+        for sandboxed in [false, true] {
+            let context = format!(
+                "Landlock ABI {}, {} victim",
+                abi.map_or("of this kernel".to_string(), |abi| format!(
+                    "{abi} (simulated)"
+                )),
+                if sandboxed {
+                    "sandboxed sibling"
+                } else {
+                    "service"
+                }
+            );
+            let victim_directory = private_directory();
+            let mut victim = if sandboxed {
+                let mut child = launcher_at(
+                    abi,
+                    "victim",
+                    &victim_directory,
+                    &launch_arguments(10, MEMORY_BYTES, &[]),
+                    &[],
+                );
+                assert_eq!(read_marker(&mut child), READY_MARKER, "{context}");
+                child.stdin.as_mut().unwrap().write_all(&[GO]).unwrap();
+                child
+            } else {
+                Command::new(std::env::current_exe().unwrap())
+                    .env_clear()
+                    .env(HELPER, "victim")
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .unwrap()
+            };
+            let mut victim_output = BufReader::new(victim.stdout.take().unwrap());
+            let mut ready = String::new();
+            victim_output.read_line(&mut ready).unwrap();
+            assert_eq!(ready, "ready\n", "{context}");
+
+            let directory = private_directory();
+            let mut child = launcher_at(
+                abi,
+                "cross-process",
+                &directory,
+                &launch_arguments(10, MEMORY_BYTES, &[grant(&directory)]),
+                &[(VICTIM, victim.id().to_string())],
+            );
+            assert_eq!(read_marker(&mut child), READY_MARKER, "{context}");
+            go(&mut child);
+            let output = child.wait_with_output().unwrap();
+            drop(victim.stdin.take());
+            let mut survived = String::new();
+            victim_output.read_to_string(&mut survived).unwrap();
+            let status = victim.wait().unwrap();
+
+            let report = String::from_utf8_lossy(&output.stdout);
+            let lines = report.lines().collect::<Vec<_>>();
+            if !output.status.success() || lines != expected {
+                failures.push(format!(
+                    "{context}: program {:?} {}\n{}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr),
+                    (0..lines.len().max(expected.len()))
+                        .filter_map(|index| {
+                            let (line, wanted) = (lines.get(index), expected.get(index));
+                            (line != wanted).then(|| {
+                                format!(
+                                    "  {} (expected {})",
+                                    line.unwrap_or(&"nothing"),
+                                    wanted.unwrap_or(&"nothing")
+                                )
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ));
+            }
+            if !status.success() || survived != "alive\n" {
+                failures.push(format!("{context}: the victim was reached: {status:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 fn without_an_output_grant_nothing_is_writable() {
@@ -539,6 +883,15 @@ fn helper(scenario: &str) {
             Err(error) => println!("{:?}", error.kind()),
         },
         "probe" => probe(),
+        "cross-process" => cross_process_probe(),
+        "victim" => {
+            // Default dispositions: SIGIO, SIGUSR1 or any other route that reaches this process ends it.
+            let mut output = std::io::stdout();
+            output.write_all(b"ready\n").unwrap();
+            output.flush().unwrap();
+            std::io::stdin().read_to_end(&mut Vec::new()).unwrap();
+            output.write_all(b"alive\n").unwrap();
+        }
         "leak-descriptor" => {
             // An inherited descriptor without close-on-exec must stop the launcher before its marker.
             let leaked = rustix::io::dup(std::io::stdout()).unwrap();
@@ -829,5 +1182,395 @@ fn probe() {
         "signal-self",
         signal(Some(rustix::process::getpid()), false),
     );
+    std::io::stdout().write_all(report.as_bytes()).unwrap();
+}
+
+/// Runs inside the launched program and tries each route to the victim, then the program's own signals.
+fn cross_process_probe() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    const F_SETSIG: libc::c_int = 10;
+    const F_SETOWN_EX: libc::c_int = 15;
+    const F_OWNER_PID: libc::c_int = 1;
+    const FIOSETOWN: libc::c_ulong = 0x8901;
+    const SIOCSPGRP: libc::c_ulong = 0x8902;
+    const PTRACE_SEIZE: libc::c_long = 0x4206;
+    const KCMP_VM: libc::c_long = 1;
+    const MADV_COLD: libc::c_long = 20;
+    const IOPRIO_WHO_PROCESS: libc::c_long = 1;
+    const IOPRIO_IDLE: libc::c_long = 3 << 13;
+    const KEYCTL_GET_KEYRING_ID: libc::c_long = 0;
+    const KEY_SPEC_USER_KEYRING: libc::c_long = -4;
+    static HANDLED: AtomicBool = AtomicBool::new(false);
+    extern "C" fn handle(_: libc::c_int) {
+        HANDLED.store(true, Ordering::SeqCst);
+    }
+
+    let victim: libc::pid_t = std::env::var(VICTIM).unwrap().parse().unwrap();
+    let target = libc::c_long::from(victim);
+    let mut report = String::new();
+    let mut line = |name: &str, result: libc::c_long| {
+        let value = if result >= 0 {
+            "ok".to_string()
+        } else {
+            match std::io::Error::last_os_error().raw_os_error() {
+                Some(libc::EPERM) => "EPERM".to_string(),
+                Some(libc::EACCES) => "EACCES".to_string(),
+                other => format!("{other:?}"),
+            }
+        };
+        report.push_str(&format!("{name}={value}\n"));
+    };
+    let call = |result: libc::c_int| libc::c_long::from(result);
+
+    // Owner and asynchronous controls on a pipe, like the standard output the service reads: once an owner and
+    // asynchronous mode are in force, the write below signals the owner with this process's credentials.
+    let mut pipe = [0; 2];
+    assert_eq!(
+        unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) },
+        0
+    );
+    let (reader, writer) = (pipe[0], pipe[1]);
+    line(
+        "set-owner",
+        call(unsafe { libc::fcntl(reader, libc::F_SETOWN, victim) }),
+    );
+    let owner = [F_OWNER_PID, victim];
+    line(
+        "set-owner-ex",
+        call(unsafe { libc::fcntl(reader, F_SETOWN_EX, owner.as_ptr()) }),
+    );
+    line(
+        "set-owner-signal",
+        call(unsafe { libc::fcntl(reader, F_SETSIG, libc::SIGUSR1) }),
+    );
+    let flags = unsafe { libc::fcntl(reader, libc::F_GETFL) };
+    line(
+        "set-asynchronous",
+        call(unsafe { libc::fcntl(reader, libc::F_SETFL, flags | libc::O_ASYNC) }),
+    );
+    line(
+        "set-non-blocking",
+        call(unsafe { libc::fcntl(reader, libc::F_SETFL, flags | libc::O_NONBLOCK) }),
+    );
+    let input = std::fs::File::open("input.cs").unwrap();
+    line(
+        "set-lease",
+        call(unsafe { libc::fcntl(input.as_raw_fd(), libc::F_SETLEASE, libc::F_RDLCK) }),
+    );
+    line(
+        "ioctl-set-owner",
+        call(unsafe { libc::ioctl(reader, FIOSETOWN, &raw const victim) }),
+    );
+    line(
+        "ioctl-set-process-group",
+        call(unsafe { libc::ioctl(reader, SIOCSPGRP, &raw const victim) }),
+    );
+    let on: libc::c_int = 1;
+    line(
+        "ioctl-set-asynchronous",
+        call(unsafe { libc::ioctl(reader, libc::FIOASYNC, &raw const on) }),
+    );
+    line(
+        "ioctl-set-terminal-group",
+        call(unsafe { libc::ioctl(reader, libc::TIOCSPGRP, &raw const victim) }),
+    );
+    let character = b'x';
+    line(
+        "ioctl-inject-terminal-input",
+        call(unsafe { libc::ioctl(reader, libc::TIOCSTI, &raw const character) }),
+    );
+    assert_eq!(
+        unsafe { libc::write(writer, (&raw const character).cast(), 1) },
+        1
+    );
+
+    // Signals, directly or through a process descriptor.
+    line("signal", call(unsafe { libc::kill(victim, libc::SIGUSR1) }));
+    line("signal-thread", unsafe {
+        libc::syscall(libc::SYS_tkill, victim, libc::SIGUSR1)
+    });
+    line("signal-group-thread", unsafe {
+        libc::syscall(libc::SYS_tgkill, victim, victim, libc::SIGUSR1)
+    });
+    let mut information: libc::siginfo_t = unsafe { std::mem::zeroed() };
+    information.si_signo = libc::SIGUSR1;
+    information.si_code = libc::SI_QUEUE;
+    line("queue-signal", unsafe {
+        libc::syscall(
+            libc::SYS_rt_sigqueueinfo,
+            victim,
+            libc::SIGUSR1,
+            &raw const information,
+        )
+    });
+    line("queue-thread-signal", unsafe {
+        libc::syscall(
+            libc::SYS_rt_tgsigqueueinfo,
+            victim,
+            victim,
+            libc::SIGUSR1,
+            &raw const information,
+        )
+    });
+    let descriptor = unsafe { libc::syscall(libc::SYS_pidfd_open, victim, 0) };
+    line("open-process", descriptor);
+    // Without a process descriptor, an invalid one still shows whether the filter refuses the call.
+    let descriptor = if descriptor >= 0 { descriptor } else { -1 };
+    line("signal-process-descriptor", unsafe {
+        libc::syscall(
+            libc::SYS_pidfd_send_signal,
+            descriptor,
+            libc::SIGUSR1,
+            std::ptr::null::<libc::siginfo_t>(),
+            0,
+        )
+    });
+    line("copy-descriptor", unsafe {
+        libc::syscall(libc::SYS_pidfd_getfd, descriptor, 0, 0)
+    });
+    let mut page = [0u8; 8];
+    let local = libc::iovec {
+        iov_base: page.as_mut_ptr().cast(),
+        iov_len: page.len(),
+    };
+    line("advise-memory", unsafe {
+        libc::syscall(
+            libc::SYS_process_madvise,
+            descriptor,
+            &raw const local,
+            1,
+            MADV_COLD,
+            0,
+        )
+    });
+    line("release-memory", unsafe {
+        libc::syscall(libc::SYS_process_mrelease, descriptor, 0)
+    });
+
+    // Tracing and memory, including through procfs.
+    line("trace", unsafe {
+        libc::syscall(libc::SYS_ptrace, PTRACE_SEIZE, victim, 0, 0)
+    });
+    let remote = libc::iovec {
+        iov_base: (&raw const local).cast_mut().cast(),
+        iov_len: page.len(),
+    };
+    line("read-memory", unsafe {
+        libc::syscall(
+            libc::SYS_process_vm_readv,
+            victim,
+            &raw const local,
+            1,
+            &raw const remote,
+            1,
+            0,
+        )
+    });
+    line("write-memory", unsafe {
+        libc::syscall(
+            libc::SYS_process_vm_writev,
+            victim,
+            &raw const local,
+            1,
+            &raw const remote,
+            1,
+            0,
+        )
+    });
+    let own = libc::c_long::from(unsafe { libc::getpid() });
+    line("compare-resources", unsafe {
+        libc::syscall(libc::SYS_kcmp, own, target, KCMP_VM, 0, 0)
+    });
+    let mut head = std::ptr::null_mut::<libc::c_void>();
+    let mut length = 0usize;
+    line("robust-list", unsafe {
+        libc::syscall(
+            libc::SYS_get_robust_list,
+            victim,
+            &raw mut head,
+            &raw mut length,
+        )
+    });
+    let open = |path: String, flags: libc::c_int| {
+        let path = CString::new(path).unwrap();
+        let descriptor = unsafe { libc::open(path.as_ptr(), flags | libc::O_CLOEXEC) };
+        if descriptor >= 0 {
+            unsafe { libc::close(descriptor) };
+        }
+        libc::c_long::from(descriptor)
+    };
+    line(
+        "open-memory",
+        open(format!("/proc/{victim}/mem"), libc::O_RDONLY),
+    );
+    line(
+        "read-status",
+        open(format!("/proc/{victim}/status"), libc::O_RDONLY),
+    );
+    line(
+        "list-processes",
+        open("/proc".to_string(), libc::O_RDONLY | libc::O_DIRECTORY),
+    );
+
+    // Scheduling, limits and memory placement.
+    line(
+        "priority",
+        call(unsafe { libc::setpriority(libc::PRIO_PROCESS, victim as libc::id_t, 19) }),
+    );
+    let mut processors: libc::cpu_set_t = unsafe { std::mem::zeroed() };
+    unsafe { libc::CPU_SET(0, &mut processors) };
+    line(
+        "affinity",
+        call(unsafe {
+            libc::sched_setaffinity(victim, size_of::<libc::cpu_set_t>(), &raw const processors)
+        }),
+    );
+    let parameters = libc::sched_param { sched_priority: 0 };
+    line(
+        "scheduler",
+        call(unsafe { libc::sched_setscheduler(victim, libc::SCHED_BATCH, &raw const parameters) }),
+    );
+    line(
+        "scheduler-parameters",
+        call(unsafe { libc::sched_setparam(victim, &raw const parameters) }),
+    );
+    // struct sched_attr, version 0: its size first, then a policy and parameters of zero.
+    let mut attributes = [0u32; 12];
+    attributes[0] = size_of_val(&attributes) as u32;
+    line("scheduler-attributes", unsafe {
+        libc::syscall(libc::SYS_sched_setattr, victim, attributes.as_ptr(), 0)
+    });
+    line("io-priority", unsafe {
+        libc::syscall(
+            libc::SYS_ioprio_set,
+            IOPRIO_WHO_PROCESS,
+            victim,
+            IOPRIO_IDLE,
+        )
+    });
+    let core = libc::rlimit64 {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    line(
+        "limits",
+        call(unsafe {
+            libc::prlimit64(
+                victim,
+                libc::RLIMIT_CORE,
+                &raw const core,
+                std::ptr::null_mut(),
+            )
+        }),
+    );
+    let nodes = [1u64];
+    line("migrate-pages", unsafe {
+        libc::syscall(
+            libc::SYS_migrate_pages,
+            victim,
+            64,
+            nodes.as_ptr(),
+            nodes.as_ptr(),
+        )
+    });
+    let mut status = [0i32];
+    line("move-pages", unsafe {
+        libc::syscall(
+            libc::SYS_move_pages,
+            victim,
+            0,
+            std::ptr::null::<*const libc::c_void>(),
+            std::ptr::null::<libc::c_int>(),
+            status.as_mut_ptr(),
+            0,
+        )
+    });
+
+    // Kernel interfaces that observe or share state across processes, and sockets (abstract unix sockets included).
+    // struct perf_event_attr: a software clock of the victim.
+    let mut event = [0u32; 32];
+    event[0] = 1;
+    event[1] = size_of_val(&event) as u32;
+    line("performance-events", unsafe {
+        libc::syscall(libc::SYS_perf_event_open, event.as_ptr(), victim, -1, -1, 0)
+    });
+    let mut ring = [0u8; 120];
+    line("io-uring", unsafe {
+        libc::syscall(libc::SYS_io_uring_setup, 1, ring.as_mut_ptr())
+    });
+    line("userfaultfd", unsafe {
+        libc::syscall(libc::SYS_userfaultfd, libc::O_CLOEXEC)
+    });
+    line("user-keyring", unsafe {
+        libc::syscall(
+            libc::SYS_keyctl,
+            KEYCTL_GET_KEYRING_ID,
+            KEY_SPEC_USER_KEYRING,
+            0,
+        )
+    });
+    line("add-key", unsafe {
+        libc::syscall(
+            libc::SYS_add_key,
+            c"user".as_ptr(),
+            c"weft".as_ptr(),
+            (&raw const character).cast::<libc::c_void>(),
+            1,
+            KEY_SPEC_USER_KEYRING,
+        )
+    });
+    line(
+        "unix-socket",
+        call(unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, 0) }),
+    );
+    let mut pair = [0; 2];
+    line(
+        "socket-pair",
+        call(unsafe {
+            libc::socketpair(
+                libc::AF_UNIX,
+                libc::SOCK_STREAM | libc::SOCK_CLOEXEC,
+                0,
+                pair.as_mut_ptr(),
+            )
+        }),
+    );
+
+    // The program's own process stays reachable: the runtime signals itself and its threads.
+    line("own-robust-list", unsafe {
+        libc::syscall(libc::SYS_get_robust_list, 0, &raw mut head, &raw mut length)
+    });
+    line(
+        "read-own-thread",
+        open("/proc/thread-self/status".to_string(), libc::O_RDONLY),
+    );
+    line(
+        "signal-self",
+        call(unsafe { libc::kill(libc::getpid(), 0) }),
+    );
+    line("signal-own-thread", unsafe {
+        libc::syscall(libc::SYS_tgkill, own, libc::gettid(), 0)
+    });
+    let (stop, parked) = std::sync::mpsc::channel::<()>();
+    let thread = std::thread::spawn(move || parked.recv().unwrap_or(()));
+    use std::os::unix::thread::JoinHandleExt;
+    let delivered = unsafe { libc::pthread_kill(thread.as_pthread_t(), 0) };
+    line(
+        "signal-other-own-thread",
+        if delivered == 0 { 0 } else { -1 },
+    );
+    stop.send(()).unwrap();
+    thread.join().unwrap();
+    unsafe { libc::signal(libc::SIGUSR2, handle as *const () as libc::sighandler_t) };
+    let raised = unsafe { libc::raise(libc::SIGUSR2) };
+    report.push_str(&format!(
+        "raise-self={}\n",
+        if raised == 0 && HANDLED.load(Ordering::SeqCst) {
+            "handled"
+        } else {
+            "refused"
+        }
+    ));
     std::io::stdout().write_all(report.as_bytes()).unwrap();
 }

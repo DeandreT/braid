@@ -45,7 +45,9 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
             !File.Exists(compiler) || !Directory.Exists(references))
             throw new ArgumentException("The compile launcher and the pinned toolchain must be installed.", nameof(options));
         grants = ProcessCompileOptions.ToolchainGrants.Resolve(options);
-        ToolchainIdentity = ComputeIdentity(options.ToolchainRoot, Path.GetDirectoryName(compiler)!, references, options.LauncherExecutable);
+        // Every granted directory beside the toolchain holds system libraries; /dev/urandom is a file.
+        ToolchainIdentity = ComputeIdentity(options.ToolchainRoot, Path.GetDirectoryName(compiler)!, references, options.LauncherExecutable,
+            grants.Execute, [.. grants.Read.Where(path => path != options.ToolchainRoot && Directory.Exists(path))]);
         inheritedFilters = ChildSandboxVerification.InheritedFilters();
         // Verifies the worker and the writable temporary root; the identity is the worker's, like every profile's.
         generation = new ProcessWorkerRunner(options.Generation);
@@ -58,8 +60,9 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
     public string CompilationBuildIdentity { get; }
 
     /// <summary>
-    /// <c>sha256:</c> over the compiler, references, host/runtime, launcher and compilation implementation
-    /// (each file's label, length and SHA-256 in ordinal order), reported and admitted by the compile protocol.
+    /// <c>sha256:</c> over the compiler, references, host/runtime, launcher and compilation implementation, the ELF
+    /// interpreter and every system library the host, runtime and launcher can load (each file's label, length and
+    /// SHA-256 in a fixed order), reported and admitted by the compile protocol.
     /// </summary>
     public string ToolchainIdentity { get; }
 
@@ -371,7 +374,10 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
         }
     }
 
-    internal static string ComputeIdentity(string root, string compiler, string references, string launcher)
+    /// <param name="interpreters">The granted ELF interpreters, which <c>execve</c> maps for the host.</param>
+    /// <param name="libraryDirectories">The granted system library directories, which the image fills from unpinned packages.</param>
+    internal static string ComputeIdentity(string root, string compiler, string references, string launcher,
+        IReadOnlyList<string> interpreters, IReadOnlyList<string> libraryDirectories)
     {
         var manifest = new StringBuilder();
         void Add(string label, string path)
@@ -381,12 +387,9 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
             manifest.Append(label).Append('\t').Append(file.Length).Append('\t').Append(digest).Append('\n');
         }
 
-        foreach (var (label, directory) in new[]
-        {
-            ("compiler", compiler), ("references", references),
-            ("host", Path.Combine(root, "host")),
-            ("runtime", Path.Combine(root, "shared/Microsoft.NETCore.App", BuildWorkerProtocol.RuntimeVersion))
-        })
+        var host = Path.Combine(root, "host");
+        var runtime = Path.Combine(root, "shared/Microsoft.NETCore.App", BuildWorkerProtocol.RuntimeVersion);
+        foreach (var (label, directory) in new[] { ("compiler", compiler), ("references", references), ("host", host), ("runtime", runtime) })
             foreach (var path in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(directory, path)).Order(StringComparer.Ordinal))
                 Add(label + "/" + path, Path.Combine(directory, path));
@@ -394,6 +397,14 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
         Add("launcher", launcher);
         Add("compilation", typeof(BuildCompilation).Assembly.Location);
         Add("runner", typeof(ProcessCompileRunner).Assembly.Location);
+        foreach (var interpreter in interpreters.Order(StringComparer.Ordinal)) Add("interpreter" + interpreter, interpreter);
+        // The system libraries the compiler child can load; the host and runtime files are measured above.
+        var measured = Directory.EnumerateFiles(host, "*", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(runtime, "*", SearchOption.AllDirectories))
+            .Select(Path.GetFullPath).Order(StringComparer.Ordinal).ToArray();
+        foreach (var library in ElfLibraryClosure.Resolve(measured.Prepend(BuildCompilation.Host(root)).Prepend(launcher),
+                     ElfLibraryClosure.RuntimeOpenedLibraries, libraryDirectories).Except(measured, StringComparer.Ordinal))
+            Add("library" + library, library);
         return "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(manifest.ToString())));
     }
 
