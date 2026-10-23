@@ -146,6 +146,20 @@ public sealed class HistoricalIngestionSeedTests(PostgresFixture fixture)
             SELECT $1,md5('historical-byte-bound:' || value::text)::uuid,'Synthetic byte bound',repeat('😀',4000),$2
             FROM generate_series(1,64) value
             """, organization, creator);
+        var before = await HistoricalIngestionSeed.CaptureSnapshotAsync(test);
+        var beforeBytes = Encoding.UTF8.GetByteCount(before.RetainedFactsJson) + Encoding.UTF8.GetByteCount(before.SchemaStateJson);
+        Assert.True(beforeBytes < 2 * 1024 * 1024);
+        // Table rows alone fit the current 2 MiB budget. Add an individually admissible
+        // schema row so only the shared facts-and-schema byte budget is exceeded.
+        await test.ExecuteAsync("""
+            DO $seed$ BEGIN
+              EXECUTE format('CREATE FUNCTION weft.snapshot_budget_padding() RETURNS void LANGUAGE plpgsql AS %L',
+                '/*' || repeat('😀',150000) || '*/ BEGIN RETURN; END');
+            END $seed$;
+            """);
+        var paddingBytes = await test.ScalarAsync<int>("SELECT octet_length(prosrc)+octet_length(pg_get_functiondef(oid)) FROM pg_proc WHERE oid='weft.snapshot_budget_padding()'::regprocedure");
+        Assert.InRange(paddingBytes, 1024 * 1024, 1536 * 1024);
+        Assert.True(beforeBytes + paddingBytes > 2 * 1024 * 1024);
         var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => HistoricalIngestionSeed.CaptureSnapshotAsync(test));
         Assert.Contains("UTF8 byte limit", refused.Message, StringComparison.Ordinal);
         Assert.Equal(64, await test.ScalarAsync<long>("SELECT count(*) FROM weft.projects"));
