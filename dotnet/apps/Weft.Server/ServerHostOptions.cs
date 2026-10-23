@@ -118,22 +118,27 @@ internal sealed class ServerHostOptions
         SessionInspectionWorker? inspection = null;
         FerruleServiceEndpoint? service = null;
         AzureSessionsRunnerSettings? sessions = null;
-        if (ingestion.Enabled || reports.DerivationEnabled)
+        var nativeWork = ingestion.Enabled || reports.DerivationEnabled;
+        // A supplied provenance pin must be valid even when this host only reads retained reports.
+        if (nativeWork || read(FerruleRunnerSelection.CompileToolchainSetting) is not null)
         {
             try
             {
                 var runner = FerruleRunnerSelection.Read(read, FerruleRunnerKind.InspectionWorker, FerruleRunnerKind.InspectionWorker,
                     FerruleRunnerKind.Service, FerruleRunnerKind.AzureContainerAppsSessions);
                 _ = FerruleRunnerSelection.ReadCompileToolchain(read, runner);
-                // Settings of a runner that is not selected are ambiguous, not ignored.
-                var worker = read("WEFT_INSPECTION_WORKER_URL") is not null || read("WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256") is not null;
-                if ((runner != FerruleRunnerKind.InspectionWorker && worker) ||
-                    (runner != FerruleRunnerKind.Service && FerruleServiceEndpoint.Configured(read)) ||
-                    (runner != FerruleRunnerKind.AzureContainerAppsSessions && AzureSessionsRunnerSettings.Configured(read)))
-                    throw Failure();
-                if (runner == FerruleRunnerKind.Service) service = FerruleServiceEndpoint.Read(read);
-                else if (runner == FerruleRunnerKind.AzureContainerAppsSessions) sessions = AzureSessionsRunnerSettings.Read(read);
-                else inspection = SessionInspectionWorker.Read(read);
+                if (nativeWork)
+                {
+                    // Settings of a runner that is not selected are ambiguous, not ignored.
+                    var worker = read("WEFT_INSPECTION_WORKER_URL") is not null || read("WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256") is not null;
+                    if ((runner != FerruleRunnerKind.InspectionWorker && worker) ||
+                        (runner != FerruleRunnerKind.Service && FerruleServiceEndpoint.Configured(read)) ||
+                        (runner != FerruleRunnerKind.AzureContainerAppsSessions && AzureSessionsRunnerSettings.Configured(read)))
+                        throw Failure();
+                    if (runner == FerruleRunnerKind.Service) service = FerruleServiceEndpoint.Read(read);
+                    else if (runner == FerruleRunnerKind.AzureContainerAppsSessions) sessions = AzureSessionsRunnerSettings.Read(read);
+                    else inspection = SessionInspectionWorker.Read(read);
+                }
             }
             catch (Exception error) when (SessionHostResources.Nonfatal(error)) { throw Failure(); }
         }

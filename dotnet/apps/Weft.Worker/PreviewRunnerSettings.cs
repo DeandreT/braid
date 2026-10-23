@@ -32,7 +32,12 @@ internal sealed class PreviewRunnerSettings
     {
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(settings);
-        if (!settings.PreviewEnabled) return new();
+        if (!settings.PreviewEnabled)
+        {
+            // This worker only serves inspection; no service compiler can consume a toolchain pin.
+            if (environment(FerruleRunnerSelection.CompileToolchainSetting) is not null) throw Failure();
+            return new();
+        }
         try
         {
             var runner = FerruleRunnerSelection.Read(environment, FerruleRunnerKind.Docker, FerruleRunnerKind.Docker, FerruleRunnerKind.Service,
