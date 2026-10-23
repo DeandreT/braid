@@ -2,11 +2,12 @@
 # Local acceptance of the packaged mapping endpoint (docs/hosted-acceptance.md). It runs the hosted
 # acceptance (acceptance-test.sh) with this script as its follow-on stage. The stage takes the build the
 # browser flows completed, qualifies it and activates a release with the release tool, grants one machine
-# caller with Weft.DatabaseTool, and starts the endpoint from compose.endpoint.yml in its local Docker
-# profile. It then calls the endpoint with app-only tokens from the run's issuer: a call, a retry under the
-# same request ID, a new activation and a rollback, expired and wrong-audience tokens, and a revoked grant.
-# The stage removes the endpoint, its images and every compiled-runtime container before the hosted
-# acceptance's own cleanup, which fails on any remaining owned object.
+# caller with Weft.DatabaseTool, and starts the endpoint from compose.endpoint.yml. WEFT_ENDPOINT_ACCEPTANCE_RUNTIME
+# selects its compiled runtime: service (the default, the hosted shape through the run's Ferrule service, with
+# no Docker socket) or docker (local only). It then calls the endpoint with app-only tokens from the run's
+# issuer: a call, a retry under the same request ID, a new activation and a rollback, expired and
+# wrong-audience tokens, and a revoked grant. The stage removes the endpoint, its images and every
+# compiled-runtime container before the hosted acceptance's own cleanup, which fails on any remaining owned object.
 # Generated secrets and tokens stay in private files and are never printed.
 set -euo pipefail
 
@@ -14,6 +15,9 @@ repository=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 compose_directory=$repository/deploy/compose
 
 if [[ ${WEFT_ENDPOINT_ACCEPTANCE_RUN:-} != stage ]]; then
+  export WEFT_ENDPOINT_ACCEPTANCE_RUNTIME=${WEFT_ENDPOINT_ACCEPTANCE_RUNTIME:-service}
+  [[ $WEFT_ENDPOINT_ACCEPTANCE_RUNTIME =~ ^(service|docker)$ ]] ||
+    { echo 'FAILED: WEFT_ENDPOINT_ACCEPTANCE_RUNTIME must be service or docker' >&2; exit 1; }
   # The run's issuer registers two machine clients: the endpoint's caller, and one whose tokens expire at once.
   uuid() { cat /proc/sys/kernel/random/uuid; }
   digest() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
@@ -37,15 +41,18 @@ fi
 # The follow-on stage, inside the hosted acceptance run: its stack, environment and private directory.
 for setting in WEFT_ACCEPTANCE_WORK WEFT_ACCEPTANCE_COMPOSE_PROJECT WEFT_ACCEPTANCE_COMPOSE_FILES WEFT_ACCEPTANCE_PRINCIPAL_ID \
   WEFT_SESSION_ORGANIZATION_ID WEFT_ENTRA_TENANT_ID WEFT_ENTRA_CLIENT_ID WEFT_FERRULE_SERVICE_IDENTITY WEFT_FERRULE_COMPILE_TOOLCHAIN \
-  WEFT_ACCEPTANCE_TRUST_PEM WEFT_ENDPOINT_ENTRA_AUDIENCE WEFT_ENDPOINT_ACCEPTANCE_CALLER_SECRET; do
+  WEFT_ACCEPTANCE_TRUST_PEM WEFT_ENDPOINT_ENTRA_AUDIENCE WEFT_ENDPOINT_ACCEPTANCE_CALLER_SECRET WEFT_ENDPOINT_ACCEPTANCE_RUNTIME \
+  WEFT_FERRULE_SERVICE_IMAGE WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256 WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256; do
   [[ -n ${!setting:-} ]] || { echo "FAILED: the endpoint stage requires $setting from the hosted acceptance run" >&2; exit 1; }
 done
 project=$WEFT_ACCEPTANCE_COMPOSE_PROJECT
 principal=$WEFT_ACCEPTANCE_PRINCIPAL_ID
+runtime=$WEFT_ENDPOINT_ACCEPTANCE_RUNTIME
 work=$(mktemp -d "$WEFT_ACCEPTANCE_WORK/endpoint.XXXXXXXX")
 files=()
 IFS=: read -r -a acceptance_files <<<"$WEFT_ACCEPTANCE_COMPOSE_FILES"
-for file in "${acceptance_files[@]}" "$compose_directory/compose.endpoint.yml" "$compose_directory/compose.endpoint-acceptance.yml"; do
+for file in "${acceptance_files[@]}" "$compose_directory/compose.endpoint.yml" "$compose_directory/compose.endpoint-$runtime.yml" \
+  "$compose_directory/compose.endpoint-acceptance.yml"; do
   files+=(--file "$file")
 done
 built_images=()
@@ -95,36 +102,63 @@ build() {
   built_images+=("$tag")
 }
 
-# The endpoint image in its local Docker profile, and the compiled runtime image its target names.
-if [[ -z ${WEFT_ENDPOINT_IMAGE:-} ]]; then
-  build "weft-mapping-endpoint-local-docker:$project" --file "$repository/deploy/container/Dockerfile" \
-    --target weft-mapping-endpoint-local-docker "$repository"
-  export WEFT_ENDPOINT_IMAGE=weft-mapping-endpoint-local-docker:$project
-fi
-if [[ -z ${WEFT_COMPILED_RUNTIME_IMAGE:-} ]]; then
-  native=${WEFT_FERRULE_NATIVE_IMAGE:-weft-ferrule-native:$project}
-  docker image inspect "$native" >/dev/null 2>&1 ||
-    fail 'set WEFT_FERRULE_NATIVE_IMAGE or WEFT_COMPILED_RUNTIME_IMAGE when the service image is supplied'
-  container=$(docker create "$native")
-  docker cp "$container:/ferrule-host" "$work/ferrule-host" >/dev/null
-  docker rm "$container" >/dev/null
-  native_digest=$(sha256sum "$work/ferrule-host" | cut -d' ' -f1)
-  rm -f "$work/ferrule-host"
-  build "weft-compiled-runtime-base:$project" --file "$repository/engines/build-worker/Dockerfile" \
-    --build-arg "WEFT_NATIVE_IMAGE=$native" --build-arg "WEFT_NATIVE_BINARY_SHA256=$native_digest" "$repository"
-  base=weft-compiled-runtime-base:$project
+if [[ $runtime == service ]]; then
+  # The hosted shape: the endpoint image without a Docker CLI, executing through the run's Ferrule service.
+  if [[ -z ${WEFT_ENDPOINT_IMAGE:-} ]]; then
+    build "weft-mapping-endpoint:$project" --file "$repository/deploy/container/Dockerfile" --target weft-mapping-endpoint "$repository"
+    export WEFT_ENDPOINT_IMAGE=weft-mapping-endpoint:$project
+  fi
+  # The execution identity the target registers, measured from the trusted local service image.
+  docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+    --label "com.docker.compose.project=$project" --tmpfs /tmp:size=256m,mode=1777 \
+    --memory 3g --pids-limit 256 "$WEFT_FERRULE_SERVICE_IMAGE" runtime-identity >"$work/runtime-identity.json" ||
+    fail 'service runtime identity'
+  WEFT_COMPILED_RUNTIME_IMAGE=$(node -e '
+    const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const pin = /^sha256:[0-9a-f]{64}$/;
+    if (value.schema !== "weft.compiled-runtime-image-identity.v1" || value.native !== process.argv[2] || !pin.test(value.runtime))
+      process.exit(1);
+    process.stdout.write(value.runtime);
+  ' "$work/runtime-identity.json" "$WEFT_FERRULE_SERVICE_IDENTITY") || fail 'service runtime identity'
+  # The endpoint's own client certificate, which the service admits beside its other clients.
+  openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 -subj '/CN=weft-endpoint-ferrule-client' \
+    -keyout "$work/endpoint-client.key" -out "$work/endpoint-client.crt" 2>/dev/null
+  WEFT_ENDPOINT_FERRULE_SERVICE_CLIENT_PEM=$(cat "$work/endpoint-client.key" "$work/endpoint-client.crt")
+  endpoint_pin=$(openssl x509 -in "$work/endpoint-client.crt" -outform DER | openssl dgst -sha256 -r | cut -d' ' -f1)
+  WEFT_ENDPOINT_SERVICE_CLIENT_PINS=$WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256${WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256:+,$WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256},$endpoint_pin
+  export WEFT_COMPILED_RUNTIME_IMAGE WEFT_ENDPOINT_FERRULE_SERVICE_CLIENT_PEM WEFT_ENDPOINT_SERVICE_CLIENT_PINS
 else
-  base=$WEFT_COMPILED_RUNTIME_IMAGE
+  # The local profile: the endpoint image with the Docker CLI, and the compiled runtime image its target names.
+  if [[ -z ${WEFT_ENDPOINT_IMAGE:-} ]]; then
+    build "weft-mapping-endpoint-local-docker:$project" --file "$repository/deploy/container/Dockerfile" \
+      --target weft-mapping-endpoint-local-docker "$repository"
+    export WEFT_ENDPOINT_IMAGE=weft-mapping-endpoint-local-docker:$project
+  fi
+  if [[ -z ${WEFT_COMPILED_RUNTIME_IMAGE:-} ]]; then
+    native=${WEFT_FERRULE_NATIVE_IMAGE:-weft-ferrule-native:$project}
+    docker image inspect "$native" >/dev/null 2>&1 ||
+      fail 'set WEFT_FERRULE_NATIVE_IMAGE or WEFT_COMPILED_RUNTIME_IMAGE when the service image is supplied'
+    container=$(docker create "$native")
+    docker cp "$container:/ferrule-host" "$work/ferrule-host" >/dev/null
+    docker rm "$container" >/dev/null
+    native_digest=$(sha256sum "$work/ferrule-host" | cut -d' ' -f1)
+    rm -f "$work/ferrule-host"
+    build "weft-compiled-runtime-base:$project" --file "$repository/engines/build-worker/Dockerfile" \
+      --build-arg "WEFT_NATIVE_IMAGE=$native" --build-arg "WEFT_NATIVE_BINARY_SHA256=$native_digest" "$repository"
+    base=weft-compiled-runtime-base:$project
+  else
+    base=$WEFT_COMPILED_RUNTIME_IMAGE
+  fi
+  # A reproducible build can share its image ID with other users of the same sources. The stage registers a
+  # run-unique child image instead, which differs only by a label. Its runtime containers inherit that label,
+  # and only containers carrying it are ever checked or removed.
+  build "weft-compiled-runtime:$project" - <<<"$(printf 'FROM %s\nLABEL io.weft.acceptance.run=%s\n' "$base" "$project")"
+  WEFT_COMPILED_RUNTIME_IMAGE=$(docker image inspect --format '{{.Id}}' "weft-compiled-runtime:$project")
+  [[ $WEFT_COMPILED_RUNTIME_IMAGE =~ ^sha256:[0-9a-f]{64}$ ]] || fail 'the compiled runtime image ID'
+  runtime_image=$WEFT_COMPILED_RUNTIME_IMAGE
+  export WEFT_COMPILED_RUNTIME_IMAGE
+  [[ -z $(runtime_containers "$project") ]] || fail 'compiled-runtime containers exist before the stage'
 fi
-# A reproducible build can share its image ID with other users of the same sources. The stage registers a
-# run-unique child image instead, which differs only by a label. Its runtime containers inherit that label,
-# and only containers carrying it are ever checked or removed.
-build "weft-compiled-runtime:$project" - <<<"$(printf 'FROM %s\nLABEL io.weft.acceptance.run=%s\n' "$base" "$project")"
-WEFT_COMPILED_RUNTIME_IMAGE=$(docker image inspect --format '{{.Id}}' "weft-compiled-runtime:$project")
-[[ $WEFT_COMPILED_RUNTIME_IMAGE =~ ^sha256:[0-9a-f]{64}$ ]] || fail 'the compiled runtime image ID'
-runtime_image=$WEFT_COMPILED_RUNTIME_IMAGE
-export WEFT_COMPILED_RUNTIME_IMAGE
-[[ -z $(runtime_containers "$project") ]] || fail 'compiled-runtime containers exist before the stage'
 
 # The build the browser flows completed, read from the database only to name it.
 sql() {
@@ -156,6 +190,12 @@ export WEFT_ENDPOINT_COMPILER_IDENTITY WEFT_ENDPOINT_ORGANIZATION_ID=$WEFT_SESSI
 WEFT_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
 export WEFT_DOCKER_GID
 compose config --quiet || fail 'endpoint stack configuration'
+if [[ $runtime == service ]]; then
+  # Every service replica restarts with the execute profile enabled and the endpoint's pin admitted.
+  compose up --detach --wait --wait-timeout 300 --no-deps --force-recreate ferrule >/dev/null 2>"$work/ferrule.log" ||
+    { tail -n 20 "$work/ferrule.log" >&2; fail 'Ferrule service with the execute profile'; }
+  echo 'ok - the Ferrule service replicas restarted healthy with the execute profile'
+fi
 
 # One operator command as the signed-in principal; its single JSON line is kept for the checks.
 operator() {
@@ -191,7 +231,7 @@ for attempt in 1 2 3; do
   fail 'qualify-build'
 done
 expect qualify qualified
-[[ $(field qualify artifactSha256) == "$artifact_digest" && $(field qualify runtimeImage) == "$runtime_image" ]] ||
+[[ $(field qualify artifactSha256) == "$artifact_digest" && $(field qualify runtimeImage) == "$WEFT_COMPILED_RUNTIME_IMAGE" ]] ||
   fail 'qualification provenance'
 operator endpoint-release register register-release-target "${target[@]}"
 expect register registered
@@ -213,6 +253,15 @@ endpoint=$(compose ps --quiet endpoint)
 [[ $(docker inspect --format '{{.State.Health.Status}}' "$endpoint") == healthy ]] || fail 'endpoint health'
 compose logs --no-color endpoint >"$work/endpoint.log" 2>&1
 grep -q 'WeftMappingEndpointReady' "$work/endpoint.log" || fail 'endpoint readiness line'
+if [[ $runtime == service ]]; then
+  # The hosted shape: no container of the stack, the endpoint included, receives the Docker socket.
+  for container in $(compose ps --all --quiet); do
+    if docker inspect --format '{{range .Mounts}}{{.Source}} {{end}}' "$container" | grep -q 'docker.sock'; then
+      fail 'a stack container mounts the Docker socket'
+    fi
+  done
+  echo 'ok - no container mounts the Docker socket'
+fi
 port=$(compose port endpoint 8080 | cut -d: -f2)
 echo 'ok - the endpoint is healthy, non-root, read-only and holds no capability'
 
@@ -346,7 +395,7 @@ call revoked-replay "$first_request" caller
 refused revoked-replay 403 refused
 echo 'ok - after revocation the caller is refused, also for a replay of its earlier call'
 
-# A stop drains, joins every compiled-runtime container and exits 0 only once cleanup is confirmed.
+# A stop drains, joins the compiled runtime's work and exits 0 only once its cleanup is confirmed.
 compose stop --timeout 100 endpoint >/dev/null 2>&1 || fail 'endpoint stop'
 [[ $(docker inspect --format '{{.State.ExitCode}}' "$endpoint") == 0 ]] || fail 'endpoint stop without confirmed cleanup'
 # The stop joined every runtime container the endpoint started; any that remains is settled and fails the run.
@@ -354,7 +403,13 @@ if [[ -n $(runtime_containers "$project") ]]; then
   settle "$project" 'after the endpoint stopped' || true
   fail 'compiled-runtime containers remained after the stop'
 fi
+if [[ $runtime == service ]]; then
+  # A replica whose child cleanup was unconfirmed fails readiness; every one must still be healthy.
+  for container in $(compose ps --quiet ferrule); do
+    [[ $(docker inspect --format '{{.State.Health.Status}}' "$container") == healthy ]] || fail 'Ferrule service replica health'
+  done
+fi
 compose rm --force endpoint >/dev/null 2>&1 || fail 'endpoint removal'
 compose logs --no-color issuer >"$work/issuer.log" 2>&1
 grep -q 'issuer machine-token' "$work/issuer.log" || fail 'no machine token was issued'
-echo "ok - the endpoint stopped cleanly and joined its runtime containers (503 retries: $retries)"
+echo "ok - the endpoint stopped cleanly and joined its compiled runtime ($runtime; 503 retries: $retries)"

@@ -120,9 +120,10 @@ values echoed.
 | `WEFT_ENDPOINT_ORGANIZATION_ID`, `_PROJECT_ID`, `_MAPPING_ID`, `_ENVIRONMENT_ID`, `_ENVIRONMENT_VERSION`, `_TARGET_ID` | The one registered target. |
 | `WEFT_ENDPOINT_ENTRA_TENANT_ID` / `WEFT_ENDPOINT_ENTRA_AUDIENCE` | The token issuer's tenant and the endpoint app registration's client ID. |
 | `WEFT_ENDPOINT_CONCURRENCY` | Optional, 1 to 4 (default 4). |
-| `WEFT_COMPILED_RUNTIME_IMAGE` | The immutable `sha256:` runtime image the target registration names. |
-| `WEFT_FERRULE_WORKER_IMAGE` | The immutable compiler image the target's builds name. |
-| `WEFT_DOCKER_EXECUTABLE` | Optional absolute path (default `/usr/bin/docker`). |
+| `WEFT_FERRULE_RUNNER` | Optional compiled runtime: `docker` (default), `service` or `azureContainerAppsSessions`; see [compiled execution](compiled-service-runtime.md#machine-endpoint-selection). |
+| `WEFT_COMPILED_RUNTIME_IMAGE` | The `sha256:` execution identity the target registration names: the Docker runtime image ID, or the service's runtime identity. |
+| `WEFT_FERRULE_WORKER_IMAGE` | With Docker, the compiler identity the target's builds name. With the service, its native identity, which `WEFT_FERRULE_COMPILE_TOOLCHAIN` (or `WEFT_ENDPOINT_COMPILER_BUILD`) completes. |
+| `WEFT_DOCKER_EXECUTABLE` | Docker only: optional absolute path (default `/usr/bin/docker`). |
 
 Each restricted login arrives only as a protected private file named by `<SETTING>_FILE`
 (owned by the process user, mode 0600, at most 16 KiB). The plain setting refuses startup,
@@ -146,6 +147,27 @@ providers and IdentityModel diagnostics are off. On stop, it closes readiness, d
 in-flight calls, joins every compiled-runtime container and then closes its stores. A
 nonzero exit after stop means cleanup was not confirmed.
 
-The local runtime is the Docker compiled runtime, so the process needs Docker access.
-Hosted platforms without Docker need a sandbox runtime behind the same
-`ICompiledBuildRuntime` seam.
+Only the Docker compiled runtime needs Docker access. The service runtime reaches the
+Ferrule service's execute profile over pinned mutual TLS with the client certificate
+delivered as `WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_FILE` and `_PRIVATE_KEY_FILE`.
+
+## Packaging
+
+The `weft-mapping-endpoint` image target holds the endpoint, its entrypoint (`endpoint` is the
+default command) and the release operator tool (`release`, see
+[local release activation](local-releases.md#operator-commands)). `weft-mapping-endpoint-local-docker`
+adds the Docker CLI for the local Docker runtime. Container health checks run the host's own
+`probe live` or `probe ready` command, an HTTP GET of that route on the loopback listener; it
+reads only the listener and transport settings. See [runtime packaging](runtime-packaging.md).
+
+- **Compose.** `deploy/compose/compose.endpoint.yml` runs one endpoint with its grant and
+  release one-shots, plus one runtime override: `compose.endpoint-service.yml` (the hosted
+  shape, without the Docker socket) or `compose.endpoint-docker.yml` (local only). The release
+  step always uses the endpoint's runtime, so qualification executes as calls do.
+- **Azure.** `deploy/azure/modules/mapping-endpoint.bicep` deploys one internal container app per
+  registered target through the service runtime, with its logins from Key Vault, at least one
+  replica, scale-out at the endpoint's concurrency and 100 s to stop, plus manual grant and
+  release jobs. See [Azure deployment](azure-deployment.md#mapping-endpoints).
+- **Acceptance.** `deploy/compose/endpoint-acceptance-test.sh` qualifies and activates a build
+  that the hosted acceptance completed, then calls, retries, activates, rolls back and revokes
+  through the packaged endpoint. See [hosted acceptance](hosted-acceptance.md#mapping-endpoint-stage).

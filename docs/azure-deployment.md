@@ -18,6 +18,7 @@ dependency privately. Tracking work is [#146](https://github.com/DeandreT/weft/i
 | Container Apps environment | Workload-profile (Consumption) environment in the VNet with public ingress. |
 | Container app | `server` and `edge` containers in one replica (fixed at one), ingress on the edge's port 8080, HTTPS only, probes on `/api/v1/health`, key-ring share mounted with UID/GID 1654 and modes 0700/0600. |
 | Jobs (manual) | `<name>-database-roles`, `<name>-migrate`, `<name>-session-keys`, `<name>-private-storage`, `<name>-maintenance` and `<name>-owner`. |
+| Mapping endpoints | Optional: one internal container app `<name>-<endpoint>` per registered release target, and the manual jobs `<name>-endpoint-grants` and `<name>-endpoint-release`. See [Mapping endpoints](#mapping-endpoints). |
 
 Templates contain no secrets. The PostgreSQL administrator password is read from the
 deploying shell's environment by the parameter file and also stored in Key Vault for the
@@ -40,6 +41,7 @@ provisioning job. Every other credential is generated into Key Vault by
 | Custom domain and DNS | Optional `customDomain`, a CNAME to the app's default host name and a TXT record `asuid.<domain>`. |
 | Initial users' Entra `sub` values | One per user, for identity bindings: the ID-token `sub` claim issued to this client ID. It is pairwise per application and differs from the object ID. |
 | Model-provider credential | Only once chat can be enabled (see the limits below); stored in Key Vault. |
+| Mapping endpoints | Optional `mappingEndpoints`, `mappingEndpointAudience`, `mappingEndpointAdministratorId`, `ferruleServiceEndpointClientCertificateSha256` and `compiledRuntimeIdentity`; see [Mapping endpoints](#mapping-endpoints). |
 | Worker identity | Optional `workerPrincipalId`: the object ID of a separately hosted `Weft.Worker`'s managed identity, granted the same data-plane role on the private object container. |
 
 ### Entra app registration
@@ -77,6 +79,8 @@ its placeholders.
    ```sh
    az acr build --registry <registryName> --file deploy/container/Dockerfile --target weft --image weft:<tag> .
    az acr build --registry <registryName> --file deploy/container/Dockerfile --target edge --image weft-edge:<tag> .
+   # Only with mapping endpoints:
+   az acr build --registry <registryName> --file deploy/container/Dockerfile --target weft-mapping-endpoint --image weft-mapping-endpoint:<tag> .
    ```
 
 3. **Secrets and certificates.** As the operator principal (from an allowed IP when
@@ -189,6 +193,49 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   overrides replace the job's list, so pass arguments only. The job uses the `pg-maintenance-connection`
   secret and the same Blob settings as the server.
 
+## Mapping endpoints
+
+Each entry of `mappingEndpoints` deploys the [mapping endpoint](mapping-endpoint.md) for one
+registered release target as the internal-only container app `<name>-<endpoint name>`. The
+environment ingress terminates TLS and forwards plain HTTP (`platformIngress`), so callers
+reach `https://<app>.internal.<environment domain>` from the virtual network only; deployment
+output `mappingEndpointOrigins` lists the origins. The endpoints require `ferruleRunner =
+service`: each executes its target's compiled artifacts through the Ferrule service's execute
+profile, which the deployment then enables, with its own client certificate
+`weft-ferrule-endpoint-client`, which the service admits by `ferruleServiceEndpointClientCertificateSha256`.
+No endpoint needs Docker.
+
+- **Entries.** Each entry names the endpoint (2–12 lowercase characters) and its target:
+  `projectId`, `mappingId`, `environmentId`, `environmentVersion` and `targetId`. Optional
+  `concurrency` (1–4, default 4) bounds the calls one replica admits, and `maxReplicas`
+  (default 4) bounds scale-out; at least one replica always runs, and a scale rule adds
+  replicas at `concurrency` concurrent requests each. Optional `callers` lists the machine
+  principals to grant, as `{ grantId, objectId }`.
+- **Identity and tokens.** `mappingEndpointAudience` is the application (client) ID of the
+  endpoint's own app registration, which must accept v2 access tokens; callers request
+  app-only tokens for it from `mappingEndpointTenantId` (default `entraTenantId`). See
+  [machine authorization](machine-authorization.md).
+- **Credentials.** Each endpoint receives its eight restricted logins from Key Vault through the
+  application identity (`pg-*-connection`, created by `initialize-secrets.sh`). The entrypoint
+  writes each to a protected private file, which is the only form the endpoint accepts.
+- **Runtime.** `compiledRuntimeIdentity` is the execution identity that the Ferrule service image
+  reports for its execute profile (see [compiled execution](compiled-service-runtime.md)). Every
+  target registers it as its runtime image. The endpoints pin the service by
+  `ferruleServiceCertificateSha256` and name the compiler of their builds by
+  `ferruleServiceIdentity` and `ferruleCompileToolchain`.
+- **Shutdown.** A replica has 100 s to stop, so calls drain within their 90-second deadline.
+
+After a deployment with endpoints, prepare each target as one project administrator, with
+`<principal-uuid>` as `mappingEndpointAdministratorId`. Release commands run through
+`<name>-endpoint-release`, for example
+`az containerapp job start -g <group> -n <name>-endpoint-release --container-name release --args release qualify-build <principal-uuid> <organizationId> <project> <mapping> <build> <qualification>`.
+Then `register-release-target` and `activate-release` follow, as described in
+[local release activation](local-releases.md#operator-commands). The job reaches the service
+like the endpoints, so qualification executes through the same runtime. Grants run through
+`<name>-endpoint-grants` with `--args database grant-machine-invocation …`; deployment output
+`mappingEndpointGrantArguments` lists one argument list per configured caller. Pass arguments
+only: environment overrides replace each job's list.
+
 ## Open questions and limits
 
 - **Parameter grant on Flexible Server.** Migration 0011 requires
@@ -271,14 +318,6 @@ deployments so the binding is kept. Add the new redirect URI to the app registra
   `WEFT_DELIVER_FILE_PREVIEW_WRITER_CONNECTION` and `WEFT_DELIVER_FILE_PREVIEW_READER_CONNECTION`
   and named by `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE` and
   `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE`.
-- **Mapping endpoint.** The [mapping endpoint](mapping-endpoint.md) runs a release's compiled
-  artifact through the Docker compiled runtime, which Container Apps cannot provide, so these
-  templates do not deploy it. The database provisioning creates its two invocation logins
-  (`invocation-grant-writer` and `invocation-writer` in Key Vault), so migration 0024 applies.
-  Hosting the endpoint also needs a sandbox runtime that does not need Docker, its own Entra app
-  registration that accepts v2 access tokens (the endpoint's audience), internal ingress, the
-  eight restricted logins delivered as protected files, and grants created with
-  `Weft.DatabaseTool` (see [machine authorization](machine-authorization.md)).
 - **Provisioning connection.** The provisioning job's PostgreSQL client image has no CA
   bundle, so it uses `sslmode=require` inside the virtual network. Application and migration
   connections use `SSL Mode=VerifyFull`.

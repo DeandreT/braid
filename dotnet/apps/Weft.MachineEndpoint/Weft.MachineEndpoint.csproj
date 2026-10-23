@@ -18,5 +18,9 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Weft.Tests</_Parameter1>
     </AssemblyAttribute>
+    <!-- The release tool qualifies builds through exactly the endpoint's compiled runtime selection. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Weft.ReleaseTool</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>

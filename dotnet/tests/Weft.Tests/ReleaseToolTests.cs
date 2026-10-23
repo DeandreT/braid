@@ -67,6 +67,28 @@ public sealed class ReleaseToolTests(PostgresFixture fixture)
             [ReleaseCommands.ReleaseWriter] = "Host=127.0.0.1;Port=1;Username=weft_release_writer;Password=p"
         }, ["register-release-target", .. Target()]);
         Assert.Equal(2, mutableImage.ExitCode);
+        // Qualification reads the endpoint's runtime selection first: an incomplete service runtime, or settings of two
+        // runtimes at once, stop it before any login is used.
+        var qualify = new Dictionary<string, string>(ReleaseCommands.QualificationLogins.ToDictionary(login => login.Setting,
+            login => $"Host=127.0.0.1;Port=1;Username={login.Role};Password=p"))
+        {
+            [ReleaseCommands.RuntimeImageSetting] = "sha256:" + new string('a', 64),
+            [ReleaseCommands.CompilerImageSetting] = "sha256:" + new string('b', 64)
+        };
+        string[] Qualify() => ["qualify-build", Ids[0], Ids[1], Ids[2], Ids[3], Ids[4], Ids[5]];
+        foreach (var runtime in new Dictionary<string, string>[]
+        {
+            new() { ["WEFT_FERRULE_RUNNER"] = "service" },
+            new() { ["WEFT_FERRULE_RUNNER"] = "service", ["WEFT_FERRULE_COMPILE_TOOLCHAIN"] = "sha256:" + new string('c', 64),
+                ["WEFT_FERRULE_SERVICE_URL"] = "https://ferrule:8443" },
+            new() { ["WEFT_FERRULE_SERVICE_URL"] = "https://ferrule:8443" },
+            new() { ["WEFT_FERRULE_RUNNER"] = "docker", ["WEFT_FERRULE_COMPILE_TOOLCHAIN"] = "sha256:" + new string('c', 64) },
+            new() { ["WEFT_FERRULE_RUNNER"] = "worker" }
+        })
+        {
+            var refused = await RunAsync(new Dictionary<string, string>(qualify.Concat(runtime)), Qualify());
+            Assert.Equal((2, "", "{\"error\":\"configurationInvalid\"}"), (refused.ExitCode, refused.Output, refused.Error.Trim()));
+        }
     }
 
     [PostgresFact]

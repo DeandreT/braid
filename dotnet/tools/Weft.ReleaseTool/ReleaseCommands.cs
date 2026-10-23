@@ -5,6 +5,7 @@ using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Deployment;
 using Weft.Domain;
+using Weft.MachineEndpoint;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
@@ -20,7 +21,8 @@ internal static class ReleaseCommands
 {
     internal const string RuntimeImageSetting = "WEFT_COMPILED_RUNTIME_IMAGE";
     internal const string CompilerImageSetting = "WEFT_FERRULE_WORKER_IMAGE";
-    internal const string DockerSetting = "WEFT_DOCKER_EXECUTABLE";
+    /// <summary>How long a canceled service execution may take to settle; the command has no caller deadline.</summary>
+    private static readonly TimeSpan Settlement = TimeSpan.FromSeconds(10);
     internal const string ReleaseWriter = "WEFT_RELEASE_WRITER_CONNECTION_STRING";
     internal const string QualificationReader = "WEFT_QUALIFICATION_READER_CONNECTION_STRING";
 
@@ -96,10 +98,10 @@ internal static class ReleaseCommands
 
     private static async Task<(string, (string, string?)[])> QualifyAsync(Command command, Func<string, string?> environment, CancellationToken token)
     {
-        var runtimeImage = Image(environment(RuntimeImageSetting));
-        var compilerImage = Image(environment(CompilerImageSetting));
-        var docker = environment(DockerSetting) is { Length: > 0 } configured ? configured : "/usr/bin/docker";
-        if (!Path.IsPathFullyQualified(docker) || docker != Path.GetFullPath(docker)) throw new ArgumentException("Invalid Docker executable.");
+        // Exactly the endpoint's runtime selection: the same runner kind, execution identity and compiler identity.
+        MappingRuntimeSelection selection;
+        try { selection = MappingRuntimeSelection.Read(environment, Image(environment(RuntimeImageSetting)), Image(environment(CompilerImageSetting))); }
+        catch (InvalidOperationException error) { throw new ArgumentException("The compiled runtime selection is invalid.", error); }
         var logins = QualificationLogins.ToDictionary(login => login.Role, login => Login(environment, login.Setting, login.Role), StringComparer.Ordinal);
         await using var qualifications = new PostgresBuildQualificationStore(logins["weft_qualification_writer"], writer: true);
         await using var builds = new PostgresBuildStore(logins["weft_build_reader"], writer: false);
@@ -108,12 +110,15 @@ internal static class ReleaseCommands
         await using var reports = new PostgresRevisionReportDatabase(logins["weft_report_reader"]);
         await using var regressionRuns = new PostgresRegressionRunStore(logins["weft_run_reader"], writer: false);
         await using var cases = new PostgresRegressionCaseStore(logins["weft_case_reader"], RegressionCaseDatabaseProfile.Reader);
-        var runner = new DockerInspectionWorkerRunner(new(docker, runtimeImage, profile: DockerWorkerProfile.Compiled));
+        MappingRuntimeSelection.Owned runner;
+        try { runner = selection.CreateRunner(Settlement); }
+        catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        { throw new ArgumentException("The compiled runtime client configuration is invalid.", error); }
         BuildQualificationRequestResult result;
         try
         {
-            var runtime = new FerruleCompiledBuildRuntime(runner,
-                new("ferrule", FerruleInspectionBackend.EngineRevision, compilerImage, FerrulePreviewBackend.AdapterBuild));
+            var runtime = new FerruleCompiledBuildRuntime(runner.Runner,
+                new("ferrule", FerruleInspectionBackend.EngineRevision, selection.CompilerIdentity, FerrulePreviewBackend.AdapterBuild));
             var projects = new PostgresProjectReader(access);
             var evidence = new RegressionRunReadService(regressionRuns, cases);
             var execution = new CompiledBuildExecution(runs, new BuildControlService(builds, projects, new PostgresRevisionReportMetadataReader(reports), evidence),
@@ -123,8 +128,8 @@ internal static class ReleaseCommands
         }
         finally
         {
-            // The runner joins its compiled-runtime container before the stores close. A stored qualification
-            // stays stored; repeating the command with the same IDs replays it without running again.
+            // The runner joins its compiled-runtime work before the stores close. A stored qualification stays
+            // stored; repeating the command with the same IDs replays it without running again.
             try { await runner.DisposeAsync(); }
             catch (InvalidOperationException error) { throw new RuntimeCleanupException(error); }
         }

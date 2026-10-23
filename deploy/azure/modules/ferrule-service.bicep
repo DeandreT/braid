@@ -17,6 +17,8 @@ param healthPort int = 8080
 param concurrency int = 2
 @description('Serve the compile profile for hosted builds. The platform kernel must provide Landlock ABI 3 (Linux 6.2); otherwise the service does not start.')
 param compile bool = false
+@description('Serve the execute profile, which runs qualified compiled mappings for the mapping endpoints.')
+param execute bool = false
 param queue int = 2
 param minReplicas int = 1
 param maxReplicas int = 10
@@ -82,6 +84,7 @@ resource service 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'WEFT_FERRULE_SERVICE_CONCURRENCY', value: string(concurrency) }
             { name: 'WEFT_FERRULE_SERVICE_QUEUE', value: string(queue) }
             { name: 'WEFT_FERRULE_SERVICE_COMPILE_ENABLED', value: compile ? 'true' : 'false' }
+            { name: 'WEFT_FERRULE_SERVICE_EXECUTION_ENABLED', value: execute ? 'true' : 'false' }
           ]
           resources: {
             cpu: json(cpu)

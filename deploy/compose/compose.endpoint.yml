@@ -1,11 +1,9 @@
 # Machine-facing mapping endpoint for one registered release target, with its grant and release operator
 # steps. The endpoint's eight restricted logins arrive as protected private files; the target, the Entra
-# tenant and audience, and the runtime and compiler identities are explicit settings. See
-# docs/mapping-endpoint.md and docs/runtime-packaging.md.
-# LOCAL PROFILE ONLY: the endpoint and the release step run compiled artifacts through the Docker compiled
-# runtime, so both receive the Docker socket, which is equivalent to host root access. A hosted deployment
-# selects a compiled runtime that needs no Docker.
-# Use with: docker compose -f compose.yml -f compose.endpoint.yml, plus the overrides that produce the builds.
+# tenant and audience, and the runtime identity are explicit settings. Add exactly one compiled runtime:
+# compose.endpoint-service.yml (the hosted shape, through the Ferrule service) or compose.endpoint-docker.yml
+# (local only, through the Docker daemon). See docs/mapping-endpoint.md and docs/runtime-packaging.md.
+# Use with: docker compose -f compose.yml [-f compose.ferrule-service.yml] -f compose.endpoint.yml -f <runtime>.
 x-hardened: &hardened
   read_only: true
   cap_drop: [ALL]
@@ -15,14 +13,13 @@ x-hardened: &hardened
     - /run/weft/secrets:uid=1654,gid=1654,mode=0700,size=1m
 
 x-runtime: &runtime
-  WEFT_COMPILED_RUNTIME_IMAGE: ${WEFT_COMPILED_RUNTIME_IMAGE:?Set the registered compiled runtime image ID}
-  # The compiler identity the target's builds name; artifacts from any other compiler are refused.
-  WEFT_FERRULE_WORKER_IMAGE: ${WEFT_ENDPOINT_COMPILER_IDENTITY:?Set the compiler identity of the target's builds}
+  # The execution identity the target registers: the Docker runtime image ID or the service's runtime identity.
+  WEFT_COMPILED_RUNTIME_IMAGE: ${WEFT_COMPILED_RUNTIME_IMAGE:?Set the registered compiled runtime identity}
 
 services:
   endpoint:
     <<: *hardened
-    image: ${WEFT_ENDPOINT_IMAGE:-weft-mapping-endpoint-local-docker:local}
+    image: ${WEFT_ENDPOINT_IMAGE:-weft-mapping-endpoint:local}
     restart: unless-stopped
     # A stop drains calls for up to their 90-second deadline, then joins every runtime container.
     stop_grace_period: 100s
@@ -55,9 +52,6 @@ services:
       WEFT_DELIVER_FILE_ENDPOINT_RUN_READER: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_ENDPOINT_CASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/endpoint-case-reader
       WEFT_DELIVER_FILE_ENDPOINT_CASE_READER: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-    group_add: ["${WEFT_DOCKER_GID:?Set the group ID of the Docker socket}"]
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     # Plain HTTP on loopback only, for a local TLS-terminating ingress (the platformIngress transport).
     ports:
       - 127.0.0.1:${WEFT_ENDPOINT_PORT:-8490}:8080
@@ -84,10 +78,11 @@ services:
     networks: [database]
 
   # One-shot release operations with Weft.ReleaseTool, as a named publisher or administrator: qualify a
-  # completed build by executing it in the compiled runtime, register the target, activate or roll back.
+  # completed build by executing it through the endpoint's compiled runtime, register the target, activate
+  # or roll back.
   endpoint-release:
     <<: *hardened
-    image: ${WEFT_ENDPOINT_IMAGE:-weft-mapping-endpoint-local-docker:local}
+    image: ${WEFT_ENDPOINT_IMAGE:-weft-mapping-endpoint:local}
     profiles: [operator]
     restart: "no"
     entrypoint: ["/app/bin/weft-entrypoint", "release"]
@@ -102,7 +97,4 @@ services:
       WEFT_QUALIFICATION_REPORT_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_QUALIFICATION_RUN_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_run_reader;Password=${WEFT_LOCAL_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_QUALIFICATION_CASE_READER_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_case_reader;Password=${WEFT_LOCAL_CASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
-    group_add: ["${WEFT_DOCKER_GID:?Set the group ID of the Docker socket}"]
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     networks: [database]

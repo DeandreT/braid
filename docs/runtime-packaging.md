@@ -189,17 +189,29 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   file (`WEFT_DELIVER_FILE_ENDPOINT_*`, named by its `_FILE` setting). The endpoint listens
   with the `platformIngress` transport on `127.0.0.1:${WEFT_ENDPOINT_PORT}` (default 8490),
   answers health through its own `probe ready` command, and has 100 s to stop, so calls drain
-  within their deadline before it joins its runtime containers. It requires the target
+  within their deadline before it joins its compiled runtime's work. It requires the target
   settings `WEFT_ENDPOINT_ORGANIZATION_ID`, `_PROJECT_ID`, `_MAPPING_ID`, `_ENVIRONMENT_ID`,
   `_ENVIRONMENT_VERSION` and `_TARGET_ID`, the callers' tenant `WEFT_ENDPOINT_ENTRA_TENANT_ID`,
-  the audience `WEFT_ENDPOINT_ENTRA_AUDIENCE`, the image ID of an `engines/build-worker` build
-  as `WEFT_COMPILED_RUNTIME_IMAGE`, the compiler identity that the target's builds name as
-  `WEFT_ENDPOINT_COMPILER_IDENTITY`, and `WEFT_DOCKER_GID`. This profile is local only: the
-  endpoint and `endpoint-release` run compiled artifacts through the Docker compiled runtime,
-  so both receive the Docker socket, which is equivalent to host root access. A hosted
-  deployment needs a compiled runtime that does not use Docker. `postgres-init.sh` creates
-  every login the endpoint and its tools use; existing volumes need the explicit
-  `postgres-add-*-roles.sh` steps for the qualification, release and invocation logins.
+  the audience `WEFT_ENDPOINT_ENTRA_AUDIENCE`, and the execution identity that the target
+  registers, `WEFT_COMPILED_RUNTIME_IMAGE`. Add exactly one compiled runtime; the endpoint and
+  `endpoint-release` always use the same one, so qualification executes as calls do:
+  - `compose.endpoint-service.yml`, the hosted shape, with `compose.ferrule-service.yml`: both
+    execute through the service's execute profile with their own client certificate
+    `WEFT_ENDPOINT_FERRULE_SERVICE_CLIENT_PEM`. The service enables execution and admits the pins
+    in `WEFT_ENDPOINT_SERVICE_CLIENT_PINS`, which must include the server's, any worker's and the
+    endpoint's. They pin the service by `WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256` and name the
+    compiler of their builds by `WEFT_FERRULE_SERVICE_IDENTITY` and
+    `WEFT_FERRULE_COMPILE_TOOLCHAIN`. `WEFT_COMPILED_RUNTIME_IMAGE` is the identity that the
+    service image's `runtime-identity` command reports. No container receives the Docker socket.
+  - `compose.endpoint-docker.yml`, local only: both run compiled artifacts through the Docker
+    daemon, so both receive the Docker socket, which is equivalent to host root access.
+    `WEFT_COMPILED_RUNTIME_IMAGE` is the image ID of an `engines/build-worker` build, and it
+    requires `WEFT_ENDPOINT_COMPILER_IDENTITY`, the compiler identity that the target's builds
+    name, and `WEFT_DOCKER_GID`.
+
+  `postgres-init.sh` creates every login the endpoint and its tools use; existing volumes need
+  the explicit `postgres-add-*-roles.sh` steps for the qualification, release and invocation
+  logins.
 
 All runtime containers use a read-only root filesystem, drop every capability and
 set `no-new-privileges`. The compose file reads every value from the caller's
@@ -213,7 +225,8 @@ PEM bundles) and each certificate's pin, `WEFT_INSPECTION_WORKER_CERTIFICATE_SHA
 `WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256`: the lowercase SHA-256 of the DER
 certificate, for example `openssl x509 -in worker.crt -outform DER | openssl dgst -sha256 -r`.
 Image names default to `weft:local`, `weft-edge:local`, `weft-local-docker:local`,
-`weft-worker:local` and `weft-mapping-endpoint-local-docker:local` (`WEFT_ENDPOINT_IMAGE`); `WEFT_COMPOSE_PORT` and `WEFT_COMPOSE_EXAMPLES_PORT` choose the
+`weft-worker:local` and `weft-mapping-endpoint:local` (`WEFT_ENDPOINT_IMAGE`; the Docker runtime
+override uses `weft-mapping-endpoint-local-docker:local`); `WEFT_COMPOSE_PORT` and `WEFT_COMPOSE_EXAMPLES_PORT` choose the
 loopback ports (`0` selects a free one).
 
 The smoke test builds uniquely tagged images, generates throwaway passwords and

@@ -21,3 +21,11 @@ param ferruleServiceImage = ''
 param ferruleServiceIdentity = ''
 param ferruleServiceCertificateSha256 = ''
 param ferruleServiceClientCertificateSha256 = ''
+// Mapping endpoints execute through the Ferrule service runner: one entry per registered target,
+// for example { name: 'orders', projectId: '…', mappingId: '…', environmentId: '…',
+// environmentVersion: 1, targetId: '…', callers: [{ grantId: '…', objectId: '…' }] }.
+param mappingEndpoints = []
+param mappingEndpointAudience = ''
+param mappingEndpointAdministratorId = ''
+param ferruleServiceEndpointClientCertificateSha256 = ''
+param compiledRuntimeIdentity = ''

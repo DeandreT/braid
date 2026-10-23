@@ -162,40 +162,47 @@ and pulled base images are left in place.
 
 `deploy/compose/endpoint-acceptance-test.sh` runs this acceptance with a follow-on stage for
 the packaged [mapping endpoint](mapping-endpoint.md). It takes the same settings, plus
-`WEFT_ENDPOINT_IMAGE` and `WEFT_COMPILED_RUNTIME_IMAGE` (an image ID) to use prebuilt images
-instead of building them. Before the stack starts, it registers two machine clients with the
-run's issuer, which then issues app-only v2 access tokens through a client-credentials grant;
-one client's tokens expire after two seconds. Once the hosted checks pass, the stage:
+`WEFT_ENDPOINT_ACCEPTANCE_RUNTIME`: `service` (the default) executes through the run's Ferrule
+service in the hosted shape, and `docker` uses the local Docker compiled runtime.
+`WEFT_ENDPOINT_IMAGE` and, for `docker`, `WEFT_COMPILED_RUNTIME_IMAGE` (an image ID) select
+prebuilt images instead of building them. Before the stack starts, it registers two machine
+clients with the run's issuer, which then issues app-only v2 access tokens through a
+client-credentials grant; one client's tokens expire after two seconds. Once the hosted checks
+pass, the stage:
 
-1. Builds `weft-mapping-endpoint-local-docker`, and the compiled runtime from
-   `engines/build-worker` with the run's native image. A reproducible build can share its image
-   ID with other users of the same sources, so the stage registers a run-unique child image that
-   differs only by a label. Its runtime containers inherit that label, and only containers
-   carrying it are ever checked or removed.
+1. Prepares the compiled runtime. With `service`, it builds `weft-mapping-endpoint`, reads the
+   execution identity from the service image's `runtime-identity` command, creates the
+   endpoint's client certificate, and restarts the service replicas with the execute profile and
+   that certificate admitted. With `docker`, it builds `weft-mapping-endpoint-local-docker`, and
+   the compiled runtime from `engines/build-worker` with the run's native image. A reproducible
+   build can share its image ID with other users of the same sources, so the stage registers a
+   run-unique child image that differs only by a label. Its runtime containers inherit that
+   label, and only containers carrying it are ever checked or removed.
 2. Names the build the browser run completed. The build must name the Ferrule service's
    combined compiler identity, which must equal the identity measured from the service image.
 3. Qualifies the build with `endpoint-release qualify-build`, which replays its saved regression
    case through the compiled runtime. It then registers a target, activates a release and grants
    one caller with `endpoint-grants`, each as the signed-in principal.
-4. Starts `endpoint` from `compose.endpoint.yml` and the test-only
-   `compose.endpoint-acceptance.yml`, which gives it the issuer's network alias and the run's
+4. Starts `endpoint` from `compose.endpoint.yml`, the selected runtime override and the
+   test-only `compose.endpoint-acceptance.yml`, which gives it the issuer's network alias and the run's
    certificate authority, as `compose.acceptance.yml` does for the server. The container must be
    healthy, run as UID 1654 with a read-only root filesystem, no capabilities and
-   `no-new-privileges`, and print `WeftMappingEndpointReady`.
+   `no-new-privileges`, and print `WeftMappingEndpointReady`. With `service`, no container of the
+   stack may mount the Docker socket.
 5. Calls it with the regression case's inputs and parameters. Each completed call must name its
    release, build and artifact, and both outputs must equal independently authored bytes at the
    call's own clock. A retry under the same request ID must return identical bytes, marked as
    replayed, with no new ledger audit. A second activation and then a rollback to the first
    release must each serve the next call. Tokens for another audience and expired tokens are
    refused with `401`. After the grant is revoked, a new call and a replay are refused with `403`.
-6. Stops the endpoint. It must exit 0 with no compiled-runtime container left.
+6. Stops the endpoint. It must exit 0. With `docker`, no compiled-runtime container may remain;
+   with `service`, every service replica must still be healthy.
 
 A `503` answer records nothing final, so the stage retries that request with the same ID a
 bounded number of times and reports the count. Qualification is tried again with the same ID
 only when it answered `unavailable` and left no runtime container. Any runtime container that
 the stage has to remove itself, whether from a failed qualification, after the stop or during
 cleanup, is printed with its state and times, and the run fails: a clean result needs a new run
-(`deploy/compose/endpoint-settlement.sh`). The endpoint and `endpoint-release` receive the
-Docker socket for the local Docker compiled runtime only; the hosted stack's socket check runs
-before the stage. The stage removes its containers and images, and the hosted cleanup then
-requires that no owned object remains.
+(`deploy/compose/endpoint-settlement.sh`). Only with `docker` do the endpoint and
+`endpoint-release` receive the Docker socket. The stage removes its containers and images, and
+the hosted cleanup then requires that no owned object remains.

@@ -1,0 +1,29 @@
+# Hosted compiled runtime for compose.endpoint.yml: the endpoint and its release step execute compiled
+# artifacts through the Ferrule service's execute profile, with their own pinned client certificate. No
+# container receives the Docker socket. The service enables execution and admits that certificate beside
+# its other clients. See docs/compiled-service-runtime.md.
+# Use with: docker compose -f compose.yml -f compose.ferrule-service.yml [-f compose.features.yml]
+#   -f compose.endpoint.yml -f compose.endpoint-service.yml
+x-service: &service
+  WEFT_FERRULE_RUNNER: service
+  WEFT_FERRULE_SERVICE_URL: https://ferrule:8443
+  WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256: ${WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256:?Set the service certificate pin}
+  # The service's native identity and its toolchain together name the compiler of the target's builds.
+  WEFT_FERRULE_WORKER_IMAGE: ${WEFT_FERRULE_SERVICE_IDENTITY:?Set the service build identity}
+  WEFT_FERRULE_COMPILE_TOOLCHAIN: ${WEFT_FERRULE_COMPILE_TOOLCHAIN:?Set the verified service toolchain pin}
+  WEFT_DELIVER_FERRULE_SERVICE_CLIENT_PEM: ${WEFT_ENDPOINT_FERRULE_SERVICE_CLIENT_PEM:?Set the endpoint service client PEM}
+
+services:
+  endpoint:
+    environment: *service
+    networks: [database, egress, ferrule]
+
+  endpoint-release:
+    environment: *service
+    networks: [database, ferrule]
+
+  ferrule:
+    environment:
+      WEFT_FERRULE_SERVICE_EXECUTION_ENABLED: "true"
+      # Every admitted client certificate pin, comma-separated, including the endpoint's.
+      WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256: ${WEFT_ENDPOINT_SERVICE_CLIENT_PINS:?Set every admitted client certificate pin, including the endpoint's}

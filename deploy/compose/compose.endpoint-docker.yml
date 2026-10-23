@@ -1,0 +1,16 @@
+# Local compiled runtime for compose.endpoint.yml: the endpoint and its release step run compiled artifacts
+# through the Docker daemon. LOCAL ONLY: both receive the Docker socket, which is equivalent to host root
+# access. A hosted deployment uses compose.endpoint-service.yml instead. See docs/runtime-packaging.md.
+# Use with: docker compose -f compose.yml -f compose.endpoint.yml -f compose.endpoint-docker.yml
+x-docker: &docker
+  image: ${WEFT_ENDPOINT_IMAGE:-weft-mapping-endpoint-local-docker:local}
+  environment:
+    # The compiler identity the target's builds name; artifacts from any other compiler are refused.
+    WEFT_FERRULE_WORKER_IMAGE: ${WEFT_ENDPOINT_COMPILER_IDENTITY:?Set the compiler identity of the target's builds}
+  group_add: ["${WEFT_DOCKER_GID:?Set the group ID of the Docker socket}"]
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+
+services:
+  endpoint: *docker
+  endpoint-release: *docker

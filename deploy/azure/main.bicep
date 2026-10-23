@@ -88,6 +88,24 @@ param ferruleServiceCompile bool = false
 @description('Compile toolchain identity of the Ferrule service image, as the service reports it for its compile profile (see docs/ferrule-service.md). With it, the Session host pins that toolchain and its reports record the combined compiler identity that builds through the service bind. Requires ferruleServiceCompile; empty keeps the native identity.')
 param ferruleCompileToolchain string = ''
 
+@description('Machine-facing mapping endpoints, one internal container app per registered release target: name (2-12 lowercase characters), projectId, mappingId, environmentId, environmentVersion, targetId, and optional concurrency (1-4, default 4), maxReplicas (default 4) and callers ([{ grantId, objectId }]). They execute through the Ferrule service, so they require ferruleRunner = service. Empty deploys none.')
+param mappingEndpoints array = []
+
+@description('Application (client) ID of the mapping endpoint app registration: the audience of callers\' app-only access tokens. Required with mappingEndpoints.')
+param mappingEndpointAudience string = ''
+
+@description('Entra tenant whose app-only access tokens the mapping endpoints accept. Empty uses entraTenantId.')
+param mappingEndpointTenantId string = ''
+
+@description('Weft principal ID of the project administrator who grants the endpoint callers; it fills the grant commands output only.')
+param mappingEndpointAdministratorId string = ''
+
+@description('Lowercase SHA-256 of the weft-ferrule-endpoint-client certificate (DER), from initialize-secrets.sh, which the Ferrule service admits for the endpoints. Required with mappingEndpoints.')
+param ferruleServiceEndpointClientCertificateSha256 string = ''
+
+@description('Execution identity the Ferrule service image reports for its execute profile (see docs/compiled-service-runtime.md); every endpoint target registers it as its runtime image. Required with mappingEndpoints.')
+param compiledRuntimeIdentity string = ''
+
 @description('Object ID of a separately hosted Weft.Worker managed identity, granted the same data-plane role on the private object container. Empty grants none.')
 param workerPrincipalId string = ''
 
@@ -131,6 +149,9 @@ var names = {
   ferrule: '${name}-ferrule'
   ferruleSessions: '${name}-ferrule-sessions'
 }
+
+// Mapping endpoints run their compiled artifacts through the Ferrule service container app.
+var mappingEndpointsEnabled = deployApplication && ferruleRunner == 'service' && !empty(mappingEndpoints)
 
 module network 'modules/network.bicep' = {
   name: 'network'
@@ -251,11 +272,14 @@ module ferruleService 'modules/ferrule-service.bicep' = if (deployApplication &&
     registryServer: registry.outputs.loginServer
     vaultUri: vault.outputs.uri
     image: ferruleServiceImage
-    clientCertificatePins: ferruleServiceClientCertificateSha256
+    clientCertificatePins: mappingEndpointsEnabled
+      ? '${ferruleServiceClientCertificateSha256},${ferruleServiceEndpointClientCertificateSha256}'
+      : ferruleServiceClientCertificateSha256
     concurrency: ferruleServiceConcurrency
     queue: ferruleServiceConcurrency
     maxReplicas: ferruleServiceMaxReplicas
     compile: ferruleServiceCompile
+    execute: mappingEndpointsEnabled
     cpu: ferruleServiceCompile ? '${ferruleServiceConcurrency + 1}.0' : '1.0'
     memory: ferruleServiceCompile ? '${2 * (ferruleServiceConcurrency + 1)}Gi' : '2Gi'
     tags: tags
@@ -318,6 +342,31 @@ module application 'modules/application.bicep' = if (deployApplication) {
   }
 }
 
+module mappingEndpoint 'modules/mapping-endpoint.bicep' = if (mappingEndpointsEnabled) {
+  name: 'mapping-endpoint'
+  params: {
+    location: location
+    namePrefix: name
+    environmentName: environment.outputs.name
+    identityId: identity.id
+    registryServer: registry.outputs.loginServer
+    endpointImage: 'weft-mapping-endpoint:${imageTag}'
+    weftImage: 'weft:${imageTag}'
+    vaultUri: vault.outputs.uri
+    organizationId: organizationId
+    endpoints: mappingEndpoints
+    grantAdministratorId: mappingEndpointAdministratorId
+    tenantId: empty(mappingEndpointTenantId) ? entraTenantId : mappingEndpointTenantId
+    audience: mappingEndpointAudience
+    ferruleServiceUrl: ferruleService.?outputs.url ?? ''
+    ferruleServiceCertificateSha256: ferruleServiceCertificateSha256
+    ferruleServiceIdentity: ferruleServiceIdentity
+    compileToolchain: ferruleCompileToolchain
+    compiledRuntimeIdentity: compiledRuntimeIdentity
+    tags: tags
+  }
+}
+
 output registryLoginServer string = registry.outputs.loginServer
 output registryName string = names.registry
 output keyVaultName string = names.vault
@@ -330,3 +379,5 @@ output applicationName string = names.app
 output privateObjectsEndpoint string = objects.outputs.blobEndpoint
 output privateObjectsContainer string = objects.outputs.containerName
 output identityClientId string = identity.properties.clientId
+output mappingEndpointOrigins array = mappingEndpoint.?outputs.origins ?? []
+output mappingEndpointGrantArguments array = mappingEndpoint.?outputs.grantArguments ?? []
