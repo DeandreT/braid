@@ -274,12 +274,22 @@ API container on Container Apps and serves the built frontend from the same orig
 with private PostgreSQL Flexible Server, Key Vault and a managed identity. It runs one
 instance; scale-out needs the session key ring and private storage qualified for it.
 
-Publishing an individual mapping is a later workflow: validate the exact
-revision, preflight runtime/format capability, build an immutable artifact,
-associate environment-specific connection references, then deploy through a
-target adapter. Rollback selects a previously qualified immutable artifact.
-Retries of transformations with external side effects require an explicit
-idempotency contract rather than blind replay.
+Hosted platforms without Docker run native work through the platform-agnostic
+[Ferrule service](ferrule-service.md): every inspection, preview, compilation and
+compiled-mapping execution is a fresh, independently limited sandbox child, and the
+service scales with load. Platform sandboxes such as Container Apps dynamic sessions
+plug in as adapters, and the local Docker runner remains for development.
+
+Publishing an individual mapping validates the exact revision, preflights
+runtime/format capability, builds an immutable artifact, qualifies it against saved
+regression baselines, and activates it as the current release of a registered target
+([build workflow](build-workflow.md), [release qualification](release-qualification.md),
+[local releases](local-releases.md)). Rollback activates a previously qualified
+immutable artifact. The separate [mapping endpoint](mapping-endpoint.md) host serves the
+current release to machine callers admitted by [machine authorization](machine-authorization.md);
+same-ID retries replay the retained outcome instead of executing again. Transformations
+with external side effects still require their own idempotency contract rather than
+blind replay.
 
 Azure Functions isolated .NET workers are another candidate for HTTP or event
 workloads. Cloud selection is a deployment decision, not part of the mapping
