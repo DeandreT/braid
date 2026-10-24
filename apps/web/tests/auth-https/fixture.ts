@@ -17,6 +17,7 @@ import {
 } from "./wire";
 import { BrowserRootFetch, type AppRequest } from "./root-fetch";
 import { blinkRestriction } from "./conditional-policy";
+import { sessionSummaryMatches } from "./summary";
 
 const warning =
   "Signing in opens Microsoft and reloads this page. Unsaved drafts and in-tab recovery details may be lost. Previously sent changes may already have committed.";
@@ -345,9 +346,11 @@ export class HttpsFixture {
     });
   }
   async summary(text: string): Promise<void> {
-    await until(
-      async () =>
-        (await this.page!.locator(".session-summary").textContent()) === text,
+    await until(async () =>
+      sessionSummaryMatches(
+        await this.page!.locator(".session-summary").textContent(),
+        text,
+      ),
     );
   }
   // Keyboard activation avoids pointer actionability, which waits on compositor

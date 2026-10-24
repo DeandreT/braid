@@ -10,6 +10,7 @@ export default defineConfig({
     "workbench-model.spec.ts",
     "hosted-mutation.spec.ts",
     "hosted-read.spec.ts",
+    "auth-https-summary.spec.ts",
     "regression.spec.ts",
     "builds.spec.ts",
     "revision-preview.spec.ts",
