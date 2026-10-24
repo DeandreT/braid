@@ -8,6 +8,7 @@
     <Compile Include="../../tests/Weft.Tests/EntraProtocolHttpsFixture.cs" Link="EntraSupport/EntraProtocolHttpsFixture.cs" />
     <Compile Include="../../tests/Weft.Tests/EntraProtocolHttpsCrypto.cs" Link="EntraSupport/EntraProtocolHttpsCrypto.cs" />
     <Compile Include="../../tests/Weft.Tests/EntraProtocolHttpsIssuer.cs" Link="EntraSupport/EntraProtocolHttpsIssuer.cs" />
+    <Compile Include="../../tests/Weft.Tests/EntraProtocolHttpsPublicClients.cs" Link="EntraSupport/EntraProtocolHttpsPublicClients.cs" />
     <Compile Include="../../tests/Weft.Tests/EntraProtocolHttpsObservations.cs" Link="EntraSupport/EntraProtocolHttpsObservations.cs" />
     <Compile Include="../../tests/Weft.Tests/EntraProtocolHttpsWire.cs" Link="EntraSupport/EntraProtocolHttpsWire.cs" />
   </ItemGroup>

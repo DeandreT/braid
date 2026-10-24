@@ -41,3 +41,5 @@ Weft currently works with mappings saved in Ferrule's native JSON format.
 
 Choose **Help** in the header at any time. Each help page has its own address,
 so you can bookmark it or share it with a colleague.
+
+To work from a terminal, see [Using the command line](cli.md).

@@ -30,7 +30,11 @@ const bashPath = (path) =>
         .replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`)
     : path;
 
-function run(script, commands, { held = false, cleanupFails = false } = {}) {
+function run(
+  script,
+  commands,
+  { held = false, cleanupFails = false, stageOnly = false } = {},
+) {
   const source = readFileSync(
     new URL(`../../deploy/compose/${script}`, import.meta.url),
     "utf8",
@@ -88,6 +92,7 @@ ${commands}`,
           PATH: "/usr/bin:/bin",
           ...(windows ? { SystemRoot: process.env.SystemRoot } : {}),
           ...(held ? { WEFT_ACCEPTANCE_HOLD: "1" } : {}),
+          ...(stageOnly ? { WEFT_ACCEPTANCE_STAGE_ONLY: "true" } : {}),
         },
       },
     );
@@ -170,4 +175,17 @@ test("cleanup failure still fails a completed acceptance", () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Cleanup of owned resources failed/);
   assert.doesNotMatch(result.stdout, /Acceptance passed/);
+});
+
+test("standalone client acceptance requires completion and does not claim browser qualification", () => {
+  const complete = run("acceptance-test.sh", "acceptance_complete=true", {
+    stageOnly: true,
+  });
+  assert.equal(complete.status, 0);
+  assert.match(complete.stdout, /Client-stage acceptance passed/);
+  assert.match(complete.stdout, /browser workflows not run/);
+  const incomplete = run("acceptance-test.sh", "exit 0", { stageOnly: true });
+  assert.equal(incomplete.status, 1);
+  assert.equal(incomplete.diagnostics, true);
+  assert.doesNotMatch(incomplete.stdout, /Client-stage acceptance passed/);
 });

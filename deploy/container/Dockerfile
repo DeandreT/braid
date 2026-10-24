@@ -50,6 +50,7 @@ COPY migrations migrations
 # Self-authored native examples are embedded in the API assembly.
 COPY engines/ferrule-host/tests/fixtures engines/ferrule-host/tests/fixtures
 COPY dotnet dotnet
+COPY docs/user-guide docs/user-guide
 RUN dotnet restore dotnet/apps/Weft.Server/Weft.Server.csproj --locked-mode \
     && for tool in DatabaseTool StorageTool MaintenanceTool SessionKeyTool; do \
         dotnet restore "dotnet/tools/Weft.$tool/Weft.$tool.csproj" --locked-mode || exit 1; done

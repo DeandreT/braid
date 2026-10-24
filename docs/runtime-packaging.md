@@ -23,6 +23,10 @@ docker build -f deploy/container/Dockerfile --target weft-mapping-endpoint -t we
 
 ## Application image
 
+The build context includes `docs/user-guide/*.md`, which `Weft.Api` embeds in the
+server assembly. The API build rejects missing guide sources; the runtime does not
+load guide files from disk.
+
 The server serves the API and the Angular application from one origin; unknown
 `/api` routes stay JSON 404s and other paths fall back to `index.html`. The process
 runs as the non-root `app` user (UID/GID 1654) and writes only to:

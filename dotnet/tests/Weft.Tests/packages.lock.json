@@ -766,6 +766,11 @@
           "System.Memory.Data": "10.0.3"
         }
       },
+      "System.CommandLine": {
+        "type": "Transitive",
+        "resolved": "2.0.13",
+        "contentHash": "TIO2lMV+sSP7WW7pD/oCRHD9ENWY+jqwXmYzgks3R46cEdDzwjQOAhsiBn+M3EegfGjgTpa2h+eIrcU+AM2k6A=="
+      },
       "System.Composition": {
         "type": "Transitive",
         "resolved": "9.0.0",
@@ -999,6 +1004,15 @@
           "Weft.Ai": "[1.0.0, )",
           "Weft.Contracts": "[1.0.0, )",
           "Weft.Domain": "[1.0.0, )"
+        }
+      },
+      "weft.cli": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Identity.Client": "[4.84.2, )",
+          "Microsoft.Identity.Client.Extensions.Msal": "[4.84.2, )",
+          "System.CommandLine": "[2.0.13, )",
+          "Weft.Contracts": "[1.0.0, )"
         }
       },
       "weft.contracts": {

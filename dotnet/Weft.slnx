@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/apps/">
     <Project Path="apps/Weft.BuildWorker/Weft.BuildWorker.csproj" />
+    <Project Path="apps/Weft.Cli/Weft.Cli.csproj" />
     <Project Path="apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj" />
     <Project Path="apps/Weft.FerruleService/Weft.FerruleService.csproj" />
     <Project Path="apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj" />

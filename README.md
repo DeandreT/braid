@@ -19,6 +19,7 @@ adapters and their own capability checks.
   regression runs, builds and compiled mappings run in isolated sandboxes without Docker,
   and private objects can be kept in Azure Blob storage.
 - Microsoft Entra sign-in, server sessions and project-scoped application permissions.
+- A `weft` command line that works with the API as the signed-in user.
 
 Other mapping engines, identity providers, and AI model providers will integrate
 through separate adapters. Web hosting and publishing a mapping as a runnable
@@ -130,6 +131,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [API contracts](docs/development.md#updating-api-contracts): the OpenAPI 3.1 documents of the [session API](contracts/weft-v1.json), the [mapping endpoint](contracts/weft-endpoint-v1.json) and the [Ferrule service](contracts/ferrule-service-v1.json).
 - [Azure Blob private storage](docs/private-storage-blob.md): the Blob object store and its publication format.
 - [Hosted acceptance](docs/hosted-acceptance.md): the packaged signed-in stack exercised end to end.
+- [Weft CLI](docs/cli.md): the `weft` command line as the signed-in user, its profiles, sign-in, protected token cache and commands.
 - [Revision comparison](docs/revision-comparison.md) and [compact workbench](docs/compact-workbench.md): semantic differences between revisions and the workbench layout.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.

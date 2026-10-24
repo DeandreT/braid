@@ -45,6 +45,7 @@
     <ProjectReference Include="../../tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.WorkerShutdownProbe/Weft.WorkerShutdownProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.Server/Weft.Server.csproj" />
+    <ProjectReference Include="../../apps/Weft.Cli/Weft.Cli.csproj" />
     <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" />
     <ProjectReference Include="../../apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.CompiledSandboxProbe/Weft.CompiledSandboxProbe.csproj" ReferenceOutputAssembly="false" />
@@ -67,6 +68,7 @@
     <!-- Committed OpenAPI documents that the hosts' own routes and generated documents are compared with. -->
     <None Include="../../../contracts/weft-endpoint-v1.json;../../../contracts/ferrule-service-v1.json"
           Link="Contracts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../contracts/weft-v1.json" Link="Contracts/weft-v1.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CopyPreviewWorker" AfterTargets="Build">
     <MSBuild Projects="../../apps/Weft.Worker/Weft.Worker.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">

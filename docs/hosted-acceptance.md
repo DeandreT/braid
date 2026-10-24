@@ -151,7 +151,7 @@ deploy/compose/acceptance-test.sh
 | `WEFT_IMAGE`, `WEFT_EDGE_IMAGE`, `WEFT_WORKER_IMAGE`, `WEFT_FERRULE_SERVICE_IMAGE` | Prebuilt images to use instead of building them; they are not removed. |
 | `WEFT_ACCEPTANCE_LOG_DIRECTORY` | On failure, keep the service logs and the browser failure context there. |
 | `WEFT_ACCEPTANCE_HOLD` | Debugging aid: stop after provisioning, write the run's environment to a private file and wait for a release file before cleaning up. |
-| `WEFT_ACCEPTANCE_STAGE` | An executable to run after the hosted checks pass and before cleanup, with the run's environment; its failure fails the run. The [mapping endpoint stage](#mapping-endpoint-stage) uses it. |
+| `WEFT_ACCEPTANCE_STAGE` | An executable to run after the hosted checks pass and before cleanup, with the run's environment; its failure fails the run. The [mapping endpoint stage](#mapping-endpoint-stage) and the [CLI stage](#cli-stage) use it. |
 | `WEFT_TEST_SUBNET_RANGE` | The IPv4 range the run's networks take their explicit subnets from; see [Docker test networks](development.md#docker-test-networks). |
 
 Generated passwords, keys and certificates stay in a private temporary directory and are
@@ -208,3 +208,60 @@ cleanup, is printed with its state and times, and the run fails: a clean result 
 (`deploy/compose/endpoint-settlement.sh`). Only with `docker` do the endpoint and
 `endpoint-release` receive the Docker socket. The stage removes its containers and images, and
 the hosted cleanup then requires that no owned object remains.
+
+## CLI stage
+
+Use `deploy/compose/cli-acceptance-test.sh --cli-only` to run the complete CLI workflows on a
+fresh packaged stack without a browser. This still checks issuer evidence, Ferrule health,
+Blob maintenance and cleanup, but does not qualify browser workflows. With no argument, both
+the browser acceptance and the CLI stage run.
+
+`deploy/compose/cli-acceptance-test.sh` runs this acceptance with a follow-on stage for the
+[`weft` CLI](cli.md). It takes the same settings. Before the stack starts, it registers the CLI
+as a public client with the run's issuer, for the run's Weft application and the `weft.api`
+scope. The issuer's public-client flows are in `tools/hosted-acceptance/public-client.mjs`:
+
+- device authorization;
+- authorization code with PKCE on a loopback redirect;
+- refresh-token redemption;
+- a test-only `deviceapprove` request that stands in for the user entering the code.
+
+Each grant issues a delegated v2 access token for the signed-in user's tenant and object ID.
+The fixture also answers MSAL instance discovery for the run's tenant at the fixed Microsoft
+authority; foreign authorities and ambiguous discovery parameters are refused.
+
+Once the hosted checks pass, the stage publishes the linux-x64 single-file CLI. It runs the CLI
+in a container built from a pinned Ubuntu image with OpenSSL and GNOME Keyring:
+
+- The container joins the issuer's network, so `login.microsoftonline.com` resolves to the
+  issuer. It also joins the ingress network, and relays the public host's port 443 to the
+  ingress, so the CLI uses the public origin unchanged.
+- It trusts only the run's certificate authority (`SSL_CERT_FILE`). The CLI's authority and
+  instance discovery are unchanged.
+- It runs as a non-root user with a read-only root filesystem, no capabilities and
+  `no-new-privileges`.
+- A private D-Bus session with an unlocked keyring holds MSAL's token cache, as the Secret
+  Service does for a user.
+
+There, the CLI:
+
+1. Saves a profile, which must be owner-only, and signs in with a device code. The stage
+   approves the code at the issuer, and no token may appear in the CLI's directory.
+2. Checks with `whoami` that the server admits the bound principal, then creates a project and
+   finds it in the project list.
+3. Creates a mapping from the `preview-orders` fixture with JSON document boundaries, then
+   appends the browser flows' second revision against the reviewed head.
+4. Ensures both revisions' projection reports and the first revision's validation, which must
+   be valid, and compares the two revisions.
+5. Runs a preview with the browser flows' sample inputs and parameters, and downloads each
+   output with digest verification.
+6. Saves a regression case whose baseline is the preview's outputs, then runs it; the
+   comparison must pass.
+7. Registers a build environment from the advertised profile, approves the exact revision with
+   the passing regression evidence, and runs the compiled build. Its artifact metadata and
+   retained read must agree; the approval is then revoked.
+8. Asks chat about the revision. The local model may take up to three turns to complete one.
+9. Signs out. A later command must then exit 3.
+
+Finally the issuer's log must show the device authorization and the token grants with no
+refusal. The stage removes its container and runner image before the hosted cleanup.

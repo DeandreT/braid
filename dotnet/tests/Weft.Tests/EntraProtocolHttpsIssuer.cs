@@ -17,7 +17,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace Weft.Tests;
 
 /// <summary>One owned HTTPS server, fixed Microsoft dialect, standard token crypto, no live provider I/O.</summary>
-internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAsyncDisposable
+internal sealed partial class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, EntraProtocolCode> codes = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<EntraProtocolIssuerSend> sends = new();
@@ -96,6 +96,7 @@ internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAs
     private async Task ProcessAsync(HttpContext context, string path)
     {
         context.Response.Headers.CacheControl = "no-store";
+        if (await PublicClientAsync(context, path)) return;
         if (context.Request.QueryString.HasValue && path != EntraProtocolFixturePolicy.Authorize)
         {
             Interlocked.Increment(ref UnexpectedRequests); context.Response.StatusCode = 400;

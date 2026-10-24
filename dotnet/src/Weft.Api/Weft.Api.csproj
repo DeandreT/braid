@@ -17,7 +17,11 @@
   </ItemGroup>
   <ItemGroup>
     <!-- The user guide ships inside the server build; nothing is read from disk at run time. -->
-    <EmbeddedResource Include="../../../docs/user-guide/*.md"
+    <UserGuideSource Include="../../../docs/user-guide/*.md" />
+    <EmbeddedResource Include="@(UserGuideSource)"
                       LogicalName="Weft.Api.UserGuide.%(Filename)%(Extension)" />
   </ItemGroup>
+  <Target Name="RequireUserGuideSources" BeforeTargets="CoreCompile">
+    <Error Condition="'@(UserGuideSource)' == ''" Text="The user guide source files are required to build Weft.Api." />
+  </Target>
 </Project>

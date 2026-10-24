@@ -24,6 +24,10 @@ files=(--file "$compose_directory/compose.yml" --file "$compose_directory/compos
 if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
   files+=(--file "$compose_directory/compose.model-fixture.yml")
 fi
+# Bearer access for the allowlisted public clients, such as the CLI stage's (cli-acceptance-test.sh).
+if [[ -n ${WEFT_API_BEARER_CLIENT_IDS:-} ]]; then
+  files+=(--file "$compose_directory/compose.bearer.yml")
+fi
 
 compose() {
   docker compose --project-name "$project" "${files[@]}" --profile operator "$@"
@@ -70,6 +74,8 @@ cleanup() {
     echo 'Acceptance failed.' >&2
   elif [[ -n ${WEFT_ACCEPTANCE_HOLD:-} ]]; then
     echo 'Held stack removed.'
+  elif [[ ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
+    echo 'Client-stage acceptance passed (browser workflows not run).'
   else
     echo 'Acceptance passed.'
   fi
@@ -82,9 +88,15 @@ fail() {
   exit 1
 }
 
-# Prerequisites: a Chromium build for Playwright, the installed web dependencies and a model cache.
-[[ -x ${WEFT_CHROMIUM_EXECUTABLE:-} ]] || fail 'Set WEFT_CHROMIUM_EXECUTABLE to a Chromium executable.'
-[[ -d $repository/node_modules/@playwright/test ]] || fail 'Run npm ci in the repository first.'
+# A dedicated client stage can qualify itself on the same packaged stack without borrowing a browser.
+case ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} in
+  true) [[ -x ${WEFT_ACCEPTANCE_STAGE:-} && -z ${WEFT_ACCEPTANCE_HOLD:-} ]] ||
+    fail 'Stage-only acceptance requires an executable WEFT_ACCEPTANCE_STAGE and no hold.' ;;
+  false)
+    [[ -x ${WEFT_CHROMIUM_EXECUTABLE:-} ]] || fail 'Set WEFT_CHROMIUM_EXECUTABLE to a Chromium executable.'
+    [[ -d $repository/node_modules/@playwright/test ]] || fail 'Run npm ci in the repository first.' ;;
+  *) fail 'WEFT_ACCEPTANCE_STAGE_ONLY must be true or false' ;;
+esac
 export WEFT_ACCEPTANCE_OLLAMA_VOLUME=${WEFT_ACCEPTANCE_OLLAMA_VOLUME:-weft-ollama-models}
 export WEFT_ACCEPTANCE_CHAT_MODEL=${WEFT_ACCEPTANCE_CHAT_MODEL:-qwen2.5:1.5b}
 case ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} in
@@ -260,6 +272,9 @@ if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
   export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$compose_directory/compose.model-fixture.yml"
 fi
 export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$work/subnets.yml"
+if [[ -n ${WEFT_API_BEARER_CLIENT_IDS:-} ]]; then
+  export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$compose_directory/compose.bearer.yml"
+fi
 export WEFT_ACCEPTANCE_PRINCIPAL_ID=$principal
 export WEFT_ACCEPTANCE_WORK=$work
 export WEFT_ACCEPTANCE_FIXTURES=$repository/engines/ferrule-host/tests/fixtures
@@ -274,27 +289,36 @@ if [[ -n ${WEFT_ACCEPTANCE_HOLD:-} ]]; then
   exit 0
 fi
 
-echo 'Running the browser flows'
-# An optional command prefix for the browser run, for example a virtual display or a lock.
-read -r -a wrapper <<<"${WEFT_ACCEPTANCE_BROWSER_WRAPPER:-}"
-(cd "$repository/apps/web" && "${wrapper[@]}" npx playwright test --config playwright.hosted-acceptance.config.ts) ||
-  fail 'browser flows'
-# Each use of the application's own recovery controls on a slow host, the chat attempts the
-# local model needed for a turn with a tool call and verified citations, and the attempt that
-# completed the build.
-echo "ok - browser flows passed: $(cat "$work/acceptance-facts.json")"
+if [[ ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
+  echo "Running the standalone client stage $(basename -- "$WEFT_ACCEPTANCE_STAGE")"
+  "$WEFT_ACCEPTANCE_STAGE" || fail 'standalone client stage'
+else
+  echo 'Running the browser flows'
+  # An optional command prefix for the browser run, for example a virtual display or a lock.
+  read -r -a wrapper <<<"${WEFT_ACCEPTANCE_BROWSER_WRAPPER:-}"
+  (cd "$repository/apps/web" && "${wrapper[@]}" npx playwright test --config playwright.hosted-acceptance.config.ts) ||
+    fail 'browser flows'
+  # Each use of the application's own recovery controls on a slow host, the chat attempts the
+  # local model needed for a turn with a tool call and verified citations, and the attempt that
+  # completed the build.
+  echo "ok - browser flows passed: $(cat "$work/acceptance-facts.json")"
+fi
 
 # The run's own evidence: sign-in went through the issuer without refusals, every service replica
 # is still healthy (a replica with unconfirmed cleanup fails readiness) and nothing restarted on its own.
 compose logs --no-color issuer >"$work/issuer.log" 2>&1
-grep -q 'issuer token' "$work/issuer.log" || fail 'no token was redeemed at the issuer'
+if [[ ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} == true ]]; then
+  grep -q 'issuer public-token' "$work/issuer.log" || fail 'no public-client token was redeemed at the issuer'
+else
+  grep -q 'issuer token' "$work/issuer.log" || fail 'no token was redeemed at the issuer'
+fi
 ! grep -q 'issuer refused' "$work/issuer.log" || fail "issuer refusals: $(grep -c 'issuer refused' "$work/issuer.log")"
 echo 'ok - every sign-in redeemed its code at the issuer without a refusal'
 for container in $(compose ps --quiet ferrule); do
   [[ $(docker inspect --format '{{.State.Health.Status}}' "$container") == healthy ]] || fail 'service replica health'
 done
 echo 'ok - every Ferrule service replica is healthy'
-project_id=$(cat "$work/project-id" 2>/dev/null) || fail 'the browser run recorded no project'
+project_id=$(cat "$work/project-id" 2>/dev/null) || fail 'the client run recorded no project'
 compose run --rm --no-deps -T maintenance run-once "$WEFT_SESSION_ORGANIZATION_ID" "$project_id" \
   >"$work/maintenance.out" 2>"$work/maintenance.err" || { tail -n 5 "$work/maintenance.err" >&2; fail 'maintenance over the Blob store'; }
 grep -q '"outcome":"finished","failure":null' "$work/maintenance.out" || fail 'maintenance outcome'
@@ -304,7 +328,7 @@ echo "ok - maintenance observed the project's Blob objects: $(grep -o '"publicat
 # An optional follow-on stage on this run's stack before cleanup, for example
 # deploy/compose/endpoint-acceptance-test.sh. It inherits the run's environment, and its failure
 # fails the run; the run's cleanup still removes the stack.
-if [[ -n ${WEFT_ACCEPTANCE_STAGE:-} ]]; then
+if [[ -n ${WEFT_ACCEPTANCE_STAGE:-} && ${WEFT_ACCEPTANCE_STAGE_ONLY:-false} != true ]]; then
   echo "Running the follow-on stage $(basename -- "$WEFT_ACCEPTANCE_STAGE")"
   "$WEFT_ACCEPTANCE_STAGE" || fail 'follow-on stage'
 fi

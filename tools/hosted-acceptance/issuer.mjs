@@ -7,8 +7,8 @@
 // pairwise subject and, for the requested profile scope, the tenant-stable object ID that Weft
 // binds. For mapping endpoint callers
 // it also issues app-only v2 access tokens to registered machine clients (client credentials).
-// It logs one fixed event name per protocol step and never logs codes, tokens, assertions,
-// secrets or keys.
+// The Weft CLI's public-client flows are in public-client.mjs. It logs one fixed event name per
+// protocol step and never logs codes, tokens, assertions, secrets or keys.
 import {
   createHash,
   createPrivateKey,
@@ -21,6 +21,7 @@ import {
   X509Certificate,
 } from "node:crypto";
 import { createServer } from "node:https";
+import { createPublicClients } from "./public-client.mjs";
 
 const host = "login.microsoftonline.com";
 const take = (name) => {
@@ -65,6 +66,25 @@ const keyId = base64url(
 const clientDigest = base64url(
   createHash("sha256").update(clientCertificate.raw).digest(),
 );
+// Optional public clients for the CLI acceptance stage: [{clientId, scope}], each the CLI's
+// application ID and the delegated scope of its access tokens for this run's Weft application.
+const publicClients = createPublicClients({
+  host,
+  tenant,
+  issuer,
+  clients: JSON.parse(process.env.WEFT_ACCEPTANCE_PUBLIC_CLIENTS || "[]").map(
+    (registration) => ({ ...registration, audience: client }),
+  ),
+  user: {
+    objectId,
+    subject,
+    username: "acceptance.user@weft.example.test",
+  },
+  signed,
+  event,
+  lifetimeSeconds: tokenLifetimeSeconds,
+});
+delete process.env.WEFT_ACCEPTANCE_PUBLIC_CLIENTS;
 const pending = new Map(); // transaction -> authorization request, until the button is pressed
 const codes = new Map(); // code -> issued authorization, single use
 const assertionIds = new Set();
@@ -345,6 +365,7 @@ async function redeem(request, response) {
   const form = new URLSearchParams(await readBody(request, 16384));
   if (form.get("grant_type") === "client_credentials")
     return clientCredentials(form, response);
+  if (publicClients.redeem(form, response)) return;
   const fields = singletons(form, [
     "grant_type",
     "client_id",
@@ -400,6 +421,7 @@ const server = createServer(tls, async (request, response) => {
     if (request.headers.host !== host)
       return refuse(response, "invalid_request", "host");
     const url = new URL(request.url, `https://${host}`);
+    if (await publicClients.route(request, url, response)) return;
     if (
       request.method === "GET" &&
       url.pathname === paths.discovery &&

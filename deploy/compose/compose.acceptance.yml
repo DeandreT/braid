@@ -123,6 +123,8 @@ services:
       WEFT_ACCEPTANCE_SIGNING_KEY: ${WEFT_ACCEPTANCE_SIGNING_KEY:?Set the ID token signing key}
       # Optional machine clients for the mapping endpoint acceptance; none by default.
       WEFT_ACCEPTANCE_MACHINE_CLIENTS: ${WEFT_ACCEPTANCE_MACHINE_CLIENTS:-[]}
+      # Optional public clients for the CLI acceptance stage; none by default.
+      WEFT_ACCEPTANCE_PUBLIC_CLIENTS: ${WEFT_ACCEPTANCE_PUBLIC_CLIENTS:-[]}
     # The server reaches the fixed Microsoft name on port 443; the issuer stays non-root.
     sysctls:
       net.ipv4.ip_unprivileged_port_start: 443
