@@ -35,6 +35,10 @@ param ferruleCompileToolchain string = ''
 param nativeWorkEnabled bool = false
 @description('Revision chat; requires nativeWorkEnabled.')
 param chatEnabled bool = false
+@description('Bearer access for signed-in users through the allowlisted public clients; the audience is entraClientId.')
+param apiBearerEnabled bool = false
+param apiBearerScope string = ''
+param apiBearerClientIds array = []
 param privateObjectsEndpoint string
 param privateObjectsContainer string
 param tags object
@@ -102,6 +106,7 @@ var roles = [
   { key: 'release-writer', env: 'RELEASE_WRITER' }
   { key: 'invocation-grant-writer', env: 'INVOCATION_GRANT_WRITER' }
   { key: 'invocation-writer', env: 'INVOCATION_WRITER' }
+  { key: 'api-audit-writer', env: 'API_AUDIT_WRITER' }
 ]
 
 // A separately hosted inspection worker; the settings stay dormant until native upload or
@@ -140,7 +145,11 @@ var chatFiles = [
   { key: 'chat-reader', setting: 'WEFT_CHAT_READER_CONNECTION_STRING', file: 'chat-reader-connection' }
   { key: 'chat-writer', setting: 'WEFT_CHAT_WRITER_CONNECTION_STRING', file: 'chat-writer-connection' }
 ]
-var serverFiles = concat(nativeWorkEnabled ? nativeWorkFiles : [], chatEnabled ? chatFiles : [])
+// Mutating bearer requests are audited through their own append-only login.
+var bearerFiles = [
+  { key: 'api-audit-writer', setting: 'WEFT_API_AUDIT_WRITER_CONNECTION_STRING', file: 'api-audit-writer' }
+]
+var serverFiles = concat(nativeWorkEnabled ? nativeWorkFiles : [], chatEnabled ? chatFiles : [], apiBearerEnabled ? bearerFiles : [])
 
 // Container app secret names; `<key>-connection` resolves `pg-<key>-connection`, the rest are named below.
 var serverSecretNames = union([
@@ -227,6 +236,12 @@ var serverEnvironment = concat([
   { name: 'WEFT_CHAT_PROFILES_FILE', value: '/run/weft/secrets/chat-profiles' }
   { name: 'WEFT_DELIVER_FILE_CHAT_PROFILES', secretRef: 'chat-profiles' }
   { name: 'WEFT_DELIVER_FILE_MODEL_PROVIDER_CREDENTIAL', secretRef: 'model-provider-credential' }
+] : [], apiBearerEnabled ? [
+  // Signed-in users' delegated v2 access tokens for the Session app's exposed scope, from the allowlisted clients.
+  { name: 'WEFT_API_BEARER_ENABLED', value: 'true' }
+  { name: 'WEFT_API_BEARER_AUDIENCE', value: entraClientId }
+  { name: 'WEFT_API_BEARER_SCOPE', value: apiBearerScope }
+  { name: 'WEFT_API_BEARER_CLIENT_IDS', value: join(apiBearerClientIds, ',') }
 ] : [], flatten(map(serverFiles, login => [
   { name: 'WEFT_DELIVER_FILE_${toUpper(replace(login.file, '-', '_'))}', secretRef: '${login.key}-connection' }
   { name: '${login.setting}_FILE', value: '/run/weft/secrets/${login.file}' }

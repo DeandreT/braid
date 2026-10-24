@@ -22,6 +22,8 @@ internal sealed class SessionHostResources
     private readonly List<X509Certificate2> certificates = [];
     private readonly List<PostgresServerSessionDatabase> sessionDatabases = [];
     private PostgresExternalIdentityDatabase? identityDatabase;
+    private PostgresApiRequestAuditWriter? auditWriter;
+    private EntraUserTokenValidator? userTokens;
     private DurableSessionKeyProfile? profile;
     internal X509Certificate2? TlsCertificate { get; private set; }
     internal SslStreamCertificateContext? TlsCertificateContext { get; private set; }
@@ -86,6 +88,7 @@ internal sealed class SessionHostResources
         var readerConnection = ReadConnection(read, "WEFT_SESSION_READER_CONNECTION_STRING_FILE");
         var writerConnection = ReadConnection(read, "WEFT_SESSION_WRITER_CONNECTION_STRING_FILE");
         var identityConnection = ReadConnection(read, "WEFT_IDENTITY_READER_CONNECTION_STRING_FILE");
+        var auditConnection = options.Bearer is null ? null : ReadProtectedConnection(read, ServerHostOptions.BearerAuditSetting);
         var readerDatabase = new PostgresServerSessionDatabase(readerConnection,
             ServerSessionDatabaseProfile.Reader);
         sessionDatabases.Add(readerDatabase);
@@ -103,6 +106,13 @@ internal sealed class SessionHostResources
         services.AddWeftEntraBrowserAuthentication(new(options.OrganizationId, options.Origin), profile, identities);
         services.AddWeftAuthenticationHttp(new(AuthenticationHttpMode.Session, options.Origin), environment);
         services.AddWeftSessionCatalog(new(options.OrganizationId), options.Metadata, options.Ingestion, options.Creation, options.Reports);
+        if (options.Bearer is { } bearer)
+        {
+            // Borrowed by the admission: the validator only fetches the fixed tenant's discovery and keys on first use.
+            auditWriter = new(auditConnection!);
+            userTokens = new(bearer);
+            services.AddWeftBearerAccess(new(options.OrganizationId), userTokens, identities, auditWriter);
+        }
         if (options.InspectionWorker is { } inspection)
             InspectionWorkerHostConfiguration.ConfigureRemote(services, inspection.Options(inspectionClient!));
         if (options.FerruleService is { } service)
@@ -258,6 +268,12 @@ internal sealed class SessionHostResources
     internal async Task DisposeAfterSettlementAsync()
     {
         Exception? first = null;
+        if (userTokens is not null)
+            try { await userTokens.DisposeAsync(); }
+            catch (Exception error) when (Nonfatal(error)) { first ??= error; }
+        if (auditWriter is not null)
+            try { await auditWriter.DisposeAsync(); }
+            catch (Exception error) when (Nonfatal(error)) { first ??= error; }
         foreach (var database in sessionDatabases)
             try { await database.DisposeAsync(); }
             catch (Exception error) when (Nonfatal(error)) { first ??= error; }

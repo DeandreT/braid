@@ -42,6 +42,7 @@ services:
       WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD: ${WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD:?Set a separate invocation grant writer password}
       WEFT_LOCAL_INVOCATION_WRITER_PASSWORD: ${WEFT_LOCAL_INVOCATION_WRITER_PASSWORD:?Set a separate invocation writer password}
       WEFT_LOCAL_RUN_WRITER_PASSWORD: ${WEFT_LOCAL_RUN_WRITER_PASSWORD:?Set a separate run writer password}
+      WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD: ${WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD:?Set a separate API audit writer password}
     ports:
       - "127.0.0.1:54329:5432"
     volumes:

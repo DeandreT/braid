@@ -106,6 +106,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Server sessions](docs/server-sessions.md): pure lifetime and conditional-operation contracts, privacy, and separate store/authentication qualification.
 - [Entra browser client](docs/entra-browser-client.md): dormant fixed-tenant OIDC adapter, certificate and key-profile ownership, and separate HTTP/host activation.
 - [Authentication HTTP](docs/browser-authentication-http.md): session inspection, login/callback, acknowledged local logout and explicit local forgetting.
+- [API authentication](docs/api-authentication.md): the browser session and opt-in Entra bearer tokens for signed-in users' other clients, with rate limits and durable audit.
 - [Session host operations](docs/session-host.md): explicit host modes, private configuration, offline TLS, ingress, privacy and shutdown.
 - [Runtime packaging](docs/runtime-packaging.md): container images, private delivery, the same-replica edge and the hosted-shape local stack.
 - [Azure deployment](docs/azure-deployment.md): Bicep templates, operator inputs, the deployment procedure and open hosting questions.

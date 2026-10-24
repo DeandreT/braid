@@ -191,18 +191,45 @@ public sealed class AuthenticationOpenApiTests
         }
     }
 
+    [Fact]
+    public async Task Every_bearer_operation_declares_validation_availability_and_challenge_headers()
+    {
+        await using var app = await StartAsync();
+        using var client = app.GetTestClient();
+        using var document = await ReadAsync(client);
+        var count = 0;
+        foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            foreach (var operation in path.Value.EnumerateObject())
+            {
+                if (!operation.Value.TryGetProperty("security", out var security) ||
+                    !security.EnumerateArray().Any(requirement => requirement.TryGetProperty("entraBearer", out _))) continue;
+                count++;
+                var responses = operation.Value.GetProperty("responses");
+                foreach (var status in new[] { "400", "401", "403", "429", "503" })
+                    Assert.True(responses.TryGetProperty(status, out _), $"{operation.Name} {path.Name} lacks {status}.");
+                foreach (var (status, error) in new[] { ("400", "invalid_request"), ("401", "invalid_token") })
+                {
+                    var schema = responses.GetProperty(status).GetProperty("headers").GetProperty("WWW-Authenticate").GetProperty("schema");
+                    Assert.Equal("string", schema.GetProperty("type").GetString());
+                    Assert.Equal("^Bearer error=\"" + error + "\"$", schema.GetProperty("pattern").GetString());
+                }
+            }
+        Assert.True(count > 0);
+    }
+
     private static void CatalogContext(JsonElement root)
     {
         var schema = root.GetProperty("components").GetProperty("schemas").GetProperty("CatalogContextV1");
         Assert.Equal(new[] { "oneOf" }, schema.EnumerateObject().Select(property => property.Name));
         var arms = schema.GetProperty("oneOf").EnumerateArray().ToArray();
-        Assert.Equal(2, arms.Length);
-        string[] common = ["mode", "actorPrincipalId", "allowedOrganizationId", "organizationName", "features", "organizationActions", "requestToken"];
-        foreach (var mode in new[] { "development", "session" })
+        Assert.Equal(3, arms.Length);
+        string[] common = ["mode", "actorPrincipalId", "allowedOrganizationId", "organizationName", "features", "organizationActions"];
+        foreach (var mode in new[] { "development", "session", "bearer" })
         {
             var arm = Assert.Single(arms, value => value.GetProperty("properties").GetProperty("mode")
                 .GetProperty("enum")[0].GetString() == mode);
-            Shape(arm, mode == "session" ? [.. common, "identityContext"] : common);
+            // A bearer request has no cookie, so it gets neither an antiforgery token nor an identity fingerprint.
+            Shape(arm, mode switch { "session" => [.. common, "requestToken", "identityContext"], "bearer" => common, _ => [.. common, "requestToken"] });
             var properties = arm.GetProperty("properties");
             Text(properties.GetProperty("mode"), mode);
             if (mode == "session") Fingerprint(properties.GetProperty("identityContext"));

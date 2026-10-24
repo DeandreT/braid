@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Weft.Api.Auth;
 using Weft.Application;
 using Weft.Contracts.Catalog;
 using Weft.Domain;
@@ -10,13 +11,16 @@ public sealed partial class CatalogRequestBoundary
 {
     private readonly CatalogBrowserSessionOptions? _browserOptions;
     private readonly ServerSessionBrowser? _browser;
+    private readonly CatalogBearerAdmission? _bearer;
 
-    internal CatalogRequestBoundary(CatalogBrowserSessionOptions options, ServerSessionBrowser browser)
+    internal CatalogRequestBoundary(CatalogBrowserSessionOptions options, ServerSessionBrowser browser,
+        CatalogBearerAdmission? bearer = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(browser);
         _browserOptions = options;
         _browser = browser;
+        _bearer = bearer;
     }
 
     /// <summary>Call only after fresh organization admission; no client identity or token may authorize issuance.</summary>
@@ -76,6 +80,28 @@ public sealed partial class CatalogRequestBoundary
                     SessionClosed(CatalogErrorCodeV1.IdentityRejected, StatusCodes.Status403Forbidden),
                 _ => SessionClosed(CatalogErrorCodeV1.Unavailable, StatusCodes.Status503ServiceUnavailable)
             };
+        }
+        catch (OperationCanceledException)
+        {
+            CheckSessionCancellation(context, cancellationToken);
+            throw;
+        }
+        catch (Exception error) when (NonfatalSessionFailure(error))
+        {
+            CheckSessionCancellation(context, cancellationToken);
+            return SessionClosed(CatalogErrorCodeV1.Unavailable, StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private async Task<CatalogRequestAdmission> AuthenticateBearerAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        if (_bearer is null)
+            return SessionClosed(CatalogErrorCodeV1.IdentityRejected, StatusCodes.Status401Unauthorized);
+        try
+        {
+            var admission = await _bearer.AdmitAsync(context, cancellationToken);
+            CheckSessionCancellation(context, cancellationToken);
+            return admission;
         }
         catch (OperationCanceledException)
         {

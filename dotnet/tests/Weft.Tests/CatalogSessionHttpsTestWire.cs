@@ -80,7 +80,7 @@ internal sealed partial class CatalogSessionHttpsFixture
     internal async Task<CatalogSessionReply> SendAsync(string path, CatalogSessionCookies? cookies = null,
         string method = "GET", string? token = null, byte[]? body = null, string? tag = null,
         string? mediaType = null, bool forgedHeaders = false, CancellationToken cancellationToken = default,
-        CatalogSessionRequestRecord? observation = null, bool idempotencyKey = false)
+        CatalogSessionRequestRecord? observation = null, bool idempotencyKey = false, string? authorization = null)
     {
         var record = observation ?? NewObservation();
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); budget.CancelAfter(TimeSpan.FromSeconds(15));
@@ -91,9 +91,9 @@ internal sealed partial class CatalogSessionHttpsFixture
         if (token is not null) message.Headers.TryAddWithoutValidation(TokenHeader, token);
         if (tag is not null) message.Headers.TryAddWithoutValidation("If-Match", tag);
         if (idempotencyKey) message.Headers.TryAddWithoutValidation("Idempotency-Key", Guid.NewGuid().ToString("D"));
+        if (authorization is not null) message.Headers.TryAddWithoutValidation("Authorization", authorization);
         if (forgedHeaders)
         {
-            message.Headers.TryAddWithoutValidation("Authorization", "Bearer forged-catalog-fixture");
             message.Headers.TryAddWithoutValidation("X-Weft-Principal-Id", Data.Seed.OtherProjectAdmin.ToString("D"));
             message.Headers.TryAddWithoutValidation("X-Weft-Organization-Id", Data.Seed.OrganizationB.ToString("D"));
             message.Headers.TryAddWithoutValidation("X-Weft-Role", "administrator");

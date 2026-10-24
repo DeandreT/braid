@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
+using Weft.Api.Auth;
 using Weft.Api.Help;
 using Weft.Application;
 using Weft.Contracts.Catalog;
@@ -20,10 +21,11 @@ public static partial class CatalogEndpoints
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         var guide = UserGuide.Embedded;
-        DescribeHelp<HelpSectionListV1>(endpoints.MapGet("/api/v1/help/sections",
+        var routes = endpoints.BusinessRoutes();
+        DescribeHelp<HelpSectionListV1>(routes.MapGet("/api/v1/help/sections",
             (HttpContext context, CatalogRequestBoundary boundary) => GetHelpSections(context, boundary, guide)),
             "GetHelpSections", "Read the user guide's sections in reading order.");
-        DescribeHelp<HelpSectionV1>(endpoints.MapGet("/api/v1/help/sections/{sectionId}",
+        DescribeHelp<HelpSectionV1>(routes.MapGet("/api/v1/help/sections/{sectionId}",
             (string sectionId, HttpContext context, CatalogRequestBoundary boundary) => GetHelpSection(sectionId, context, boundary, guide)),
             "GetHelpSection", "Read one user guide section as structured text.")
             .AddOpenApiOperationTransformer((operation, _, _) =>

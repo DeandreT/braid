@@ -28,6 +28,11 @@ param ferruleServiceCompile = false
 param ferruleCompileToolchain = ''
 param ferruleServiceWorkerClientCertificateSha256 = ''
 param chatEnabled = false
+// Bearer access for signed-in users through allowlisted public clients such as the weft CLI: the Session
+// app registration exposes apiBearerScope (the scp name, for example 'weft.api') and accepts v2 tokens.
+param apiBearerEnabled = false
+param apiBearerScope = ''
+param apiBearerClientIds = []
 // Mapping endpoints execute through the Ferrule service runner: one entry per registered target,
 // for example { name: 'orders', projectId: '…', mappingId: '…', environmentId: '…',
 // environmentVersion: 1, targetId: '…', callers: [{ grantId: '…', objectId: '…' }] }.

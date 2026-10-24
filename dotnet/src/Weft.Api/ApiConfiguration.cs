@@ -16,7 +16,7 @@ public static class ApiConfiguration
         services.AddWeftRegressionRuns();
         services.AddWeftBuildApi();
         services.ConfigureHttpJsonOptions(options => ProjectionJson.Configure(options.SerializerOptions));
-        services.AddOpenApi(options => options.AddDocumentTransformer((document, _, _) =>
+        services.AddOpenApi(options => options.AddDocumentTransformer((document, context, _) =>
         {
             document.Info.Title = "Weft API";
             document.Info.Version = "v1";
@@ -51,6 +51,8 @@ public static class ApiConfiguration
             CatalogEndpoints.TransformRevisionReportSchemas(document);
             ChatEndpoints.TransformSchemas(document);
             AuthenticationOpenApi.Transform(document);
+            // Last: every operation, including the authentication routes added above, declares its admitted schemes.
+            ApiSecurity.Transform(document, context.DescriptionGroups);
             return Task.CompletedTask;
         }));
         return services;

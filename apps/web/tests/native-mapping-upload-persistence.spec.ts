@@ -29,7 +29,11 @@ import {
   type UploadResult,
 } from "./native-mapping-upload.fixture";
 
-type Context = components["schemas"]["CatalogContextV1"];
+// A browser session never receives the bearer arm.
+type Context = Exclude<
+  components["schemas"]["CatalogContextV1"],
+  { mode: "bearer" }
+>;
 type Project = components["schemas"]["CatalogProjectV1"];
 type FixedSample = {
   readonly sample: Sample;

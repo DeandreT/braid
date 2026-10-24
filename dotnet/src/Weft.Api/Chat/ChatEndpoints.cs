@@ -1,8 +1,12 @@
+using System.Globalization;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OpenApi;
 using Weft.Ai;
+using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Application;
 using Weft.Contracts.Catalog;
@@ -45,26 +49,51 @@ public static partial class ChatEndpoints
     public static IEndpointRouteBuilder MapWeftChat(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
+        var routes = endpoints.BusinessRoutes();
         const string conversation = RevisionRoute + "/conversations/{conversationId}";
         const string turn = conversation + "/turns/{turnId}";
-        Describe<ChatAvailabilityV1>(endpoints.MapGet(RevisionRoute, GetAvailability), "GetChatAvailability",
+        Describe<ChatAvailabilityV1>(routes.MapGet(RevisionRoute, GetAvailability), "GetChatAvailability",
             "Read the configured model profiles and limits for an authorized revision.");
-        Describe<ChatConversationPageV1>(endpoints.MapGet(RevisionRoute + "/conversations", ListConversations), "GetChatConversations",
-            "Read the caller's most recent private conversations about this revision.");
-        Describe<ChatConversationV1>(endpoints.MapPost(RevisionRoute + "/conversations", CreateConversation), "CreateChatConversation",
+        Describe<ChatConversationPageV1>(routes.MapGet(RevisionRoute + "/conversations", ListConversations), "GetChatConversations",
+            "Read the caller's most recent private conversations about this revision.")
+            .DescribeNumber("limit", 1, 100, 50, "The number of most recent conversations to return.");
+        Describe<ChatConversationV1>(routes.MapPost(RevisionRoute + "/conversations", CreateConversation), "CreateChatConversation",
             "Create or replay a private conversation pinned to the revision's current verified reports.", StatusCodes.Status201Created)
             .DescribeBody<ChatConversationCreateV1>();
-        Describe<ChatConversationDetailV1>(endpoints.MapGet(conversation, GetConversation), "GetChatConversation",
+        Describe<ChatConversationDetailV1>(routes.MapGet(conversation, GetConversation), "GetChatConversation",
             "Read one private conversation and its most recent turns.");
-        Describe<ChatTurnV1>(endpoints.MapPost(conversation + "/turns", CreateTurn), "CreateChatTurn",
+        Describe<ChatTurnV1>(routes.MapPost(conversation + "/turns", CreateTurn), "CreateChatTurn",
             "Start or replay a turn identified by its client-generated turn ID.", StatusCodes.Status201Created)
             .DescribeBody<ChatTurnCreateV1>();
-        Describe<ChatTurnV1>(endpoints.MapPost(turn + "/cancel", CancelTurn), "CancelChatTurn",
+        Describe<ChatTurnV1>(routes.MapPost(turn + "/cancel", CancelTurn), "CancelChatTurn",
             "Cancel an active turn; a terminal turn is returned unchanged.");
-        Describe<ChatTurnEventV1>(endpoints.MapGet(turn + "/events", StreamTurn), "StreamChatTurnEvents",
-            "Stream the turn's durable events after a sequence number using SSE framing.", contentType: "text/event-stream");
+        Describe<ChatTurnEventV1>(routes.MapGet(turn + "/events", StreamTurn), "StreamChatTurnEvents",
+            "Stream the turn's durable events after a sequence number using SSE framing.", contentType: "text/event-stream")
+            .DescribeNumber("after", 0, ChatGrounding.MaxEvents, 0, "Stream only events with a greater sequence number.");
         return endpoints;
     }
+
+    // The only query field an operation accepts: a canonical decimal within its bounds, or the default when absent.
+    private static RouteHandlerBuilder DescribeNumber(this RouteHandlerBuilder route, string name, int minimum, int maximum,
+        int fallback, string description) =>
+        route.AddOpenApiOperationTransformer((operation, _, _) =>
+        {
+            operation.Parameters ??= [];
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Name = name,
+                In = ParameterLocation.Query,
+                Description = $"{description} A canonical decimal from {minimum} to {maximum}, {fallback} when absent.",
+                Schema = new OpenApiSchema
+                {
+                    Type = JsonSchemaType.Integer,
+                    Minimum = minimum.ToString(CultureInfo.InvariantCulture),
+                    Maximum = maximum.ToString(CultureInfo.InvariantCulture),
+                    Default = JsonValue.Create(fallback)
+                }
+            });
+            return Task.CompletedTask;
+        });
 
     private static RouteHandlerBuilder Describe<T>(RouteHandlerBuilder route, string name, string summary,
         int success = StatusCodes.Status200OK, string contentType = "application/json")
@@ -187,8 +216,13 @@ public static partial class ChatEndpoints
             var boundary = context.RequestServices.GetRequiredService<CatalogRequestBoundary>();
             var admission = await boundary.AuthenticateAsync(context, unsafeRequest, context.RequestAborted);
             if (!admission.IsAdmitted)
-                return Error(admission.Error == CatalogErrorCodeV1.IdentityRejected
-                    ? ChatErrorCodeV1.IdentityRejected : ChatErrorCodeV1.Unavailable, admission.StatusCode);
+                return Error(admission.Error switch
+                {
+                    CatalogErrorCodeV1.IdentityRejected => ChatErrorCodeV1.IdentityRejected,
+                    CatalogErrorCodeV1.InvalidRequest => ChatErrorCodeV1.InvalidRequest,
+                    CatalogErrorCodeV1.RateLimited => ChatErrorCodeV1.RateLimited,
+                    _ => ChatErrorCodeV1.Unavailable
+                }, admission.StatusCode);
             var host = context.RequestServices.GetRequiredService<ChatTurnHost>();
             return await action(new(admission.Actor!, admission.AllowedOrganizationId!.Value, host, options));
         }

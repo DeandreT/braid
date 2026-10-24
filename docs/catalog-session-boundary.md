@@ -34,8 +34,11 @@ can precede CSRF; they are not catalog authority or business dispatch.
 
 Only a positive private observation with the configured organization supplies
 an internal principal/actor and allowed organization. Ambient or transformed
-claims, email/provider roles, identity headers and bearer fallback supply no
-catalog identity. A missing/refused session yields `identityRejected`/401; CSRF
+claims, email/provider roles and identity headers supply no catalog identity, and
+an `Authorization` header never falls back to the session. A request that carries
+one takes the separate [bearer path](api-authentication.md) when the deployment
+enables bearer access, and is otherwise refused with `identityRejected`/401 before
+the session is read. A missing/refused session yields `identityRejected`/401; CSRF
 refusal yields `identityRejected`/403; operational or inconsistent session facts
 yield `unavailable`/503. Responses remain no-store, failures omit ETag, and there
 are no redirects or private exception details. Cancellation remains cancellation.

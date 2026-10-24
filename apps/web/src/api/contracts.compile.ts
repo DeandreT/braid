@@ -729,6 +729,7 @@ type DevelopmentCatalogContext = Extract<
   { mode: "development" }
 >;
 type SessionCatalogContext = Extract<CatalogContext, { mode: "session" }>;
+type BearerCatalogContext = Extract<CatalogContext, { mode: "bearer" }>;
 
 // Generated supported-contract types do not imply runtime route activation.
 export const authenticatedStatus = {
@@ -791,10 +792,21 @@ export function catalogPresentationIdentity(
       return fingerprint;
     }
     case "development":
+    case "bearer":
       return undefined;
     default:
       return assertNever(context);
   }
+}
+
+// A bearer context carries no session request token or presentation fingerprint.
+export function rejectBearerSessionFields(context: BearerCatalogContext): void {
+  // @ts-expect-error A bearer catalog context has no request token.
+  const token = context.requestToken;
+  // @ts-expect-error A bearer catalog context has no presentation fingerprint.
+  const fingerprint = context.identityContext;
+  void token;
+  void fingerprint;
 }
 
 export function developmentContextWithoutFingerprint(

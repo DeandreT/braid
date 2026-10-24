@@ -107,6 +107,7 @@ const roles = [
   ["weft_release_writer", "RELEASE_WRITER"],
   ["weft_invocation_grant_writer", "INVOCATION_GRANT_WRITER"],
   ["weft_invocation_writer", "INVOCATION_WRITER"],
+  ["weft_api_audit_writer", "API_AUDIT_WRITER"],
 ];
 const secrets = new Map(
   ["POSTGRES_ADMIN", ...roles.map(([, key]) => key)].map((key) => [

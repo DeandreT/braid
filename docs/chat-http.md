@@ -99,7 +99,10 @@ conversation or turn is `404 notFound`.
 
 `POST` routes are unsafe requests: they require the exact configured `Origin` and
 the catalog context's `X-XSRF-TOKEN` (session mode additionally binds it to the
-session epoch). Bodies are strict `application/json` (optional `charset=utf-8`,
+session epoch). A request admitted with an [Entra bearer
+token](api-authentication.md) sends neither, and each `POST` is audited before it
+runs; bearer refusals answer `400 invalidRequest`, `401`/`403 identityRejected`,
+`429 rateLimited` with `Retry-After`, or `503 unavailable`. Bodies are strict `application/json` (optional `charset=utf-8`,
 identity encoding), at most 1 KiB for conversations and 256 KiB for turns, with
 unknown or duplicate properties refused. Turn text is 1–32 KiB of UTF-8, not
 blank and without NUL. `selectors` (required, possibly empty) holds at most 32

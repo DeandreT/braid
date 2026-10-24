@@ -44,6 +44,7 @@ internal sealed class ServerHostOptions
     internal SessionInspectionWorker? InspectionWorker { get; private init; }
     internal FerruleServiceEndpoint? FerruleService { get; private init; }
     internal AzureSessionsRunnerSettings? FerruleSessions { get; private init; }
+    internal EntraUserTokenOptions? Bearer { get; private init; }
 
     internal static ServerHostOptions Read(Func<string, string?> read)
     {
@@ -58,6 +59,8 @@ internal sealed class ServerHostOptions
         };
         if (mode != AuthenticationHttpMode.Session)
         {
+            // Bearer access exists only beside Entra sessions; a dormant setting elsewhere is a mistake.
+            if (Flag(read, BearerEnabledSetting) || BearerSettings.Any(name => read(name) is not null)) throw Failure();
             var listener = DevelopmentListenAddress.Parse(read("WEFT_DEV_LISTEN_ADDR"));
             var origin = mode == AuthenticationHttpMode.Development
                 ? Required(read, "WEFT_DEV_BROWSER_ORIGIN") : LoopbackOrigin(listener);
@@ -142,8 +145,10 @@ internal sealed class ServerHostOptions
             }
             catch (Exception error) when (SessionHostResources.Nonfatal(error)) { throw Failure(); }
         }
+        var bearer = ReadBearer(read, tenant, client);
         return new(mode, address, publicOrigin, proxy, knownProxy, organization, tenant, client, application, directory)
         {
+            Bearer = bearer,
             Metadata = metadata,
             Ingestion = ingestion,
             Creation = creation,
@@ -157,6 +162,39 @@ internal sealed class ServerHostOptions
             FerruleService = service,
             FerruleSessions = sessions
         };
+    }
+
+    internal const string BearerEnabledSetting = "WEFT_API_BEARER_ENABLED";
+    internal const string BearerAuditSetting = "WEFT_API_AUDIT_WRITER_CONNECTION_STRING";
+    private static readonly string[] BearerSettings =
+        ["WEFT_API_BEARER_AUDIENCE", "WEFT_API_BEARER_SCOPE", "WEFT_API_BEARER_CLIENT_IDS", BearerAuditSetting, BearerAuditSetting + "_FILE"];
+
+    /// <summary>
+    /// Bearer access is off unless explicitly enabled with all of its settings; any partial or mixed setting refuses.
+    /// The audience is the Session app registration that exposes the scope, so it must be the configured client.
+    /// </summary>
+    private static EntraUserTokenOptions? ReadBearer(Func<string, string?> read, Guid tenant, Guid client)
+    {
+        if (!Flag(read, BearerEnabledSetting))
+        {
+            if (BearerSettings.Any(name => read(name) is not null)) throw Failure();
+            return null;
+        }
+        // The audit login is delivered only as a protected file; the plain setting refuses startup.
+        if (read(BearerAuditSetting) is not null || read(BearerAuditSetting + "_FILE") is not { Length: > 0 }) throw Failure();
+        var audience = Id(read, "WEFT_API_BEARER_AUDIENCE");
+        var scope = Required(read, "WEFT_API_BEARER_SCOPE");
+        var clients = Required(read, "WEFT_API_BEARER_CLIENT_IDS").Split(',');
+        if (audience != client || !EntraUserTokenOptions.IsScope(scope) || clients.Length > EntraUserTokenOptions.MaximumClients)
+            throw Failure();
+        var ids = new List<Guid>();
+        foreach (var text in clients)
+        {
+            if (!Guid.TryParseExact(text, "D", out var id) || id == Guid.Empty || text != id.ToString("D")) throw Failure();
+            ids.Add(id);
+        }
+        try { return new EntraUserTokenOptions(tenant, audience, scope, ids); }
+        catch (ArgumentException) { throw Failure(); }
     }
 
     internal static bool Flag(Func<string, string?> read, string name) => read(name) switch

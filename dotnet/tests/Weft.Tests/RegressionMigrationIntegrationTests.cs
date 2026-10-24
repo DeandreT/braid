@@ -49,8 +49,8 @@ public sealed class RegressionMigrationIntegrationTests(PostgresFixture fixture)
     {
         await using var test = await fixture.CreateCaseAsync();
         await RegressionSchemaTestContract.AdmitAsync(test);
-        Assert.Equal(24, MigrationRunner.EmbeddedMigrations.Count);
-        Assert.Equal(Enumerable.Range(1, 24), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(25, MigrationRunner.EmbeddedMigrations.Count);
+        Assert.Equal(Enumerable.Range(1, 25), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         var source = MigrationRunner.EmbeddedMigrations;
         Assert.Equal(PreviewSchemaTestContract.MigrationChecksum, source[11].Checksum);
         Assert.Equal(PreviewSchemaTestContract.MessagesMigrationChecksum, source[12].Checksum);
@@ -65,6 +65,7 @@ public sealed class RegressionMigrationIntegrationTests(PostgresFixture fixture)
         Assert.Equal(RegressionSchemaTestContract.LocalReleaseChecksum, source[21].Checksum);
         Assert.Equal(MaintenanceSchemaContract.StoreKindMigrationChecksum, source[22].Checksum);
         Assert.Equal(RegressionSchemaTestContract.MachineInvocationChecksum, source[23].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.ApiRequestAuditChecksum, source[24].Checksum);
     }
 
     [PostgresFact]

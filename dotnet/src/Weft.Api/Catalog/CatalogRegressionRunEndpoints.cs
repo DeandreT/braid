@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Weft.Api.Auth;
 using Weft.Application.Regression;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Regression;
@@ -16,15 +17,18 @@ public static partial class CatalogEndpoints
 {
     public static IEndpointRouteBuilder MapWeftRegressionRuns(this IEndpointRouteBuilder endpoints)
     {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        var routes = endpoints.BusinessRoutes();
         const string route = "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-runs";
-        DescribeCase<RegressionRunPageV1>(endpoints.MapGet(route, GetRegressionRuns), "GetRegressionRuns", "Read the caller's bounded regression run history.");
-        DescribeCase<RegressionRunV1>(endpoints.MapGet(route + "/{runId}", GetRegressionRun), "GetRegressionRun", "Read a retained exact-case result under fresh sample authority.");
-        DescribeCase<RegressionRunReceiptV1>(endpoints.MapPut(route + "/{runId}", PutRegressionRun), "PutRegressionRun", "Queue one exact saved-case version or recover the original request.")
+        DescribeCase<RegressionRunPageV1>(routes.MapGet(route, GetRegressionRuns), "GetRegressionRuns", "Read the caller's bounded regression run history.")
+            .DescribePage("afterRunId", "Return runs after this run: the nextRunId of the previous page.");
+        DescribeCase<RegressionRunV1>(routes.MapGet(route + "/{runId}", GetRegressionRun), "GetRegressionRun", "Read a retained exact-case result under fresh sample authority.");
+        DescribeCase<RegressionRunReceiptV1>(routes.MapPut(route + "/{runId}", PutRegressionRun), "PutRegressionRun", "Queue one exact saved-case version or recover the original request.")
             .Accepts<RegressionRunPutV1>(CatalogRegressionRunRequest.MediaType).Produces<RegressionRunReceiptV1>(StatusCodes.Status201Created)
             .Produces<CatalogErrorV1>(StatusCodes.Status409Conflict).Produces<CatalogErrorV1>(StatusCodes.Status412PreconditionFailed)
             .Produces<CatalogErrorV1>(StatusCodes.Status413PayloadTooLarge).Produces<CatalogErrorV1>(StatusCodes.Status415UnsupportedMediaType)
             .Produces<CatalogErrorV1>(StatusCodes.Status429TooManyRequests);
-        DescribeCase<RegressionRunV1>(endpoints.MapPost(route + "/{runId}/cancel", CancelRegressionRun), "CancelRegressionRun", "Request cancellation without replacing a retained terminal result.");
+        DescribeCase<RegressionRunV1>(routes.MapPost(route + "/{runId}/cancel", CancelRegressionRun), "CancelRegressionRun", "Request cancellation without replacing a retained terminal result.");
         return endpoints;
     }
 

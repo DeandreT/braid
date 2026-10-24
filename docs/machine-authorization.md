@@ -35,6 +35,11 @@ The endpoint's app registration must accept v2 access tokens.
   is `azp`; a v1 `appid` claim, when present, must equal it. Roles, groups and
   display claims grant nothing.
 
+The Session host's [bearer access](api-authentication.md) validates signed-in users'
+delegated tokens with the same discovery, key refresh and strict JWT rules. Each
+validator accepts only its own token type: this one refuses any token with `scp`,
+and the delegated validator refuses app-only tokens.
+
 There is no issuer, key, authority or transport override in production code. A test
 issuer is reachable only the way hosted acceptance reaches its sign-in issuer:
 `login.microsoftonline.com` resolves to it and the process trusts only that run's

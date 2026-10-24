@@ -30,7 +30,11 @@ import {
   type AppendResult,
 } from "./native-revision-append.fixture";
 
-type Context = components["schemas"]["CatalogContextV1"];
+// A browser session never receives the bearer arm.
+type Context = Exclude<
+  components["schemas"]["CatalogContextV1"],
+  { mode: "bearer" }
+>;
 type Mapping = components["schemas"]["CatalogMappingV1"];
 type FixedSample = {
   readonly sample: Sample;

@@ -18,7 +18,7 @@ public static class CatalogPublicMapper
         Context(admission, requestToken, "development", metadataEditsEnabled, revisionIngestionEnabled,
             projectCreationEnabled, canCreateProjects, readReportsEnabled, deriveReportsEnabled);
 
-    internal static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string requestToken,
+    internal static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string? requestToken,
         string mode, bool metadataEditsEnabled, bool revisionIngestionEnabled, bool projectCreationEnabled,
         bool canCreateProjects, bool readReportsEnabled, bool deriveReportsEnabled, string? identityContext = null,
         bool chatEnabled = false, bool previewEnabled = false) =>

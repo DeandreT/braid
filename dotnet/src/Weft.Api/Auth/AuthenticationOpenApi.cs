@@ -64,13 +64,18 @@ internal static class AuthenticationOpenApi
         if (schemas.TryGetValue("CatalogContextV1", out var contextSchema) &&
             contextSchema is OpenApiSchema context && context.Properties is { } original)
         {
+            var requestToken = new OpenApiSchema { Type = JsonSchemaType.String };
             var developmentProperties = new Dictionary<string, IOpenApiSchema>(original)
-            { ["mode"] = Text("development") };
+            { ["mode"] = Text("development"), ["requestToken"] = requestToken };
             developmentProperties.Remove("identityContext");
             var sessionProperties = new Dictionary<string, IOpenApiSchema>(original)
-            { ["mode"] = Text("session"), ["identityContext"] = fingerprint };
+            { ["mode"] = Text("session"), ["requestToken"] = requestToken, ["identityContext"] = fingerprint };
+            // A bearer request has no ambient session: no request token and no identity context.
+            var bearerProperties = new Dictionary<string, IOpenApiSchema>(original) { ["mode"] = Text("bearer") };
+            bearerProperties.Remove("requestToken");
+            bearerProperties.Remove("identityContext");
             schemas["CatalogContextV1"] = new OpenApiSchema
-            { OneOf = [Object(developmentProperties), Object(sessionProperties)] };
+            { OneOf = [Object(developmentProperties), Object(sessionProperties), Object(bearerProperties)] };
         }
 
         OpenApiSchema Session(string state, IOpenApiSchema requestToken, IOpenApiSchema identityContext) => Object(new()

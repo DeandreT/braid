@@ -22,7 +22,11 @@ import {
   type ProjectCreationOwner,
 } from "./project-creation.fixture";
 
-type Context = components["schemas"]["CatalogContextV1"];
+// A browser session never receives the bearer arm.
+type Context = Exclude<
+  components["schemas"]["CatalogContextV1"],
+  { mode: "bearer" }
+>;
 type Project = components["schemas"]["CatalogProjectV1"];
 type Draft = {
   readonly name: string;

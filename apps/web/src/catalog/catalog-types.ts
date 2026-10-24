@@ -1,6 +1,10 @@
 import type { components } from "../api/generated";
 
-export type CatalogContext = components["schemas"]["CatalogContextV1"];
+// The browser never sends a bearer token, so the API's bearer arm never reaches it (isContext refuses one).
+export type CatalogContext = Exclude<
+  components["schemas"]["CatalogContextV1"],
+  { mode: "bearer" }
+>;
 export type CatalogProject = components["schemas"]["CatalogProjectV1"];
 export type CatalogMapping = components["schemas"]["CatalogMappingV1"];
 export type CatalogRevision = components["schemas"]["CatalogRevisionV1"];

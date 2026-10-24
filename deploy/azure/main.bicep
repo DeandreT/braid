@@ -97,6 +97,15 @@ param ferruleServiceWorkerClientCertificateSha256 string = ''
 @description('Enable revision chat in the Session host. Requires nativeWorkEnabled, and the weft-chat-profiles and weft-model-provider-credential Key Vault secrets (see docs/azure-deployment.md).')
 param chatEnabled bool = false
 
+@description('Bearer access to /api/v1 for signed-in users through allowlisted public clients such as the weft CLI. The Session app registration (entraClientId) must expose apiBearerScope and accept v2 access tokens; see docs/api-authentication.md.')
+param apiBearerEnabled bool = false
+
+@description('The delegated scope name the Session app registration exposes, exactly as it appears in the token\'s scp claim, for example weft.api. Required with apiBearerEnabled.')
+param apiBearerScope string = ''
+
+@description('Client IDs of the public client applications allowed to present bearer tokens (1-16), for example the weft CLI registration. Required with apiBearerEnabled.')
+param apiBearerClientIds array = []
+
 @description('Machine-facing mapping endpoints, one internal container app per registered release target: name (2-12 lowercase characters), projectId, mappingId, environmentId, environmentVersion, targetId, and optional concurrency (1-4, default 4), maxReplicas (default 4) and callers ([{ grantId, objectId }]). They execute through the Ferrule service, so they require ferruleRunner = service. Empty deploys none.')
 param mappingEndpoints array = []
 
@@ -173,6 +182,14 @@ var featureRequirements = !nativeWorkEnabled && !chatEnabled ? true
   : ferruleRunner == 'service' && empty(ferruleServiceWorkerClientCertificateSha256) ? fail('nativeWorkEnabled with ferruleRunner = service requires ferruleServiceWorkerClientCertificateSha256')
   : true
 var workerEnabled = deployApplication && nativeWorkEnabled && featureRequirements
+
+// Bearer access is complete or absent; the host refuses a partial profile at startup, so the deployment does first.
+var bearerRequirements = !apiBearerEnabled ? (empty(apiBearerScope) && empty(apiBearerClientIds) ? true
+    : fail('apiBearerScope and apiBearerClientIds require apiBearerEnabled'))
+  : empty(apiBearerScope) || length(apiBearerScope) > 120 ? fail('apiBearerEnabled requires apiBearerScope, the scope name as it appears in scp')
+  : empty(apiBearerClientIds) || length(apiBearerClientIds) > 16 ? fail('apiBearerEnabled requires 1-16 apiBearerClientIds')
+  : contains(apiBearerClientIds, entraClientId) ? fail('apiBearerClientIds must not contain the Session app registration itself')
+  : true
 
 module network 'modules/network.bicep' = {
   name: 'network'
@@ -336,7 +353,7 @@ module ferruleSessions 'modules/ferrule-session-pool.bicep' = if (deployApplicat
   }
 }
 
-module application 'modules/application.bicep' = if (deployApplication && featureRequirements) {
+module application 'modules/application.bicep' = if (deployApplication && featureRequirements && bearerRequirements) {
   name: 'application'
   params: {
     location: location
@@ -370,6 +387,9 @@ module application 'modules/application.bicep' = if (deployApplication && featur
     ferruleCompileToolchain: ferruleServiceCompile ? ferruleCompileToolchain : ''
     nativeWorkEnabled: nativeWorkEnabled
     chatEnabled: chatEnabled
+    apiBearerEnabled: apiBearerEnabled
+    apiBearerScope: apiBearerScope
+    apiBearerClientIds: apiBearerClientIds
     privateObjectsEndpoint: objects.outputs.blobEndpoint
     privateObjectsContainer: objects.outputs.containerName
     tags: tags

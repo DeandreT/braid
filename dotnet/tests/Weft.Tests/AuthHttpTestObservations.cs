@@ -39,7 +39,8 @@ internal enum AuthHttpTaskRole { Unspecified, ActualReader, GatedReader, PublicA
 internal enum AuthHttpFinalDrainPhase { Login, PrimeStatus, Configure, Send, BoundaryWait, BoundaryAssert, CallerCancel, CallerAssert, DisposalBegin, DisposalAssert, AdmissionJoin, ResponseJoin, DisposalJoin, FinalAssert, CookieAssert }
 internal sealed class AuthHttpRecord
 {
-    internal int Id, BodyReads, FormReads, SessionReads, Resolves, BindingReads, Renews, Revokes, Creates, CatalogReads, MetadataWrites;
+    internal int Id, BodyReads, FormReads, SessionReads, Resolves, BindingReads, Renews, Revokes, Creates, CatalogReads, MetadataWrites, Audits;
+    internal bool AuditUnavailable, AuditIdentityChanged;
     internal int ReaderGateAtRead;
     internal bool BorrowedIdentityResolved, ExpectedDirectFailure;
     internal Exception? ClosedError;

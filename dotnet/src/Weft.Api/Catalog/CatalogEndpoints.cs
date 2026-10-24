@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Weft.Api.Auth;
 using Weft.Application;
 using Weft.Contracts.Catalog;
 using Weft.Domain;
@@ -14,33 +15,34 @@ public static partial class CatalogEndpoints
     public static IEndpointRouteBuilder MapWeftCatalog(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        Describe<CatalogContextV1>(endpoints.MapGet("/api/v1/catalog/context", GetContext),
+        var routes = endpoints.BusinessRoutes();
+        Describe<CatalogContextV1>(routes.MapGet("/api/v1/catalog/context", GetContext),
             "GetCatalogContext", "Read the explicitly configured catalog identity context and request token.");
         const string organization = "/api/v1/organizations/{organizationId}";
         const string project = organization + "/projects/{projectId}";
         const string mapping = project + "/mappings/{mappingId}";
-        Describe<CatalogProjectPageV1>(endpoints.MapGet(organization + "/projects", GetProjects),
+        Describe<CatalogProjectPageV1>(routes.MapGet(organization + "/projects", GetProjects),
             "GetCatalogProjects", "Read a bounded page of currently visible projects.");
-        DescribeProjectCreation(endpoints.MapPost(organization + "/projects", CreateCatalogProject));
-        Describe<CatalogProjectV1>(endpoints.MapGet(project, GetProject),
+        DescribeProjectCreation(routes.MapPost(organization + "/projects", CreateCatalogProject));
+        Describe<CatalogProjectV1>(routes.MapGet(project, GetProject),
             "GetCatalogProject", "Read project metadata and current supported actions.");
-        Describe<CatalogMappingPageV1>(endpoints.MapGet(project + "/mappings", GetMappings),
+        Describe<CatalogMappingPageV1>(routes.MapGet(project + "/mappings", GetMappings),
             "GetCatalogMappings", "Read a bounded page of mappings and committed heads.");
-        Describe<CatalogMappingV1>(endpoints.MapGet(mapping, GetMapping),
+        Describe<CatalogMappingV1>(routes.MapGet(mapping, GetMapping),
             "GetCatalogMapping", "Read mapping metadata and its current committed head.");
-        DescribeMetadataRead(endpoints.MapGet(mapping + "/metadata", GetMetadata));
-        DescribeMetadataEdit(endpoints.MapPatch(mapping + "/metadata", PatchMetadata));
-        Describe<CatalogRevisionPageV1>(endpoints.MapGet(mapping + "/revisions", GetRevisions),
+        DescribeMetadataRead(routes.MapGet(mapping + "/metadata", GetMetadata));
+        DescribeMetadataEdit(routes.MapPatch(mapping + "/metadata", PatchMetadata));
+        Describe<CatalogRevisionPageV1>(routes.MapGet(mapping + "/revisions", GetRevisions),
             "GetCatalogRevisions", "Read immutable revision history in descending committed sequence.");
-        Describe<CatalogRevisionV1>(endpoints.MapGet(mapping + "/revisions/{revisionId}", GetRevision),
+        Describe<CatalogRevisionV1>(routes.MapGet(mapping + "/revisions/{revisionId}", GetRevision),
             "GetCatalogRevision", "Read one scoped immutable revision's catalog metadata.");
-        MapRevisionReports(endpoints, mapping + "/revisions/{revisionId}");
-        MapRevisionComparisons(endpoints, mapping);
-        MapPreviews(endpoints, organization, mapping + "/revisions/{revisionId}");
-        DescribeRevisionUpload(endpoints.MapPost(project + "/mappings", CreateCatalogMapping), create: true);
-        DescribeRevisionUpload(endpoints.MapPost(mapping + "/revisions", AppendCatalogRevision), create: false);
-        DescribeIngestionReceipt(endpoints.MapGet(project + "/revision-ingestions/{operationId}", GetCatalogIngestionReceipt));
-        DescribeIngestionResume(endpoints.MapPost(project + "/revision-ingestions/{operationId}/resume", ResumeCatalogRevisionIngestion));
+        MapRevisionReports(routes, mapping + "/revisions/{revisionId}");
+        MapRevisionComparisons(routes, mapping);
+        MapPreviews(routes, organization, mapping + "/revisions/{revisionId}");
+        DescribeRevisionUpload(routes.MapPost(project + "/mappings", CreateCatalogMapping), create: true);
+        DescribeRevisionUpload(routes.MapPost(mapping + "/revisions", AppendCatalogRevision), create: false);
+        DescribeIngestionReceipt(routes.MapGet(project + "/revision-ingestions/{operationId}", GetCatalogIngestionReceipt));
+        DescribeIngestionResume(routes.MapPost(project + "/revision-ingestions/{operationId}/resume", ResumeCatalogRevisionIngestion));
         return endpoints;
     }
 
@@ -73,7 +75,9 @@ public static partial class CatalogEndpoints
                     return NotFound();
                 canCreateProjects = creation.CanCreateProjects;
             }
-            var token = await boundary.IssueRequestTokenAsync(context, admission.Actor!, context.RequestAborted);
+            // A bearer request carries its own credential: there is no ambient session to protect with a request token.
+            var token = admission.ContextMode == "bearer" ? null
+                : await boundary.IssueRequestTokenAsync(context, admission.Actor!, context.RequestAborted);
             return Results.Ok(CatalogPublicMapper.Context(organization, token, admission.ContextMode!, metadataEditOptions.Enabled,
                 ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
                 revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, admission.IdentityContext,

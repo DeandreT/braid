@@ -64,7 +64,7 @@ public sealed class CatalogBrowserSessionContractTests
     public void BothModesRetainRequiredRequestTokenAndExactByteBudget(string mode)
     {
         var maximum = new string('a', 4096);
-        Assert.True(Context(mode, maximum).RequestToken.Length == 4096, "The admitted token bound changed.");
+        Assert.True(Context(mode, maximum).RequestToken!.Length == 4096, "The admitted token bound changed.");
         foreach (var invalid in new[] { "", " ", new string('a', 4097), new string('é', 2049) })
             Assert.True(Capture(() => Context(mode, invalid)) is ArgumentException, "An invalid token escaped the existing DTO bound.");
     }

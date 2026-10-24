@@ -138,7 +138,7 @@ public sealed class MachineTokenValidationTests
         await using var test = await Fixture.StartAsync();
         foreach (var token in new[] { "", "a.b", "a.b.c.d", "a b.c.d", new string('a', 16 * 1024 + 1), "eyJ.eyJ.%" })
         {
-            Assert.Equal(EntraMachineTokenRefusal.Format, (await test.Validator.CheckAsync(token, default)).Refusal);
+            Assert.Equal(EntraTokenRefusal.Format, (await test.Validator.CheckAsync(token, default)).Refusal);
             var refusal = await Assert.ThrowsAsync<MachineTokenException>(() => test.Validator.ValidateAsync(token, default));
             Assert.Equal(MachineTokenFailure.Denied, refusal.Failure);
         }
@@ -183,7 +183,7 @@ public sealed class MachineTokenValidationTests
     {
         await using var test = await Fixture.StartAsync();
         test.Issuer.Metadata = Enum.Parse<EntraProtocolMetadataCase>(metadata);
-        Assert.Equal(EntraMachineTokenRefusal.Unavailable, (await test.Validator.CheckAsync(test.Sign(Claims()), default)).Refusal);
+        Assert.Equal(EntraTokenRefusal.Unavailable, (await test.Validator.CheckAsync(test.Sign(Claims()), default)).Refusal);
         var refusal = await Assert.ThrowsAsync<MachineTokenException>(() => test.Validator.ValidateAsync(test.Sign(Claims()), default));
         Assert.Equal(MachineTokenFailure.Unavailable, refusal.Failure);
     }

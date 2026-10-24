@@ -46,6 +46,9 @@ public static partial class CatalogEndpoints
                         ["application/json"] = new() { Schema = new OpenApiSchemaReference(nameof(CatalogPreviewSubmissionV1), document) }
                     }
                 };
+                AddReportParameter(operation, "Idempotency-Key", ParameterLocation.Header, true,
+                    "Exactly one nonzero canonical lowercase D-format UUID with only surrounding SP/HTAB allowed; If-Match and If-None-Match are rejected. " +
+                    "The same key with the same submission replays the original run; with a different submission it is a 409 idempotency conflict.", uuid: true);
             })
             .Produces<CatalogPreviewSubmitResultV1>(StatusCodes.Status201Created)
             .Produces<CatalogErrorV1>(StatusCodes.Status409Conflict)

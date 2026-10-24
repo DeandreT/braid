@@ -1,10 +1,13 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OpenApi;
+using Weft.Api.Auth;
 using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Contracts.Catalog;
@@ -21,14 +24,16 @@ public static partial class CatalogEndpoints
     public static IEndpointRouteBuilder MapWeftRegressionCases(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
+        var routes = endpoints.BusinessRoutes();
         const string route = "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-cases";
-        DescribeCase<RegressionCaseCapabilitiesV1>(endpoints.MapGet(route + "/capabilities", GetRegressionCapabilities),
+        DescribeCase<RegressionCaseCapabilitiesV1>(routes.MapGet(route + "/capabilities", GetRegressionCapabilities),
             "GetRegressionCaseCapabilities", "Read the active regression-case profile and current sample permissions.");
-        DescribeCase<RegressionCasePageV1>(endpoints.MapGet(route, GetRegressionCases),
-            "GetRegressionCases", "Read a bounded metadata page of saved regression cases.");
-        DescribeCase<RegressionCaseDetailV1>(endpoints.MapGet(route + "/{caseId}/versions/{version}", GetRegressionCaseVersion),
+        DescribeCase<RegressionCasePageV1>(routes.MapGet(route, GetRegressionCases),
+            "GetRegressionCases", "Read a bounded metadata page of saved regression cases.")
+            .DescribePage("afterCaseId", "Return cases after this case: the nextCaseId of the previous page.");
+        DescribeCase<RegressionCaseDetailV1>(routes.MapGet(route + "/{caseId}/versions/{version}", GetRegressionCaseVersion),
             "GetRegressionCaseVersion", "Read an exact saved case version under fresh sample permission.");
-        DescribeCase<RegressionCaseSavedV1>(endpoints.MapPut(route + "/{caseId}/versions/{version}", PutRegressionCaseVersion),
+        DescribeCase<RegressionCaseSavedV1>(routes.MapPut(route + "/{caseId}/versions/{version}", PutRegressionCaseVersion),
             "PutRegressionCaseVersion", "Publish an immutable case version or replay the identical original request.")
             .Accepts<RegressionCasePutV1>(CatalogRegressionCaseRequest.MediaType)
             .Produces<RegressionCaseSavedV1>(StatusCodes.Status201Created)
@@ -38,6 +43,22 @@ public static partial class CatalogEndpoints
             .Produces<CatalogErrorV1>(StatusCodes.Status415UnsupportedMediaType);
         return endpoints;
     }
+
+    // The paging query a history read accepts: a page size and the previous page's cursor; nothing else.
+    private static RouteHandlerBuilder DescribePage(this RouteHandlerBuilder route, string cursor, string description) =>
+        route.AddOpenApiOperationTransformer((operation, _, _) =>
+        {
+            operation.Parameters ??= [];
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Name = "limit",
+                In = ParameterLocation.Query,
+                Description = "Page size: a canonical decimal from 1 to 100, 50 when absent.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.Integer, Minimum = "1", Maximum = "100", Default = JsonValue.Create(50) }
+            });
+            AddReportParameter(operation, cursor, ParameterLocation.Query, false, description, uuid: true);
+            return Task.CompletedTask;
+        });
 
     private static RouteHandlerBuilder DescribeCase<T>(RouteHandlerBuilder route, string name, string summary) =>
         route.WithName(name).WithTags("Regression cases").WithSummary(summary)

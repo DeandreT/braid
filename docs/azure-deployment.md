@@ -46,6 +46,7 @@ provisioning job. Every other credential is generated into Key Vault by
 | Chat profile and model credential | Optional `chatEnabled`: the profile document, and the model-provider credential unless the profile uses the application identity, stored in Key Vault; see [Chat](#chat). |
 | Mapping endpoints | Optional `mappingEndpoints`, `mappingEndpointAudience`, `mappingEndpointAdministratorId`, `ferruleServiceEndpointClientCertificateSha256` and `compiledRuntimeIdentity`; see [Mapping endpoints](#mapping-endpoints). |
 | Docker inspection worker identity | Optional `workerPrincipalId`: the object ID of the managed identity of a separately hosted [Docker inspection worker](#docker-inspection-worker), granted the same data-plane role on the private object container. |
+| Bearer access | Optional `apiBearerEnabled`, with `apiBearerScope` (the scope name the app registration exposes) and `apiBearerClientIds` (the allowed public clients, such as the `weft` CLI); see [API authentication](api-authentication.md#app-registrations). |
 
 ### Entra app registration
 
@@ -59,6 +60,12 @@ Register a single-tenant web application in the sign-in tenant:
   object ID in the ID token.
 - Certificate credential: upload `weft-entra-client.pem` written by `initialize-secrets.sh`,
   for example `az ad app credential reset --id <client-id> --cert @weft-entra-client.pem --append`.
+- For `apiBearerEnabled`, also expose the delegated scope under *Expose an API*, set
+  `requestedAccessTokenVersion` to `2`, and register the CLI as a separate public client,
+  as [API authentication](api-authentication.md#app-registrations) describes. Every
+  deployment provisions the `weft_api_audit_writer` login and its Key Vault secret,
+  because migration 0025 requires the login; only `apiBearerEnabled` delivers it to the
+  Session app.
 
 ## Deployment
 

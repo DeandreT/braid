@@ -26,7 +26,11 @@ import {
   type Profile,
 } from "./mapping-metadata.fixture";
 
-type Context = components["schemas"]["CatalogContextV1"];
+// A browser session never receives the bearer arm.
+type Context = Exclude<
+  components["schemas"]["CatalogContextV1"],
+  { mode: "bearer" }
+>;
 type Mapping = components["schemas"]["CatalogMappingV1"];
 type Draft = {
   readonly name: string;

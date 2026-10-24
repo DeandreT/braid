@@ -19,7 +19,8 @@ public enum ChatErrorCodeV1
     ProfileUnavailable = 10,
     TurnActive = 11,
     IdempotencyConflict = 12,
-    TurnNotStarted = 13
+    TurnNotStarted = 13,
+    RateLimited = 14
 }
 
 public sealed record ChatErrorV1

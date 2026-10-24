@@ -35,6 +35,8 @@ public sealed record CatalogRequestAdmission
     internal static CatalogRequestAdmission AcceptedSession(ActorContext actor, Guid organizationId,
         ServerSessionRequestIdentity identity) =>
         new(actor, organizationId, null, StatusCodes.Status200OK, "session", ServerSessionIdentityContext.Derive(identity));
+    internal static CatalogRequestAdmission AcceptedBearer(ActorContext actor, Guid organizationId) =>
+        new(actor, organizationId, null, StatusCodes.Status200OK, "bearer");
     internal static CatalogRequestAdmission Closed(CatalogErrorCodeV1 error, int statusCode) =>
         new(null, null, error, statusCode);
 }
@@ -62,7 +64,12 @@ public sealed partial class CatalogRequestBoundary
         cancellationToken.ThrowIfCancellationRequested();
         context.Response.Headers.CacheControl = "no-store";
         if (_browser is not null)
+        {
+            // An Authorization header selects the bearer path, which refuses it unless bearer access is enabled.
+            if (context.Request.Headers.Authorization.Count != 0)
+                return await AuthenticateBearerAsync(context, cancellationToken);
             return await AuthenticateBrowserSessionAsync(context, cancellationToken);
+        }
         if (_options is not { Enabled: true } options)
             return CatalogRequestAdmission.Closed(CatalogErrorCodeV1.Unavailable, StatusCodes.Status404NotFound);
         if (!ValidTransport(context))

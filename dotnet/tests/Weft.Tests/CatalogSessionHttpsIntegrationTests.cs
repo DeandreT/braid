@@ -166,6 +166,16 @@ public sealed class CatalogSessionHttpsIntegrationTests(PostgresFixture fixture)
                 observation: test.NewObservation(seedEtag: true));
             CatalogSessionHttpsFixture.Error(absent, HttpStatusCode.Unauthorized, "identityRejected");
             CatalogSessionHttpsFixture.NoBodyOrBusiness(absent);
+            // Without bearer access an Authorization header is refused outright, with or without the session's cookies.
+            foreach (var carrier in new[] { cookies, new CatalogSessionCookies() })
+            {
+                var bearer = await test.SendAsync(test.MappingPath, carrier, forgedHeaders: true, authorization: "Bearer forged-catalog-fixture",
+                    observation: test.NewObservation(seedEtag: true));
+                CatalogSessionHttpsFixture.Error(bearer, HttpStatusCode.Unauthorized, "identityRejected");
+                CatalogSessionHttpsFixture.NoBodyOrBusiness(bearer);
+                CatalogSessionHttpsFixture.Check(bearer.Record.Actor is null && !bearer.Headers.ContainsKey("WWW-Authenticate"),
+                    "A disabled bearer path admitted an actor or advertised a challenge.");
+            }
         });
 
     [PostgresFact]

@@ -180,6 +180,12 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   limits each service replica to one child operation and gives it 3 GiB for the
   compiler and transport. The `identity` image command can measure and check the
   installed toolchain before the stack starts. No host receives the Docker socket.
+- The override file `deploy/compose/compose.bearer.yml` turns on
+  [bearer access](api-authentication.md) for signed-in users' public clients on the
+  Session server, with the audience `WEFT_ENTRA_CLIENT_ID`, the scope
+  `WEFT_API_BEARER_SCOPE` (default `weft.api`) and the required allowlist
+  `WEFT_API_BEARER_CLIENT_IDS`. The `weft_api_audit_writer` login is delivered as a
+  protected private file, like the feature logins.
 - The override file `deploy/compose/compose.endpoint.yml` adds the
   [mapping endpoint](mapping-endpoint.md) for one registered target, after `migrate`, and two
   one-shots in the `operator` profile: `endpoint-grants` runs the `Weft.DatabaseTool` grant

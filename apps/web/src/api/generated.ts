@@ -1236,6 +1236,15 @@ export interface components {
           organizationActions: components["schemas"]["CatalogOrganizationActionsV1"];
           organizationName: string;
           requestToken: string;
+        }
+      | {
+          actorPrincipalId: string;
+          allowedOrganizationId: string;
+          features: components["schemas"]["CatalogFeaturesV1"];
+          /** @enum {string} */
+          mode: "bearer";
+          organizationActions: components["schemas"]["CatalogOrganizationActionsV1"];
+          organizationName: string;
         };
     /** @enum {unknown} */
     CatalogErrorCodeV1:
@@ -1259,7 +1268,8 @@ export interface components {
       | "revisionReportSelectionChanged"
       | "revisionReportGenerationExhausted"
       | "revisionReportUnavailable"
-      | "revisionReportResourceLimit";
+      | "revisionReportResourceLimit"
+      | "rateLimited";
     CatalogErrorV1: {
       code: components["schemas"]["CatalogErrorCodeV1"];
     };
@@ -1667,7 +1677,8 @@ export interface components {
       | "profileUnavailable"
       | "turnActive"
       | "idempotencyConflict"
-      | "turnNotStarted";
+      | "turnNotStarted"
+      | "rateLimited";
     ChatErrorV1: {
       code: components["schemas"]["ChatErrorCodeV1"];
     };
@@ -3183,6 +3194,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3192,6 +3205,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3210,6 +3225,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -3362,6 +3388,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3371,6 +3399,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3389,6 +3419,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -3438,6 +3479,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3447,6 +3490,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3465,6 +3510,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -3515,6 +3571,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3524,6 +3582,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3542,6 +3602,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -3592,6 +3663,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3601,6 +3674,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3619,6 +3694,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -3668,6 +3754,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3676,6 +3764,17 @@ export interface operations {
       };
       /** @description Unauthorized */
       401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
         headers: {
           [name: string]: unknown;
         };
@@ -3692,8 +3791,28 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity validation, identity persistence or audit persistence is unavailable. */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -3729,6 +3848,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3738,6 +3859,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3756,6 +3879,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -3790,10 +3924,10 @@ export interface operations {
         "Content-Encoding"?: string;
         /** @description Exactly one nonzero canonical lowercase D-format UUID with only surrounding SP/HTAB OWS allowed. Raw value at most 128 characters; duplicates and lists are rejected. */
         "Idempotency-Key": string;
-        /** @description One exact canonical configured browser origin, checked before any body read. */
-        Origin: string;
-        /** @description Cookie-bound framework request token from a successfully admitted catalog context, at most 4096 characters. */
-        "X-XSRF-TOKEN": string;
+        /** @description Required with weftSession; omitted with entraBearer. One exact canonical configured browser origin, checked before any body read. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Cookie-bound framework request token from a successfully admitted catalog context, at most 4096 characters. */
+        "X-XSRF-TOKEN"?: string;
       };
       path: {
         organizationId: string;
@@ -3837,6 +3971,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3848,6 +3984,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3909,6 +4047,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -3957,6 +4106,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3966,6 +4117,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -3984,6 +4137,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4034,6 +4198,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4043,6 +4229,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4091,6 +4288,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4100,6 +4319,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4143,6 +4373,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4152,6 +4404,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4208,6 +4471,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4259,6 +4544,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Service Unavailable */
       503: {
         headers: {
@@ -4297,6 +4593,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4306,6 +4604,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4324,6 +4624,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4409,6 +4720,8 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4422,6 +4735,8 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4498,6 +4813,19 @@ export interface operations {
           "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
         };
       };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogRevisionIngestionResultV1"]
+            | components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -4549,6 +4877,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4558,6 +4888,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -4576,6 +4908,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4632,6 +4975,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4641,6 +5006,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4684,6 +5060,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4693,6 +5091,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4749,6 +5158,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4800,6 +5231,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Service Unavailable */
       503: {
         headers: {
@@ -4837,6 +5279,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4846,6 +5310,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4888,6 +5363,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4897,6 +5394,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4944,6 +5452,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -4953,6 +5483,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -4996,6 +5537,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -5005,6 +5568,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -5061,6 +5635,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -5115,6 +5711,8 @@ export interface operations {
       /** @description Too Many Requests */
       429: {
         headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -5158,6 +5756,28 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
           [name: string]: unknown;
         };
         content: {
@@ -5167,6 +5787,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -5225,6 +5856,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5234,6 +5867,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5270,6 +5905,8 @@ export interface operations {
       /** @description Too Many Requests */
       429: {
         headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -5341,6 +5978,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5350,6 +5989,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5377,6 +6018,17 @@ export interface operations {
       /** @description Precondition Failed */
       412: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -5439,6 +6091,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5448,6 +6102,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5519,6 +6175,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -5541,7 +6208,12 @@ export interface operations {
   };
   GetRegressionCases: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Return cases after this case: the nextCaseId of the previous page. */
+        afterCaseId?: string;
+        /** @description Page size: a canonical decimal from 1 to 100, 50 when absent. */
+        limit?: number;
+      };
       header?: never;
       path: {
         mappingId: string;
@@ -5564,6 +6236,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5573,6 +6247,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5591,6 +6267,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -5644,6 +6331,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5653,6 +6342,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5671,6 +6362,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -5737,6 +6439,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5746,6 +6450,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5806,6 +6512,17 @@ export interface operations {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -5851,6 +6568,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5860,6 +6579,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5878,6 +6599,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -5906,7 +6638,12 @@ export interface operations {
   };
   GetRegressionRuns: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Return runs after this run: the nextRunId of the previous page. */
+        afterRunId?: string;
+        /** @description Page size: a canonical decimal from 1 to 100, 50 when absent. */
+        limit?: number;
+      };
       header?: never;
       path: {
         mappingId: string;
@@ -5929,6 +6666,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5938,6 +6677,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -5956,6 +6697,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6008,6 +6760,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6017,6 +6771,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6035,6 +6791,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6100,6 +6867,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6109,6 +6878,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6172,6 +6943,8 @@ export interface operations {
       /** @description Too Many Requests */
       429: {
         headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6224,6 +6997,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6233,6 +7008,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6251,6 +7028,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6305,6 +7093,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6314,6 +7104,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6332,6 +7124,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6416,6 +7219,8 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6429,6 +7234,8 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6505,6 +7312,19 @@ export interface operations {
           "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
         };
       };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogRevisionIngestionResultV1"]
+            | components["schemas"]["CatalogErrorV1"];
+        };
+      };
       /** @description Internal Server Error */
       500: {
         headers: {
@@ -6557,6 +7377,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6566,6 +7388,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6584,6 +7408,17 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6636,6 +7471,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6645,6 +7482,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6690,6 +7529,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6718,7 +7568,10 @@ export interface operations {
   };
   GetChatConversations: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description The number of most recent conversations to return. A canonical decimal from 1 to 100, 50 when absent. */
+        limit?: number;
+      };
       header?: never;
       path: {
         mappingId: string;
@@ -6742,6 +7595,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6751,6 +7606,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6796,6 +7653,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6861,6 +7729,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6870,6 +7740,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6915,6 +7787,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -6968,6 +7851,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -6977,6 +7862,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7022,6 +7909,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -7088,6 +7986,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7097,6 +7997,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7142,6 +8044,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -7196,6 +8109,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7205,6 +8120,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7250,6 +8167,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -7278,7 +8206,10 @@ export interface operations {
   };
   StreamChatTurnEvents: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Stream only events with a greater sequence number. A canonical decimal from 0 to 4096, 0 when absent. */
+        after?: number;
+      };
       header?: never;
       path: {
         conversationId: string;
@@ -7304,6 +8235,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7313,6 +8246,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7358,6 +8293,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -7387,7 +8333,10 @@ export interface operations {
   SubmitCatalogPreview: {
     parameters: {
       query?: never;
-      header?: never;
+      header: {
+        /** @description Exactly one nonzero canonical lowercase D-format UUID with only surrounding SP/HTAB allowed; If-Match and If-None-Match are rejected. The same key with the same submission replays the original run; with a different submission it is a 409 idempotency conflict. */
+        "Idempotency-Key": string;
+      };
       path: {
         mappingId: string;
         organizationId: string;
@@ -7423,6 +8372,8 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7432,6 +8383,8 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7477,6 +8430,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -7536,6 +8500,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7547,6 +8513,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7591,6 +8559,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -7655,6 +8625,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7666,6 +8638,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7710,6 +8684,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -7746,13 +8722,13 @@ export interface operations {
         /** @description Exact selected successful derivation to repair explicitly; no current-result substitution. */
         repairDerivationId?: string;
       };
-      header: {
+      header?: {
         /** @description Absent or a single identity token; no other coding or request body is accepted. */
         "Content-Encoding"?: string;
-        /** @description One exact configured canonical browser origin. */
-        Origin: string;
-        /** @description Framework cookie-bound token issued by an admitted catalog context. */
-        "X-XSRF-TOKEN": string;
+        /** @description Required with weftSession; omitted with entraBearer. One exact configured canonical browser origin. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Framework cookie-bound token issued by an admitted catalog context. */
+        "X-XSRF-TOKEN"?: string;
       };
       path: {
         mappingId: string;
@@ -7795,6 +8771,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7806,6 +8784,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7861,6 +8841,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -7927,6 +8909,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7938,6 +8922,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -7982,6 +8968,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -8049,6 +9037,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -8060,6 +9050,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -8104,6 +9096,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -8140,13 +9134,13 @@ export interface operations {
         /** @description Exact selected successful derivation to repair explicitly; no current-result substitution. */
         repairDerivationId?: string;
       };
-      header: {
+      header?: {
         /** @description Absent or a single identity token; no other coding or request body is accepted. */
         "Content-Encoding"?: string;
-        /** @description One exact configured canonical browser origin. */
-        Origin: string;
-        /** @description Framework cookie-bound token issued by an admitted catalog context. */
-        "X-XSRF-TOKEN": string;
+        /** @description Required with weftSession; omitted with entraBearer. One exact configured canonical browser origin. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Framework cookie-bound token issued by an admitted catalog context. */
+        "X-XSRF-TOKEN"?: string;
       };
       path: {
         mappingId: string;
@@ -8189,6 +9183,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -8200,6 +9196,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -8255,6 +9253,8 @@ export interface operations {
         headers: {
           /** @description Always no-store. */
           "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -8314,6 +9314,8 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -8325,6 +9327,8 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -8347,6 +9351,17 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
         content: {
@@ -8419,6 +9434,8 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -8432,6 +9449,8 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
           [name: string]: unknown;
         };
         content: {
@@ -8506,6 +9525,19 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogRevisionIngestionResultV1"]
+            | components["schemas"]["CatalogErrorV1"];
         };
       };
       /** @description Internal Server Error */

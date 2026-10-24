@@ -1,9 +1,30 @@
 using System.Runtime.Versioning;
+using Weft.Ai;
 using Weft.Application;
 using Weft.Domain;
 using Weft.Identity;
 
 namespace Weft.Tests;
+
+/// <summary>The actual audit writer, counted per request; a record can make it unavailable or report a changed identity.</summary>
+[SupportedOSPlatform("linux")]
+internal sealed class AuthHttpAuditWriter(IApiRequestAuditWriter actual, AuthHttpFixture test) : IApiRequestAuditWriter
+{
+    public async Task<ApiRequestAuditOutcome> RecordAsync(ApiRequestAudit audit, CancellationToken cancellationToken)
+    {
+        var record = test.Current; Interlocked.Increment(ref record.Audits);
+        if (record.AuditUnavailable) throw new InvalidOperationException("The owned audit fixture is unavailable.");
+        if (record.AuditIdentityChanged) return ApiRequestAuditOutcome.IdentityChanged;
+        return await actual.RecordAsync(audit, cancellationToken);
+    }
+}
+
+/// <summary>The chat routes' provider credential is never needed: no case starts a turn.</summary>
+internal sealed class AuthHttpNoCredentials : IAiCredentialResolver
+{
+    public ValueTask<AiCredentialResult> ResolveAsync(string reference, CancellationToken ct) =>
+        ValueTask.FromResult<AiCredentialResult>(CredentialUnavailable.Instance);
+}
 
 [SupportedOSPlatform("linux")]
 internal sealed class AuthHttpIdentityReader(IExternalIdentityReader actual, AuthHttpFixture test) : IExternalIdentityReader, IDisposable

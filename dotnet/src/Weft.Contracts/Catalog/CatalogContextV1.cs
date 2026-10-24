@@ -33,7 +33,8 @@ public enum CatalogErrorCodeV1
     RevisionReportSelectionChanged = 18,
     RevisionReportGenerationExhausted = 19,
     RevisionReportUnavailable = 20,
-    RevisionReportResourceLimit = 21
+    RevisionReportResourceLimit = 21,
+    RateLimited = 22
 }
 
 public sealed record CatalogFeaturesV1
@@ -153,12 +154,18 @@ public sealed record CatalogContextV1
     {
     }
 
+    /// <summary>
+    /// Bearer mode is the context of a signed-in user's bearer request: it has neither an antiforgery request
+    /// token nor a session identity context, because the credential is not ambient and no session exists.
+    /// Both are optional here so that a bearer context, which omits them, deserializes; the other modes still
+    /// require the request token.
+    /// </summary>
     [JsonConstructor]
     public CatalogContextV1(string mode, string actorPrincipalId, string allowedOrganizationId,
         string organizationName, CatalogFeaturesV1 features, CatalogOrganizationActionsV1 organizationActions,
-        string requestToken, string? identityContext = null)
+        string? requestToken = null, string? identityContext = null)
     {
-        if (mode is not ("development" or "session"))
+        if (mode is not ("development" or "session" or "bearer"))
             throw new ArgumentException("The catalog identity mode is unsupported.", nameof(mode));
         ArgumentNullException.ThrowIfNull(features);
         ArgumentNullException.ThrowIfNull(organizationActions);
@@ -170,7 +177,8 @@ public sealed record CatalogContextV1
         OrganizationName = CatalogValueV1.RequireName(organizationName, nameof(organizationName));
         Features = features;
         OrganizationActions = organizationActions;
-        RequestToken = CatalogValueV1.RequireText(requestToken, 4096, nameof(requestToken));
+        RequestToken = mode != "bearer" ? CatalogValueV1.RequireText(requestToken!, 4096, nameof(requestToken))
+            : requestToken is null ? null : throw new ArgumentException("A bearer context has no request token.", nameof(requestToken));
         if (mode == "session" ? !AuthValueV1.IsIdentityContext(identityContext) : identityContext is not null)
             throw new ArgumentException("The catalog identity context is invalid.", nameof(identityContext));
         IdentityContext = identityContext;
@@ -182,7 +190,8 @@ public sealed record CatalogContextV1
     public string OrganizationName { get; }
     public CatalogFeaturesV1 Features { get; }
     public CatalogOrganizationActionsV1 OrganizationActions { get; }
-    public string RequestToken { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RequestToken { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? IdentityContext { get; }
 

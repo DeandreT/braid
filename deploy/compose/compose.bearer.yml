@@ -1,0 +1,14 @@
+# Bearer access for signed-in users' public clients, such as the weft CLI, beside the browser
+# session: Entra v2 delegated tokens for the Session app's exposed scope, from the allowlisted
+# client applications, with every mutation audited through its own login delivered as a
+# protected private file. See docs/api-authentication.md.
+# Use with: docker compose -f compose.yml [-f ...] -f compose.bearer.yml
+services:
+  server:
+    environment:
+      WEFT_API_BEARER_ENABLED: "true"
+      WEFT_API_BEARER_AUDIENCE: ${WEFT_ENTRA_CLIENT_ID:?}
+      WEFT_API_BEARER_SCOPE: ${WEFT_API_BEARER_SCOPE:-weft.api}
+      WEFT_API_BEARER_CLIENT_IDS: ${WEFT_API_BEARER_CLIENT_IDS:?Set the allowed public client IDs}
+      WEFT_API_AUDIT_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/api-audit-writer
+      WEFT_DELIVER_FILE_API_AUDIT_WRITER: Host=postgres;Database=weft;Username=weft_api_audit_writer;Password=${WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD:?};GSS Encryption Mode=Disable

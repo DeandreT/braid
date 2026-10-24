@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
+using Weft.Api.Auth;
 using Weft.Application;
 using Weft.Contracts.Builds;
 using Weft.Contracts.Catalog;
@@ -16,14 +17,16 @@ public static partial class CatalogEndpoints
 {
     public static IEndpointRouteBuilder MapWeftBuilds(this IEndpointRouteBuilder endpoints)
     {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        var routes = endpoints.BusinessRoutes();
         const string project = "/api/v1/organizations/{organizationId}/projects/{projectId}";
         const string mapping = project + "/mappings/{mappingId}";
-        DescribeBuild<BuildCapabilitiesV1>(endpoints.MapGet(mapping + "/build-capabilities", GetBuildCapabilities), "GetBuildCapabilities", "Read current build-control capabilities without starting a worker.");
-        BuildPageParameters(DescribeBuild<BuildEnvironmentPageV1>(endpoints.MapGet(project + "/build-environments", GetBuildEnvironments), "GetBuildEnvironments", "Read bounded retained environment versions."), "afterEnvironmentId", environmentVersion: true);
-        DescribeBuild<BuildEnvironmentV1>(endpoints.MapGet(project + "/build-environments/{environmentId}/versions/{version}", GetBuildEnvironment), "GetBuildEnvironment", "Read one exact retained environment version.");
-        MapBuildAdministration(endpoints, project, mapping);
-        MapBuildApprovals(endpoints, mapping);
-        MapBuildRuns(endpoints, mapping);
+        DescribeBuild<BuildCapabilitiesV1>(routes.MapGet(mapping + "/build-capabilities", GetBuildCapabilities), "GetBuildCapabilities", "Read current build-control capabilities without starting a worker.");
+        BuildPageParameters(DescribeBuild<BuildEnvironmentPageV1>(routes.MapGet(project + "/build-environments", GetBuildEnvironments), "GetBuildEnvironments", "Read bounded retained environment versions."), "afterEnvironmentId", environmentVersion: true);
+        DescribeBuild<BuildEnvironmentV1>(routes.MapGet(project + "/build-environments/{environmentId}/versions/{version}", GetBuildEnvironment), "GetBuildEnvironment", "Read one exact retained environment version.");
+        MapBuildAdministration(routes, project, mapping);
+        MapBuildApprovals(routes, mapping);
+        MapBuildRuns(routes, mapping);
         return endpoints;
     }
 

@@ -14,9 +14,11 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Weft.Ai;
 using Weft.Api;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
+using Weft.Api.Chat;
 using Weft.Application;
 using Weft.Identity;
 using Weft.Persistence.Postgres;
@@ -53,9 +55,16 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
     private Task? disposal, issuerRelease, ownerRelease, dataRelease;
     private int sequence;
 
-    internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true)
+    /// <summary>Bearer access beside the session catalog when positive: its per-principal burst, with no replenishment in the run.</summary>
+    internal int BearerBurst { get; private init; }
+
+    /// <summary>Also maps the chat routes on the restricted chat logins; their provider profile is never contacted.</summary>
+    internal bool Chat { get; private init; }
+
+    internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true, int bearerBurst = 0,
+        bool chat = false)
     {
-        var test = new AuthHttpFixture(); Exception? primary = null; var cleanup = new List<Exception>();
+        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat }; Exception? primary = null; var cleanup = new List<Exception>();
         try { await test.InitializeAsync(postgres, bindIssuer); await body(test); }
         catch (Exception error) { primary = Safe(error, "The independent auth HTTP case failed."); }
         finally { try { await test.DisposeAsync(); } catch (Exception error) { cleanup.Add(Safe(error, "The independent auth HTTP cleanup failed.")); } }
@@ -289,6 +298,9 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
     internal PostgresProjectCreationDatabase CreationPool = null!;
     internal EntraHttpsFixtureTransport Transport = null!;
     internal AuthHttpIdentityReader Identities = null!;
+    internal EntraUserTokenValidator? UserTokens;
+    internal PostgresApiRequestAuditWriter? Audit;
+    internal PostgresChatDatabase? ChatReaderPool, ChatWriterPool;
     internal HttpClient Client = null!;
     internal bool Settled;
     internal int PhysicalPort;
@@ -312,17 +324,39 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
         builder.Services.AddSingleton<IExternalIdentityReader>(identities);
         builder.Services.AddWeftEntraBrowserAuthentication(new(test.Data.Seed.OrganizationA, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, identities);
         builder.Services.AddWeftSessionCatalog(new(test.Data.Seed.OrganizationA), new CatalogMetadataEditOptions(true), new CatalogRevisionIngestionOptions(false), new CatalogProjectCreationOptions(false), new CatalogRevisionReportOptions(false, false));
+        if (test.BearerBurst > 0)
+        {
+            // The same owned issuer signs delegated tokens; the validator reaches it only through the fixture transport.
+            UserTokens = new(new(EntraProtocolFixturePolicy.Tenant, EntraProtocolFixturePolicy.Client, UserTokenValidationTests.Scope,
+                [UserTokenValidationTests.Cli, UserTokenValidationTests.SecondCli]), new EntraHttpsFixtureTransport(test.Issuer.Port, test.Crypto.Root));
+            Audit = new(test.Data.Case.RegressionConnectionString("weft_api_audit_writer"));
+            builder.Services.AddWeftBearerAccess(new(test.Data.Seed.OrganizationA, test.BearerBurst, 1, TimeSpan.FromDays(1)), UserTokens, identities,
+                new AuthHttpAuditWriter(Audit, test));
+        }
         builder.Services.AddSingleton<ICatalogReader>(new AuthHttpCatalogReader(test.Data.Reader, test));
         builder.Services.AddSingleton<IMappingMetadataWriter>(new AuthHttpMetadataWriter(test.Data.Writer, test));
         builder.Services.AddSingleton<IOrganizationProjectCreationReader>(new PostgresProjectCreator(CreationPool));
         builder.Services.AddWeftAuthenticationHttp(new(AuthenticationHttpMode.Session, test.Origin.GetLeftPart(UriPartial.Authority)), builder.Environment);
+        if (test.Chat)
+        {
+            ChatReaderPool = new(test.Data.Case.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
+            ChatWriterPool = new(test.Data.Case.ChatWriterConnectionString, ChatDatabaseProfile.Writer);
+            var chatReader = new PostgresChatStore(ChatReaderPool); var chatWriter = new PostgresChatStore(ChatWriterPool);
+            builder.Services.AddSingleton(new ChatPersistencePorts(chatReader, chatReader, chatWriter, chatWriter));
+            builder.Services.AddSingleton<IAiCredentialResolver>(new AuthHttpNoCredentials());
+            var profile = AiProfileSpec.Create(AiProfileKey.Create("chat-fixture", 1), AiDialect.ChatCompletionsSseV1, "fixture-model",
+                new Uri("http://127.0.0.1:9/v1/chat/completions"), true, AiAuthentication.Bearer, "fixture-credential",
+                AiCapability.Text, "mapping-metadata", 1, true, false);
+            builder.Services.AddWeftChat(new([new ChatModelProfile("Fixture model", "fixture", profile)], TimeSpan.FromDays(1), TimeSpan.FromSeconds(60), 128));
+        }
         var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start(1); var port = ((IPEndPoint)reservation.LocalEndpoint).Port; PhysicalPort = port;
         try
         {
             builder.WebHost.ConfigureKestrel(options => { options.Limits.MaxRequestLineSize = 24576; options.Limits.MaxRequestHeadersTotalSize = 32768; options.Limits.MaxRequestBodySize = 65536; options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(5); options.Listen(IPAddress.Loopback, port, listen => { listen.Protocols = HttpProtocols.Http1; listen.UseHttps(test.Crypto.ApplicationTls); }); });
             Application = builder.Build();
             Application.Use((HttpContext context, RequestDelegate next) => test.MiddlewareAsync(this, context, next)); Application.UseAuthentication();
-            Application.MapWeftAuthentication(); Application.MapWeftCatalog();
+            Application.MapWeftAuthentication(); Application.MapWeftCatalog(); Application.MapWeftHelp();
+            if (test.Chat) Application.MapWeftChat();
             Client = AuthHttpFixture.NewClient(test.Crypto.Root, "127.0.0.1", test.Origin.Port, port); Client.BaseAddress = test.Origin;
             reservation.Stop(); using var start = new CancellationTokenSource(TimeSpan.FromSeconds(15)); await Application.StartAsync(start.Token);
             AuthHttpFixture.Check(Transport.SnapshotAttempts().Count == 0, "Dormant registration sent provider HTTP.");
@@ -348,6 +382,10 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
         var errors = new List<Exception>();
         try { Client?.Dispose(); } catch (Exception) { errors.Add(new AuthHttpFailure("The owned app client did not settle.")); }
         try { Identities?.Dispose(); } catch (Exception) { errors.Add(new AuthHttpFailure("The borrowed identity reader did not settle after drain.")); }
+        if (UserTokens is not null) try { await UserTokens.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15)); } catch (Exception) { errors.Add(new AuthHttpFailure("The borrowed user-token validator did not settle after drain.")); }
+        if (Audit is not null) try { await Audit.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15)); } catch (Exception) { errors.Add(new AuthHttpFailure("The borrowed audit writer did not settle after drain.")); }
+        foreach (var pool in new[] { ChatReaderPool, ChatWriterPool })
+            if (pool is not null) try { await pool.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15)); } catch (Exception) { errors.Add(new AuthHttpFailure("A borrowed chat pool did not settle after drain.")); }
         try { Profile?.Dispose(); } catch (Exception) { errors.Add(new AuthHttpFailure("The borrowed app profile did not settle after drain.")); }
         if (ReaderPool is not null) try { readerRelease ??= ReaderPool.DisposeAsync().AsTask(); await readerRelease.WaitAsync(TimeSpan.FromSeconds(15)); } catch (Exception) { errors.Add(new AuthHttpFailure("The original reader-pool disposal did not settle.")); }
         if (WriterPool is not null) try { writerRelease ??= WriterPool.DisposeAsync().AsTask(); await writerRelease.WaitAsync(TimeSpan.FromSeconds(15)); } catch (Exception) { errors.Add(new AuthHttpFailure("The original writer-pool disposal did not settle.")); }

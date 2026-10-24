@@ -120,6 +120,28 @@ public sealed class CatalogContractTests
     }
 
     [Fact]
+    public void BearerContextRoundTripsWithoutSessionFieldsAndOtherModesStillRequireTheirToken()
+    {
+        var bearer = new CatalogContextV1("bearer", Principal, Organization, "Local catalog", CatalogFeaturesV1.ReadOnly,
+            CatalogOrganizationActionsV1.None);
+        var text = JsonSerializer.Serialize(bearer, Options);
+        using (var json = JsonDocument.Parse(text))
+        {
+            Assert.Equal("bearer", json.RootElement.GetProperty("mode").GetString());
+            Assert.False(json.RootElement.TryGetProperty("requestToken", out _));
+            Assert.False(json.RootElement.TryGetProperty("identityContext", out _));
+        }
+        // Strongly typed clients read it with the shipped options, which respect required constructor parameters.
+        var read = JsonSerializer.Deserialize<CatalogContextV1>(text, Options)!;
+        Assert.Equal(("bearer", Principal, Organization, (string?)null, (string?)null),
+            (read.Mode, read.ActorPrincipalId, read.AllowedOrganizationId, read.RequestToken, read.IdentityContext));
+        Rejects(() => new CatalogContextV1("bearer", Principal, Organization, "Local", CatalogFeaturesV1.ReadOnly,
+            CatalogOrganizationActionsV1.None, "token"));
+        var tokenless = text.Replace("\"bearer\"", "\"development\"", StringComparison.Ordinal);
+        Assert.ThrowsAny<Exception>(() => JsonSerializer.Deserialize<CatalogContextV1>(tokenless, Options));
+    }
+
+    [Fact]
     public void MetadataRepresentationExcludesHeadActivityAndActorVaryingActions()
     {
         var metadata = new CatalogMappingMetadataV1(MappingScope, " Exact name ", "Description\n", Largest);

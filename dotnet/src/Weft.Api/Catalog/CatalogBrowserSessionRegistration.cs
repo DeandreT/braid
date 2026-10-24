@@ -27,7 +27,7 @@ public static partial class CatalogEndpoints
         services.AddSingleton(options);
         RegisterCatalogFeatures(services, metadata, ingestion, creation, reports);
         services.AddSingleton(provider => new CatalogRequestBoundary(options,
-            provider.GetRequiredService<ServerSessionBrowser>()));
+            provider.GetRequiredService<ServerSessionBrowser>(), provider.GetService<Auth.CatalogBearerAdmission>()));
         return services;
     }
 

@@ -138,7 +138,9 @@ that tenant. Browser sign-in requests the `profile` scope, without which Entra o
 tokens carry the same `tid` and `oid`, so one person keeps one key, binding and
 principal across client applications. The per-application pairwise `sub` is checked
 but never used as a key, because a token issued to another client application
-carries a different `sub` for the same person.
+carries a different `sub` for the same person. [Bearer access](api-authentication.md)
+resolves a delegated access token's `(tid, oid)` through the same binding, so one
+`bind-entra-user` admits a person in the browser and in the CLI alike.
 
 Earlier versions keyed browser sign-in on `("entra", issuer, sub)`. Those bindings
 remain in the database, unchanged, and nothing constructs that key any more, so they
