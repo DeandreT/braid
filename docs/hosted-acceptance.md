@@ -151,6 +151,7 @@ deploy/compose/acceptance-test.sh
 | `WEFT_ACCEPTANCE_LOG_DIRECTORY` | On failure, keep the service logs and the browser failure context there. |
 | `WEFT_ACCEPTANCE_HOLD` | Debugging aid: stop after provisioning, write the run's environment to a private file and wait for a release file before cleaning up. |
 | `WEFT_ACCEPTANCE_STAGE` | An executable to run after the hosted checks pass and before cleanup, with the run's environment; its failure fails the run. The [mapping endpoint stage](#mapping-endpoint-stage) uses it. |
+| `WEFT_TEST_SUBNET_RANGE` | The IPv4 range the run's networks take their explicit subnets from; see [Docker test networks](development.md#docker-test-networks). |
 
 Generated passwords, keys and certificates stay in a private temporary directory and are
 never printed. The script removes every container, network, volume and image tag it

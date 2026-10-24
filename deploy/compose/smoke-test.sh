@@ -23,6 +23,9 @@ files=(--file "$compose_directory/compose.yml")
 [[ $examples == true ]] && files+=(--file "$compose_directory/compose.examples.yml" --file "$compose_directory/compose.worker.yml")
 [[ $ferrule_service == true ]] && files+=(--file "$compose_directory/compose.ferrule-service.yml")
 
+# shellcheck source=test-subnets.sh
+source "$compose_directory/test-subnets.sh"
+
 compose() {
   docker compose --project-name "$project" "${files[@]}" --profile operator "$@"
 }
@@ -120,11 +123,13 @@ env -u WEFT_FERRULE_WORKER_IMAGE -u WEFT_DOCKER_GID -u WEFT_FERRULE_SERVICE_IMAG
   fail 'base stack configuration without the examples settings'
 echo 'ok - base stack renders without the examples settings'
 
+networks=$(compose config --networks) || fail 'stack networks'
+files+=(--file "$work/subnets.yml")
 runtime_services=(server edge)
 [[ $examples == true ]] && runtime_services+=(worker)
 [[ $ferrule_service == true ]] && runtime_services+=(ferrule)
 echo "Starting $project from new volumes"
-compose up --detach --wait --wait-timeout 180 "${runtime_services[@]}" >/dev/null 2>"$work/up.log" ||
+start_on_test_subnets "$work/subnets.yml" "$work/up.log" "$networks" --detach --wait --wait-timeout 180 "${runtime_services[@]}" ||
   { tail -n 20 "$work/up.log" >&2; compose logs --no-color migrate storage-init session-keys "${runtime_services[@]}" 2>&1 | tail -n 40 >&2; fail 'stack start'; }
 base=http://$(compose port server 8080)
 

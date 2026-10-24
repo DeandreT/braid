@@ -279,6 +279,16 @@ of a smaller range is refused, setup fails with an exhaustion error that names
 the range. Fixture networks keep their owner labels, so cleanup by owner label
 removes them with the fixture's other resources.
 
+The Compose test scripts (`deploy/compose/smoke-test.sh` and
+`deploy/compose/acceptance-test.sh`) give every network of their project a
+distinct /27 of the same range through a generated override in the run's private
+directory; the deployment Compose files keep daemon-assigned subnets. A candidate
+that overlaps an existing Docker network is skipped, with the same bound and
+exhaustion error. If another network takes a chosen subnet before Compose creates
+it, the run removes its networks and starts again on new subnets, up to three
+starts. Later Compose commands of the run, including the endpoint stage and the
+browser flows, include the same override.
+
 ### Isolated test builds
 
 Keep native Windows and Linux outputs separate. Pass the same `--artifacts-path`

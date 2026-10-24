@@ -13,6 +13,8 @@ repository=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 compose_directory=$repository/deploy/compose
 # shellcheck source=acceptance-lifecycle.sh
 source "$compose_directory/acceptance-lifecycle.sh"
+# shellcheck source=test-subnets.sh
+source "$compose_directory/test-subnets.sh"
 project=weft-accept-$(openssl rand -hex 4)
 work=$(mktemp -d "${TMPDIR:-/tmp}/weft-accept.XXXXXXXX")
 chmod 0700 "$work"
@@ -204,9 +206,11 @@ WEFT_CHAT_PROFILES_JSON=$(printf '{"version":1,"retentionDays":7,"turnSeconds":1
 export WEFT_CHAT_PROFILES_JSON
 
 compose config --quiet || fail 'acceptance stack configuration'
+networks=$(compose config --networks) || fail 'acceptance stack networks'
+files+=(--file "$work/subnets.yml")
 runtime_services=(server edge ferrule runs server-relay runs-relay issuer ingress model)
 echo "Starting $project from new volumes"
-compose up --detach --wait --wait-timeout 300 "${runtime_services[@]}" >/dev/null 2>"$work/up.log" ||
+start_on_test_subnets "$work/subnets.yml" "$work/up.log" "$networks" --detach --wait --wait-timeout 300 "${runtime_services[@]}" ||
   { tail -n 20 "$work/up.log" >&2; compose logs --no-color 2>&1 | tail -n 60 >&2; fail 'stack start'; }
 for service in migrate blob-container storage-init session-keys; do
   [[ $(docker inspect --format '{{.State.ExitCode}}' "$(compose ps --all --quiet "$service")") == 0 ]] ||
@@ -254,6 +258,7 @@ export WEFT_ACCEPTANCE_COMPOSE_FILES=${WEFT_ACCEPTANCE_COMPOSE_FILES%:}
 if [[ ${WEFT_ACCEPTANCE_MODEL_FIXTURE:-false} == true ]]; then
   export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$compose_directory/compose.model-fixture.yml"
 fi
+export WEFT_ACCEPTANCE_COMPOSE_FILES="$WEFT_ACCEPTANCE_COMPOSE_FILES:$work/subnets.yml"
 export WEFT_ACCEPTANCE_PRINCIPAL_ID=$principal
 export WEFT_ACCEPTANCE_WORK=$work
 export WEFT_ACCEPTANCE_FIXTURES=$repository/engines/ferrule-host/tests/fixtures
