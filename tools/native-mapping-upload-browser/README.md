@@ -32,7 +32,7 @@ Spawn with Node `[operator, '--config', configuration]`. Root/browser env is:
 
 The source-only candidate has no actual config/release/client/runtime binding.
 The worker image is
-`sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184`;
+`sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e`;
 the PostgreSQL16.15 reference is
 `postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc`.
 The runtime pins the actual images, daemon, profiles, loopback origin/PG port,

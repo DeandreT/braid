@@ -413,7 +413,7 @@ caller and is the only route to the listener.
 
 ```sh
 CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/ferrule-host \
-  cargo +nightly-2026-07-21 test --manifest-path engines/ferrule-host/Cargo.toml --locked
+  cargo +1.98.1 test --manifest-path engines/ferrule-host/Cargo.toml --locked
 ```
 
 `sandbox_qualification` runs each sandbox scenario in a fresh process. It checks
@@ -424,7 +424,7 @@ address-space limit, and termination at the CPU limit.
 
 ```sh
 CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/compile-sandbox \
-  cargo +nightly-2026-07-21 test --manifest-path engines/compile-sandbox/Cargo.toml --release --locked
+  cargo +1.98.1 test --manifest-path engines/compile-sandbox/Cargo.toml --release --locked
 ```
 
 The compile launcher's `sandbox_qualification` launches a fresh copy of the test

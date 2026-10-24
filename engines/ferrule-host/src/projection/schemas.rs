@@ -500,6 +500,18 @@ fn schema_gaps(
         "/nullable",
     )?;
     add(
+        options.json_document && schema.json_object_item_nullable.is_some(),
+        "schema.objectItemNullability",
+        "Array-container nullability is visible; the explicit nullability of each object item remains a distinct native fact that v1 cannot express.",
+        "/json_object_item_nullable",
+    )?;
+    add(
+        schema.json_undeclared_property,
+        "schema.undeclaredProperty",
+        "This property is admitted by its parent's dynamic value schema rather than declared; that provenance remains at the native location.",
+        "/json_undeclared_property",
+    )?;
+    add(
         options.xml_document && schema.repeating && schema.nillable,
         "schema.xmlOccurrenceNullability",
         "XML nil applies to each repeated element occurrence; it does not establish nullability of an array container.",

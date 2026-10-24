@@ -106,20 +106,23 @@ external side effects in v1.
 ## Ferrule integration
 
 The restricted worker pins:
-[`577359a991a7dd44172a3c4af91fdcab7592457c`](https://github.com/DeandreT/ferrule/commit/577359a991a7dd44172a3c4af91fdcab7592457c).
+[`0169809123b8caebd141b26a625be4c07e750536`](https://github.com/DeandreT/ferrule/commit/0169809123b8caebd141b26a625be4c07e750536).
 It consumes `mapping`, `ir`, and `engine` for inspection, validation and
-projection, and the `cli` library's in-memory payload API for bounded JSON
-preview. It never runs the Ferrule command-line program, MFD importer or code
-generators. Native codec, validation, JSON preview and local Linux/amd64 process
-isolation are qualified at that pin. Generated deployment runtimes have a
-separate gate. See [Ferrule worker](ferrule-worker.md#json-sample-preview).
+projection, the `cli` library's in-memory payload API for bounded JSON preview,
+and `codegen` and `codegen-csharp` for in-memory C# source generation in the
+build operation. It never runs the Ferrule command-line program or MFD importer.
+Native codec, validation, JSON preview, C# generation and local Linux/amd64
+process isolation are qualified at that pin. Generated deployment runtimes have a
+separate gate. See [Ferrule worker](ferrule-worker.md#json-sample-preview) and
+[Restricted Ferrule C# compiler worker](build-compiler.md).
 
 In the engine host, pin every Ferrule Git dependency to the same full commit and commit Cargo.lock
 when adding the workspace. Alias generic upstream package names (`mapping`,
 `engine`, `cli`) as Ferrule-specific dependencies inside the adapter. Never use
-an unpinned branch or local sibling path in CI/release manifests. Record the
-compiler toolchain used to qualify that dependency; Ferrule currently documents
-a nightly toolchain requirement.
+an unpinned branch or local sibling path in CI/release manifests. Build and
+qualify with the Rust toolchain that Ferrule pins at that revision, stable
+`1.98.1`, and record it in the worker's `rust-toolchain.toml`, image build and
+`io.weft.rust.toolchain` label.
 
 The worker uses these public boundaries:
 
@@ -131,7 +134,11 @@ The worker uses these public boundaries:
 - `cli::run_project_value_payloads`: execution of an already decoded project
   from host-owned documents, with returned in-memory artifacts.
 - `cli::PayloadRunOptions`: target selection, typed parameters and the
-  validated `with_current_datetime` host-clock override. Tracing is not admitted.
+  validated `with_current_datetime` host-clock override. Tracing is not admitted,
+  and the worker keeps Ferrule's default trusted execution policy because every
+  payload is a host-supplied document.
+- `codegen::lower` and `codegen_csharp::emit`: in-memory C# generation for the
+  build operation.
 
 The CLI crate's public host API is reusable despite its package name. The worker
 calls it as a library and communicates bounded structured results to the C#
@@ -183,7 +190,7 @@ from interpreter validation alone.
 
 ## Source references
 
-- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/577359a991a7dd44172a3c4af91fdcab7592457c/crates/mapping/src/project_file.rs).
-- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/577359a991a7dd44172a3c4af91fdcab7592457c/crates/cli/src/lib.rs).
-- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/577359a991a7dd44172a3c4af91fdcab7592457c/crates/cli/src/payload.rs).
-- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/577359a991a7dd44172a3c4af91fdcab7592457c/docs/architecture.md).
+- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/0169809123b8caebd141b26a625be4c07e750536/crates/mapping/src/project_file.rs).
+- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/0169809123b8caebd141b26a625be4c07e750536/crates/cli/src/lib.rs).
+- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/0169809123b8caebd141b26a625be4c07e750536/crates/cli/src/payload.rs).
+- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/0169809123b8caebd141b26a625be4c07e750536/docs/architecture.md).

@@ -804,10 +804,10 @@ export function expectReport(
     expect(provenance?.confirmed).toBe(true);
     expect(provenance?.backend.id).toBe("ferrule");
     expect(provenance?.backend.revision).toBe(
-      "577359a991a7dd44172a3c4af91fdcab7592457c",
+      "0169809123b8caebd141b26a625be4c07e750536",
     );
     expect(provenance?.backend.buildId).toBe(
-      "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184",
+      "sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e",
     );
     expect(provenance?.adapterVersion).toBe("weft.ferrule-adapter.v3");
     if (value.operation === "projection") {

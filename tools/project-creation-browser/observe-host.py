@@ -15,7 +15,7 @@ import urllib.parse
 import uuid
 
 PG_IMAGE = 'postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc'
-WORKER_IMAGE = 'sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184'
+WORKER_IMAGE = 'sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e'
 OWNER, NONCE, CASE = ('weft.qualification.' + key for key in ('owner', 'nonce', 'case'))
 LABELS = (OWNER, NONCE, CASE)
 WORKER = re.compile(r'weft-inspect-[0-9a-f]{32}')

@@ -17,7 +17,7 @@ Inspection and validation were qualified in
 
 ## Native authority and results
 
-Ferrule libraries are pinned to `577359a991a7dd44172a3c4af91fdcab7592457c`.
+Ferrule libraries are pinned to `0169809123b8caebd141b26a625be4c07e750536`.
 `mapping::project_file::decode_bytes` admits the file;
 `engine::validate` supplies validation issues and typed owners. The worker never
 evaluates mappings or resolves design-time resources. Inspection returns boundary
@@ -35,6 +35,17 @@ include this identity, the full Ferrule commit and the server-selected immutable
 image. A changed engine selects a different key without rewriting native bytes,
 ingestion facts or retained report provenance. Stored-format readers compare a
 retained report with its own complete key and do not resolve a current worker.
+
+Advancing the pin therefore has these effects. Native revisions are unchanged and
+decode at the new pin, including legacy unmarked files. Current reads select new
+projection and validation keys, so retained reports re-derive with the new worker
+on their next current request; reports and ingestion evidence derived earlier keep
+their original engine, image and adapter provenance and stay readable by their own
+keys. Preview provenance, saved regression cases and build intents carry the full
+engine revision and image identity. A saved case runs only on its recorded
+runtime, and existing builds, approvals and published artifacts stay bound to
+their original compiler and runtime images: the new runtime refuses them, so they
+need a new build, regression evidence and approval at the new revision.
 
 Validation validity and total issue count are separate from the emitted bounded
 diagnostics. Exact typed owners identify graph/function nodes, endpoints,
@@ -189,7 +200,8 @@ The Session host never runs this runner; it reaches the same runner in a separat
 worker service through the hosted inspection transport below.
 
 The image builds on pinned Ubuntu 24.04 using checksum-verified rustup 1.29.1 and
-nightly `2026-07-21`, with locked dependencies and two build jobs. Its scratch
+stable Rust `1.98.1`, Ferrule's pinned toolchain, with locked dependencies and two
+build jobs. Its scratch
 runtime contains only `/ferrule-host`, observed allowlisted GNU runtime libraries,
 and dependency copyright/license metadata. BuildKit is required to build it.
 
@@ -286,7 +298,7 @@ From the repository root, with the pinned .NET SDK and Rust toolchain installed:
 
 ```sh
 CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=target/ferrule-host \
-  cargo +nightly-2026-07-21 test --manifest-path engines/ferrule-host/Cargo.toml --locked
+  cargo +1.98.1 test --manifest-path engines/ferrule-host/Cargo.toml --locked
 docker build --iidfile /tmp/weft-worker-image-id engines/ferrule-host
 dotnet build dotnet/Weft.slnx --configuration Release --no-restore
 ```

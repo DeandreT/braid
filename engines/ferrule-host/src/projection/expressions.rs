@@ -68,6 +68,19 @@ impl Builder<'_> {
                 },
                 context,
             )?,
+            Some(_) if context.owned_join_closed => self.unsupported(
+                "Closed owned join scope expression",
+                "Ferrule refuses this owned join context before evaluation; the expression has no executable explanation.",
+                locator.clone(),
+                context,
+            )?,
+            Some(node) if context.owned_join_tuple && !owned_join_tuple_node(&node) => self
+                .unsupported(
+                    "Closed owned join tuple expression",
+                    "An owned join tuple reads members only through owned join reads; this form is closed here.",
+                    locator.clone(),
+                    context,
+                )?,
             Some(Node::Const { value }) => {
                 let literal = self.literal(&value)?;
                 Expression {
@@ -478,6 +491,76 @@ impl Builder<'_> {
                     )?
                 }
             }
+            Some(Node::OwnedJoinField(native)) => {
+                for segment in &native.path {
+                    self.budget.text(segment)?;
+                }
+                let member = context
+                    .owned_joins
+                    .get(&native.join.get())
+                    .and_then(|members| {
+                        members
+                            .iter()
+                            .find(|(member, _)| *member == native.collection)
+                    })
+                    .map(|(_, candidates)| candidates.clone());
+                if let Some(collections) = member {
+                    let mut candidates = Vec::new();
+                    for (boundary, prefix) in collections {
+                        let full = prefix
+                            .into_iter()
+                            .chain(native.path.iter().cloned())
+                            .collect::<Vec<_>>();
+                        if let Some(id) = self.field_id(&boundary, &full) {
+                            candidates.push(id);
+                        }
+                    }
+                    self.fields_expression(
+                        candidates,
+                        role,
+                        locator.clone(),
+                        context,
+                        "Owned joined field",
+                    )?
+                } else {
+                    self.unsupported(
+                        "Unresolved owned joined field",
+                        "The owning join or its member is not active at this expression.",
+                        locator.clone(),
+                        context,
+                    )?
+                }
+            }
+            Some(Node::OwnedJoinSourcePosition(native)) => {
+                let active = context
+                    .owned_joins
+                    .get(&native.join.get())
+                    .is_some_and(|members| {
+                        members
+                            .iter()
+                            .any(|(member, _)| *member == native.collection)
+                    });
+                let control = context.join_controls.get(&native.join.get()).cloned();
+                if let (true, Some(control_id)) = (active, control) {
+                    Expression {
+                        detail: text_detail(
+                            "One-based raw source position of one owned join member",
+                        ),
+                        dependencies: vec![Dependency::Node {
+                            node: NodeReference::Control { control_id },
+                            role: role.into(),
+                        }],
+                        summary: "Owned join source position".into(),
+                    }
+                } else {
+                    self.unsupported(
+                        "Unresolved owned join source position",
+                        "The owning join or its member is not active at this expression.",
+                        locator.clone(),
+                        context,
+                    )?
+                }
+            }
             Some(Node::JoinPosition { join }) => {
                 let control = context.join_controls.get(&join.get()).cloned();
                 if let Some(control_id) = control {
@@ -717,16 +800,25 @@ impl Builder<'_> {
                     summary: "Source document metadata".into(),
                 }
             }
-            Some(Node::DynamicSourceField { key, .. }) => {
+            Some(
+                node @ (Node::DynamicSourceField { .. } | Node::OwnedDynamicSourceField(_)),
+            ) => {
+                let (key, construct) = match &node {
+                    Node::OwnedDynamicSourceField(native) => {
+                        (native.key, "Explicitly owned runtime-named source field")
+                    }
+                    Node::DynamicSourceField { key, .. } => (*key, "Runtime-named source field"),
+                    _ => unreachable!(),
+                };
                 let key = self.expression_inner(key, context, role, depth + 1, active)?;
                 let mut unsupported = self.unsupported(
-                    "Runtime-named source field",
+                    construct,
                     "The computed field name has no fixed field lineage.",
                     locator.clone(),
                     context,
                 )?;
                 unsupported.detail = Detail::Group {
-                    label: "Runtime-named source field".into(),
+                    label: construct.into(),
                     children: vec![unsupported.detail, group("Computed key", key.detail)],
                 };
                 unsupported.dependencies = key.dependencies;
@@ -1247,9 +1339,37 @@ fn merge_dependencies<const N: usize>(values: [Vec<Dependency>; N]) -> Vec<Depen
     result
 }
 
+/// The forms an owned join tuple can evaluate; every other read stays closed there.
+fn owned_join_tuple_node(node: &Node) -> bool {
+    matches!(
+        node,
+        Node::OwnedJoinField(_)
+            | Node::OwnedJoinSourcePosition(_)
+            | Node::JoinPosition { .. }
+            | Node::Unconnected
+            | Node::Const { .. }
+            | Node::Call { .. }
+            | Node::If { .. }
+            | Node::ValueMap { .. }
+            | Node::RuntimeValue { .. }
+            | Node::RuntimeParameter { .. }
+            | Node::RuntimeParameterDefault { .. }
+            | Node::Raise { .. }
+    )
+}
+
+// Exhaustive so that a native form added upstream is named deliberately.
 fn unsupported_kind(node: &Node) -> &'static str {
     match node {
         Node::OwnedPosition(_) => "Explicitly owned position",
+        Node::OwnedRowDocumentPath(_) => "Explicitly owned row document location",
+        Node::OwnedSourceDocumentPath(_) => "Explicitly owned source document location",
+        Node::OwnedLookup(_) => "Explicitly owned lookup",
+        Node::OwnedCollectionFind(_) => "Explicitly owned collection search",
+        Node::OwnedXmlSerialize(_) => "Explicitly owned XML serialization",
+        Node::OwnedAggregate(_) => "Explicitly owned aggregate",
+        Node::OwnedXmlMixedContent(_) => "Explicitly owned XML mixed content",
+        Node::OwnedJoinAggregate(_) => "Owned join aggregate",
         Node::SourceRootXmlTypeEquals { .. } => "Observed XML root type",
         Node::XmlMixedContent { .. } => "XML mixed content",
         Node::XmlSerialize { .. } => "XML serialization",
@@ -1258,6 +1378,29 @@ fn unsupported_kind(node: &Node) -> &'static str {
         Node::SequenceItemAt { .. } => "Generated sequence item selection",
         Node::SequenceAggregate { .. } => "Generated sequence aggregate",
         Node::JoinAggregate { .. } => "Join aggregate",
-        _ => "Unexplained native expression",
+        Node::OwnedSourceField(_)
+        | Node::OwnedJoinField(_)
+        | Node::OwnedJoinSourcePosition(_)
+        | Node::SourceField { .. }
+        | Node::SourceRootField { .. }
+        | Node::SourceDocumentPath
+        | Node::Position { .. }
+        | Node::JoinField { .. }
+        | Node::JoinPosition { .. }
+        | Node::Unconnected
+        | Node::Const { .. }
+        | Node::FunctionParameter { .. }
+        | Node::RuntimeValue { .. }
+        | Node::RuntimeParameter { .. }
+        | Node::RuntimeParameterDefault { .. }
+        | Node::Call { .. }
+        | Node::UserFunctionCall { .. }
+        | Node::If { .. }
+        | Node::Raise { .. }
+        | Node::ValueMap { .. }
+        | Node::Lookup { .. }
+        | Node::DynamicSourceField { .. }
+        | Node::OwnedDynamicSourceField(_)
+        | Node::Aggregate { .. } => "Unexplained native expression",
     }
 }

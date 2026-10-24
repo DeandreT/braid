@@ -294,6 +294,7 @@ impl Budget {
             match node {
                 Node::ValueMap { table, .. } => self.charge(table.len().saturating_mul(2))?,
                 Node::XmlSerialize { schema, .. } => self.schema(schema)?,
+                Node::OwnedXmlSerialize(serialize) => self.schema(&serialize.schema)?,
                 _ => {}
             }
         }

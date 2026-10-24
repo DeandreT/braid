@@ -276,7 +276,7 @@ export async function runBrowserFixture(definition) {
     absolute(cfg.dotnet);
     const workerImage = regressionScenario
       ? cfg.workerImage
-      : "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184";
+      : "sha256:439291fb4d665e3ba9c086e88214a73fd44552af80932a9b40c97f5816c7047e";
     check(!regressionScenario || /^sha256:[a-f0-9]{64}$/.test(workerImage));
     const postgresImage =
       "postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc";

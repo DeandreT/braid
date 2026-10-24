@@ -3,7 +3,7 @@ FROM ubuntu@sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb6461
 
 ENV CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
-    RUSTUP_TOOLCHAIN=nightly-2026-07-21 \
+    RUSTUP_TOOLCHAIN=1.98.1 \
     CARGO_TARGET_DIR=/opt/weft-target \
     CARGO_BUILD_JOBS=2 \
     CARGO_INCREMENTAL=0 \
@@ -32,7 +32,7 @@ chmod 0755 /tmp/rustup-init
 /tmp/rustup-init --yes --no-modify-path --profile minimal \
     --default-host x86_64-unknown-linux-gnu --default-toolchain "$RUSTUP_TOOLCHAIN"
 rustup set auto-self-update disable
-test "$(rustc --version)" = 'rustc 1.99.0-nightly (87e5904f5 2026-07-20)'
+test "$(rustc --version)" = 'rustc 1.98.1 (48a229cea 2026-09-01)'
 rm -f /tmp/rustup-init /tmp/weft-build-ca.pem
 EOF
 
@@ -110,8 +110,8 @@ ARG WEFT_REVISION=""
 LABEL org.opencontainers.image.title="Weft Ferrule worker" \
       org.opencontainers.image.source="https://github.com/DeandreT/weft" \
       org.opencontainers.image.revision="$WEFT_REVISION" \
-      io.weft.ferrule.revision="577359a991a7dd44172a3c4af91fdcab7592457c" \
-      io.weft.rust.toolchain="nightly-2026-07-21"
+      io.weft.ferrule.revision="0169809123b8caebd141b26a625be4c07e750536" \
+      io.weft.rust.toolchain="1.98.1"
 COPY --from=build /runtime/ /
 USER 65532:65532
 ENTRYPOINT ["/ferrule-host"]

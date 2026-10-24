@@ -6,7 +6,7 @@ pub mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ferrule_mapping::{FunctionId, Project};
+use ferrule_mapping::{FunctionId, OwnedSourceRef, Project};
 
 use crate::protocol::{Limits, NativeLocator};
 use budget::Budget;
@@ -57,6 +57,12 @@ pub(crate) struct Context {
     pub join_ownership_unknown: bool,
     pub in_join: bool,
     pub join_controls: BTreeMap<u64, String>,
+    /// Active owned joins by join identity.
+    pub owned_joins: BTreeMap<u64, OwnedJoinMembers>,
+    /// Inside an owned join tuple only member reads and scalar operations are open.
+    pub owned_join_tuple: bool,
+    /// A scope Ferrule refuses inside an owned join; none of its expressions is open.
+    pub owned_join_closed: bool,
     pub function: Option<FunctionId>,
     pub private_parameters: BTreeMap<u64, String>,
     pub documents: Vec<String>,
@@ -66,6 +72,8 @@ pub(crate) struct Context {
 }
 
 pub(crate) type JoinSources = BTreeMap<Vec<String>, Vec<(String, Vec<String>)>>;
+/// Each owned join member's exact identity and its admitted collection candidates.
+pub(crate) type OwnedJoinMembers = Vec<(OwnedSourceRef, Vec<(String, Vec<String>)>)>;
 
 #[derive(Clone)]
 pub(crate) struct Frame {

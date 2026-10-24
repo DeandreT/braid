@@ -206,6 +206,42 @@ public sealed class FerruleProjectionIntegrationTests
     }
 
     [FerruleWorkerIntegrationTests.WorkerFact]
+    public async Task ActualOwnedFormsReadOnlyTheirExactEndpointsAndKeepClosedReadsPartial()
+    {
+        var artifact = Artifact("projection-owned-context");
+        var backend = Backend();
+        Assert.True((await backend.ValidateAsync(artifact)).IsValid);
+        var document = Successful(await backend.ProjectAsync(artifact), artifact);
+        var input = Assert.Single(document.Boundaries, value => value.Role == BoundaryRole.PrimaryInput);
+        var lookup = document.Boundaries.Where(value => value.Role == BoundaryRole.NamedInput).First();
+        var output = Assert.Single(document.Boundaries, value => value.Role == BoundaryRole.PrimaryOutput);
+        ProjectionRule Rule(params string[] path) => Assert.Single(document.Rules,
+            value => value.OutputFieldId == Field(document, output.Id, path).Id);
+        var join = Assert.Single(document.Controls, value => value.Kind == ControlKind.Join);
+        Assert.Equal("Ordered owned inner join", join.Summary);
+        var joinReads = join.Dependencies.OfType<FieldDependency>().Select(value => value.FieldId).ToHashSet();
+        Assert.Contains(Field(document, input.Id, ["orders", "customer"]).Id, joinReads);
+        Assert.Contains(Field(document, lookup.Id, ["orders", "id"]).Id, joinReads);
+        Assert.Equal(Field(document, lookup.Id, ["orders", "name"]).Id,
+            Assert.Single(Rule("rows", "name").Dependencies.OfType<FieldDependency>()).FieldId);
+        Assert.Contains(Rule("rows", "position").Dependencies, value => value is NodeDependency
+        { Node: ControlNodeReference reference } && reference.ControlId == join.Id);
+        Assert.Empty(Rule("rows", "plain").Dependencies.OfType<FieldDependency>());
+        Assert.Contains(document.Coverage.Gaps, value => value.NativeLocator is GraphNodeNativeLocator { NodeId: "3" });
+        var presence = Assert.Single(document.Controls, value => value.Kind == ControlKind.Iteration && value.Summary == "Optional presence");
+        Assert.Equal(Field(document, input.Id, ["flag"]).Id, Assert.Single(presence.Dependencies.OfType<FieldDependency>()).FieldId);
+        Assert.Equal(Field(document, input.Id, ["code"]).Id,
+            Assert.Single(Rule("maybe", "mapped").Dependencies.OfType<FieldDependency>()).FieldId);
+        var failure = Assert.Single(document.Controls, value => value.Kind == ControlKind.Failure);
+        Assert.Contains(failure.Dependencies, value => value is FieldDependency { FieldId: var id } && id == Field(document, lookup.Id, ["orders", "name"]).Id);
+        Assert.DoesNotContain(failure.Dependencies, value => value is FieldDependency { FieldId: var id } && id == Field(document, input.Id, ["orders", "name"]).Id);
+        foreach (var code in new[] { "schema.objectItemNullability", "schema.undeclaredProperty" })
+            Assert.Contains(document.Coverage.Gaps, value => value.Code == code);
+        Assert.Equal(CoverageStatus.Partial, document.Coverage.Status);
+        AssertNativeLocators(document, artifact.CopyBytes());
+    }
+
+    [FerruleWorkerIntegrationTests.WorkerFact]
     public async Task ActualInnerScalarSourceShadowsAnOuterGeneratedItem()
     {
         var artifact = Artifact("projection-generated-source-context");

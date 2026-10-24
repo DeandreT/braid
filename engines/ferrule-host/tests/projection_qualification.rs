@@ -11,10 +11,11 @@ const BASIC: &[u8] = include_bytes!("fixtures/projection-basic.json");
 const CONTROLS: &[u8] = include_bytes!("fixtures/projection-controls.json");
 const FUNCTIONS: &[u8] = include_bytes!("fixtures/projection-functions.json");
 const PARTIAL: &[u8] = include_bytes!("fixtures/projection-partial.json");
+const OWNED: &[u8] = include_bytes!("fixtures/projection-owned-context.json");
 
 #[test]
 fn self_authored_projection_examples_decode_and_validate_without_evaluation() {
-    for native in [BASIC, CONTROLS, FUNCTIONS, PARTIAL] {
+    for native in [BASIC, CONTROLS, FUNCTIONS, PARTIAL, OWNED] {
         let project = project_file::decode_bytes(native).unwrap();
         let issues = ferrule_engine::validate(&project);
         assert!(

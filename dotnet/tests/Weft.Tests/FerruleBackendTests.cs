@@ -260,6 +260,7 @@ public sealed class FerruleBackendTests
 
     [Theory]
     [InlineData("0495822e102bba3f97d9bffd3c665adfb6138bec")]
+    [InlineData("577359a991a7dd44172a3c4af91fdcab7592457c")]
     [InlineData("ffffffffffffffffffffffffffffffffffffffff")]
     public async Task OldAndForgedLiveEngineRevisionsCannotConfirmInspectionOrValidation(string revision)
     {

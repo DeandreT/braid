@@ -64,7 +64,7 @@ public sealed class FerrulePreviewBackendTests
 
     public static TheoryData<string> ForgedResponses() =>
     [
-        "oldEngine", "forgedEngine", "requestId", "revision", "digest", "documentId", "profile", "protocol", "unknownMember",
+        "oldEngine", "previousEngine", "forgedEngine", "requestId", "revision", "digest", "documentId", "profile", "protocol", "unknownMember",
         "artifactDigest", "frameLength", "missingFrame", "trailingByte", "boundaryOrder", "duplicateBoundary", "mediaType",
         "outputLimit", "artifactLimit", "bothResultAndFailure", "unknownFailureCode", "failureWithFrames", "duplicateProperty", "emptyArtifacts"
     ];
@@ -271,6 +271,7 @@ public sealed class FerrulePreviewBackendTests
         switch (forgery)
         {
             case "oldEngine": return Reply(header, response => response["engineRevision"] = "0495822e102bba3f97d9bffd3c665adfb6138bec");
+            case "previousEngine": return Reply(header, response => response["engineRevision"] = "577359a991a7dd44172a3c4af91fdcab7592457c");
             case "forgedEngine": return Reply(header, response => response["engineRevision"] = new string('f', 40));
             case "requestId": return Reply(header, response => response["requestId"] = Guid.NewGuid().ToString("D"));
             case "revision": return Reply(header, response => response["revision"]!["revisionId"] = Guid.NewGuid().ToString("D"));

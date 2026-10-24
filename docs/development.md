@@ -52,7 +52,7 @@ stack in the hosted shape are described in [Runtime packaging](runtime-packaging
 - Node 22.23.3 and npm 12.1.0, pinned in `.node-version` and `package.json`.
 - For Linux browser tests: Xvfb, curl, unzip, and the pinned Chrome for Testing
   build described below.
-- For Ferrule worker checks: Rust nightly `2026-07-21` with rustfmt/clippy,
+- For Ferrule worker checks: Rust `1.98.1` (stable, Ferrule's pinned toolchain) with rustfmt/clippy,
   Linux Docker with cgroup v2, and BuildKit. See [Ferrule worker](ferrule-worker.md)
   for the image build and live-test configuration.
 

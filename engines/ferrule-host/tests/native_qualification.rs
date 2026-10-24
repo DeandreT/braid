@@ -6,6 +6,85 @@ use serde_json::{Value, json};
 use support::*;
 
 #[test]
+fn every_retained_native_fixture_round_trips_through_the_pinned_codec() {
+    let directory = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+    let mut fixtures = std::fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .map(|path| std::fs::read(path).unwrap())
+        .collect::<Vec<_>>();
+    // The packaged native example that is not a worker fixture.
+    fixtures.push(
+        include_bytes!(
+            "../../../dotnet/src/Weft.Api/NativeExamples/Artifacts/validation-cycle.json"
+        )
+        .to_vec(),
+    );
+    assert!(fixtures.len() >= 15);
+    let mut legacy = 0;
+    for native in &fixtures {
+        let decoded = project_file::decode_bytes(native).unwrap();
+        let encoded = project_file::encode_pretty(&decoded).unwrap();
+        let again = project_file::decode_bytes(encoded.as_bytes()).unwrap();
+        assert_eq!(
+            serde_json::to_value(&decoded).unwrap(),
+            serde_json::to_value(&again).unwrap()
+        );
+        assert_eq!(project_file::encode_pretty(&again).unwrap(), encoded);
+        let marked = |bytes: &[u8]| {
+            serde_json::from_slice::<Value>(bytes).unwrap()["__ferrule_file"].is_object()
+        };
+        legacy += usize::from(!marked(native));
+        // The encoder writes the legacy form whenever it represents the model exactly,
+        // so native pointers can lose the envelope prefix and nothing else. Projection
+        // identities hash those pointers, so projections compare within one form.
+        let prefix = |bytes: &[u8]| if marked(bytes) { "/document" } else { "" };
+        let same_form = marked(native) == marked(encoded.as_bytes());
+        let operations: &[&str] = if same_form {
+            &["inspect", "validate", "project"]
+        } else {
+            &["inspect", "validate"]
+        };
+        for &operation in operations {
+            let mut original = process(&request(operation, native), native);
+            let mut reencoded =
+                process(&request(operation, encoded.as_bytes()), encoded.as_bytes());
+            strip_pointer_prefix(&mut original, prefix(native));
+            strip_pointer_prefix(&mut reencoded, prefix(encoded.as_bytes()));
+            assert_eq!(original["result"], reencoded["result"], "{operation}");
+            assert_eq!(original["failure"], reencoded["failure"], "{operation}");
+        }
+    }
+    assert!(
+        legacy > 0,
+        "legacy unmarked files are part of the retained set"
+    );
+}
+
+fn strip_pointer_prefix(value: &mut Value, prefix: &str) {
+    match value {
+        Value::Object(object) => {
+            for (key, item) in object.iter_mut() {
+                match item {
+                    Value::String(text) if key == "pointer" => {
+                        *text = text.strip_prefix(prefix).unwrap().to_string();
+                    }
+                    _ => strip_pointer_prefix(item, prefix),
+                }
+            }
+        }
+        Value::Array(items) => items
+            .iter_mut()
+            .for_each(|item| strip_pointer_prefix(item, prefix)),
+        _ => {}
+    }
+}
+
+#[test]
 fn self_authored_documents_use_the_authoritative_decoder() {
     for native in [BASIC, INVALID, INVALID_FUNCTION, EXACT, RESOURCES] {
         let expected = project_file::decode_bytes(native).unwrap();

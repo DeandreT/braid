@@ -1,0 +1,475 @@
+{
+  "source": {
+    "name": "Source",
+    "repeating": false,
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "orders",
+          "repeating": true,
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "customer",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "name",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "flag",
+          "repeating": false,
+          "kind": {
+            "kind": "scalar",
+            "ty": "bool"
+          }
+        },
+        {
+          "name": "code",
+          "repeating": false,
+          "kind": {
+            "kind": "scalar",
+            "ty": "string"
+          }
+        },
+        {
+          "name": "rows",
+          "repeating": true,
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "file",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "items",
+          "repeating": true,
+          "json_object_item_nullable": true,
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "code",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "open",
+          "repeating": false,
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "authored",
+                "repeating": false,
+                "json_undeclared_property": true,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ],
+            "dynamic": {
+              "name": "value",
+              "repeating": false,
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "target": {
+    "name": "Target",
+    "repeating": false,
+    "kind": {
+      "kind": "group",
+      "children": [
+        {
+          "name": "rows",
+          "repeating": true,
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "name",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "position",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "int"
+                }
+              },
+              {
+                "name": "plain",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "maybe",
+          "repeating": true,
+          "kind": {
+            "kind": "group",
+            "children": [
+              {
+                "name": "mapped",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              },
+              {
+                "name": "authored",
+                "repeating": false,
+                "kind": {
+                  "kind": "scalar",
+                  "ty": "string"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "source_options": {
+    "lenient_segments": false,
+    "json_document": true,
+    "delimiter": null,
+    "has_header_row": null
+  },
+  "target_options": {
+    "lenient_segments": false,
+    "delimiter": null,
+    "has_header_row": null
+  },
+  "extra_sources": [
+    {
+      "name": "lookup",
+      "path": "lookup.json",
+      "schema": {
+        "name": "Lookup",
+        "repeating": false,
+        "kind": {
+          "kind": "group",
+          "children": [
+            {
+              "name": "orders",
+              "repeating": true,
+              "kind": {
+                "kind": "group",
+                "children": [
+                  {
+                    "name": "id",
+                    "repeating": false,
+                    "kind": {
+                      "kind": "scalar",
+                      "ty": "string"
+                    }
+                  },
+                  {
+                    "name": "name",
+                    "repeating": false,
+                    "kind": {
+                      "kind": "scalar",
+                      "ty": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "options": {
+        "lenient_segments": false,
+        "delimiter": null,
+        "has_header_row": null
+      }
+    },
+    {
+      "name": "documents",
+      "path": "documents.json",
+      "schema": {
+        "name": "Documents",
+        "repeating": false,
+        "kind": {
+          "kind": "group",
+          "children": [
+            {
+              "name": "code",
+              "repeating": false,
+              "kind": {
+                "kind": "scalar",
+                "ty": "string"
+              }
+            }
+          ]
+        }
+      },
+      "options": {
+        "lenient_segments": false,
+        "delimiter": null,
+        "has_header_row": null
+      },
+      "dynamic_path": {
+        "node": 6,
+        "iteration": {
+          "owner": {
+            "kind": "primary"
+          },
+          "path": [
+            "rows"
+          ]
+        }
+      }
+    }
+  ],
+  "failure_rules": [
+    {
+      "iteration": {
+        "kind": "owned_source",
+        "source": {
+          "owner": {
+            "kind": "named",
+            "name": "lookup"
+          },
+          "path": [
+            "orders"
+          ]
+        }
+      },
+      "selection": {
+        "kind": "when_true",
+        "predicate": 8
+      },
+      "message": 9
+    }
+  ],
+  "graph": {
+    "nodes": {
+      "1": {
+        "kind": "owned_join_field",
+        "join": 7,
+        "collection": {
+          "owner": {
+            "kind": "named",
+            "name": "lookup"
+          },
+          "path": [
+            "orders"
+          ]
+        },
+        "path": [
+          "name"
+        ]
+      },
+      "2": {
+        "kind": "owned_join_source_position",
+        "join": 7,
+        "collection": {
+          "owner": {
+            "kind": "named",
+            "name": "lookup"
+          },
+          "path": [
+            "orders"
+          ]
+        }
+      },
+      "3": {
+        "kind": "source_field",
+        "path": [
+          "name"
+        ]
+      },
+      "4": {
+        "kind": "source_field",
+        "path": [
+          "flag"
+        ]
+      },
+      "5": {
+        "kind": "source_field",
+        "path": [
+          "code"
+        ]
+      },
+      "6": {
+        "kind": "source_field",
+        "path": [
+          "file"
+        ]
+      },
+      "7": {
+        "kind": "const",
+        "value": ""
+      },
+      "8": {
+        "kind": "call",
+        "function": "equal",
+        "args": [
+          10,
+          7
+        ]
+      },
+      "9": {
+        "kind": "const",
+        "value": "A lookup row has no name."
+      },
+      "10": {
+        "kind": "source_field",
+        "path": [
+          "name"
+        ]
+      },
+      "11": {
+        "kind": "source_field",
+        "path": [
+          "open",
+          "authored"
+        ]
+      }
+    }
+  },
+  "root": {
+    "target_field": "",
+    "source": null,
+    "filter": null,
+    "bindings": [],
+    "children": [
+      {
+        "target_field": "rows",
+        "source": null,
+        "join": {
+          "id": 7,
+          "plan": {
+            "first": {
+              "collection": {
+                "owner": {
+                  "kind": "primary"
+                },
+                "path": [
+                  "orders"
+                ]
+              }
+            },
+            "second": {
+              "source": {
+                "collection": {
+                  "owner": {
+                    "kind": "named",
+                    "name": "lookup"
+                  },
+                  "path": [
+                    "orders"
+                  ]
+                }
+              },
+              "conditions": {
+                "first": {
+                  "left_collection": {
+                    "owner": {
+                      "kind": "primary"
+                    },
+                    "path": [
+                      "orders"
+                    ]
+                  },
+                  "left_path": [
+                    "customer"
+                  ],
+                  "right_path": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "filter": null,
+        "bindings": [
+          {
+            "target_field": "name",
+            "node": 1
+          },
+          {
+            "target_field": "position",
+            "node": 2
+          },
+          {
+            "target_field": "plain",
+            "node": 3
+          }
+        ],
+        "children": []
+      },
+      {
+        "target_field": "maybe",
+        "source": null,
+        "sequence": {
+          "kind": "optional_presence",
+          "condition": 4
+        },
+        "filter": null,
+        "bindings": [
+          {
+            "target_field": "mapped",
+            "node": 5
+          },
+          {
+            "target_field": "authored",
+            "node": 11
+          }
+        ],
+        "children": []
+      }
+    ]
+  }
+}
+

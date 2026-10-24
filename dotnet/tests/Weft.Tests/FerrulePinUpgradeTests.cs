@@ -1,31 +1,56 @@
 using Weft.Application;
+using Weft.Application.Regression;
 using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Projections;
+using Weft.Deployment;
 using Weft.Domain;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Ingestion;
+using Weft.MappingBackends.Workers;
 
 namespace Weft.Tests;
 
 /// <summary>Authored identity/provenance cases; not worker, image, storage or migration qualification.</summary>
 public sealed class FerrulePinUpgradeTests
 {
-    private const string PreviousRevision = "0495822e102bba3f97d9bffd3c665adfb6138bec";
-    private const string PreviousAdapter = "weft.ferrule-adapter.v2";
-    private const string PreviousImage = "sha256:247f7e82f965ced7f6dcde5970d3dc3c584c6f648c9d4f359a9bb5b6ed3985a3";
-    private static RevisionReportBackendProfile PreviousProfile => new("ferrule", PreviousRevision, PreviousImage, PreviousAdapter);
+    private const string CurrentRevision = "0169809123b8caebd141b26a625be4c07e750536";
+    private const string CurrentAdapter = "weft.ferrule-adapter.v3";
+
+    /// <summary>Every earlier qualified profile: engine, its qualified worker image and adapter.</summary>
+    public static TheoryData<string, string, string> PreviousProfiles => new()
+    {
+        { "0495822e102bba3f97d9bffd3c665adfb6138bec", "sha256:247f7e82f965ced7f6dcde5970d3dc3c584c6f648c9d4f359a9bb5b6ed3985a3", "weft.ferrule-adapter.v2" },
+        { "577359a991a7dd44172a3c4af91fdcab7592457c", "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184", "weft.ferrule-adapter.v3" },
+    };
+
+    private static RevisionReportBackendProfile Previous(string revision, string image, string adapter) => new("ferrule", revision, image, adapter);
 
     [Fact]
-    public void CurrentKeysSeparateTheEngineEvenWhenAllOtherKeyInputsMatch()
+    public void EveryCurrentIdentityNamesTheUpgradedEngine()
+    {
+        Assert.Equal(CurrentRevision, FerruleInspectionBackend.EngineRevision);
+        Assert.Equal(CurrentRevision, BuildWorkerProtocol.Engine);
+        Assert.Equal(CurrentRevision, FerruleReportTestData.Profile.BackendRevision);
+        Assert.Equal(CurrentAdapter, FerruleReportTestData.Profile.AdapterBuild);
+        // The preview and build adapters did not change; their identities still bind the new engine.
+        Assert.Equal("weft.ferrule-preview-adapter.v1", FerrulePreviewBackend.AdapterBuild);
+        Assert.Equal(FerrulePreviewBackend.AdapterBuild, FerruleBuildCompiler.Adapter);
+    }
+
+    [Theory]
+    [MemberData(nameof(PreviousProfiles))]
+    public void CurrentKeysSeparateTheEngineEvenWhenAllOtherKeyInputsMatch(string revision, string image, string adapter)
     {
         var artifact = FerruleReportTestData.Artifact();
         var current = FerruleReportTestData.Profile;
-        Assert.Equal("577359a991a7dd44172a3c4af91fdcab7592457c", current.BackendRevision);
-        Assert.Equal("weft.ferrule-adapter.v3", current.AdapterBuild);
-        var oldEngineOnly = new RevisionReportBackendProfile(current.BackendId, PreviousRevision, current.BackendBuild, current.AdapterBuild);
-        var oldAdapterOnly = new RevisionReportBackendProfile(current.BackendId, current.BackendRevision, current.BackendBuild, PreviousAdapter);
-        foreach (var other in new[] { oldEngineOnly, oldAdapterOnly, PreviousProfile })
+        var others = new List<RevisionReportBackendProfile>
+        {
+            new(current.BackendId, revision, current.BackendBuild, current.AdapterBuild),
+            Previous(revision, image, adapter),
+        };
+        if (adapter != current.AdapterBuild) others.Add(new(current.BackendId, current.BackendRevision, current.BackendBuild, adapter));
+        foreach (var other in others)
         {
             Assert.NotEqual(FerruleReportTestData.ProjectionKey(artifact).Fingerprint,
                 FerruleReportTestData.ProjectionKey(artifact, profile: other).Fingerprint);
@@ -34,31 +59,34 @@ public sealed class FerrulePinUpgradeTests
         }
     }
 
-    [Fact]
-    public async Task HistoricalLiveKeysRefuseBeforeResolvingTheCurrentRunner()
+    [Theory]
+    [MemberData(nameof(PreviousProfiles))]
+    public async Task HistoricalLiveKeysRefuseBeforeResolvingTheCurrentRunner(string revision, string image, string adapter)
     {
+        var previous = Previous(revision, image, adapter);
         var resolutions = 0;
         var registry = FerruleRevisionReportBackendFactory.CreateRegistry(FerruleReportTestData.Profile, new(),
             () => { resolutions++; throw new InvalidOperationException("Historical keys cannot dispatch a current worker."); });
         var artifact = FerruleReportTestData.Artifact();
         await Assert.ThrowsAsync<RevisionReportValidationException>(() => registry.FindCurrent("ferrule", RevisionReportOperation.Projection)!
-            .GetBackend().DeriveAsync(FerruleReportTestData.ProjectionKey(artifact, profile: PreviousProfile), artifact));
+            .GetBackend().DeriveAsync(FerruleReportTestData.ProjectionKey(artifact, profile: previous), artifact));
         await Assert.ThrowsAsync<RevisionReportValidationException>(() => registry.FindCurrent("ferrule", RevisionReportOperation.Validation)!
-            .GetBackend().DeriveAsync(FerruleReportTestData.ValidationKey(artifact, profile: PreviousProfile), artifact));
-        Assert.Throws<ArgumentException>(() => FerruleRevisionReportBackendFactory.CreateRegistry(PreviousProfile, new(),
+            .GetBackend().DeriveAsync(FerruleReportTestData.ValidationKey(artifact, profile: previous), artifact));
+        Assert.Throws<ArgumentException>(() => FerruleRevisionReportBackendFactory.CreateRegistry(previous, new(),
             () => throw new InvalidOperationException("Old profiles cannot register live workers.")));
         Assert.Equal(0, resolutions);
     }
 
-    [Fact]
-    public void RetainedOldProjectionValidationAndIngestionFactsKeepTheirOwnExactProvenanceWithoutAWorker()
+    [Theory]
+    [MemberData(nameof(PreviousProfiles))]
+    public void RetainedOldProjectionValidationAndIngestionFactsKeepTheirOwnExactProvenanceWithoutAWorker(string revision, string image, string adapter)
     {
         var resolutions = 0;
         var registry = FerruleRevisionReportBackendFactory.CreateRegistry(FerruleReportTestData.Profile, new(),
             () => { resolutions++; throw new InvalidOperationException("Retained reports require no worker."); });
         var bytes = "{\"kept\":9007199254740993,\"bits\":\"8000000000000000\"}\r\n"u8.ToArray();
         var artifact = NativeArtifact.Admit(FerruleReportTestData.Artifact().Scope, bytes, bytes.Length);
-        var old = PreviousProfile;
+        var old = Previous(revision, image, adapter);
         var provenance = new MappingOperationProvenance(artifact.Scope, artifact.Digest, old.BackendId, old.BackendRevision,
             old.BackendBuild, old.AdapterBuild, true);
         var projectionKey = FerruleReportTestData.ProjectionKey(artifact, profile: old);
@@ -76,14 +104,14 @@ public sealed class FerrulePinUpgradeTests
         registry.FindStored(RevisionReportFormat.FromKey(projectionKey))!.Validate(projectionKey, projection);
         registry.FindStored(RevisionReportFormat.FromKey(validationKey))!.Validate(validationKey, validation);
         Assert.Equal(0, resolutions);
-        Assert.Equal(PreviousRevision, projection.Document!.Provenance.Backend.Revision);
-        Assert.Equal(PreviousImage, projection.Document.Provenance.Backend.BuildId);
-        Assert.Equal(PreviousAdapter, projection.Document.Provenance.AdapterVersion);
+        Assert.Equal(revision, projection.Document!.Provenance.Backend.Revision);
+        Assert.Equal(image, projection.Document.Provenance.Backend.BuildId);
+        Assert.Equal(adapter, projection.Document.Provenance.AdapterVersion);
         Assert.Equal("8000000000000000", Assert.IsType<ExactNumberLiteralValue>(projection.Document.Parameters[0].DefaultValue).Value);
-        Assert.Equal(PreviousRevision, validation.Provenance!.Backend.Revision);
-        Assert.Equal(PreviousImage, validation.Provenance.Backend.BuildId);
-        Assert.Equal(PreviousAdapter, validation.Provenance.AdapterVersion);
-        Assert.Equal(new IngestionBackendProfile("ferrule", PreviousRevision, PreviousImage, PreviousAdapter), ingestion.Facts.Provenance.BackendProfile);
+        Assert.Equal(revision, validation.Provenance!.Backend.Revision);
+        Assert.Equal(image, validation.Provenance.Backend.BuildId);
+        Assert.Equal(adapter, validation.Provenance.AdapterVersion);
+        Assert.Equal(new IngestionBackendProfile("ferrule", revision, image, adapter), ingestion.Facts.Provenance.BackendProfile);
         Assert.Equal(retainedIngestionBytes, ingestion.CopyUtf8());
         Assert.Equal(bytes, artifact.CopyBytes());
         Assert.Throws<RevisionReportValidationException>(() => registry.FindStored(RevisionReportFormat.FromKey(projectionKey))!
@@ -93,7 +121,8 @@ public sealed class FerrulePinUpgradeTests
     }
 
     [Theory]
-    [InlineData(PreviousRevision)]
+    [InlineData("0495822e102bba3f97d9bffd3c665adfb6138bec")]
+    [InlineData("577359a991a7dd44172a3c4af91fdcab7592457c")]
     [InlineData("ffffffffffffffffffffffffffffffffffffffff")]
     public async Task OldAndForgedLiveRepliesFailDefaultProjectionReportsAndIngestion(string revision)
     {
@@ -118,5 +147,45 @@ public sealed class FerrulePinUpgradeTests
         Assert.Null(ingestion.Evidence.Facts.IsValid);
         Assert.False(ingestion.Evidence.Facts.Provenance.Confirmed);
         Assert.Equal(4, runner.Calls);
+    }
+
+    [Theory]
+    [InlineData("0495822e102bba3f97d9bffd3c665adfb6138bec", "sha256:247f7e82f965ced7f6dcde5970d3dc3c584c6f648c9d4f359a9bb5b6ed3985a3")]
+    [InlineData("577359a991a7dd44172a3c4af91fdcab7592457c", "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184")]
+    public async Task ApprovedBuildsOfAnEarlierEngineStayBoundToTheirOriginalImages(string revision, string image)
+    {
+        var runner = new CountingRunner();
+        var original = new BuildBackendIdentity("ferrule", revision, image, FerruleBuildCompiler.Adapter);
+        Assert.Throws<ArgumentException>(() => new FerruleCompiledBuildRuntime(runner, original));
+
+        var current = new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, "sha256:" + new string('a', 64), FerruleBuildCompiler.Adapter);
+        var runtime = new FerruleCompiledBuildRuntime(runner, current);
+        var replay = new RegressionReplay(PreviewTargetSelection.All, "2026-10-21T00:00:00Z", PreviewLimits.Default, new(null, "{}"u8), [], []);
+        // The original images, and the earlier engine alone under the current image, are both refused.
+        foreach (var approved in new[] { original, new BuildBackendIdentity("ferrule", revision, current.EngineBuild, current.AdapterVersion) })
+        {
+            var scope = new RevisionScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+            var intent = new BuildIntent(Guid.NewGuid(), scope, Sha256Digest.FromBytes([4]), approved, FerruleBuildCompiler.Profile,
+                [new(BuildBoundaryKind.PrimaryInput, null, "json"), new(BuildBoundaryKind.PrimaryOutput, null, "json")],
+                new(new(scope.OrganizationId, scope.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), Guid.NewGuid());
+            var artifact = new BuildBytes([1, 2, 3], intent.Profile.MaximumArtifactBytes);
+            var reference = BuildArtifactReference.Restore(intent, artifact.Digest, artifact.Length);
+            var result = await runtime.ExecuteAsync(reference, artifact, replay);
+            Assert.Equal(CompiledBuildOutcome.Unsupported, result.Outcome);
+            Assert.Null(result.Outputs);
+            Assert.Equal(revision, reference.Intent.Backend.EngineRevision);
+        }
+        Assert.Equal(0, runner.Calls);
+    }
+
+    private sealed class CountingRunner : IInspectionWorkerRunner
+    {
+        public string BuildIdentity => "sha256:" + new string('b', 64);
+        internal int Calls { get; private set; }
+        public Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(new WorkerProcessResult([], WorkerProcessFailure.None));
+        }
     }
 }

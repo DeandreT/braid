@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
 use ferrule_mapping::{
-    FailureIteration, FailureSelection, IterationOutput, NodeId, Scope, ScopeConstruction,
-    ScopeIteration, SequenceExpr, SequenceWindow, SortFilterOrder, SourceOwner,
+    FailureIteration, FailureSelection, IterationOutput, NodeId, OwnedSourceRef, Scope,
+    ScopeConstruction, ScopeIteration, SequenceExpr, SequenceWindow, SortFilterOrder, SourceOwner,
+    SourceSelector,
 };
 
 use super::budget::MAX_DEPTH;
@@ -138,8 +139,21 @@ impl Builder<'_> {
                     }),
                     ..Context::default()
                 };
-                let dependencies =
-                    self.source_frames(&dynamic.iteration, &mut context, &id, &suffix)?;
+                let dependencies = match &dynamic.iteration {
+                    SourceSelector::Legacy(path) => {
+                        self.source_frames(path, &mut context, &id, &suffix)?
+                    }
+                    SourceSelector::Owned(driver) => {
+                        let candidates = self.owned_collection(driver)?;
+                        self.frames_for_candidates(
+                            candidates,
+                            &driver.path,
+                            &mut context,
+                            &id,
+                            &suffix,
+                        )?
+                    }
+                };
                 let path = self.expression(dynamic.node, &context, "value")?;
                 let mut all_dependencies = dependencies;
                 extend_dependencies(&mut all_dependencies, path.dependencies);
@@ -181,6 +195,30 @@ impl Builder<'_> {
         let target_ref = target.as_ref().map(|id| NodeReference::Field {
             field_id: id.clone(),
         });
+        // Ferrule refuses these scopes before evaluation, so their reads have no lineage.
+        let closed = !parent.owned_join_closed
+            && if parent.owned_join_tuple {
+                !owned_tuple_descendant_is_open(scope)
+            } else {
+                matches!(scope.iteration, ScopeIteration::OwnedInnerJoin { .. })
+                    && !owned_join_is_open(scope)
+            };
+        let closed_parent;
+        let parent = if closed {
+            self.gap(
+                "projection.closedOwnedJoinScope",
+                "Ferrule refuses this owned join context before evaluation; its expressions have no executable explanation.",
+                self.pointer(suffix)?,
+                target_ref.clone(),
+            )?;
+            closed_parent = Context {
+                owned_join_closed: true,
+                ..parent.clone()
+            };
+            &closed_parent
+        } else {
+            parent
+        };
         let mut context = parent.clone();
         let iteration_id = self
             .budget
@@ -200,26 +238,7 @@ impl Builder<'_> {
                     native_locator: self.pointer(suffix)? })?;
             }
             ScopeIteration::OwnedSource { source, .. } => {
-                let owner = match &source.owner {
-                    SourceOwner::Primary => None,
-                    SourceOwner::Named { name } => Some(name.as_str()),
-                };
-                if let Some(name) = owner {
-                    self.budget.text(name)?;
-                }
-                for segment in &source.path {
-                    self.budget.text(segment)?;
-                }
-                let collections = self
-                    .catalog
-                    .iter()
-                    .filter(|field| {
-                        field.input
-                            && field.source_name.as_deref() == owner
-                            && field.path == source.path
-                    })
-                    .map(|field| (field.boundary_id.clone(), field.path.clone()))
-                    .collect::<Vec<_>>();
+                let collections = self.owned_collection(source)?;
                 let dependencies = self.frames_for_candidates(
                     collections,
                     &source.path,
@@ -380,6 +399,125 @@ impl Builder<'_> {
                     native_locator: self.pointer(&format!("{suffix}/join/plan"))?,
                 })?;
             }
+            ScopeIteration::OwnedInnerJoin { id, plan } => {
+                let mut dependencies = Vec::new();
+                let mut details = Vec::new();
+                let mut members = Vec::new();
+                for source in plan.sources() {
+                    let candidates = self.owned_collection(source.collection())?;
+                    if candidates.len() != 1 {
+                        self.gap(
+                            "projection.ambiguousJoinSource",
+                            "A join source has no unique admitted collection.",
+                            self.pointer(suffix)?,
+                            target_ref.clone(),
+                        )?;
+                    }
+                    for (boundary, path) in &candidates {
+                        if let Some(field_id) = self.field_id(boundary, path) {
+                            dependencies.push(Dependency::Field {
+                                field_id: field_id.clone(),
+                                role: "value".into(),
+                            });
+                            details.push(group(
+                                &format!("{:?} owned join source", source.cardinality()),
+                                Detail::Reference {
+                                    reference: NodeReference::Field { field_id },
+                                },
+                            ));
+                        }
+                    }
+                    members.push((source.collection().clone(), candidates));
+                }
+                for (stage, (right, conditions)) in plan.stages().enumerate() {
+                    let mut keys = Vec::new();
+                    for condition in conditions.iter() {
+                        let mut pair = Vec::new();
+                        for (collection, leaf) in [
+                            (condition.left_collection(), condition.left_path()),
+                            (right.collection(), condition.right_path()),
+                        ] {
+                            for segment in leaf {
+                                self.budget.text(segment)?;
+                            }
+                            // Key paths are row-relative to their exact member; no other
+                            // endpoint or same-path collection supplies them.
+                            let candidates = members
+                                .iter()
+                                .find(|(member, _)| member == collection)
+                                .map(|(_, candidates)| candidates.clone())
+                                .unwrap_or_default();
+                            let mut resolved = false;
+                            for (boundary, path) in candidates {
+                                let full = path.iter().chain(leaf).cloned().collect::<Vec<_>>();
+                                if let Some(field_id) = self.field_id(&boundary, &full) {
+                                    resolved = true;
+                                    extend_dependencies(
+                                        &mut dependencies,
+                                        vec![Dependency::Field {
+                                            field_id: field_id.clone(),
+                                            role: "value".into(),
+                                        }],
+                                    );
+                                    pair.push(Detail::Reference {
+                                        reference: NodeReference::Field { field_id },
+                                    });
+                                }
+                            }
+                            if !resolved {
+                                self.gap(
+                                    "projection.unresolvedJoinKey",
+                                    "A join equality path has no unique admitted field.",
+                                    self.pointer(suffix)?,
+                                    target_ref.clone(),
+                                )?;
+                            }
+                        }
+                        keys.push(Detail::Expression {
+                            operation: "Equal".into(),
+                            arguments: pair,
+                        });
+                    }
+                    details.push(Detail::Group {
+                        label: format!("Join stage {} (all keys must match)", stage + 1),
+                        children: keys,
+                    });
+                }
+                context.owned_joins.insert(id.get(), members);
+                context.owned_join_tuple = true;
+                context.join_controls.insert(id.get(), iteration_id.clone());
+                details.push(output_detail(scope.iteration_output));
+                details.push(text_detail("Each source and key belongs to exactly one endpoint. Tuple expressions read members only through owned join reads and the flattened join position."));
+                self.add_control(Control {
+                    id: iteration_id.clone(),
+                    kind: "join".into(),
+                    summary: "Ordered owned inner join".into(),
+                    applies_to: target_ref.clone().into_iter().collect(),
+                    dependencies,
+                    details,
+                    native_locator: self.pointer(&format!("{suffix}/join/plan"))?,
+                })?;
+            }
+            ScopeIteration::OptionalPresence { condition } => {
+                let mut use_context = parent.clone();
+                use_context.use_id = iteration_id.clone();
+                use_context.projection_ref = Some(NodeReference::Control {
+                    control_id: iteration_id.clone(),
+                });
+                let expression = self.expression(*condition, &use_context, "condition")?;
+                self.add_control(Control {
+                    id: iteration_id.clone(),
+                    kind: "iteration".into(),
+                    summary: "Optional presence".into(),
+                    applies_to: target_ref.clone().into_iter().collect(),
+                    dependencies: expression.dependencies,
+                    details: vec![
+                        group("Present when true", expression.detail),
+                        text_detail("Constructs at most one group in the unchanged parent context; no iteration frame is added."),
+                    ],
+                    native_locator: self.pointer(suffix)?,
+                })?;
+            }
             ScopeIteration::Concatenate(sequence) => {
                 self.add_control(Control {
                     id: iteration_id.clone(),
@@ -404,7 +542,9 @@ impl Builder<'_> {
                 }
             }
         }
-        context.grouped = scope.has_grouping() || (!scope.iterates() && parent.grouped);
+        // Optional presence keeps the parent item, so it also keeps a grouped parent's members.
+        context.grouped = scope.has_grouping()
+            || ((!scope.iterates() || scope.presence().is_some()) && parent.grouped);
         self.scope_controls(scope, suffix, &context, parent, target_ref.clone())?;
         if let Some(path) = scope.output_path() {
             let id = self
@@ -473,7 +613,17 @@ impl Builder<'_> {
                         "Adjacency tree construction",
                         "The bounded recursive adjacency-tree plan remains at its native location.",
                     ),
-                    _ => unreachable!(),
+                    ScopeConstruction::OwnedPathHierarchy { .. } => (
+                        "Owned path hierarchy construction",
+                        "The bounded recursive path-tree plan over one explicitly owned collection remains at its native location.",
+                    ),
+                    ScopeConstruction::OwnedAdjacencyTree { .. } => (
+                        "Owned adjacency tree construction",
+                        "The bounded recursive adjacency-tree plan over one explicitly owned collection remains at its native location.",
+                    ),
+                    ScopeConstruction::Constructed | ScopeConstruction::Scalar { .. } => {
+                        unreachable!()
+                    }
                 };
                 let id = self
                     .budget
@@ -607,6 +757,32 @@ impl Builder<'_> {
             details: vec![expression.detail],
             native_locator: self.pointer(suffix)?,
         })
+    }
+
+    /// The collection of exactly one endpoint at its endpoint-relative path. No
+    /// other endpoint, alias or same-path collection is a candidate.
+    pub(crate) fn owned_collection(
+        &mut self,
+        source: &OwnedSourceRef,
+    ) -> Result<Vec<(String, Vec<String>)>, &'static str> {
+        let owner = match &source.owner {
+            SourceOwner::Primary => None,
+            SourceOwner::Named { name } => Some(name.as_str()),
+        };
+        if let Some(name) = owner {
+            self.budget.text(name)?;
+        }
+        for segment in &source.path {
+            self.budget.text(segment)?;
+        }
+        Ok(self
+            .catalog
+            .iter()
+            .filter(|field| {
+                field.input && field.source_name.as_deref() == owner && field.path == source.path
+            })
+            .map(|field| (field.boundary_id.clone(), field.path.clone()))
+            .collect())
     }
 
     fn source_frames(
@@ -950,7 +1126,9 @@ impl Builder<'_> {
         }
         if matches!(
             sequence,
-            SequenceExpr::RecursiveCollect { .. } | SequenceExpr::FilterMapV1(_)
+            SequenceExpr::RecursiveCollect { .. }
+                | SequenceExpr::OwnedRecursiveCollect(_)
+                | SequenceExpr::FilterMapV1(_)
         ) {
             self.gap("projection.nativeSequence", "The advanced sequence plan remains native metadata; only its enclosing inputs are explained.", crate::protocol::NativeLocator::Document { document_id: self.document_id.into() }, context.projection_ref.clone())?;
             details.push(Detail::Unsupported {
@@ -1036,6 +1214,16 @@ impl Builder<'_> {
             let mut dependencies = match &rule.iteration {
                 FailureIteration::Source { collection } => {
                     self.source_frames(collection, &mut context, &id, &suffix)?
+                }
+                FailureIteration::OwnedSource { source } => {
+                    let candidates = self.owned_collection(source)?;
+                    self.frames_for_candidates(
+                        candidates,
+                        &source.path,
+                        &mut context,
+                        &id,
+                        &suffix,
+                    )?
                 }
                 FailureIteration::Sequence { sequence } => {
                     let (detail, dependencies) = self.sequence(sequence, &context)?;
@@ -1123,6 +1311,31 @@ impl Builder<'_> {
         }
         Ok(())
     }
+}
+
+/// Ferrule admits an owned join only with plain construction and a context it can
+/// own: no grouping, mapped-sequence output or runtime-named targets.
+fn owned_join_is_open(scope: &Scope) -> bool {
+    matches!(
+        scope.construction,
+        ScopeConstruction::Constructed | ScopeConstruction::Scalar { .. }
+    ) && owned_capability_is_basic(scope)
+}
+
+/// Only static, constructed descendant scopes share an owned join tuple.
+fn owned_tuple_descendant_is_open(scope: &Scope) -> bool {
+    matches!(scope.iteration, ScopeIteration::None)
+        && matches!(scope.construction, ScopeConstruction::Constructed)
+        && owned_capability_is_basic(scope)
+}
+
+fn owned_capability_is_basic(scope: &Scope) -> bool {
+    scope.iteration_output != IterationOutput::MappedSequence
+        && !scope.has_grouping()
+        && scope.post_group_filter.is_none()
+        && scope.dynamic_bindings.is_empty()
+        && scope.dynamic_children.is_empty()
+        && !scope.merge_dynamic_fields
 }
 
 fn output_detail(output: IterationOutput) -> Detail {
