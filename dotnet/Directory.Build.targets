@@ -1,0 +1,13 @@
+<Project>
+  <!-- ApiDescription.Server 10.0.12's GenerateOpenApiDocuments tracks only TargetPath.
+       Library method-body changes need not rewrite their reference assemblies or
+       the host DLL. Extend the incremental inputs without replacing the SDK exporter. -->
+  <Target Name="WeftInvalidateOpenApiForChangedReferences"
+          BeforeTargets="GenerateOpenApiDocuments"
+          DependsOnTargets="ResolveReferences"
+          Condition="'$(OpenApiGenerateDocuments)' == 'true' and '$(_OpenApiDocumentsCache)' != ''"
+          Inputs="@(ReferenceCopyLocalPaths)"
+          Outputs="$(_OpenApiDocumentsCache)">
+    <Delete Files="$(_OpenApiDocumentsCache)" />
+  </Target>
+</Project>

@@ -67,6 +67,37 @@ dotnet build dotnet/Weft.slnx --configuration Release --no-restore
 npm run contracts:check
 ```
 
+### Generated OpenAPI and incremental builds
+
+Building `Weft.Server`, `Weft.MachineEndpoint` or `Weft.FerruleService` exports its
+OpenAPI document into `contracts/` from the built implementation. The shared
+`dotnet/Directory.Build.targets` includes resolved copy-local implementation assemblies
+in the export's incremental dependencies. A referenced implementation can change
+without changing its public reference assembly or recompiling the host; that still
+invalidates the SDK's document cache. An unchanged build leaves the export cached.
+Generation disabled explicitly with `OpenApiGenerateDocuments=false` stays disabled.
+
+After an API change, build the affected host and run `npm run contracts:generate`
+when the application contract changed. Check `npm run contracts:check` and
+`git diff --exit-code -- contracts apps/web/src/api/generated.ts` against the
+committed generated files, as the existing CI job does. A successful incremental
+compile alone does not establish that generated files have been committed.
+
+The build regression runs in the existing CI test step and can be enabled locally
+with the same opt-in flag. It exercises all three actual hosts in a disposable source
+copy, with two build jobs and no listeners, databases, workers or browsers:
+
+```sh
+WEFT_OPENAPI_INCREMENTAL_TESTS=1 dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj \
+  --configuration Release --filter FullyQualifiedName~OpenApiIncrementalBuildTests
+```
+
+It demonstrates the pinned SDK's stale-cache behavior without the shared target,
+then checks reference-implementation-only invalidation without host recompilation,
+stale-contract diff failure, unchanged-build reuse and clean-build parity. The
+test changes only its private copy and removes it afterward. Choose a disk-backed
+temporary directory for this build-heavy check on hosts with RAM-backed `/tmp`.
+
 Start the server in one terminal:
 
 ```sh
