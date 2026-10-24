@@ -168,6 +168,7 @@ internal sealed partial class CatalogSessionHttpsFixture : IAsyncDisposable
                 context.Response.StatusCode = 204;
             }).ExcludeFromDescription();
             application.MapWeftCatalog();
+            application.MapWeftHelp();
             byte[] pin = Certificate.GetCertHash(HashAlgorithmName.SHA256);
             var handler = new HttpClientHandler { UseCookies = false, UseProxy = false, AllowAutoRedirect = false };
             handler.ServerCertificateCustomValidationCallback = (message, certificate, _, errors) =>

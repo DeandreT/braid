@@ -4,6 +4,7 @@
     Run this saved revision on sample JSON documents. Results are kept for a
     limited time and only you can read them.
   </p>
+  <weft-help-link [section]="'previews'">About samples</weft-help-link>
   @if (!allowed()) {
     <p class="preview-note" role="note">
       Your project role ({{ mapping().access.role }}) cannot run previews.

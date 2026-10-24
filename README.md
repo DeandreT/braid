@@ -91,6 +91,8 @@ scoped viewer opens those reports for the exact selected revision.
 
 See [Local development](docs/development.md) to run and verify the application.
 
+- [User guide](docs/user-guide/overview.md): how to use Weft, also shown in the app at `/help`.
+- [In-app help](docs/help.md): writing guide sections, the embedded guide and the help API.
 - [Architecture](docs/architecture.md): boundaries, storage, identity, and hosting.
 - [Mapping backend contract](docs/mapping-backends.md): projections and Ferrule integration.
 - [Projection v1](docs/projection-contract.md): public read model and fixture behavior.

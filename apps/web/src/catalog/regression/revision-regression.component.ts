@@ -49,6 +49,7 @@ import {
   type PendingRun,
   type RegressionWork,
 } from "./regression-view-recovery";
+import { HelpLinkComponent } from "../../help/help-link.component";
 
 const encoder = new TextEncoder();
 const maxBytes = 8 * 1024 * 1024;
@@ -66,6 +67,7 @@ const maxBytes = 8 * 1024 * 1024;
     RouterLink,
     StatusChipComponent,
     MetadataValueComponent,
+    HelpLinkComponent,
   ],
   templateUrl: "./revision-regression.component.html",
   styleUrl: "./revision-regression.component.css",

@@ -25,10 +25,11 @@ import type {
   NativeMappingUploadFieldError,
   NativeMappingUploadRejection,
 } from "./native-mapping-upload-types";
+import { HelpLinkComponent } from "../../help/help-link.component";
 
 @Component({
   selector: "weft-upload-mapping-page",
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, HelpLinkComponent],
   providers: [MappingUploadDraftRecovery],
   templateUrl: "./upload-mapping-page.component.html",
   styleUrl: "./upload-mapping-page.component.css",

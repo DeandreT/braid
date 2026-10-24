@@ -1,0 +1,132 @@
+<div class="help-layout">
+  <nav class="help-contents" aria-labelledby="help-contents-title">
+    <p id="help-contents-title" class="catalog-eyebrow">
+      <a routerLink="/help">User guide</a>
+    </p>
+    @if (contents(); as list) {
+      <ol>
+        @for (item of list.sections; track item.id) {
+          <li>
+            <a
+              [routerLink]="['/help', item.id]"
+              routerLinkActive="active"
+              ariaCurrentWhenActive="page"
+              >{{ item.title }}</a
+            >
+          </li>
+        }
+      </ol>
+    }
+  </nav>
+  <article class="help-article" aria-labelledby="catalog-page-title">
+    @switch (state().kind) {
+      @case ("loading") {
+        <h1 id="catalog-page-title" class="help-title">Help</h1>
+        <p class="help-status wb-state" data-state="loading" role="status">
+          Loading the user guide…
+        </p>
+      }
+      @case ("error") {
+        <h1 id="catalog-page-title" class="help-title">Help</h1>
+        @switch (error()) {
+          @case ("signedOut") {
+            <p class="help-status wb-state" data-state="rejected" role="alert">
+              Sign in to read the user guide.
+            </p>
+          }
+          @case ("unavailable") {
+            <p
+              class="help-status wb-state"
+              data-state="unavailable"
+              role="alert"
+            >
+              The user guide isn't available in this workspace.
+            </p>
+          }
+          @default {
+            <p class="help-status wb-state" data-tone="failure" role="alert">
+              The user guide couldn't be loaded.
+            </p>
+            <button class="catalog-button" type="button" (click)="retry()">
+              Try again
+            </button>
+          }
+        }
+      }
+      @default {
+        @if (section(); as current) {
+          <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+            <ol>
+              <li><a routerLink="/help">Help</a></li>
+              <li>
+                <span aria-current="page">{{ current.title }}</span>
+              </li>
+            </ol>
+          </nav>
+          <header class="help-heading">
+            <p class="catalog-eyebrow">User guide</p>
+            <h1 id="catalog-page-title" class="help-title">
+              {{ current.title }}
+            </h1>
+            <p class="catalog-intro">{{ current.summary }}</p>
+          </header>
+          @if (outline().length > 2) {
+            <nav class="help-outline" aria-label="On this page">
+              <p>On this page</p>
+              <ul>
+                @for (item of outline(); track item.anchor) {
+                  <li>
+                    <a [routerLink]="[]" [fragment]="item.anchor">{{
+                      item.text
+                    }}</a>
+                  </li>
+                }
+              </ul>
+            </nav>
+          }
+          <div class="help-body">
+            <weft-help-content [blocks]="current.blocks" />
+          </div>
+          <nav class="help-pager" aria-label="Guide sections">
+            @if (neighbours().previous; as previous) {
+              <a
+                class="help-pager-previous"
+                [routerLink]="['/help', previous.id]"
+                ><span>Previous</span>{{ previous.title }}</a
+              >
+            }
+            @if (neighbours().next; as next) {
+              <a class="help-pager-next" [routerLink]="['/help', next.id]"
+                ><span>Next</span>{{ next.title }}</a
+              >
+            }
+          </nav>
+        } @else if (missing()) {
+          <h1 id="catalog-page-title" class="help-title">Help</h1>
+          <p class="help-status wb-state" data-state="notFound" role="alert">
+            This help page doesn't exist. Choose a section from the user guide.
+          </p>
+          <a class="catalog-page-link" routerLink="/help"
+            >Open the user guide</a
+          >
+        } @else if (contents(); as list) {
+          <header class="help-heading">
+            <p class="catalog-eyebrow">Help</p>
+            <h1 id="catalog-page-title" class="help-title">User guide</h1>
+            <p class="catalog-intro">
+              How to find, understand, test and prepare mappings in Weft.
+            </p>
+          </header>
+          <ol class="help-index" aria-label="Guide sections">
+            @for (item of list.sections; track item.id) {
+              <li>
+                <a [routerLink]="['/help', item.id]">{{ item.title }}</a>
+                <p>{{ item.summary }}</p>
+              </li>
+            }
+          </ol>
+        }
+      }
+    }
+  </article>
+</div>

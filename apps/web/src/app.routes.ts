@@ -126,6 +126,22 @@ export const routes: Routes = [
     title: "Catalog · Weft",
   },
   {
+    path: "help",
+    loadComponent: () =>
+      import("./help/help-page.component").then(
+        (module) => module.HelpPageComponent,
+      ),
+    title: "Help · Weft",
+  },
+  {
+    path: "help/:sectionId",
+    loadComponent: () =>
+      import("./help/help-page.component").then(
+        (module) => module.HelpPageComponent,
+      ),
+    title: "Help · Weft",
+  },
+  {
     path: "**",
     component: NotFoundComponent,
     title: "Page unavailable · Weft",

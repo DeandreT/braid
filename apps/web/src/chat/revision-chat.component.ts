@@ -34,9 +34,11 @@ import {
   type ChatEvent,
   type ChatTurn,
 } from "./chat-types";
+import { HelpLinkComponent } from "../help/help-link.component";
 
 @Component({
   selector: "weft-revision-chat",
+  imports: [HelpLinkComponent],
   templateUrl: "./revision-chat.component.html",
   styleUrl: "./revision-chat.component.css",
 })

@@ -15,4 +15,9 @@
     <EmbeddedResource Include="NativeExamples/Artifacts/*.json"
                       LogicalName="Weft.Api.NativeExamples.%(Filename)%(Extension)" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The user guide ships inside the server build; nothing is read from disk at run time. -->
+    <EmbeddedResource Include="../../../docs/user-guide/*.md"
+                      LogicalName="Weft.Api.UserGuide.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

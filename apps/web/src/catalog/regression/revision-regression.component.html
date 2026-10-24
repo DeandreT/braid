@@ -7,6 +7,9 @@
     Save test cases and compare their results, including exact formatting. These
     are not production payloads.
   </p>
+  <weft-help-link [section]="'regression-tests'"
+    >About regression tests</weft-help-link
+  >
   @if (!capabilities()) {
     @if (kept(); as message) {
       <p role="status">{{ message }}</p>

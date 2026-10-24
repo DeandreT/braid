@@ -28,13 +28,14 @@ import {
   type PreviewParameterKind,
   type PreviewTargetKind,
 } from "./preview-types";
+import { HelpLinkComponent } from "../../help/help-link.component";
 
 const shownBytes = 256 * 1024;
 const decoder = new TextDecoder("utf-8", { fatal: false });
 
 @Component({
   selector: "weft-revision-preview",
-  imports: [StatusChipComponent],
+  imports: [StatusChipComponent, HelpLinkComponent],
   templateUrl: "./revision-preview.component.html",
   styleUrl: "./revision-preview.component.css",
 })

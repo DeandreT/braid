@@ -40,6 +40,7 @@ app.MapWeftRegressionCases();
 app.MapWeftRegressionRuns();
 app.MapWeftBuilds();
 app.MapWeftChat();
+app.MapWeftHelp();
 app.MapWeftAuthentication();
 if (app.Environment.IsDevelopment())
 {

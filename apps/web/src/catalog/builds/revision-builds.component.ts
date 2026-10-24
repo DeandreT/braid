@@ -70,6 +70,7 @@ import {
   type BuildOwner,
   type PendingBuildMutation,
 } from "./build-recovery";
+import { HelpLinkComponent } from "../../help/help-link.component";
 
 /** No durable browser storage: uncertain requests keep their original immutable frame until explicit recovery or invalidation. */
 @Component({
@@ -81,6 +82,7 @@ import {
     StatusChipComponent,
     MetadataValueComponent,
     ConfirmationComponent,
+    HelpLinkComponent,
   ],
   templateUrl: "./revision-builds.component.html",
   styleUrl: "./revision-builds.component.css",

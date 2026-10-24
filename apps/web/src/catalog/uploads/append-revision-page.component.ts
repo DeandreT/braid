@@ -25,10 +25,11 @@ import type {
   NativeRevisionAppendInputErrors,
   NativeRevisionAppendRejection,
 } from "./native-revision-append-types";
+import { HelpLinkComponent } from "../../help/help-link.component";
 
 @Component({
   selector: "weft-append-revision-page",
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, HelpLinkComponent],
   providers: [RevisionAppendDraftRecovery],
   templateUrl: "./append-revision-page.component.html",
   styleUrl: "./append-revision-page.component.css",

@@ -77,6 +77,7 @@ import {
   type ComparisonGroupView,
   type ComparisonItemView,
 } from "./revision-comparison-view";
+import { HelpLinkComponent } from "../../help/help-link.component";
 
 type ProjectionDocument = components["schemas"]["ProjectionDocumentV1"];
 type ValidationReport = components["schemas"]["ValidationReportV1"];
@@ -130,6 +131,7 @@ const sideNames: readonly ComparisonSideName[] = ["left", "right"];
     CatalogStatusComponent,
     MappingProjectionComponent,
     NativeEvidenceComponent,
+    HelpLinkComponent,
   ],
   templateUrl: "./revision-comparison-page.component.html",
   styleUrl: "./revision-comparison-page.component.css",

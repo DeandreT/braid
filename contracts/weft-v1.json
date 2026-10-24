@@ -8586,6 +8586,180 @@
         }
       }
     },
+    "/api/v1/help/sections": {
+      "get": {
+        "tags": [
+          "Help"
+        ],
+        "summary": "Read the user guide's sections in reading order.",
+        "operationId": "GetHelpSections",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelpSectionListV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/help/sections/{sectionId}": {
+      "get": {
+        "tags": [
+          "Help"
+        ],
+        "summary": "Read one user guide section as structured text.",
+        "operationId": "GetHelpSection",
+        "parameters": [
+          {
+            "name": "sectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelpSectionV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/session": {
       "get": {
         "summary": "Explicit browser authentication protocol.",
@@ -13221,6 +13395,383 @@
           }
         }
       },
+      "HelpBlockV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/HelpBlockV1HelpHeadingV1"
+          },
+          {
+            "$ref": "#/components/schemas/HelpBlockV1HelpParagraphV1"
+          },
+          {
+            "$ref": "#/components/schemas/HelpBlockV1HelpListV1"
+          },
+          {
+            "$ref": "#/components/schemas/HelpBlockV1HelpTableV1"
+          },
+          {
+            "$ref": "#/components/schemas/HelpBlockV1HelpCodeBlockV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "heading": "#/components/schemas/HelpBlockV1HelpHeadingV1",
+            "paragraph": "#/components/schemas/HelpBlockV1HelpParagraphV1",
+            "list": "#/components/schemas/HelpBlockV1HelpListV1",
+            "table": "#/components/schemas/HelpBlockV1HelpTableV1",
+            "codeBlock": "#/components/schemas/HelpBlockV1HelpCodeBlockV1"
+          }
+        }
+      },
+      "HelpBlockV1HelpCodeBlockV1": {
+        "required": [
+          "text",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "codeBlock"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "HelpBlockV1HelpHeadingV1": {
+        "required": [
+          "level",
+          "anchor",
+          "text",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "heading"
+            ],
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "anchor": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "HelpBlockV1HelpListV1": {
+        "required": [
+          "ordered",
+          "items",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "list"
+            ],
+            "type": "string"
+          },
+          "ordered": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpListItemV1"
+            }
+          }
+        }
+      },
+      "HelpBlockV1HelpParagraphV1": {
+        "required": [
+          "content",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "paragraph"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpInlineV1"
+            }
+          }
+        }
+      },
+      "HelpBlockV1HelpTableV1": {
+        "required": [
+          "header",
+          "rows",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "table"
+            ],
+            "type": "string"
+          },
+          "header": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpTableCellV1"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpTableRowV1"
+            }
+          }
+        }
+      },
+      "HelpInlineV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/HelpInlineV1HelpTextV1"
+          },
+          {
+            "$ref": "#/components/schemas/HelpInlineV1HelpStrongV1"
+          },
+          {
+            "$ref": "#/components/schemas/HelpInlineV1HelpEmphasisV1"
+          },
+          {
+            "$ref": "#/components/schemas/HelpInlineV1HelpCodeV1"
+          },
+          {
+            "$ref": "#/components/schemas/HelpInlineV1HelpLinkV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "text": "#/components/schemas/HelpInlineV1HelpTextV1",
+            "strong": "#/components/schemas/HelpInlineV1HelpStrongV1",
+            "emphasis": "#/components/schemas/HelpInlineV1HelpEmphasisV1",
+            "code": "#/components/schemas/HelpInlineV1HelpCodeV1",
+            "link": "#/components/schemas/HelpInlineV1HelpLinkV1"
+          }
+        }
+      },
+      "HelpInlineV1HelpCodeV1": {
+        "required": [
+          "text",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "code"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "HelpInlineV1HelpEmphasisV1": {
+        "required": [
+          "text",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "emphasis"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "HelpInlineV1HelpLinkV1": {
+        "required": [
+          "text",
+          "sectionId",
+          "anchor",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "link"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "sectionId": {
+            "type": "string"
+          },
+          "anchor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "HelpInlineV1HelpStrongV1": {
+        "required": [
+          "text",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "strong"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "HelpInlineV1HelpTextV1": {
+        "required": [
+          "text",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "text"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "HelpListItemV1": {
+        "required": [
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpInlineV1"
+            }
+          }
+        }
+      },
+      "HelpSectionListV1": {
+        "required": [
+          "sections"
+        ],
+        "type": "object",
+        "properties": {
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpSectionSummaryV1"
+            }
+          }
+        }
+      },
+      "HelpSectionSummaryV1": {
+        "required": [
+          "id",
+          "title",
+          "summary"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "HelpSectionV1": {
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "blocks"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpBlockV1"
+            }
+          }
+        }
+      },
+      "HelpTableCellV1": {
+        "required": [
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpInlineV1"
+            }
+          }
+        }
+      },
+      "HelpTableRowV1": {
+        "required": [
+          "cells"
+        ],
+        "type": "object",
+        "properties": {
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelpTableCellV1"
+            }
+          }
+        }
+      },
       "LiteralValue": {
         "required": [
           "kind"
@@ -15631,6 +16182,9 @@
     },
     {
       "name": "Chat"
+    },
+    {
+      "name": "Help"
     }
   ]
 }

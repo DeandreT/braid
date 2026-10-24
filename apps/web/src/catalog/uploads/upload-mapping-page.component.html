@@ -14,6 +14,7 @@
       This creates a new mapping and its first saved revision. It does not
       append to an existing mapping or include referenced files and resources.
     </p>
+    <weft-help-link [section]="'uploads'">About uploads</weft-help-link>
     @if (state.project(); as project) {
       <a [routerLink]="routes.project(project.scope)" [queryParams]="{}"
         >Back to project</a

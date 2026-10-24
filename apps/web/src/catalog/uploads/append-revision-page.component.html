@@ -16,6 +16,7 @@
       A new append is saved only while the mapping still has the head you
       reviewed. Existing revisions and mapping metadata stay intact.
     </p>
+    <weft-help-link [section]="'uploads'">About uploads</weft-help-link>
     <div class="append-actions">
       @if (view.mapping; as mapping) {
         <a [routerLink]="routes.mapping(mapping.scope)" [queryParams]="{}"

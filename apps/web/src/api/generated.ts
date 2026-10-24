@@ -187,6 +187,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/help/sections": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the user guide's sections in reading order. */
+    get: operations["GetHelpSections"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/help/sections/{sectionId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one user guide section as structured text. */
+    get: operations["GetHelpSection"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/previews/{runId}": {
     parameters: {
       query?: never;
@@ -2013,6 +2047,98 @@ export interface components {
       status: string;
       version: string;
     };
+    HelpBlockV1:
+      | components["schemas"]["HelpBlockV1HelpHeadingV1"]
+      | components["schemas"]["HelpBlockV1HelpParagraphV1"]
+      | components["schemas"]["HelpBlockV1HelpListV1"]
+      | components["schemas"]["HelpBlockV1HelpTableV1"]
+      | components["schemas"]["HelpBlockV1HelpCodeBlockV1"];
+    HelpBlockV1HelpCodeBlockV1: {
+      /** @enum {string} */
+      kind: "codeBlock";
+      text: string;
+    };
+    HelpBlockV1HelpHeadingV1: {
+      anchor: string;
+      /** @enum {string} */
+      kind: "heading";
+      /** Format: int32 */
+      level: number;
+      text: string;
+    };
+    HelpBlockV1HelpListV1: {
+      items: components["schemas"]["HelpListItemV1"][];
+      /** @enum {string} */
+      kind: "list";
+      ordered: boolean;
+    };
+    HelpBlockV1HelpParagraphV1: {
+      content: components["schemas"]["HelpInlineV1"][];
+      /** @enum {string} */
+      kind: "paragraph";
+    };
+    HelpBlockV1HelpTableV1: {
+      header: components["schemas"]["HelpTableCellV1"][];
+      /** @enum {string} */
+      kind: "table";
+      rows: components["schemas"]["HelpTableRowV1"][];
+    };
+    HelpInlineV1:
+      | components["schemas"]["HelpInlineV1HelpTextV1"]
+      | components["schemas"]["HelpInlineV1HelpStrongV1"]
+      | components["schemas"]["HelpInlineV1HelpEmphasisV1"]
+      | components["schemas"]["HelpInlineV1HelpCodeV1"]
+      | components["schemas"]["HelpInlineV1HelpLinkV1"];
+    HelpInlineV1HelpCodeV1: {
+      /** @enum {string} */
+      kind: "code";
+      text: string;
+    };
+    HelpInlineV1HelpEmphasisV1: {
+      /** @enum {string} */
+      kind: "emphasis";
+      text: string;
+    };
+    HelpInlineV1HelpLinkV1: {
+      anchor: null | string;
+      /** @enum {string} */
+      kind: "link";
+      sectionId: string;
+      text: string;
+    };
+    HelpInlineV1HelpStrongV1: {
+      /** @enum {string} */
+      kind: "strong";
+      text: string;
+    };
+    HelpInlineV1HelpTextV1: {
+      /** @enum {string} */
+      kind: "text";
+      text: string;
+    };
+    HelpListItemV1: {
+      content: components["schemas"]["HelpInlineV1"][];
+    };
+    HelpSectionListV1: {
+      sections: components["schemas"]["HelpSectionSummaryV1"][];
+    };
+    HelpSectionSummaryV1: {
+      id: string;
+      summary: string;
+      title: string;
+    };
+    HelpSectionV1: {
+      blocks: components["schemas"]["HelpBlockV1"][];
+      id: string;
+      summary: string;
+      title: string;
+    };
+    HelpTableCellV1: {
+      content: components["schemas"]["HelpInlineV1"][];
+    };
+    HelpTableRowV1: {
+      cells: components["schemas"]["HelpTableCellV1"][];
+    };
     LiteralValue:
       | components["schemas"]["LiteralValueStringLiteralValue"]
       | components["schemas"]["LiteralValueBooleanLiteralValue"]
@@ -3211,6 +3337,156 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HealthResponseV1"];
+        };
+      };
+    };
+  };
+  GetHelpSections: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HelpSectionListV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetHelpSection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sectionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HelpSectionV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
     };

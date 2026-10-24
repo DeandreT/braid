@@ -31,6 +31,7 @@ import type {
   RevisionReportErrorKind,
   RevisionReportOperation,
 } from "./revision-report-types";
+import { HelpLinkComponent } from "../../help/help-link.component";
 
 type Lifecycle = components["schemas"]["CatalogRevisionReportStateV1"];
 type ReadOutcome = components["schemas"]["CatalogRevisionReportReadOutcomeV1"];
@@ -44,6 +45,7 @@ type Failure = components["schemas"]["CatalogRevisionReportFailureV1"];
     MappingProjectionComponent,
     NativeEvidenceComponent,
     WorkbenchMappingTableComponent,
+    HelpLinkComponent,
   ],
   templateUrl: "./revision-reports.component.html",
   styleUrl: "./revision-reports.component.css",

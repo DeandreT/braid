@@ -16,6 +16,8 @@
     "playwright.native-revision-append.config.ts",
     "playwright.browser-session.config.ts",
     "playwright.chat.config.ts",
+    "playwright.help.config.ts",
+    "tests/help.spec.ts",
     "playwright.comparison.config.ts",
     "tests/browser-auth-controls.spec.ts",
     "playwright.regression.config.ts",
