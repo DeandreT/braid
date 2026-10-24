@@ -231,6 +231,25 @@ service, a lost connection, or a missing settled answer is a cleanup failure. As
 with the hosted inspection transport, it closes the runner's admission and faults
 host shutdown.
 
+```mermaid
+flowchart TD
+    op["Host operation"] --> ready["Fresh channel: GET /v1/ready checks status, build identity and protocol"]
+    ready --> send["Send the exact frame under a fresh operation identity"]
+    send --> outcome{"Outcome"}
+    outcome -->|"answer from the service"| verify["The adapter verifies the echoed revision, digest and typed owners"]
+    outcome -->|"503, or failure before any frame byte"| retry["Nothing ran: retry on a fresh channel, at most three attempts"]
+    retry --> ready
+    outcome -->|"deadline or caller cancellation"| cancel["Send the cancellation and wait for the settled answer"]
+    cancel -->|"settled"| done["Caller sees canceled or timed out"]
+    cancel -->|"no settled answer"| closed
+    outcome -->|"lost connection or foreign answer"| closed["Cleanup failure: the runner closes admission and host shutdown faults"]
+```
+
+Inside a replica the same rule applies to children: the service kills a child at its
+deadline or on cancellation and waits until it is reaped. A child it cannot confirm
+reaped, or a private directory it cannot remove, makes the replica stop admitting work
+and fail readiness, so the platform replaces it.
+
 The pinned connector (`PinnedServiceConnector`) opens one HTTP/2 connection per
 channel and can never open a second, so retries inside the HTTP stack cannot
 deliver a frame elsewhere or twice. Place the service behind a layer-4 load balancer

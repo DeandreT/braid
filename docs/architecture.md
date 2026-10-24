@@ -44,28 +44,103 @@ bounded, cancellable outbound requests.
 
 ```mermaid
 flowchart TB
-    browser["Browser: catalog, mapping viewer, AI chat, preview"]
-    api["Weft API: sessions, permissions, revisions, conversations"]
-    identity["Identity adapter: Entra first, other OIDC providers later"]
-    metadata["PostgreSQL: memberships, revisions, runs, conversations"]
-    blobs["Private object storage: native artifacts and bounded results"]
-    chat["AI orchestration: context, tools, citations, streaming"]
-    models["Model-provider adapters: hosted or local models"]
-    mapping["Mapping-backend adapter: Ferrule first"]
-    worker["Isolated mapping worker"]
-    deploy["Deployment-target adapters: Azure first, later milestone"]
+    subgraph callers [Callers]
+        direction LR
+        browser["Browser: Angular workbench"]
+        machine["Machine caller: app-only Entra token"]
+        operator["Operator tools: database, release, storage, maintenance"]
+    end
+    subgraph hosts [Hosts]
+        direction LR
+        edge["Edge: TLS and HSTS"]
+        server["Weft Server (Session host): /api/v1 and /api/auth"]
+        endpoint["Mapping endpoint host: /v1/invocations"]
+        worker["Weft.Worker runs: previews, regression runs, builds"]
+    end
+    subgraph external [External services]
+        direction LR
+        entra["Microsoft Entra ID"]
+        models["Model provider: Chat Completions or Ollama"]
+    end
+    ferrule["Ferrule service: one sandboxed ferrule-host child per operation"]
+    subgraph state [State]
+        direction LR
+        postgres["PostgreSQL: one restricted login per role; build artifacts"]
+        objects["Private objects: native files and reports, filesystem or Azure Blob"]
+    end
 
-    browser --> api
-    api --> identity
-    api --> metadata
-    api --> blobs
-    api --> chat
-    chat --> models
-    chat -->|"Authorized read tools"| api
-    api --> worker
-    worker --> mapping
-    worker --> blobs
-    api -.-> deploy
+    browser -->|"session cookie and antiforgery"| edge --> server
+    machine -->|"bearer token and request ID"| endpoint
+    operator -->|"restricted logins"| postgres
+    server -->|"sign-in"| entra
+    endpoint -->|"signing keys"| entra
+    server -->|"chat rounds"| models
+    server -->|"inspect, validate, project"| ferrule
+    worker -->|"preview, compile"| ferrule
+    endpoint -->|"run the compiled release"| ferrule
+    hosts -->|"restricted logins, create-only objects"| state
+```
+
+Hosts never load Ferrule or mapping code in process. Every native operation crosses
+the pinned, mutually authenticated transport to a fresh sandboxed child (see
+[Ferrule service](ferrule-service.md)); local development can use the per-operation
+Docker runner instead, and Azure can use Container Apps dynamic sessions.
+
+### Upload and reports
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant S as Weft Server
+    participant P as PostgreSQL
+    participant O as Private objects
+    participant F as Ferrule service
+    Note over S: Every step rechecks current organization and project authority
+    B->>S: Upload a native file (new mapping or appended revision)
+    S->>P: Reserve identities and claim the attempt
+    S->>O: Publish the native bytes (create-only)
+    S->>O: Read back and verify scope, size and digest
+    S->>F: Validation frame
+    F-->>S: Typed result echoing revision and digest
+    S->>P: Finish the attempt and publish the revision
+    B->>S: Ensure the projection and validation reports
+    S->>P: Claim the derivation, or return the retained report
+    S->>F: Projection and validation frames
+    F-->>S: Typed reports
+    S->>O: Publish report objects (create-only)
+    S->>P: Record the reports
+    B->>S: Read the reports of the exact revision
+```
+
+### Build, release and invocation
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant S as Weft Server
+    participant W as Weft.Worker runs
+    participant R as Weft.ReleaseTool
+    participant P as PostgreSQL
+    participant F as Ferrule service
+    participant E as Mapping endpoint
+    participant M as Machine caller
+    B->>S: Approve and request a build
+    S->>P: Durable build run
+    W->>P: Claim the run
+    W->>F: Compile (generation and compiler children)
+    F-->>W: Artifact bytes and compiler identity
+    W->>P: Store the artifact and its publication
+    R->>F: Qualify: replay the saved regression case on the compiled runtime
+    R->>P: Record qualification, register the target, activate the release
+    M->>E: Invocation with app-only token and request ID
+    E->>E: Validate the token and the grant, claim the request ID
+    E->>P: Read the current release and its artifact
+    E->>F: Run the compiled mapping in a sandboxed child
+    F-->>E: Outputs
+    E->>P: Retain the outcome and audit
+    E-->>M: Outputs with release, build and artifact identity
+    M->>E: Retry with the same request ID
+    E-->>M: The retained outcome, replayed without running again
 ```
 
 There are four independent extension boundaries: mapping backend, identity
