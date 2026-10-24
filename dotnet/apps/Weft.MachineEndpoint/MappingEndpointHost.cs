@@ -104,13 +104,17 @@ internal static class MappingEndpointHost
                         }
                     });
                 });
-                web.Configure(app =>
-                {
-                    var routes = app.ApplicationServices.GetRequiredService<MappingEndpointRoutes>();
-                    app.Run(routes.HandleAsync);
-                });
+                web.Configure(Compose);
             });
         return builder.Build();
+    }
+
+    /// <summary>The request pipeline: the exact-route gate, then routing to the endpoint's routes.</summary>
+    internal static void Compose(IApplicationBuilder app)
+    {
+        app.Use(app.ApplicationServices.GetRequiredService<MappingEndpointRoutes>().GateAsync);
+        app.UseRouting();
+        app.UseEndpoints(MappingEndpointRoutes.Map);
     }
 
     private static void Privacy()

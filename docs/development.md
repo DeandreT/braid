@@ -198,7 +198,16 @@ the smaller model answers faster.
 
 ## Updating API contracts
 
-Edit the C# contract or typed endpoint, then build the server and regenerate:
+Every HTTP API that Weft serves has an OpenAPI 3.1 document in `contracts/`, which
+the host's build writes from its own route registrations:
+
+| Document | Host | API |
+| --- | --- | --- |
+| `contracts/weft-v1.json` | `Weft.Server` | The browser and session API under `/api` |
+| `contracts/weft-endpoint-v1.json` | `Weft.MachineEndpoint` | The [mapping endpoint](mapping-endpoint.md) |
+| `contracts/ferrule-service-v1.json` | `Weft.FerruleService` | The [Ferrule service](ferrule-service.md#api-weftferrule-servicev1) |
+
+Edit the C# contract or route, then build and regenerate:
 
 ```sh
 dotnet build dotnet/Weft.slnx --configuration Release --no-restore
@@ -206,12 +215,25 @@ npm run contracts:generate
 npm run contracts:check
 ```
 
-Commit both `contracts/weft-v1.json` and `apps/web/src/api/generated.ts`. The
-server build exports OpenAPI 3.1 using the same JSON settings as HTTP responses.
+Commit the rewritten documents and `apps/web/src/api/generated.ts`. Each build
+exports OpenAPI 3.1 using the same JSON settings as the host's responses. The
+endpoint and the Ferrule service generate theirs from a document-only host that
+maps the same routes without settings, credentials, a database or a listener; only
+the build-time generator (`GetDocument.Insider`) selects it. Image builds turn
+generation off with `-p:OpenApiGenerateDocuments=false`.
+
 The check regenerates Angular types in memory, compares them without rewriting,
-and compiles narrowing/precision examples with Angular's TypeScript version.
-The generator has its own locked dependency tree: its supported TypeScript 5
-compiler cannot replace Angular's pinned TypeScript 6 compiler.
+and compiles narrowing/precision examples with Angular's TypeScript version. It
+also validates the endpoint and service documents: references, unique operation
+IDs, path parameters, response descriptions and security schemes. The generator
+has its own locked dependency tree: its supported TypeScript 5 compiler cannot
+replace Angular's pinned TypeScript 6 compiler.
+
+.NET tests compare each document with the document its host generates and with
+the host's live routes: every mapped route and method with its operation ID and
+statuses, and no other route. After a build, a route change without its committed
+document fails `git diff --exit-code -- contracts`; with generation off, it fails
+these tests.
 
 ## Verification
 
@@ -223,7 +245,7 @@ dotnet restore dotnet/Weft.slnx --locked-mode
 dotnet format dotnet/Weft.slnx --verify-no-changes --no-restore
 dotnet build dotnet/Weft.slnx --configuration Release --no-restore
 npm run contracts:check
-git diff --exit-code -- contracts/weft-v1.json apps/web/src/api/generated.ts
+git diff --exit-code -- contracts apps/web/src/api/generated.ts
 weft_host_qualification="$(mktemp -d "${TMPDIR:-/tmp}/weft-host-qualification.XXXXXXXX")"
 dotnet publish dotnet/apps/Weft.Server/Weft.Server.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/server"
 dotnet publish dotnet/tools/Weft.HostPrivacyProbe/Weft.HostPrivacyProbe.csproj --configuration Release --no-build --no-restore --output "$weft_host_qualification/probe"

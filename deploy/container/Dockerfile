@@ -104,9 +104,9 @@ FROM build AS endpoint-build
 RUN dotnet restore dotnet/apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj --locked-mode \
     && dotnet restore dotnet/tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj --locked-mode \
     && dotnet publish dotnet/apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj --configuration Release --no-restore \
-        --output /out/endpoint -p:UseAppHost=false \
+        --output /out/endpoint -p:UseAppHost=false -p:OpenApiGenerateDocuments=false \
     && dotnet publish dotnet/tools/Weft.ReleaseTool/Weft.ReleaseTool.csproj --configuration Release --no-restore \
-        --output /out/tools/release -p:UseAppHost=false
+        --output /out/tools/release -p:UseAppHost=false -p:OpenApiGenerateDocuments=false
 
 FROM ${ASPNET_IMAGE} AS weft-mapping-endpoint
 COPY --from=endpoint-build /out/endpoint /app/endpoint

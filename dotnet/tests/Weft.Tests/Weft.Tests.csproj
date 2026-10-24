@@ -64,6 +64,9 @@
           Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Weft.Api/NativeExamples/Artifacts/*.json"
           Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Committed OpenAPI documents that the hosts' own routes and generated documents are compared with. -->
+    <None Include="../../../contracts/weft-endpoint-v1.json;../../../contracts/ferrule-service-v1.json"
+          Link="Contracts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CopyPreviewWorker" AfterTargets="Build">
     <MSBuild Projects="../../apps/Weft.Worker/Weft.Worker.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">

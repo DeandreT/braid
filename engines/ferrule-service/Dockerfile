@@ -27,7 +27,7 @@ COPY global.json ./
 COPY dotnet dotnet
 RUN /usr/share/dotnet/dotnet restore dotnet/apps/Weft.FerruleService/Weft.FerruleService.csproj --locked-mode \
     && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.FerruleService/Weft.FerruleService.csproj -c Release --no-restore \
-        --output /out/app -p:UseSharedCompilation=false \
+        --output /out/app -p:UseSharedCompilation=false -p:OpenApiGenerateDocuments=false \
     && /usr/share/dotnet/dotnet restore dotnet/apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj --locked-mode \
     && /usr/share/dotnet/dotnet publish dotnet/apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj -c Release --no-restore \
         --output /out/runtime -p:UseSharedCompilation=false \

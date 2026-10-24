@@ -75,7 +75,7 @@ jobs:
       - name: Verify generated mapping contracts
         run: |
           npm run contracts:check
-          git diff --exit-code -- contracts/weft-v1.json apps/web/src/api/generated.ts
+          git diff --exit-code -- contracts apps/web/src/api/generated.ts
       - name: Publish exact host qualification artifacts
         run: |
           weft_host_qualification="$RUNNER_TEMP/weft-host-qualification"

@@ -1,8 +1,12 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Weft.Application;
 using Weft.Deployment;
 using Weft.MachineEndpoint;
@@ -42,6 +46,43 @@ public sealed class MappingEndpointRouteTests
         test.Data.Caller = new(test.Data.Caller.Principal, test.Data.Caller.ApplicationId, DateTimeOffset.UtcNow.AddHours(1));
         var retry = await test.CallAsync(new MemoryStream(test.Body));
         Assert.Equal(200, retry.Status); Assert.Equal(2, test.Data.RuntimeCalls);
+    }
+
+    [Fact]
+    public async Task A_call_through_the_routed_pipeline_completes_and_its_retry_replays_the_same_bytes()
+    {
+        var test = await Harness.StartAsync(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60), expiresIn: TimeSpan.FromHours(1));
+        using var host = new HostBuilder()
+            .ConfigureWebHost(web => web.UseTestServer()
+                .ConfigureServices(services => services.AddRouting().AddSingleton(test.Routes))
+                .Configure(MappingEndpointHost.Compose))
+            .Build();
+        await host.StartAsync();
+        try
+        {
+            using var client = host.GetTestClient();
+            async Task<(HttpResponseMessage Response, byte[] Body)> CallAsync()
+            {
+                using var message = new HttpRequestMessage(HttpMethod.Post, MappingEndpointRoutes.InvocationsPath) { Content = new ByteArrayContent(test.Body) };
+                message.Content.Headers.ContentType = new("application/json");
+                message.Headers.TryAddWithoutValidation("Authorization", "Bearer fixture");
+                message.Headers.Add(MappingEndpointRoutes.RequestIdHeader, test.Data.RequestId.ToString("D"));
+                var response = await client.SendAsync(message);
+                return (response, await response.Content.ReadAsByteArrayAsync());
+            }
+            var (first, completed) = await CallAsync();
+            Assert.Equal(System.Net.HttpStatusCode.OK, first.StatusCode);
+            Assert.Equal("false", Assert.Single(first.Headers.GetValues(MappingEndpointRoutes.ReplayedHeader)));
+            Assert.Equal(test.Data.RequestId, JsonSerializer.Deserialize<MappingInvocationResponseV1>(completed, MappingEndpointContract.Json)!.RequestId);
+            var (retry, replayed) = await CallAsync();
+            Assert.Equal(System.Net.HttpStatusCode.OK, retry.StatusCode);
+            Assert.Equal("true", Assert.Single(retry.Headers.GetValues(MappingEndpointRoutes.ReplayedHeader)));
+            Assert.Equal(completed, replayed);
+            Assert.Equal(1, test.Data.RuntimeCalls);
+            first.Dispose();
+            retry.Dispose();
+        }
+        finally { await host.StopAsync(); }
     }
 
     [Fact]
@@ -194,6 +235,7 @@ public sealed class MappingEndpointRouteTests
         }
 
         internal MachineInvocationServiceTests.Fixture Data { get; }
+        internal MappingEndpointRoutes Routes => routes;
         internal byte[] Body { get; }
         internal Func<bool> RuntimeAvailable { get; set; } = () => true;
 
@@ -210,7 +252,7 @@ public sealed class MappingEndpointRouteTests
             var context = new DefaultHttpContext();
             context.Request.Method = "GET";
             context.Request.Path = MappingEndpointRoutes.ReadyPath;
-            await routes.HandleAsync(context);
+            await routes.ReadyAsync(context);
             return context.Response.StatusCode;
         }
 
@@ -228,7 +270,7 @@ public sealed class MappingEndpointRouteTests
             var captured = new MemoryStream();
             context.Response.Body = response ?? captured;
             using var bound = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-            await routes.HandleAsync(context).WaitAsync(bound.Token);
+            await routes.InvokeAsync(context).WaitAsync(bound.Token);
             string? outcome = null;
             if (response is null && context.Response.StatusCode != 200 && captured.Length > 0)
                 using (var document = JsonDocument.Parse(captured.ToArray()))

@@ -959,6 +959,7 @@
       "weft-ferrule-service": {
         "type": "Project",
         "dependencies": {
+          "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
           "Weft.MappingBackends": "[1.0.0, )",
           "Weft.Storage.FileSystem": "[1.0.0, )",
           "Weft.WorkerTransport": "[1.0.0, )"
@@ -967,6 +968,7 @@
       "weft-mapping-endpoint": {
         "type": "Project",
         "dependencies": {
+          "Microsoft.AspNetCore.OpenApi": "[10.0.12, )",
           "Weft.Deployment": "[1.0.0, )",
           "Weft.Identity": "[1.0.0, )",
           "Weft.MappingBackends": "[1.0.0, )",

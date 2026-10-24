@@ -18,7 +18,7 @@
     "check:browser-fixture": "node --test tools/browser-fixture/schema.test.mjs tools/browser-fixture/failure-site.test.mjs tools/browser-fixture/safe-diagnostics.test.mjs tools/hosted-acceptance/model.test.mjs tools/hosted-acceptance/endpoint-settlement.test.mjs tools/hosted-acceptance/acceptance-lifecycle.test.mjs",
     "check:browser-session-probe": "npm --workspace @weft/web run check:browser-session-probe",
     "contracts:generate": "npm --prefix tools/contracts-generator run generate",
-    "contracts:check": "npm --prefix tools/contracts-generator run check && npm --workspace @weft/web run check:contracts",
+    "contracts:check": "npm --prefix tools/contracts-generator run check && node tools/contracts-generator/check-specifications.mjs && npm --workspace @weft/web run check:contracts",
     "format": "prettier --write \"apps/web/**/*.{ts,html,css,json}\" \"tools/**/*.{mjs,json}\" package.json global.json",
     "test:browser": "env -u WAYLAND_DISPLAY xvfb-run -a -w 10 npm --workspace @weft/web run test:e2e",
     "test:browser-session": "env -u WAYLAND_DISPLAY xvfb-run -a -w 10 npm --workspace @weft/web run test:e2e -- --config playwright.browser-session.config.ts",

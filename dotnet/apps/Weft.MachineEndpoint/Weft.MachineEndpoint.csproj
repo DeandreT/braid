@@ -3,9 +3,14 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>weft-mapping-endpoint</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The build writes the endpoint's OpenAPI document from its document-only host. -->
+    <OpenApiDocumentsDirectory>../../../contracts</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--file-name weft-endpoint-v1 --openapi-version OpenApi3_1</OpenApiGenerateDocumentsOptions>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.12" PrivateAssets="all" />
     <ProjectReference Include="../../src/Weft.Deployment/Weft.Deployment.csproj" />
     <ProjectReference Include="../../src/Weft.Identity/Weft.Identity.csproj" />
     <ProjectReference Include="../../src/Weft.MappingBackends/Weft.MappingBackends.csproj" />

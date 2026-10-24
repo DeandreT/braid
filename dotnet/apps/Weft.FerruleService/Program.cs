@@ -1,6 +1,14 @@
 using Microsoft.Extensions.Hosting;
 using Weft.FerruleService;
 
+// Build-time OpenAPI generation runs this entry point inside its own tool and reads the document-only host.
+if (FerruleServiceOpenApi.Generating)
+{
+    using var document = FerruleServiceOpenApi.BuildDocumentHost();
+    await document.RunAsync();
+    return 0;
+}
+
 // The shell-less image's own health check for platforms without HTTP probes.
 if (args is ["probe"])
     return await FerruleServiceProbe.RunAsync(Environment.GetEnvironmentVariable);

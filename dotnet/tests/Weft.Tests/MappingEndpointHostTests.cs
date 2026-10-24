@@ -169,7 +169,7 @@ public sealed class MappingEndpointHostTests
         finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
     }
 
-    private static Dictionary<string, string> Settings(int port) => new()
+    internal static Dictionary<string, string> Settings(int port) => new()
     {
         [MappingEndpointSettings.Listen] = "127.0.0.1:" + port,
         [MappingEndpointSettings.Transport] = "platformIngress",
@@ -186,7 +186,7 @@ public sealed class MappingEndpointHostTests
     };
 
     // Unreachable database addresses: startup opens no connection, and the purge fails closed.
-    private static Dictionary<string, string> Connections(params (string Role, string Username)[] overrides) =>
+    internal static Dictionary<string, string> Connections(params (string Role, string Username)[] overrides) =>
         MappingEndpointSettings.Logins.ToDictionary(login => login.Setting, login =>
             $"Host=127.0.0.1;Port=1;Database=weft;Username={overrides.FirstOrDefault(item => item.Role == login.Role).Username ?? login.Role};Password=p-{Guid.NewGuid():N}");
 

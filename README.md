@@ -126,6 +126,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Release qualification](docs/release-qualification.md): exact-baseline qualification evidence for builds.
 - [Mapping endpoint](docs/mapping-endpoint.md) and [machine authorization](docs/machine-authorization.md): the machine-facing HTTP host, app-only tokens, invocation grants and idempotent calls.
 - [Ferrule service](docs/ferrule-service.md), [build compiler](docs/build-compiler.md) and [compiled service runtime](docs/compiled-service-runtime.md): sandboxed hosted inspection, compilation and compiled execution without Docker.
+- [API contracts](docs/development.md#updating-api-contracts): the OpenAPI 3.1 documents of the [session API](contracts/weft-v1.json), the [mapping endpoint](contracts/weft-endpoint-v1.json) and the [Ferrule service](contracts/ferrule-service-v1.json).
 - [Azure Blob private storage](docs/private-storage-blob.md): the Blob object store and its publication format.
 - [Hosted acceptance](docs/hosted-acceptance.md): the packaged signed-in stack exercised end to end.
 - [Revision comparison](docs/revision-comparison.md) and [compact workbench](docs/compact-workbench.md): semantic differences between revisions and the workbench layout.

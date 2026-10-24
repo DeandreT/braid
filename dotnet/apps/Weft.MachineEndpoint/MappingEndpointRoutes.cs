@@ -1,7 +1,10 @@
-using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Weft.Application;
 using Weft.Deployment;
 
@@ -39,36 +42,77 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
     /// <summary>Of the rest: what a canceled execution may spend settling and closing its channel.</summary>
     internal static TimeSpan Settlement(TimeSpan work, TimeSpan deadline) => deadline - work - Release - ResponseReserve;
     private static readonly JsonDocumentOptions JsonOptions = new() { MaxDepth = 8 };
+    /// <summary>Every status an invocation answers besides 200, each with <see cref="MappingInvocationErrorV1"/>.</summary>
+    internal static readonly int[] Refusals = [.. Enum.GetValues<MappingInvocationOutcomeV1>().Select(Status).Distinct().Order()];
     private readonly SemaphoreSlim slots = new(calls.ConcurrencyLimit, calls.ConcurrencyLimit);
+    private Dictionary<string, string[]>? mapped;
     private int ready;
 
     internal void MarkReady() => Volatile.Write(ref ready, 1);
     internal void MarkStopping() => Volatile.Write(ref ready, 0);
 
-    internal async Task HandleAsync(HttpContext context)
+    /// <summary>
+    /// The routes and their answers, which <c>contracts/weft-endpoint-v1.json</c> describes. Handlers find the routes
+    /// among the request's services, so the document-only host maps these same registrations without them.
+    /// </summary>
+    internal static void Map(IEndpointRouteBuilder endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+        // No Accepts metadata: routing would answer a media type before saturation, the token and the request ID.
+        var invoke = endpoints.MapPost(InvocationsPath, Handler(static (routes, context) => routes.InvokeAsync(context)))
+            .WithName("InvokeRelease").WithTags("Invocations")
+            .Produces<MappingInvocationResponseV1>(StatusCodes.Status200OK, MappingEndpointContract.MediaType);
+        foreach (var status in Refusals) invoke.Produces<MappingInvocationErrorV1>(status, MappingEndpointContract.MediaType);
+        endpoints.MapGet(LivePath, Handler(static (_, context) => Status(context, StatusCodes.Status204NoContent)))
+            .WithName("GetLiveness").WithTags("Health").Produces(StatusCodes.Status204NoContent);
+        endpoints.MapGet(ReadyPath, Handler(static (routes, context) => routes.ReadyAsync(context)))
+            .WithName("GetReadiness").WithTags("Health")
+            .Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    private static Delegate Handler(Func<MappingEndpointRoutes, HttpContext, Task> handle) =>
+        (HttpContext context) => handle(context.RequestServices.GetRequiredService<MappingEndpointRoutes>(), context);
+
+    /// <summary>
+    /// Runs before routing; every answer is no-store and nosniff. Only a mapped route's exact path and method, without a
+    /// query or path base, reaches routing: any other path answers 404, and another method on a mapped path 405 with
+    /// <c>Allow</c>. Routing alone would also match case and trailing-slash variants.
+    /// </summary>
+    internal Task GateAsync(HttpContext context, RequestDelegate next)
     {
         var request = context.Request;
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers.XContentTypeOptions = "nosniff";
-        if (request.QueryString.HasValue || request.PathBase.HasValue) { await Status(context, 404); return; }
-        switch (request.Path.Value)
+        var routes = LazyInitializer.EnsureInitialized(ref mapped, () => Mapped(context.RequestServices.GetRequiredService<EndpointDataSource>()));
+        if (request.QueryString.HasValue || request.PathBase.HasValue || request.Path.Value is not { } path ||
+            !routes.TryGetValue(path, out var methods))
+            return Status(context, StatusCodes.Status404NotFound);
+        if (!methods.Any(method => HttpMethods.Equals(method, request.Method)))
         {
-            case LivePath when HttpMethods.IsGet(request.Method):
-                await Status(context, 204); return;
-            case ReadyPath when HttpMethods.IsGet(request.Method):
-                await Status(context, Volatile.Read(ref ready) == 1 && calls.RuntimeAvailable() ? 204 : 503); return;
-            case InvocationsPath when HttpMethods.IsPost(request.Method):
-                break;
-            case InvocationsPath or LivePath or ReadyPath:
-                context.Response.Headers.Allow = request.Path.Value == InvocationsPath ? "POST" : "GET";
-                await Status(context, 405); return;
-            default:
-                await Status(context, 404); return;
+            context.Response.Headers.Allow = string.Join(", ", methods);
+            return Status(context, StatusCodes.Status405MethodNotAllowed);
         }
+        return next(context);
+    }
+
+    /// <summary>Each mapped route's exact path and its methods.</summary>
+    private static Dictionary<string, string[]> Mapped(EndpointDataSource source) =>
+        source.Endpoints.OfType<RouteEndpoint>()
+            .GroupBy(endpoint => endpoint.RoutePattern.RawText ?? throw new InvalidOperationException("A route needs its path."), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key,
+                group => group.SelectMany(endpoint => endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? []).ToArray(),
+                StringComparer.Ordinal);
+
+    internal Task ReadyAsync(HttpContext context) =>
+        Status(context, Volatile.Read(ref ready) == 1 && calls.RuntimeAvailable() ? StatusCodes.Status204NoContent : StatusCodes.Status503ServiceUnavailable);
+
+    internal async Task InvokeAsync(HttpContext context)
+    {
         using var call = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
         call.CancelAfter(calls.Deadline);
         // Saturation refuses before any token, body or database work.
-        if (Volatile.Read(ref ready) != 1 || !slots.Wait(0)) { await Outcome(context, 503, null, "busy", call.Token, retryAfter: 1); return; }
+        if (Volatile.Read(ref ready) != 1 || !slots.Wait(0))
+        { await Outcome(context, null, MappingInvocationOutcomeV1.Busy, call.Token, retryAfter: 1); return; }
         try { await InvokeAsync(context, call.Token); }
         finally { slots.Release(); }
     }
@@ -91,7 +135,7 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
             { await Unauthorized(context, call); return; }
             try { caller = await calls.Validator.ValidateAsync(authorization[7..], work.Token); }
             catch (MachineTokenException error) when (error.Failure == MachineTokenFailure.Unavailable)
-            { await Outcome(context, 503, null, "unavailable", call, retryAfter: 5); return; }
+            { await Outcome(context, null, MappingInvocationOutcomeV1.Unavailable, call, retryAfter: 5); return; }
             catch (MachineTokenException) { await Unauthorized(context, call); return; }
             // The credential bounds the call: once it expires, nothing is read, claimed, run or delivered for it.
             var remaining = caller.ExpiresAt - calls.Time.GetUtcNow();
@@ -99,22 +143,23 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
             if (remaining < calls.Deadline) credential.CancelAfter(remaining);
             if (headers[RequestIdHeader].Count != 1 || !Guid.TryParseExact(headers[RequestIdHeader][0], "D", out var id) ||
                 id == Guid.Empty || headers[RequestIdHeader][0] != id.ToString("D"))
-            { await Outcome(context, 400, null, "invalidRequestId", call); return; }
+            { await Outcome(context, null, MappingInvocationOutcomeV1.InvalidRequestId, call); return; }
             requestId = id;
             if (context.Request.ContentType is not ("application/json" or "application/json; charset=utf-8") ||
                 headers.ContentEncoding.Count != 0)
-            { await Outcome(context, 415, id, "unsupportedMediaType", call); return; }
+            { await Outcome(context, id, MappingInvocationOutcomeV1.UnsupportedMediaType, call); return; }
             var (body, refusal) = await ReadBodyAsync(context, bounded.Token);
-            if (body is null) { await Outcome(context, refusal, id, refusal == 413 ? "requestTooLarge" : "invalidRequest", call); return; }
+            if (body is null)
+            { await Outcome(context, id, refusal == 413 ? MappingInvocationOutcomeV1.RequestTooLarge : MappingInvocationOutcomeV1.InvalidRequest, call); return; }
             MachineInvocationRequest invocation;
             try { invocation = Parse(body); }
             catch (Exception error) when (error is JsonException or FormatException or ArgumentException or InvalidOperationException)
-            { await Outcome(context, 400, id, "invalidRequest", call); return; }
+            { await Outcome(context, id, MappingInvocationOutcomeV1.InvalidRequest, call); return; }
             if (Expired(caller, credential)) { await Unauthorized(context, call); return; }
             MachineInvocationResult result;
             try { result = await calls.Service.InvokeAsync(calls.Target, caller, id, invocation, bounded.Token); }
             catch (Exception error) when (error is not (OperationCanceledException or OutOfMemoryException or StackOverflowException))
-            { await Outcome(context, 503, id, "unavailable", call, retryAfter: 2); return; }
+            { await Outcome(context, id, MappingInvocationOutcomeV1.Unavailable, call, retryAfter: 2); return; }
             // A recorded outcome is not delivered on an expired credential; a retry with a valid one replays it.
             if (Expired(caller, credential)) { await Unauthorized(context, call); return; }
             await DeliverAsync(context, id, result, delivery.Token);
@@ -123,7 +168,7 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
         {
             if (context.Response.HasStarted) { context.Abort(); return; }
             if (caller is not null && Expired(caller, credential)) await Unauthorized(context, call);
-            else await Outcome(context, 503, requestId, "deadline", call, retryAfter: 1);
+            else await Outcome(context, requestId, MappingInvocationOutcomeV1.Deadline, call, retryAfter: 1);
         }
     }
 
@@ -141,20 +186,13 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
                 context.Response.StatusCode = 200;
                 await WriteAsync(context, result.Response!, call);
                 return;
-            case MachineInvocationStatus.Failed:
-                await Outcome(context, result.Outcome switch
-                {
-                    MachineInvocationOutcome.Refused => 403,
-                    MachineInvocationOutcome.IntegrityFailure or MachineInvocationOutcome.Interrupted or MachineInvocationOutcome.AttemptsExhausted => 500,
-                    _ => 422
-                }, requestId, Name(result.Outcome!.Value), call);
-                return;
-            case MachineInvocationStatus.Expired: await Outcome(context, 410, requestId, "expired", call); return;
-            case MachineInvocationStatus.Conflict: await Outcome(context, 409, requestId, "conflict", call); return;
-            case MachineInvocationStatus.InProgress: await Outcome(context, 409, requestId, "inProgress", call, retryAfter: 5); return;
-            case MachineInvocationStatus.Refused: await Outcome(context, 403, requestId, "refused", call); return;
-            case MachineInvocationStatus.NoRelease: await Outcome(context, 503, requestId, "noRelease", call, retryAfter: 30); return;
-            default: await Outcome(context, 503, requestId, result.Outcome is { } outcome ? Name(outcome) : "unavailable", call, retryAfter: 2); return;
+            case MachineInvocationStatus.Failed: await Outcome(context, requestId, Name(result.Outcome!.Value), call); return;
+            case MachineInvocationStatus.Expired: await Outcome(context, requestId, MappingInvocationOutcomeV1.Expired, call); return;
+            case MachineInvocationStatus.Conflict: await Outcome(context, requestId, MappingInvocationOutcomeV1.Conflict, call); return;
+            case MachineInvocationStatus.InProgress: await Outcome(context, requestId, MappingInvocationOutcomeV1.InProgress, call, retryAfter: 5); return;
+            case MachineInvocationStatus.Refused: await Outcome(context, requestId, MappingInvocationOutcomeV1.Refused, call); return;
+            case MachineInvocationStatus.NoRelease: await Outcome(context, requestId, MappingInvocationOutcomeV1.NoRelease, call, retryAfter: 30); return;
+            default: await Outcome(context, requestId, result.Outcome is { } outcome ? Name(outcome) : MappingInvocationOutcomeV1.Unavailable, call, retryAfter: 2); return;
         }
     }
 
@@ -232,27 +270,27 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
     private static string Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : throw new FormatException();
 
-    private static string Name(MachineInvocationOutcome outcome) => outcome switch
+    /// <summary>A recorded outcome on the wire. A completed outcome is delivered as the response, never as a refusal.</summary>
+    private static MappingInvocationOutcomeV1 Name(MachineInvocationOutcome outcome) => outcome switch
     {
-        MachineInvocationOutcome.InvalidInput => "invalidInput",
-        MachineInvocationOutcome.InvalidParameter => "invalidParameter",
-        MachineInvocationOutcome.ExecutionFailed => "executionFailed",
-        MachineInvocationOutcome.ResourceLimit => "resourceLimit",
-        MachineInvocationOutcome.IntegrityFailure => "integrityFailure",
-        MachineInvocationOutcome.Unsupported => "unsupported",
-        MachineInvocationOutcome.Interrupted => "interrupted",
-        MachineInvocationOutcome.AttemptsExhausted => "attemptsExhausted",
-        MachineInvocationOutcome.Busy => "busy",
-        MachineInvocationOutcome.ReleaseChanged => "releaseChanged",
-        MachineInvocationOutcome.Refused => "refused",
-        MachineInvocationOutcome.Completed => "completed",
-        _ => "unavailable"
+        MachineInvocationOutcome.InvalidInput => MappingInvocationOutcomeV1.InvalidInput,
+        MachineInvocationOutcome.InvalidParameter => MappingInvocationOutcomeV1.InvalidParameter,
+        MachineInvocationOutcome.ExecutionFailed => MappingInvocationOutcomeV1.ExecutionFailed,
+        MachineInvocationOutcome.ResourceLimit => MappingInvocationOutcomeV1.ResourceLimit,
+        MachineInvocationOutcome.IntegrityFailure => MappingInvocationOutcomeV1.IntegrityFailure,
+        MachineInvocationOutcome.Unsupported => MappingInvocationOutcomeV1.Unsupported,
+        MachineInvocationOutcome.Interrupted => MappingInvocationOutcomeV1.Interrupted,
+        MachineInvocationOutcome.AttemptsExhausted => MappingInvocationOutcomeV1.AttemptsExhausted,
+        MachineInvocationOutcome.Busy => MappingInvocationOutcomeV1.Busy,
+        MachineInvocationOutcome.ReleaseChanged => MappingInvocationOutcomeV1.ReleaseChanged,
+        MachineInvocationOutcome.Refused => MappingInvocationOutcomeV1.Refused,
+        _ => MappingInvocationOutcomeV1.Unavailable
     };
 
     private static Task Unauthorized(HttpContext context, CancellationToken call)
     {
         context.Response.Headers.WWWAuthenticate = "Bearer";
-        return Outcome(context, 401, null, "unauthorized", call);
+        return Outcome(context, null, MappingInvocationOutcomeV1.Unauthorized, call);
     }
 
     private static Task Status(HttpContext context, int status)
@@ -262,19 +300,30 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
         return Task.CompletedTask;
     }
 
-    private static Task Outcome(HttpContext context, int status, Guid? requestId, string outcome, CancellationToken call, int? retryAfter = null)
+    /// <summary>The one status of each outcome; the OpenAPI document lists every status's outcomes from it.</summary>
+    internal static int Status(MappingInvocationOutcomeV1 outcome) => outcome switch
     {
-        context.Response.StatusCode = status;
+        MappingInvocationOutcomeV1.InvalidRequestId or MappingInvocationOutcomeV1.InvalidRequest => StatusCodes.Status400BadRequest,
+        MappingInvocationOutcomeV1.Unauthorized => StatusCodes.Status401Unauthorized,
+        MappingInvocationOutcomeV1.Refused => StatusCodes.Status403Forbidden,
+        MappingInvocationOutcomeV1.Conflict or MappingInvocationOutcomeV1.InProgress => StatusCodes.Status409Conflict,
+        MappingInvocationOutcomeV1.Expired => StatusCodes.Status410Gone,
+        MappingInvocationOutcomeV1.RequestTooLarge => StatusCodes.Status413PayloadTooLarge,
+        MappingInvocationOutcomeV1.UnsupportedMediaType => StatusCodes.Status415UnsupportedMediaType,
+        MappingInvocationOutcomeV1.InvalidInput or MappingInvocationOutcomeV1.InvalidParameter or MappingInvocationOutcomeV1.ExecutionFailed or
+            MappingInvocationOutcomeV1.ResourceLimit or MappingInvocationOutcomeV1.Unsupported => StatusCodes.Status422UnprocessableEntity,
+        MappingInvocationOutcomeV1.IntegrityFailure or MappingInvocationOutcomeV1.Interrupted or MappingInvocationOutcomeV1.AttemptsExhausted =>
+            StatusCodes.Status500InternalServerError,
+        MappingInvocationOutcomeV1.Busy or MappingInvocationOutcomeV1.Unavailable or MappingInvocationOutcomeV1.ReleaseChanged or
+            MappingInvocationOutcomeV1.Deadline or MappingInvocationOutcomeV1.NoRelease => StatusCodes.Status503ServiceUnavailable,
+        _ => throw new ArgumentOutOfRangeException(nameof(outcome))
+    };
+
+    private static Task Outcome(HttpContext context, Guid? requestId, MappingInvocationOutcomeV1 outcome, CancellationToken call, int? retryAfter = null)
+    {
+        context.Response.StatusCode = Status(outcome);
         if (retryAfter is { } seconds) context.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        using var stream = new MemoryStream();
-        using (var json = new Utf8JsonWriter(stream))
-        {
-            json.WriteStartObject();
-            if (requestId is { } id) json.WriteString("requestId", id.ToString("D"));
-            json.WriteString("outcome", outcome);
-            json.WriteEndObject();
-        }
-        return WriteAsync(context, stream.ToArray(), call);
+        return WriteAsync(context, JsonSerializer.SerializeToUtf8Bytes(new MappingInvocationErrorV1(requestId, outcome), MappingEndpointContract.Json), call);
     }
 
     /// <summary>The response stays inside the call deadline; a client that does not take it in time loses the connection.</summary>

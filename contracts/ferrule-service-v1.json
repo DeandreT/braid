@@ -1,0 +1,790 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Weft Ferrule service",
+    "description": "`weft.ferrule-service.v1`: stateless Ferrule operations for horizontally scaled replicas. A route selects a trusted profile; the frame's own header selects the Ferrule operation within it. Over pinned mutual TLS the service also serves the `weft.inspection-transport.v1` routes, so an existing inspection client works unchanged. A separate plain probe listener, when configured, serves only the two health routes and answers `404` for every other path. Any other path answers `404`, and another method on a mapped path `405` with `Allow`.",
+    "version": "v1"
+  },
+  "paths": {
+    "/v1/ready": {
+      "get": {
+        "tags": [
+          "Ferrule service"
+        ],
+        "summary": "Confirm the service and its identities before sending a frame.",
+        "description": "Over pinned TLS, reaching this route proves that the service admitted the client certificate.",
+        "operationId": "GetServiceReady",
+        "responses": {
+          "204": {
+            "description": "Ready.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Weft-Worker-Image": {
+                "description": "The service's native identity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "Weft-Compile-Toolchain": {
+                "description": "The compile toolchain identity, when the service compiles.",
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "Weft-Compiled-Runtime": {
+                "description": "The compiled runtime identity: on ready when execution is enabled, and on `execute` answers.",
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The replica is stopping. Send to another replica after `Retry-After`.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "1"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "tags": [
+          "Ferrule service"
+        ],
+        "summary": "Read the protocol, identities, replica limits and served profiles.",
+        "operationId": "GetCapabilities",
+        "responses": {
+          "200": {
+            "description": "The capability document.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FerruleServiceCapabilitiesV1"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/operations/{profile}/{operation}": {
+      "post": {
+        "tags": [
+          "Ferrule service"
+        ],
+        "summary": "Run one exact frame under a fresh operation identity.",
+        "description": "The service reads the complete frame before admission, so an incomplete frame never runs and its connection is aborted. An admitted operation answers `200` only after its child has settled; any other status means nothing ran. An operation identity is admitted once per replica. Send ready, the operation and its cancellation as streams of one HTTP/2 connection (pinned mutual TLS) or within one sandbox session, so that all reach the same replica.\n\n| Profile | Request bytes | Response bytes | Wall seconds | CPU seconds | Memory bytes |\n| --- | --- | --- | --- | --- | --- |\n| `inspection` | 8388612 | 8388612 | 10 | 10 | 268435456 |\n| `preview` | 12599368 | 9437444 | 30 | 30 | 536870912 |\n| `compile` | 4210692 | 33686528 | 120 | 120 | 2147483648 |\n| `execute` | 44040320 | 9437440 | 30 | 30 | 536870912 |",
+        "operationId": "RunOperation",
+        "parameters": [
+          {
+            "name": "profile",
+            "in": "path",
+            "description": "`inspection` and `preview` are always served. `compile` and `execute` are served only when enabled and otherwise answer `501`; another name answers `404` (`400` for a cancellation).",
+            "required": true,
+            "schema": {
+              "enum": [
+                "inspection",
+                "preview",
+                "compile",
+                "execute"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "operation",
+            "in": "path",
+            "description": "A fresh 128-bit operation identity.",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Weft-Worker-Image",
+            "in": "header",
+            "description": "The service's native identity, as `GET /v1/ready` reports it; another value answers `409`.",
+            "required": true,
+            "schema": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Weft-Compile-Toolchain",
+            "in": "header",
+            "description": "Required for the `compile` profile. When present it must equal the service's compile toolchain identity; another value answers `409`.",
+            "schema": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Weft-Compiled-Runtime",
+            "in": "header",
+            "description": "Required for the `execute` profile and equal to the service's runtime identity. Any other value, or the header on another profile, answers `409`.",
+            "schema": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "One exact frame with a known length (`Content-Length` of at least one byte and at most the profile's request bytes) and no content encoding.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The operation settled. With `Weft-Worker-Result: none` the body is the exact worker output; otherwise it is empty.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Weft-Worker-Result": {
+                "description": "How the child settled. Only `none` carries output.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "none",
+                    "canceled",
+                    "timedOut",
+                    "startFailed",
+                    "workerFailed",
+                    "outputLimitExceeded",
+                    "cleanupFailed",
+                    "sandboxUnavailable"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Weft-Worker-Image": {
+                "description": "The service's native identity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "Weft-Compile-Toolchain": {
+                "description": "The compile toolchain identity, when the service compiles.",
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "Weft-Compiled-Runtime": {
+                "description": "The compiled runtime identity: on ready when execution is enabled, and on `execute` answers.",
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed operation identity, media type, content encoding or length. Nothing ran.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another native, toolchain or runtime identity, or a repeated operation identity. Nothing ran.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The replica is full or stopping, or the operation was not admitted within the admission wait. Nothing ran; send a fresh operation identity to any replica after `Retry-After`.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "1"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown profile. Nothing ran.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "A reserved profile: `compile` or `execute` while disabled. Nothing ran.",
+            "headers": {
+              "Weft-Service-Protocol": {
+                "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "weft.ferrule-service.v1"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/operations/{profile}/{operation}/cancel": {
+      "post": {
+        "tags": [
+          "Ferrule service"
+        ],
+        "summary": "Cancel an operation on the channel that carries it.",
+        "description": "Cancels the admitted operation through its runner, which then answers it `200` with `Weft-Worker-Result: canceled`. A cancellation that arrives first is remembered, and the operation is answered `canceled` without running.",
+        "operationId": "CancelOperation",
+        "parameters": [
+          {
+            "name": "profile",
+            "in": "path",
+            "description": "`inspection` and `preview` are always served. `compile` and `execute` are served only when enabled and otherwise answer `501`; another name answers `404` (`400` for a cancellation).",
+            "required": true,
+            "schema": {
+              "enum": [
+                "inspection",
+                "preview",
+                "compile",
+                "execute"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "operation",
+            "in": "path",
+            "description": "A fresh 128-bit operation identity.",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Canceled, or recorded so that the operation is refused when it arrives."
+          },
+          "400": {
+            "description": "Malformed operation identity, or a profile this service does not serve."
+          }
+        }
+      }
+    },
+    "/v1/health/live": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Platform liveness probe.",
+        "operationId": "GetLiveness",
+        "responses": {
+          "204": {
+            "description": "The process serves requests."
+          }
+        },
+        "security": [
+          {
+            "pinnedClientCertificate": [ ]
+          },
+          { }
+        ]
+      }
+    },
+    "/v1/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Platform readiness probe.",
+        "operationId": "GetReadiness",
+        "responses": {
+          "204": {
+            "description": "Ready."
+          },
+          "503": {
+            "description": "Stopping, or a cleanup is unconfirmed."
+          }
+        },
+        "security": [
+          {
+            "pinnedClientCertificate": [ ]
+          },
+          { }
+        ]
+      }
+    },
+    "/v1/inspection/ready": {
+      "get": {
+        "tags": [
+          "Inspection transport"
+        ],
+        "summary": "Confirm the client certificate and the native identity (`weft.inspection-transport.v1`).",
+        "operationId": "GetInspectionReady",
+        "responses": {
+          "204": {
+            "description": "Ready.",
+            "headers": {
+              "Weft-Worker-Image": {
+                "description": "The service's native identity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inspection/operations/{operation}": {
+      "post": {
+        "tags": [
+          "Inspection transport"
+        ],
+        "summary": "Run one exact inspection frame (`weft.inspection-transport.v1`).",
+        "description": "The service reads the complete frame before admission, so an incomplete frame never runs and its connection is aborted. An admitted operation answers `200` only after its child has settled; any other status means nothing ran. An operation identity is admitted once per replica. Send ready, the operation and its cancellation as streams of one HTTP/2 connection (pinned mutual TLS) or within one sandbox session, so that all reach the same replica.\n\nThe `inspection` profile's limits apply:\n\n| Profile | Request bytes | Response bytes | Wall seconds | CPU seconds | Memory bytes |\n| --- | --- | --- | --- | --- | --- |\n| `inspection` | 8388612 | 8388612 | 10 | 10 | 268435456 |",
+        "operationId": "RunInspectionOperation",
+        "parameters": [
+          {
+            "name": "operation",
+            "in": "path",
+            "description": "A fresh 128-bit operation identity.",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Weft-Worker-Image",
+            "in": "header",
+            "description": "The service's native identity, as `GET /v1/ready` reports it; another value answers `409`.",
+            "required": true,
+            "schema": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Weft-Compile-Toolchain",
+            "in": "header",
+            "description": "When present it must equal the service's compile toolchain identity; another value answers `409`.",
+            "schema": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Weft-Compiled-Runtime",
+            "in": "header",
+            "description": "Required for the `execute` profile and equal to the service's runtime identity. Any other value, or the header on another profile, answers `409`.",
+            "schema": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "One exact frame with a known length (`Content-Length` of at least one byte and at most the profile's request bytes) and no content encoding.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The operation settled. With `Weft-Worker-Result: none` the body is the exact worker output; otherwise it is empty.",
+            "headers": {
+              "Weft-Worker-Result": {
+                "description": "How the child settled. Only `none` carries output.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "none",
+                    "canceled",
+                    "timedOut",
+                    "startFailed",
+                    "workerFailed",
+                    "outputLimitExceeded",
+                    "cleanupFailed",
+                    "sandboxUnavailable"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Weft-Worker-Image": {
+                "description": "The service's native identity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "Weft-Compile-Toolchain": {
+                "description": "The compile toolchain identity, when the service compiles.",
+                "schema": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed operation identity, media type, content encoding or length. Nothing ran."
+          },
+          "409": {
+            "description": "Another native or toolchain identity, a runtime identity, or a repeated operation identity. Nothing ran."
+          },
+          "503": {
+            "description": "The replica is full or stopping, or the operation was not admitted within the admission wait. Nothing ran; send a fresh operation identity to any replica after `Retry-After`.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "1"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inspection/operations/{operation}/cancel": {
+      "post": {
+        "tags": [
+          "Inspection transport"
+        ],
+        "summary": "Cancel an inspection operation (`weft.inspection-transport.v1`).",
+        "description": "Cancels the admitted operation through its runner, which then answers it `200` with `Weft-Worker-Result: canceled`. A cancellation that arrives first is remembered, and the operation is answered `canceled` without running.",
+        "operationId": "CancelInspectionOperation",
+        "parameters": [
+          {
+            "name": "operation",
+            "in": "path",
+            "description": "A fresh 128-bit operation identity.",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Canceled, or recorded so that the operation is refused when it arrives."
+          },
+          "400": {
+            "description": "Malformed operation identity."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "FerruleServiceCapabilitiesV1": {
+        "required": [
+          "protocol",
+          "buildIdentity",
+          "concurrency",
+          "capacity",
+          "admissionWaitMilliseconds",
+          "profiles",
+          "reserved"
+        ],
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "buildIdentity": {
+            "type": "string"
+          },
+          "engineRevision": {
+            "type": "string"
+          },
+          "concurrency": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "capacity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "admissionWaitMilliseconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FerruleServiceProfileV1"
+            }
+          },
+          "reserved": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "FerruleServiceProfileV1": {
+        "required": [
+          "name",
+          "maximumRequestBytes",
+          "maximumResponseBytes",
+          "wallSeconds",
+          "cpuSeconds",
+          "memoryBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "maximumRequestBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maximumResponseBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "wallSeconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cpuSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "memoryBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "toolchain": {
+            "$ref": "#/components/schemas/FerruleServiceToolchainV1"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/FerruleServiceRuntimeV1"
+          }
+        }
+      },
+      "FerruleServiceRuntimeV1": {
+        "required": [
+          "protocol",
+          "version",
+          "identity",
+          "managedHeapBytes",
+          "maximumAddressSpaceBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "identity": {
+            "type": "string"
+          },
+          "managedHeapBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "maximumAddressSpaceBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "FerruleServiceToolchainV1": {
+        "required": [
+          "protocol",
+          "profile",
+          "sdkVersion",
+          "runtimeVersion",
+          "identity",
+          "buildIdentity"
+        ],
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "sdkVersion": {
+            "type": "string"
+          },
+          "runtimeVersion": {
+            "type": "string"
+          },
+          "identity": {
+            "type": "string"
+          },
+          "buildIdentity": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "pinnedClientCertificate": {
+        "type": "mutualTLS",
+        "description": "Pinned mutual TLS: the TLS handshake completes only for a client certificate whose DER SHA-256 digest the service admits (`WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256`), and the client pins the service certificate the same way. Trust stores, names and revocation are not used. A platform-sandbox deployment (`WEFT_FERRULE_SERVICE_AUTHENTICATION=platformSandbox`) instead listens on plain HTTP behind a platform front end that authenticates every caller and is the only route to the listener; it serves the service and probe routes only."
+      }
+    }
+  },
+  "security": [
+    {
+      "pinnedClientCertificate": [ ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "Ferrule service"
+    },
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Inspection transport"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.DependencyInjection;
@@ -123,35 +124,13 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
             if (options.HealthListen is { } health)
                 server.Listen(health, listener => listener.Protocols = HttpProtocols.Http1);
         });
+        // Route handlers find this instance among the request's services.
+        builder.Services.AddSingleton(this);
         var built = builder.Build();
         // The plain probe listener reaches nothing but liveness and readiness.
         built.Use((context, next) => Tls && !context.Request.IsHttps && !IsHealthPath(context.Request.Path)
             ? NotFound(context) : next(context));
-        if (options.ServiceRoutes)
-        {
-            built.MapGet(FerruleServiceProtocol.ReadyPath, (RequestDelegate)(context => Ready(context, service: true)));
-            built.MapGet(FerruleServiceProtocol.CapabilitiesPath, (RequestDelegate)CapabilitiesAsync);
-            built.MapPost(FerruleServiceProtocol.OperationsPath + "{profile}/{operation}", (RequestDelegate)(context =>
-                RunAsync(context, context.Request.RouteValues["profile"] as string, service: true)));
-            built.MapPost(FerruleServiceProtocol.OperationsPath + "{profile}/{operation}" + InspectionTransport.CancelSuffix,
-                (RequestDelegate)(context => Cancel(context, context.Request.RouteValues["profile"] as string)));
-            built.MapGet(FerruleServiceProtocol.LivenessPath, (RequestDelegate)Live);
-            built.MapGet(FerruleServiceProtocol.ReadinessPath, (RequestDelegate)Readiness);
-        }
-        else if (options.HealthListen is not null)
-        {
-            built.MapGet(FerruleServiceProtocol.LivenessPath, (RequestDelegate)Live);
-            built.MapGet(FerruleServiceProtocol.ReadinessPath, (RequestDelegate)Readiness);
-        }
-
-        if (Tls && runners.ContainsKey(FerruleServiceProtocol.InspectionProfile))
-        {
-            built.MapGet(LegacyReadyPath, (RequestDelegate)(context => Ready(context, service: false)));
-            built.MapPost(LegacyOperationsPath + "{operation}", (RequestDelegate)(context =>
-                RunAsync(context, FerruleServiceProtocol.InspectionProfile, service: false)));
-            built.MapPost(LegacyOperationsPath + "{operation}" + InspectionTransport.CancelSuffix, (RequestDelegate)(context =>
-                Cancel(context, FerruleServiceProtocol.InspectionProfile)));
-        }
+        MapRoutes(built, Routes);
 
         try
         {
@@ -171,6 +150,75 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         if (options.HealthListen is not null)
             HealthPort = ports.Single(address => address.Scheme == Uri.UriSchemeHttp).Port;
     }
+
+    /// <summary>The routes the started listener serves.</summary>
+    internal IEnumerable<Endpoint> Endpoints =>
+        (application ?? throw new InvalidOperationException("The server has not started.")).Services.GetRequiredService<EndpointDataSource>().Endpoints;
+
+    /// <summary>The routes this configuration serves.</summary>
+    internal WorkerTransportRoutes Routes =>
+        (options.ServiceRoutes ? WorkerTransportRoutes.Service | WorkerTransportRoutes.Health
+            : options.HealthListen is not null ? WorkerTransportRoutes.Health : WorkerTransportRoutes.None) |
+        (Tls && runners.ContainsKey(FerruleServiceProtocol.InspectionProfile) ? WorkerTransportRoutes.Inspection : WorkerTransportRoutes.None);
+
+    /// <summary>
+    /// Maps the selected routes with their answers. Handlers resolve the serving instance from the request's services,
+    /// so a document-only host maps these same registrations without a listener or runners.
+    /// </summary>
+    public static void MapRoutes(IEndpointRouteBuilder routes, WorkerTransportRoutes selected)
+    {
+        ArgumentNullException.ThrowIfNull(routes);
+        const string Json = "application/json";
+        const string Service = "Ferrule service";
+        const string Health = "Health";
+        const string Inspection = "Inspection transport";
+        if (selected.HasFlag(WorkerTransportRoutes.Service))
+        {
+            routes.MapGet(FerruleServiceProtocol.ReadyPath, Handler(static (server, context) => server.Ready(context, service: true)))
+                .WithName("GetServiceReady").WithTags(Service)
+                .Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status503ServiceUnavailable);
+            routes.MapGet(FerruleServiceProtocol.CapabilitiesPath, Handler(static (server, context) => server.CapabilitiesAsync(context)))
+                .WithName("GetCapabilities").WithTags(Service)
+                .Produces<FerruleServiceCapabilitiesV1>(StatusCodes.Status200OK, Json);
+            Operation(routes.MapPost(FerruleServiceProtocol.OperationsPath + "{profile}/{operation}", Handler(static (server, context) =>
+                    server.RunAsync(context, context.Request.RouteValues["profile"] as string, service: true))), "RunOperation", Service)
+                .Produces(StatusCodes.Status404NotFound).Produces(StatusCodes.Status501NotImplemented);
+            Cancellation(routes.MapPost(FerruleServiceProtocol.OperationsPath + "{profile}/{operation}" + InspectionTransport.CancelSuffix,
+                Handler(static (server, context) => server.Cancel(context, context.Request.RouteValues["profile"] as string))), "CancelOperation", Service);
+        }
+
+        if (selected.HasFlag(WorkerTransportRoutes.Health))
+        {
+            routes.MapGet(FerruleServiceProtocol.LivenessPath, Handler(static (_, context) => Live(context)))
+                .WithName("GetLiveness").WithTags(Health).Produces(StatusCodes.Status204NoContent);
+            routes.MapGet(FerruleServiceProtocol.ReadinessPath, Handler(static (server, context) => server.Readiness(context)))
+                .WithName("GetReadiness").WithTags(Health)
+                .Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        if (selected.HasFlag(WorkerTransportRoutes.Inspection))
+        {
+            routes.MapGet(LegacyReadyPath, Handler(static (server, context) => server.Ready(context, service: false)))
+                .WithName("GetInspectionReady").WithTags(Inspection).Produces(StatusCodes.Status204NoContent);
+            Operation(routes.MapPost(LegacyOperationsPath + "{operation}", Handler(static (server, context) =>
+                server.RunAsync(context, FerruleServiceProtocol.InspectionProfile, service: false))), "RunInspectionOperation", Inspection);
+            Cancellation(routes.MapPost(LegacyOperationsPath + "{operation}" + InspectionTransport.CancelSuffix, Handler(static (server, context) =>
+                server.Cancel(context, FerruleServiceProtocol.InspectionProfile))), "CancelInspectionOperation", Inspection);
+        }
+
+        // No Accepts metadata: routing would answer a media type before the operation's own checks. The service's
+        // OpenAPI document describes the frame body.
+        static RouteHandlerBuilder Operation(RouteHandlerBuilder route, string name, string tag) => route
+            .WithName(name).WithTags(tag)
+            .Produces(StatusCodes.Status200OK, contentType: InspectionTransport.MediaType)
+            .Produces(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status409Conflict).Produces(StatusCodes.Status503ServiceUnavailable);
+
+        static RouteHandlerBuilder Cancellation(RouteHandlerBuilder route, string name, string tag) => route
+            .WithName(name).WithTags(tag).Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status400BadRequest);
+    }
+
+    private static Delegate Handler(Func<WorkerTransportServer, HttpContext, Task> handle) =>
+        (HttpContext context) => handle(context.RequestServices.GetRequiredService<WorkerTransportServer>(), context);
 
     private static bool IsHealthPath(PathString path) =>
         path == FerruleServiceProtocol.LivenessPath || path == FerruleServiceProtocol.ReadinessPath;
