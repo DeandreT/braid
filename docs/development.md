@@ -123,6 +123,79 @@ To inspect the self-authored fixture contract, start with
 `/api/v1/fixtures/projections/rich` or `/openapi/v1.json`. Fixtures return 404 in
 other environments. See [Projection v1](projection-contract.md) for their scope.
 
+## Run a complete local instance
+
+`deploy/local/dev-up.sh` starts every feature of the Development profile on
+loopback in one command: catalog reads, metadata edits and project creation,
+native upload and report derivation, retained reports and revision comparison,
+chat through a local Ollama model, previews, regression cases and runs, and builds.
+It needs Linux with user systemd, Docker with BuildKit, Node and the pinned .NET
+SDK on `PATH` (or `DOTNET_ROOT`) with its ASP.NET Core runtime.
+
+```sh
+deploy/local/dev-up.sh
+```
+
+It then:
+
+1. Generates every database password once into a private settings directory
+   (`~/.config/weft-dev`, mode 0700, files 0600). Nothing secret is printed or
+   logged, and build and container processes do not inherit the passwords.
+2. Publishes the Release server, `Weft.Worker`, `Weft.DatabaseTool` and
+   `Weft.StorageTool` from the checkout into `~/.local/share/weft-dev/app/<commit>`,
+   and builds the Ferrule native image and the combined compiler image from its
+   exact image ID, tagged `weft-dev/ferrule-host:<commit>` and
+   `weft-dev/build-worker:<commit>`. The combined image's immutable ID is the one
+   `WEFT_FERRULE_WORKER_IMAGE` for inspection, previews, regression runs and builds.
+   Without a global buildx plugin, set `WEFT_DEV_BUILD_DOCKER_CONFIG` to a Docker
+   configuration directory that has it.
+3. Starts the `weft-dev-postgres` container with the `weft-dev-postgres-data`
+   volume on `127.0.0.1:55432`. On its first start, `postgres-init.sh` creates every
+   restricted login. It applies the migrations, provisions the Development
+   organization and principal, and grants that principal project creation.
+4. Provisions a v2 filesystem store under `~/.local/share/weft-dev/storage`.
+5. Starts the `weft-ollama` container (created with the `weft-ollama-models`
+   volume if absent), pulls missing models, and writes a chat profile for each
+   model with `loopbackFixture` against `http://127.0.0.1:11434/api/chat`. The
+   first model is the default.
+6. Starts the server on `http://127.0.0.1:4100` and the worker as the user
+   systemd units `weft-dev-server` and `weft-dev-worker`, which keep running after
+   the shell exits. Each reads its own logins from a private environment file and
+   logs to `~/.local/share/weft-dev/logs`.
+7. Creates the default project "Local project" through the product API and grants
+   the principal its Administrator role.
+
+Open `http://127.0.0.1:4100/catalog`. `~/.local/share/weft-dev/status.sh` reports
+the units, containers and endpoints, and `~/.local/share/weft-dev/stop.sh` stops
+the units and the PostgreSQL and Ollama containers, keeping all data. Both work
+without the checkout; the repository's `deploy/local/dev-status.sh` and
+`dev-down.sh` are the same commands. `dev-down.sh --keep-ollama` leaves Ollama
+running; `dev-down.sh --purge` also removes the instance's database container and
+volume, image tags, state and settings, but never the Ollama container or models.
+
+A rerun keeps the secrets, database, store, identity and project. It rebuilds only
+for a new commit (or on every run from a modified checkout), and restarts a unit
+only when its build or settings changed. The passwords follow the logins that
+`postgres-init.sh` creates, so a rerun also generates one for a login added there;
+an existing volume still needs that login created with its `postgres-add-*.sh`
+script, as for any existing installation.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `WEFT_DEV_NAME` | `weft-dev` | Prefix of the containers, volume, units, image tags and directories |
+| `WEFT_DEV_PORT` / `WEFT_DEV_POSTGRES_PORT` | `4100` / `55432` | Loopback ports of the server and PostgreSQL |
+| `WEFT_DEV_HOME` / `WEFT_DEV_CONFIG` | `~/.local/share/<name>` / `~/.config/<name>` | State, logs and control scripts / private settings |
+| `WEFT_DEV_SOURCE` | this checkout | Checkout to build and run |
+| `WEFT_DEV_CHAT_MODELS` | `qwen2.5:3b qwen2.5:1.5b` | Ollama models offered in chat, default first |
+| `WEFT_DEV_OLLAMA_CONTAINER` / `WEFT_DEV_OLLAMA_URL` | `weft-ollama` / `http://127.0.0.1:11434` | Ollama container to start (empty for an externally managed one) and its loopback origin |
+| `WEFT_DEV_BUILD_DOCKER_CONFIG` | none | Docker configuration with the buildx plugin, used only for image builds |
+
+Pass the same variables to `dev-down.sh` and `dev-status.sh`. A second instance with
+its own name and ports leaves the first untouched; give it `--keep-ollama` when
+stopping it so a shared Ollama keeps serving the other. Chat on CPU can exceed the
+provider deadlines described in [Local model check](chat-http.md#local-model-check);
+the smaller model answers faster.
+
 ## Updating API contracts
 
 Edit the C# contract or typed endpoint, then build the server and regenerate:
