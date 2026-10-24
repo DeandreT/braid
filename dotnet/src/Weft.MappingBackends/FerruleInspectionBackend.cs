@@ -10,10 +10,10 @@ using Weft.MappingBackends.Workers;
 
 namespace Weft.MappingBackends;
 
-public sealed partial class FerruleInspectionBackend(IInspectionWorkerRunner runner) : IMappingInspectionBackend, IMappingProjectionBackend
+public sealed partial class FerruleInspectionBackend(IInspectionWorkerRunner runner) : IMappingInspectionBackend, IMappingProjectionBackend, Weft.Application.IMappingEditBackend
 {
     public const string ProtocolVersion = "weft.ferrule-host.v1";
-    public const string EngineRevision = "0169809123b8caebd141b26a625be4c07e750536";
+    public const string EngineRevision = "576012aa17c403d9c3fcb8659ed4d3a47ba06864";
     public const string AdapterBuild = "weft.ferrule-adapter.v3";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();

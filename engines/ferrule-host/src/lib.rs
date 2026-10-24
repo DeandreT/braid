@@ -6,19 +6,18 @@ use ferrule_mapping::FileCodecError;
 use sha2::{Digest, Sha256};
 
 pub mod build;
-pub mod decode;
+pub mod edit;
 pub mod framing;
-pub mod inspect;
 pub mod preview;
-pub mod projection;
-pub mod protocol;
 pub mod sandbox;
-pub mod validation;
+pub use weft_ferrule_core::{
+    decode, inspect, projection, protocol, valid_context_parts, validation,
+};
 
 use preview::protocol::PREVIEW_PROTOCOL_VERSION;
 use protocol::{
     Failure, MAX_DIAGNOSTICS, MAX_HEADER_BYTES, MAX_ITEMS, MAX_NATIVE_BYTES, MAX_TEXT_BYTES,
-    NativeLocator, PROTOCOL_VERSION, RequestHeader, Response, Revision, WorkerResult, bounded_text,
+    NativeLocator, PROTOCOL_VERSION, RequestHeader, Response, WorkerResult, bounded_text,
 };
 use serde::Deserialize;
 
@@ -37,6 +36,11 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
     struct ProtocolProbe {
         #[serde(rename = "protocolVersion")]
         protocol_version: Option<String>,
+    }
+    if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
+        .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(edit::PROTOCOL))
+    {
+        return edit::handle(&header_bytes, reader, writer);
     }
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
         .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(build::PROTOCOL))
@@ -191,48 +195,4 @@ fn valid_context(header: &RequestHeader) -> bool {
         &header.native_digest,
         &header.document_id,
     )
-}
-
-pub(crate) fn valid_context_parts(
-    request_id: &str,
-    revision: &Revision,
-    native_digest: &str,
-    document_id: &str,
-) -> bool {
-    [
-        request_id,
-        &revision.organization_id,
-        &revision.project_id,
-        &revision.mapping_id,
-        &revision.revision_id,
-    ]
-    .into_iter()
-    .all(canonical_nonzero_guid)
-        && native_digest.len() == 64
-        && native_digest
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        && valid_document_id(document_id)
-}
-
-fn canonical_nonzero_guid(value: &str) -> bool {
-    value.len() == 36
-        && value != "00000000-0000-0000-0000-000000000000"
-        && value.bytes().enumerate().all(|(index, byte)| {
-            if matches!(index, 8 | 13 | 18 | 23) {
-                byte == b'-'
-            } else {
-                byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
-            }
-        })
-}
-
-fn valid_document_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && !value.contains("..")
-        && value.as_bytes()[0].is_ascii_alphanumeric()
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }

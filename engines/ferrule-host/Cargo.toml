@@ -5,14 +5,16 @@ edition = "2024"
 publish = false
 
 [workspace]
+members = ["core"]
 
 [dependencies]
-ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "0169809123b8caebd141b26a625be4c07e750536" }
-ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "0169809123b8caebd141b26a625be4c07e750536" }
-ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "0169809123b8caebd141b26a625be4c07e750536" }
-ferrule-cli = { package = "cli", git = "https://github.com/DeandreT/ferrule", rev = "0169809123b8caebd141b26a625be4c07e750536" }
-ferrule-codegen = { package = "codegen", git = "https://github.com/DeandreT/ferrule", rev = "0169809123b8caebd141b26a625be4c07e750536" }
-ferrule-codegen-csharp = { package = "codegen-csharp", git = "https://github.com/DeandreT/ferrule", rev = "0169809123b8caebd141b26a625be4c07e750536" }
+weft-ferrule-core = { path = "core" }
+ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+ferrule-cli = { package = "cli", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+ferrule-codegen = { package = "codegen", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+ferrule-codegen-csharp = { package = "codegen-csharp", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
 anyhow = "=1.0.103"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }

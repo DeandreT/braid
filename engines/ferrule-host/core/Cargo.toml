@@ -1,0 +1,18 @@
+[package]
+name = "weft-ferrule-core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+ferrule-edit-ops = { package = "edit-ops", git = "https://github.com/DeandreT/ferrule", rev = "576012aa17c403d9c3fcb8659ed4d3a47ba06864" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = { version = "=1.0.150", features = ["float_roundtrip"] }
+sha2 = "=0.10.9"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+# Required to compile the runtime catalogue; no runtime functions are exposed by this core.
+getrandom = { version = "=0.4.2", features = ["wasm_js"] }

@@ -20,6 +20,10 @@ public sealed class DockerWorkerProfile
     public static DockerWorkerProfile Inspection { get; } = new("inspection", 268_435_456, 10,
         TimeSpan.FromSeconds(10), DockerInspectionWorkerOptions.MaximumFrameBytes, DockerInspectionWorkerOptions.MaximumFrameBytes);
 
+    /// <summary>Exact-base edit replay; isolation is identical to inspection, with bounded checkpoint frames.</summary>
+    public static DockerWorkerProfile Edit { get; } = new("edit", 268_435_456, 10,
+        TimeSpan.FromSeconds(10), MappingEditPolicy.MaximumRequestBytes, MappingEditPolicy.MaximumResponseBytes);
+
     /// <summary>Bounded sample preview with explicit input and output documents.</summary>
     public static DockerWorkerProfile Preview { get; } = new("preview", 536_870_912, 30,
         TimeSpan.FromSeconds(30), PreviewPolicy.MaximumRequestBytes, PreviewPolicy.MaximumResponseBytes);

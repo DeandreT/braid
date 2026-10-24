@@ -103,14 +103,14 @@ cp -R /work/third-party /runtime/usr/share/weft-ferrule-host/third-party
 EOF
 
 FROM build AS qualification
-RUN cargo test --release --locked --package weft-ferrule-host --test build_qualification --test protocol_qualification --test preview_qualification --test sandbox_qualification
+RUN cargo test --release --locked --package weft-ferrule-host --test build_qualification --test protocol_qualification --test preview_qualification --test edit_qualification --test sandbox_qualification
 
 FROM scratch
 ARG WEFT_REVISION=""
 LABEL org.opencontainers.image.title="Weft Ferrule worker" \
       org.opencontainers.image.source="https://github.com/DeandreT/weft" \
       org.opencontainers.image.revision="$WEFT_REVISION" \
-      io.weft.ferrule.revision="0169809123b8caebd141b26a625be4c07e750536" \
+      io.weft.ferrule.revision="576012aa17c403d9c3fcb8659ed4d3a47ba06864" \
       io.weft.rust.toolchain="1.98.1"
 COPY --from=build /runtime/ /
 USER 65532:65532

@@ -119,16 +119,17 @@
           "Ferrule service"
         ],
         "summary": "Run one exact frame under a fresh operation identity.",
-        "description": "The service reads the complete frame before admission, so an incomplete frame never runs and its connection is aborted. An admitted operation answers `200` only after its child has settled; any other status means nothing ran. An operation identity is admitted once per replica. Send ready, the operation and its cancellation as streams of one HTTP/2 connection (pinned mutual TLS) or within one sandbox session, so that all reach the same replica.\n\n| Profile | Request bytes | Response bytes | Wall seconds | CPU seconds | Memory bytes |\n| --- | --- | --- | --- | --- | --- |\n| `inspection` | 8388612 | 8388612 | 10 | 10 | 268435456 |\n| `preview` | 12599368 | 9437444 | 30 | 30 | 536870912 |\n| `compile` | 4210692 | 33686528 | 120 | 120 | 2147483648 |\n| `execute` | 44040320 | 9437440 | 30 | 30 | 536870912 |",
+        "description": "The service reads the complete frame before admission, so an incomplete frame never runs and its connection is aborted. An admitted operation answers `200` only after its child has settled; any other status means nothing ran. An operation identity is admitted once per replica. Send ready, the operation and its cancellation as streams of one HTTP/2 connection (pinned mutual TLS) or within one sandbox session, so that all reach the same replica.\n\n| Profile | Request bytes | Response bytes | Wall seconds | CPU seconds | Memory bytes |\n| --- | --- | --- | --- | --- | --- |\n| `edit` | 5259276 | 20971528 | 10 | 10 | 268435456 |\n| `inspection` | 8388612 | 8388612 | 10 | 10 | 268435456 |\n| `preview` | 12599368 | 9437444 | 30 | 30 | 536870912 |\n| `compile` | 4210692 | 33686528 | 120 | 120 | 2147483648 |\n| `execute` | 44040320 | 9437440 | 30 | 30 | 536870912 |",
         "operationId": "RunOperation",
         "parameters": [
           {
             "name": "profile",
             "in": "path",
-            "description": "`inspection` and `preview` are always served. `compile` and `execute` are served only when enabled and otherwise answer `501`; another name answers `404` (`400` for a cancellation).",
+            "description": "`edit`, `inspection` and `preview` are always served. `compile` and `execute` are served only when enabled and otherwise answer `501`; another name answers `404` (`400` for a cancellation).",
             "required": true,
             "schema": {
               "enum": [
+                "edit",
                 "inspection",
                 "preview",
                 "compile",
@@ -351,10 +352,11 @@
           {
             "name": "profile",
             "in": "path",
-            "description": "`inspection` and `preview` are always served. `compile` and `execute` are served only when enabled and otherwise answer `501`; another name answers `404` (`400` for a cancellation).",
+            "description": "`edit`, `inspection` and `preview` are always served. `compile` and `execute` are served only when enabled and otherwise answer `501`; another name answers `404` (`400` for a cancellation).",
             "required": true,
             "schema": {
               "enum": [
+                "edit",
                 "inspection",
                 "preview",
                 "compile",
