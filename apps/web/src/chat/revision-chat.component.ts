@@ -16,9 +16,10 @@ import {
 import { firstValueFrom, fromEvent, takeUntil } from "rxjs";
 import { CatalogContextStore } from "../catalog/catalog-context";
 import { CatalogApi } from "../catalog/catalog-api";
-import type {
-  CatalogContext,
-  CatalogRevisionScope,
+import {
+  catalogOwner,
+  type CatalogContext,
+  type CatalogRevisionScope,
 } from "../catalog/catalog-types";
 import { ChatApi } from "./chat-api";
 import { ChatViewRecovery } from "./chat-view-recovery";
@@ -129,14 +130,29 @@ export class RevisionChatComponent {
     context: CatalogContext;
     scope: CatalogRevisionScope;
   } | null = null;
+  /**
+   * A same-owner re-read replaces the context; only another owner, revision or set of workspace
+   * features restarts chat.
+   */
+  private readonly owner = computed(() => {
+    const scope = this.scope();
+    const context = this.context();
+    return JSON.stringify([
+      catalogOwner(context),
+      scope.organizationId,
+      scope.projectId,
+      scope.mappingId,
+      scope.revisionId,
+      context.features,
+    ]);
+  });
   private focusTarget: HTMLElement | null = null;
   private preferredFocus: string | null = null;
   private focusVersion = 0;
 
   constructor() {
     effect(() => {
-      this.scope();
-      this.context();
+      this.owner();
       this.contexts.identityVersion();
       untracked(() => {
         this.suspend();
@@ -238,7 +254,7 @@ export class RevisionChatComponent {
         context.mode !== expected.mode ||
         (context.mode === "session" ? context.identityContext : null) !==
           (expected.mode === "session" ? expected.identityContext : null) ||
-        !this.contexts.canPresent(context)
+        !this.contexts.canDispatch(context)
       ) {
         this.recovery.discard();
         this.clear();

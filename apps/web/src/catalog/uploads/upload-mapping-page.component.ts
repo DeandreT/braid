@@ -118,7 +118,8 @@ export class UploadMappingPageComponent {
         operation = this.state.operationStatus();
       const context = this.state.context(),
         project = this.state.project();
-      if (!this.contexts.visible() || this.leaveDecision()) return;
+      // Focus waits for the access check to settle; a boundary clears the queued request.
+      if (!this.contexts.settled() || this.leaveDecision()) return;
       let focus = "",
         target = "",
         editingOwner = "";
@@ -389,7 +390,7 @@ export class UploadMappingPageComponent {
         if (
           !this.destroyed &&
           request === this.focusRequest &&
-          this.contexts.visible() &&
+          this.contexts.settled() &&
           (target === "upload-leave"
             ? this.leaveDecision() !== null
             : this.leaveDecision() === null && !this.abandonDecision())

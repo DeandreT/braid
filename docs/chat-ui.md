@@ -37,28 +37,31 @@ produces a notice instead of changing the viewer selection. Validation and
 operation diagnostic ordinals refer to their own report lists; explanation
 document diagnostics are not substituted for operation diagnostics.
 
-Each operation observes fresh session status and catalog context. Session
-boundaries and catalog refreshes invalidate outstanding requests and clear
-displayed conversations. An unsent question, an unacknowledged question and an
-unconfirmed new-conversation request are instead suspended in a page-scoped
-provider. After the panel's next availability read, the same owner (mode,
-principal, organization and Session identity context) on the same revision gets
-them back, and the conversation they belong to is reopened. Nothing is sent
-again. A fresh context for another owner, another revision or leaving the page
-discards them. Expired or
-rejected sessions, unconfigured chat, missing reports, unavailable profiles,
-provider failure and interrupted streams remain distinct from a successful
-answer. The server remains responsible for fresh project authorization.
+Each operation observes fresh session status and catalog context. A routine
+check keeps the conversation on screen, and so does a catalog re-read by the same
+owner for the same revision and workspace features. Session boundaries, and a
+re-read for another owner, revision or set of features, invalidate outstanding
+requests and clear displayed conversations.
+An unsent question, an unacknowledged question and an unconfirmed
+new-conversation request are instead suspended in a page-scoped provider. After
+the panel's next availability read, the same owner (mode, principal,
+organization and Session identity context) on the same revision gets them back,
+and the conversation they belong to is reopened. Nothing is sent again. A fresh
+context for another owner, another revision or leaving the page discards them.
+Expired or rejected sessions, unconfigured chat, missing reports, unavailable
+profiles, provider failure and interrupted streams remain distinct from a
+successful answer. The server remains responsible for fresh project authorization.
 
 Chat waits for the initial report reads before loading its availability. Its
 fresh context checks do not replace the catalog's shared selected context:
 replacing that context would invalidate the page that owns the chat itself.
 Settlement tracks actual requests, including cancellation after a report
 refusal; an idle presentation pane does not imply a request is still running.
-After admission hides and restores the workspace, keyboard focus returns to the
-initiating control, or to the composer after creating a conversation. A deliberate
-focus move elsewhere is preserved. An unacknowledged send focuses the explicit
-recovery action rather than a disabled composer or send button.
+When an operation disables its initiating control, keyboard focus returns to that
+control after the operation settles, or to the composer after creating a
+conversation. A deliberate focus move elsewhere is preserved. An unacknowledged
+send focuses the explicit recovery action rather than a disabled composer or send
+button.
 
 ## Browser checks
 

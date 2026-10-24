@@ -101,7 +101,7 @@ export class ProjectCreationState {
     const context = this.admitted();
     return this.active() &&
       context !== null &&
-      this.contexts.context() === context &&
+      this.contexts.isCurrent(context) &&
       context.allowedOrganizationId === this.organizationId()
       ? context
       : null;
@@ -198,12 +198,15 @@ export class ProjectCreationState {
       !this.busy(),
   );
   readonly canCreate = computed(
-    () => this.canEdit() && capability(this.currentContext()),
+    () =>
+      this.canEdit() &&
+      this.contexts.canDispatch(this.currentContext()) &&
+      capability(this.currentContext()),
   );
   readonly canRecover = computed(
     () =>
       this.attemptSummary() !== null &&
-      this.contexts.canPresent(this.currentContext()) &&
+      this.contexts.canDispatch(this.currentContext()) &&
       capability(this.currentContext()) &&
       !this.busy(),
   );
@@ -433,7 +436,7 @@ export class ProjectCreationState {
             this.actionError.set(new ProjectCreationError("identityChanged"));
             return;
           }
-          if (this.contexts.canPresent(context)) next(context);
+          if (this.contexts.canDispatch(context)) next(context);
         },
         error: (error: unknown) => {
           if (!this.selected(generation, organizationId)) return;

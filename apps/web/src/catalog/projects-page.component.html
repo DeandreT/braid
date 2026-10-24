@@ -1,4 +1,8 @@
-<section class="catalog-page" aria-labelledby="catalog-page-title">
+<section
+  class="catalog-page"
+  aria-labelledby="catalog-page-title"
+  [attr.aria-busy]="refreshing() ? 'true' : null"
+>
   <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
     <ol>
       <li><span aria-current="page">Projects</span></li>

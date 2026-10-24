@@ -3,6 +3,7 @@ import { DestroyRef, computed, inject, signal } from "@angular/core";
 import {
   EMPTY,
   defer,
+  finalize,
   map,
   switchMap,
   type Observable,
@@ -27,15 +28,24 @@ type Selection<T> = {
   load: (context: CatalogContext) => Observable<T>;
 };
 
-/** A controller belongs to one routed screen; every attempt replaces its previous selection. */
+/**
+ * A controller belongs to one routed screen; every attempt replaces its previous selection.
+ * A new selection starts empty. Reading the displayed selection again (Refresh, Retry, returning
+ * to the tab) keeps its ready view in place until the fresh read settles.
+ */
 export class CatalogRead<T> {
   private readonly current = signal<CatalogReadState<T>>({ kind: "idle" });
+  private readonly reloading = signal(false);
   readonly state = computed<CatalogReadState<T>>(() => {
     const state = this.current();
-    return state.kind === "ready" && this.contexts.context() !== state.context
+    return state.kind === "ready" && !this.contexts.isCurrent(state.context)
       ? { kind: "unavailable" }
       : state;
   });
+  /** A fresh read of the displayed selection is in flight. */
+  readonly refreshing = computed(
+    () => this.reloading() && this.state().kind === "ready",
+  );
   private selection: Selection<T> | null = null;
   private subscription: Subscription | null = null;
   private generation = 0;
@@ -72,11 +82,11 @@ export class CatalogRead<T> {
       this.current.set({ kind: "invalidLink" });
       return;
     }
-    this.run();
+    this.run(false);
   }
 
   retry(): void {
-    if (this.selection && !this.destroyed) this.run();
+    if (this.selection && !this.destroyed) this.run(true);
   }
 
   clear(): void {
@@ -102,14 +112,19 @@ export class CatalogRead<T> {
     ++this.generation;
     this.subscription?.unsubscribe();
     this.subscription = null;
+    this.reloading.set(false);
   }
 
-  private run(): void {
+  private run(inPlace: boolean): void {
     this.cancel();
     const selection = this.selection;
     if (!selection || this.destroyed) return;
     const generation = this.generation;
-    this.current.set({ kind: "loading" });
+    // The displayed selection stays readable while it is read again; another one starts empty.
+    if (!inPlace) this.contexts.beginSelection();
+    if (!inPlace || this.state().kind !== "ready")
+      this.current.set({ kind: "loading" });
+    this.reloading.set(true);
     this.subscription = this.contexts
       .refresh()
       .pipe(
@@ -133,6 +148,9 @@ export class CatalogRead<T> {
             map((data) => ({ data, context })),
           );
         }),
+        finalize(() => {
+          if (generation === this.generation) this.reloading.set(false);
+        }),
       )
       .subscribe({
         next: ({ data, context }) => {
@@ -142,7 +160,7 @@ export class CatalogRead<T> {
             selection === this.selection
           ) {
             this.current.set(
-              this.contexts.context() === context
+              this.contexts.isCurrent(context)
                 ? { kind: "ready", data, context }
                 : { kind: "unavailable" },
             );

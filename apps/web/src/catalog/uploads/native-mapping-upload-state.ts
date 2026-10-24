@@ -151,7 +151,7 @@ export class NativeMappingUploadState {
     return this.active() &&
       admission &&
       selected &&
-      this.contexts.context() === admission.context &&
+      this.contexts.isCurrent(admission.context) &&
       sameScope(admission.project.scope, selected)
       ? admission
       : null;
@@ -218,12 +218,16 @@ export class NativeMappingUploadState {
   );
   readonly canChooseFile = this.canEdit;
   readonly canUpload = computed(
-    () => this.canEdit() && this.source() !== null && !this.preparingFile(),
+    () =>
+      this.canEdit() &&
+      this.contexts.canDispatch(this.context()) &&
+      this.source() !== null &&
+      !this.preparingFile(),
   );
   readonly canResend = computed(
     () =>
       this.uploadAdmitted() &&
-      this.contexts.canPresent(this.context()) &&
+      this.contexts.canDispatch(this.context()) &&
       this.original() !== null &&
       (this.known() === null ||
         this.known()?.receipt.latestFailure === "needsSource") &&
@@ -679,7 +683,7 @@ export class NativeMappingUploadState {
           if (!this.current(generation, scope)) return;
           this.work.set("idle");
           if (
-            this.contexts.context() !== admission.context ||
+            !this.contexts.isCurrent(admission.context) ||
             !sameScope(admission.project.scope, scope)
           ) {
             this.presenting.set(false);
@@ -712,7 +716,7 @@ export class NativeMappingUploadState {
             );
             return;
           }
-          if (this.contexts.canPresent(admission.context)) next(admission);
+          if (this.contexts.canDispatch(admission.context)) next(admission);
         },
         error: (error: unknown) => {
           if (!this.current(generation, scope)) return;

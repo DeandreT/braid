@@ -99,7 +99,7 @@ export class MappingMetadataState {
       scope = this.selectedScope();
     return admission &&
       scope &&
-      this.contexts.context() === admission.context &&
+      this.contexts.isCurrent(admission.context) &&
       sameScope(admission.mapping.scope, scope) &&
       this.owner() === admission.context.actorPrincipalId &&
       this.ownerMode() === admission.context.mode
@@ -178,7 +178,12 @@ export class MappingMetadataState {
       this.base() !== null &&
       !this.busy(),
   );
-  readonly canSave = computed(() => this.canEdit() && !this.needsReview());
+  readonly canSave = computed(
+    () =>
+      this.canEdit() &&
+      this.contexts.canDispatch(this.context()) &&
+      !this.needsReview(),
+  );
   readonly needsLeaveDecision = computed(
     () => this.dirty() || this.unknown() || this.saving(),
   );
@@ -441,7 +446,7 @@ export class MappingMetadataState {
           if (!this.current(generation, scope)) return;
           this.operation.set("idle");
           if (
-            this.contexts.context() !== admission.context ||
+            !this.contexts.isCurrent(admission.context) ||
             !sameScope(admission.mapping.scope, scope)
           ) {
             this.presentingEditor.set(false);
@@ -461,7 +466,7 @@ export class MappingMetadataState {
             );
             return;
           }
-          if (this.contexts.canPresent(admission.context)) next(admission);
+          if (this.contexts.canDispatch(admission.context)) next(admission);
         },
         error: (error: unknown) => {
           if (!this.current(generation, scope)) return;

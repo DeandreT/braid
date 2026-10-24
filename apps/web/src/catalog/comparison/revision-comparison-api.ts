@@ -88,7 +88,7 @@ export class RevisionComparisonApi {
       return throwError(() => comparisonFailure(error));
     }
     return defer(() => {
-      if (!this.sessions.visible()) throw new ComparisonError("rejected");
+      if (!this.sessions.settled()) throw new ComparisonError("rejected");
       const generation = this.sessions.generation();
       const sessionMode = this.sessions.state().kind === "authenticated";
       let params = new HttpParams()

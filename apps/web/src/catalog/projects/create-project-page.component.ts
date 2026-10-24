@@ -73,7 +73,6 @@ export class CreateProjectPageComponent {
     });
     effect(() => {
       const draft = this.state.draft();
-      const editable = this.state.canEdit();
       untracked(() => {
         const current = this.form.getRawValue();
         if (
@@ -81,8 +80,6 @@ export class CreateProjectPageComponent {
           current.description !== draft.description
         )
           this.form.setValue(draft, { emitEvent: false });
-        if (editable) this.form.enable({ emitEvent: false });
-        else this.form.disable({ emitEvent: false });
       });
     });
     effect(() => {
@@ -90,7 +87,8 @@ export class CreateProjectPageComponent {
       const errors = this.state.fieldErrors();
       const attempt = this.state.attemptSummary();
       const confirmation = this.state.confirmation();
-      if (!this.contexts.visible()) return;
+      // Focus waits for the access check to settle; a boundary clears the queued request.
+      if (!this.contexts.settled()) return;
       let focus = "";
       let target = "";
       let editingOwner = "";
@@ -183,7 +181,7 @@ export class CreateProjectPageComponent {
         if (
           this.destroyed ||
           generation !== this.focusGeneration ||
-          !this.contexts.visible()
+          !this.contexts.settled()
         )
           return;
         const element = this.document.getElementById(target);

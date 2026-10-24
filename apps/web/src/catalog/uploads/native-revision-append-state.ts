@@ -597,7 +597,7 @@ export class NativeRevisionAppendState {
       admission &&
       scope &&
       sameScope(admission.mapping.scope, scope) &&
-      this.contexts.context() === admission.context
+      this.contexts.isCurrent(admission.context)
       ? admission
       : null;
   }
@@ -683,7 +683,8 @@ export class NativeRevisionAppendState {
       operation = this.known();
     const read = admission !== null && safe,
       upload = this.uploadAdmitted(),
-      available = this.contexts.canPresent(admission?.context ?? null);
+      available = this.contexts.canPresent(admission?.context ?? null),
+      dispatchable = this.contexts.canDispatch(admission?.context ?? null);
     const busy = this.busy(),
       blocked = busy || this.pendingLeave() !== null;
     const locked = this.locked(),
@@ -732,6 +733,7 @@ export class NativeRevisionAppendState {
       canChooseFile: canEdit,
       canAppend:
         canEdit &&
+        dispatchable &&
         this.source() !== null &&
         !this.preparing() &&
         this.reviewed() !== null &&
@@ -744,7 +746,7 @@ export class NativeRevisionAppendState {
         (!locked || operation?.headConflict === true),
       canResend:
         upload &&
-        available &&
+        dispatchable &&
         !blocked &&
         original !== null &&
         !operation?.terminal &&
@@ -928,7 +930,7 @@ export class NativeRevisionAppendState {
             try {
               const identityVersion = this.contexts.identityVersion();
               if (
-                this.contexts.context() !== admission.context ||
+                !this.contexts.isCurrent(admission.context) ||
                 !sameScope(admission.mapping.scope, scope) ||
                 admissionIdentityVersion === null ||
                 admissionIdentityVersion !== identityVersion
@@ -976,7 +978,7 @@ export class NativeRevisionAppendState {
                   this.known() ?? undefined,
                 );
               }
-              if (this.contexts.canPresent(admission.context)) next(admission);
+              if (this.contexts.canDispatch(admission.context)) next(admission);
             } catch (error: unknown) {
               this.recordFailure(appendError(error));
               this.requestFocus("summary");

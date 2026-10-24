@@ -423,11 +423,14 @@ test("keyboard creation restores focus to the composer after a delayed session c
     await create.focus();
     await page.keyboard.press("Enter");
     await held.arrived;
-    await expect(create).not.toBeVisible();
+    // The routine check keeps the panel on screen and shows on the initiating control.
+    await expect(create).toBeVisible();
+    await expect(create).toHaveAttribute("aria-busy", "true");
     held.release();
     await expect(
       panel(page).getByLabel("Question", { exact: true }),
     ).toBeFocused();
+    await expect(create).not.toHaveAttribute("aria-busy", "true");
   } finally {
     held.release();
   }
@@ -765,6 +768,30 @@ test("identity changes clear private chat instead of adopting another owner's co
       session: sessionStorage.length,
     })),
   ).toEqual({ local: 0, session: 0 });
+});
+
+test("a same-owner refresh that disables chat clears the open conversation", async ({
+  page,
+}) => {
+  const f = await fixture(page);
+  await page.goto(f.data.browserPath);
+  await start(page);
+  await expect(panel(page)).toContainText("This maps the saved value.");
+  f.data.context.features.chat = false;
+  const refresh = page.getByRole("button", {
+    name: "Refresh catalog",
+    exact: true,
+  });
+  await refresh.click();
+  await expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  await expect(panel(page)).not.toContainText("This maps the saved value.");
+  await expect(panel(page).getByLabel("Question", { exact: true })).toHaveCount(
+    0,
+  );
+  expect(f.posts).toHaveLength(2);
 });
 
 /** A focus refresh whose session check fails, then the shell and page Retry controls. */

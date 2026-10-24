@@ -62,10 +62,7 @@ export class CatalogApi {
 
   context(): Observable<CatalogContext> {
     return this.sessions.observe().pipe(
-      switchMap(() => {
-        if (!this.sessions.visible()) throw new CatalogReadError("rejected");
-        return this.get("/api/v1/catalog/context", isContext);
-      }),
+      switchMap(() => this.get("/api/v1/catalog/context", isContext)),
       map((context) => {
         if (!this.sessions.accepts(context)) {
           this.sessions.invalidate();
@@ -166,29 +163,33 @@ export class CatalogApi {
     guard: (value: unknown) => value is T,
     params?: HttpParams,
   ): Observable<T> {
-    return defer(() => {
-      if (!this.sessions.visible()) throw new CatalogReadError("rejected");
-      const generation = this.sessions.generation();
-      const sessionMode = this.sessions.state().kind === "authenticated";
-      return this.http.get<unknown>(url, { params }).pipe(
-        timeout(8000),
-        map((value) => {
-          if (generation !== this.sessions.generation() || !guard(value))
-            throw new CatalogReadError("unavailable");
-          return value;
-        }),
-        catchError((error: unknown) => {
-          if (
-            generation === this.sessions.generation() &&
-            sessionMode &&
-            error instanceof HttpErrorResponse &&
-            (error.status === 401 || error.status === 403)
-          )
-            this.sessions.rejectProtectedRequest(generation);
-          return throwError(() => catalogFailure(error));
-        }),
-      );
-    });
+    // A read that meets another action's routine check waits for it; without a presented
+    // identity it is refused unsent.
+    return this.sessions.whenSettled().pipe(
+      catchError(() => throwError(() => new CatalogReadError("rejected"))),
+      switchMap(() => {
+        const generation = this.sessions.generation();
+        const sessionMode = this.sessions.state().kind === "authenticated";
+        return this.http.get<unknown>(url, { params }).pipe(
+          timeout(8000),
+          map((value) => {
+            if (generation !== this.sessions.generation() || !guard(value))
+              throw new CatalogReadError("unavailable");
+            return value;
+          }),
+          catchError((error: unknown) => {
+            if (
+              generation === this.sessions.generation() &&
+              sessionMode &&
+              error instanceof HttpErrorResponse &&
+              (error.status === 401 || error.status === 403)
+            )
+              this.sessions.rejectProtectedRequest(generation);
+            return throwError(() => catalogFailure(error));
+          }),
+        );
+      }),
+    );
   }
 }
 

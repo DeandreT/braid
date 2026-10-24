@@ -1,6 +1,7 @@
 import { computed, signal, type WritableSignal } from "@angular/core";
 import {
   finalize,
+  switchMap,
   take,
   timeout,
   type Observable,
@@ -56,8 +57,16 @@ export interface RevisionReportPane<T extends RevisionReport> {
 export interface RevisionReportStateOptions {
   /** The parent refreshes its existing metadata controller once and returns its admitted screen. */
   readonly refresh: () => Observable<RevisionReportAdmission>;
-  /** Compare the parent's current context identity and exact visible revision scope. */
+  /** Whether the admission is still current for the parent's displayed revision and access. */
   readonly isCurrent: (admission: RevisionReportAdmission) => boolean;
+  /**
+   * Waits for any pending access check before a report request under this admission is sent,
+   * including polling and linked follow-up reads, and emits the freshest context of its lineage;
+   * fails, sending nothing, when access is gone.
+   */
+  readonly admit: (
+    admission: RevisionReportAdmission,
+  ) => Observable<CatalogContext>;
 }
 
 type PaneValue<T extends RevisionReport> = Omit<
@@ -201,6 +210,19 @@ export class RevisionReportState {
       previous.revision === copy.revision
     )
       return;
+    // A same-owner re-read that leaves the revision and access unchanged keeps observed reports
+    // on screen. A pane without one (failed, pending, not derived or unread) is read again, as
+    // an explicit refresh asks; an action in progress settles its panes itself.
+    if (sameSelection && previous && this.current(previous)) {
+      this.admitted.set(copy);
+      if (this.working() || !this.canRead()) return;
+      this.attemptedLink = null;
+      if (!observedReport(this.projectionPane.value()))
+        this.readProjection(copy);
+      if (!observedReport(this.validationPane.value()))
+        this.readValidation(copy);
+      return;
+    }
     this.cancelAll();
     this.admitted.set(copy);
     this.hasSelection.set(true);
@@ -269,11 +291,12 @@ export class RevisionReportState {
         this.receive(
           this.projectionPane,
           admitted,
-          this.api.ensureProjection(
-            admitted.revision,
-            admitted.context.requestToken,
-            repairId,
-          ),
+          (context) =>
+            this.api.ensureProjection(
+              admitted.revision,
+              context.requestToken,
+              repairId,
+            ),
           "ensuring",
           (response) => this.ensured(this.projectionPane, admitted, response),
         );
@@ -282,11 +305,12 @@ export class RevisionReportState {
         this.receive(
           this.validationPane,
           admitted,
-          this.api.ensureValidation(
-            admitted.revision,
-            admitted.context.requestToken,
-            repairId,
-          ),
+          (context) =>
+            this.api.ensureValidation(
+              admitted.revision,
+              context.requestToken,
+              repairId,
+            ),
           "ensuring",
           (response) => this.ensured(this.validationPane, admitted, response),
         );
@@ -381,18 +405,11 @@ export class RevisionReportState {
     admitted: RevisionReportAdmission,
     observation?: Observation,
   ): void {
-    let request = this.api.projection(
-      admitted.revision,
-      this.selectors.projectionDerivationId,
-    );
-    if (observation)
-      request = request.pipe(
-        timeout(Math.max(1, observation.deadline - Date.now())),
-      );
+    const selected = this.selectors.projectionDerivationId;
     this.receive(
       this.projectionPane,
       admitted,
-      request,
+      () => this.api.projection(admitted.revision, selected),
       observation ? "polling" : "loading",
       (response) =>
         this.observed(this.projectionPane, admitted, response, observation),
@@ -406,19 +423,10 @@ export class RevisionReportState {
     retainedId = this.selectors.validationDerivationId,
     projectionId: string | null = null,
   ): void {
-    let request = this.api.validation(
-      admitted.revision,
-      retainedId,
-      projectionId,
-    );
-    if (observation)
-      request = request.pipe(
-        timeout(Math.max(1, observation.deadline - Date.now())),
-      );
     this.receive(
       this.validationPane,
       admitted,
-      request,
+      () => this.api.validation(admitted.revision, retainedId, projectionId),
       observation ? "polling" : "loading",
       (response) =>
         this.observed(this.validationPane, admitted, response, observation),
@@ -429,7 +437,7 @@ export class RevisionReportState {
   private receive<T extends RevisionReport>(
     controller: Pane<T>,
     admitted: RevisionReportAdmission,
-    request: Observable<RevisionReportResponse<T>>,
+    request: (context: CatalogContext) => Observable<RevisionReportResponse<T>>,
     phase: PaneValue<T>["phase"],
     next: (response: RevisionReportResponse<T>) => void,
     observation?: Observation,
@@ -445,7 +453,15 @@ export class RevisionReportState {
     });
     let emitted = false;
     controller.reading.set(true);
-    controller.subscription = request
+    // An observation's deadline also bounds its wait for admission.
+    let admittedRequest = this.options
+      .admit(admitted)
+      .pipe(take(1), switchMap(request));
+    if (observation)
+      admittedRequest = admittedRequest.pipe(
+        timeout(Math.max(1, observation.deadline - Date.now())),
+      );
+    controller.subscription = admittedRequest
       .pipe(
         take(1),
         finalize(() => {
@@ -754,6 +770,18 @@ function pane<T extends RevisionReport>(
   };
 }
 
+/** The pane shows a report that was read successfully; nothing about it is left to settle. */
+function observedReport<T extends RevisionReport>(
+  value: PaneValue<T>,
+): boolean {
+  const body = value.response?.body;
+  return (
+    value.phase === "ready" &&
+    body?.state === "available" &&
+    body.readOutcome === "observed"
+  );
+}
+
 function empty<T extends RevisionReport>(pinned: boolean): PaneValue<T> {
   return {
     phase: "idle",
@@ -810,7 +838,7 @@ function snapshotAdmission(
     value.mapping.scope.mappingId !== scope.mappingId
   )
     throw new RevisionReportError("invalidLink");
-  // These are the parent's admitted DTOs; reference identity is part of its late-reply guard.
+  // These are the parent's admitted DTOs; the parent's currency check is the late-reply guard.
   // The transport separately captures all immutable revision facts before each request.
   return {
     context: value.context,

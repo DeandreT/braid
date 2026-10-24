@@ -24,7 +24,7 @@ export class WorkbenchRecents {
 
   remember(context: CatalogContext, scope: CatalogMappingScope): void {
     if (
-      !this.sessions.canDispatch(context) ||
+      !this.sessions.presents(context) ||
       context.allowedOrganizationId !== scope.organizationId
     )
       return;
@@ -49,7 +49,7 @@ export class WorkbenchRecents {
 
   scopes(context: CatalogContext): readonly CatalogMappingScope[] {
     if (
-      !this.sessions.canDispatch(context) ||
+      !this.sessions.presents(context) ||
       this.owner !== this.identity(context)
     ) {
       this.clear();

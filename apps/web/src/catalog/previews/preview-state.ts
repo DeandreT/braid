@@ -1,5 +1,12 @@
 import { computed, signal } from "@angular/core";
-import type { Subscription } from "rxjs";
+import {
+  catchError,
+  switchMap,
+  tap,
+  throwError,
+  type Observable,
+  type Subscription,
+} from "rxjs";
 import type { CatalogRevisionScope } from "../catalog-types";
 import { PreviewApi } from "./preview-api";
 import {
@@ -30,7 +37,13 @@ export interface PreviewParameterDraft {
 
 export interface PreviewBinding {
   readonly scope: CatalogRevisionScope;
-  readonly requestToken: () => string | null;
+  /**
+   * Waits for any pending access check, then emits the freshest admitted request token. It fails
+   * when the binding's context is no longer current, and nothing is sent.
+   */
+  readonly admit: () => Observable<string>;
+  /** No access check is pending, so a request can be sent at once. */
+  readonly ready: () => boolean;
 }
 
 /** A submission whose key outlives a reload until its run is known and finished with. */
@@ -180,40 +193,40 @@ export class PreviewState {
       );
       return;
     }
-    const token = binding.requestToken();
-    if (!token) {
-      this.currentError.set("rejected");
-      return;
-    }
     const record = this.currentRecord();
     const key =
       record && record.runId === null ? record.key : crypto.randomUUID();
-    this.save({ key, runId: null });
     this.currentBusy.set("submitting");
-    this.request = this.api.submit(binding.scope, token, key, body).subscribe({
-      next: (submitted) => {
-        this.request = null;
-        this.currentBusy.set(null);
-        this.save({ key, runId: submitted.run.runId });
-        this.currentNotice.set(
-          submitted.outcome === "replayed" ? "replayed" : null,
-        );
-        this.track(submitted.run);
-      },
-      error: (error: unknown) => {
-        this.request = null;
-        this.currentBusy.set(null);
-        const kind = kindOf(error);
-        // A refused request was never recorded, so its key can be reused for a corrected form.
-        if (
-          kind === "invalidRequest" ||
-          kind === "bodyLimit" ||
-          kind === "unsupportedMediaType"
-        )
-          this.save(record && record.runId === null ? record : null);
-        this.currentError.set(kind);
-      },
-    });
+    // The key is kept for recovery only once the request can be sent.
+    this.request = this.admitted(binding)
+      .pipe(
+        tap(() => this.save({ key, runId: null })),
+        switchMap((token) => this.api.submit(binding.scope, token, key, body)),
+      )
+      .subscribe({
+        next: (submitted) => {
+          this.request = null;
+          this.currentBusy.set(null);
+          this.save({ key, runId: submitted.run.runId });
+          this.currentNotice.set(
+            submitted.outcome === "replayed" ? "replayed" : null,
+          );
+          this.track(submitted.run);
+        },
+        error: (error: unknown) => {
+          this.request = null;
+          this.currentBusy.set(null);
+          const kind = kindOf(error);
+          // A refused request was never recorded, so its key can be reused for a corrected form.
+          if (
+            kind === "invalidRequest" ||
+            kind === "bodyLimit" ||
+            kind === "unsupportedMediaType"
+          )
+            this.save(record && record.runId === null ? record : null);
+          this.currentError.set(kind);
+        },
+      });
   }
 
   /** Forgets an unconfirmed or finished submission so the next submit starts a new run. */
@@ -231,29 +244,28 @@ export class PreviewState {
     const run = this.currentRun();
     if (!binding || !run || !this.active() || this.currentBusy() !== null)
       return;
-    const token = binding.requestToken();
-    if (!token) {
-      this.currentError.set("rejected");
-      return;
-    }
     this.stop();
     this.currentBusy.set("canceling");
-    this.request = this.api.cancel(binding.scope, run.runId, token).subscribe({
-      next: (canceled) => {
-        this.request = null;
-        this.currentBusy.set(null);
-        this.currentNotice.set(
-          canceled.outcome === "requested" ? "cancelRequested" : null,
-        );
-        this.track(canceled.run);
-      },
-      error: (error: unknown) => {
-        this.request = null;
-        this.currentBusy.set(null);
-        this.currentError.set(kindOf(error));
-        this.track(run);
-      },
-    });
+    this.request = this.admitted(binding)
+      .pipe(
+        switchMap((token) => this.api.cancel(binding.scope, run.runId, token)),
+      )
+      .subscribe({
+        next: (canceled) => {
+          this.request = null;
+          this.currentBusy.set(null);
+          this.currentNotice.set(
+            canceled.outcome === "requested" ? "cancelRequested" : null,
+          );
+          this.track(canceled.run);
+        },
+        error: (error: unknown) => {
+          this.request = null;
+          this.currentBusy.set(null);
+          this.currentError.set(kindOf(error));
+          this.track(run);
+        },
+      });
   }
 
   /** Re-reads the current or recovered run after a failed status check. */
@@ -269,37 +281,54 @@ export class PreviewState {
     const binding = this.binding;
     const run = this.currentRun();
     if (!binding || !run) throw new PreviewError("invalidLink");
-    return this.api.output(binding.scope, run.runId, output);
+    return this.admitted(binding).pipe(
+      switchMap(() => this.api.output(binding.scope, run.runId, output)),
+    );
   }
 
   private read(runId: string): void {
     const binding = this.binding;
     if (!binding) return;
     this.currentBusy.set("reading");
-    this.request = this.api.read(binding.scope, runId).subscribe({
-      next: (run) => {
-        this.request = null;
-        this.currentBusy.set(null);
-        this.currentError.set(null);
-        this.pollFailures = 0;
-        this.track(run);
-      },
-      error: (error: unknown) => {
-        this.request = null;
-        this.currentBusy.set(null);
-        const kind = kindOf(error);
-        if (kind === "notFound") {
-          // The run expired, or belongs to someone else; nothing remains to recover.
-          this.save(null);
-          this.currentRun.set(null);
-          this.currentNotice.set(null);
-        } else if (this.active() && ++this.pollFailures < maximumPollFailures) {
-          this.schedule(runId);
-          return;
-        }
-        this.currentError.set(kind);
-      },
-    });
+    // A status read waits for a pending access check instead of counting as a failed poll.
+    this.request = this.admitted(binding)
+      .pipe(switchMap(() => this.api.read(binding.scope, runId)))
+      .subscribe({
+        next: (run) => {
+          this.request = null;
+          this.currentBusy.set(null);
+          this.currentError.set(null);
+          this.pollFailures = 0;
+          this.track(run);
+        },
+        error: (error: unknown) => {
+          this.request = null;
+          this.currentBusy.set(null);
+          const kind = kindOf(error);
+          if (kind === "notFound") {
+            // The run expired, or belongs to someone else; nothing remains to recover.
+            this.save(null);
+            this.currentRun.set(null);
+            this.currentNotice.set(null);
+          } else if (
+            this.active() &&
+            ++this.pollFailures < maximumPollFailures
+          ) {
+            this.schedule(runId);
+            return;
+          }
+          this.currentError.set(kind);
+        },
+      });
+  }
+
+  /** A failed wait sent nothing and is not a refusal. */
+  private admitted(binding: PreviewBinding): Observable<string> {
+    return binding
+      .admit()
+      .pipe(
+        catchError(() => throwError(() => new PreviewError("unavailable"))),
+      );
   }
 
   private track(run: PreviewRun): void {
@@ -314,7 +343,10 @@ export class PreviewState {
     const delay = pollDelays[Math.min(this.polls++, pollDelays.length - 1)];
     this.timer = setTimeout(() => {
       this.timer = null;
-      if (this.binding && this.currentBusy() === null) this.read(runId);
+      if (!this.binding || this.currentBusy() !== null) return;
+      // Polling skips a turn while access is checked rather than holding the form busy.
+      if (this.binding.ready()) this.read(runId);
+      else this.schedule(runId);
     }, delay);
   }
 

@@ -32,6 +32,37 @@ a:focus-visible {
   outline: 3px solid #287a60;
   outline-offset: 5px;
 }
+/* The control whose action waits for an access check. */
+button[aria-busy="true"],
+a[aria-busy="true"] {
+  cursor: progress;
+}
+button[aria-busy="true"]::after,
+a[aria-busy="true"]::after {
+  content: "";
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-left: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: busy-control 0.8s linear infinite;
+}
+@keyframes busy-control {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button[aria-busy="true"]::after,
+  a[aria-busy="true"]::after {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.6;
+  }
+}
 .app-shell {
   width: min(1120px, calc(100% - 64px));
   margin: 0 auto;

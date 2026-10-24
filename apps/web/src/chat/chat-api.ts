@@ -238,7 +238,7 @@ export class ChatApi {
         scope.revisionId,
       ].every(isCatalogId) ||
       context.allowedOrganizationId !== scope.organizationId ||
-      !this.contexts.canPresent(context)
+      !this.contexts.canDispatch(context)
     )
       throw new ChatError("identityRejected");
     const headers: Record<string, string> = {

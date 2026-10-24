@@ -1,7 +1,9 @@
 <section
   class="session-panel"
   aria-label="Sign-in and session"
-  [attr.aria-busy]="session.busy() || session.state().kind === 'checking'"
+  [attr.aria-busy]="
+    session.busy() || session.checking() || session.state().kind === 'checking'
+  "
 >
   <div class="session-copy">
     <h2>Session</h2>
@@ -58,7 +60,11 @@
     <button
       class="secondary-button"
       type="button"
-      [disabled]="session.busy() || session.state().kind === 'checking'"
+      [disabled]="
+        session.busy() ||
+        session.checking() ||
+        session.state().kind === 'checking'
+      "
       (click)="check()"
     >
       Check session

@@ -8,12 +8,17 @@ import {
 import {
   Subject,
   Subscriber,
+  asapScheduler,
   catchError,
   defer,
   finalize,
   map,
+  merge,
+  observeOn,
+  of,
   shareReplay,
   switchMap,
+  take,
   takeUntil,
   tap,
   throwError,
@@ -37,15 +42,24 @@ type ProtectedObservation = {
   settled: boolean;
 };
 
-/** One tab-memory observation boundary. It neither caches authority nor publishes credentials. */
+/**
+ * One tab-memory observation boundary. It neither caches authority nor publishes credentials.
+ *
+ * Two kinds of check exist. A routine check re-observes the retained confirmed identity: its
+ * view stays presented and only new dispatch waits (`checking`). A boundary (a changed,
+ * negative or failed observation, or explicit invalidation) synchronously clears protected
+ * state, and the view is `checking` or `unavailable` until a new identity is confirmed.
+ */
 @Injectable({ providedIn: "root" })
 export class BrowserSessionState {
   private readonly api = inject(BrowserSessionApi);
   private readonly navigation = inject(BrowserAuthNavigation);
   private readonly status = signal<AuthStatus | null>(null);
   private readonly view = signal<BrowserSessionView>({ kind: "checking" });
+  private readonly routine = signal(false);
   private readonly revision = signal(0);
   private readonly changes = new Subject<void>();
+  private readonly settles = new Subject<void>();
   private pending: Observable<void> | null = null;
   private observation = 0;
   private protectedObservation: ProtectedObservation | null = null;
@@ -58,12 +72,19 @@ export class BrowserSessionState {
   readonly state = this.view.asReadonly();
   readonly generation = this.revision.asReadonly();
   readonly invalidated = this.changes.asObservable();
+  /** A routine check settled without a boundary: confirmed, or canceled with nothing observed. */
+  readonly routineSettled = this.settles.asObservable();
   readonly action = this.actionView.asReadonly();
   readonly busy = this.actionPending.asReadonly();
+  /** A confirmed identity is presented, including while its routine check is pending. */
   readonly visible = computed(() => {
     const kind = this.view().kind;
     return kind === "development" || kind === "authenticated";
   });
+  /** A routine check of the presented identity is pending; new dispatch waits for it. */
+  readonly checking = computed(() => this.visible() && this.routine());
+  /** The presented identity is confirmed and no check is pending: new dispatch may start. */
+  readonly settled = computed(() => this.visible() && !this.routine());
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -138,7 +159,7 @@ export class BrowserSessionState {
     this.view.set({ kind: "unavailable" });
   }
 
-  /** Retained provenance for already-sent callbacks, also while a safe check hides the view. */
+  /** Retained provenance for already-sent callbacks, also while a check is pending. */
   accepts(context: CatalogContext): boolean {
     const status = this.status();
     return status?.mode === "development"
@@ -150,8 +171,23 @@ export class BrowserSessionState {
           context.identityContext === status.identityContext;
   }
 
-  canDispatch(context: CatalogContext): boolean {
+  /**
+   * Emits once no routine check of the presented identity is pending, deciding again after the
+   * settling task; fails when no confirmed identity is presented. A request that meets another
+   * action's routine check therefore waits for it rather than being refused.
+   */
+  whenSettled(): Observable<void> {
+    return defer(() => this.settledFrom(this.revision()));
+  }
+
+  /** Content admitted under this context may stay on screen; a routine check does not hide it. */
+  presents(context: CatalogContext): boolean {
     return this.visible() && this.accepts(context);
+  }
+
+  /** A new request may be sent under this context: no check is pending and nothing has changed. */
+  canDispatch(context: CatalogContext): boolean {
+    return this.settled() && this.accepts(context);
   }
 
   canPresent(action: BrowserAuthAction): boolean {
@@ -159,6 +195,7 @@ export class BrowserSessionState {
     return (
       !this.destroyed &&
       !this.busy() &&
+      !this.routine() &&
       allows(action, status) &&
       this.view().kind === status.state
     );
@@ -301,7 +338,11 @@ export class BrowserSessionState {
     protectedObservation: ProtectedObservation | null = null,
   ): Observable<void> {
     const observation = ++this.observation;
-    this.view.set({ kind: "checking" });
+    // Re-observing the presented confirmed identity is routine: its view stays on screen and
+    // only new dispatch waits. Without a confirmed identity nothing protected is presented.
+    const routine = protectedObservation === null && this.visible();
+    if (routine) this.routine.set(true);
+    else this.view.set({ kind: "checking" });
     let settled = false;
     const request = this.api.observe().pipe(
       map((status) => {
@@ -313,9 +354,13 @@ export class BrowserSessionState {
           this.clearBoundary();
         if (observation !== this.observation) throw new BrowserSessionError();
         this.status.set(status);
+        // Settle before observers continue, so their dispatch sees this confirmation.
+        const wasRoutine = this.routine();
+        this.routine.set(false);
         this.view.set({
           kind: status.mode === "session" ? status.state : status.mode,
         });
+        if (wasRoutine) this.settles.next();
       }),
       catchError(() => {
         if (this.pending === request) this.pending = null;
@@ -337,15 +382,34 @@ export class BrowserSessionState {
       finalize(() => {
         if (this.pending === request) this.pending = null;
         if (!settled && observation === this.observation) {
-          // Canceling a safe check is not an observed identity change. Keep existing
-          // sent-work bookkeeping private, while denying new dispatch/display.
-          this.view.set({ kind: "unavailable" });
+          // Canceling a check is not an observed identity change. A canceled routine check
+          // leaves the retained confirmed view as it was; without one, deny new dispatch and
+          // display while keeping existing sent-work bookkeeping private.
+          if (routine) {
+            this.routine.set(false);
+            this.settles.next();
+          } else this.view.set({ kind: "unavailable" });
         }
       }),
       shareReplay({ bufferSize: 1, refCount: true }),
     );
     this.pending = request;
     return request;
+  }
+
+  /** A boundary since the wait began fails it, whatever identity is presented by then. */
+  private settledFrom(generation: number): Observable<void> {
+    return defer(() => {
+      if (generation !== this.revision())
+        return throwError(() => new BrowserSessionError());
+      if (this.settled()) return of(undefined);
+      if (!this.checking()) return throwError(() => new BrowserSessionError());
+      return merge(this.settles, this.changes).pipe(
+        take(1),
+        observeOn(asapScheduler),
+        switchMap(() => this.settledFrom(generation)),
+      );
+    });
   }
 
   private cancelProtectedObservation(): void {
@@ -359,6 +423,7 @@ export class BrowserSessionState {
     if (this.protectedObservation !== owner) this.cancelProtectedObservation();
     this.revision.update((value) => value + 1);
     this.status.set(null);
+    this.routine.set(false);
     this.view.set({ kind: "checking" });
     // Synchronous subscribers remove protected DTOs/requests before replacement publication.
     this.changes.next();

@@ -2,6 +2,7 @@ import { DatePipe } from "@angular/common";
 import {
   Component,
   DestroyRef,
+  computed,
   effect,
   inject,
   input,
@@ -23,9 +24,11 @@ import { RouterLink } from "@angular/router";
 import { Subscription, map, switchMap, type Observable } from "rxjs";
 import { BrowserSessionState } from "../../auth/browser-session-state";
 import { CatalogApi } from "../catalog-api";
+import { CatalogContextStore } from "../catalog-context";
 import {
   CatalogReadError,
   catalogRoutes,
+  revisionPanelKey,
   type CatalogContext,
   type CatalogMapping,
   type CatalogRevision,
@@ -94,6 +97,7 @@ export class RevisionBuildsComponent {
   private readonly regression = inject(RegressionApi);
   private readonly catalog = inject(CatalogApi);
   private readonly sessions = inject(BrowserSessionState);
+  private readonly contexts = inject(CatalogContextStore);
   private readonly recovery = inject(BuildViewRecovery);
   private readonly admission = signal<CatalogContext | null>(null);
   private readonly observedAccess = signal<CatalogMapping["access"] | null>(
@@ -103,6 +107,10 @@ export class RevisionBuildsComponent {
   private epoch = 0;
   private operation = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** A same-owner re-read replaces the inputs without clearing this panel. */
+  private readonly binding = computed(() =>
+    revisionPanelKey(this.context(), this.mapping(), this.revision()),
+  );
   readonly capabilities = signal<BuildCapabilities | null>(null);
   readonly environmentCapabilities = signal<EnvironmentCapabilities | null>(
     null,
@@ -130,12 +138,13 @@ export class RevisionBuildsComponent {
 
   constructor() {
     effect(() => {
-      const context = this.context(),
-        mapping = this.mapping(),
-        revision = this.revision();
+      this.binding();
       this.sessions.generation();
       untracked(() => {
-        this.recovery.bind(buildOwner(context, revision), mapping.access);
+        this.recovery.bind(
+          buildOwner(this.context(), this.revision()),
+          this.mapping().access,
+        );
         this.clear(false);
       });
     });
@@ -345,10 +354,15 @@ export class RevisionBuildsComponent {
       !sameOwner(pending.owner, this.owner())
     )
       return;
+    this.sendPending(pending, false);
+  }
+  /** A new request is recorded for recovery only when it is sent, after its fresh admission. */
+  private sendPending(pending: PendingBuildMutation, record: boolean): void {
     this.stopTimer();
     this.send(
       this.freshAdmission(pending.owner).pipe(
         switchMap((ctx) => {
+          if (record) this.pending.set(pending);
           const scope = pending.owner.scope;
           switch (pending.kind) {
             case "environment":
@@ -444,10 +458,8 @@ export class RevisionBuildsComponent {
         this.pending.set(null);
       return;
     }
-    if (!this.canMutate() || !this.sessions.canDispatch(this.admitted()))
-      return;
-    this.pending.set(captured.operation);
-    this.retryPending();
+    if (!this.canMutate()) return;
+    this.sendPending(captured.operation, true);
   }
   isCurrent(value: { revision: CatalogRevision["scope"] }): boolean {
     return sameRevision(value.revision, this.revision().scope);
@@ -582,57 +594,61 @@ export class RevisionBuildsComponent {
     success: (value: T) => void,
     source: "build" | "evidence" = "build",
   ): void {
-    if (this.busy() || !this.sessions.canDispatch(this.admitted())) return;
+    if (this.busy()) return;
     const epoch = this.epoch,
       operation = ++this.operation;
     this.busy.set(true);
     this.error.set(null);
+    // A pending access check delays the request; a boundary fails it unsent.
     this.requests.add(
-      request.subscribe({
-        next: (value) => {
-          if (epoch === this.epoch && operation === this.operation) {
+      this.contexts
+        .admitted(this.context())
+        .pipe(switchMap(() => request))
+        .subscribe({
+          next: (value) => {
+            if (epoch === this.epoch && operation === this.operation) {
+              this.busy.set(false);
+              success(value);
+            }
+          },
+          error: (error: unknown) => {
+            if (epoch !== this.epoch || operation !== this.operation) return;
             this.busy.set(false);
-            success(value);
-          }
-        },
-        error: (error: unknown) => {
-          if (epoch !== this.epoch || operation !== this.operation) return;
-          this.busy.set(false);
-          if (
-            (error instanceof BuildError && error.kind === "rejected") ||
-            (error instanceof RegressionError && error.kind === "rejected") ||
-            (error instanceof CatalogReadError &&
-              ["notFound", "rejected"].includes(error.kind))
-          )
-            this.clear();
-          else if (
-            source === "build" &&
-            error instanceof BuildError &&
-            error.kind === "notFound"
-          ) {
-            this.blocked.set(true);
-            this.hideMetadata();
-            this.confirmAccess(epoch);
-          } else if (
-            source === "evidence" &&
-            error instanceof RegressionError &&
-            error.kind === "notFound"
-          ) {
-            this.confirmAccess(epoch);
-          }
-          this.error.set(
-            source === "evidence" &&
+            if (
+              (error instanceof BuildError && error.kind === "rejected") ||
+              (error instanceof RegressionError && error.kind === "rejected") ||
+              (error instanceof CatalogReadError &&
+                ["notFound", "rejected"].includes(error.kind))
+            )
+              this.clear();
+            else if (
+              source === "build" &&
+              error instanceof BuildError &&
+              error.kind === "notFound"
+            ) {
+              this.blocked.set(true);
+              this.hideMetadata();
+              this.confirmAccess(epoch);
+            } else if (
+              source === "evidence" &&
               error instanceof RegressionError &&
               error.kind === "notFound"
-              ? "Saved regression runs are unavailable. Existing build metadata can still be recovered."
-              : message(error),
-          );
-        },
-        complete: () => {
-          if (epoch === this.epoch && operation === this.operation)
-            this.busy.set(false);
-        },
-      }),
+            ) {
+              this.confirmAccess(epoch);
+            }
+            this.error.set(
+              source === "evidence" &&
+                error instanceof RegressionError &&
+                error.kind === "notFound"
+                ? "Saved regression runs are unavailable. Existing build metadata can still be recovered."
+                : message(error),
+            );
+          },
+          complete: () => {
+            if (epoch === this.epoch && operation === this.operation)
+              this.busy.set(false);
+          },
+        }),
     );
   }
   private confirmAccess(epoch: number): void {
@@ -671,7 +687,9 @@ export class RevisionBuildsComponent {
         !this.isActive()
       )
         return;
-      if (this.busy()) this.schedulePoll(id);
+      // Polling skips a turn while access is checked rather than holding the panel busy.
+      if (this.busy() || !this.contexts.canSend(this.context()))
+        this.schedulePoll(id);
       else this.openRun(id);
     }, 2000);
   }

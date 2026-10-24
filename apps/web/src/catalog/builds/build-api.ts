@@ -462,9 +462,10 @@ export class BuildApi {
           timeout(45000),
           takeUntil(this.sessions.invalidated),
           map((response) => {
+            // A routine check does not refuse a sent request's reply; a boundary does.
             if (
               generation !== this.sessions.generation() ||
-              !this.sessions.canDispatch(context)
+              !this.sessions.presents(context)
             )
               throw new BuildError("rejected");
             if (

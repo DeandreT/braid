@@ -17,15 +17,16 @@ import {
   operationStatus,
 } from "../../workbench/presentation";
 import { RouterLink } from "@angular/router";
-import { Subscription, type Observable } from "rxjs";
+import { Subscription, map, switchMap, type Observable } from "rxjs";
 import { BrowserSessionState } from "../../auth/browser-session-state";
+import { CatalogContextStore } from "../catalog-context";
 import type {
   CatalogContext,
   CatalogMapping,
   CatalogRevision,
   CatalogRevisionScope,
 } from "../catalog-types";
-import { catalogRoutes } from "../catalog-types";
+import { catalogRoutes, revisionPanelKey } from "../catalog-types";
 import {
   RegressionApi,
   RegressionError,
@@ -80,6 +81,7 @@ export class RevisionRegressionComponent {
   readonly workbench = input(false);
   private readonly api = inject(RegressionApi);
   private readonly sessions = inject(BrowserSessionState);
+  private readonly contexts = inject(CatalogContextStore);
   private readonly recovery = inject(RegressionViewRecovery);
   private readonly document = inject(DOCUMENT);
   private requests = new Subscription();
@@ -93,6 +95,10 @@ export class RevisionRegressionComponent {
     context: CatalogContext;
     scope: CatalogRevisionScope;
   } | null = null;
+  /** A same-owner re-read replaces the inputs without suspending this panel's work. */
+  private readonly binding = computed(() =>
+    revisionPanelKey(this.context(), this.mapping(), this.revision()),
+  );
   readonly capabilities = signal<CaseCapabilities | null>(null);
   readonly kept = computed(() => {
     if (this.capabilities()) return null;
@@ -149,9 +155,7 @@ export class RevisionRegressionComponent {
 
   constructor() {
     effect(() => {
-      this.context();
-      this.mapping();
-      this.revision();
+      this.binding();
       this.sessions.generation();
       untracked(() => this.suspend());
     });
@@ -168,7 +172,7 @@ export class RevisionRegressionComponent {
   load(): void {
     if (this.busy()) return;
     this.send(
-      this.api.capabilities(this.context(), this.mapping().scope),
+      (context) => this.api.capabilities(context, this.mapping().scope),
       (value) => {
         this.capabilities.set(value);
         this.admission = {
@@ -185,7 +189,8 @@ export class RevisionRegressionComponent {
     if (!this.capabilities()) return;
     const after = next ? this.cases()?.nextCaseId : null;
     this.send(
-      this.api.cases(this.context(), this.mapping().scope, after || undefined),
+      (context) =>
+        this.api.cases(context, this.mapping().scope, after || undefined),
       (page) => this.cases.set(page),
     );
   }
@@ -193,14 +198,15 @@ export class RevisionRegressionComponent {
     if (!this.capabilities()?.readSamples) return;
     const after = next ? this.history()?.nextRunId : null;
     this.send(
-      this.api.runs(this.context(), this.mapping().scope, after || undefined),
+      (context) =>
+        this.api.runs(context, this.mapping().scope, after || undefined),
       (page) => this.history.set(page),
     );
   }
   openCase(id: string, version: string, refreshCases = false): void {
     if (this.busy() || this.pendingCase() || this.pendingRun()) return;
     this.send(
-      this.api.case(this.context(), this.mapping().scope, id, version),
+      (context) => this.api.case(context, this.mapping().scope, id, version),
       (value) => {
         if (!this.isCurrentRevision(value.revision)) {
           this.rejectDifferentRevision(value.revision);
@@ -349,8 +355,12 @@ export class RevisionRegressionComponent {
     try {
       const body = this.definition();
       const identity = this.editId || { id: crypto.randomUUID(), version: "1" };
-      this.pendingCase.set({ ...identity, body });
-      this.retryPublication();
+      // The request is recorded for recovery only once it can be sent.
+      this.sendPublication(() => {
+        const pending = { ...identity, body };
+        this.pendingCase.set(pending);
+        return pending;
+      });
     } catch (error) {
       this.error.set(
         error instanceof Error ? error.message : "The fixture is invalid.",
@@ -360,15 +370,23 @@ export class RevisionRegressionComponent {
   retryPublication(): void {
     const pending = this.pendingCase();
     if (!pending || this.busy()) return;
+    this.sendPublication(() => pending);
+  }
+  private sendPublication(record: () => PendingCase): void {
     this.send(
-      this.api.publish(
-        this.context(),
-        this.mapping().scope,
-        pending.id,
-        pending.version,
-        pending.body,
-      ),
-      () => {
+      (context) => {
+        const pending = record();
+        return this.api
+          .publish(
+            context,
+            this.mapping().scope,
+            pending.id,
+            pending.version,
+            pending.body,
+          )
+          .pipe(map(() => pending));
+      },
+      (pending) => {
         this.pendingCase.set(null);
         this.editing.set(false);
         this.notice.set("The exact fixture version is saved.");
@@ -381,12 +399,13 @@ export class RevisionRegressionComponent {
     const pending = this.pendingCase();
     if (!pending || this.busy()) return;
     this.send(
-      this.api.case(
-        this.context(),
-        this.mapping().scope,
-        pending.id,
-        pending.version,
-      ),
+      (context) =>
+        this.api.case(
+          context,
+          this.mapping().scope,
+          pending.id,
+          pending.version,
+        ),
       (value) => {
         // Only the byte-for-byte original definition settles an uncertain publication.
         if (
@@ -435,25 +454,37 @@ export class RevisionRegressionComponent {
       !this.capabilities()?.readSamples
     )
       return;
-    this.pendingRun.set({
-      id: crypto.randomUUID(),
-      caseId: value.caseId,
-      version: value.version,
+    // The run is recorded for recovery only once its request can be sent.
+    this.sendRun(() => {
+      const pending = {
+        id: crypto.randomUUID(),
+        caseId: value.caseId,
+        version: value.version,
+      };
+      this.pendingRun.set(pending);
+      return pending;
     });
-    this.retryRun();
   }
   retryRun(): void {
     const pending = this.pendingRun();
     if (!pending || this.busy()) return;
+    this.sendRun(() => pending);
+  }
+  private sendRun(record: () => PendingRun): void {
     this.send(
-      this.api.submit(
-        this.context(),
-        this.mapping().scope,
-        pending.id,
-        pending.caseId,
-        pending.version,
-      ),
-      () => this.openRun(pending.id),
+      (context) => {
+        const pending = record();
+        return this.api
+          .submit(
+            context,
+            this.mapping().scope,
+            pending.id,
+            pending.caseId,
+            pending.version,
+          )
+          .pipe(map(() => pending));
+      },
+      (pending) => this.openRun(pending.id),
     );
   }
   recoverRun(): void {
@@ -464,7 +495,7 @@ export class RevisionRegressionComponent {
     if (this.busy()) return;
     this.stopTimer();
     this.send(
-      this.api.run(this.context(), this.mapping().scope, id, cancel),
+      (context) => this.api.run(context, this.mapping().scope, id, cancel),
       (value) => {
         const pending = this.pendingRun();
         if (
@@ -569,33 +600,44 @@ export class RevisionRegressionComponent {
     this.pendingCase.set(null);
     this.pendingRun.set(null);
   }
-  private send<T>(request: Observable<T>, success: (value: T) => void): void {
-    if (this.busy() || !this.sessions.canDispatch(this.context())) return;
+  /**
+   * Requests wait for any pending access check and are built with the freshest admitted context.
+   * The panel stays busy meanwhile. A failed wait sends nothing and is not a refusal: retained
+   * work stays for the boundary handling that follows.
+   */
+  private send<T>(
+    request: (context: CatalogContext) => Observable<T>,
+    success: (value: T) => void,
+  ): void {
+    if (this.busy()) return;
     const epoch = this.epoch;
     const operation = ++this.operation;
     this.busy.set(true);
     this.error.set(null);
-    const subscription = request.subscribe({
-      next: (value) => {
-        if (epoch !== this.epoch || operation !== this.operation) return;
-        this.busy.set(false);
-        success(value);
-      },
-      error: (error: unknown) => {
-        if (epoch !== this.epoch || operation !== this.operation) return;
-        this.busy.set(false);
-        if (
-          error instanceof RegressionError &&
-          ["notFound", "rejected"].includes(error.kind)
-        )
-          this.hidePrivate();
-        this.error.set(errorText(error));
-      },
-      complete: () => {
-        if (epoch === this.epoch && operation === this.operation)
+    const subscription = this.contexts
+      .admitted(this.context())
+      .pipe(switchMap(request))
+      .subscribe({
+        next: (value) => {
+          if (epoch !== this.epoch || operation !== this.operation) return;
           this.busy.set(false);
-      },
-    });
+          success(value);
+        },
+        error: (error: unknown) => {
+          if (epoch !== this.epoch || operation !== this.operation) return;
+          this.busy.set(false);
+          if (
+            error instanceof RegressionError &&
+            ["notFound", "rejected"].includes(error.kind)
+          )
+            this.hidePrivate();
+          this.error.set(errorText(error));
+        },
+        complete: () => {
+          if (epoch === this.epoch && operation === this.operation)
+            this.busy.set(false);
+        },
+      });
     this.requests.add(subscription);
   }
   private definition(): CaseDefinition {
@@ -701,7 +743,9 @@ export class RevisionRegressionComponent {
         !this.isActive()
       )
         return;
-      if (this.busy()) this.schedulePoll(id);
+      // Polling skips a turn while access is checked rather than holding the panel busy.
+      if (this.busy() || !this.contexts.canSend(this.context()))
+        this.schedulePoll(id);
       else this.openRun(id);
     }, 2000);
   }

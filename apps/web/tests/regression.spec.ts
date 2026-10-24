@@ -97,7 +97,9 @@ class RegressionFixture {
   failPublication = false;
   failSubmission = false;
   reads = 0;
+  runReads = 0;
   cancels = 0;
+  token = synthetic.context.requestToken;
   async install(page: Page) {
     await syntheticCatalog(page);
     await page.route(new RegExp(root + "/regression-"), (route) =>
@@ -133,9 +135,7 @@ class RegressionFixture {
         },
       });
     if (request.method() === "PUT") {
-      expect(request.headers()["x-xsrf-token"]).toBe(
-        synthetic.context.requestToken,
-      );
+      expect(request.headers()["x-xsrf-token"]).toBe(this.token);
       if (path.includes("/regression-cases/")) {
         expect(request.headers()["content-type"]).toContain(
           "application/vnd.weft.regression-case.v1+json",
@@ -212,12 +212,26 @@ class RegressionFixture {
     if (path.endsWith("/cancel")) {
       this.cancels++;
       this.response = run("canceled");
-    }
+    } else this.runReads++;
     return route.fulfill({ json: this.response });
   }
 }
 const panel = (page: Page) =>
   page.getByRole("region", { name: "Regression tests", exact: true });
+/** The revision page's in-place re-read has finished. */
+const settled = (page: Page) =>
+  expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+/** The revision page's own catalog read of the displayed revision. */
+const revisionRead = (page: Page) =>
+  page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      new URL(response.url()).pathname ===
+        `${root}/revisions/${scope.revisionId}`,
+  );
 async function openCase(page: Page) {
   await panel(page)
     .getByRole("button", { name: "Open Order fixture", exact: true })
@@ -940,7 +954,7 @@ for (const failure of ["unavailable", "timeout"] as const) {
   });
 }
 
-test("a draft survives a successful background refresh that replaces the panel", async ({
+test("a successful background refresh keeps the panel and its draft in place", async ({
   page,
 }) => {
   const fixture = new RegressionFixture();
@@ -950,13 +964,153 @@ test("a draft survives a successful background refresh that replaces the panel",
     (response) =>
       new URL(response.url()).pathname === "/api/v1/catalog/context",
   );
+  const revision = revisionRead(page);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   expect((await reread).status()).toBe(200);
-  await page.getByRole("tab", { name: "Tests", exact: true }).click();
-  await panel(page)
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
+  expect((await revision).status()).toBe(200);
+  // The revision page's own re-read has finished, not only the context read.
+  await settled(page);
+  // A same-owner re-read leaves the loaded panel and its draft on screen.
   await expectDraft(page);
+  await expect(
+    panel(page).getByRole("button", {
+      name: "Load regression cases",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+});
+
+/** Holds the next GET of `path` until released. */
+async function holdRead(page: Page, path: string, reply: () => unknown) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let arrive!: () => void;
+  const arrived = new Promise<void>((resolve) => {
+    arrive = resolve;
+  });
+  await page.route(
+    `**${path}`,
+    async (route) => {
+      arrive();
+      await gate;
+      await route.fulfill({ json: reply() });
+    },
+    { times: 1 },
+  );
+  return { release, arrived };
+}
+
+test("a run clicked during a routine refresh waits for the fresh context and sends with its token", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  await fixture.install(page);
+  await openCase(page);
+  const start = panel(page).getByRole("button", {
+    name: "Run saved version",
+    exact: true,
+  });
+  const fresh = "synthetic-ui-only-fresh-token";
+  const held = await holdRead(page, "/api/v1/catalog/context", () => ({
+    ...synthetic.context,
+    requestToken: fresh,
+  }));
+  await page
+    .getByRole("button", { name: "Refresh catalog", exact: true })
+    .click();
+  await held.arrived;
+  try {
+    // The session check has settled; the panel's catalog admission is still being read again.
+    await start.click();
+    await expect(start).toBeDisabled();
+    await expect(
+      panel(page).getByRole("heading", {
+        name: "Check previous run",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    expect(fixture.submissions).toHaveLength(0);
+    fixture.token = fresh;
+  } finally {
+    held.release();
+  }
+  await expect(panel(page)).toContainText("Matches expected result");
+  expect(fixture.submissions).toHaveLength(1);
+  await expect(start).toBeEnabled();
+});
+
+test("a run sent before the page's own re-read finishes uses the fresh context's token", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  await fixture.install(page);
+  await openCase(page);
+  const fresh = "synthetic-ui-only-fresh-token";
+  await page.route(
+    "**/api/v1/catalog/context",
+    (route) =>
+      route.fulfill({ json: { ...synthetic.context, requestToken: fresh } }),
+    { times: 1 },
+  );
+  const held = await holdRead(
+    page,
+    `${root}/revisions/${scope.revisionId}`,
+    () => synthetic.revision,
+  );
+  await page
+    .getByRole("button", { name: "Refresh catalog", exact: true })
+    .click();
+  await held.arrived;
+  try {
+    fixture.token = fresh;
+    await panel(page)
+      .getByRole("button", { name: "Run saved version", exact: true })
+      .click();
+    await expect(panel(page)).toContainText("Matches expected result");
+    expect(fixture.submissions).toHaveLength(1);
+  } finally {
+    held.release();
+  }
+  await settled(page);
+});
+
+test("result polling waits out a routine check without taking keyboard focus", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  fixture.response = run("running");
+  await fixture.install(page);
+  const history = panel(page).getByRole("button", {
+    name: "Load run history",
+    exact: true,
+  });
+  await history.click();
+  await panel(page)
+    .getByRole("button", { name: `Open run ${RUN}`, exact: true })
+    .click();
+  await expect.poll(() => fixture.runReads).toBeGreaterThan(0);
+  await expect(history).toBeEnabled();
+  await history.focus();
+  const held = await holdRead(page, "/api/auth/session", () => ({
+    version: 1,
+    mode: "development",
+  }));
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await held.arrived;
+  try {
+    // The two-second poll comes due during the check and skips its turn.
+    const reads = fixture.runReads;
+    await page.waitForTimeout(3000);
+    await expect(history).toBeFocused();
+    await expect(history).toBeEnabled();
+    expect(fixture.runReads).toBe(reads);
+    fixture.response = run("completed", "passed");
+  } finally {
+    held.release();
+  }
+  await expect(panel(page)).toContainText("Matches expected result");
 });
 
 test("an uncertain publication keeps its original request across a failed session check", async ({

@@ -7,10 +7,10 @@ Wolverine worker host and Ferrule worker image. It owns every resource it uses:
   `deploy/local/postgres-init.sh`, migrated to the current schema with the
   migrator login;
 - a private v2 storage root in a fresh temporary directory;
-- a Development administrator host on `127.0.0.1:4101` with the in-process worker
+- a Development administrator host on `127.0.0.1:4121` with the in-process worker
   runner, which creates the project and uploads `preview-orders.json` and
   `preview-csv-source.json` through ordinary HTTP;
-- the browser host on `127.0.0.1:4100` (Development identity, previews enabled with
+- the browser host on `127.0.0.1:4120` (Development identity, previews enabled with
   the two preview logins) and the separate `Weft.Worker` preview host.
 
 Publisher and viewer memberships are provisioned with `Weft.DatabaseTool`. The
@@ -46,6 +46,7 @@ env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE xvfb-run -a -w 10 
   --worker-image "$WEFT_FERRULE_WORKER_IMAGE"
 ```
 
-Ports 4100 and 4101 must be free. Arguments after `--playwright-args` are passed to
-Playwright. The run fails if any test fails or if a process, the labeled container
-or the temporary directory cannot be removed.
+Ports 4120 and 4121 must be free; they stay clear of a local instance on 4100.
+Arguments after `--playwright-args` are passed to Playwright. The run fails if
+any test fails or if a process, the labeled container or the temporary directory
+cannot be removed.

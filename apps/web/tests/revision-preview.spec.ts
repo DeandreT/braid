@@ -74,6 +74,7 @@ class Previews {
   reads = 0;
   submitReply: { status: number; json: unknown } | null = null;
   states: Run[] = [run("running"), succeeded];
+  token = synthetic.context.requestToken;
 
   constructor(private readonly page: Page) {}
 
@@ -98,7 +99,7 @@ class Previews {
     const headers = request.headers();
     expect(request.method()).toBe("POST");
     expect(headers["content-type"]).toContain("application/json");
-    expect(headers["x-xsrf-token"]).toBe(synthetic.context.requestToken);
+    expect(headers["x-xsrf-token"]).toBe(this.token);
     const key = headers["idempotency-key"];
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
     this.submissions.push({ key, body: request.postDataJSON() as Submission });
@@ -277,6 +278,100 @@ test("a running preview can be canceled", async ({ page }) => {
   await expect(
     region.getByRole("button", { name: "Cancel preview" }),
   ).toHaveCount(0);
+});
+
+/** Holds the next request matching `pattern` until released. */
+async function hold(page: Page, pattern: string, reply: () => unknown) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let arrive!: () => void;
+  const arrived = new Promise<void>((resolve) => {
+    arrive = resolve;
+  });
+  await page.route(
+    pattern,
+    async (route) => {
+      arrive();
+      await gate;
+      await route.fulfill({ json: reply() });
+    },
+    { times: 1 },
+  );
+  return { release, arrived };
+}
+
+test("a preview submitted during a routine refresh waits and sends with the fresh token", async ({
+  page,
+}) => {
+  const previews = new Previews(page);
+  await previews.install();
+  await open(page);
+  const region = panel(page);
+  await region.getByLabel("Primary input (JSON)").fill("{}");
+  const fresh = "synthetic-ui-only-fresh-token";
+  const context = structuredClone(synthetic.context);
+  context.features.preview = true;
+  const held = await hold(page, "**/api/v1/catalog/context", () => ({
+    ...context,
+    requestToken: fresh,
+  }));
+  await page
+    .getByRole("button", { name: "Refresh catalog", exact: true })
+    .click();
+  await held.arrived;
+  try {
+    // The form stays as it was; the submission waits for the fresh context.
+    await region.getByRole("button", { name: "Run preview" }).click();
+    await expect(region.getByLabel("Primary input (JSON)")).toHaveValue("{}");
+    await expect(
+      region.getByRole("button", { name: "Submitting…" }),
+    ).toBeVisible();
+    expect(previews.submissions).toHaveLength(0);
+    previews.token = fresh;
+  } finally {
+    held.release();
+  }
+  await expect(
+    region.getByRole("status").filter({ hasText: "Sample ran successfully" }),
+  ).toBeVisible();
+  expect(previews.submissions).toHaveLength(1);
+});
+
+test("status polling waits for a routine check instead of counting it as a failure", async ({
+  page,
+}) => {
+  const previews = new Previews(page);
+  previews.states = [run("running")];
+  await previews.install();
+  await open(page);
+  const region = panel(page);
+  await region.getByLabel("Primary input (JSON)").fill("{}");
+  await region.getByRole("button", { name: "Run preview" }).click();
+  await expect(
+    region.getByRole("status").filter({ hasText: "Running" }),
+  ).toBeVisible();
+  await expect.poll(() => previews.reads).toBeGreaterThan(0);
+  const held = await hold(page, "**/api/auth/session", () => ({
+    version: 1,
+    mode: "development",
+  }));
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await held.arrived;
+  try {
+    // Several poll intervals pass while the check is pending; no status read is sent.
+    const reads = previews.reads;
+    await page.waitForTimeout(3000);
+    expect(previews.reads).toBe(reads);
+    previews.states = [succeeded];
+  } finally {
+    held.release();
+  }
+  await expect(
+    region.getByRole("status").filter({ hasText: "Sample ran successfully" }),
+  ).toBeVisible();
+  await expect(region.getByRole("alert")).toHaveCount(0);
 });
 
 test("a reload recovers the submitted run and an unconfirmed key is reused", async ({

@@ -34,9 +34,13 @@ report reading is enabled, the revision page reads saved reports separately.
 The server supplies the Development identity and checks access on every read.
 The browser offers no actor or role selector. Route changes, explicit refresh
 and returning to a focused/visible document obtain fresh context and data.
-Old content clears while a new selection loads; canceled or late reads cannot
-replace the current selection. There is no periodic polling or instantaneous
-revocation notification while a tab makes no requests.
+These routine access checks keep the workspace on screen. A new selection starts
+empty and shows loading on its page; reading the displayed selection again keeps
+it readable, with the page marked busy, until the fresh read settles.
+Canceled or late reads cannot replace the current selection. Only a changed
+identity, an ended session or a failed check hides and clears the workspace; see
+[Session-safe browser state](browser-session-state.md). There is no periodic
+polling or instantaneous revocation notification while a tab makes no requests.
 
 Accessible empty lists, unavailable/not-found resources, rejected workspace
 identity, invalid links and operational failures have distinct states. A role

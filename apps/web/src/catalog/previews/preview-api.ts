@@ -216,7 +216,7 @@ export class PreviewApi {
     return defer(() => {
       if (!scopeKeys.every((key) => isCatalogId(scope?.[key])))
         throw new PreviewError("invalidLink");
-      if (!this.sessions.visible()) throw new PreviewError("rejected");
+      if (!this.sessions.settled()) throw new PreviewError("rejected");
       const generation = this.sessions.generation();
       const sessionMode = this.sessions.state().kind === "authenticated";
       return send(generation).pipe(

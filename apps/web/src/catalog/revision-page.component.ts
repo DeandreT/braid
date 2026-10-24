@@ -20,6 +20,7 @@ import {
   combineLatest,
   forkJoin,
   of,
+  switchMap,
 } from "rxjs";
 import { CatalogContextStore } from "./catalog-context";
 import {
@@ -33,7 +34,11 @@ import type {
   CatalogRevisionScope,
   CatalogRevisionPage,
 } from "./catalog-types";
-import { CatalogReadError, isCatalogId } from "./catalog-types";
+import {
+  CatalogReadError,
+  isCatalogId,
+  sameAdmittedAccess,
+} from "./catalog-types";
 import { RevisionReportApi } from "./reports/revision-report-api";
 import { revisionReportSelectors } from "./reports/revision-report-selection";
 import {
@@ -177,7 +182,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
       view &&
       value &&
       this.context() &&
-      this.sessions.canDispatch(this.context()!) &&
+      this.sessions.presents(this.context()!) &&
       component.context() === this.context() &&
       component.capabilities()?.readSamples &&
       sameRevision(value.revision, view.revision.scope)
@@ -192,7 +197,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
       view &&
       value &&
       this.context() &&
-      this.sessions.canDispatch(this.context()!) &&
+      this.sessions.presents(this.context()!) &&
       component.context() === this.context() &&
       component.capabilities()?.readSamples &&
       sameRevision(value.run.revision, view.revision.scope)
@@ -325,6 +330,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
   readonly reports = new RevisionReportState(inject(RevisionReportApi), {
     refresh: () => this.refreshReportAdmission(),
     isCurrent: (admission) => this.isCurrentAdmission(admission),
+    admit: (admission) => this.contexts.admitted(admission.context),
   });
 
   constructor() {
@@ -644,54 +650,62 @@ export class RevisionPageComponent extends CatalogRoutePage<
     const context = this.context(),
       view = this.data(),
       lifetime = this.workbench.lifetime();
-    if (!context || !view || !this.sessions.canDispatch(context)) return;
+    if (!context || !view || !this.sessions.presents(context)) return;
     this.switcherRequest?.unsubscribe();
     const recent = this.recents
       .scopes(context)
       .map((scope) => this.api.mapping(scope).pipe(catchError(() => of(null))));
-    this.switcherRequest = forkJoin({
-      projects: this.api.projects(context.allowedOrganizationId),
-      mappings: this.api.mappings(view.project.scope),
-      recent: recent.length ? forkJoin(recent) : of([]),
-    }).subscribe({
-      next: ({ projects, mappings, recent }) => {
-        if (this.workbench.lifetime() !== lifetime) return;
-        this.switcherPaths.clear();
-        const choices: WorkbenchCommand[] = [];
-        for (const project of projects.projects) {
-          const id = `project:${project.scope.projectId}`;
-          this.switcherPaths.set(id, this.routes.project(project.scope));
-          choices.push({ id, label: project.name, detail: "Project" });
-        }
-        for (const mapping of recent) {
-          if (!mapping) continue;
-          const id = `mapping:${mapping.scope.projectId}/${mapping.scope.mappingId}`;
-          this.switcherPaths.set(id, this.routes.mapping(mapping.scope));
-          choices.push({
-            id,
-            label: mapping.name,
-            detail: "Recent mapping · access refreshed",
-          });
-        }
-        for (const mapping of mappings.mappings) {
-          const id = `mapping:${mapping.scope.projectId}/${mapping.scope.mappingId}`;
-          if (this.switcherPaths.has(id)) continue;
-          this.switcherPaths.set(id, this.routes.mapping(mapping.scope));
-          choices.push({
-            id,
-            label: mapping.name,
-            detail: "Mapping in current project",
-          });
-        }
-        this.switcherChoices.set(choices);
-      },
-      error: () => {
-        if (this.workbench.lifetime() === lifetime) {
-          this.switcherChoices.set([]);
+    // The reads wait for any pending access check.
+    this.switcherRequest = this.contexts
+      .admitted(context)
+      .pipe(
+        switchMap(() =>
+          forkJoin({
+            projects: this.api.projects(context.allowedOrganizationId),
+            mappings: this.api.mappings(view.project.scope),
+            recent: recent.length ? forkJoin(recent) : of([]),
+          }),
+        ),
+      )
+      .subscribe({
+        next: ({ projects, mappings, recent }) => {
+          if (this.workbench.lifetime() !== lifetime) return;
           this.switcherPaths.clear();
-        }
-      },
-    });
+          const choices: WorkbenchCommand[] = [];
+          for (const project of projects.projects) {
+            const id = `project:${project.scope.projectId}`;
+            this.switcherPaths.set(id, this.routes.project(project.scope));
+            choices.push({ id, label: project.name, detail: "Project" });
+          }
+          for (const mapping of recent) {
+            if (!mapping) continue;
+            const id = `mapping:${mapping.scope.projectId}/${mapping.scope.mappingId}`;
+            this.switcherPaths.set(id, this.routes.mapping(mapping.scope));
+            choices.push({
+              id,
+              label: mapping.name,
+              detail: "Recent mapping · access refreshed",
+            });
+          }
+          for (const mapping of mappings.mappings) {
+            const id = `mapping:${mapping.scope.projectId}/${mapping.scope.mappingId}`;
+            if (this.switcherPaths.has(id)) continue;
+            this.switcherPaths.set(id, this.routes.mapping(mapping.scope));
+            choices.push({
+              id,
+              label: mapping.name,
+              detail: "Mapping in current project",
+            });
+          }
+          this.switcherChoices.set(choices);
+        },
+        error: () => {
+          if (this.workbench.lifetime() === lifetime) {
+            this.switcherChoices.set([]);
+            this.switcherPaths.clear();
+          }
+        },
+      });
   }
 
   loadRevisions(next = false): void {
@@ -701,17 +715,17 @@ export class RevisionPageComponent extends CatalogRoutePage<
     if (
       !view ||
       !context ||
-      !this.sessions.canDispatch(context) ||
+      !this.sessions.presents(context) ||
       this.historyBusy()
     )
       return;
     this.historyBusy.set(true);
     this.historyError.set(null);
-    this.historyRequest = this.api
-      .revisions(
-        view.mapping.scope,
-        next ? (this.revisionHistory()?.nextCursor ?? null) : null,
-      )
+    const cursor = next ? (this.revisionHistory()?.nextCursor ?? null) : null;
+    // The read waits for any pending access check.
+    this.historyRequest = this.contexts
+      .admitted(context)
+      .pipe(switchMap(() => this.api.revisions(view.mapping.scope, cursor)))
       .subscribe({
         next: (value) => {
           if (this.workbench.lifetime() === lifetime) {
@@ -731,15 +745,19 @@ export class RevisionPageComponent extends CatalogRoutePage<
       });
   }
 
+  /** A same-owner re-read keeps an admission current while its revision and access are unchanged. */
   private isCurrentAdmission(admission: RevisionReportAdmission): boolean {
     const selection = this.reportSelection();
     const view = this.data();
+    const context = this.context();
     return (
       selection !== null &&
-      this.contexts.context() === admission.context &&
-      this.context() === admission.context &&
-      view?.mapping === admission.mapping &&
-      view.revision === admission.revision &&
+      view !== null &&
+      context !== null &&
+      this.contexts.isCurrent(admission.context) &&
+      this.contexts.isCurrent(context) &&
+      sameAdmittedAccess({ context, mapping: view.mapping }, admission) &&
+      sameRevision(view.revision.scope, admission.revision.scope) &&
       sameRevision(selection.scope, admission.revision.scope)
     );
   }

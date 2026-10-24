@@ -1,5 +1,6 @@
 @if (data(); as view) {
   <weft-workbench-frame
+    [attr.aria-busy]="refreshing() ? 'true' : null"
     [inspector]="inspector"
     [dock]="dock"
     [commands]="commands()"

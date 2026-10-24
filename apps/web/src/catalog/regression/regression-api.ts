@@ -382,9 +382,10 @@ export class RegressionApi {
           timeout(45000),
           takeUntil(this.sessions.invalidated),
           map((response) => {
+            // A routine check does not refuse a sent request's reply; a boundary does.
             if (
               generation !== this.sessions.generation() ||
-              !this.sessions.canDispatch(context)
+              !this.sessions.presents(context)
             )
               throw new RegressionError("rejected");
             if ((response.body?.length ?? 0) > 24 * 1024 * 1024) invalid();

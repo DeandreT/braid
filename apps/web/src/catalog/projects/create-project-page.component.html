@@ -359,6 +359,7 @@
             formControlName="name"
             maxlength="65536"
             autocomplete="off"
+            [readOnly]="!state.canEdit()"
             [attr.aria-invalid]="errors.name ? 'true' : null"
             aria-describedby="project-name-help project-name-error"
           />
@@ -379,6 +380,7 @@
             formControlName="description"
             maxlength="8000"
             rows="5"
+            [readOnly]="!state.canEdit()"
             [attr.aria-invalid]="errors.description ? 'true' : null"
             aria-describedby="project-description-help project-description-error"
           ></textarea>

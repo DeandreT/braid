@@ -1,4 +1,8 @@
-<section class="catalog-shell" aria-label="Catalog workspace">
+<section
+  class="catalog-shell"
+  aria-label="Catalog workspace"
+  [attr.aria-busy]="contextStore.checking() ? 'true' : null"
+>
   @if (sessions.state().kind === "checking") {
     <p class="catalog-state" role="status">Checking workspace access…</p>
   } @else if (!contextStore.visible()) {

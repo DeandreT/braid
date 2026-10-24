@@ -29,31 +29,66 @@ server still authorizes each operation independently.
 
 ## Checking and identity boundaries
 
-A safe observation hides and inerts the mounted protected workspace and blocks
-new dispatches. It does not destroy private forms, cancel an already-sent mutation,
-or reconstruct its request. An unchanged positive observation does not invalidate
-that original work. Canceling the last pending observer keeps the workspace
-unavailable until another explicit observation, without claiming that an
-in-flight mutation was undone.
+`BrowserSessionState` distinguishes two kinds of check. A routine check
+re-observes the presented confirmed identity: before every action, every catalog
+read and on returning to the tab. The protected workspace stays rendered, readable
+and focusable while it runs; private forms, focus and scroll position are
+unchanged. Only new dispatch waits: `checking` is true and `canDispatch` is
+false. Actions that read their own fresh admission (metadata, uploads, project
+creation, report derivation, build changes and chat) still send that check before
+their request. Mounted panels that send under the context they were admitted with
+(regression tests, previews, reports, build reads, revision history and
+comparisons) go through `CatalogContextStore.admitted`. A request made while a session check or a
+catalog context read is pending waits for it, then uses the freshest context of
+the same-owner lineage and its request token; at a boundary it fails without
+being sent. Such a failure is not a refusal, so retained drafts and uncertain
+requests stay for the boundary handling that follows. A waiting request decides
+only after the task that settled the check has finished, and a page that starts
+reading a different selection fails the requests still waiting for the one it
+replaces. A mutation is recorded for recovery only once it is sent. Catalog reads
+inside a multi-step action wait for another action's routine check in the same
+way instead of being refused. A background check neither disables controls nor
+moves focus: polling skips its turn while a check is pending. The control whose
+action started the check carries it as its busy state (`aria-busy`). If the
+action disables that control and focus falls back to the page, focus returns to
+the control once it is enabled again. A routine check does not destroy private forms, cancel an already-sent
+mutation or reconstruct its request. An unchanged positive observation does not
+invalidate that work. Canceling the last observer of a routine check observes
+nothing: the confirmed state before the check stands. Without a confirmed
+identity, a canceled check keeps the workspace unavailable until another explicit
+observation, without claiming that an in-flight mutation was undone.
 
-Creation, upload and append completion focus waits until the protected workspace is visible
-again. A focus request is consumed only after its rendered target receives focus;
-later safe checks do not replay it. Identity invalidation cancels queued focus
-along with the existing generation-bound presentation callbacks.
+`CatalogContextStore` keeps the confirmed context while it reads a fresh one. A
+fresh context for the same owner (mode, principal, organization and Session
+identity context) replaces it and joins its lineage, so content admitted under an
+earlier context of that lineage stays current; new requests use the freshest
+context and its request token. A context for another owner, a failed context read
+or a session boundary ends the lineage. Reading the same selection again keeps its
+ready view on screen until the fresh read settles; a different selection starts
+empty and shows loading on its own page. Revision panels and reports stay in place
+when a same-owner re-read leaves the revision, workspace features and mapping
+access unchanged.
 
-A changed, negative or failed observation first advances the boundary generation,
-removes old acceptance/visibility, and synchronously notifies consumers. They
-clear protected ready views, access facts and reports, fence late callbacks,
-cancel owned pending reads and suspend original mutation bookkeeping before the
-replacement categorical view appears. Queued focus refreshes are cleared at this
-true boundary; later ordinary focus events retain their normal admission flow.
+Creation, upload and append completion focus waits until the access check settles.
+A focus request is consumed only after its rendered target receives focus; later
+routine checks do not replay it. Identity invalidation cancels queued focus along
+with the existing generation-bound presentation callbacks.
+
+A changed, negative or failed observation is a boundary. It first advances the
+boundary generation, removes old acceptance/visibility, hides and inerts the
+mounted workspace, and synchronously notifies consumers. They clear protected ready
+views, access facts and reports, fence late callbacks, cancel owned pending reads
+and suspend original mutation bookkeeping before the replacement categorical view
+appears. Queued focus refreshes are cleared at this true boundary; later ordinary
+focus events retain their normal admission flow. Replies to already-sent requests
+are accepted during a routine check and refused after a boundary.
 
 Current Session catalog or report requests rejected with HTTP401/403 use
 `rejectProtectedRequest` to clear the protected boundary synchronously before
 starting one fresh, status-only observation. In-flight rejection classification
 is coalesced, and captured boundary generations fence obsolete API failures. The
 retained private status and any supplied admitted context establish request
-ownership even while a safe check temporarily hides the public workspace.
+ownership even while a check is pending.
 The session service owns this eight-second-bounded observation independently of
 the rejected consumer, so clearing an editor or canceling its read cannot cancel
 classification.
@@ -107,9 +142,11 @@ confirmed new owner. Existing explicit replacement/abandonment and accepted rout
 loss retain their normal memory boundaries.
 
 Revision-page workflow panels (regression tests, builds and chat) are child
-views that a boundary or a catalog refresh unmounts. Their unsent drafts and
-uncertain requests live in page-scoped recovery providers rather than in the
-panel. A boundary or refresh suspends that work. Only a fresh catalog context
+views that a boundary unmounts. A same-owner catalog re-read keeps them, and
+their displayed work, in place unless it changes the revision, workspace features
+or mapping access. Their unsent drafts and uncertain requests live in page-scoped
+recovery providers rather than in the panel. A boundary, or a re-read that changes
+what the panel was admitted for, suspends that work. Only a fresh catalog context
 whose owner (mode, principal, organization and Session identity context)
 differs discards it, as does another revision, explicit abandonment or leaving
 the page. The panel restores it to the same owner only after its own fresh

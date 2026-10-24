@@ -121,7 +121,12 @@ export class BrowserAuthControlsComponent {
   }
 
   check(): void {
-    if (this.session.busy() || this.session.state().kind === "checking") return;
+    if (
+      this.session.busy() ||
+      this.session.checking() ||
+      this.session.state().kind === "checking"
+    )
+      return;
     this.forgetGeneration.set(null);
     this.run(this.session.observe());
   }

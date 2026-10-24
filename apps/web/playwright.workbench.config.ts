@@ -30,7 +30,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "npm run dev -- --port 5181 --no-hmr" +
+      "npm run dev -- --port 5181 --proxy-config proxy.synthetic.conf.json --no-hmr" +
       (process.platform === "win32" ? " --poll 2000" : ""),
     url: "http://127.0.0.1:5181",
     reuseExistingServer: false,

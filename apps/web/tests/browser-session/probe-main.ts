@@ -414,7 +414,8 @@ export class BrowserSessionPublicProbe {
     }
     if (component instanceof CatalogRoutePage)
       return {
-        busy: component.kind() === "loading",
+        // A same-selection read keeps its ready view in place while it runs.
+        busy: component.kind() === "loading" || component.refreshing(),
         admitted: component.context() !== null,
         retained: false,
         unknown: false,
@@ -444,6 +445,7 @@ export class BrowserSessionPublicProbe {
         kind: this.sessions.state().kind,
         generation: this.sessions.generation(),
         visible: this.sessions.visible(),
+        checking: this.sessions.checking(),
         accepts: this.context !== null && this.sessions.accepts(this.context),
         canDispatch:
           this.context !== null && this.sessions.canDispatch(this.context),

@@ -103,7 +103,8 @@ export class AppendRevisionPageComponent {
     effect(() => {
       const prompt = this.state.leavePrompt(),
         request = this.state.focusRequest();
-      if (!this.contexts.visible()) return;
+      // Focus waits for the access check to settle; a boundary clears the queued request.
+      if (!this.contexts.settled()) return;
       if (prompt) {
         this.queueFocus("append-leave");
         return;
@@ -324,7 +325,7 @@ export class AppendRevisionPageComponent {
         if (
           !this.destroyed &&
           generation === this.focusGeneration &&
-          this.contexts.visible() &&
+          this.contexts.settled() &&
           (stateSequence === undefined ||
             this.state.focusRequest()?.sequence === stateSequence) &&
           (target === "append-leave"

@@ -173,46 +173,58 @@ async function validMountedDraft(
             hidden:
               node.getClientRects().length === 0 &&
               node.closest('[aria-hidden="true"]') !== null,
+            visible:
+              node.getClientRects().length > 0 &&
+              node.closest('[inert], [aria-hidden="true"], [hidden]') === null,
           };
         },
         attemptFocus: () => {
           node.focus();
           return document.activeElement !== node;
         },
+        focused: () => document.activeElement === node,
         submit: () => node.form?.requestSubmit(),
       },
     });
   }, inputIds[feature]);
 }
+type Mounted = {
+  __weft119Mounted: {
+    inspect(): {
+      same: boolean;
+      value: boolean;
+      writes: number;
+      changed: boolean;
+      detached: boolean;
+      inert: boolean;
+      hidden: boolean;
+      visible: boolean;
+    };
+    attemptFocus(): boolean;
+    focused(): boolean;
+    submit(): void;
+  };
+};
+/** A routine check keeps the mounted form visible and focusable; a boundary hides it. */
 async function retainedMountedDraft(
   app: ControlledSession,
-  mandatoryHidden: boolean,
+  presentation: "visible" | "hidden",
   submit = false,
 ): Promise<void> {
+  const witness = await app.page.evaluate(
+    ({ submit, presentation }) => {
+      const witness = (window as unknown as Mounted).__weft119Mounted;
+      const result = witness.inspect();
+      const focus =
+        presentation === "hidden"
+          ? witness.attemptFocus()
+          : !witness.attemptFocus() && witness.focused();
+      if (submit) witness.submit();
+      return { ...result, focus };
+    },
+    { submit, presentation },
+  );
   const facts = await app.snapshot();
-  const witness = await app.page.evaluate((submit) => {
-    const witness = (
-      window as unknown as {
-        __weft119Mounted: {
-          inspect(): {
-            same: boolean;
-            value: boolean;
-            writes: number;
-            changed: boolean;
-            detached: boolean;
-            inert: boolean;
-            hidden: boolean;
-          };
-          attemptFocus(): boolean;
-          submit(): void;
-        };
-      }
-    ).__weft119Mounted;
-    const result = witness.inspect();
-    const noFocus = result.hidden ? witness.attemptFocus() : true;
-    if (submit) witness.submit();
-    return { ...result, noFocus };
-  }, submit);
   expect(
     witness.same &&
       witness.value &&
@@ -220,8 +232,12 @@ async function retainedMountedDraft(
       !witness.detached &&
       witness.writes === 0,
   ).toBe(true);
-  if (mandatoryHidden || !facts["visible"])
-    expect(witness.hidden && witness.inert && witness.noFocus).toBe(true);
+  if (presentation === "hidden")
+    expect(witness.hidden && witness.inert && witness.focus).toBe(true);
+  else {
+    expect(witness.visible && !witness.inert && witness.focus).toBe(true);
+    expect(facts["visible"]).toBe(true);
+  }
   expect(facts["newDispatchAllowed"]).toBe(false);
 }
 async function restoredMountedDraft(
@@ -575,14 +591,24 @@ test("only overlapping observations share; canceled waiter is not settled author
     await app.observe();
     await expect.poll(() => app.count("status")).toBe(2);
     await expect.poll(sample(app, "completed")).toBeGreaterThan(completed);
+    const generation = (await app.snapshot())["generation"];
+    // The canceled routine check would have observed sign-out; it must never publish.
+    app.session = "anonymous";
     const final = app.hold("status", { json: app.status() });
+    app.session = "authenticated";
     await app.observe();
     await final.entered;
+    expect((await app.snapshot())["checking"]).toBe(true);
     await page.locator("#probe-cancel-all").click();
     await expect.poll(() => final.canceled).toBe(true);
     final.release();
     await final.finished;
-    expect((await app.snapshot())["visible"]).toBe(false);
+    // Canceling observed nothing: the confirmed state before the check stands.
+    const canceled = await app.snapshot();
+    expect(canceled["kind"]).toBe("authenticated");
+    expect(canceled["visible"]).toBe(true);
+    expect(canceled["checking"]).toBe(false);
+    expect(canceled["generation"]).toBe(generation);
     await app.observe();
     await expect.poll(() => app.count("status")).toBe(4);
   }));
@@ -624,7 +650,7 @@ test("session context mismatch fails the initiating admission and explicit retry
   }));
 
 for (const feature of ["creation", "metadata", "upload", "append"] as const)
-  test(`safe checking keeps the same private mounted ${feature} form hidden and inert`, async ({
+  test(`routine checking keeps the same private mounted ${feature} form visible and blocks its dispatch`, async ({
     app,
   }) =>
     guarded(async () => {
@@ -632,15 +658,141 @@ for (const feature of ["creation", "metadata", "upload", "append"] as const)
       const held = app.hold("status", () => ({ json: app.status() }));
       await app.observe();
       await held.entered;
-      await retainedMountedDraft(app, true, true);
+      await retainedMountedDraft(app, "visible", true);
       const checking = await app.snapshot();
+      expect(checking["kind"]).toBe("authenticated");
+      expect(checking["checking"]).toBe(true);
       expect(checking["accepts"]).toBe(true);
       expect(checking["canDispatch"]).toBe(false);
+      expect(
+        await app.page
+          .getByText("Checking workspace access…", { exact: true })
+          .count(),
+      ).toBe(0);
+      expect(app.wires.length).toBe(0);
       held.release();
       await held.finished;
       await expect.poll(sample(app, "kind")).toBe("authenticated");
       await restoredMountedDraft(app, feature);
     }));
+
+test("a routine re-read keeps the catalog page attached, visible and focus-stable", async ({
+  app,
+  page,
+}) =>
+  guarded(async () => {
+    await app.open(projectPath, true);
+    await expect.poll(sample(app, "readReady")).toBe(true);
+    await expect(page.locator(".catalog-summary")).toBeVisible();
+    await page.evaluate(() => {
+      const title = document.getElementById("catalog-page-title")!,
+        summary = document.querySelector(".catalog-summary")!;
+      let detached = false;
+      const observer = new MutationObserver((records) => {
+        for (const record of records)
+          record.removedNodes.forEach((removed) => {
+            if (removed.contains(title) || removed.contains(summary))
+              detached = true;
+          });
+      });
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      });
+      title.focus();
+      Object.defineProperty(window, "__weft324Page", {
+        configurable: true,
+        value: () =>
+          !detached &&
+          title.isConnected &&
+          summary.isConnected &&
+          document.activeElement === title &&
+          [title, summary].every(
+            (node) =>
+              node.getClientRects().length > 0 &&
+              node.closest('[inert], [aria-hidden="true"], [hidden]') === null,
+          ) &&
+          !document.body.textContent?.includes("Checking workspace access"),
+      });
+    });
+    const stable = () =>
+      page.evaluate(() =>
+        (window as unknown as { __weft324Page(): boolean }).__weft324Page(),
+      );
+    expect(await stable()).toBe(true);
+    const contexts = app.count("context");
+    const status = app.hold("status", () => ({ json: app.status() }));
+    const resource = app.hold("project", { json: app.project });
+    // Returning to the tab reads the displayed page again.
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await status.entered;
+    expect(await stable()).toBe(true);
+    await expect(page.locator("section.catalog-page")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    status.release();
+    await status.finished;
+    await resource.entered;
+    expect(await stable()).toBe(true);
+    resource.release();
+    await resource.finished;
+    await expect(page.locator("section.catalog-page")).not.toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(await stable()).toBe(true);
+    expect(app.count("context")).toBe(contexts + 1);
+    expect((await app.snapshot())["readReady"]).toBe(true);
+    expect(app.wires.length).toBe(0);
+  }));
+
+test("a save waits for its own check, shows it on the Save control and is sent once", async ({
+  app,
+  page,
+}) =>
+  guarded(async () => {
+    await validMountedDraft(app, "metadata");
+    app.plans.set("patch", {
+      json: {
+        ...app.metadata(),
+        name: "Owned unsent retained value",
+        description: "Owned private description",
+        version: "2",
+      },
+      headers: {
+        ETag: `"metadata-v1:${ids.organization}:${ids.project}:${ids.mapping}:2"`,
+      },
+    });
+    const save = page.getByRole("button", {
+      name: "Save metadata",
+      exact: true,
+    });
+    const statuses = app.count("status"),
+      contexts = app.count("context");
+    const status = app.hold("status", () => ({ json: app.status() }));
+    await save.click();
+    await status.entered;
+    await expect(save).toHaveAttribute("aria-busy", "true");
+    // The form stays on screen; a second submit while the check runs sends nothing.
+    await retainedMountedDraft(app, "visible", true);
+    await page.evaluate(() =>
+      document
+        .querySelector<HTMLButtonElement>("button.metadata-primary")
+        ?.click(),
+    );
+    expect(app.count("status")).toBe(statuses + 1);
+    expect(app.count("context")).toBe(contexts);
+    expect(app.count("patch")).toBe(0);
+    status.release();
+    await status.finished;
+    await expect(page.locator("#metadata-saved")).toBeVisible();
+    await expect(save).not.toHaveAttribute("aria-busy", "true");
+    expect(app.count("patch")).toBe(1);
+    expect(app.count("context")).toBe(contexts + 1);
+    expect(app.wires.length).toBe(1);
+    expect(app.wires[0]?.freshCatalogToken).toBe(true);
+  }));
 
 for (const feature of ["creation", "metadata", "upload", "append"] as const)
   test(`actual ${feature} child refresh preserves the form through complete fresh admission`, async ({
@@ -661,18 +813,18 @@ for (const feature of ["creation", "metadata", "upload", "append"] as const)
         .getByRole("button", { name: refreshName[feature], exact: true })
         .click();
       await status.entered;
-      await retainedMountedDraft(app, true, true);
+      await retainedMountedDraft(app, "visible", true);
       expect(app.wires.length).toBe(0);
       status.release();
       await status.finished;
       await context.entered;
-      await retainedMountedDraft(app, false);
+      await retainedMountedDraft(app, "visible");
       expect(app.wires.length).toBe(0);
       context.release();
       await context.finished;
       if (resource) {
         await resource.entered;
-        await retainedMountedDraft(app, false);
+        await retainedMountedDraft(app, "visible");
         expect(app.wires.length).toBe(0);
         resource.release();
         await resource.finished;
@@ -690,29 +842,36 @@ for (const [label, path] of [
   }) =>
     guarded(async () => {
       await app.open(path, true);
-      if (label in inputIds)
-        await expect(
-          app.page.locator("#" + inputIds[label as Feature]),
-        ).toBeVisible();
-      else {
-        await expect(app.page.locator("#catalog-page-title")).toBeVisible();
+      const consumer = app.page.locator(
+        label in inputIds
+          ? "#" + inputIds[label as Feature]
+          : "#catalog-page-title",
+      );
+      await expect(consumer).toBeVisible();
+      if (!(label in inputIds))
         expect(
-          await app.page
-            .locator("#catalog-page-title")
-            .evaluate(
-              (node, kind) =>
-                node.textContent?.trim() ===
-                (kind === "project"
-                  ? "Owned synthetic project"
-                  : "Owned synthetic mapping"),
-              label,
-            ),
+          await consumer.evaluate(
+            (node, kind) =>
+              node.textContent?.trim() ===
+              (kind === "project"
+                ? "Owned synthetic project"
+                : "Owned synthetic mapping"),
+            label,
+          ),
         ).toBe(true);
-      }
       await app.arm();
       expect((await app.snapshot())["actualOwner"]).toBe(true);
       app.identity(ids.foreignActor);
+      const held = app.hold("status", () => ({ json: app.status() }));
       await app.observe();
+      await held.entered;
+      // Until the changed identity is observed, the check keeps the consumer on screen.
+      await expect(consumer).toBeVisible();
+      const checking = await app.snapshot();
+      expect(checking["checking"]).toBe(true);
+      expect(checking["notices"]).toBe(0);
+      held.release();
+      await held.finished;
       await expect.poll(sample(app, "notices")).toBeGreaterThan(0);
       expect((await app.snapshot())["clearedSynchronously"]).toBe(true);
       expect(app.wires.length).toBe(0);

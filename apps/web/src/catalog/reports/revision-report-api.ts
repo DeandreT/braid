@@ -153,7 +153,7 @@ export class RevisionReportApi {
     projectionId: string | null,
   ): Observable<RevisionReportResponse<T>> {
     return captured(revision, (expected) => {
-      if (!this.sessions.visible()) throw new RevisionReportError("rejected");
+      if (!this.sessions.settled()) throw new RevisionReportError("rejected");
       const generation = this.sessions.generation();
       const sessionMode = this.sessions.state().kind === "authenticated";
       selector(retainedId);
@@ -192,7 +192,7 @@ export class RevisionReportApi {
     repairId: string | null,
   ): Observable<RevisionReportResponse<T>> {
     return captured(revision, (expected) => {
-      if (!this.sessions.visible()) throw new RevisionReportError("rejected");
+      if (!this.sessions.settled()) throw new RevisionReportError("rejected");
       const generation = this.sessions.generation();
       const sessionMode = this.sessions.state().kind === "authenticated";
       selector(repairId);

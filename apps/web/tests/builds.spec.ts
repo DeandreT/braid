@@ -276,7 +276,7 @@ test("lost approval reply retries the original URL and exact body without creati
   expect(state.writes[1].body).toBe(original.body);
 });
 
-test("a catalog metadata refresh replaces the child without discarding its uncertain original request", async ({
+test("a same-owner catalog refresh keeps the panel and its uncertain original request", async ({
   page,
 }) => {
   const state = await buildFixture(page);
@@ -297,10 +297,30 @@ test("a catalog metadata refresh replaces the child without discarding its uncer
   ).toBeVisible();
   await settledOriginal(page, state);
   const original = state.writes[0];
-  await page
-    .getByRole("button", { name: "Refresh catalog", exact: true })
-    .click();
-  await loaded(page);
+  const refresh = page.getByRole("button", {
+    name: "Refresh catalog",
+    exact: true,
+  });
+  const revision = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/organizations/${scope.organizationId}/projects/${scope.projectId}/mappings/${scope.mappingId}/revisions/${scope.revisionId}`,
+  );
+  await refresh.click();
+  // Wait for the page's own re-read to finish, not only the access check.
+  expect((await revision).status()).toBe(200);
+  await expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  // The re-read leaves the loaded panel, and the request it holds, on screen.
+  await expect(
+    panel(page).getByRole("button", {
+      name: "Load preparation controls",
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await expect(
     panel(page).getByRole("heading", {
       name: "Previous request",
@@ -362,6 +382,58 @@ async function lostRegistration(page: Page, state: BuildFixture) {
   await confirmAction(page);
   await settledOriginal(page, state);
 }
+
+test("controls requested during a routine refresh load after it without disturbing the page", async ({
+  page,
+}) => {
+  await buildFixture(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let arrive!: () => void;
+  const arrived = new Promise<void>((resolve) => {
+    arrive = resolve;
+  });
+  await page.route(
+    "**/api/v1/catalog/context",
+    async (route) => {
+      arrive();
+      await gate;
+      await route.fulfill({
+        json: {
+          ...synthetic.context,
+          features: { ...synthetic.context.features, uploadRevisions: false },
+        },
+      });
+    },
+    { times: 1 },
+  );
+  await page
+    .getByRole("button", { name: "Refresh catalog", exact: true })
+    .click();
+  await arrived;
+  try {
+    // The request waits for the pending context read instead of being refused.
+    await panel(page)
+      .getByRole("button", { name: "Load preparation controls", exact: true })
+      .click();
+  } finally {
+    release();
+  }
+  await expect(
+    panel(page).getByRole("combobox", {
+      name: "Environment version",
+      exact: true,
+    }),
+  ).toBeVisible();
+  // The page's own re-read was not refused by the panel's later admission check.
+  await expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
+});
 
 test("a failed session check keeps the uncertain original request", async ({
   page,

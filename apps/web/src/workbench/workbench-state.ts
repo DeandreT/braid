@@ -58,7 +58,7 @@ export class WorkbenchState {
   ): void {
     const key = workbenchScopeKey(scope);
     if (
-      !this.sessions.canDispatch(context) ||
+      !this.sessions.presents(context) ||
       !mapping.access.actions.view ||
       context.allowedOrganizationId !== scope.organizationId ||
       mapping.scope.organizationId !== scope.organizationId ||

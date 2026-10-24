@@ -551,10 +551,13 @@ for (const observationEnd of ["unchanged", "last-waiter-canceled"] as const)
         if (observationEnd === "last-waiter-canceled") {
           await page.locator("#probe-cancel-all").click();
           await expect.poll(() => status.canceled).toBe(true);
+          // A canceled routine check observed nothing; the confirmed state stands.
           const canceled = await app.snapshot();
-          expect(canceled["visible"]).toBe(false);
+          expect(canceled["kind"]).toBe("authenticated");
+          expect(canceled["visible"]).toBe(true);
+          expect(canceled["checking"]).toBe(false);
           expect(canceled["accepts"]).toBe(true);
-          expect(canceled["canDispatch"]).toBe(false);
+          expect(canceled["notices"]).toBe(0);
         }
         write.release();
         await write.finished;
@@ -614,29 +617,30 @@ for (const feature of ["creation", "upload", "append"] as const)
         write.release();
         await write.finished;
         await status.entered;
+        // The routine check keeps the workspace on screen; focus waits for it to settle.
+        const shell = page.locator("section.catalog-shell");
+        await expect(shell).toHaveAttribute("aria-busy", "true");
+        await expect(page.locator(`#${target}`)).toBeVisible();
         await expect(
           page.getByText("Checking workspace access…", { exact: true }),
-        ).toBeVisible();
+        ).toHaveCount(0);
         expect(await focusedCount()).toBe(0);
         await expect(page.locator(`#${target}`)).not.toBeFocused();
         if (observationEnd === "foreign-owner") app.identity(ids.foreignActor);
         status.release();
         await status.finished;
-        await expect(
-          page.getByText("Checking workspace access…", { exact: true }),
-        ).toHaveCount(0);
+        await expect(shell).not.toHaveAttribute("aria-busy", "true");
         if (observationEnd === "unchanged") {
           await expect(page.locator(`#${target}`)).toBeFocused();
           expect(await focusedCount()).toBe(1);
-          // A consumed focus request must not steal focus on the next safe check.
+          // A consumed focus request must not steal focus on the next routine check.
           const later = app.hold("status", () => ({ json: app.status() }));
           await app.observe();
           await later.entered;
+          await expect(shell).toHaveAttribute("aria-busy", "true");
           later.release();
           await later.finished;
-          await expect(
-            page.getByText("Checking workspace access…", { exact: true }),
-          ).toHaveCount(0);
+          await expect(shell).not.toHaveAttribute("aria-busy", "true");
           await expect(page.locator("#probe-observe")).toBeFocused();
           expect(await focusedCount()).toBe(1);
         } else {
@@ -985,7 +989,9 @@ test("protected rejection during checking fences the old status without resendin
     const oldStatus = app.hold("status", { json: oldPositive });
     await app.observe();
     await oldStatus.entered;
-    await expect.poll(sample(app, "kind")).toBe("checking");
+    // A routine check keeps the confirmed view; only its dispatch waits.
+    await expect.poll(sample(app, "checking")).toBe(true);
+    expect((await app.snapshot())["kind"]).toBe("authenticated");
     expect((await app.snapshot())["context"]).toBe(true);
     const contexts = app.count("context");
     app.plans.delete("status");
@@ -1226,7 +1232,8 @@ for (const feature of ["creation", "metadata", "upload", "append"] as const)
       await app.observe();
       await failedStatus.entered;
       const checking = await app.snapshot();
-      expect(checking["kind"]).toBe("checking");
+      expect(checking["kind"]).toBe("authenticated");
+      expect(checking["checking"]).toBe(true);
       expect(checking["notices"]).toBe(before["notices"]);
       expect(checking["generation"]).toBe(before["generation"]);
       expect(checking["actualOwner"]).toBe(true);

@@ -57,6 +57,40 @@ export function catalogOwner(context: CatalogContext): string {
   ]);
 }
 
+/**
+ * What a revision panel was admitted for: its owner, revision and mapping access. A same-owner
+ * re-read replaces the context and DTOs with equal values; only a different key restarts a panel.
+ */
+export function revisionPanelKey(
+  context: CatalogContext,
+  mapping: CatalogMapping,
+  revision: CatalogRevision,
+): string {
+  const scope = revision.scope;
+  return JSON.stringify([
+    catalogOwner(context),
+    scope.organizationId,
+    scope.projectId,
+    scope.mappingId,
+    scope.revisionId,
+    mapping.scope.mappingId,
+    mapping.access,
+    context.features,
+  ]);
+}
+
+/** Whether two reads admit the same workspace features and mapping access. */
+export function sameAdmittedAccess(
+  left: { readonly context: CatalogContext; readonly mapping: CatalogMapping },
+  right: { readonly context: CatalogContext; readonly mapping: CatalogMapping },
+): boolean {
+  return (
+    JSON.stringify(left.context.features) ===
+      JSON.stringify(right.context.features) &&
+    JSON.stringify(left.mapping.access) === JSON.stringify(right.mapping.access)
+  );
+}
+
 export function isCatalogId(value: unknown): value is string {
   return (
     typeof value === "string" &&

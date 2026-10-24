@@ -503,6 +503,35 @@ test("a side without a readable saved explanation links to its report controls a
   await expect(side(page, "Left revision")).toContainText(P[0]);
 });
 
+test("refreshing the catalog reads an unsaved side again while a read side stays", async ({
+  page,
+}) => {
+  const fixture = fixtures.get(page)!;
+  const saved = fixture.projections[0];
+  fixture.projections[0] = notDerived(saved);
+  await page.goto(fixture.comparisonPage(`left=${REV[0]}&right=${REV[2]}`));
+  await expect(side(page, "Left revision")).toContainText(
+    "No saved explanation exists for this revision.",
+  );
+  await expect(side(page, "Right revision")).toContainText(P[2]);
+  expect(fixture.comparisons).toEqual([]);
+
+  // The left report is derived elsewhere; an explicit refresh reads that side again.
+  fixture.projections[0] = saved;
+  const reads: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.includes("/reports/")) reads.push(path);
+  });
+  await page.getByRole("button", { name: "Refresh catalog" }).first().click();
+  await expect(side(page, "Left revision")).toContainText(P[0]);
+  await expect(results(page).locator(".comparison-headline")).toBeVisible();
+  expect(reads.some((path) => path.includes(REV[0]))).toBe(true);
+  // The right side's reports were read and stay on screen without another read.
+  expect(reads.some((path) => path.includes(REV[2]))).toBe(false);
+  expect(fixture.comparisons).toHaveLength(1);
+});
+
 test("comparison refusals, missing reports and unavailable storage recover explicitly", async ({
   page,
 }) => {

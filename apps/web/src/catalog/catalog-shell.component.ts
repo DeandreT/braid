@@ -30,6 +30,7 @@ import { BrowserSessionState } from "../auth/browser-session-state";
 import { fileStatusLabel } from "../workbench/presentation";
 import { CatalogContextStore } from "./catalog-context";
 import { createCatalogRead } from "./catalog-state";
+import { InitiatingControl } from "./initiating-control";
 import { revisionReportSelectors } from "./reports/revision-report-selection";
 import {
   catalogRoutes,
@@ -135,6 +136,8 @@ export abstract class CatalogRoutePage<T, TScope extends CatalogScope> {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   readonly read = createCatalogRead<T>();
+  /** The displayed view is being read again in place. */
+  readonly refreshing = computed(() => this.read.refreshing());
   private readonly head = createCatalogRead<CatalogMapping>({
     refreshOnFocus: false,
   });
@@ -308,6 +311,7 @@ function routeSelection(
 @Component({
   selector: "weft-catalog-shell",
   imports: [RouterOutlet, CatalogStatusComponent],
+  providers: [InitiatingControl],
   templateUrl: "./catalog-shell.component.html",
 })
 export class CatalogShellComponent {
@@ -320,6 +324,7 @@ export class CatalogShellComponent {
   private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
+    inject(InitiatingControl);
     this.router.events
       .pipe(
         filter((event) => event instanceof NavigationEnd),
@@ -348,7 +353,8 @@ export class CatalogShellComponent {
   }
 
   retryAccess(): void {
-    if (this.sessions.state().kind === "checking") return;
+    if (this.sessions.state().kind === "checking" || this.sessions.checking())
+      return;
     // First reobserve identity and organization only. The mounted child still owns
     // its separate explicit complete resource admission, with no automatic write.
     this.contextStore

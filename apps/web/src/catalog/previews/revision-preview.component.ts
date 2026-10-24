@@ -9,7 +9,8 @@ import {
   signal,
   untracked,
 } from "@angular/core";
-import type { Subscription } from "rxjs";
+import { map, type Subscription } from "rxjs";
+import { CatalogContextStore } from "../catalog-context";
 import type {
   CatalogContext,
   CatalogMapping,
@@ -40,6 +41,7 @@ const decoder = new TextDecoder("utf-8", { fatal: false });
 export class RevisionPreviewComponent {
   readonly runStatus = previewRunStatus;
   private readonly document = inject(DOCUMENT);
+  private readonly contexts = inject(CatalogContextStore);
   private downloads: Subscription[] = [];
   readonly context = input.required<CatalogContext>();
   readonly mapping = input.required<CatalogMapping>();
@@ -68,7 +70,11 @@ export class RevisionPreviewComponent {
         }
         this.preview.bind({
           scope: revision.scope,
-          requestToken: () => this.context().requestToken || null,
+          admit: () =>
+            this.contexts
+              .admitted(this.context())
+              .pipe(map((context) => context.requestToken)),
+          ready: () => this.contexts.canSend(this.context()),
         });
       });
     });

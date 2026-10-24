@@ -16,7 +16,8 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "npm run dev -- --port 5174 --no-hmr",
+    command:
+      "npm run dev -- --port 5174 --proxy-config proxy.synthetic.conf.json --no-hmr",
     url: "http://127.0.0.1:5174",
     reuseExistingServer: false,
     gracefulShutdown: { signal: "SIGTERM", timeout: 15000 },

@@ -75,3 +75,6 @@ authorization or persistence qualification. The existing real-API suites remain
 the separate check for those contracts. Set `WEFT_CHROMIUM_EXECUTABLE` to a verified
 installed Chromium browser when the matching Playwright browser is unavailable.
 The workbench suite uses port 5181 and leaves the local viewer on port 4102 alone.
+Its development server, like the chat and comparison suites', sends unrouted API
+requests to a closed loopback port (`proxy.synthetic.conf.json`), never to a local
+instance on 4100.

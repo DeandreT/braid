@@ -64,8 +64,8 @@ if (!existsSync(join(dirname(products.server), "wwwroot", "index.html"))) {
 }
 
 const dotnet = process.env.DOTNET_HOST_PATH ?? "dotnet";
-const readOrigin = "http://127.0.0.1:4100";
-const mutationOrigin = "http://127.0.0.1:4101";
+const readOrigin = "http://127.0.0.1:4120";
+const mutationOrigin = "http://127.0.0.1:4121";
 const nonce = randomBytes(6).toString("hex");
 const label = "weft.preview-browser.owner=" + nonce;
 const scratch = mkdtempSync(join(tmpdir(), "weft-preview-browser-"));

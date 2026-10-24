@@ -1,13 +1,21 @@
 import { signal } from "@angular/core";
-import { take, type Subscription } from "rxjs";
+import {
+  catchError,
+  of,
+  switchMap,
+  take,
+  throwError,
+  type Observable,
+  type Subscription,
+} from "rxjs";
 import {
   comparisonFailure,
   type RevisionComparisonApi,
 } from "./revision-comparison-api";
-import type {
+import {
   ComparisonError,
-  ComparisonRequest,
-  RevisionComparison,
+  type ComparisonRequest,
+  type RevisionComparison,
 } from "./revision-comparison-types";
 
 export type RevisionComparisonView =
@@ -33,7 +41,11 @@ export class RevisionComparisonState {
   private destroyed = false;
   readonly view = this.current.asReadonly();
 
-  constructor(private readonly api: RevisionComparisonApi) {}
+  /** `admit` waits for any pending access check and fails, unsent, when access is gone. */
+  constructor(
+    private readonly api: RevisionComparisonApi,
+    private readonly admit: () => Observable<unknown> = () => of(undefined),
+  ) {}
 
   /** Repeated selection of the same admitted reports is idempotent and starts no request. */
   select(request: ComparisonRequest | null): void {
@@ -76,9 +88,12 @@ export class RevisionComparisonState {
     const generation = this.generation;
     this.current.set({ phase: "loading", request });
     let emitted = false;
-    this.subscription = this.api
-      .compare(request)
-      .pipe(take(1))
+    this.subscription = this.admit()
+      .pipe(
+        take(1),
+        catchError(() => throwError(() => new ComparisonError("rejected"))),
+        switchMap(() => this.api.compare(request).pipe(take(1))),
+      )
       .subscribe({
         next: (comparison) => {
           emitted = true;

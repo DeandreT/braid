@@ -32,6 +32,7 @@ import {
 } from "../catalog-shell.component";
 import {
   CatalogReadError,
+  sameAdmittedAccess,
   type CatalogMapping,
   type CatalogMappingScope,
   type CatalogProject,
@@ -59,13 +60,14 @@ import {
   type ComparisonSideSelection,
 } from "./revision-comparison-selection";
 import { RevisionComparisonState } from "./revision-comparison-state";
-import type {
-  ComparisonErrorKind,
-  ComparisonRequest,
-  ComparisonSideCitation,
-  ComparisonSideName,
-  ComparisonValidationSummary,
-  RevisionComparison,
+import {
+  ComparisonError,
+  type ComparisonErrorKind,
+  type ComparisonRequest,
+  type ComparisonSideCitation,
+  type ComparisonSideName,
+  type ComparisonValidationSummary,
+  type RevisionComparison,
 } from "./revision-comparison-types";
 import {
   comparisonGroups,
@@ -146,6 +148,12 @@ export class RevisionComparisonPageComponent extends CatalogRoutePage<
   readonly rightReports = this.sideReports("right");
   readonly comparison = new RevisionComparisonState(
     inject(RevisionComparisonApi),
+    () => {
+      const context = this.context();
+      return context
+        ? this.contexts.admitted(context)
+        : throwError(() => new ComparisonError("rejected"));
+    },
   );
   readonly showUnchanged = signal(false);
   readonly viewerSide = signal<ComparisonSideName | null>(null);
@@ -629,6 +637,7 @@ export class RevisionComparisonPageComponent extends CatalogRoutePage<
       // This view never starts a report action; report work belongs to each revision page.
       refresh: () => throwError(() => new CatalogReadError("unavailable")),
       isCurrent: (admission) => this.isCurrentAdmission(name, admission),
+      admit: (admission) => this.contexts.admitted(admission.context),
     });
   }
 
@@ -638,12 +647,19 @@ export class RevisionComparisonPageComponent extends CatalogRoutePage<
   ): boolean {
     const selection = this.selection();
     const view = this.data();
+    const context = this.context();
+    const revision = view?.[name];
+    // A same-owner re-read keeps an admission current while its revision and access are unchanged.
     return (
       selection?.[name]?.revisionId === admission.revision.scope.revisionId &&
-      this.contexts.context() === admission.context &&
-      this.context() === admission.context &&
-      view?.mapping === admission.mapping &&
-      view[name] === admission.revision
+      view !== null &&
+      context !== null &&
+      this.contexts.isCurrent(admission.context) &&
+      this.contexts.isCurrent(context) &&
+      sameAdmittedAccess({ context, mapping: view.mapping }, admission) &&
+      typeof revision === "object" &&
+      revision !== null &&
+      revision.scope.revisionId === admission.revision.scope.revisionId
     );
   }
 
