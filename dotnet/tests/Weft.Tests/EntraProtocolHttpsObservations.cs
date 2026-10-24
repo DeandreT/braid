@@ -21,6 +21,11 @@ internal static class EntraProtocolFixturePolicy
     internal static string TokenAddress => "https://login.microsoftonline.com" + Token;
     internal const string Callback = "/api/auth/callback/entra";
     internal const string Subject = " opaque:fixture-subject\u00e9 ";
+    // Another application's pairwise subject for the same user: same tid and oid, different sub.
+    internal const string AlternateSubject = "opaque:another-application-subject";
+    // The signed-in user's tenant-stable object ID; the binding key is (Tenant, ObjectId), never Subject.
+    internal static readonly Guid ObjectId = Guid.Parse("3d1f6b2e-8c4a-4f7e-9b5d-2a6c8e0f1b37");
+    internal static Weft.Application.ExternalIdentityKey UserKey => Weft.Application.EntraUserIdentity.Key(Tenant, ObjectId);
     internal const string PrivateMarker = "weft-owned-private-protocol-marker";
     internal const string TraceHeader = "X-Weft-116-Request";
     internal static void Check(bool condition, string category)
@@ -34,7 +39,8 @@ internal enum EntraProtocolTokenCase
 {
     Good, WrongIssuer, WrongAudience, WrongTenant, Unsigned, BadSignature, SymmetricAlgorithm, UnapprovedRsaAlgorithm,
     MissingSubject, MissingNbf, MissingExp, DuplicateIssuer, DuplicateAudience, DuplicateTenant,
-    DuplicateSubject, DuplicateExp, Expired, NotYetValid, BadNonce, ExcludedKey
+    DuplicateSubject, DuplicateExp, Expired, NotYetValid, BadNonce, ExcludedKey,
+    MissingObjectId, NoncanonicalObjectId, EmptyObjectId, DuplicateObjectId, ControlSubject, OversizedSubject, AlternateSubject
 }
 internal enum EntraProtocolMetadataCase
 {
@@ -139,7 +145,7 @@ internal sealed class EntraProtocolHandlerPolicy(OpenIdConnectOptions options)
     internal string CorrelationPrefix { get; } = options.CorrelationCookie.Name!;
     internal string NoncePrefix { get; } = options.NonceCookie.Name!;
     internal bool Fixed { get; } = options.ResponseType == "code" && options.ResponseMode == "query" && options.UsePkce && options.DisableTelemetry
-        && options.Scope.Count == 1 && options.Scope.Contains("openid") && !options.SaveTokens && !options.GetClaimsFromUserInfoEndpoint && !options.MapInboundClaims
+        && options.Scope.SequenceEqual(["openid", "profile"]) && !options.SaveTokens && !options.GetClaimsFromUserInfoEndpoint && !options.MapInboundClaims
         && options.PushedAuthorizationBehavior == Microsoft.AspNetCore.Authentication.OpenIdConnect.PushedAuthorizationBehavior.Disable
         && options.ProtocolValidator.NonceLifetime == TimeSpan.FromMinutes(10) && options.RemoteAuthenticationTimeout == TimeSpan.FromMinutes(10);
     public override string ToString() => nameof(EntraProtocolHandlerPolicy);

@@ -169,7 +169,7 @@ public sealed class EntraTrustBoundaryTests
             {
                 var result = await test.Facade.VerifyCallbackAsync(context, CancellationToken.None);
                 succeeded = result.OrganizationId == EntraProtocolFixturePolicy.Organization
-                    && result.ExternalIdentity.Subject == EntraProtocolFixturePolicy.Subject;
+                    && result.ExternalIdentity == EntraProtocolFixturePolicy.UserKey;
             }
             catch (ServerSessionIdentityException error)
             {

@@ -6,11 +6,12 @@ using Weft.Persistence.Postgres;
 
 namespace Weft.DatabaseTool;
 
-/// <summary>Four explicit owner commands, separate from legacy Development provisioning.</summary>
+/// <summary>Explicit owner commands, separate from legacy Development provisioning.</summary>
 internal static class ExternalIdentityOwnerCommands
 {
     internal static bool IsCommand(string[] arguments) => arguments.Length > 0 && arguments[0] is
-        "ensure-principal" or "ensure-organization-admission" or "bind-external-identity" or "disable-external-identity";
+        "ensure-principal" or "ensure-organization-admission" or "bind-external-identity" or "disable-external-identity" or
+        "bind-entra-user" or "disable-entra-user";
 
     internal static async Task<int> RunAsync(string[] arguments)
     {
@@ -31,7 +32,13 @@ internal static class ExternalIdentityOwnerCommands
             if (command.Kind is CommandKind.Bind or CommandKind.Disable)
             {
                 using var input = Console.OpenStandardInput();
-                key = await ExternalIdentityOwnerInput.ReadAsync(input, cancellation.Token);
+                key = command.EntraUser ? await ExternalIdentityOwnerInput.ReadEntraUserAsync(input, cancellation.Token)
+                    : await ExternalIdentityOwnerInput.ReadAsync(input, cancellation.Token);
+                // Entra keys are bound only through the Entra user commands, which fix their canonical layout. A
+                // retired ("entra", issuer, sub) key can still be disabled, but never bound again: nothing resolves it.
+                if (!command.EntraUser && command.Kind == CommandKind.Bind &&
+                    key.Provider is EntraUserIdentity.Provider or EntraUserIdentity.RetiredSubjectProvider)
+                    throw InvalidArguments();
             }
             cancellation.Token.ThrowIfCancellationRequested();
             CommandOutcome outcome;
@@ -72,13 +79,17 @@ internal static class ExternalIdentityOwnerCommands
     private static Arguments ParseArguments(string[] arguments) => arguments switch
     {
         ["ensure-principal", var principal] =>
-            new(CommandKind.EnsurePrincipal, Principal(principal), Guid.Empty, 0),
+            new(CommandKind.EnsurePrincipal, Principal(principal), Guid.Empty, 0, false),
         ["ensure-organization-admission", var organization, var principal] =>
-            new(CommandKind.EnsureOrganizationAdmission, Principal(principal), Identifier(organization), 0),
+            new(CommandKind.EnsureOrganizationAdmission, Principal(principal), Identifier(organization), 0, false),
         ["bind-external-identity", var principal] =>
-            new(CommandKind.Bind, Principal(principal), Guid.Empty, 0),
+            new(CommandKind.Bind, Principal(principal), Guid.Empty, 0, false),
         ["disable-external-identity", var principal, var version] =>
-            new(CommandKind.Disable, Principal(principal), Guid.Empty, Version(version)),
+            new(CommandKind.Disable, Principal(principal), Guid.Empty, Version(version), false),
+        ["bind-entra-user", var principal] =>
+            new(CommandKind.Bind, Principal(principal), Guid.Empty, 0, true),
+        ["disable-entra-user", var principal, var version] =>
+            new(CommandKind.Disable, Principal(principal), Guid.Empty, Version(version), true),
         _ => throw InvalidArguments()
     };
 
@@ -149,5 +160,5 @@ internal static class ExternalIdentityOwnerCommands
 
     private enum CommandKind { EnsurePrincipal, EnsureOrganizationAdmission, Bind, Disable }
     private readonly record struct CommandOutcome(string Category, bool Success);
-    private sealed record Arguments(CommandKind Kind, PrincipalId PrincipalId, Guid OrganizationId, long Version);
+    private sealed record Arguments(CommandKind Kind, PrincipalId PrincipalId, Guid OrganizationId, long Version, bool EntraUser);
 }

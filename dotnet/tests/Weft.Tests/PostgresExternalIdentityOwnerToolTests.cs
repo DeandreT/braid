@@ -86,6 +86,47 @@ public sealed class PostgresExternalIdentityOwnerToolTests(PostgresFixture fixtu
     }
 
     [PostgresFact]
+    public async Task EntraUserCommandsBindTheTenantStableKeyBesideARetiredSubjectBindingWithTheSameSemantics()
+    {
+        await using var test = await PostgresExternalIdentityTestSupport.CreateAsync(fixture);
+        await PostgresSeedData.CreateAsync(test.Case);
+        var principal = await test.PrincipalAsync();
+        var other = await test.PrincipalAsync();
+        var tenant = Guid.NewGuid();
+        var objectId = Guid.NewGuid();
+        // An installation from before the tenant-stable key: the browser bound the pairwise sub.
+        var retired = new ExternalIdentityKey(EntraUserIdentity.RetiredSubjectProvider,
+            "https://login.microsoftonline.com/" + tenant.ToString("D") + "/v2.0", "pairwise-private-subject");
+        var old = await test.BindAsync(retired, principal);
+        var key = EntraUserIdentity.Key(tenant, objectId);
+        Assert.Equal(("entra.oid", tenant.ToString("D"), objectId.ToString("D")), (key.Provider, key.Authority, key.Subject));
+        var input = Encoding.UTF8.GetBytes("{\"objectId\":\"" + objectId.ToString("D") + "\",\"tenantId\":\"" + tenant.ToString("D") + "\"}");
+        PostgresExternalIdentityTestSupport.Hidden(ExternalIdentityResolutionOutcome.Unknown, await test.Reader.ResolveAsync(key));
+        Category(await RunAsync(test, ["bind-entra-user", principal.Value.ToString("D")], input, key), 0, "created");
+        var binding = PostgresExternalIdentityTestSupport.Resolved(await test.Reader.ResolveAsync(key));
+        Assert.Equal(principal, binding.PrincipalId);
+        Assert.NotEqual(old.BindingId, binding.BindingId);
+        // The new key is exactly the one browser sign-in and bearer access construct, and it never equals the retired one.
+        Assert.True(binding.Key == key && binding.Key != retired);
+        Category(await RunAsync(test, ["bind-entra-user", principal.Value.ToString("D")], input, key), 0, "existing");
+        Category(await RunAsync(test, ["bind-entra-user", other.Value.ToString("D")], input, key), 3, "bindingConflict");
+        Category(await RunAsync(test, ["disable-entra-user", other.Value.ToString("D"), "1"], input, key), 3, "ownerConflict");
+        // Upgrade step two: the owner disables the retired binding with the existing generic command.
+        Category(await RunAsync(test, ["disable-external-identity", principal.Value.ToString("D"), "1"],
+            ExternalIdentityOwnerToolTestSupport.KeyBytes(retired), retired), 0, "disabled");
+        PostgresExternalIdentityTestSupport.Hidden(ExternalIdentityResolutionOutcome.Disabled, await test.Reader.ResolveAsync(retired));
+        PostgresExternalIdentityTestSupport.SameBinding(binding, PostgresExternalIdentityTestSupport.Resolved(await test.Reader.ResolveAsync(key)));
+        Category(await RunAsync(test, ["disable-entra-user", principal.Value.ToString("D"), "1"], input, key), 0, "disabled");
+        Category(await RunAsync(test, ["disable-entra-user", principal.Value.ToString("D"), "2"], input, key), 0, "alreadyDisabled");
+        Category(await RunAsync(test, ["bind-entra-user", principal.Value.ToString("D")], input, key), 0, "existing");
+        PostgresExternalIdentityTestSupport.Hidden(ExternalIdentityResolutionOutcome.Disabled, await test.Reader.ResolveAsync(key));
+        var unknown = Encoding.UTF8.GetBytes("{\"tenantId\":\"" + tenant.ToString("D") + "\",\"objectId\":\"" + Guid.NewGuid().ToString("D") + "\"}");
+        Category(await RunAsync(test, ["disable-entra-user", principal.Value.ToString("D"), "1"], unknown, key), 3, "unknownBinding");
+        Assert.Equal(2L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.external_identity_bindings"));
+        Assert.Equal(0L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.organization_memberships WHERE principal_id IN ($1,$2)", principal.Value, other.Value));
+    }
+
+    [PostgresFact]
     public async Task RestrictedOrInvalidOwnerCredentialsFailCategoricallyWithoutChangingPrivateRows()
     {
         await using var test = await PostgresExternalIdentityTestSupport.CreateAsync(fixture);

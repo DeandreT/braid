@@ -85,7 +85,7 @@ internal sealed partial class AuthHttpFixture
     {
         var flow = await FlowAsync(jar, host); var reply = await CompleteAsync(flow, host);
         Check(reply.Status == HttpStatusCode.SeeOther && reply.Body.Length == 0 && reply.Headers.TryGetValue("Location", out var location) && location.SequenceEqual(new[] { "/" }), "Real verified callback did not finish with fixed empty303.");
-        Check(reply.Record.Resolves == 1 && reply.Record.ResolvedKey == new Weft.Application.ExternalIdentityKey("entra", EntraProtocolFixturePolicy.Issuer, EntraProtocolFixturePolicy.Subject)
+        Check(reply.Record.Resolves == 1 && reply.Record.ResolvedKey == EntraProtocolFixturePolicy.UserKey
             && reply.Record.Creates == 1 && reply.Record.Renews == 0 && reply.Record.SessionReads == 0
             && Issuer.AssertionAccepted > 0 && Issuer.PkceAccepted > 0 && Issuer.AssertionRejected == 0,
             "Real OIDC verification/fresh binding/session issue ordering was skipped.");

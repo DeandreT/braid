@@ -42,7 +42,8 @@ script checks every container's mounts.
   for the fixed Microsoft organizational endpoints of the run's tenant and client:
   discovery, signing keys, an authorization page with one sign-in button, and code
   redemption that requires the server's PS256 certificate assertion, PKCE (S256) and
-  single-use codes, then returns an RS256 ID token. The server resolves
+  single-use codes, then returns an RS256 ID token carrying the run's pairwise subject and
+  the user's object ID for the requested `openid profile` scope. The server resolves
   `login.microsoftonline.com` to the issuer through a network alias and trusts only the
   run's test certificate authority, delivered as `SSL_CERT_FILE`. The Session host's
   endpoint, metadata, key, token and binding checks run unchanged.
@@ -54,8 +55,8 @@ script checks every container's mounts.
 
 The harness then binds one external identity through the owner commands of
 `Weft.DatabaseTool`: it creates the organization and an admitted principal
-(`provision-development-identity`), binds the issuer's subject
-(`bind-external-identity`) and grants project creation
+(`provision-development-identity`), binds the signed-in user's tenant and object ID
+(`bind-entra-user`) and grants project creation
 (`set-project-creation-capability`). No project role is granted; creating the project
 makes the user its administrator.
 

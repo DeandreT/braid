@@ -13,6 +13,28 @@ internal static class ExternalIdentityOwnerInput
 
     internal static async Task<ExternalIdentityKey> ReadAsync(Stream input, CancellationToken cancellationToken)
     {
+        var members = await ReadMembersAsync(input, ["provider", "authority", "subject"], cancellationToken);
+        try { return new ExternalIdentityKey(members[0], members[1], members[2]); }
+        catch (ArgumentException) { throw InvalidInput(); }
+    }
+
+    /// <summary>
+    /// The tenant-stable Entra user key from exactly <c>tenantId</c> and <c>objectId</c>, each a canonical
+    /// nonzero lowercase <c>D</c>-format UUID. The provider and key layout are fixed, never supplied.
+    /// </summary>
+    internal static async Task<ExternalIdentityKey> ReadEntraUserAsync(Stream input, CancellationToken cancellationToken)
+    {
+        var members = await ReadMembersAsync(input, ["tenantId", "objectId"], cancellationToken);
+        try { return EntraUserIdentity.Key(Identifier(members[0]), Identifier(members[1])); }
+        catch (ArgumentException) { throw InvalidInput(); }
+    }
+
+    private static Guid Identifier(string value) =>
+        Guid.TryParseExact(value, "D", out var id) && id != Guid.Empty && string.Equals(value, id.ToString("D"), StringComparison.Ordinal)
+            ? id : throw InvalidInput();
+
+    private static async Task<string[]> ReadMembersAsync(Stream input, string[] names, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(input);
         var buffer = new byte[MaximumInputBytes + 1];
         try
@@ -27,14 +49,14 @@ internal static class ExternalIdentityOwnerInput
                 if (count > MaximumInputBytes) throw InvalidInput();
             }
             cancellationToken.ThrowIfCancellationRequested();
-            return Parse(buffer.AsSpan(0, count));
+            return Parse(buffer.AsSpan(0, count), names);
         }
         catch (IOException)
         { throw InvalidInput(); }
         finally { CryptographicOperations.ZeroMemory(buffer); }
     }
 
-    private static ExternalIdentityKey Parse(ReadOnlySpan<byte> bytes)
+    private static string[] Parse(ReadOnlySpan<byte> bytes, string[] names)
     {
         try
         {
@@ -46,25 +68,17 @@ internal static class ExternalIdentityOwnerInput
                 MaxDepth = 2
             });
             if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) throw InvalidInput();
-            string? provider = null, authority = null, subject = null;
-            var seen = 0;
+            var values = new string?[names.Length];
             while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
             {
                 if (reader.TokenType != JsonTokenType.PropertyName) throw InvalidInput();
-                var name = String(ref reader);
-                var bit = name switch { "provider" => 1, "authority" => 2, "subject" => 4, _ => throw InvalidInput() };
-                if ((seen & bit) != 0 || !reader.Read() || reader.TokenType != JsonTokenType.String) throw InvalidInput();
-                var value = String(ref reader);
-                seen |= bit;
-                switch (bit)
-                {
-                    case 1: provider = value; break;
-                    case 2: authority = value; break;
-                    case 4: subject = value; break;
-                }
+                var index = Array.IndexOf(names, String(ref reader));
+                if (index < 0 || values[index] is not null || !reader.Read() || reader.TokenType != JsonTokenType.String)
+                    throw InvalidInput();
+                values[index] = String(ref reader);
             }
-            if (reader.TokenType != JsonTokenType.EndObject || seen != 7 || reader.Read()) throw InvalidInput();
-            return new ExternalIdentityKey(provider!, authority!, subject!);
+            if (reader.TokenType != JsonTokenType.EndObject || values.Any(value => value is null) || reader.Read()) throw InvalidInput();
+            return values!;
         }
         catch (Exception error) when (error is JsonException or InvalidOperationException or ArgumentException)
         {

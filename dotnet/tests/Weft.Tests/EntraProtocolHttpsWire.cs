@@ -99,8 +99,7 @@ internal sealed partial class EntraProtocolHttpsFixture
         var value = reply.Request.Verified;
         EntraProtocolFixturePolicy.Check(reply.Status == HttpStatusCode.OK && reply.Request.Failure is null && value is not null
             && reply.Request.EvidencePublished == 1 && value.OrganizationId == EntraProtocolFixturePolicy.Organization
-            && value.ExternalIdentity.Provider == "entra" && value.ExternalIdentity.Authority == EntraProtocolFixturePolicy.Issuer
-            && value.ExternalIdentity.Subject == EntraProtocolFixturePolicy.Subject && value.VerifiedDeadlineUtc == Issuer.LastExpiry
+            && value.ExternalIdentity == EntraProtocolFixturePolicy.UserKey && value.VerifiedDeadlineUtc == Issuer.LastExpiry
             && value.VerifiedDeadlineUtc.Offset == TimeSpan.Zero && value.VerifiedDeadlineUtc.Ticks % TimeSpan.TicksPerSecond == 0,
             "The final private evidence was absent, early, widened or not the exact verified tuple/deadline.");
         EntraProtocolFixturePolicy.Check(!reply.Request.UserChanged && Ports.Calls == 0 && Issuer.AssertionAccepted > 0

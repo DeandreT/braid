@@ -97,7 +97,7 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
         Data = await PostgresMappingMetadataTestSupport.CreateAsync(postgres); Owner = new(Data.Case.MigrationConnectionString);
         if (bindIssuer)
         {
-            var binding = await Owner.BindAsync(new("entra", EntraProtocolFixturePolicy.Issuer, EntraProtocolFixturePolicy.Subject), Data.Actor.PrincipalId);
+            var binding = await Owner.BindAsync(EntraProtocolFixturePolicy.UserKey, Data.Actor.PrincipalId);
             Check(binding.Outcome == ExternalIdentityBindingOwnerOutcome.Created && binding.Binding is not null, "The actual OIDC fixture binding was not prepared."); Binding = binding.Binding!;
         }
         Crypto = new(); Files = new();
@@ -202,7 +202,7 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
                 else if (record.Direct == AuthHttpDirect.BorrowedObserve)
                 { var original = host.Browser.ObserveAsync(context, token); record.ModuleOperation = original; _ = Track(original, cancellation: true); record.ModuleStarted.TrySetResult(); record.Identity = (await original).Identity; }
                 else if (record.Direct == AuthHttpDirect.BorrowedIdentity)
-                { var original = host.Identities.ResolveAsync(new("entra", EntraProtocolFixturePolicy.Issuer, EntraProtocolFixturePolicy.Subject), token); record.ModuleOperation = original; _ = Track(original, cancellation: true); record.ModuleStarted.TrySetResult(); record.BorrowedIdentityResolved = (await original).Outcome == ExternalIdentityResolutionOutcome.Resolved; }
+                { var original = host.Identities.ResolveAsync(EntraProtocolFixturePolicy.UserKey, token); record.ModuleOperation = original; _ = Track(original, cancellation: true); record.ModuleStarted.TrySetResult(); record.BorrowedIdentityResolved = (await original).Outcome == ExternalIdentityResolutionOutcome.Resolved; }
                 else
                 { var original = host.Entra.BeginLoginAsync(context, token); record.ModuleOperation = original; _ = Track(original, cancellation: true); record.ModuleStarted.TrySetResult(); record.ChallengeResult = await original; }
                 context.Response.StatusCode = 204;

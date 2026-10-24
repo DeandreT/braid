@@ -164,12 +164,13 @@ WEFT_SESSION_ORGANIZATION_ID=$(cat /proc/sys/kernel/random/uuid)
 WEFT_ENTRA_TENANT_ID=$(cat /proc/sys/kernel/random/uuid)
 WEFT_ENTRA_CLIENT_ID=$(cat /proc/sys/kernel/random/uuid)
 WEFT_ACCEPTANCE_SUBJECT=$(openssl rand 32 | basenc --base64url | tr -d '=')
+WEFT_ACCEPTANCE_OBJECT_ID=$(cat /proc/sys/kernel/random/uuid)
 WEFT_ACCEPTANCE_ISSUER_PEM=$(new_leaf issuer login.microsoftonline.com)
 WEFT_ACCEPTANCE_INGRESS_PEM=$(new_leaf ingress "$WEFT_PUBLIC_HOST")
 WEFT_ACCEPTANCE_TRUST_PEM=$(cat "$work/authority.crt")
 WEFT_ACCEPTANCE_SIGNING_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null)
 export WEFT_SESSION_KEY_PEM WEFT_ENTRA_CLIENT_PEM WEFT_ACCEPTANCE_CLIENT_CERTIFICATE WEFT_SESSION_ORGANIZATION_ID \
-  WEFT_ENTRA_TENANT_ID WEFT_ENTRA_CLIENT_ID WEFT_ACCEPTANCE_SUBJECT WEFT_ACCEPTANCE_ISSUER_PEM \
+  WEFT_ENTRA_TENANT_ID WEFT_ENTRA_CLIENT_ID WEFT_ACCEPTANCE_SUBJECT WEFT_ACCEPTANCE_OBJECT_ID WEFT_ACCEPTANCE_ISSUER_PEM \
   WEFT_ACCEPTANCE_INGRESS_PEM WEFT_ACCEPTANCE_TRUST_PEM WEFT_ACCEPTANCE_SIGNING_KEY
 # The service's build identity is the digest of the exact worker binary recorded in its image.
 worker_digest=$(docker image inspect --format '{{index .Config.Labels "io.weft.ferrule.worker-sha256"}}' "$WEFT_FERRULE_SERVICE_IMAGE")
@@ -240,8 +241,8 @@ owner() {
 }
 owner -e "WEFT_DEV_ORGANIZATION_ID=$WEFT_SESSION_ORGANIZATION_ID" -e "WEFT_DEV_PRINCIPAL_ID=$principal" \
   -e 'WEFT_DEV_ORGANIZATION_NAME=Acceptance organization' migrate database provision-development-identity
-owner -e "WEFT_DELIVER_OWNER_INPUT={\"provider\":\"entra\",\"authority\":\"https://login.microsoftonline.com/$WEFT_ENTRA_TENANT_ID/v2.0\",\"subject\":\"$WEFT_ACCEPTANCE_SUBJECT\"}" \
-  migrate database bind-external-identity "$principal"
+owner -e "WEFT_DELIVER_OWNER_INPUT={\"tenantId\":\"$WEFT_ENTRA_TENANT_ID\",\"objectId\":\"$WEFT_ACCEPTANCE_OBJECT_ID\"}" \
+  migrate database bind-entra-user "$principal"
 grep -q '"outcome":"created"' "$work/owner.out" || fail 'identity binding'
 owner migrate database set-project-creation-capability "$WEFT_SESSION_ORGANIZATION_ID" "$principal" true
 echo 'ok - one external identity bound to an admitted principal that may create projects'

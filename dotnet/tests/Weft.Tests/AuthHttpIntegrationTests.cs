@@ -173,6 +173,36 @@ public sealed class AuthHttpIntegrationTests(PostgresFixture postgres)
     });
 
     [PostgresFact]
+    public Task RetiredSubjectBindingNeverMatchesAndTheOwnerRebindRestoresTheSamePrincipal() => AuthHttpFixture.RunAsync(postgres, async test =>
+    {
+        // An installation from before the tenant-stable key: the exact (entra, issuer, sub) of this very ID token.
+        var retired = new ExternalIdentityKey(EntraUserIdentity.RetiredSubjectProvider, EntraProtocolFixturePolicy.Issuer, EntraProtocolFixturePolicy.Subject);
+        var old = await test.Owner.BindAsync(retired, test.Data.Actor.PrincipalId);
+        AuthHttpFixture.Check(old.Outcome == ExternalIdentityBindingOwnerOutcome.Created, "The retired binding was not prepared.");
+        var record = test.NewRecord();
+        var refused = await test.CompleteAsync(await test.FlowAsync(), record: record); AuthHttpFixture.CallbackError(refused, HttpStatusCode.Unauthorized);
+        AuthHttpFixture.Check(record.Resolves == 1 && record.ResolvedKey == EntraProtocolFixturePolicy.UserKey && record.Creates == 0 && await test.RowsAsync() == 0,
+            "Sign-in matched a retired pairwise-subject binding or looked up anything but the tenant-stable key.");
+        // Upgrade step one: the owner binds the tenant-stable key to the same principal.
+        var rebound = await test.Owner.BindAsync(EntraProtocolFixturePolicy.UserKey, test.Data.Actor.PrincipalId);
+        AuthHttpFixture.Check(rebound.Outcome == ExternalIdentityBindingOwnerOutcome.Created, "The tenant-stable binding was not created.");
+        var jar = await test.LoginAsync(); var status = await test.StatusAsync(jar);
+        AuthHttpFixture.Check(status.State == "authenticated" && status.Reply.Record.Identity?.PrincipalId == test.Data.Actor.PrincipalId,
+            "The rebind did not restore the same principal.");
+        // Another application's pairwise sub for the same tid and oid is the same person: same key, same principal.
+        test.Issuer.TokenCase = EntraProtocolTokenCase.AlternateSubject;
+        var alternate = await test.StatusAsync(await test.LoginAsync());
+        AuthHttpFixture.Check(alternate.State == "authenticated" && alternate.Reply.Record.Identity?.PrincipalId == test.Data.Actor.PrincipalId,
+            "A different pairwise subject for the same object ID changed the principal.");
+        test.Issuer.TokenCase = EntraProtocolTokenCase.Good;
+        // Upgrade step two: disabling the retired binding leaves the rebound session and new sign-ins intact.
+        var disabled = await test.Owner.DisableAsync(retired, test.Data.Actor.PrincipalId, old.Binding!.Version);
+        AuthHttpFixture.Check(disabled.Outcome == ExternalIdentityBindingOwnerOutcome.Disabled, "The retired binding was not disabled.");
+        AuthHttpFixture.Check((await test.StatusAsync(jar)).State == "authenticated", "Disabling the retired binding ended the rebound session.");
+        _ = await test.LoginAsync();
+    }, bindIssuer: false);
+
+    [PostgresFact]
     public async Task UnknownInactiveAndOperationalBindingRemainDistinctFromSuccessfulSignIn()
     {
         foreach (string state in new[] { "unknown", "inactive", "unavailable" })

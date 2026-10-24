@@ -3,7 +3,9 @@
 // test certificate authority; the Session host's identity code and validation are unchanged.
 // It implements only what the Weft Entra client uses: discovery, signing keys, an
 // authorization page with one sign-in button, and code redemption with a PS256 certificate
-// assertion, PKCE (S256), single-use codes and RS256 ID tokens. For mapping endpoint callers
+// assertion, PKCE (S256), single-use codes and RS256 ID tokens. The ID token carries the user's
+// pairwise subject and, for the requested profile scope, the tenant-stable object ID that Weft
+// binds. For mapping endpoint callers
 // it also issues app-only v2 access tokens to registered machine clients (client credentials).
 // It logs one fixed event name per protocol step and never logs codes, tokens, assertions,
 // secrets or keys.
@@ -30,6 +32,7 @@ const take = (name) => {
 const tenant = take("WEFT_ACCEPTANCE_TENANT_ID");
 const client = take("WEFT_ACCEPTANCE_CLIENT_ID");
 const subject = take("WEFT_ACCEPTANCE_SUBJECT");
+const objectId = take("WEFT_ACCEPTANCE_OBJECT_ID");
 const callback = take("WEFT_ACCEPTANCE_CALLBACK");
 const tlsBundle = take("WEFT_ACCEPTANCE_ISSUER_PEM");
 const clientCertificate = new X509Certificate(
@@ -131,7 +134,7 @@ function authorize(url, response) {
     query.client_id !== client ||
     query.redirect_uri !== callback ||
     query.response_type !== "code" ||
-    query.scope !== "openid" ||
+    query.scope !== "openid profile" ||
     query.code_challenge_method !== "S256" ||
     query.code_challenge.length !== 43 ||
     url.searchParams.has("code_verifier") ||
@@ -268,6 +271,9 @@ function idToken(nonce) {
     aud: client,
     tid: tenant,
     sub: subject,
+    oid: objectId,
+    name: "Acceptance user",
+    preferred_username: "acceptance.user@weft.example.test",
     iat: now - 1,
     nbf: now - 1,
     exp: now + tokenLifetimeSeconds,
@@ -407,7 +413,7 @@ const server = createServer(tls, async (request, response) => {
         response_types_supported: ["code"],
         response_modes_supported: ["query"],
         subject_types_supported: ["pairwise"],
-        scopes_supported: ["openid"],
+        scopes_supported: ["openid", "profile"],
         id_token_signing_alg_values_supported: ["RS256"],
         token_endpoint_auth_methods_supported: [
           "private_key_jwt",

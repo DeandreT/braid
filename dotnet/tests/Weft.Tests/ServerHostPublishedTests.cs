@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
+using Weft.Application;
 
 namespace Weft.Tests;
 
@@ -270,6 +271,22 @@ public sealed class ServerHostPublishedTests(PostgresFixture postgres)
                 "A forged identity bypassed the session boundary or triggered a default challenge redirect.");
             await host.StopAsync();
         });
+
+    [PostgresFact]
+    public Task PublishedSessionFromARetiredSubjectBindingLastsUntilTheOwnerDisablesThatBinding() =>
+        ServerHostSessionCase.RunAsync(postgres, async test =>
+        {
+            // The upgraded host never constructs the retired key, but an existing session names its binding by ID.
+            var host = test.Start(); using var client = ServerHostHttp.Client(test.Origin, test.Files.TlsCertificate);
+            test.PositiveStatus(await ServerHostHttp.StartupStatusAsync(client, test.Cookies.Header));
+            var disabled = await test.Identities.DisableAsync(test.Binding.Key, test.Data.Actor.PrincipalId, test.Binding.Version);
+            ServerHostCheck.That(disabled.Outcome == ExternalIdentityBindingOwnerOutcome.Disabled, "The retired binding was not disabled.");
+            var reply = await test.StatusAsync(client); using var json = reply.Json(); var value = json.RootElement;
+            ServerHostCheck.That(reply.Status == 200 && value.GetProperty("state").GetString() == "authenticationRequired"
+                && value.GetProperty("requestToken").ValueKind == JsonValueKind.Null,
+                "A session from a disabled retired binding stayed authenticated.");
+            await host.StopAsync();
+        }, retiredBinding: true);
 
     [PostgresFact]
     public Task InadmissibleDeliveredKeyOrCredentialProfileFailsClosedWithoutBootstrap() =>

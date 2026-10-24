@@ -52,6 +52,74 @@ public sealed class ExternalIdentityOwnerToolInputTests
     }
 
     [Fact]
+    public async Task EntraUserCommandsAcceptOnlyExactCanonicalTenantAndObjectIdsOnStdin()
+    {
+        var tenant = Guid.NewGuid().ToString("D");
+        var objectId = Guid.NewGuid().ToString("D");
+        var documents = new[]
+        {
+            "", "null", "[]", """{"tenantId":"%T"}""", """{"objectId":"%O"}""",
+            """{"tenantId":"%T","objectId":"%O","extra":"private"}""",
+            """{"tenantId":"%T","objectId":"%O","objectId":"%O"}""",
+            """{"tenantId":"%T","objectId":null}""", """{"tenantId":"%T","objectId":1}""",
+            """{"provider":"entra.oid","authority":"%T","subject":"%O"}""",
+            """{"tenantId":"%T","objectId":"00000000-0000-0000-0000-000000000000"}""",
+            """{"tenantId":"00000000-0000-0000-0000-000000000000","objectId":"%O"}""",
+            """{"tenantId":"9188040d-6c67-4c5b-b112-36a304b66dad","objectId":"%O"}""",
+            """{"tenantId":"%U","objectId":"%O"}""", """{"tenantId":"%T","objectId":"%U"}""",
+            """{"tenantId":" %T","objectId":"%O"}""", """{"tenantId":"{%T}","objectId":"%O"}""",
+            """{"tenantId":"%N","objectId":"%O"}""", """{"tenantId":"%T","objectId":"weft-private-stdin-marker"}""",
+            """{"tenantId":"%T","objectId":"%O"}{}""", """{"tenantId":"%T","objectId":"%O",}"""
+        };
+        foreach (var template in documents)
+        {
+            var document = template.Replace("%T", tenant).Replace("%O", objectId)
+                .Replace("%U", objectId.ToUpperInvariant()).Replace("%N", Guid.Parse(tenant).ToString("N"));
+            foreach (var command in new[] { new[] { "bind-entra-user", Guid.NewGuid().ToString("D") },
+                new[] { "disable-entra-user", Guid.NewGuid().ToString("D"), "1" } })
+            {
+                var result = await ExternalIdentityOwnerToolTestSupport.RunAsync(InputOnlyConnection, command,
+                    Encoding.UTF8.GetBytes(document), [Marker, objectId]);
+                ExternalIdentityOwnerToolTestSupport.Category(result, 2, "error", "invalidRequest");
+            }
+        }
+        List<string[]> malformed =
+        [
+            ["bind-entra-user"], ["bind-entra-user", Guid.NewGuid().ToString("D"), objectId],
+            ["disable-entra-user", Guid.NewGuid().ToString("D")], ["disable-entra-user", Guid.NewGuid().ToString("D"), "0"],
+            ["bind-entra-user", Guid.Empty.ToString("D")], ["disable-entra-user", Guid.NewGuid().ToString("D"), "1", "extra"]
+        ];
+        foreach (var arguments in malformed)
+        {
+            var result = await ExternalIdentityOwnerToolTestSupport.RunAsync(InputOnlyConnection, arguments, privateValues: [Marker]);
+            ExternalIdentityOwnerToolTestSupport.Category(result, 2, "error", "invalidRequest");
+        }
+    }
+
+    [Fact]
+    public async Task TheGenericBindCommandRefusesEntraKeysButDisableStillReadsThem()
+    {
+        var principal = Guid.NewGuid().ToString("D");
+        var tenant = Guid.NewGuid().ToString("D");
+        foreach (var document in new[]
+        {
+            // A retired pairwise-subject browser key: nothing resolves it, so it is never bound again.
+            "{\"provider\":\"entra\",\"authority\":\"https://login.microsoftonline.com/" + tenant + "/v2.0\",\"subject\":\"" + Marker + "\"}",
+            // The tenant-stable key is bound only through bind-entra-user, which fixes its canonical layout.
+            "{\"provider\":\"entra.oid\",\"authority\":\"" + tenant + "\",\"subject\":\"" + Guid.NewGuid().ToString("D") + "\"}"
+        })
+        {
+            var refused = await ExternalIdentityOwnerToolTestSupport.RunAsync(InputOnlyConnection,
+                ["bind-external-identity", principal], Encoding.UTF8.GetBytes(document), [Marker]);
+            ExternalIdentityOwnerToolTestSupport.Category(refused, 2, "error", "invalidRequest");
+            // Disabling a retired key reaches the owner connection, which this input-only address cannot open.
+            var disable = await ExternalIdentityOwnerToolTestSupport.RunAsync(InputOnlyConnection,
+                ["disable-external-identity", principal, "1"], Encoding.UTF8.GetBytes(document), [Marker]);
+            ExternalIdentityOwnerToolTestSupport.Category(disable, 1, "error", "persistenceFailure");
+        }
+    }
+
+    [Fact]
     public async Task ActualBinaryStdinRefusesOneByteBeyondRawDocumentLimit()
     {
         var document = Encoding.UTF8.GetBytes("{\"provider\":\"provider\",\"authority\":\"authority\",\"subject\":\"" + Marker + "\"}");

@@ -163,7 +163,9 @@ public sealed partial class EntraProtocolHttpsTests
             EntraProtocolTokenCase.SymmetricAlgorithm, EntraProtocolTokenCase.UnapprovedRsaAlgorithm, EntraProtocolTokenCase.MissingSubject, EntraProtocolTokenCase.MissingNbf,
             EntraProtocolTokenCase.MissingExp, EntraProtocolTokenCase.DuplicateIssuer, EntraProtocolTokenCase.DuplicateAudience,
             EntraProtocolTokenCase.DuplicateTenant, EntraProtocolTokenCase.DuplicateSubject, EntraProtocolTokenCase.DuplicateExp,
-            EntraProtocolTokenCase.Expired, EntraProtocolTokenCase.NotYetValid })
+            EntraProtocolTokenCase.Expired, EntraProtocolTokenCase.NotYetValid, EntraProtocolTokenCase.MissingObjectId,
+            EntraProtocolTokenCase.NoncanonicalObjectId, EntraProtocolTokenCase.EmptyObjectId, EntraProtocolTokenCase.DuplicateObjectId,
+            EntraProtocolTokenCase.ControlSubject, EntraProtocolTokenCase.OversizedSubject })
         {
             test.Issuer.TokenCase = variant;
             var flow = await test.FlowAsync(); var reply = await test.CompleteAsync(flow); test.Denied(reply); test.CheckPrivacy(reply);

@@ -168,10 +168,10 @@ internal sealed class ServerHostSessionCase : IAsyncDisposable
     private readonly List<Task> dependencyDisposalTasks = [];
     private bool issuerSettled;
 
-    internal static async Task RunAsync(PostgresFixture postgres, Func<ServerHostSessionCase, Task> body)
+    internal static async Task RunAsync(PostgresFixture postgres, Func<ServerHostSessionCase, Task> body, bool retiredBinding = false)
     {
         var test = new ServerHostSessionCase(); Exception? primary = null; var cleanup = new List<Exception>();
-        try { await test.InitializeAsync(postgres); await body(test); }
+        try { await test.InitializeAsync(postgres, retiredBinding); await body(test); }
         catch (Exception error) { primary = ServerHostCheck.Safe(error, "The owned published-session case failed."); }
         finally
         {
@@ -181,12 +181,16 @@ internal sealed class ServerHostSessionCase : IAsyncDisposable
         ServerHostCheck.Throw(primary, cleanup);
     }
 
-    private async Task InitializeAsync(PostgresFixture postgres)
+    internal ExternalIdentityBindingProvisioner Identities => identities!;
+
+    private async Task InitializeAsync(PostgresFixture postgres, bool retiredBinding)
     {
         Data = await PostgresMappingMetadataTestSupport.CreateAsync(postgres);
         Files = new(); identities = new(Data.Case.MigrationConnectionString);
-        var binding = await identities.BindAsync(new ExternalIdentityKey("entra", "https://login.microsoftonline.com/" + Tenant.ToString("D") + "/v2.0",
-            "owned-private-host-subject"), Data.Actor.PrincipalId);
+        // A retired binding is one an earlier version made from the pairwise sub; its session predates the upgrade.
+        var key = retiredBinding ? new ExternalIdentityKey(EntraUserIdentity.RetiredSubjectProvider,
+            "https://login.microsoftonline.com/" + Tenant.ToString("D") + "/v2.0", "owned-private-host-subject") : EntraUserIdentity.Key(Tenant, Guid.NewGuid());
+        var binding = await identities.BindAsync(key, Data.Actor.PrincipalId);
         ServerHostCheck.That(binding.Outcome == ExternalIdentityBindingOwnerOutcome.Created && binding.Binding is not null,
             "The trusted host fixture binding was not created.");
         Binding = binding.Binding!;

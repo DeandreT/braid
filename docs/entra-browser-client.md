@@ -102,10 +102,13 @@ checks before every verifier construction, including historical cached keys.
 Standard signature and protocol validation remains in use. Private baseline
 parameters require signed **RS256** ID tokens, exact issuer/tenant/client audience,
 finite required times and zero clock skew. Critical duplicate claims are refused.
-No browser claim, email, display name, `oid`, role or group grants application
-access. The only identity key is `("entra", exactIssuer, exactOpaqueSub)`.
+No browser claim, email, display name, role or group grants application access.
+The ID token must carry a nonempty `sub` and a canonical nonzero `oid`, each exactly
+once. The only identity key is the tenant-stable `("entra.oid", tenant, oid)`
+described in [External identity bindings](external-identity-bindings.md#entra-users);
+the pairwise `sub` is checked but is not a key.
 
-Authorization uses `openid` only, code/query response mode, S256 PKCE, state,
+Authorization uses exactly `openid profile`, code/query response mode, S256 PKCE, state,
 correlation and nonce. `select_account` does not promise password re-entry. PKCE
 is server-controlled; its verifier may travel through the browser inside protected
 state. SaveTokens, UserInfo, token refresh and claim mapping are disabled.

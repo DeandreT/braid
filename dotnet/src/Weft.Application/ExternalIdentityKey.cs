@@ -52,6 +52,17 @@ public sealed class ExternalIdentityKey : IEquatable<ExternalIdentityKey>
 
     public override string ToString() => "ExternalIdentityKey";
 
+    /// <summary>
+    /// Whether a provider's opaque subject meets the subject component rules, for a provider that verifies a
+    /// subject without keying on it.
+    /// </summary>
+    public static bool IsValidSubject(string? subject)
+    {
+        if (subject is null) return false;
+        try { ValidateOpaque(subject, MaximumSubjectBytes, nameof(subject)); return true; }
+        catch (ArgumentException) { return false; }
+    }
+
     private static void ValidateOpaque(string value, int maximumBytes, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(value, parameterName);
@@ -72,4 +83,25 @@ public sealed class ExternalIdentityKey : IEquatable<ExternalIdentityKey>
 
     private static ArgumentException Invalid(string parameterName) =>
         new("The external identity component is invalid.", parameterName);
+}
+
+/// <summary>
+/// The tenant-stable key of one Microsoft Entra user: the canonical tenant ID (<c>tid</c>) and the user's
+/// canonical object ID (<c>oid</c>) in that tenant. Browser sign-in and bearer access derive the same key from
+/// their verified tokens, so one person resolves to one binding through both. The distinct provider slug means
+/// this key never equals a retired <c>("entra", issuer, sub)</c> browser key, whatever that key's text.
+/// </summary>
+public static class EntraUserIdentity
+{
+    public const string Provider = "entra.oid";
+    /// <summary>The provider of retired browser keys, keyed on the per-application pairwise <c>sub</c>.</summary>
+    public const string RetiredSubjectProvider = "entra";
+    private static readonly Guid ConsumerTenant = new("9188040d-6c67-4c5b-b112-36a304b66dad");
+
+    public static ExternalIdentityKey Key(Guid tenantId, Guid objectId)
+    {
+        if (tenantId == Guid.Empty || tenantId == ConsumerTenant || objectId == Guid.Empty)
+            throw new ArgumentException("An Entra user key requires an organizational tenant and an object ID.");
+        return new(Provider, tenantId.ToString("D"), objectId.ToString("D"));
+    }
 }

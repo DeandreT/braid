@@ -120,7 +120,7 @@ internal sealed class EntraProtocolCrypto : IDisposable
             ["nonce"] = code.Nonce,
             ["name"] = EntraProtocolFixturePolicy.PrivateMarker,
             ["email"] = EntraProtocolFixturePolicy.PrivateMarker + "@invalid.example",
-            ["oid"] = Guid.NewGuid().ToString("D"),
+            ["oid"] = EntraProtocolFixturePolicy.ObjectId.ToString("D"),
             ["roles"] = new[] { "administrator", "run.payload.read" },
             ["groups"] = new[] { EntraProtocolFixturePolicy.PrivateMarker },
             ["wids"] = new[] { EntraProtocolFixturePolicy.PrivateMarker }
@@ -136,6 +136,12 @@ internal sealed class EntraProtocolCrypto : IDisposable
             case EntraProtocolTokenCase.Expired: claims["exp"] = now - 1; claims["nbf"] = now - 300; claims["iat"] = now - 300; break;
             case EntraProtocolTokenCase.NotYetValid: claims["nbf"] = now + 60; break;
             case EntraProtocolTokenCase.BadNonce: claims["nonce"] = "wrong-owned-nonce"; break;
+            case EntraProtocolTokenCase.MissingObjectId: claims.Remove("oid"); break;
+            case EntraProtocolTokenCase.NoncanonicalObjectId: claims["oid"] = EntraProtocolFixturePolicy.ObjectId.ToString("D").ToUpperInvariant(); break;
+            case EntraProtocolTokenCase.EmptyObjectId: claims["oid"] = Guid.Empty.ToString("D"); break;
+            case EntraProtocolTokenCase.ControlSubject: claims["sub"] = "opaque\u0001subject"; break;
+            case EntraProtocolTokenCase.OversizedSubject: claims["sub"] = new string('s', 513); break;
+            case EntraProtocolTokenCase.AlternateSubject: claims["sub"] = EntraProtocolFixturePolicy.AlternateSubject; break;
         }
         expiry = DateTimeOffset.FromUnixTimeSeconds(claims.TryGetValue("exp", out var exp) ? (long)exp! : now + 300);
         string json = JsonSerializer.Serialize(claims);
@@ -146,6 +152,7 @@ internal sealed class EntraProtocolCrypto : IDisposable
             EntraProtocolTokenCase.DuplicateTenant => "tid",
             EntraProtocolTokenCase.DuplicateSubject => "sub",
             EntraProtocolTokenCase.DuplicateExp => "exp",
+            EntraProtocolTokenCase.DuplicateObjectId => "oid",
             _ => null
         };
         if (duplicate is not null) json = json[..^1] + "," + JsonSerializer.Serialize(duplicate) + ":" + JsonSerializer.Serialize(claims[duplicate]) + "}";

@@ -89,7 +89,7 @@ internal sealed class AuthBrowserHttpsCase
         postgres = new(); await postgres.InitializeAsync();
         material = new(); tlsMaterial = new(); data = await PostgresCatalogTestSupport.CreateAsync(postgres);
         identityOwner = new(data.Case.MigrationConnectionString);
-        var binding = await identityOwner.BindAsync(new("entra", EntraProtocolFixturePolicy.Issuer, EntraProtocolFixturePolicy.Subject), data.Actor.PrincipalId);
+        var binding = await identityOwner.BindAsync(EntraProtocolFixturePolicy.UserKey, data.Actor.PrincipalId);
         QualificationWire.Require(binding.Outcome == Weft.Application.ExternalIdentityBindingOwnerOutcome.Created);
         string keys = Path.Combine(root, "keys"); Directory.CreateDirectory(keys, ServerHostFiles.PrivateDirectory);
         const string application = "Weft owned HTTPS browser qualification";

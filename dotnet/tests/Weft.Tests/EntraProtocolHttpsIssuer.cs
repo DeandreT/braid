@@ -47,7 +47,7 @@ internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAs
     internal bool Settled { get; private set; }
     internal IReadOnlyList<EntraProtocolIssuerSend> Snapshot() => sends.ToArray();
     internal IReadOnlyList<string> PrivateOperands() => codes.SelectMany(pair => new[] { pair.Key, pair.Value.Nonce, pair.Value.State })
-        .Concat(new[] { lastAssertion, lastToken, EntraProtocolFixturePolicy.Subject, EntraProtocolFixturePolicy.PrivateMarker })
+        .Concat(new[] { lastAssertion, lastToken, EntraProtocolFixturePolicy.Subject, EntraProtocolFixturePolicy.ObjectId.ToString("D"), EntraProtocolFixturePolicy.PrivateMarker })
         .Where(value => !string.IsNullOrEmpty(value)).Select(value => value!).ToArray();
 
     internal async Task StartAsync()
@@ -123,7 +123,7 @@ internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAs
                 ["response_types_supported"] = new[] { "code" },
                 ["response_modes_supported"] = new[] { "query" },
                 ["subject_types_supported"] = new[] { "pairwise" },
-                ["scopes_supported"] = new[] { "openid" },
+                ["scopes_supported"] = new[] { "openid", "profile" },
                 ["id_token_signing_alg_values_supported"] = new[] { "RS256" },
                 ["token_endpoint_auth_methods_supported"] = new[] { "private_key_jwt" },
                 ["code_challenge_methods_supported"] = new[] { "S256" }
@@ -153,7 +153,7 @@ internal sealed class EntraProtocolHttpsIssuer(EntraProtocolCrypto crypto) : IAs
                 "The owned authorization request lost the required bounded singleton field: " + key + "."); return value[0]!;
         }
         EntraProtocolFixturePolicy.Check(One("client_id") == EntraProtocolFixturePolicy.Client.ToString("D") && One("redirect_uri") == Callback
-            && One("response_type") == "code" && One("scope") == "openid"
+            && One("response_type") == "code" && One("scope") == "openid profile"
             && One("prompt") == "select_account" && One("code_challenge_method") == "S256",
             "The standard challenge departed from the fixed code/PKCE/OpenID policy.");
         // The standard handler omits the default query response mode for code flow.

@@ -41,7 +41,7 @@ provisioning job. Every other credential is generated into Key Vault by
 | Operator object ID | `operatorPrincipalId`: user or group granted Key Vault Secrets Officer and Certificates Officer. |
 | Operator IP ranges | Optional `operatorIpRanges` that restrict Key Vault's public endpoint. |
 | Custom domain and DNS | Optional `customDomain`, a CNAME to the app's default host name and a TXT record `asuid.<domain>`. |
-| Initial users' Entra `sub` values | One per user, for identity bindings: the ID-token `sub` claim issued to this client ID. It is pairwise per application and differs from the object ID. |
+| Initial users' Entra object IDs | One per user, for identity bindings: the user's **Object ID** in the sign-in tenant (the Entra admin center user page, or the `id` that Microsoft Graph returns for the user). |
 | Native work | Optional `nativeWorkEnabled`, with `ferruleRunner`, the Ferrule service image and pins, `ferruleServiceCompile` and `ferruleCompileToolchain`; see [Native work](#native-work-previews-regression-runs-and-builds). |
 | Chat profile and model credential | Optional `chatEnabled`: the profile document, and the model-provider credential unless the profile uses the application identity, stored in Key Vault; see [Chat](#chat). |
 | Mapping endpoints | Optional `mappingEndpoints`, `mappingEndpointAudience`, `mappingEndpointAdministratorId`, `ferruleServiceEndpointClientCertificateSha256` and `compiledRuntimeIdentity`; see [Mapping endpoints](#mapping-endpoints). |
@@ -54,8 +54,9 @@ Register a single-tenant web application in the sign-in tenant:
 - Redirect URI (Web): `https://<public host>/api/auth/callback/entra`, exactly. The public
   host is the custom domain or the app's default host name (deployment output `publicHost`;
   `entraRedirectUri` repeats the full URI).
-- No client secret, implicit grant or front-channel logout URL. Sign-in requests only
-  `openid` with authorization code and PKCE.
+- No client secret, implicit grant or front-channel logout URL. Sign-in requests exactly
+  `openid profile` with authorization code and PKCE; `profile` is what puts the user's
+  object ID in the ID token.
 - Certificate credential: upload `weft-entra-client.pem` written by `initialize-secrets.sh`,
   for example `az ad app credential reset --id <client-id> --cert @weft-entra-client.pem --append`.
 
@@ -159,11 +160,11 @@ az containerapp job start -g <group> -n <name>-owner --container-name owner \
   --args database set-project-creation-capability <organizationId> <principal-uuid> true --env-vars $owner_env
 ```
 
-To bind the user's Entra account, store the key as the `weft-owner-input` secret
-(`{"provider":"entra","authority":"https://login.microsoftonline.com/<tenant>/v2.0","subject":"<sub>"}`)
+To bind the user's Entra account, store their tenant and object ID as the
+`weft-owner-input` secret (`{"tenantId":"<tenant>","objectId":"<user object id>"}`)
 with `az keyvault secret set --file`, refresh the job's reference with
 `az containerapp job secret set -g <group> -n <name>-owner --secrets owner-input=keyvaultref:<vault-uri>secrets/weft-owner-input,identityref:<identity-resource-id>`,
-then start the job with `--args database bind-external-identity <principal-uuid>`. Restore
+then start the job with `--args database bind-entra-user <principal-uuid>`. Restore
 the placeholder `{}` afterwards. See [External identity bindings](external-identity-bindings.md)
 for the other owner commands and their outcomes.
 

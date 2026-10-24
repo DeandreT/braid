@@ -72,7 +72,7 @@ public sealed partial class EntraBrowserClient
         var operation = RequireOperation();
         if (operation.Callback || context.ProtocolMessage.IssuerAddress != policy.Authorize ||
             context.ProtocolMessage.RedirectUri != options.PublicOrigin + CallbackPath ||
-            context.ProtocolMessage.ClientId != policy.Client || context.ProtocolMessage.Scope != "openid" ||
+            context.ProtocolMessage.ClientId != policy.Client || context.ProtocolMessage.Scope != string.Join(' ', Scopes) ||
             context.ProtocolMessage.ResponseType != "code" || context.ProtocolMessage.Prompt != "select_account")
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.ConfigurationFailure);
         if (operation.NonceName is not { } nonce || !IsBoundNonceCookieName(nonce) || context.Properties is null)
@@ -155,6 +155,9 @@ public sealed partial class EntraBrowserClient
             EntraEndpointPolicy.RequireUniqueObject(root);
             var issuer = EntraEndpointPolicy.ReadRequired(root, "iss");
             var subject = EntraEndpointPolicy.ReadRequired(root, "sub");
+            // The pairwise sub is not the key, but it keeps the opaque subject rules it had as one.
+            if (!ExternalIdentityKey.IsValidSubject(subject))
+                throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
             if (issuer != policy.Issuer || EntraEndpointPolicy.ReadRequired(root, "tid") != policy.Tenant ||
                 EntraEndpointPolicy.ReadRequired(root, "aud") != policy.Client ||
                 EntraEndpointPolicy.ReadRequired(root, "nonce").Length > 512 ||
@@ -166,9 +169,14 @@ public sealed partial class EntraBrowserClient
             var now = DateTimeOffset.UtcNow;
             if (deadline <= now || notBefore > now || issued > now || notBefore >= deadline || issued >= deadline)
                 throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
-            var key = new ExternalIdentityKey("entra", issuer, subject);
-            RequirePrincipal(context.Principal, key);
-            operation.Candidate = new(key, deadline, context.Principal, context.Properties!);
+            // The binding key is the tenant-stable (tid, oid), never the pairwise sub: the same person then
+            // resolves to the same binding through a bearer token issued to another client application.
+            var objectId = EntraEndpointPolicy.ReadRequired(root, "oid");
+            if (!Guid.TryParseExact(objectId, "D", out var oid) || oid == Guid.Empty || objectId != oid.ToString("D"))
+                throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
+            var key = EntraUserIdentity.Key(Guid.Parse(policy.Tenant), oid);
+            RequirePrincipal(context.Principal, key, subject);
+            operation.Candidate = new(key, subject, deadline, context.Principal, context.Properties!);
             // Candidate remains private: framework nonce/ValidateTokenResponse still follow.
             return Task.CompletedTask;
         }
@@ -187,7 +195,7 @@ public sealed partial class EntraBrowserClient
             !ReferenceEquals(context.Properties, candidate.Properties))
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
         RequireFlowProperties(context.Properties);
-        RequirePrincipal(context.Principal!, candidate.Identity);
+        RequirePrincipal(context.Principal!, candidate.Identity, candidate.Subject);
         if (candidate.Deadline <= DateTimeOffset.UtcNow)
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
         operation.Verified = new(this, operation.Context, operation, organization, candidate.Identity, candidate.Deadline);
@@ -249,10 +257,12 @@ public sealed partial class EntraBrowserClient
         catch (ArgumentOutOfRangeException) { throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied); }
     }
 
-    private void RequirePrincipal(ClaimsPrincipal principal, ExternalIdentityKey identity)
+    private void RequirePrincipal(ClaimsPrincipal principal, ExternalIdentityKey identity, string subject)
     {
-        foreach (var pair in new[] { ("iss", identity.Authority), ("sub", identity.Subject),
-            ("tid", policy.Tenant), ("aud", policy.Client) })
+        if (identity.Provider != EntraUserIdentity.Provider || identity.Authority != policy.Tenant)
+            throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
+        foreach (var pair in new[] { ("iss", policy.Issuer), ("sub", subject), ("tid", policy.Tenant),
+            ("aud", policy.Client), ("oid", identity.Subject) })
         {
             var claims = principal.FindAll(pair.Item1).ToArray();
             if (claims.Length != 1 || claims[0].Value != pair.Item2)
@@ -260,6 +270,6 @@ public sealed partial class EntraBrowserClient
         }
     }
 
-    internal sealed record Candidate(ExternalIdentityKey Identity, DateTimeOffset Deadline,
+    internal sealed record Candidate(ExternalIdentityKey Identity, string Subject, DateTimeOffset Deadline,
         ClaimsPrincipal Principal, AuthenticationProperties Properties);
 }

@@ -71,7 +71,7 @@ that migration supplies only the narrow reader grants. It creates no application
 principals or admissions. Do not pass migration credentials to the server or use
 Development provisioning as an external-account binding mechanism.
 
-## Four explicit owner commands
+## Explicit owner commands
 
 Set `WEFT_MIGRATION_CONNECTION_STRING` privately for the separate owner process.
 These commands use the existing DatabaseTool entry point; for a source checkout,
@@ -87,6 +87,8 @@ dotnet run --configuration Release --project dotnet/tools/Weft.DatabaseTool --
 | `ensure-organization-admission ORGANIZATION_ID PRINCIPAL_ID` | Require the existing organization and active principal; create only their missing active organization admission. Existing active is unchanged; inactive admission is refused. |
 | `bind-external-identity PRINCIPAL_ID` | Read the key from stdin; create an enabled version-one binding or preserve same-owner replay. Does not prepare any parent or grant. |
 | `disable-external-identity PRINCIPAL_ID EXPECTED_VERSION` | Read the same exact key from stdin; compare owner/version and disable once. Unknown key, different owner or stale version refuses. |
+| `bind-entra-user PRINCIPAL_ID` | Read an Entra user's tenant and object ID from stdin and bind their [tenant-stable key](#entra-users), with the same semantics as `bind-external-identity`. |
+| `disable-entra-user PRINCIPAL_ID EXPECTED_VERSION` | Read the same tenant and object ID from stdin and disable that key, with the same semantics as `disable-external-identity`. |
 
 Replace placeholders with canonical nonzero lowercase `D`-format UUIDs. The
 disable version is a canonical positive decimal Int64, without signs, spaces or
@@ -95,7 +97,9 @@ organization admission does not create its organization or principal and does
 not supply a project membership or `createProjects` capability.
 
 Bind/disable read one UTF-8 JSON object from stdin through EOF, with exactly the
-string members `provider`, `authority` and `subject`, in any order. The entire
+string members `provider`, `authority` and `subject`, in any order; the Entra user
+commands read exactly `tenantId` and `objectId`, each a canonical nonzero lowercase
+`D`-format UUID, and refuse the Microsoft consumer tenant. The entire
 input is limited to 8,192 bytes, including whitespace. Missing/duplicate/unknown
 members, comments, trailing commas, invalid Unicode and trailing non-whitespace
 input are rejected. Decoded key components still obey their smaller byte limits.
@@ -123,6 +127,48 @@ The legacy `provision-development-identity` and
 `set-project-creation-capability` commands remain separate. Login, binding replay
 and these preparation commands never invoke a project/payload-grant operation.
 No CLI result enables the Development identity provider in a hosted environment.
+
+## Entra users
+
+An Entra user is keyed on the tenant-stable pair the Microsoft identity platform
+issues in both ID tokens and access tokens: provider `entra.oid`, authority the
+canonical tenant ID (`tid`) and subject the user's canonical object ID (`oid`) in
+that tenant. Browser sign-in requests the `profile` scope, without which Entra omits
+`oid` from the ID token, and builds this key from the verified ID token. Access
+tokens carry the same `tid` and `oid`, so one person keeps one key, binding and
+principal across client applications. The per-application pairwise `sub` is checked
+but never used as a key, because a token issued to another client application
+carries a different `sub` for the same person.
+
+Earlier versions keyed browser sign-in on `("entra", issuer, sub)`. Those bindings
+remain in the database, unchanged, and nothing constructs that key any more, so they
+never match anyone. The distinct `entra.oid` provider guarantees that no retired
+key equals a tenant-stable one, whatever text either contains, because keys compare
+exactly on all three components. `bind-external-identity` refuses both Entra
+providers: tenant-stable keys are bound only through `bind-entra-user`, which fixes
+their canonical form, and retired keys can only be disabled.
+
+### Upgrading an installation with `sub` bindings
+
+There is no automatic migration: a pairwise `sub` cannot be converted to an object
+ID, so each binding is replaced explicitly by the owner.
+
+1. Before upgrading, find each bound user's object ID in their tenant: the Entra
+   admin center's user **Object ID**, or the `id` returned by Microsoft Graph for
+   that user. Confirm the tenant is the configured `WEFT_ENTRA_TENANT_ID`.
+2. For each user, run `bind-entra-user PRINCIPAL_ID` with
+   `{"tenantId":"<tenant>","objectId":"<object id>"}` on stdin, using the principal
+   of their existing binding. The new binding is enabled at version 1; the old one is
+   untouched.
+3. Upgrade the Session host. Signing in now resolves only the new binding. Existing
+   browser sessions issued from an old binding stay valid until they expire or
+   their binding is disabled.
+4. Disable each old binding with `disable-external-identity PRINCIPAL_ID
+   EXPECTED_VERSION` and its exact old key on stdin. This ends any session still
+   issued from it; the user signs in again through the new binding.
+
+A user without a new binding cannot sign in after step 3. Skipping step 4 leaves
+inert rows that never match, but keeps their old sessions alive until expiry.
 
 ## Verification boundary and later work
 

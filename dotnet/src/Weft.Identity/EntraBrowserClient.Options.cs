@@ -23,7 +23,9 @@ public sealed partial class EntraBrowserClient
         value.SignInScheme = Sink;
         value.SignOutScheme = Sink;
         value.Scope.Clear();
+        // profile is what makes Entra include the tenant-stable oid in the ID token.
         value.Scope.Add("openid");
+        value.Scope.Add("profile");
         value.ClaimActions.Clear();
         value.AdditionalAuthorizationParameters.Clear();
         value.Prompt = "select_account";
@@ -94,8 +96,8 @@ public sealed partial class EntraBrowserClient
         if (value.Authority != policy.Issuer || value.MetadataAddress != policy.Discovery ||
             value.ClientId != policy.Client || value.ClientSecret is not null || value.CallbackPath != CallbackPath || value.AccessDeniedPath.HasValue ||
             value.RemoteSignOutPath.HasValue || value.SignedOutCallbackPath.HasValue || value.SignedOutRedirectUri != "/" ||
-            value.SignInScheme != Sink || value.SignOutScheme != Sink || value.Scope.Count != 1 ||
-            !value.Scope.Contains("openid") || value.ClaimActions.Count() != 0 ||
+            value.SignInScheme != Sink || value.SignOutScheme != Sink ||
+            !value.Scope.SequenceEqual(Scopes, StringComparer.Ordinal) || value.ClaimActions.Count() != 0 ||
             value.AdditionalAuthorizationParameters.Count != 0 || value.Prompt != "select_account" ||
             value.ResponseType != OpenIdConnectResponseType.Code || value.ResponseMode != OpenIdConnectResponseMode.Query ||
             !value.UsePkce || value.MapInboundClaims || value.GetClaimsFromUserInfoEndpoint || value.SaveTokens ||

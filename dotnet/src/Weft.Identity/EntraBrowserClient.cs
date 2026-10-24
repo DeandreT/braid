@@ -23,6 +23,7 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
     internal const string NoncePrefix = "__Host-Weft.Entra.Nonce.";
     internal const string CorrelationPrefix = "__Host-Weft.Entra.Correlation.";
     internal static readonly TimeSpan FlowLifetime = TimeSpan.FromMinutes(10);
+    internal static readonly string[] Scopes = ["openid", "profile"];
     private readonly EntraClientOptions options;
     private readonly DurableSessionKeyProfile borrowedProfile;
     private readonly Guid organization;
