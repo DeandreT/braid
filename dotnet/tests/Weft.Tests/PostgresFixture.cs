@@ -93,7 +93,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string docker = Environment.GetEnvironmentVariable("WEFT_DOCKER_EXECUTABLE") ?? "docker";
     private string Host => client is null ? "127.0.0.1" : Container;
     private string Container => $"weft-pg-{owner}";
-    private string Network => $"weft-pg-net-{owner}";
+    internal string Network => $"weft-pg-net-{owner}";
     private string Volume => $"weft-pg-data-{owner}";
     private string BootstrapUser => $"weft_bootstrap_{owner}";
     private int port = 5432;
@@ -164,11 +164,7 @@ public sealed class PostgresFixture : IAsyncLifetime
                 if (platform.Trim() != "linux/amd64")
                     throw new InvalidOperationException("The qualified image did not resolve to linux/amd64.");
                 networkAttempted = true;
-                var networkArguments = new List<string> { "network", "create", "--driver", "bridge" };
-                if (client is not null)
-                    networkArguments.Add("--internal");
-                networkArguments.AddRange(["--label", $"{OwnerLabel}={owner}", Network]);
-                await DockerAsync(networkArguments);
+                await TestNetworkSubnets.CreateAsync(CreateNetworkAsync);
                 volumeAttempted = true;
                 await DockerAsync(["volume", "create", "--label", $"{OwnerLabel}={owner}", Volume]);
                 if (client is not null)
@@ -476,6 +472,18 @@ public sealed class PostgresFixture : IAsyncLifetime
             await DockerAsync(["container", "start", Container]);
         }
         await WaitForServerAsync();
+    }
+
+    private async Task<bool> CreateNetworkAsync(string subnet)
+    {
+        var arguments = new List<string> { "network", "create", "--driver", "bridge", "--subnet", subnet };
+        if (client is not null)
+            arguments.Add("--internal");
+        arguments.AddRange(["--label", $"{OwnerLabel}={owner}", Network]);
+        var result = await RunDockerAsync(arguments);
+        if (result.ExitCode != 0 && !TestNetworkSubnets.IsOverlap(result.Error))
+            throw new InvalidOperationException($"Owned PostgreSQL Docker operation network failed with exit code {result.ExitCode}.{SafeDockerError(result.Error)}");
+        return result.ExitCode == 0;
     }
 
     private async Task StartContainerAsync(IReadOnlyList<string> arguments, string image)

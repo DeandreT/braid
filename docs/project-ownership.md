@@ -136,7 +136,9 @@ environment fails. Qualification must execute these tests; an unconfigured
 skip is not database evidence.
 
 The fixture creates uniquely owned container, network and persistent volume
-resources, separate synthetic owner/runtime logins, and per-case databases.
+resources, separate synthetic owner/runtime logins, and per-case databases. The
+network takes an explicit small subnet from the test range described in
+[Docker test networks](development.md#docker-test-networks).
 Host mode publishes an ephemeral loopback port. An isolated qualification
 client can be named with `WEFT_TEST_CLIENT_CONTAINER`; only that client joins
 the owned internal network, and PostgreSQL exposes no host port. Cleanup checks

@@ -259,6 +259,26 @@ Host process tests require these explicit absolute paths to fresh publications o
 the same Release build. The privacy probe is a qualification tool, not a deployed
 Server dependency; keep its publication separate from the shipped host.
 
+### Docker test networks
+
+A Docker network created without a subnet takes a whole /16 or /20 from the
+daemon's default address pools, and a few concurrent test runs exhaust them. Test
+fixtures that create their own networks (the PostgreSQL test fixture and the
+browser fixture) therefore give each one an explicit /28 from
+`WEFT_TEST_SUBNET_RANGE`, by default `198.19.0.0/16`. That default is the upper
+half of the RFC 2544 benchmarking block, outside Docker's default pools
+(`172.17.0.0/16`–`172.31.0.0/16` and `192.168.0.0/16`), private LAN ranges, CGNAT
+and Tailscale (`100.64.0.0/10`) and the fake-IP range of common proxies
+(`198.18.0.0/16`). Set the variable to another free IPv4 range of /28 or larger,
+in canonical form, when the default collides with a local network.
+
+A fixture tries distinct random /28 candidates and moves to another one when
+Docker refuses a candidate as overlapping an existing network. Other Docker
+failures are not retried. After 32 refused candidates, or once every candidate
+of a smaller range is refused, setup fails with an exhaustion error that names
+the range. Fixture networks keep their owner labels, so cleanup by owner label
+removes them with the fixture's other resources.
+
 ### Isolated test builds
 
 Keep native Windows and Linux outputs separate. Pass the same `--artifacts-path`

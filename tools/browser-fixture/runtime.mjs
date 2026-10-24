@@ -23,6 +23,7 @@ import { setTimeout as pause } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { failureSite } from "./failure-site.mjs";
 import { hostFailureSummary } from "./safe-diagnostics.mjs";
+import { createOnFreeSubnet, isPoolOverlap } from "./test-subnets.mjs";
 import {
   browserFixtureMigrations,
   browserFixtureProtectedTables,
@@ -390,7 +391,13 @@ export async function runBrowserFixture(definition) {
     function run(
       command,
       args,
-      { env = process.env, input, timeout = 30000, allowFailure = false } = {},
+      {
+        env = process.env,
+        input,
+        timeout = 30000,
+        allowFailure = false,
+        keepError = false,
+      } = {},
     ) {
       let code = 0,
         stdout = "",
@@ -423,7 +430,8 @@ export async function runBrowserFixture(definition) {
         allowFailure || code === 0,
         code === -1 ? "deadline" : "productFailure",
       );
-      return { code, stdout: stdout.trim() };
+      // Error text stays with the caller that classifies it; it is never recorded.
+      return { code, stdout: stdout.trim(), ...(keepError ? { stderr } : {}) };
     }
     const docker = (args, options) =>
       run(cfg.docker, ["--host=unix://" + cfg.daemonSocket, ...args], options)
@@ -2040,12 +2048,28 @@ export async function runBrowserFixture(definition) {
       );
       await openEvents();
       const netAttempt = attempt("network", resourceName + "-network");
-      netAttempt.id = docker([
-        "network",
-        "create",
-        ...labelArgs,
-        netAttempt.name,
-      ]);
+      createOnFreeSubnet((subnet) => {
+        const created = run(
+          cfg.docker,
+          [
+            "--host=unix://" + cfg.daemonSocket,
+            "network",
+            "create",
+            "--subnet",
+            subnet,
+            ...labelArgs,
+            netAttempt.name,
+          ],
+          { allowFailure: true, keepError: true },
+        );
+        check(created.code !== -1, "deadline");
+        check(
+          created.code === 0 || isPoolOverlap(created.stderr),
+          "productFailure",
+        );
+        netAttempt.id = created.code === 0 ? created.stdout : null;
+        return created.code === 0;
+      });
       network = jsonDocker(["network", "inspect", netAttempt.id])[0];
       check(
         labelsMatch(network) &&
