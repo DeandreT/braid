@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
+using Weft.Contracts.Projections;
 
 namespace Weft.Contracts.Catalog;
 

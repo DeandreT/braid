@@ -125,6 +125,7 @@ async function fixture(
               authActionRequestToken: "YXV0aC1h",
               requestToken: null,
               identityContext: null,
+              displayName: null,
             }
           : { version: 1, mode: "development" },
       });

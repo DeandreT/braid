@@ -52,7 +52,7 @@ internal sealed partial class AuthHttpFixture
         var reply = await SendAsync(StatusPath, jar, record: record, host: host); SharedHeaders(reply);
         Check(reply.Status == HttpStatusCode.OK, "Healthy auth bootstrap did not complete.");
         var json = reply.Json();
-        Check(json.EnumerateObject().Count() == 6 && json.GetProperty("version").GetInt32() == 1 && json.GetProperty("mode").GetString() == "session", "Auth session union shape changed.");
+        Check(json.EnumerateObject().Count() == 7 && json.GetProperty("version").GetInt32() == 1 && json.GetProperty("mode").GetString() == "session", "Auth session union shape changed.");
         string? state = json.GetProperty("state").GetString(); bool positive = state == "authenticated";
         Check(state is "anonymous" or "authenticationRequired" or "authenticated"
             && positive == (json.GetProperty("requestToken").ValueKind == System.Text.Json.JsonValueKind.String)

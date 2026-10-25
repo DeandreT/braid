@@ -2,7 +2,7 @@ import {
   pathText,
   type NodeReference,
   type ProjectionView,
-} from "../../mappings/projection-view";
+} from "../../workbench/projection-view";
 import {
   comparisonEntities,
   type ComparisonAspect,

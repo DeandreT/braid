@@ -6,6 +6,15 @@ namespace Weft.Identity;
 
 internal static class BrowserAuthenticationRequest
 {
+    internal const string ReturnToHeader = "X-Weft-Return-To";
+
+    /// <summary>The validated sign-in return path of a login request, or the application root.</summary>
+    internal static string ReturnPath(HttpContext context)
+    {
+        var value = context.Request.Headers[ReturnToHeader];
+        return value.Count == 1 && BrowserReturnPath.IsValid(value[0]) ? value[0]! : BrowserReturnPath.Root;
+    }
+
     internal static void Require(HttpContext context, BrowserAuthenticationOptions options, string action)
     {
         var request = context.Request;
@@ -50,6 +59,11 @@ internal static class BrowserAuthenticationRequest
             if (name == expected ? values.Count != 1 || values[0] != "1" : values.Count != 0)
                 throw Error(BrowserAuthenticationFailureKind.InvalidRequest);
         }
+        // Only sign-in may name where it returns, and only as one valid application path.
+        var returnTo = request.Headers[ReturnToHeader];
+        if (action == "login" ? returnTo.Count > 1 || returnTo.Count == 1 && !BrowserReturnPath.IsValid(returnTo[0])
+            : returnTo.Count != 0)
+            throw Error(BrowserAuthenticationFailureKind.InvalidRequest);
         var fetchSite = request.Headers["Sec-Fetch-Site"];
         if (fetchSite.Count > 1 || fetchSite.Count == 1 && fetchSite[0] == "cross-site")
             throw Error(BrowserAuthenticationFailureKind.RequestRejected);

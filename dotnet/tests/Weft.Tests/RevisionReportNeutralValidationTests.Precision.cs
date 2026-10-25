@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json;
 using Weft.Application;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Projections;
 using Weft.Domain;

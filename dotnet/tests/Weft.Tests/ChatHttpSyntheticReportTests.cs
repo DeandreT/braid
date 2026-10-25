@@ -1,7 +1,6 @@
 using System.Runtime.Versioning;
 using System.Text.Json;
 using Weft.Application;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Projections;
 using Weft.Contracts.Validation;
 using Weft.Domain;

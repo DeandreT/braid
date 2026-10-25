@@ -42,12 +42,12 @@ internal sealed partial class BrowserQualificationAdmission
     {
         string path = item.RawTarget;
         if (item.Destination == "document") return item.Method == "GET" && item.Mode == "navigate" && item.Origin is null && item.Negative is null
-            && (path == callback || path == "/" && returnArmed || new[] { "/auth-qualification", "/examples", "/", $"/catalog/organizations/{input.Organization:D}/projects" }.Contains(path));
+            && (path == callback || path == "/" && returnArmed || new[] { "/auth-qualification", "/sign-in", "/", $"/catalog/organizations/{input.Organization:D}/projects" }.Contains(path));
         if (path.StartsWith("/api/", StringComparison.Ordinal))
         {
             if (item.Destination != "empty" || item.Mode is not ("cors" or "same-origin") || item.Site != "same-origin") return false;
             if (item.Method == "POST") return item.Origin == input.Origin && path is "/api/auth/login" or "/api/auth/logout" && (item.Negative is null || path == "/api/auth/login");
-            return item.Method == "GET" && item.Origin is null && item.Negative is null && new[] { "/api/auth/session", "/api/v1/catalog/context", "/api/v1/health", "/api/v1/examples/mappings", $"/api/v1/organizations/{input.Organization:D}/projects?limit=10" }.Contains(path);
+            return item.Method == "GET" && item.Origin is null && item.Negative is null && new[] { "/api/auth/session", "/api/v1/catalog/context", "/api/v1/health", $"/api/v1/organizations/{input.Organization:D}/projects?limit=10" }.Contains(path);
         }
         // Module scripts and fonts are CORS-mode loads; Chromium sends the page Origin even same-origin.
         bool cors = item.Destination is "script" or "font";

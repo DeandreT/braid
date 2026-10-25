@@ -16,7 +16,7 @@ import {
   ProjectionView,
   pathText,
   dataTypeText,
-} from "../mappings/projection-view";
+} from "./projection-view";
 import {
   groupMappingRows,
   mappingCellText,

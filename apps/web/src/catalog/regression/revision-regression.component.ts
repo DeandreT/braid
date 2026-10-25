@@ -50,6 +50,7 @@ import {
   type RegressionWork,
 } from "./regression-view-recovery";
 import { HelpLinkComponent } from "../../help/help-link.component";
+import { UnsentWork } from "../../workbench/unsent-work";
 
 const encoder = new TextEncoder();
 const maxBytes = 8 * 1024 * 1024;
@@ -156,6 +157,9 @@ export class RevisionRegressionComponent {
   targetName = "";
 
   constructor() {
+    inject(UnsentWork).track(
+      () => this.editing() || !!this.pendingCase() || !!this.pendingRun(),
+    );
     effect(() => {
       this.binding();
       this.sessions.generation();

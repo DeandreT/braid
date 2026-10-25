@@ -32,6 +32,7 @@ import {
   type NativeMappingUploadOperation,
   type NativeMappingUploadResponse,
 } from "./native-mapping-upload-types";
+import { UnsentWork } from "../../workbench/unsent-work";
 
 type Owner = {
   readonly mode: "development" | "session";
@@ -328,6 +329,7 @@ export class NativeMappingUploadState {
   });
 
   constructor() {
+    inject(UnsentWork).track(() => !!this.leaveRisk());
     const invalidation = this.contexts.invalidated.subscribe(() => {
       this.suspendDraft();
       this.cancelNetwork();

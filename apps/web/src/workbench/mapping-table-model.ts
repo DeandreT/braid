@@ -4,7 +4,7 @@ import {
   pathText,
   type MappingRow,
   ProjectionView,
-} from "../mappings/projection-view";
+} from "./projection-view";
 
 export type MappingColumn = "source" | "rule" | "target" | "type";
 export type MappingGrouping = "output" | "structure";

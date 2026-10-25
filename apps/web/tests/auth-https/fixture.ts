@@ -19,8 +19,6 @@ import { BrowserRootFetch, type AppRequest } from "./root-fetch";
 import { blinkRestriction } from "./conditional-policy";
 import { sessionSummaryMatches } from "./summary";
 
-const warning =
-  "Signing in opens Microsoft and reloads this page. Unsaved drafts and in-tab recovery details may be lost. Previously sent changes may already have committed.";
 const unresolved = [
   "login.microsoftonline.com",
   "accounts.google.com",
@@ -289,7 +287,6 @@ export class HttpsFixture {
             "POST /api/auth/logout",
             "GET /api/v1/catalog/context",
             "GET /api/v1/health",
-            "GET /api/v1/examples/mappings",
           ].includes(key)) ||
           (request.method === "GET" &&
             url.pathname + url.search ===
@@ -345,7 +342,18 @@ export class HttpsFixture {
       exact: true,
     });
   }
+  /** The session controls live in the header account menu; open it by keyboard. */
+  private async openMenu(): Promise<void> {
+    const trigger = this.page!.locator("#account-trigger");
+    await until(async () => (await trigger.count()) === 1);
+    if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+      await trigger.focus();
+      await this.page!.keyboard.press("Enter");
+    }
+    await until(async () => (await this.panel().count()) === 1);
+  }
   async summary(text: string): Promise<void> {
+    await this.openMenu();
     await until(async () =>
       sessionSummaryMatches(
         await this.page!.locator(".session-summary").textContent(),
@@ -355,7 +363,8 @@ export class HttpsFixture {
   }
   // Keyboard activation avoids pointer actionability, which waits on compositor
   // frames that a loaded virtual display may not produce promptly.
-  private async activate(target: Locator): Promise<void> {
+  private async activate(target: Locator, inMenu = true): Promise<void> {
+    if (inMenu) await this.openMenu();
     await until(
       async () => (await target.count()) === 1 && (await target.isEnabled()),
     );
@@ -370,10 +379,10 @@ export class HttpsFixture {
     await this.responseTail;
   }
   async login(authenticated: boolean): Promise<void> {
-    const notice = this.page!.locator("#sign-in-navigation-warning");
+    // The qualification page holds no unsent work, so signing in warns about none.
+    await this.openMenu();
     requireOwned(
-      (await notice.isVisible()) &&
-        (await notice.textContent())?.replace(/\s+/g, " ").trim() === warning,
+      (await this.page!.locator("#sign-in-navigation-warning").count()) === 0,
     );
     this.nativeAdmitted = false;
     let resolve!: (url: string | null) => void;
@@ -519,6 +528,7 @@ export class HttpsFixture {
         name: "Workspace",
         exact: true,
       }).getByRole("link", { name: "Catalog", exact: true }),
+      false,
     );
     await until(
       async () =>

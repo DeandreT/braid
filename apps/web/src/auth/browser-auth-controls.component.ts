@@ -2,18 +2,23 @@ import { DOCUMENT } from "@angular/common";
 import {
   Component,
   DestroyRef,
+  ElementRef,
   Injector,
   afterNextRender,
   computed,
   effect,
   inject,
+  input,
   signal,
 } from "@angular/core";
+import { Router } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import type { Observable } from "rxjs";
 import { BrowserSessionState } from "./browser-session-state";
-import { sessionTone } from "./browser-auth-presentation";
+import { sessionActionMessage, sessionTone } from "./browser-auth-presentation";
+import { UnsentWork } from "../workbench/unsent-work";
 
+/** The header account menu: the session's state, organization and explicit session actions. */
 @Component({
   selector: "weft-browser-auth-controls",
   templateUrl: "./browser-auth-controls.component.html",
@@ -21,6 +26,13 @@ import { sessionTone } from "./browser-auth-presentation";
 })
 export class BrowserAuthControlsComponent {
   readonly session = inject(BrowserSessionState);
+  /** The confirmed workspace's organization, when the catalog has read one. */
+  readonly organization = input<string | null>(null);
+  /** Sign-in navigation or an ended session can discard work held only by this tab. */
+  readonly unsentWork = inject(UnsentWork).present;
+  readonly open = signal(false);
+  private readonly router = inject(Router);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly tone = computed(() =>
     sessionTone(this.session.state().kind, this.session.action().kind),
   );
@@ -67,7 +79,7 @@ export class BrowserAuthControlsComponent {
       case "checking":
         return "Protected content stays hidden while the session is checked.";
       case "disabled":
-        return "This host has no browser sign-in. Examples remain available.";
+        return "This host has no browser sign-in.";
       case "development":
         return "The explicit Development workspace is active; it is not an Entra session.";
       case "anonymous":
@@ -80,37 +92,29 @@ export class BrowserAuthControlsComponent {
         return "Protected content is hidden. An unavailable check does not mean you are signed out.";
     }
   });
-  readonly actionMessage = computed(() => {
-    const action = this.session.action();
-    switch (action.kind) {
-      case "idle":
-        return "";
-      case "admitting":
-        return "Checking the current session before your chosen action…";
-      case "pending":
-        return action.action === "logout"
-          ? "Waiting for local sign-out acknowledgement…"
-          : action.action === "forgetLocal"
-            ? "Waiting for explicit local forgetting…"
-            : "Requesting sign-in…";
-      case "redirecting":
-        return "Continuing to the server-approved sign-in page. Sign-in is not yet confirmed.";
-      case "notAdmitted":
-        return "The action was not sent because the current session could not be admitted unchanged. Check session, then choose again.";
-      case "logoutAcknowledged":
-        return "Local sign-out was acknowledged. This does not sign you out of Microsoft Entra. Check session to continue.";
-      case "revocationUnconfirmed":
-        return "Local forgetting was acknowledged. Revocation is unconfirmed: a server session may still exist. Check session to continue.";
-      case "unconfirmed":
-        return action.action === "logout"
-          ? "Sign-out was not confirmed. The session may still be active. Nothing was retried; check session before choosing another action."
-          : action.action === "forgetLocal"
-            ? "Local forgetting was not confirmed or was not available. Revocation is unconfirmed. Nothing was retried; check session to continue."
-            : "Sign-in could not be confirmed. Nothing was retried; check session before choosing again.";
-    }
-  });
+  readonly actionMessage = computed(() =>
+    sessionActionMessage(this.session.action()),
+  );
+  readonly label = computed(() =>
+    this.session.state().kind === "authenticated"
+      ? (this.session.displayName() ?? "Account")
+      : this.summary(),
+  );
 
   constructor() {
+    // The menu closes on Escape or a pointer press outside it.
+    const press = (event: Event) => {
+      if (
+        this.open() &&
+        event.target instanceof Node &&
+        !this.host.nativeElement.contains(event.target)
+      )
+        this.open.set(false);
+    };
+    this.document.addEventListener("pointerdown", press, true);
+    this.destroyRef.onDestroy(() =>
+      this.document.removeEventListener("pointerdown", press, true),
+    );
     effect(() => {
       if (
         this.session.state().kind !== "authenticationRequired" ||
@@ -131,10 +135,21 @@ export class BrowserAuthControlsComponent {
     this.run(this.session.observe());
   }
 
+  toggle(): void {
+    this.open.update((value) => !value);
+  }
+
+  close(): void {
+    if (!this.open()) return;
+    this.open.set(false);
+    this.document.getElementById("account-trigger")?.focus();
+  }
+
   signIn(): void {
     if (!this.session.canPresent("login")) return;
     this.forgetGeneration.set(null);
-    this.run(this.session.signIn());
+    // Signing in again returns to the page on screen.
+    this.run(this.session.signIn(this.router.url));
   }
 
   logout(): void {

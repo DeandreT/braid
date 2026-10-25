@@ -26,6 +26,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0023_private_publication_storage_kind.sql",
   "0024_machine_invocation.sql",
   "0025_api_request_audit.sql",
+  "0026_account_display_metadata.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
@@ -39,6 +40,7 @@ export const browserFixtureProtectedTables = Object.freeze([
   "machine_invocation_audit",
   "machine_invocation_results",
   "api_request_audit",
+  "account_display_metadata",
 ]);
 
 /** Read-side regression hosts may derive the same saved reports that the UI reads. */

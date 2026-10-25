@@ -66,8 +66,8 @@ makes the user its administrator.
 browser resolves only the public host and `login.microsoftonline.com`, each to the run's
 listener, and admits only the run's two TLS keys.
 
-1. Sign in through the session panel and the issuer's page; the status reports an
-   authenticated Session.
+1. Sign in through the sign-in page and the issuer's page; the account menu reports
+   an authenticated Session.
 2. Create a project.
 3. Upload a native mapping (the preview-orders fixture with JSON documents declared on
    every input and output); its registration carries the Blob profile identity.

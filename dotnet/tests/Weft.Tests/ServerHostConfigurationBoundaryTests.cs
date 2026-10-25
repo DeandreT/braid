@@ -275,6 +275,27 @@ public sealed class ServerHostConfigurationBoundaryTests
         ServerHostCheck.That(rejected, "A delivered connection admitted an implicit or alternate credential mechanism.");
     }
 
+    [Fact]
+    public void OptionalAccountDisplayDeliveryHasNoCredentialFallbackAndAdmitsOnlyItsOwnProtectedLogin()
+    {
+        const string name = "WEFT_ACCOUNT_DISPLAY_CONNECTION_STRING";
+        Assert.Null(SessionHostResources.ReadAccountDisplayConnection(_ => null));
+        Assert.Throws<InvalidOperationException>(() => SessionHostResources.ReadAccountDisplayConnection(
+            key => key == name ? PasswordConnection().ConnectionString : null));
+        Assert.Throws<InvalidOperationException>(() => SessionHostResources.ReadAccountDisplayConnection(
+            key => key == name + "_FILE" ? "/owned-missing-display-connection" : null));
+        using var files = new ServerHostFiles();
+        foreach (var username in new[] { "weft_migrator", "weft_session_writer", "weft_identity_reader", "weft_account_display" })
+        {
+            var connection = PasswordConnection(); connection.Username = username;
+            var path = files.Text(username + ".txt", connection.ConnectionString);
+            string? Read(string key) => key == name + "_FILE" ? path : null;
+            if (username == "weft_account_display")
+                Assert.Equal(username, new NpgsqlConnectionStringBuilder(SessionHostResources.ReadAccountDisplayConnection(Read)).Username);
+            else Assert.Throws<InvalidOperationException>(() => SessionHostResources.ReadAccountDisplayConnection(Read));
+        }
+    }
+
     [Theory]
     [InlineData("Passfile")]
     [InlineData("pAsSfIlE")]

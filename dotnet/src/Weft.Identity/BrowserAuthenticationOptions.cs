@@ -37,23 +37,26 @@ public sealed class BrowserAuthenticationException : Exception
 public sealed class BrowserAuthenticationSession
 {
     internal BrowserAuthenticationSession(BrowserAuthenticationState state, string authActionRequestToken,
-        string? requestToken, string? identityContext)
+        string? requestToken, string? identityContext, string? displayName = null)
     {
         if (!Enum.IsDefined(state) || !ServerSessionCarrierFormat.IsCanonicalToken(authActionRequestToken, 4096) ||
             (state == BrowserAuthenticationState.Authenticated
                 ? !ServerSessionCarrierFormat.IsCanonicalToken(requestToken, 4096) ||
                     !ServerSessionIdentityContext.IsCanonical(identityContext)
-                : requestToken is not null || identityContext is not null))
+                : requestToken is not null || identityContext is not null || displayName is not null) ||
+            displayName is not null && !Weft.Contracts.Auth.AccountDisplayName.IsValid(displayName))
             throw new BrowserAuthenticationException(BrowserAuthenticationFailureKind.Unavailable);
         State = state;
         AuthActionRequestToken = authActionRequestToken;
         RequestToken = requestToken;
         IdentityContext = identityContext;
+        DisplayName = displayName;
     }
 
     [JsonIgnore] public BrowserAuthenticationState State { get; }
     [JsonIgnore] public string AuthActionRequestToken { get; }
     [JsonIgnore] public string? RequestToken { get; }
     [JsonIgnore] public string? IdentityContext { get; }
+    [JsonIgnore] public string? DisplayName { get; }
     public override string ToString() => nameof(BrowserAuthenticationSession);
 }

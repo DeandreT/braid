@@ -89,67 +89,6 @@
         }
       }
     },
-    "/api/v1/examples/mappings": {
-      "get": {
-        "tags": [
-          "Native examples"
-        ],
-        "summary": "List immutable self-authored native examples (development only).",
-        "operationId": "GetNativeExamples",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/NativeExampleDescriptorV1"
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found"
-          }
-        }
-      }
-    },
-    "/api/v1/examples/mappings/{exampleId}": {
-      "get": {
-        "tags": [
-          "Native examples"
-        ],
-        "summary": "Read separate native projection and validation reports (development only).",
-        "operationId": "GetNativeExample",
-        "parameters": [
-          {
-            "name": "exampleId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NativeExampleResultV1"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found"
-          }
-        }
-      }
-    },
     "/api/v1/catalog/context": {
       "get": {
         "tags": [
@@ -11619,7 +11558,7 @@
     "/api/auth/session": {
       "get": {
         "summary": "Explicit browser authentication protocol.",
-        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
         "operationId": "ReadBrowserAuthentication",
         "parameters": [
           {
@@ -11843,7 +11782,7 @@
     "/api/auth/login": {
       "post": {
         "summary": "Explicit browser authentication protocol.",
-        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
         "operationId": "BeginBrowserLogin",
         "parameters": [
           {
@@ -11854,6 +11793,16 @@
               "enum": [
                 "1"
               ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Weft-Return-To",
+            "in": "header",
+            "schema": {
+              "maxLength": 1024,
+              "minLength": 1,
+              "pattern": "^/[A-Za-z0-9\\-._~!$&'()*+,;=:@/?%#]*$",
               "type": "string"
             }
           },
@@ -12097,7 +12046,7 @@
     "/api/auth/logout": {
       "post": {
         "summary": "Explicit browser authentication protocol.",
-        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
         "operationId": "LogoutBrowserSession",
         "parameters": [
           {
@@ -12344,7 +12293,7 @@
     "/api/auth/forget-local": {
       "post": {
         "summary": "Explicit browser authentication protocol.",
-        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.",
         "operationId": "ForgetDeniedLocalSession",
         "parameters": [
           {
@@ -12588,7 +12537,7 @@
     "/api/auth/callback/entra": {
       "get": {
         "summary": "Complete the fixed Entra code flow.",
-        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. Success only303Location'/' after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.",
+        "description": "Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.",
         "operationId": "CompleteEntraLogin",
         "responses": {
           "303": {
@@ -12612,9 +12561,9 @@
               },
               "Location": {
                 "schema": {
-                  "enum": [
-                    "/"
-                  ],
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "pattern": "^/[A-Za-z0-9\\-._~!$&'()*+,;=:@/?%#]*$",
                   "type": "string"
                 }
               }
@@ -12834,7 +12783,8 @@
               "state",
               "authActionRequestToken",
               "requestToken",
-              "identityContext"
+              "identityContext",
+              "displayName"
             ],
             "type": "object",
             "properties": {
@@ -12873,6 +12823,16 @@
                 "minLength": 46,
                 "pattern": "^v1\\.[A-Za-z0-9_-]{43}$",
                 "type": "string"
+              },
+              "displayName": {
+                "maxLength": 200,
+                "minLength": 1,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]*$",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "description": "Optional provider-supplied display text, never an identity or authority. At most 200 Unicode scalars; blank text is invalid."
               }
             },
             "additionalProperties": false
@@ -12884,7 +12844,8 @@
               "state",
               "authActionRequestToken",
               "requestToken",
-              "identityContext"
+              "identityContext",
+              "displayName"
             ],
             "type": "object",
             "properties": {
@@ -12917,6 +12878,9 @@
               },
               "identityContext": {
                 "type": "null"
+              },
+              "displayName": {
+                "type": "null"
               }
             },
             "additionalProperties": false
@@ -12928,7 +12892,8 @@
               "state",
               "authActionRequestToken",
               "requestToken",
-              "identityContext"
+              "identityContext",
+              "displayName"
             ],
             "type": "object",
             "properties": {
@@ -12960,6 +12925,9 @@
                 "type": "null"
               },
               "identityContext": {
+                "type": "null"
+              },
+              "displayName": {
                 "type": "null"
               }
             },
@@ -17065,57 +17033,6 @@
           }
         }
       },
-      "NativeExampleDescriptorV1": {
-        "required": [
-          "id",
-          "title",
-          "source",
-          "revision",
-          "digest",
-          "byteCount"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "source": {
-            "type": "string"
-          },
-          "revision": {
-            "$ref": "#/components/schemas/ScopedRevisionId"
-          },
-          "digest": {
-            "$ref": "#/components/schemas/ArtifactDigest"
-          },
-          "byteCount": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "NativeExampleResultV1": {
-        "required": [
-          "example",
-          "projection",
-          "validation"
-        ],
-        "type": "object",
-        "properties": {
-          "example": {
-            "$ref": "#/components/schemas/NativeExampleDescriptorV1"
-          },
-          "projection": {
-            "$ref": "#/components/schemas/ProjectionReportV1"
-          },
-          "validation": {
-            "$ref": "#/components/schemas/ValidationReportV1"
-          }
-        }
-      },
       "NativeLocator": {
         "required": [
           "kind"
@@ -19127,9 +19044,6 @@
     },
     {
       "name": "Projection fixtures"
-    },
-    {
-      "name": "Native examples"
     },
     {
       "name": "Catalog"

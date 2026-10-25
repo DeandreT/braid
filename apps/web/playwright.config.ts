@@ -4,8 +4,9 @@ export default defineConfig({
   testDir: "./tests",
   testMatch: [
     "**/shell.spec.ts",
-    "**/mapping-viewer.spec.ts",
     "**/browser-auth-controls.spec.ts",
+    "**/return-path.spec.ts",
+    "**/sign-in-entry.spec.ts",
     "**/revision-chat.spec.ts",
     "**/revision-preview.spec.ts",
     "**/revision-comparison.spec.ts",

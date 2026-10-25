@@ -28,6 +28,7 @@ import {
   type MappingMetadataBaseline,
   type MappingMetadataInputErrors,
 } from "./mapping-metadata-types";
+import { UnsentWork } from "../../workbench/unsent-work";
 
 type Draft = { readonly name: string; readonly description: string };
 type AdmissionState =
@@ -190,6 +191,7 @@ export class MappingMetadataState {
   readonly hasRetainedWork = computed(() => this.dirty() || this.unknown());
 
   constructor() {
+    inject(UnsentWork).track(() => this.needsLeaveDecision());
     const invalidation = this.contexts.invalidated.subscribe(() => {
       this.cancelActive();
       this.presentingEditor.set(false);

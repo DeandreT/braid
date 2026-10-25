@@ -6,6 +6,25 @@ namespace Weft.Identity;
 
 public sealed partial class ServerSessionBrowser
 {
+    // Read the binding from fresh protected server facts, never from a friendly name or a new ticket claim.
+    internal async Task<Guid> ReadDisplayBindingAsync(HttpContext context, ServerSessionRequestIdentity identity,
+        CancellationToken ct)
+    {
+        CheckOperation(context, ct);
+        var state = GetState(context);
+        var observation = await ObserveCoreAsync(state, ct);
+        if (observation.Kind != ServerSessionRequestKind.Authenticated || !SameIdentity(observation.Identity, identity))
+            throw Failure(ServerSessionIdentityFailureKind.Denied);
+        var handle = ParseObservedHandle(observation);
+        var current = await reader.ObserveAsync(new(organization, handle.Digest), ct)
+            ?? throw Failure(ServerSessionIdentityFailureKind.Denied);
+        var envelope = codec.Unprotect(handle, current, ct);
+        ServerSessionCanonicalTicket.ValidateRenew(observation.CopyTicket(), current, envelope);
+        CheckOperation(context, ct);
+        RequireCurrent(state);
+        return current.Facts.BindingId;
+    }
+
     internal bool UsesAuthenticationProfile(DurableSessionKeyProfile profile, Guid expectedOrganization,
         string expectedOrigin) => ReferenceEquals(profile, borrowedProfile) && organization == expectedOrganization &&
         string.Equals(options.ExpectedOrigin, expectedOrigin, StringComparison.Ordinal);

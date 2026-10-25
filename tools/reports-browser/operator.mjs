@@ -1,5 +1,6 @@
 // Actual HTTP-created saved-report scenario. Private state never crosses the owner pipe.
 import { runBrowserFixture } from "../browser-fixture/runtime.mjs";
+import { reportSetupDiagnostic } from "../browser-fixture/safe-diagnostics.mjs";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
@@ -14,37 +15,16 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
+import {
+  reportSampleArtifacts,
+  reportSampleFixtureIndex,
+  reportSampleNames,
+} from "./samples.mjs";
 
 await runBrowserFixture({
   kind: "reports",
   entrypoint: import.meta.url,
-  fixtures: [
-    [
-      "engines/ferrule-host/tests/fixtures/valid-basic.json",
-      "4220877674cba63c004226d487f5a80042369aab30350a964dc5fff5df48dc26",
-      2191,
-    ],
-    [
-      "engines/ferrule-host/tests/fixtures/versioned-exact.json",
-      "b9ac8045a2b3fba94520043cdb5f1a0be7dde34aa2ecd577fafce9168dd440e7",
-      1566,
-    ],
-    [
-      "engines/ferrule-host/tests/fixtures/projection-partial.json",
-      "fb01b40491fa38c35e65463d63c8d057db975e12b80254fa03ca4a4f289d152e",
-      2478,
-    ],
-    [
-      "engines/ferrule-host/tests/fixtures/projection-join-context.json",
-      "308ad4c997a12597bf80309eff9ff2a676f110eab7b6f9c218db75517259547d",
-      1701,
-    ],
-    [
-      "dotnet/src/Weft.Api/NativeExamples/Artifacts/validation-cycle.json",
-      "54514537939302ceda435e4403da8051935f55c9e684dc2f9dadfb05145f52c2",
-      526,
-    ],
-  ],
+  fixtures: reportSampleArtifacts,
   create(fx) {
     const {
       Failure,
@@ -82,15 +62,7 @@ await runBrowserFixture({
       budget,
     } = fx;
     const profiles = ["administrator", "viewer", "runner", "publisher"];
-    const sampleNames = [
-      "basic",
-      "exact",
-      "partial",
-      "ambiguous",
-      "invalid",
-      "uncached",
-      "pending",
-    ];
+    const sampleNames = reportSampleNames;
     const modes = ["full", "readOnlyNoWorker", "profileUnavailable"];
     const records = {},
       faults = new Map();
@@ -160,7 +132,7 @@ await runBrowserFixture({
         records[sampleNames[index]] = await upload(
           host,
           project,
-          fixtures[index < 5 ? index : 0],
+          fixtures[reportSampleFixtureIndex(sampleNames[index])],
           null,
           index,
         );
@@ -172,11 +144,11 @@ await runBrowserFixture({
       const initial = rows();
       check(
         initial.projects.length === 1 &&
-          initial.mappings.length === 7 &&
-          initial.mapping_revisions.length === 7 &&
+          initial.mappings.length === sampleNames.length &&
+          initial.mapping_revisions.length === sampleNames.length &&
           initial.revision_derivations.length === 0 &&
           initial.revision_derivation_attempts.length === 0 &&
-          initial.private_object_publications.length === 7 &&
+          initial.private_object_publications.length === sampleNames.length &&
           initial.private_object_retirements.length === 0 &&
           initial.private_object_cleanup_attempts.length === 0,
       );
@@ -256,6 +228,10 @@ await runBrowserFixture({
       return result;
     }
     function result(reply, sample, operation) {
+      // Keep fixed contract categories, never report contents or transport tokens,
+      // when a real derivation fails before the browser can read its result.
+      state.observations.push(reportSetupDiagnostic(operation, reply));
+      save();
       check(
         reply.status === 200 &&
           reply.body.schemaVersion === "weft.catalog-revision-report.v1" &&

@@ -81,7 +81,7 @@ public sealed partial class BearerSecurityContractTests
             Assert.True(expected == schemes, $"{operation.Item2} {operation.Item1} admits {schemes} but declares {expected}.");
         }
         // The Session host maps every declared operation except the Development-only examples and fixtures.
-        Assert.Equal(["/api/v1/examples/mappings", "/api/v1/examples/mappings/{exampleId}", "/api/v1/fixtures/projections/{fixtureId}"],
+        Assert.Equal(["/api/v1/fixtures/projections/{fixtureId}"],
             declared.Keys.Where(key => !observed.ContainsKey(key)).Select(key => key.Item1).Order(StringComparer.Ordinal));
     }
 

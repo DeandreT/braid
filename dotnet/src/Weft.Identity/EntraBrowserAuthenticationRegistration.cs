@@ -6,7 +6,8 @@ namespace Weft.Identity;
 public static class EntraBrowserAuthenticationRegistration
 {
     public static IServiceCollection AddWeftEntraBrowserAuthentication(this IServiceCollection services,
-        BrowserAuthenticationOptions options, DurableSessionKeyProfile profile, IExternalIdentityReader identities)
+        BrowserAuthenticationOptions options, DurableSessionKeyProfile profile, IExternalIdentityReader identities,
+        IAccountDisplayMetadata? displayMetadata = null)
     {
         if (services is null || options is null || profile is null || identities is null ||
             services.Any(item => item.ServiceType == typeof(EntraBrowserAuthentication) ||
@@ -16,7 +17,7 @@ public static class EntraBrowserAuthenticationRegistration
         RequireSingleton<EntraBrowserClient>(services);
         services.AddSingleton(options);
         services.AddSingleton(provider => new EntraBrowserAuthentication(options, profile, identities,
-            provider.GetRequiredService<ServerSessionBrowser>(), provider.GetRequiredService<EntraBrowserClient>()));
+            provider.GetRequiredService<ServerSessionBrowser>(), provider.GetRequiredService<EntraBrowserClient>(), displayMetadata));
         return services;
     }
 

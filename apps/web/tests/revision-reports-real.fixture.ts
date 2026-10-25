@@ -4,6 +4,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 import type { components } from "../src/api/generated";
+import {
+  reportSampleArtifacts,
+  reportSampleFixtureIndex,
+  reportSampleNames,
+} from "../../../tools/reports-browser/samples.mjs";
 
 export type Revision = components["schemas"]["CatalogRevisionV1"];
 export type ProjectionReport =
@@ -13,14 +18,7 @@ export type ValidationReport =
 export type Report = ProjectionReport | ValidationReport;
 export type Operation = Report["operation"];
 export type Role = "viewer" | "runner" | "publisher" | "administrator";
-export type Sample =
-  | "basic"
-  | "exact"
-  | "partial"
-  | "ambiguous"
-  | "invalid"
-  | "uncached"
-  | "pending";
+export type Sample = (typeof reportSampleNames)[number];
 export type HostMode = "full" | "readOnlyNoWorker" | "profileUnavailable";
 
 export interface ReportsBrowserManifest {
@@ -218,7 +216,10 @@ function revision(value: unknown): asserts value is Revision {
   ])
     requireFixture(typeof row[key] === "string", "invalid revision metadata");
 }
-function manifest(value: unknown, origin: string): ReportsBrowserManifest {
+export function parseReportsManifest(
+  value: unknown,
+  origin: string,
+): ReportsBrowserManifest {
   const row = object(value, [
     "schemaVersion",
     "fixtureId",
@@ -267,31 +268,33 @@ function manifest(value: unknown, origin: string): ReportsBrowserManifest {
       uuid(projectScope.projectId),
     "invalid sample project scope",
   );
-  const samples = object(row.samples, [
-    "basic",
-    "exact",
-    "partial",
-    "ambiguous",
-    "invalid",
-    "uncached",
-    "pending",
-  ]);
+  const samples = object(row.samples, reportSampleNames);
   const revisions: Revision[] = [];
-  for (const sample of Object.values(samples)) {
+  for (const [label, sample] of Object.entries(samples)) {
     const nested = object(sample, ["revision"]);
     revision(nested.revision);
     const admitted = nested.revision;
+    const [, digest, byteCount] =
+      reportSampleArtifacts[reportSampleFixtureIndex(label as Sample)];
     requireFixture(
       admitted.scope.organizationId === row.organizationId &&
         admitted.scope.projectId === projectScope.projectId &&
-        admitted.backendId === "ferrule",
-      "sample escaped actual fixture project/backend",
+        admitted.backendId === "ferrule" &&
+        admitted.nativeDigest.value === digest &&
+        admitted.nativeByteCount === byteCount,
+      "sample differs from pinned artifact/project/backend",
     );
     revisions.push(admitted);
   }
   requireFixture(
-    new Set(revisions.map((value) => value.scope.mappingId)).size === 7,
+    new Set(revisions.map((value) => value.scope.mappingId)).size ===
+      reportSampleNames.length,
     "samples must be separately HTTP-created mappings",
+  );
+  requireFixture(
+    new Set(revisions.map((value) => value.scope.revisionId)).size ===
+      reportSampleNames.length,
+    "samples must have distinct HTTP-created revisions",
   );
   return value as ReportsBrowserManifest;
 }
@@ -419,7 +422,10 @@ export class ReportsOwner {
           ready.manifestSha256,
       "manifest size/hash differs",
     );
-    this.manifest = manifest(JSON.parse(bytes.toString("utf8")), origin);
+    this.manifest = parseReportsManifest(
+      JSON.parse(bytes.toString("utf8")),
+      origin,
+    );
     requireFixture(
       this.manifest.fixtureId === ready.fixtureId,
       "manifest fixture identity differs",
@@ -466,6 +472,25 @@ export class ReportsOwner {
         "action",
         "outcome",
       ];
+      const outcome = (value as Record<string, unknown>)["outcome"];
+      if (outcome === "failed" || outcome === "refused") {
+        const failed = object(value, [...baseKeys, "failure"]);
+        requireFixture(
+          [
+            "invalidControl",
+            "ownershipChanged",
+            "deadline",
+            "productFailure",
+            "stateMismatch",
+            "cleanupFailure",
+          ].includes(failed["failure"] as string),
+          "unknown control failure category",
+        );
+        requireFixture(
+          false,
+          `control ${command.action} ${outcome}: ${failed["failure"]}`,
+        );
+      }
       switch (ack.action) {
         case "restart-profile":
           object(value, [...baseKeys, "profile", "mode", "contextStatus"]);

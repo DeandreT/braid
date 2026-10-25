@@ -43,6 +43,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string derivationPassword = Guid.NewGuid().ToString("N");
     private readonly string maintenancePassword = Guid.NewGuid().ToString("N");
     private readonly string identityPassword = Guid.NewGuid().ToString("N");
+    private readonly string accountDisplayPassword = Guid.NewGuid().ToString("N");
     private readonly string payloadPermissionPassword = Guid.NewGuid().ToString("N");
     private readonly string sessionReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string sessionWriterPassword = Guid.NewGuid().ToString("N");
@@ -74,6 +75,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly bool provisionDeriver;
     private readonly bool provisionMaintenance;
     private readonly bool provisionIdentityReader;
+    private readonly bool provisionAccountDisplay;
     private readonly bool provisionPayloadPermissionReader;
     private readonly bool provisionSessionReader;
     private readonly bool provisionSessionWriter;
@@ -114,7 +116,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         bool provisionChatReader = true, bool provisionChatWriter = true, bool provisionChatLifecycle = true,
         bool provisionPreviewProfiles = true, bool provisionRegressionProfiles = true, bool provisionBuildProfiles = true,
         bool provisionBuildRunProfiles = true, bool provisionBuildMetadata = true, bool provisionQualifications = true, bool provisionLocalReleases = true,
-        bool provisionMachineInvocations = true, bool provisionApiAudit = true)
+        bool provisionMachineInvocations = true, bool provisionApiAudit = true, bool provisionAccountDisplay = true)
     {
         this.provisionMetadataEditor = provisionMetadataEditor;
         this.provisionProjectCreator = provisionProjectCreator;
@@ -122,6 +124,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         this.provisionDeriver = provisionDeriver;
         this.provisionMaintenance = provisionMaintenance;
         this.provisionIdentityReader = provisionIdentityReader;
+        this.provisionAccountDisplay = provisionAccountDisplay;
         this.provisionPayloadPermissionReader = provisionPayloadPermissionReader;
         this.provisionSessionReader = provisionSessionReader;
         this.provisionSessionWriter = provisionSessionWriter;
@@ -257,6 +260,14 @@ public sealed class PostgresFixture : IAsyncLifetime
             }
             if (provisionIdentityReader)
             {
+                if (provisionAccountDisplay)
+                {
+                    await using var displayRole = new NpgsqlCommand($"""
+                        CREATE ROLE weft_account_display LOGIN PASSWORD '{accountDisplayPassword}'
+                          NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                        """, bootstrap);
+                    await displayRole.ExecuteNonQueryAsync();
+                }
                 await using var identityRole = new NpgsqlCommand($"""
                     CREATE ROLE weft_identity_reader LOGIN PASSWORD '{identityPassword}'
                       NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
@@ -356,6 +367,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             if (provisionDeriver) connectRoles.Add("weft_deriver");
             if (provisionMaintenance) connectRoles.Add("weft_maintenance");
             if (provisionIdentityReader) connectRoles.Add("weft_identity_reader");
+            if (provisionIdentityReader && provisionAccountDisplay) connectRoles.Add("weft_account_display");
             if (provisionPayloadPermissionReader) connectRoles.Add("weft_payload_permission_reader");
             if (provisionSessionReader) connectRoles.Add("weft_session_reader");
             if (provisionSessionWriter) connectRoles.Add("weft_session_writer");
@@ -529,6 +541,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
+    internal string AccountDisplayConnectionString(PostgresCase test) =>
+        ConnectionString(test.Name, "weft_account_display", accountDisplayPassword);
+
     private string ConnectionString(string database, string username, string password, bool pooling = true) => new NpgsqlConnectionStringBuilder
     {
         Host = Host,
@@ -699,6 +714,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
 public sealed class PostgresCase : IAsyncDisposable
 {
+    internal string AccountDisplayConnectionString => fixture.AccountDisplayConnectionString(this);
     private readonly PostgresFixture fixture;
     private readonly SemaphoreSlim lifetime = new(1, 1);
     private bool ownerPoolClosed;

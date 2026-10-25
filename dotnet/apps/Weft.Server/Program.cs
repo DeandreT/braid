@@ -28,13 +28,11 @@ CatalogHostConfiguration.Configure(builder, address);
 builder.Services.AddWeftAuthenticationHttp(new(hostOptions.Mode, hostOptions.Origin), builder.Environment);
 if (builder.Environment.IsDevelopment())
     DevelopmentFerruleRunner.Configure(builder.Services, Environment.GetEnvironmentVariable);
-builder.Services.AddWeftNativeExamples();
 var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapWeftHealth();
 app.MapWeftProjectionFixtures();
-app.MapWeftNativeExamples();
 app.MapWeftCatalog();
 app.MapWeftRegressionCases();
 app.MapWeftRegressionRuns();

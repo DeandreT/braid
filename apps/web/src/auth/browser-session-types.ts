@@ -59,6 +59,7 @@ export function isAuthStatus(value: unknown): value is AuthStatus {
       "authActionRequestToken",
       "requestToken",
       "identityContext",
+      "displayName",
     ]) ||
     !isSessionRequestToken(value["authActionRequestToken"])
   )
@@ -66,13 +67,28 @@ export function isAuthStatus(value: unknown): value is AuthStatus {
   if (value["state"] === "authenticated")
     return (
       isSessionRequestToken(value["requestToken"]) &&
-      isIdentityContext(value["identityContext"])
+      isIdentityContext(value["identityContext"]) &&
+      (value["displayName"] === null || isDisplayName(value["displayName"]))
     );
   return (
     (value["state"] === "anonymous" ||
       value["state"] === "authenticationRequired") &&
     value["requestToken"] === null &&
-    value["identityContext"] === null
+    value["identityContext"] === null &&
+    value["displayName"] === null
+  );
+}
+
+/** Display-only provider text, with the same scalar and control bounds as the server. */
+export function isDisplayName(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 400 &&
+    /\P{White_Space}/u.test(value) &&
+    [...value].length <= 200 &&
+    !/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069\ud800-\udfff]/u.test(
+      value,
+    )
   );
 }
 

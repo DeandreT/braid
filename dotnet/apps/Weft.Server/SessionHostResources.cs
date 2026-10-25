@@ -24,6 +24,7 @@ internal sealed class SessionHostResources
     private PostgresExternalIdentityDatabase? identityDatabase;
     private PostgresApiRequestAuditWriter? auditWriter;
     private EntraUserTokenValidator? userTokens;
+    private PostgresAccountDisplayMetadata? displayMetadata;
     private DurableSessionKeyProfile? profile;
     internal X509Certificate2? TlsCertificate { get; private set; }
     internal SslStreamCertificateContext? TlsCertificateContext { get; private set; }
@@ -97,13 +98,16 @@ internal sealed class SessionHostResources
         sessionDatabases.Add(writerDatabase);
         identityDatabase = new(identityConnection);
         var identities = new PostgresExternalIdentityReader(identityDatabase);
+        // Absence is an explicit presentation-only default; never borrow another pool's credentials.
+        if (ReadAccountDisplayConnection(read) is { } displayConnection)
+            displayMetadata = new(displayConnection);
         var reader = new PostgresServerSessionReader(readerDatabase);
         var writer = new PostgresServerSessionWriter(writerDatabase);
         // Implementation instances are borrowed; the DI container must not own these pools/profile/certificates.
         services.AddSingleton<IExternalIdentityReader>(identities);
         services.AddWeftBrowserSessions(new(options.Origin), profile, reader, writer, TimeProvider.System);
         services.AddWeftEntraClient(new(options.TenantId, options.ClientId, options.Origin), profile, clientCertificate);
-        services.AddWeftEntraBrowserAuthentication(new(options.OrganizationId, options.Origin), profile, identities);
+        services.AddWeftEntraBrowserAuthentication(new(options.OrganizationId, options.Origin), profile, identities, displayMetadata);
         services.AddWeftAuthenticationHttp(new(AuthenticationHttpMode.Session, options.Origin), environment);
         services.AddWeftSessionCatalog(new(options.OrganizationId), options.Metadata, options.Ingestion, options.Creation, options.Reports);
         if (options.Bearer is { } bearer)
@@ -135,6 +139,16 @@ internal sealed class SessionHostResources
     {
         if (read(name) is not null) throw ServerHostOptions.Failure();
         return ReadConnection(read, name + "_FILE");
+    }
+
+    internal static string? ReadAccountDisplayConnection(Func<string, string?> read)
+    {
+        const string name = "WEFT_ACCOUNT_DISPLAY_CONNECTION_STRING";
+        if (read(name) is null && read(name + "_FILE") is null) return null;
+        var connection = ReadProtectedConnection(read, name);
+        if (new NpgsqlConnectionStringBuilder(connection).Username != "weft_account_display")
+            throw ServerHostOptions.Failure();
+        return connection;
     }
 
     internal static string ReadConnection(Func<string, string?> read, string name)
@@ -279,6 +293,9 @@ internal sealed class SessionHostResources
             catch (Exception error) when (Nonfatal(error)) { first ??= error; }
         if (identityDatabase is not null)
             try { await identityDatabase.DisposeAsync(); }
+            catch (Exception error) when (Nonfatal(error)) { first ??= error; }
+        if (displayMetadata is not null)
+            try { await displayMetadata.DisposeAsync(); }
             catch (Exception error) when (Nonfatal(error)) { first ??= error; }
         try { profile?.Dispose(); }
         catch (Exception error) when (Nonfatal(error)) { first ??= error; }

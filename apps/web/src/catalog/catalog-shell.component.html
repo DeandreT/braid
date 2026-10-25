@@ -5,6 +5,11 @@
 >
   @if (sessions.state().kind === "checking") {
     <p class="catalog-state" role="status">Checking workspace access…</p>
+  } @else if (sessions.state().kind === "disabled") {
+    <section class="catalog-state" role="status">
+      <h2>No workspace on this host</h2>
+      <p>This host has no browser sign-in or catalog.</p>
+    </section>
   } @else if (!contextStore.visible()) {
     <section class="catalog-state catalog-state-error" role="alert">
       <h2>Workspace access unavailable</h2>

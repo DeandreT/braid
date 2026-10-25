@@ -3,12 +3,13 @@ import { inject } from "@angular/core";
 import { type CanDeactivateFn, type Routes } from "@angular/router";
 import type { Observable } from "rxjs";
 import { BrowserSessionState } from "./auth/browser-session-state";
+import { requireSignIn, signInEntry } from "./auth/sign-in-guards";
+import { SignInPageComponent } from "./auth/sign-in-page.component";
 import { CatalogShellComponent } from "./catalog/catalog-shell.component";
 import { CreateProjectPageComponent } from "./catalog/projects/create-project-page.component";
 import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-page.component";
 import type { UploadMappingPageComponent } from "./catalog/uploads/upload-mapping-page.component";
 import type { AppendRevisionPageComponent } from "./catalog/uploads/append-revision-page.component";
-import { ExamplesComponent } from "./examples.component";
 import { NotFoundComponent } from "./not-found.component";
 
 const leaveMappingEditor: CanDeactivateFn<EditMappingPageComponent> = (
@@ -41,11 +42,17 @@ function requestWorkspaceLeave(component: {
 }
 
 export const routes: Routes = [
-  { path: "", pathMatch: "full", redirectTo: "examples" },
-  { path: "examples", component: ExamplesComponent, title: "Examples · Weft" },
+  { path: "", pathMatch: "full", redirectTo: "catalog" },
+  {
+    path: "sign-in",
+    component: SignInPageComponent,
+    canActivate: [signInEntry],
+    title: "Sign in · Weft",
+  },
   {
     path: "catalog",
     component: CatalogShellComponent,
+    canActivate: [requireSignIn],
     children: [
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/new",
@@ -127,6 +134,7 @@ export const routes: Routes = [
   },
   {
     path: "help",
+    canActivate: [requireSignIn],
     loadComponent: () =>
       import("./help/help-page.component").then(
         (module) => module.HelpPageComponent,
@@ -135,6 +143,7 @@ export const routes: Routes = [
   },
   {
     path: "help/:sectionId",
+    canActivate: [requireSignIn],
     loadComponent: () =>
       import("./help/help-page.component").then(
         (module) => module.HelpPageComponent,

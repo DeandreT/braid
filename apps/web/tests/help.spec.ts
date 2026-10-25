@@ -156,6 +156,13 @@ async function install(page: Page): Promise<Fixture> {
       await route.fulfill({ json: { version: 1, mode: "development" } });
       return;
     }
+    if (url.pathname === "/api/v1/health") {
+      expect(request.method()).toBe("GET");
+      await route.fulfill({
+        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+      });
+      return;
+    }
     fixture.requests.push(`${request.method()} ${url.pathname}${url.search}`);
     expect(request.method()).toBe("GET");
     expect(request.headers()["x-xsrf-token"]).toBeUndefined();

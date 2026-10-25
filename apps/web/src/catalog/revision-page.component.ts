@@ -72,9 +72,9 @@ import {
 import type {
   NodeReference,
   ProjectionView,
-} from "../mappings/projection-view";
+} from "../workbench/projection-view";
 import type { DockView } from "../workbench/workbench-model";
-import { NativeEvidenceComponent } from "../mappings/native-evidence.component";
+import { NativeEvidenceComponent } from "../workbench/native-evidence.component";
 import { StatusChipComponent } from "../workbench/status-chip.component";
 import { MetadataValueComponent } from "../workbench/metadata-value.component";
 import {

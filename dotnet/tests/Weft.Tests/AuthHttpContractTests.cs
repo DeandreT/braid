@@ -20,7 +20,7 @@ public sealed class AuthHttpContractTests
             bool positive = state == "authenticated";
             var value = new AuthSessionV1(1, "session", state, "AA", positive ? "AQ" : null, positive ? Fingerprint : null);
             using var document = JsonDocument.Parse(JsonSerializer.Serialize(value, Json));
-            AuthHttpFixture.Check(document.RootElement.EnumerateObject().Count() == 6 && value.ToString() == nameof(AuthSessionV1), "Auth status wire shape or diagnostic text changed.");
+            AuthHttpFixture.Check(document.RootElement.EnumerateObject().Count() == 7 && value.ToString() == nameof(AuthSessionV1), "Auth status wire shape or diagnostic text changed.");
         }
         foreach (string mode in new[] { "development", "disabled" })
         {

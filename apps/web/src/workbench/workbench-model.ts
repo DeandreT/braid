@@ -2,7 +2,7 @@ import {
   isCatalogId,
   type CatalogRevisionScope,
 } from "../catalog/catalog-types";
-import type { NodeReference } from "../mappings/projection-view";
+import type { NodeReference } from "./projection-view";
 
 export const workbenchViews = [
   "mapping",

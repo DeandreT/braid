@@ -90,9 +90,16 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
 
     internal IOptionsMonitor<OpenIdConnectOptions> FixedMonitor { get; }
 
-    public async Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, CancellationToken cancellationToken)
+    public Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, CancellationToken cancellationToken) =>
+        BeginLoginAsync(context, BrowserReturnPath.Root, cancellationToken);
+
+    public async Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, string returnPath,
+        CancellationToken cancellationToken)
     {
-        var operation = await RunAsync(context, callback: false, cancellationToken);
+        // The return path travels in the protected state and is checked again on the callback.
+        if (returnPath != BrowserReturnPath.Root && !BrowserReturnPath.IsValid(returnPath))
+            throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
+        var operation = await RunAsync(context, callback: false, cancellationToken, returnPath);
         return operation.Challenge ?? throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
     }
 
@@ -104,7 +111,8 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
         return result;
     }
 
-    private async Task<Operation> RunAsync(HttpContext context, bool callback, CancellationToken caller)
+    private async Task<Operation> RunAsync(HttpContext context, bool callback, CancellationToken caller,
+        string returnPath = BrowserReturnPath.Root)
     {
         if (context is null) throw EntraErrors.Create(ServerSessionIdentityFailureKind.UntrustedIssuance);
         var originalAbort = context.RequestAborted;
@@ -159,7 +167,7 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
                 var now = WholeSecondNow();
                 var properties = new AuthenticationProperties
                 {
-                    RedirectUri = "/",
+                    RedirectUri = returnPath,
                     IsPersistent = false,
                     IssuedUtc = now,
                     ExpiresUtc = now.Add(FlowLifetime)

@@ -4,11 +4,7 @@ import {
   type CaseDetail,
   type RegressionRun,
 } from "../catalog/regression/regression-api";
-import {
-  type Field,
-  type MappingRow,
-  ProjectionView,
-} from "../mappings/projection-view";
+import { type Field, type MappingRow, ProjectionView } from "./projection-view";
 import { ObservedJson, type ObservedValue } from "./observed-json";
 import { workbenchScopeKey } from "./workbench-model";
 

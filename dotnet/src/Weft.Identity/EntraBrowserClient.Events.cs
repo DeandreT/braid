@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Weft.Application;
+using Weft.Contracts.Auth;
 
 namespace Weft.Identity;
 
@@ -176,7 +177,7 @@ public sealed partial class EntraBrowserClient
                 throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
             var key = EntraUserIdentity.Key(Guid.Parse(policy.Tenant), oid);
             RequirePrincipal(context.Principal, key, subject);
-            operation.Candidate = new(key, subject, deadline, context.Principal, context.Properties!);
+            operation.Candidate = new(key, subject, deadline, context.Principal, context.Properties!, token);
             // Candidate remains private: framework nonce/ValidateTokenResponse still follow.
             return Task.CompletedTask;
         }
@@ -198,7 +199,14 @@ public sealed partial class EntraBrowserClient
         RequirePrincipal(context.Principal!, candidate.Identity, candidate.Subject);
         if (candidate.Deadline <= DateTimeOffset.UtcNow)
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
-        operation.Verified = new(this, operation.Context, operation, organization, candidate.Identity, candidate.Deadline);
+        var returnPath = BrowserReturnPath.IsValid(context.Properties!.RedirectUri)
+            ? context.Properties.RedirectUri! : BrowserReturnPath.Root;
+        // Name is optional presentation data. Publish it only after framework nonce/response validation.
+        // Read the validated token's scalar, not framework-mapped/flattened array claims.
+        var displayName = candidate.Token.Payload.TryGetValue("name", out var name) && name is string text
+            ? AccountDisplayName.Optional(text) : null;
+        operation.Verified = new(this, operation.Context, operation, organization, candidate.Identity, candidate.Deadline,
+            returnPath, displayName, DateTimeOffset.UtcNow);
         return Task.CompletedTask;
     }
 
@@ -233,7 +241,8 @@ public sealed partial class EntraBrowserClient
     private static void RequireFlowProperties(AuthenticationProperties? properties)
     {
         var now = DateTimeOffset.UtcNow;
-        if (properties is null || properties.RedirectUri is not ("/" or null) || properties.IsPersistent ||
+        if (properties is null || properties.RedirectUri is not (null or "/") && !BrowserReturnPath.IsValid(properties.RedirectUri) ||
+            properties.IsPersistent ||
             !properties.Items.TryGetValue(".weft.flow", out var version) || version != "1" ||
             !properties.Items.TryGetValue(".weft.nonce-cookie", out var nonce) ||
             nonce is null || !IsBoundNonceCookieName(nonce) ||
@@ -271,5 +280,8 @@ public sealed partial class EntraBrowserClient
     }
 
     internal sealed record Candidate(ExternalIdentityKey Identity, string Subject, DateTimeOffset Deadline,
-        ClaimsPrincipal Principal, AuthenticationProperties Properties);
+        ClaimsPrincipal Principal, AuthenticationProperties Properties, JwtSecurityToken Token)
+    {
+        public override string ToString() => nameof(Candidate);
+    }
 }

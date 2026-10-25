@@ -42,17 +42,25 @@ the private configuration exactly. These are Node-only values; no product contro
 endpoint or browser-accessible private configuration is added.
 
 Setup provisions four real principals and project roles, initializes strict v2
-storage with the ordinary tool, then makes seven separate native mapping uploads
-through product HTTP and the pinned native worker. Five checksum-pinned artifacts
-cover basic, exact numeric, partial, ambiguous and invalid-cycle sources; two more
-basic uploads are independently uncached and pending samples. Setup asserts zero
+storage with the ordinary tool, then makes twelve separate native mapping uploads
+through product HTTP and the pinned native worker. Nine checksum-pinned artifacts
+cover basic, exact numeric, partial, ambiguous, invalid-cycle, conditions,
+controls/named inputs, reusable functions and generated source context. Repeated
+artifacts receive independent mapping and revision identities; basic uploads also
+provide independently uncached and pending samples. Setup asserts zero
 report cache keys/attempts/results. Browser Ensure requests create saved reports;
 no successful report, payload, claim or receipt is seeded through SQL.
 
 The ready record is `weft.reports-browser-ready.v1`, with fixture UUID, immutable
 manifest digest and initial viewer profile. The bounded public manifest contains
-only source identity, origin, four role identities, project scope and seven
+only source identity, origin, four role identities, project scope and twelve
 actual revision metadata records nested under `samples.*.revision`.
+
+`npm run test:mapping-viewer-browser` uses the same source-admitted owner with a
+dedicated workbench rendering suite. It checks real retained report semantics and
+explicitly controlled presentation states separately; it does not use public
+example routes. Supply the same private operator configuration and manifest
+environment as the report suite, and run on an isolated display.
 
 Controls are serialized private JSON lines with canonical UUID request nonces,
 maximum1024 bytes/64 distinct nonces, and closed acknowledgements maximum4096

@@ -12,7 +12,7 @@ export interface paths {
     };
     /**
      * Complete the fixed Entra code flow.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. Success only303Location'/' after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
      */
     get: operations["CompleteEntraLogin"];
     put?: never;
@@ -34,7 +34,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["ForgetDeniedLocalSession"];
     delete?: never;
@@ -54,7 +54,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["BeginBrowserLogin"];
     delete?: never;
@@ -74,7 +74,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["LogoutBrowserSession"];
     delete?: never;
@@ -92,7 +92,7 @@ export interface paths {
     };
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     get: operations["ReadBrowserAuthentication"];
     put?: never;
@@ -112,40 +112,6 @@ export interface paths {
     };
     /** Read the explicitly configured catalog identity context and request token. */
     get: operations["GetCatalogContext"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/examples/mappings": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** List immutable self-authored native examples (development only). */
-    get: operations["GetNativeExamples"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/examples/mappings/{exampleId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Read separate native projection and validation reports (development only). */
-    get: operations["GetNativeExample"];
     put?: never;
     post?: never;
     delete?: never;
@@ -1040,6 +1006,8 @@ export interface components {
     AuthSessionV1:
       | {
           authActionRequestToken: string;
+          /** @description Optional provider-supplied display text, never an identity or authority. At most 200 Unicode scalars; blank text is invalid. */
+          displayName: null | string;
           identityContext: string;
           /** @enum {string} */
           mode: "session";
@@ -1051,6 +1019,7 @@ export interface components {
         }
       | {
           authActionRequestToken: string;
+          displayName: null;
           identityContext: null;
           /** @enum {string} */
           mode: "session";
@@ -1062,6 +1031,7 @@ export interface components {
         }
       | {
           authActionRequestToken: string;
+          displayName: null;
           identityContext: null;
           /** @enum {string} */
           mode: "session";
@@ -2259,20 +2229,6 @@ export interface components {
       /** @enum {string} */
       kind: "target";
     };
-    NativeExampleDescriptorV1: {
-      /** Format: int32 */
-      byteCount: number;
-      digest: components["schemas"]["ArtifactDigest"];
-      id: string;
-      revision: components["schemas"]["ScopedRevisionId"];
-      source: string;
-      title: string;
-    };
-    NativeExampleResultV1: {
-      example: components["schemas"]["NativeExampleDescriptorV1"];
-      projection: components["schemas"]["ProjectionReportV1"];
-      validation: components["schemas"]["ValidationReportV1"];
-    };
     NativeLocator:
       | components["schemas"]["NativeLocatorDocumentNativeLocator"]
       | components["schemas"]["NativeLocatorJsonPointerNativeLocator"]
@@ -2782,7 +2738,7 @@ export interface operations {
       303: {
         headers: {
           "Cache-Control"?: "no-store";
-          Location?: "/";
+          Location?: string;
           "Referrer-Policy"?: "no-referrer";
           [name: string]: unknown;
         };
@@ -2922,6 +2878,7 @@ export interface operations {
         Origin: string;
         "X-Weft-Auth-Token": string;
         "X-Weft-Login": "1";
+        "X-Weft-Return-To"?: string;
         "X-XSRF-TOKEN"?: string;
       };
       path?: never;
@@ -3275,62 +3232,6 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["CatalogErrorV1"];
         };
-      };
-    };
-  };
-  GetNativeExamples: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NativeExampleDescriptorV1"][];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  GetNativeExample: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        exampleId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["NativeExampleResultV1"];
-        };
-      };
-      /** @description Not Found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
       };
     };
   };

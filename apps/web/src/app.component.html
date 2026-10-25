@@ -7,55 +7,51 @@
     (click)="skipToContent($event)"
     >Skip to content</a
   >
-  <header class="app-header">
-    <a class="brand" routerLink="/examples" aria-label="Weft home"
-      ><span class="brand-mark" aria-hidden="true">w</span
-      ><span class="brand-name"
-        >weft<span class="brand-period">.</span></span
-      ></a
-    >
-    <nav class="workspace-nav" aria-label="Workspace">
-      <a
-        routerLink="/examples"
-        routerLinkActive="active"
-        ariaCurrentWhenActive="page"
-        aria-label="Examples"
-        title="Examples"
-        ><span class="rail-icon" aria-hidden="true">◈</span
-        ><span class="rail-label">Examples</span></a
+  @if (!signInPage()) {
+    <header class="app-header">
+      <a class="brand" routerLink="/catalog" aria-label="Weft home"
+        ><span class="brand-mark" aria-hidden="true">w</span
+        ><span class="brand-name"
+          >weft<span class="brand-period">.</span></span
+        ></a
       >
-      <a
-        routerLink="/catalog"
-        routerLinkActive="active"
-        ariaCurrentWhenActive="page"
-        aria-label="Catalog"
-        title="Catalog"
-        ><span class="rail-icon" aria-hidden="true">▦</span
-        ><span class="rail-label">Catalog</span></a
-      >
-      <a
-        routerLink="/help"
-        routerLinkActive="active"
-        ariaCurrentWhenActive="page"
-        aria-label="Help"
-        title="Help"
-        ><span class="rail-icon" aria-hidden="true">?</span
-        ><span class="rail-label">Help</span></a
-      >
-    </nav>
-    <span class="environment-label">{{
-      session.state().kind === "development"
-        ? "Development workspace"
-        : "Workspace"
-    }}</span>
-  </header>
-  <weft-connection-notice />
-  @if (
-    session.state().kind !== "disabled" &&
-    session.state().kind !== "development"
-  ) {
-    <weft-browser-auth-controls />
+      <nav class="workspace-nav" aria-label="Workspace">
+        <a
+          routerLink="/catalog"
+          routerLinkActive="active"
+          ariaCurrentWhenActive="page"
+          aria-label="Catalog"
+          title="Catalog"
+          ><span class="rail-icon" aria-hidden="true">▦</span
+          ><span class="rail-label">Catalog</span></a
+        >
+        <a
+          routerLink="/help"
+          routerLinkActive="active"
+          ariaCurrentWhenActive="page"
+          aria-label="Help"
+          title="Help"
+          ><span class="rail-icon" aria-hidden="true">?</span
+          ><span class="rail-label">Help</span></a
+        >
+      </nav>
+      @if (
+        session.state().kind === "development" ||
+        session.state().kind === "disabled"
+      ) {
+        <span class="environment-label">{{
+          session.state().kind === "development"
+            ? "Development workspace"
+            : "Workspace"
+        }}</span>
+      } @else {
+        <weft-browser-auth-controls
+          [organization]="contexts.context()?.organizationName ?? null"
+        />
+      }
+    </header>
   }
+  <weft-connection-notice />
   <main id="main-content" tabindex="-1">
     <router-outlet />
   </main>

@@ -2,7 +2,7 @@ import {
   decodeBytes,
   type RegressionDocument,
 } from "../catalog/regression/regression-api";
-import type { ProjectionView } from "../mappings/projection-view";
+import type { ProjectionView } from "./projection-view";
 import { ObservedJson } from "./observed-json";
 
 export interface DocumentDisplay {

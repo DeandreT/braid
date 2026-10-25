@@ -76,10 +76,6 @@ CMD ["server"]
 
 FROM ${DOCKER_CLI_IMAGE} AS docker-cli
 
-# Local examples only: the Development worker runner drives the host Docker daemon.
-FROM weft AS weft-local-docker
-COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker
-
 # Hosted inspection worker: Weft.Worker with the Docker CLI. It runs the Ferrule image through a
 # Docker daemon for the Session server, which reaches it only over the pinned inspection transport.
 # These stages come last so the classic builder does not build them for the other targets.

@@ -1,7 +1,7 @@
 import { Component, computed, input, output } from "@angular/core";
-import { MappingDetailsComponent } from "../mappings/detail.component";
-import { MappingEntityComponent } from "../mappings/entity.component";
-import { NativeEvidenceComponent } from "../mappings/native-evidence.component";
+import { MappingDetailsComponent } from "./detail.component";
+import { MappingEntityComponent } from "./entity.component";
+import { NativeEvidenceComponent } from "./native-evidence.component";
 import {
   cardinalityText,
   dataTypeText,
@@ -12,7 +12,7 @@ import {
   type NodeReference,
   type Rule,
   ProjectionView,
-} from "../mappings/projection-view";
+} from "./projection-view";
 import type { InspectorTab } from "./workbench-model";
 
 @Component({

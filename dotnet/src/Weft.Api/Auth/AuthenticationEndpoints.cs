@@ -116,7 +116,7 @@ public static class AuthenticationEndpoints
                     _ => throw new InvalidOperationException("The authentication status is invalid.")
                 };
                 await Results.Json(new AuthSessionV1(1, "session", state, value.AuthActionRequestToken,
-                    value.RequestToken, value.IdentityContext)).ExecuteAsync(context);
+                    value.RequestToken, value.IdentityContext, value.DisplayName)).ExecuteAsync(context);
             }
             else if (action == "login")
             {
@@ -125,11 +125,11 @@ public static class AuthenticationEndpoints
             }
             else if (action == "callback")
             {
-                await owner.CompleteLoginAsync(context, context.RequestAborted);
+                var returnPath = await owner.CompleteLoginAsync(context, context.RequestAborted);
                 context.RequestAborted.ThrowIfCancellationRequested();
                 if (context.Response.HasStarted) throw new InvalidOperationException("Authentication response already started.");
                 context.Response.StatusCode = StatusCodes.Status303SeeOther;
-                context.Response.Headers.Location = "/";
+                context.Response.Headers.Location = BrowserReturnPath.IsValid(returnPath) ? returnPath : BrowserReturnPath.Root;
                 context.Response.ContentLength = 0;
             }
             else if (action == "logout")

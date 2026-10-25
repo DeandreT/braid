@@ -14,13 +14,13 @@ import { sameScope } from "../../chat/chat-types";
 import {
   ProjectionView,
   type NodeReference,
-} from "../../mappings/projection-view";
+} from "../../workbench/projection-view";
 import { WorkbenchMappingTableComponent } from "../../workbench/mapping-table.component";
 import type { WorkbenchSample } from "../../workbench/workbench-sample";
 import { RouterLink } from "@angular/router";
 import type { components } from "../../api/generated";
-import { NativeEvidenceComponent } from "../../mappings/native-evidence.component";
-import { MappingProjectionComponent } from "../../mappings/projection.component";
+import { NativeEvidenceComponent } from "../../workbench/native-evidence.component";
+import { MappingProjectionComponent } from "../../workbench/projection.component";
 import { catalogRoutes, type CatalogRevision } from "../catalog-types";
 import type {
   RevisionReportPane,

@@ -19,14 +19,83 @@ function status(state: SessionState, fresh = false, owner = ownerA) {
     requestToken:
       state === "authenticated" ? (fresh ? freshEpochToken : epochToken) : null,
     identityContext: state === "authenticated" ? owner : null,
+    displayName: null,
   };
 }
 
 const controls = (page: Page) =>
   page.getByRole("region", { name: "Sign-in and session", exact: true });
 const summary = (page: Page) => controls(page).locator(".session-summary");
+// A page outside the catalog, so no sign-in redirect applies: the header still carries the menu.
+const entry = "/account-controls";
+
+/** Opens the header account menu, which holds the session controls. */
+async function openControls(page: Page): Promise<void> {
+  const trigger = page.locator("#account-trigger");
+  await expect(trigger).toBeVisible();
+  if ((await trigger.getAttribute("aria-expanded")) !== "true")
+    await trigger.click();
+  await expect(controls(page)).toBeVisible();
+}
 
 test.describe("controlled sign-in controls, not provider qualification", () => {
+  test("account names are escaped display text and clear at account and anonymous boundaries", async ({
+    page,
+  }) => {
+    let observation = 0;
+    const markup = '<img src=x onerror="window.nameInjected=true"> & Zoë';
+    await page.route("**/api/auth/session", (route) => {
+      observation += 1;
+      const value =
+        observation === 1
+          ? { ...status("authenticated"), displayName: markup }
+          : observation === 2
+            ? {
+                ...status("authenticated", true, ownerB),
+                displayName: "Other account",
+              }
+            : status("anonymous", true);
+      return route.fulfill({ json: value });
+    });
+    await page.goto(entry);
+    await openControls(page);
+    await expect(page.locator("#account-trigger")).toHaveText(markup);
+    await expect(controls(page).locator(".session-account-name")).toHaveText(
+      markup,
+    );
+    await expect(controls(page).locator("img")).toHaveCount(0);
+    expect(await page.evaluate(() => "nameInjected" in window)).toBe(false);
+    await controls(page)
+      .getByRole("button", { name: "Check session", exact: true })
+      .click();
+    await expect(page.locator("#account-trigger")).toHaveText("Other account");
+    await expect(controls(page)).not.toContainText(markup);
+    await controls(page)
+      .getByRole("button", { name: "Check session", exact: true })
+      .click();
+    await expect(summary(page)).toHaveText("Not signed in");
+    await expect(controls(page).locator(".session-account-name")).toHaveCount(
+      0,
+    );
+    await expect(page.locator("#account-trigger")).not.toContainText(
+      "Other account",
+    );
+  });
+
+  test("a missing optional name uses Account rather than an identifier or organization", async ({
+    page,
+  }) => {
+    await page.route("**/api/auth/session", (route) =>
+      route.fulfill({ json: status("authenticated") }),
+    );
+    await page.goto(entry);
+    await openControls(page);
+    await expect(page.locator("#account-trigger")).toHaveText("Account");
+    await expect(controls(page).locator(".session-account-name")).toHaveText(
+      "Account",
+    );
+  });
+
   for (const mode of ["disabled", "development"] as const) {
     test(`${mode} remains explicit and offers no auth mutation`, async ({
       page,
@@ -37,9 +106,10 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       const observed = page.waitForResponse(
         (response) => new URL(response.url()).pathname === "/api/auth/session",
       );
-      await page.goto("/examples");
+      await page.goto(entry);
       await observed;
-      // Without browser sign-in there is no session panel or auth action.
+      // Without browser sign-in there is no account menu or auth action.
+      await expect(page.locator("#account-trigger")).toHaveCount(0);
       await expect(controls(page)).toHaveCount(0);
       await expect(page.locator(".environment-label")).toHaveText(
         mode === "development" ? "Development workspace" : "Workspace",
@@ -51,8 +121,8 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       await expect(
         page.getByRole("button", { name: "Review local recovery" }),
       ).toHaveCount(0);
-      await expect(page.getByRole("heading", { level: 1 })).toContainText(
-        "Understand your mapping.",
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+        "Page unavailable",
       );
     });
   }
@@ -64,7 +134,8 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       await page.route("**/api/auth/session", (route) =>
         route.fulfill({ status: code, body: "" }),
       );
-      await page.goto("/examples");
+      await page.goto(entry);
+      await openControls(page);
       await expect(summary(page)).toHaveText("Sign-in status unavailable");
       await expect(
         controls(page).getByRole("button", { name: "Sign in", exact: true }),
@@ -86,7 +157,12 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
     await page.route("**/api/auth/session", (route) => {
       observations += 1;
       expect(route.request().headers()["x-weft-session"]).toBe("1");
-      return route.fulfill({ json: status("authenticated", observations > 1) });
+      return route.fulfill({
+        json: {
+          ...status("authenticated", observations > 1),
+          displayName: "Signed-in account",
+        },
+      });
     });
     await page.route("**/api/auth/logout", async (route) => {
       posts += 1;
@@ -102,7 +178,8 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       expect(headers["x-weft-forget-local"]).toBeUndefined();
       await route.fulfill({ status: 204 });
     });
-    await page.goto("/examples");
+    await page.goto(entry);
+    await openControls(page);
     await expect(summary(page)).toHaveText("Signed in to Weft");
     await controls(page)
       .getByRole("button", { name: "Sign out", exact: true })
@@ -111,6 +188,10 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       "Local sign-out was acknowledged.",
     );
     await expect(summary(page)).toHaveText("Session check needed");
+    await expect(controls(page)).not.toContainText("Signed-in account");
+    await expect(page.locator("#account-trigger")).not.toContainText(
+      "Signed-in account",
+    );
     expect(posts).toBe(1);
     expect(observations).toBe(2);
   });
@@ -137,7 +218,8 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
         forgets += 1;
         return route.abort();
       });
-      await page.goto("/examples");
+      await page.goto(entry);
+      await openControls(page);
       await expect(summary(page)).toHaveText("Signed in to Weft");
       await controls(page)
         .getByRole("button", { name: "Sign out", exact: true })
@@ -180,7 +262,8 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       posts += 1;
       return route.fulfill({ status: 204 });
     });
-    await page.goto("/examples");
+    await page.goto(entry);
+    await openControls(page);
     await expect(summary(page)).toHaveText("Signed in to Weft");
     await controls(page)
       .getByRole("button", { name: "Sign out", exact: true })
@@ -226,7 +309,8 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
         );
       });
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto("/examples");
+      await page.goto(entry);
+      await openControls(page);
       await expect(summary(page)).toHaveText("Sign-in required");
       await controls(page)
         .getByRole("button", { name: "Review local recovery" })
@@ -301,7 +385,8 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
         expect(headers["x-xsrf-token"]).toBeUndefined();
         return route.fulfill({ json: { version: 1, authorizationUrl } });
       });
-      await page.goto("/examples");
+      await page.goto(entry);
+      await openControls(page);
       await expect(summary(page)).toHaveText("Not signed in");
       await controls(page)
         .getByRole("button", { name: "Sign in", exact: true })
@@ -309,7 +394,7 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       await expect(controls(page)).toContainText(
         "Sign-in could not be confirmed.",
       );
-      expect(new URL(page.url()).pathname).toBe("/examples");
+      expect(new URL(page.url()).pathname).toBe(entry);
       expect(posts).toBe(1);
       expect(observations).toBe(2);
       await expect(controls(page)).not.toContainText(authorizationUrl);
@@ -324,9 +409,9 @@ type PositiveRoute = import("@playwright/test").Route;
 type PositiveRequest = import("@playwright/test").Request;
 type PositiveReply = Parameters<PositiveRoute["fulfill"]>[0];
 const positiveEntry = "/auth-controls-positive";
-// Required public interface of the pinned dvvb01V6 warning-only overlay.
+// The reload warning appears only while the page holds unsent work.
 const positiveUnloadWarning =
-  "Signing in opens Microsoft and reloads this page. Unsaved drafts and in-tab recovery details may be lost. Previously sent changes may already have committed.";
+  "This page holds unsent work. Signing in again reloads this page; signing out ends this session. Unsaved drafts and in-tab recovery details may be lost. Previously sent changes may already have committed.";
 const positiveOrganization = "10000000-0000-4000-8000-000000000001";
 const positiveProjects = `/catalog/organizations/${positiveOrganization}/projects`;
 
@@ -411,6 +496,7 @@ class PositiveAuthHarness {
   }> = [];
   private unexpected = 0;
   private handlerErrors = 0;
+  private pendingHealthReads = 0;
   private responder: ReturnType<typeof status> | null = null;
   private readonly recordCanceled = (request: PositiveRequest): void => {
     for (const hold of this.holds) if (hold.owns(request)) hold.canceled = true;
@@ -480,10 +566,16 @@ class PositiveAuthHarness {
     return hold;
   }
 
-  login(request: PositiveRequest, authenticated: boolean): void {
+  /** `returnTo` is the page sign-in returns to; outside an application section none is sent. */
+  login(
+    request: PositiveRequest,
+    authenticated: boolean,
+    returnTo?: string,
+  ): void {
     const headers = request.headers();
     this.loginWireValid =
       request.method() === "POST" &&
+      headers["x-weft-return-to"] === returnTo &&
       request.postData() === null &&
       headers["content-type"] === undefined &&
       headers["x-weft-login"] === "1" &&
@@ -596,6 +688,18 @@ class PositiveAuthHarness {
       });
       return;
     }
+    // The shell checks public health once per document. Keep that response
+    // synthetic and budgeted; it must not open an API fall-through window.
+    if (key === "GET /api/v1/health" && this.pendingHealthReads > 0) {
+      --this.pendingHealthReads;
+      this.totals.set(key, (this.totals.get(key) ?? 0) + 1);
+      await this.handle(route, () =>
+        route.fulfill({
+          json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+        }),
+      );
+      return;
+    }
     // Only UI document/static delivery may reach the owned app host. API and
     // provider traffic must consume an exact, finite plan; never fall through.
     const document =
@@ -615,6 +719,7 @@ class PositiveAuthHarness {
       !url.pathname.startsWith("/api/") &&
       (document || staticAsset)
     ) {
+      if (document) ++this.pendingHealthReads;
       await route.continue();
       return;
     }
@@ -697,10 +802,12 @@ positiveTest.describe(
         });
         const native = wire.nativeNavigation();
         await page.goto(positiveEntry);
+        await openControls(page);
         await expect(summary(page)).toHaveText("Not signed in");
+        // Nothing unsent on this page, so signing in warns about no lost work.
         await expect(
           controls(page).getByText(positiveUnloadWarning, { exact: true }),
-        ).toBeVisible();
+        ).toHaveCount(0);
         await controls(page)
           .getByRole("button", { name: "Sign in", exact: true })
           .click();
@@ -717,11 +824,15 @@ positiveTest.describe(
         // Explicit test-driven reload is NOT a callback and establishes no cookie.
         const bootstrap = wire.hold("GET", "/api/auth/session");
         await page.reload();
+        await openControls(page);
         await bootstrap.arrived;
         await expect(summary(page)).toHaveText("Checking sign-in status…");
         bootstrap.reply({ json: status("authenticated", true) });
         await bootstrap.settled;
         await expect(summary(page)).toHaveText("Signed in to Weft");
+        await expect(
+          controls(page).getByRole("button", { name: "Sign out", exact: true }),
+        ).not.toHaveAttribute("aria-describedby", "sign-in-navigation-warning");
         expect(wire.count("GET", "/api/v1/catalog/context")).toBe(0);
 
         // Catalog landing and selected project list each own a separate admission.
@@ -776,6 +887,7 @@ positiveTest.describe(
           ]);
         wire.status("authenticated");
         await page.goto(positiveEntry);
+        await openControls(page);
         await expect(summary(page)).toHaveText("Signed in to Weft");
         wire.respond("authenticated");
         wire.json("GET", "/api/v1/catalog/context", wire.catalogContext());
@@ -797,15 +909,17 @@ positiveTest.describe(
         const observed = wire.count("GET", "/api/auth/session");
         wire.status("authenticated", true);
         wire.plan("POST", "/api/auth/login", async (route) => {
-          wire.login(route.request(), true);
+          // Signing in again returns to the page on screen.
+          wire.login(route.request(), true, positiveProjects);
           await route.fulfill({
             json: { version: 1, authorizationUrl: wire.destination },
           });
         });
         const native = wire.nativeNavigation();
+        await openControls(page);
         await expect(
           controls(page).getByText(positiveUnloadWarning, { exact: true }),
-        ).toBeVisible();
+        ).toHaveCount(0);
         await controls(page)
           .getByRole("button", { name: "Sign in again", exact: true })
           .focus();
@@ -835,6 +949,7 @@ positiveTest.describe(
         const native = wire.nativeNavigation();
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto(positiveEntry);
+        await openControls(page);
         const signIn = controls(page).getByRole("button", {
           name: "Sign in again",
           exact: true,
@@ -912,6 +1027,7 @@ positiveTest.describe(
           wire.status("authenticated", true);
           const original = wire.hold("POST", `/api/auth/${action}`);
           await page.goto(positiveEntry);
+          await openControls(page);
           await expect(summary(page)).toHaveText("Signed in to Weft");
           await controls(page)
             .getByRole("button", {
@@ -923,6 +1039,7 @@ positiveTest.describe(
           await expect(controls(page)).toHaveAttribute("aria-busy", "true");
           wire.status("authenticated", true, ownerB);
           await page.reload();
+          await openControls(page);
           await expect(summary(page)).toHaveText("Signed in to Weft");
           // The old HTTP outcome is unknown. Playwright reports no failure for a routed
           // request whose document was replaced, so this fulfillment is only a synthetic
@@ -946,10 +1063,7 @@ positiveTest.describe(
           ).toHaveCount(0);
           await expect(
             controls(page).locator("#sign-in-navigation-warning"),
-          ).toBeVisible();
-          await expect(
-            controls(page).locator("#sign-in-navigation-warning"),
-          ).toHaveText(positiveUnloadWarning);
+          ).toHaveCount(0);
           expect(wire.count("POST", `/api/auth/${action}`)).toBe(1);
           expect(wire.count("GET", "/api/auth/session")).toBe(4);
           expect(wire.nativeAttempts).toBe(0);

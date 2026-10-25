@@ -1,13 +1,13 @@
 # Mapping viewer
 
-The Angular workspace reads Weft's generated public contracts. Development native
-examples come from retained, self-authored Ferrule artifacts through the qualified
-restricted backend; display-only browser fixtures remain explicitly synthetic.
+The Angular workbench reads Weft's generated public contracts. Mapping reports
+come from retained revisions through the qualified restricted backend;
+display-only browser fixtures remain explicitly synthetic.
 The native file stays authoritative and is never rewritten by the viewer.
 
 ## Reading a mapping
 
-Choose an example and an output. The table shows source dependencies,
+Open a catalog revision and choose an output in its saved projection. The table shows source dependencies,
 transformation summaries, and target fields in declared order. Multiple rules
 writing to one field retain their order. Structural fields remain available in
 boundary and entity details. Search includes sources, targets, expression
@@ -51,15 +51,14 @@ as an object.
 
 ## Requests and scope
 
-Changing the selected example clears old mapping details and aborts the previous
-read. Loading, missing examples, unavailable services, canceled operations,
+Changing the selected revision clears old mapping details and aborts the previous
+read. Loading, missing revisions, unavailable services, canceled operations,
 validation findings, and retries have separate states. Late responses cannot
-replace the current selection. A known example remains in the manifest when the
-worker is unavailable; no empty graph represents that failure.
+replace the current selection. Retained reports remain readable when the worker
+is unavailable; no empty graph represents a failed derivation.
 
-This increment provides a loopback Development workspace and fixed example
-routes. Catalog uploads/revisions, sign-in, chat, previews, comparison, and
-deployment follow the delivery plan. Viewing a mapping does not qualify execution
-or publishing. Browser qualification uses a private alternate display, including
+Viewing a mapping does not qualify execution or publishing. The workbench's
+preview, comparison, chat and build panels retain their separate authorization
+and feature checks. Browser qualification uses a private alternate display, including
 keyboard and small-screen flows. See [Local development](development.md) for
 configuration and checks.

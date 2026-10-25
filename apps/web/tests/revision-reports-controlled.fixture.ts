@@ -258,6 +258,7 @@ export class ControlledReports {
   private readonly replies = new Map<string, Reply | Handler>();
   private readonly deferred: (() => void)[] = [];
   private readonly origin: string;
+  private pendingHealthReads = 0;
   constructor(readonly page: Page) {
     const origin = process.env.WEFT_REPORTS_BASE_URL;
     if (!origin || new URL(origin).origin !== origin)
@@ -265,6 +266,14 @@ export class ControlledReports {
         "Controlled reports require the explicit packaged origin",
       );
     this.origin = origin;
+    page.on("request", (request) => {
+      if (
+        request.isNavigationRequest() &&
+        request.frame() === page.mainFrame() &&
+        new URL(request.url()).origin === this.origin
+      )
+        ++this.pendingHealthReads;
+    });
     this.add(this.data);
   }
   private key(method: string, path: string, query = ""): string {
@@ -353,6 +362,20 @@ export class ControlledReports {
       const request = route.request();
       const url = new URL(request.url());
       const headers = request.headers();
+      if (
+        url.pathname === "/api/v1/health" &&
+        url.origin === this.origin &&
+        request.method() === "GET" &&
+        !url.search &&
+        (request.postDataBuffer()?.length ?? 0) === 0 &&
+        this.pendingHealthReads > 0
+      ) {
+        --this.pendingHealthReads;
+        await route.fulfill({
+          json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+        });
+        return;
+      }
       // Explicit bootstrap is outside the unchanged protected-report observation census.
       if (url.pathname === "/api/auth/session") {
         const admitted =

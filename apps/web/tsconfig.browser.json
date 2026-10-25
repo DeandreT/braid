@@ -20,6 +20,7 @@
     "tests/help.spec.ts",
     "playwright.comparison.config.ts",
     "tests/browser-auth-controls.spec.ts",
+    "tests/sign-in-entry.spec.ts",
     "playwright.regression.config.ts",
     "playwright.regression-live.config.ts",
     "tests/regression.spec.ts",

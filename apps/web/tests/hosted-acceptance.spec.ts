@@ -151,8 +151,21 @@ const ids = (href: string): Scope => {
   if (!match) throw new Error("Unexpected revision link.");
   return { projectId: match[1], mappingId: match[2], revisionId: match[3] };
 };
-const session = (page: Page) =>
-  page.getByRole("region", { name: "Sign-in and session" });
+const signInStatus = (page: Page) =>
+  page
+    .getByRole("region", { name: "Sign in to Weft" })
+    .getByRole("status")
+    .first();
+/** Opens the header account menu and returns its session summary. */
+async function accountSummary(target: Page): Promise<Locator> {
+  const trigger = target.locator("#account-trigger");
+  if ((await trigger.getAttribute("aria-expanded")) !== "true")
+    await trigger.click();
+  return target
+    .getByRole("region", { name: "Sign-in and session" })
+    .getByRole("status")
+    .first();
+}
 const workflow = (page: Page, name: string) =>
   page.getByRole("tab", { name, exact: true });
 
@@ -296,13 +309,21 @@ test.afterAll(async () => {
 });
 
 test("signs in through the Session host's Microsoft sign-in", async () => {
-  await page.goto(`/catalog/organizations/${organization}/projects`);
-  await expect(session(page).getByRole("status").first()).toHaveText(
-    "Not signed in",
+  const projects = `/catalog/organizations/${organization}/projects`;
+  // Opening a workspace page without a session goes to the sign-in page, which keeps the path.
+  await page.goto(projects);
+  await page.waitForURL(
+    (url) =>
+      url.pathname === "/sign-in" &&
+      url.searchParams.get("returnTo") === projects,
   );
+  await expect(signInStatus(page)).toHaveText(
+    "You are signed out. Sign in to open your workspace.",
+  );
+  let returnTo = projects;
   for (let attempt = 1; ; attempt++) {
-    await session(page)
-      .getByRole("button", { name: "Sign in", exact: true })
+    await page
+      .getByRole("button", { name: "Sign in with Microsoft", exact: true })
       .click();
     await page.waitForURL(/^https:\/\/login\.microsoftonline\.com\//);
     await page
@@ -313,17 +334,23 @@ test("signs in through the Session host's Microsoft sign-in", async () => {
     const unavailable = page.getByRole("heading", {
       name: "Sign-in is temporarily unavailable",
     });
-    const signedIn = session(page).getByRole("status").first();
-    await expect(signedIn.or(unavailable)).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Catalog workspace" })
+        .or(unavailable)
+        .first(),
+    ).toBeVisible();
     if (!(await unavailable.isVisible())) break;
     expect(attempt).toBeLessThan(3);
     recoveries.push("sign-in");
     await page.getByRole("link", { name: "Return to Weft" }).click();
-    await expect(signedIn).toHaveText("Not signed in");
+    // "/" opens the catalog, which sends a signed-out browser back to sign-in.
+    await page.waitForURL((url) => url.pathname === "/sign-in");
+    returnTo = "/catalog";
   }
-  await expect(session(page).getByRole("status").first()).toHaveText(
-    "Signed in to Weft",
-  );
+  // The callback returned to the requested page.
+  expect(new URL(page.url()).pathname).toBe(returnTo);
+  await expect(await accountSummary(page)).toHaveText("Signed in to Weft");
   const status = await read<{ mode: string; state: string }>(
     page,
     "/api/auth/session",
@@ -1192,9 +1219,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
 
     // The same browser session and every retained record reopen on the restarted replica.
     await openCatalog(revisionPath(first), revisionReady);
-    await expect(session(page).getByRole("status").first()).toHaveText(
-      "Signed in to Weft",
-    );
+    await expect(await accountSummary(page)).toHaveText("Signed in to Weft");
     const reports = page.getByRole("region", { name: "Saved reports" });
     await settleReports(reports);
     await expect(

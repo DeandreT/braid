@@ -172,8 +172,6 @@ internal static class ApiOperations
     public static IReadOnlyDictionary<string, string> NotUsed { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["GetProjectionFixture"] = "a Development-only fixture route that the Session host does not map",
-        ["GetNativeExamples"] = "a Development-only example route that the Session host does not map",
-        ["GetNativeExample"] = "a Development-only example route that the Session host does not map",
         ["ReadBrowserAuthentication"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["BeginBrowserLogin"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["LogoutBrowserSession"] = "browser cookie-session sign-in; the CLI signs in with MSAL",

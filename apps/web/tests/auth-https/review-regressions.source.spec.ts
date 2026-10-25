@@ -126,7 +126,7 @@ test("review header arguments: closed missing duplicate value route method and n
     ],
     ["/api/auth/session", "GET", [["X-Weft-Session", "2"]]],
     ["/api/auth/logout", "POST", [["X-Weft-Logout", "1,1"]]],
-    ["/examples", "GET", [["X-Weft-Session", "1"]]],
+    ["/sign-in", "GET", [["X-Weft-Session", "1"]]],
     ["/api/auth/login", "POST", [["X-Weft-Logout", "1"]]],
     ["/api/auth/session", "POST", [["X-Weft-Session", "1"]]],
     ["/api/auth/logout", "GET", [["X-Weft-Logout", "1"]]],

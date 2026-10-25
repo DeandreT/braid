@@ -71,6 +71,7 @@ import {
   type PendingBuildMutation,
 } from "./build-recovery";
 import { HelpLinkComponent } from "../../help/help-link.component";
+import { UnsentWork } from "../../workbench/unsent-work";
 
 /** No durable browser storage: uncertain requests keep their original immutable frame until explicit recovery or invalidation. */
 @Component({
@@ -139,6 +140,7 @@ export class RevisionBuildsComponent {
   readonly routes = catalogRoutes;
 
   constructor() {
+    inject(UnsentWork).track(() => this.pending() !== null);
     effect(() => {
       this.binding();
       this.sessions.generation();

@@ -10,6 +10,7 @@ namespace Weft.Tests;
 /// <summary>Owned fixture keys only. All JWT signing and verification use standard IdentityModel.</summary>
 internal sealed class EntraProtocolCrypto : IDisposable
 {
+    internal object? DisplayName { get; set; } = EntraProtocolFixturePolicy.PrivateMarker;
     internal X509Certificate2 Root { get; private set; } = null!;
     internal X509Certificate2 IssuerTls { get; private set; } = null!;
     internal X509Certificate2 ApplicationTls { get; private set; } = null!;
@@ -118,7 +119,7 @@ internal sealed class EntraProtocolCrypto : IDisposable
             ["nbf"] = now - 1,
             ["exp"] = now + lifetimeSeconds,
             ["nonce"] = code.Nonce,
-            ["name"] = EntraProtocolFixturePolicy.PrivateMarker,
+            ["name"] = DisplayName,
             ["email"] = EntraProtocolFixturePolicy.PrivateMarker + "@invalid.example",
             ["oid"] = EntraProtocolFixturePolicy.ObjectId.ToString("D"),
             ["roles"] = new[] { "administrator", "run.payload.read" },

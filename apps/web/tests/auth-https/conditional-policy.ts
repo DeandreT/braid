@@ -39,7 +39,7 @@ export function expectedTuple(
           ? phase === "callback" || phase === "replay"
           : [
               "/",
-              "/examples",
+              "/sign-in",
               "/auth-qualification",
               `/catalog/organizations/${cfg.organization}/projects`,
             ].includes(target)),
@@ -66,7 +66,6 @@ export function expectedTuple(
           "/api/auth/session",
           "/api/v1/catalog/context",
           "/api/v1/health",
-          "/api/v1/examples/mappings",
           `/api/v1/organizations/${cfg.organization}/projects?limit=10`,
         ].includes(target)) ||
         (method === "POST" &&

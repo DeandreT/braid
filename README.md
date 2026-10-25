@@ -85,8 +85,7 @@ the C# API schema.
 
 The Ferrule adapter can inspect, validate, and project native artifacts through a
 bounded, isolated worker. Its revision-specific projection contains fields,
-rules, controls, lineage, and located coverage gaps. Development example routes
-provide separate projection and validation reports. The catalog retains
+rules, controls, lineage, and located coverage gaps. The catalog retains
 immutable native uploads and their saved projection and validation reports; its
 scoped viewer opens those reports for the exact selected revision.
 

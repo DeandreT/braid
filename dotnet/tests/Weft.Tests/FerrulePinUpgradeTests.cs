@@ -1,6 +1,5 @@
 using Weft.Application;
 using Weft.Application.Regression;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Projections;
 using Weft.Deployment;

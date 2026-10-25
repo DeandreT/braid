@@ -35,6 +35,7 @@ import {
   type ChatTurn,
 } from "./chat-types";
 import { HelpLinkComponent } from "../help/help-link.component";
+import { UnsentWork } from "../workbench/unsent-work";
 
 @Component({
   selector: "weft-revision-chat",
@@ -153,6 +154,9 @@ export class RevisionChatComponent {
   private focusVersion = 0;
 
   constructor() {
+    inject(UnsentWork).track(
+      () => this.draft().trim() !== "" || this.streaming(),
+    );
     effect(() => {
       this.owner();
       this.contexts.identityVersion();

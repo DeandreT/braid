@@ -1,6 +1,6 @@
 # Local stack in the hosted shape: PostgreSQL, a separate migration step with the migrator
 # credential, private storage and session key-ring volumes, and the Session-profile server
-# behind its same-replica edge. compose.examples.yml adds the local-only examples server.
+# behind its same-replica edge.
 # Values come from the caller's private environment; see docs/runtime-packaging.md.
 name: weft-hosted-shape
 

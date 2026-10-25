@@ -1,4 +1,4 @@
-@import "./mappings/mapping.css";
+@import "./workbench/mapping.css";
 @import "./catalog/catalog.css";
 @import "./workbench/workbench.css";
 @import "./workbench/semantic-tokens.css";

@@ -9,7 +9,6 @@ syntax, so the classic Docker builder also builds it. Tracking work is [#137](ht
 | --- | --- |
 | `weft` | `Weft.Server` with the built Angular application in `wwwroot`, the operator tools and one entrypoint. |
 | `edge` | The same-replica reverse proxy for the `trustedProxyOneHop` host transport. |
-| `weft-local-docker` | `weft` plus the Docker CLI for the local Development worker runner only. |
 | `weft-worker` | `Weft.Worker`, the same entrypoint and the Docker CLI, for the hosted inspection service. |
 | `weft-mapping-endpoint` | The [mapping endpoint](mapping-endpoint.md) host and the release operator tool (`Weft.ReleaseTool`), with the same entrypoint and no Docker CLI. |
 | `weft-mapping-endpoint-local-docker` | `weft-mapping-endpoint` plus the Docker CLI, for the local Docker compiled runtime only. |
@@ -153,11 +152,6 @@ WEFT_PUBLIC_ORIGIN=https://<WEFT_PUBLIC_HOST>
   equivalent to host root access; it has no database, storage or egress network and
   no published port. The server reaches `https://worker:8443` over the internal
   `inspection` network, each side pinning the other's certificate.
-- The override file `deploy/compose/compose.examples.yml` adds a Development server
-  in the Disabled profile with the Docker socket, so its worker runner can explain
-  native examples. Docker socket access is equivalent to host root access; this file
-  is local only and never part of the hosted shape.
-
 - The override file `deploy/compose/compose.ferrule-service.yml` runs native upload and
   report derivation through the [Ferrule service](ferrule-service.md) instead of the
   worker override: `WEFT_FERRULE_SERVICE_REPLICAS` replicas (default two) of the service
@@ -228,16 +222,16 @@ set `no-new-privileges`. The compose file reads every value from the caller's
 environment: the `WEFT_LOCAL_*_PASSWORD` values required by `postgres-init.sh` plus
 `WEFT_LOCAL_POSTGRES_ADMIN_PASSWORD`, `WEFT_SESSION_ORGANIZATION_ID`,
 `WEFT_SESSION_KEY_PEM`, `WEFT_ENTRA_TENANT_ID`, `WEFT_ENTRA_CLIENT_ID`,
-`WEFT_ENTRA_CLIENT_PEM` and `WEFT_PUBLIC_HOST`; the examples override additionally
-requires `WEFT_FERRULE_WORKER_IMAGE` and `WEFT_DOCKER_GID`. The worker override requires
-those two plus `WEFT_INSPECTION_WORKER_PEM` and `WEFT_INSPECTION_CLIENT_PEM` (separate
+`WEFT_ENTRA_CLIENT_PEM` and `WEFT_PUBLIC_HOST`. The worker override also requires
+`WEFT_FERRULE_WORKER_IMAGE`, `WEFT_DOCKER_GID`, `WEFT_INSPECTION_WORKER_PEM` and
+`WEFT_INSPECTION_CLIENT_PEM` (separate
 PEM bundles) and each certificate's pin, `WEFT_INSPECTION_WORKER_CERTIFICATE_SHA256` and
 `WEFT_INSPECTION_CLIENT_CERTIFICATE_SHA256`: the lowercase SHA-256 of the DER
 certificate, for example `openssl x509 -in worker.crt -outform DER | openssl dgst -sha256 -r`.
-Image names default to `weft:local`, `weft-edge:local`, `weft-local-docker:local`,
-`weft-worker:local` and `weft-mapping-endpoint:local` (`WEFT_ENDPOINT_IMAGE`; the Docker runtime
-override uses `weft-mapping-endpoint-local-docker:local`); `WEFT_COMPOSE_PORT` and `WEFT_COMPOSE_EXAMPLES_PORT` choose the
-loopback ports (`0` selects a free one).
+Image names default to `weft:local`, `weft-edge:local`, `weft-worker:local` and
+`weft-mapping-endpoint:local` (`WEFT_ENDPOINT_IMAGE`; the Docker runtime override uses
+`weft-mapping-endpoint-local-docker:local`). `WEFT_COMPOSE_PORT` chooses the edge's
+loopback port (`0` selects a free one).
 
 The smoke test builds uniquely tagged images, generates throwaway passwords and
 self-signed certificates in a private temporary directory, starts the stack from new
@@ -248,14 +242,13 @@ failed cleanup step or a remaining owned object fails the run:
 deploy/compose/smoke-test.sh
 ```
 
-It checks that the base stack renders without the examples settings, then health,
+It checks that the base stack renders without the worker settings, then health,
 HSTS, the Angular application and its assets from the same origin,
-the Session status endpoint, anonymous catalog refusal, absence of the Development
-examples API, replacement of client forwarding fields, completion of the one-shot
+the Session status endpoint, anonymous catalog refusal, rejection of unknown API
+routes, replacement of client forwarding fields, completion of the one-shot
 steps, maintenance access to the shared storage root, and the same checks after the
 replica restarts with its retained volumes. With `WEFT_FERRULE_WORKER_IMAGE` set, it
-also applies the examples and worker overrides and requires native projection and
-validation through the examples worker runner; the Session server to start with native
+also applies the worker override and requires the Session server to start with native
 upload and derivation enabled, also after the restart; and, on the worker's internal
 address, admission of only the pinned server certificate and one exact native validation
 frame through the hosted worker. With `WEFT_FERRULE_SERVICE_IMAGE` set to a built service
@@ -273,8 +266,8 @@ previews, regression runs and recovery, in the same shape.
 The Session host does not register a Docker worker runner. Native ingestion and
 report derivation run through the [Ferrule service](ferrule-service.md), or through the
 inspection service of a separate `Weft.Worker` over the
-[hosted inspection transport](ferrule-worker.md#hosted-inspection-transport); examples
-remain a Development feature. Chat, preview, regression and build submission are composed
+[hosted inspection transport](ferrule-worker.md#hosted-inspection-transport). Chat,
+preview, regression and build submission are composed
 by the Session host with `_FILE` credential deliveries (see
 [feature composition](session-host.md#feature-composition)). Previews, regression runs and
 builds execute in the separate `Weft.Worker` `runs` host through the Ferrule service, which

@@ -8,9 +8,10 @@ import {
   RouterLinkActive,
   RouterOutlet,
 } from "@angular/router";
-import { filter } from "rxjs";
+import { EMPTY, catchError, filter, switchMap, tap } from "rxjs";
 import { BrowserSessionState } from "./auth/browser-session-state";
 import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.component";
+import { CatalogContextStore } from "./catalog/catalog-context";
 import { ConnectionNoticeComponent } from "./workbench/connection-notice.component";
 
 @Component({
@@ -27,7 +28,10 @@ import { ConnectionNoticeComponent } from "./workbench/connection-notice.compone
 export class AppComponent {
   private readonly document = inject(DOCUMENT);
   readonly session = inject(BrowserSessionState);
+  readonly contexts = inject(CatalogContextStore);
   readonly workbench = signal(false);
+  /** The sign-in page is a full page of its own, without the workspace header. */
+  readonly signInPage = signal(false);
 
   constructor() {
     this.session
@@ -38,22 +42,37 @@ export class AppComponent {
     inject(Router)
       .events.pipe(
         filter((event) => event instanceof NavigationEnd),
+        tap((event) => {
+          this.workbench.set(
+            /\/mappings\/[^/]+\/revisions\/(?!new(?:[?#]|$))[^/?#]+(?:[?#]|$)/.test(
+              event.urlAfterRedirects,
+            ),
+          );
+          this.signInPage.set(
+            /^\/sign-in(?:[?#]|$)/.test(event.urlAfterRedirects),
+          );
+          if (initialNavigation) {
+            initialNavigation = false;
+            return;
+          }
+          queueMicrotask(() =>
+            this.document.getElementById("main-content")?.focus(),
+          );
+        }),
+        // Help has no catalog page to load the account's organization. Read once
+        // per navigation, not per session observation: a denied organization can
+        // still have a valid session, and must not cause a reclassification loop.
+        // A failed read leaves the guide available and no organization displayed.
+        switchMap((event) =>
+          /^\/help(?:[/?#]|$)/.test(event.urlAfterRedirects) &&
+          this.session.state().kind === "authenticated" &&
+          this.contexts.context() === null
+            ? this.contexts.refresh().pipe(catchError(() => EMPTY))
+            : EMPTY,
+        ),
         takeUntilDestroyed(),
       )
-      .subscribe((event) => {
-        this.workbench.set(
-          /\/mappings\/[^/]+\/revisions\/(?!new(?:[?#]|$))[^/?#]+(?:[?#]|$)/.test(
-            event.urlAfterRedirects,
-          ),
-        );
-        if (initialNavigation) {
-          initialNavigation = false;
-          return;
-        }
-        queueMicrotask(() =>
-          this.document.getElementById("main-content")?.focus(),
-        );
-      });
+      .subscribe();
   }
 
   skipToContent(event: MouseEvent): void {

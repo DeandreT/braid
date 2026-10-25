@@ -1,5 +1,4 @@
 using System.Text;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Projections;
 using Weft.Contracts.Validation;

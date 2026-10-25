@@ -41,6 +41,7 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
     internal SessionTicketQualificationRoot Files { get; private set; } = null!;
     internal AuthHttpHost First { get; private set; } = null!;
     internal AuthHttpHost? Second { get; private set; }
+    internal PostgresAccountDisplayMetadata? DisplayMetadata { get; private set; }
     internal Uri Origin { get; private set; } = null!;
     internal AuthHttpRecord Current => current.Value ?? throw new AuthHttpFailure("An auth fixture port lost its request owner.");
     private readonly AsyncLocal<AuthHttpRecord?> current = new();
@@ -62,10 +63,10 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
     internal bool Chat { get; private init; }
 
     internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true, int bearerBurst = 0,
-        bool chat = false)
+        bool chat = false, bool displayMetadata = false)
     {
         var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat }; Exception? primary = null; var cleanup = new List<Exception>();
-        try { await test.InitializeAsync(postgres, bindIssuer); await body(test); }
+        try { await test.InitializeAsync(postgres, bindIssuer, displayMetadata); await body(test); }
         catch (Exception error) { primary = Safe(error, "The independent auth HTTP case failed."); }
         finally { try { await test.DisposeAsync(); } catch (Exception error) { cleanup.Add(Safe(error, "The independent auth HTTP cleanup failed.")); } }
         Throw(primary, cleanup);
@@ -101,9 +102,10 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
         if (primary is not null) ExceptionDispatchInfo.Capture(primary).Throw();
         if (cleanup.Count != 0) throw new AggregateException("Auth HTTP original cleanup failed.", cleanup);
     }
-    private async Task InitializeAsync(PostgresFixture postgres, bool bindIssuer)
+    private async Task InitializeAsync(PostgresFixture postgres, bool bindIssuer, bool displayMetadata)
     {
         Data = await PostgresMappingMetadataTestSupport.CreateAsync(postgres); Owner = new(Data.Case.MigrationConnectionString);
+        if (displayMetadata) DisplayMetadata = new(postgres.AccountDisplayConnectionString(Data.Case));
         if (bindIssuer)
         {
             var binding = await Owner.BindAsync(EntraProtocolFixturePolicy.UserKey, Data.Actor.PrincipalId);
@@ -274,6 +276,7 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
             try { await host.ReleaseBorrowedAsync(); } catch (Exception) { dependencies = false; errors.Add(new AuthHttpFailure("An owned borrowed-resource release failed.")); }
         foreach (var profile in additionalProfiles) try { profile.Dispose(); } catch (Exception) { dependencies = false; errors.Add(new AuthHttpFailure("An owned extra profile did not settle.")); }
         if (Owner is not null) try { ownerRelease ??= Owner.DisposeAsync().AsTask(); await ownerRelease.WaitAsync(TimeSpan.FromSeconds(15)); } catch (Exception) { dependencies = false; errors.Add(new AuthHttpFailure("The fixture identity owner did not settle.")); }
+        if (DisplayMetadata is not null) try { await DisplayMetadata.DisposeAsync(); } catch (Exception) { dependencies = false; errors.Add(new AuthHttpFailure("The display metadata owner did not settle.")); }
         if (!dependencies) { Throw(null, errors); return; }
         try { Files?.Dispose(); } catch (Exception) { errors.Add(new AuthHttpFailure("The owned qualification key root did not settle.")); }
         try { Crypto?.Dispose(); } catch (Exception) { errors.Add(new AuthHttpFailure("The owned protocol certificates did not settle.")); }
@@ -322,7 +325,7 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
         Transport = new(test.Issuer.Port, test.Crypto.Root);
         EntraClientRegistration.AddForHttpsFixture(builder.Services, new(EntraProtocolFixturePolicy.Tenant, EntraProtocolFixturePolicy.Client, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, test.Crypto.ClientCertificate, Transport);
         builder.Services.AddSingleton<IExternalIdentityReader>(identities);
-        builder.Services.AddWeftEntraBrowserAuthentication(new(test.Data.Seed.OrganizationA, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, identities);
+        builder.Services.AddWeftEntraBrowserAuthentication(new(test.Data.Seed.OrganizationA, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, identities, test.DisplayMetadata);
         builder.Services.AddWeftSessionCatalog(new(test.Data.Seed.OrganizationA), new CatalogMetadataEditOptions(true), new CatalogRevisionIngestionOptions(false), new CatalogProjectCreationOptions(false), new CatalogRevisionReportOptions(false, false));
         if (test.BearerBurst > 0)
         {

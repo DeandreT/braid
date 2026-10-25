@@ -7,6 +7,16 @@ import {
   syntheticCatalog,
 } from "./catalog.fixture";
 
+/** "Check session" lives in the header account menu. */
+async function checkSession(page: Page): Promise<void> {
+  const trigger = page.locator("#account-trigger");
+  if ((await trigger.getAttribute("aria-expanded")) !== "true")
+    await trigger.click();
+  await page
+    .getByRole("button", { name: "Check session", exact: true })
+    .click();
+}
+
 type Kind = "mapping" | "append";
 const bytes = Buffer.from(' {"order":9007199254740993,"code":"001"}\r\n');
 const submit = (page: Page, kind: Kind) =>
@@ -44,6 +54,7 @@ async function fixture(page: Page, kind: Kind, heldCapture = false) {
         state: "authenticated",
         identityContext,
         authActionRequestToken: "YXV0aC1h",
+        displayName: null,
         requestToken: "ZXBvY2gtYQ",
       },
     }),
@@ -154,10 +165,7 @@ async function failCheck(
         : route.fulfill({ status: 503, json: { code: "unavailable" } }),
     { times: 1 },
   );
-  if (duringCapture)
-    await page
-      .getByRole("button", { name: "Check session", exact: true })
-      .click();
+  if (duringCapture) await checkSession(page);
   else await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(
     page.getByRole("heading", {
@@ -279,9 +287,7 @@ for (const kind of ["mapping", "append"] as const) {
       (route) => route.fulfill({ status: 503, json: { code: "unavailable" } }),
       { times: 1 },
     );
-    await page
-      .getByRole("button", { name: "Check session", exact: true })
-      .click();
+    await checkSession(page);
     await expect(
       page.getByRole("heading", {
         name: "Workspace access unavailable",
