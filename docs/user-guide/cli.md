@@ -34,6 +34,11 @@ Use `--profile work` to choose a profile for one command. `weft logout` removes
 that profile's local account and tokens; it does not sign out your browser or
 other Microsoft applications.
 
+`weft health` checks whether the configured server is alive. `weft health --ready`
+checks whether it can accept work. These public checks do not need a sign-in or
+access the token store. Readiness can be unavailable while the server safely
+recovers its mapping service; do not treat that as a completed mapping operation.
+
 ## Find a mapping and read its reports
 
 Start with `weft projects list`, then use `weft mappings list --project PROJECT_ID`

@@ -7,6 +7,38 @@ namespace Weft.Tests;
 
 public sealed class BuildRunExecutorTests
 {
+    [Fact]
+    public async Task A_quarantined_service_releases_the_claim_and_the_same_pump_recovers_without_host_restart()
+    {
+        var connector = new FerruleServiceRecoveryTests.Connector();
+        await using var runner = FerruleServiceRecoveryTests.Runner(connector);
+        var store = new Store([Intent()]);
+        var execution = new Execution(async (claim, token) =>
+        {
+            var result = await runner.RunAsync(new byte[] { 1 }, token);
+            // FerruleBuildCompiler throws on every transport failure; the executor releases, not completes, it.
+            if (result.Failure != Weft.MappingBackends.Workers.WorkerProcessFailure.None)
+                throw new InvalidOperationException("Compiler worker unavailable.");
+            return Publication(claim);
+        })
+        { Admission = () => runner.Available };
+        var pump = new BuildRunPump(store, new(store, execution));
+        Assert.Equal(0, await pump.RunOnceAsync());
+        Assert.Equal(1, store.Releases);
+        Assert.Empty(store.Completed);
+        Assert.Equal(1, store.Claims);
+        Assert.Equal(0, await pump.RunOnceAsync());
+        Assert.Empty(store.Completed);
+        Assert.Equal(1, store.Claims);
+        Assert.Equal(1, store.Releases);
+        Assert.Equal(1, connector.Deliveries);
+        connector.Uncertain = false;
+        await FerruleServiceRecoveryTests.Reopened(runner);
+        Assert.Equal(1, await pump.RunOnceAsync());
+        Assert.Single(store.Completed);
+        Assert.Equal(2, connector.Deliveries);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -158,8 +190,10 @@ public sealed class BuildRunExecutorTests
         return new(BuildExecutionOutcome.Created, new(claim.Actor, artifact,
             new(PrivateObjectId.Restore(claim.Intent.Revision, claim.Intent.BuildId, PrivateObjectClass.DerivedArtifact), bytes.Digest, bytes.Length)));
     }
-    private sealed class Execution(Func<BuildRunClaim, CancellationToken, Task<BuildExecutionResult>> operation) : IBuildRunExecution
+    private sealed class Execution(Func<BuildRunClaim, CancellationToken, Task<BuildExecutionResult>> operation) : IBuildRunExecution, IExecutionAdmission
     {
+        internal Func<bool>? Admission;
+        public bool CanExecute => Admission?.Invoke() ?? true;
         internal readonly List<Guid> Calls = [];
         public Task<BuildExecutionResult> ExecuteAsync(BuildRunClaim claim, CancellationToken token = default)
         { Calls.Add(claim.Intent.BuildId); return operation(claim, token); }

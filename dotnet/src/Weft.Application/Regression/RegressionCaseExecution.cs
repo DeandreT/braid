@@ -47,7 +47,7 @@ public interface IRegressionCaseExecutor
     Task<RegressionCaseExecution> ExecuteAsync(ActorContext actor, RegressionCaseReference expected, CancellationToken cancellationToken = default);
 }
 
-public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor
+public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IExecutionAdmission
 {
     private readonly IRegressionCaseReader cases;
     private readonly IProjectReader projects;
@@ -55,6 +55,8 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor
     private readonly IPrivateObjectStore objects;
     private readonly IMappingPreviewBackend backend;
     private readonly RegressionRuntimeIdentity runtime;
+
+    public bool CanExecute => backend is not IExecutionAdmission { CanExecute: false };
 
     public RegressionCaseExecutionService(IRegressionCaseReader cases, IProjectReader projects,
         IRevisionReportMetadataReader sources, IPrivateObjectStore objects, IMappingPreviewBackend backend,

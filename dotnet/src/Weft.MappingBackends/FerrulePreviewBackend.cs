@@ -12,7 +12,7 @@ using Weft.MappingBackends.Workers;
 namespace Weft.MappingBackends;
 
 /// <summary>Runs bounded JSON sample previews through the restricted Ferrule worker.</summary>
-public sealed class FerrulePreviewBackend : IMappingPreviewBackend
+public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAdmission
 {
     public const string ProtocolVersion = "weft.ferrule-preview.v1";
     public const string AdapterBuild = "weft.ferrule-preview-adapter.v1";
@@ -22,6 +22,8 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
     private readonly IInspectionWorkerRunner _runner;
     private readonly string _backendBuild;
+
+    public bool CanExecute => _runner is not IExecutionAdmission { CanExecute: false };
 
     public FerrulePreviewBackend(IInspectionWorkerRunner runner)
     {

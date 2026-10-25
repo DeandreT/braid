@@ -322,7 +322,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               type: 'Readiness'
-              httpGet: healthProbe
+              httpGet: union(healthProbe, { path: '/api/v1/health/ready' })
               periodSeconds: 10
               failureThreshold: 3
             }

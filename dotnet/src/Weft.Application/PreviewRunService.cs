@@ -118,13 +118,15 @@ public sealed class PreviewRunService
 /// Executes leased attempts of stored preview runs through the preview backend, with native
 /// bytes read from private storage. It never submits or reads on a caller's behalf.
 /// </summary>
-public sealed class PreviewRunExecutor
+public sealed class PreviewRunExecutor : IExecutionAdmission
 {
     private readonly IPreviewRunStore _store;
     private readonly IPrivateObjectStore _objects;
     private readonly IMappingPreviewBackend _backend;
     private readonly TimeProvider _time;
     private readonly PreviewRunOptions _options;
+
+    public bool CanExecute => _backend is not IExecutionAdmission { CanExecute: false };
 
     public PreviewRunExecutor(IPreviewRunStore store, IPrivateObjectStore objects, IMappingPreviewBackend backend,
         TimeProvider time, PreviewRunOptions? options = null)
@@ -153,6 +155,8 @@ public sealed class PreviewRunExecutor
     public async Task<PreviewExecutionOutcome> ExecuteAsync(Guid organizationId, Guid runId, Guid workerInstance,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!CanExecute) return PreviewExecutionOutcome.Busy;
         var claimed = await _store.ClaimAsync(organizationId, runId, workerInstance, _options.Lease, cancellationToken).ConfigureAwait(false);
         switch (claimed.Outcome)
         {

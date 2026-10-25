@@ -16,6 +16,10 @@ public sealed class RunPreviewHandler
         PreviewRunOptions options, IMessageContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        cancellationToken.ThrowIfCancellationRequested();
+        // Pause/requeue the existing envelope instead of manufacturing scheduled deliveries for a closed backend.
+        // Once admission reopens the normal store claim still observes terminal, missing and expired runs.
+        if (!executor.CanExecute) throw new PreviewAdmissionClosedException();
         var outcome = await executor.ExecuteAsync(command.OrganizationId, command.RunId, worker.Id, cancellationToken).ConfigureAwait(false);
         switch (outcome)
         {
@@ -29,3 +33,5 @@ public sealed class RunPreviewHandler
         }
     }
 }
+
+public sealed class PreviewAdmissionClosedException() : Exception("Preview execution admission is closed.");

@@ -53,6 +53,8 @@ public sealed partial class RevisionReportService
                 {
                     throw new RevisionReportServiceException(Failure(error));
                 }
+                if (!registration.CanExecute)
+                    return RevisionReportEnsureResult.WithoutData(RevisionReportEnsureOutcome.AdmissionBusy);
                 var owned = await MetadataReadAsync(() => inspection.Repair is { } repair
                     ? _metadata.RepairAsync(actor, repair, _serverInstanceId, token)
                     : _metadata.TryClaimAsync(actor, key, _serverInstanceId, token));

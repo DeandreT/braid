@@ -16,6 +16,7 @@ public static class FerruleServiceProtocol
     public const string LivenessPath = "/v1/health/live";
     public const string ReadinessPath = "/v1/health/ready";
     public const string ProtocolHeader = "Weft-Service-Protocol";
+    public const string ReplicaHeader = "Weft-Service-Replica";
     public const string CompileToolchainHeader = "Weft-Compile-Toolchain";
     public const string CompiledRuntimeHeader = "Weft-Compiled-Runtime";
 

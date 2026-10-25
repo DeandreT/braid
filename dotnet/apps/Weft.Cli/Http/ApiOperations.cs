@@ -1,3 +1,4 @@
+using Weft.Contracts;
 using Weft.Contracts.Builds;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
@@ -23,7 +24,8 @@ internal sealed record ApiOperation(
     Type? RequestBody,
     IReadOnlyDictionary<int, Type?> Success,
     Type ErrorBody,
-    string ResponseMediaType = "application/json");
+    string ResponseMediaType = "application/json",
+    bool RequiresAuthentication = true);
 
 internal static class ApiOperations
 {
@@ -36,6 +38,11 @@ internal static class ApiOperations
     private static readonly string[] None = [];
     private static readonly string[] Page = ["limit", "cursor"];
     private static readonly string[] Key = ["Idempotency-Key"];
+
+    public static readonly ApiOperation GetHealth = new("GetHealth", "GET", "/api/v1/health", None, None,
+        null, null, Ok(typeof(HealthResponseV1)), typeof(HealthResponseV1), RequiresAuthentication: false);
+    public static readonly ApiOperation GetReadiness = new("GetReadiness", "GET", "/api/v1/health/ready", None, None,
+        null, null, Ok(typeof(HealthResponseV1)), typeof(HealthResponseV1), RequiresAuthentication: false);
 
     public static readonly ApiOperation GetCatalogContext = Get("GetCatalogContext", "/api/v1/catalog/context", typeof(CatalogContextV1));
     public static readonly ApiOperation GetHelpSections = Get("GetHelpSections", "/api/v1/help/sections", typeof(HelpSectionListV1));
@@ -145,7 +152,7 @@ internal static class ApiOperations
 
     public static IReadOnlyList<ApiOperation> All { get; } =
     [
-        GetCatalogContext, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
+        GetHealth, GetReadiness, GetCatalogContext, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
         GetCatalogMapping, GetCatalogMappingMetadata, EditCatalogMappingMetadata, GetCatalogRevisions, AppendCatalogRevision,
         GetCatalogRevision, GetCatalogRevisionIngestionReceipt, ResumeCatalogRevisionIngestion, GetCatalogProjectionReport,
         GetCatalogValidationReport, GetRetainedCatalogProjectionReport, GetRetainedCatalogValidationReport,
@@ -164,7 +171,6 @@ internal static class ApiOperations
     /// </summary>
     public static IReadOnlyDictionary<string, string> NotUsed { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["GetHealth"] = "an unauthenticated readiness probe, not a user operation",
         ["GetProjectionFixture"] = "a Development-only fixture route that the Session host does not map",
         ["GetNativeExamples"] = "a Development-only example route that the Session host does not map",
         ["GetNativeExample"] = "a Development-only example route that the Session host does not map",

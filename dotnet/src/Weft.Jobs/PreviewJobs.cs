@@ -1,5 +1,6 @@
 using JasperFx;
 using Wolverine;
+using Wolverine.ErrorHandling;
 using Wolverine.Postgresql;
 
 namespace Weft.Jobs;
@@ -34,6 +35,10 @@ public static class PreviewJobs
         options.PublishMessage<RunPreview>().ToPostgresqlQueue(Queue);
         if (role == PreviewJobRole.Worker)
         {
+            // Local admission is not an execution failure. Keep the same durable envelope and pause the listener;
+            // neither the run's attempt budget nor a finite delivery retry budget should expire during quarantine.
+            options.Policies.OnException<PreviewAdmissionClosedException>()
+                .RequeueIndefinitely().AndPauseProcessing(TimeSpan.FromSeconds(30));
             options.Discovery.IncludeType<RunPreviewHandler>();
             // The restricted worker runner admits one container at a time.
             options.ListenToPostgresqlQueue(Queue).MaximumParallelMessages(1).UseDurableInbox();

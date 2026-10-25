@@ -18,6 +18,34 @@ namespace Weft.Tests;
 public sealed class MappingEndpointRouteTests
 {
     [Fact]
+    public async Task An_uncertain_invocation_is_not_completed_and_a_later_attempt_uses_the_reopened_runner()
+    {
+        var connector = new FerruleServiceRecoveryTests.Connector();
+        await using var runner = FerruleServiceRecoveryTests.Runner(connector);
+        var test = await Harness.StartAsync(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60), TimeSpan.FromHours(1));
+        test.RuntimeAvailable = () => runner.Available;
+        test.Data.Execute = async token =>
+        {
+            var result = await runner.RunAsync(new byte[] { 1 }, token);
+            return result.Failure == WorkerProcessFailure.None ? test.Data.Data.Result : new(CompiledBuildOutcome.Unavailable);
+        };
+        Assert.Equal(503, (await test.CallAsync(new MemoryStream(test.Body))).Status);
+        Assert.Equal(MachineInvocationOutcome.Unavailable, Assert.Single(test.Data.Finishes).Outcome);
+        Assert.Null(Assert.Single(test.Data.Finishes).Response);
+        Assert.Equal(503, await test.ReadyAsync());
+        connector.Uncertain = false;
+        await FerruleServiceRecoveryTests.Reopened(runner);
+        Assert.Equal(204, await test.ReadyAsync());
+        var recovered = await test.CallAsync(new MemoryStream(test.Body));
+        Assert.Equal(200, recovered.Status);
+        Assert.Equal("false", recovered.Context.Response.Headers[MappingEndpointRoutes.ReplayedHeader].ToString());
+        Assert.Equal(MachineInvocationOutcome.Completed, test.Data.Finishes.Last().Outcome);
+        var replay = await test.CallAsync(new MemoryStream(test.Body));
+        Assert.Equal("true", replay.Context.Response.Headers[MappingEndpointRoutes.ReplayedHeader].ToString());
+        Assert.Equal(2, connector.Deliveries);
+    }
+
+    [Fact]
     public async Task A_credential_that_expires_while_the_body_is_withheld_claims_and_runs_nothing()
     {
         var test = await Harness.StartAsync(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60), expiresIn: TimeSpan.FromSeconds(3));

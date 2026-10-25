@@ -49,11 +49,19 @@
                   "pattern": "^sha256:[0-9a-f]{64}$",
                   "type": "string"
                 }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
               }
             }
           },
           "503": {
-            "description": "The replica is stopping. Send to another replica after `Retry-After`.",
+            "description": "The replica is stopping or its cleanup is unconfirmed. Send to another replica after `Retry-After`.",
             "headers": {
               "Weft-Service-Protocol": {
                 "description": "Identifies the service, so a client can tell its answers from an intermediary's.",
@@ -72,6 +80,14 @@
                   "enum": [
                     "1"
                   ],
+                  "type": "string"
+                }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
                   "type": "string"
                 }
               }
@@ -98,6 +114,14 @@
                   "enum": [
                     "weft.ferrule-service.v1"
                   ],
+                  "type": "string"
+                }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
                   "type": "string"
                 }
               }
@@ -240,6 +264,14 @@
                   "pattern": "^sha256:[0-9a-f]{64}$",
                   "type": "string"
                 }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
               }
             },
             "content": {
@@ -263,6 +295,14 @@
                   ],
                   "type": "string"
                 }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
               }
             }
           },
@@ -276,6 +316,14 @@
                   "enum": [
                     "weft.ferrule-service.v1"
                   ],
+                  "type": "string"
+                }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
                   "type": "string"
                 }
               }
@@ -303,6 +351,14 @@
                   ],
                   "type": "string"
                 }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
               }
             }
           },
@@ -318,6 +374,14 @@
                   ],
                   "type": "string"
                 }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
               }
             }
           },
@@ -331,6 +395,14 @@
                   "enum": [
                     "weft.ferrule-service.v1"
                   ],
+                  "type": "string"
+                }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
                   "type": "string"
                 }
               }
@@ -376,10 +448,30 @@
         ],
         "responses": {
           "204": {
-            "description": "Canceled, or recorded so that the operation is refused when it arrives."
+            "description": "Canceled, or recorded so that the operation is refused when it arrives.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Malformed operation identity, or a profile this service does not serve."
+            "description": "Malformed operation identity, or a profile this service does not serve.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -393,7 +485,17 @@
         "operationId": "GetLiveness",
         "responses": {
           "204": {
-            "description": "The process serves requests."
+            "description": "The process serves requests.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -413,10 +515,30 @@
         "operationId": "GetReadiness",
         "responses": {
           "204": {
-            "description": "Ready."
+            "description": "Ready.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Stopping, or a cleanup is unconfirmed."
+            "description": "Stopping, or a cleanup is unconfirmed.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -443,6 +565,14 @@
                 "required": true,
                 "schema": {
                   "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
                   "type": "string"
                 }
               }
@@ -546,6 +676,14 @@
                   "pattern": "^sha256:[0-9a-f]{64}$",
                   "type": "string"
                 }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
               }
             },
             "content": {
@@ -558,10 +696,30 @@
             }
           },
           "400": {
-            "description": "Malformed operation identity, media type, content encoding or length. Nothing ran."
+            "description": "Malformed operation identity, media type, content encoding or length. Nothing ran.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Another native or toolchain identity, a runtime identity, or a repeated operation identity. Nothing ran."
+            "description": "Another native or toolchain identity, a runtime identity, or a repeated operation identity. Nothing ran.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
             "description": "The replica is full or stopping, or the operation was not admitted within the admission wait. Nothing ran; send a fresh operation identity to any replica after `Retry-After`.",
@@ -573,6 +731,14 @@
                   "enum": [
                     "1"
                   ],
+                  "type": "string"
+                }
+              },
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
                   "type": "string"
                 }
               }
@@ -603,10 +769,30 @@
         ],
         "responses": {
           "204": {
-            "description": "Canceled, or recorded so that the operation is refused when it arrives."
+            "description": "Canceled, or recorded so that the operation is refused when it arrives.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Malformed operation identity."
+            "description": "Malformed operation identity.",
+            "headers": {
+              "Weft-Service-Replica": {
+                "description": "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                "required": true,
+                "schema": {
+                  "pattern": "^[0-9a-f]{32}$",
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }

@@ -53,10 +53,16 @@ public static class InspectionWorkerHostConfiguration
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(connector);
+        services.AddSingleton(_ => new InspectionWorkerAdmission());
         services.AddKeyedSingleton(nameof(IFerruleServiceConnector), (provider, _) => connector(provider));
-        services.AddSingleton(provider => new FerruleServiceRunner(new(
-            provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)), FerruleServiceProtocol.InspectionProfile,
-            buildIdentity, compileToolchainIdentity)));
+        services.AddSingleton(provider =>
+        {
+            var runner = new FerruleServiceRunner(new(
+                provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)), FerruleServiceProtocol.InspectionProfile,
+                buildIdentity, compileToolchainIdentity));
+            provider.GetRequiredService<InspectionWorkerAdmission>().Bind(runner);
+            return runner;
+        });
         services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<FerruleServiceRunner>());
         services.AddSingleton<IHostedService>(provider =>
             new InspectionWorkerHostLifetime(provider.GetRequiredService<FerruleServiceRunner>().StopAsync));

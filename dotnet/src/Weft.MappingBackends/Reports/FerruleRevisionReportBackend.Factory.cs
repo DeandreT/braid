@@ -16,19 +16,20 @@ public static class FerruleRevisionReportBackendFactory
     }
 
     public static RevisionReportProfileRegistry CreateRegistry(RevisionReportBackendProfile trustedProfile,
-        RevisionReportPolicy policy, Func<IInspectionWorkerRunner> sharedRunnerFactory)
+        RevisionReportPolicy policy, Func<IInspectionWorkerRunner> sharedRunnerFactory, IExecutionAdmission? knownAdmission = null)
     {
         RequireProfile(trustedProfile);
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(sharedRunnerFactory);
         var runner = new Lazy<IInspectionWorkerRunner>(() => sharedRunnerFactory() ??
             throw new RevisionReportServiceException(RevisionReportFailureCategory.ProfileUnavailable));
+        var admission = new DeferredAdmission(runner, knownAdmission);
         var projection = Format(RevisionReportOperation.Projection);
         var validation = Format(RevisionReportOperation.Validation);
         var validator = new FerruleRevisionReportFormatValidator();
         return new([
-            new(trustedProfile, projection, policy, () => new DeferredBackend(runner, trustedProfile)),
-            new(trustedProfile, validation, policy, () => new DeferredBackend(runner, trustedProfile))
+            new(trustedProfile, projection, policy, () => new DeferredBackend(runner, trustedProfile, admission), admission),
+            new(trustedProfile, validation, policy, () => new DeferredBackend(runner, trustedProfile, admission), admission)
         ], [new(projection, validator), new(validation, validator)]);
     }
 
@@ -58,13 +59,24 @@ public static class FerruleRevisionReportBackendFactory
                 throw new ArgumentException("A trusted immutable image identity is required.", nameof(image));
     }
 
-    private sealed class DeferredBackend : IRevisionReportBackend
+    // The registrations share this signal even before either outer backend is resolved.
+    // A host can also expose its already-created runner without invoking the runner factory.
+    private sealed class DeferredAdmission(Lazy<IInspectionWorkerRunner> runner, IExecutionAdmission? knownAdmission) : IExecutionAdmission
+    {
+        public bool CanExecute => knownAdmission is not { CanExecute: false } &&
+            (!runner.IsValueCreated || runner.Value is not IExecutionAdmission { CanExecute: false });
+    }
+
+    private sealed class DeferredBackend : IRevisionReportBackend, IExecutionAdmission
     {
         private readonly RevisionReportBackendProfile _profile;
         private readonly Lazy<FerruleRevisionReportBackend> _backend;
-        internal DeferredBackend(Lazy<IInspectionWorkerRunner> runner, RevisionReportBackendProfile profile)
+        private readonly IExecutionAdmission _admission;
+        public bool CanExecute => _admission.CanExecute;
+        internal DeferredBackend(Lazy<IInspectionWorkerRunner> runner, RevisionReportBackendProfile profile, IExecutionAdmission admission)
         {
             _profile = profile;
+            _admission = admission;
             _backend = new(() => new(runner.Value, profile));
         }
         public Task<RevisionReportBackendResult> DeriveAsync(RevisionReportKey key, NativeArtifact artifact,

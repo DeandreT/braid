@@ -109,6 +109,7 @@ shaped like a token.
 | Command | Operations |
 | --- | --- |
 | `weft context`, `weft whoami` | Catalog context and admitted identity |
+| `weft health [--ready]` | Public liveness, or readiness to accept work; does not sign in or read tokens |
 | `weft guide list/get` | The authenticated server's user guide, as readable text or exact structured JSON |
 | `weft projects list/get/create` | Projects; creation makes you the project's administrator |
 | `weft mappings list/get/create` | Mappings; `create` uploads the first native revision |
@@ -149,8 +150,9 @@ terminal. Progress, retries and sign-in prompts go to standard error.
 
 ## Requests and recovery
 
-- **Transport:** every request carries only `Authorization: Bearer`. There is no cookie handler,
-  redirects are not followed, and no browser antiforgery header is sent.
+- **Transport:** business requests carry only `Authorization: Bearer`; public health checks
+  omit credentials. There is no cookie handler, redirects are not followed, and no browser
+  antiforgery header is sent.
 - **Retries:** a `429` or a busy `503` is retried after the server's `Retry-After`, capped at 60
   seconds (2 seconds when absent), up to five attempts. Connection failures are retried with
   backoff. A `401` triggers one forced token refresh and one retry.

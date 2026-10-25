@@ -7,6 +7,20 @@ namespace Weft.Tests;
 public sealed class RegressionCaseExecutionTests
 {
     [Fact]
+    public void Local_admission_tracks_the_same_backend_without_reading_case_or_payload_data()
+    {
+        var test = new Harness();
+        Assert.True(test.Service.CanExecute);
+        test.CanExecute = false;
+        Assert.False(test.Service.CanExecute);
+        test.CanExecute = true;
+        Assert.True(test.Service.CanExecute);
+        Assert.Equal(0, test.SourceReads);
+        Assert.Equal(0, test.StorageReads);
+        Assert.Empty(test.Requests);
+    }
+
+    [Fact]
     public async Task Replays_the_exact_saved_revision_clock_parameters_and_bytes()
     {
         var test = new Harness();
@@ -342,8 +356,9 @@ public sealed class RegressionCaseExecutionTests
     private static PreviewOutputArtifact Output(string boundary, string name, ReadOnlySpan<byte> bytes,
         bool truncated = false, string media = PreviewPolicy.MediaType) => new(boundary, name, truncated, media, 1, bytes);
 
-    private sealed class Harness : IRegressionCaseReader, IProjectReader, IRevisionReportMetadataReader, IPrivateObjectStore, IMappingPreviewBackend
+    private sealed class Harness : IRegressionCaseReader, IProjectReader, IRevisionReportMetadataReader, IPrivateObjectStore, IMappingPreviewBackend, IExecutionAdmission
     {
+        public bool CanExecute { get; set; } = true;
         internal static readonly RevisionScope OtherScope = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         private readonly RevisionScope scope = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         private readonly Guid caseId = Guid.NewGuid();

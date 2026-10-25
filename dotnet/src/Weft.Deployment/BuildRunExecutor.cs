@@ -9,6 +9,7 @@ public sealed class BuildRunExecutor(IBuildRunStore store, IBuildRunExecution ex
     {
         ArgumentNullException.ThrowIfNull(key);
         token.ThrowIfCancellationRequested();
+        if (execution is IExecutionAdmission { CanExecute: false }) return BuildRunDispatchOutcome.Unavailable;
         BuildRunClaim? claim;
         try { claim = await store.ClaimAsync(key.OrganizationId, key.BuildId, workerId, token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }

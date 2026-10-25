@@ -160,6 +160,12 @@ public sealed class RevisionIngestionService : IRevisionIngestionService
     private async Task<RevisionIngestionResult> ClaimAndRunAsync(ActorContext actor,
         IngestionReceipt receipt, byte[]? sourceBytes, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        // Preserve uploaded bytes and reusable eligible evidence. Only a resume that needs fresh engine work is
+        // held back; staging a new source and committing previously eligible evidence retain their normal paths.
+        if (sourceBytes is null && receipt.Phase is IngestionPhase.Staged or IngestionPhase.Ready && receipt.EligibleAttemptGeneration is null &&
+            _backends.GetReserved(receipt.Facts.BackendProfile)?.Backend is IExecutionAdmission { CanExecute: false })
+            return FromReceipt(receipt);
         var claimResult = await _metadata.ClaimAsync(actor, receipt.Facts.Project,
             receipt.Facts.OperationId, _serverInstanceId, cancellationToken);
         if (claimResult.Receipt is not { } claimedReceipt)

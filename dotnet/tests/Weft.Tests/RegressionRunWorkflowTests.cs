@@ -94,6 +94,33 @@ public sealed class RegressionRunWorkflowTests
     }
 
     [Fact]
+    public async Task A_run_released_by_an_uncertain_service_recovers_on_the_same_executor_after_quarantine()
+    {
+        var connector = new FerruleServiceRecoveryTests.Connector();
+        await using var runner = FerruleServiceRecoveryTests.Runner(connector);
+        var store = new Runs();
+        var execution = new CaseExecutor(async token =>
+        {
+            var result = await runner.RunAsync(new byte[] { 1 }, token);
+            return result.Failure == Weft.MappingBackends.Workers.WorkerProcessFailure.None ? Success()
+                : RegressionCaseExecution.Refused(RegressionCaseExecutionOutcome.InfrastructureFailure);
+        })
+        { Admission = () => runner.Available };
+        var executor = new RegressionRunExecutor(store, execution);
+        Assert.Equal(RegressionRunDispatchOutcome.Deferred, await executor.ExecuteAsync(Reference.Revision.OrganizationId, RunId, store.Worker));
+        Assert.Equal(1, store.Releases);
+        Assert.Equal(0, store.Completions);
+        for (var index = 0; index < 10; index++)
+            Assert.Equal(RegressionRunDispatchOutcome.Deferred, await executor.ExecuteAsync(Reference.Revision.OrganizationId, RunId, store.Worker));
+        Assert.Equal(1, store.Claims);
+        connector.Uncertain = false;
+        await FerruleServiceRecoveryTests.Reopened(runner);
+        Assert.Equal(RegressionRunDispatchOutcome.Completed, await executor.ExecuteAsync(Reference.Revision.OrganizationId, RunId, store.Worker));
+        Assert.Equal(1, store.Completions);
+        Assert.Equal(2, connector.Deliveries);
+    }
+
+    [Fact]
     public async Task A_requested_shutdown_cancels_execution_and_releases_the_owned_attempt()
     {
         var store = new Runs();
@@ -127,8 +154,10 @@ public sealed class RegressionRunWorkflowTests
     private static RegressionCaseExecution Success() => RegressionCaseExecution.Complete(MappingPreviewStatus.Succeeded, Value.Expected,
         new RegressionComparisonService().Compare(Value.Expected, new(OperationStatusV1.Succeeded, Value.Expected)));
 
-    private sealed class CaseExecutor(Func<CancellationToken, Task<RegressionCaseExecution>> action) : IRegressionCaseExecutor
+    private sealed class CaseExecutor(Func<CancellationToken, Task<RegressionCaseExecution>> action) : IRegressionCaseExecutor, IExecutionAdmission
     {
+        internal Func<bool>? Admission;
+        public bool CanExecute => Admission?.Invoke() ?? true;
         internal int Calls { get; private set; }
         public Task<RegressionCaseExecution> ExecuteAsync(ActorContext actor, RegressionCaseReference expected, CancellationToken cancellationToken = default)
         {
@@ -143,10 +172,12 @@ public sealed class RegressionRunWorkflowTests
         internal RegressionRunClaimResult ClaimResult { get; set; }
         internal bool Observed { get; init; } = true;
         internal int Releases { get; private set; }
+        internal int Claims { get; private set; }
         internal int Completions { get; private set; }
         internal Runs() => ClaimResult = new(RegressionRunClaimOutcome.Claimed,
             new(RunId, Actor.PrincipalId, Reference, 1, Worker, Guid.NewGuid(), DateTimeOffset.UtcNow.AddSeconds(90)));
-        public Task<RegressionRunClaimResult> ClaimAsync(Guid organizationId, Guid runId, Guid worker, CancellationToken token = default) => Task.FromResult(ClaimResult);
+        public Task<RegressionRunClaimResult> ClaimAsync(Guid organizationId, Guid runId, Guid worker, CancellationToken token = default)
+        { Claims++; return Task.FromResult(ClaimResult); }
         public Task<bool> ObserveAsync(RegressionRunClaim claim, CancellationToken token = default) => Task.FromResult(Observed);
         public Task<bool> CompleteAsync(RegressionRunClaim claim, RegressionCaseExecution completion, CancellationToken token = default) { Completions++; return Task.FromResult(true); }
         public Task<bool> ReleaseAsync(RegressionRunClaim claim, CancellationToken token = default) { Releases++; return Task.FromResult(true); }

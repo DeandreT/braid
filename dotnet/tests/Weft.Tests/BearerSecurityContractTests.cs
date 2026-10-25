@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -91,11 +92,12 @@ public sealed partial class BearerSecurityContractTests
             requirement.EnumerateObject().Any() ? string.Join('+', requirement.EnumerateObject().Select(scheme => scheme.Name)) : "anonymous"));
     }
 
-    private static string RepositoryRoot()
+    private static string RepositoryRoot([CallerFilePath] string sourceFile = "")
     {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-            if (File.Exists(Path.Combine(directory.FullName, "global.json")) && File.Exists(Path.Combine(directory.FullName, "contracts", "weft-v1.json")))
-                return directory.FullName;
+        foreach (var root in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory(), Path.GetDirectoryName(sourceFile)! })
+            for (var directory = new DirectoryInfo(root); directory is not null; directory = directory.Parent)
+                if (File.Exists(Path.Combine(directory.FullName, "global.json")) && File.Exists(Path.Combine(directory.FullName, "contracts", "weft-v1.json")))
+                    return directory.FullName;
         throw new InvalidOperationException("The repository contract is required for the security parity check.");
     }
 

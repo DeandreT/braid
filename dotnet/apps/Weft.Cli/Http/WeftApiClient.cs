@@ -75,7 +75,8 @@ internal sealed class WeftApiClient : IDisposable
         var forceRefresh = false;
         for (var attempt = 1; ; attempt++)
         {
-            var token = await _tokens.GetAccessTokenAsync(forceRefresh, cancellationToken);
+            var token = request.Operation.RequiresAuthentication
+                ? await _tokens.GetAccessTokenAsync(forceRefresh, cancellationToken) : null;
             forceRefresh = false;
             using var message = Build(request, token);
             CancellationTokenSource? timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -87,13 +88,14 @@ internal sealed class WeftApiClient : IDisposable
             {
                 response = await _http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
                 var status = (int)response.StatusCode;
-                if (status == 401 && !refreshed)
+                if (status == 401 && request.Operation.RequiresAuthentication && !refreshed)
                 {
                     refreshed = forceRefresh = true;
                     attempt--;
                     continue;
                 }
-                if (attempt < MaximumAttempts && await RetryableAsync(response, request.Operation, timeout.Token) is { } advised)
+                if (request.Operation.RequiresAuthentication && attempt < MaximumAttempts &&
+                    await RetryableAsync(response, request.Operation, timeout.Token) is { } advised)
                 {
                     delay = advised;
                     reason = status == 429 ? "The server is rate limiting requests" : "The server is busy";
@@ -127,10 +129,10 @@ internal sealed class WeftApiClient : IDisposable
         }
     }
 
-    private HttpRequestMessage Build(ApiRequest request, string token)
+    private HttpRequestMessage Build(ApiRequest request, string? token)
     {
         var message = new HttpRequestMessage(new HttpMethod(request.Operation.Method), new Uri(_server, request.Target()));
-        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (token is not null) message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(request.Operation.ResponseMediaType));
         message.Headers.UserAgent.ParseAdd(UserAgent);
         foreach (var (name, value) in request.Headers)

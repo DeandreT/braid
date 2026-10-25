@@ -18,6 +18,98 @@ namespace Weft.Tests;
 public sealed class FerruleServiceEndToEndTests
 {
     [ServiceWorkerFact]
+    public async Task DroppedChannelWithARealChildRecoversOnAFreshReplicaWithoutRestartingTheRunner()
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            await using var first = await ServiceHost.StartAsync(root, holdInspection: true);
+            await using var replacement = await ServiceHost.StartAsync(root);
+            await using var balancer = FerruleServiceRunnerTests.RoundRobinBalancer.Start(first.Server.Port);
+            var connector = new SwitchingConnector(new PinnedServiceConnector(new(
+                new Uri("https://127.0.0.1:" + balancer.Port), first.ServerPin, first.ClientCertificate)));
+            await using var runner = new FerruleServiceRunner(new(connector, "inspection", first.Identity));
+            var frame = await FerruleServiceProcessRunnerTests.InspectionFrameAsync();
+            var pending = runner.RunAsync(frame, default);
+            await WaitForWorkerChildren(1, sandboxReady: true);
+            balancer.Sever();
+            Assert.Equal(WorkerProcessFailure.CleanupFailed, (await pending.WaitAsync(TimeSpan.FromSeconds(15))).Failure);
+            Assert.False(runner.Available);
+            connector.Current = new PinnedServiceConnector(new(replacement.Endpoint, replacement.ServerPin, replacement.ClientCertificate));
+            Assert.Equal(WorkerProcessFailure.SandboxUnavailable, (await runner.RunAsync(frame, default)).Failure);
+            var quarantined = Stopwatch.StartNew();
+            using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(65)))
+                while (!runner.Available) await Task.Delay(25, deadline.Token);
+            Assert.True(quarantined.Elapsed >= TimeSpan.FromSeconds(46));
+            Assert.Empty(WorkerChildren());
+            var recovered = await new FerruleInspectionBackend(runner).ValidateAsync(Artifact("valid-basic"));
+            Assert.True(recovered.Provenance.Confirmed);
+            Assert.Equal(MappingOperationStatus.Succeeded, recovered.Status);
+            Assert.Empty(WorkerChildren());
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+            await runner.StopAsync();
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private sealed class SwitchingConnector(IFerruleServiceConnector current) : IFerruleServiceConnector
+    {
+        internal IFerruleServiceConnector Current = current;
+        public IFerruleServiceChannel Open() => Current.Open();
+    }
+
+    [ServiceCompileFact]
+    public async Task KillingAPackagedReplicaDuringCompilationRecoversTheSameHostRunnerOnAnotherReplica()
+    {
+        var root = TemporaryRoot();
+        using var certificate = TransportCase.Certificate("CN=Recovery replicas");
+        using var client = TransportCase.Certificate("CN=Recovery caller");
+        try
+        {
+            await using var first = await PackagedFerruleService.StartAsync(PackagedFerruleService.Bundle(certificate),
+                [TransportCase.Pin(client)], root, extra: PackagedFerruleService.Compilation);
+            await using var replacement = await PackagedFerruleService.StartAsync(PackagedFerruleService.Bundle(certificate),
+                [TransportCase.Pin(client)], root, extra: PackagedFerruleService.Compilation);
+            using var http = ServiceHost.PinnedClient(new Uri("https://127.0.0.1:" + replacement.Port), TransportCase.Pin(certificate), client);
+            using var capabilities = JsonDocument.Parse(await http.GetByteArrayAsync(FerruleServiceProtocol.CapabilitiesPath));
+            var toolchain = capabilities.RootElement.GetProperty("profiles").EnumerateArray()
+                .Single(profile => profile.GetProperty("name").GetString() == "compile").GetProperty("toolchain").GetProperty("identity").GetString()!;
+            var connector = new SwitchingConnector(new PinnedServiceConnector(new(new Uri("https://127.0.0.1:" + first.Port), TransportCase.Pin(certificate), client)));
+            var clock = new MaintenanceServiceTestTimeProvider();
+            var options = new FerruleServiceRunnerOptions(connector, "compile", PackagedFerruleService.Identity, toolchain) { Clock = clock };
+            await using var runner = new FerruleServiceRunner(options);
+            var frame = BuildFrame("valid-basic", "compile");
+            var pending = runner.RunAsync(frame, default);
+            using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+            {
+                // A replica is a process tree/cgroup, not just its listening process. Remove the whole owned tree.
+                while (!Directory.EnumerateDirectories($"/proc/{first.Process.Id}/task").Any(task =>
+                {
+                    try { return File.ReadAllText(Path.Combine(task, "children")).Trim().Length > 0; }
+                    catch (IOException) { return false; }
+                }))
+                {
+                    Assert.False(pending.IsCompleted, "The compile must still be running when the replica is killed.");
+                    await Task.Delay(1, deadline.Token);
+                }
+            }
+            Assert.False(pending.IsCompleted);
+            first.Process.Kill(entireProcessTree: true);
+            await first.Process.WaitForExitAsync();
+            Assert.Equal(WorkerProcessFailure.CleanupFailed, (await pending.WaitAsync(TimeSpan.FromSeconds(20))).Failure);
+            Assert.False(runner.Available);
+            connector.Current = new PinnedServiceConnector(new(new Uri("https://127.0.0.1:" + replacement.Port), TransportCase.Pin(certificate), client));
+            clock.Advance(options.QuarantineBound);
+            await FerruleServiceRecoveryTests.Reopened(runner);
+            var recovered = await runner.RunAsync(frame, default);
+            Assert.Equal(WorkerProcessFailure.None, recovered.Failure);
+            Assert.NotEmpty(recovered.Output);
+            await runner.StopAsync();
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [ServiceWorkerFact]
     public async Task ServiceAnswersEqualDirectChildOutputsOnEveryRoute()
     {
         var root = TemporaryRoot();
@@ -254,7 +346,7 @@ public sealed class FerruleServiceEndToEndTests
     }
 
     /// <summary>The service composition (child runners behind one pinned listener) on an ephemeral port.</summary>
-    private sealed class ServiceHost : IAsyncDisposable
+    internal sealed class ServiceHost : IAsyncDisposable
     {
         private readonly ProcessWorkerRunner inspection;
         private readonly ProcessWorkerRunner preview;

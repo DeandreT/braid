@@ -76,16 +76,20 @@ public sealed class CliContractDriftTests
             CompareShape(type, content["schema"]!, $"{operationId} {status}");
         }
 
-        // The CLI authenticates only with the delegated bearer token, so every operation it calls must admit it.
+        // Business operations admit delegated bearer tokens; only public health probes omit credentials.
         var security = documented.Node["security"]?.AsArray() ?? Spec.Document["security"]?.AsArray();
-        Assert.True(security is not null && security.Any(requirement => requirement!.AsObject().Count == 1 &&
-            requirement["entraBearer"]?.AsArray().Select(scope => scope!.GetValue<string>()).SequenceEqual(["api://{sessionClientId}/{scope}"]) == true),
-            $"{operationId} does not admit the entraBearer scheme alone");
+        if (operation.RequiresAuthentication)
+            Assert.True(security is not null && security.Any(requirement => requirement!.AsObject().Count == 1 &&
+                requirement["entraBearer"]?.AsArray().Select(scope => scope!.GetValue<string>()).SequenceEqual(["api://{sessionClientId}/{scope}"]) == true),
+                $"{operationId} does not admit the entraBearer scheme alone");
+        else
+            Assert.True(security is null || security.Count == 0 || security.Any(requirement => requirement!.AsObject().Count == 0),
+                $"{operationId} is not declared as a public probe");
 
         var errorSchema = "#/components/schemas/" + operation.ErrorBody.Name;
         var errors = documented.Statuses.Where(status => status >= 400).Select(status => documented.Response(status)!)
             .Select(response => response["content"]?["application/json"]?["schema"]).Where(schema => schema is not null).ToArray();
-        Assert.NotEmpty(errors);
+        if (operation.RequiresAuthentication) Assert.NotEmpty(errors);
         Assert.All(errors, schema => Assert.True(schema!.ToJsonString().Contains(errorSchema, StringComparison.Ordinal) ||
             schema.ToJsonString().Contains("#/components/schemas/CatalogRevisionIngestionResultV1", StringComparison.Ordinal),
             $"{operationId} documents an error body other than {operation.ErrorBody.Name}"));
