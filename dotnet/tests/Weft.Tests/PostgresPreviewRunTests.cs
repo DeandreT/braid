@@ -77,11 +77,11 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
         Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound,
             (await test.Service().SubmitAsync(new ActorContext(new PrincipalId(test.Catalog.Seed.Bob)), submission)).Outcome);
         Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound, (await test.Service().SubmitAsync(test.Alice,
-            submission with { Revision = new(test.Revision.OrganizationId, test.Revision.ProjectId, test.Revision.MappingId, Guid.NewGuid()), RequestKey = Guid.NewGuid() })).Outcome);
+            submission with { Subject = new RevisionPreviewSubject(new(test.Revision.OrganizationId, test.Revision.ProjectId, test.Revision.MappingId, Guid.NewGuid())), RequestKey = Guid.NewGuid() })).Outcome);
 
         var snapshot = Assert.IsType<PreviewRunSnapshot>(await test.Service().ReadAsync(test.Alice, test.Revision.OrganizationId, run));
         Assert.Equal(PreviewRunState.Queued, snapshot.State);
-        Assert.Equal(test.Revision, snapshot.Revision);
+        Assert.Equal(test.Revision, Assert.IsType<RevisionPreviewSubject>(snapshot.Subject).Revision);
         Assert.Equal(0, snapshot.Attempt);
         Assert.Equal(3, snapshot.MaxAttempts);
         Assert.Null(snapshot.Outcome);
@@ -108,8 +108,8 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
         var org = test.Revision.OrganizationId;
         var first = Assert.IsType<PreviewRunClaim>((await test.Store.ClaimAsync(org, run, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Claim);
         Assert.Equal(1, first.Attempt);
-        Assert.Equal(test.Revision, first.Revision);
-        Assert.Equal(test.Native, first.NativeObject);
+        Assert.Equal(test.Revision, Assert.IsType<RevisionPreviewSubject>(first.Subject).Revision);
+        Assert.Equal(test.Native, Assert.IsType<StoredPreviewNative>(first.Native).Reference);
         Assert.Equal(test.Alice.PrincipalId, first.Submitter);
         Assert.Equal(PreviewClaimOutcome.Busy, (await test.Store.ClaimAsync(org, run, Guid.NewGuid(), TimeSpan.FromSeconds(60))).Outcome);
         var inputs = await test.Store.ReadInputsAsync(first);

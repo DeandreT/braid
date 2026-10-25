@@ -19,17 +19,18 @@ internal static class RegressionSchemaTestContract
     internal const string LocalReleaseChecksum = "91ea3ec6ca0652000a319b565f699a53f296c44f0c2f633670cfce83f9eb63e3";
     internal const string MachineInvocationChecksum = "8a1b8ec1221b58a5cb102b76dba7c17be0855e07097275b323a324a51f981b13";
     internal const string ApiRequestAuditChecksum = "e8ce44832823c885a709222b66f317c86b2bf789262804266a9920f50e7601a2";
-    internal static readonly string[] Tables = ["regression_cases", "regression_case_versions", "regression_runs", .. BuildRoleGuard.Tables, .. BuildRunRoleGuard.Tables, .. QualificationRoleGuard.Tables, .. LocalReleaseRoleGuard.Tables, .. MachineInvocationRoleGuard.Tables, .. ApiRequestAuditRoleGuard.Tables];
+    internal static readonly string[] Tables = ["regression_cases", "regression_case_versions", "regression_runs", .. BuildRoleGuard.Tables, .. BuildRunRoleGuard.Tables, .. QualificationRoleGuard.Tables, .. LocalReleaseRoleGuard.Tables, .. MachineInvocationRoleGuard.Tables, .. ApiRequestAuditRoleGuard.Tables, .. MappingDraftSchemaTestContract.Tables];
     internal static readonly string[] Functions = ["case_authorized", "guard_regression_case", "guard_regression_version",
         "save_regression_case", "read_regression_case", "list_regression_cases", "regression_run_authorized", "guard_regression_run",
         "submit_regression_run", "claim_regression_run", "observe_regression_run", "finish_regression_run", "release_regression_run",
-        "cancel_regression_run", "read_regression_run", "list_ready_regression_runs", "list_regression_run_history", .. BuildRoleGuard.Names, .. BuildRunRoleGuard.Names, .. BuildMetadataRoleGuard.Names, .. QualificationRoleGuard.Names, .. LocalReleaseRoleGuard.Names, .. MachineInvocationRoleGuard.Names, .. ApiRequestAuditRoleGuard.Names];
+        "cancel_regression_run", "read_regression_run", "list_ready_regression_runs", "list_regression_run_history", .. BuildRoleGuard.Names, .. BuildRunRoleGuard.Names, .. BuildMetadataRoleGuard.Names, .. QualificationRoleGuard.Names, .. LocalReleaseRoleGuard.Names, .. MachineInvocationRoleGuard.Names, .. ApiRequestAuditRoleGuard.Names, .. MappingDraftSchemaTestContract.Functions];
     internal static readonly string[] Roles = ["weft_case_reader", "weft_case_writer", "weft_run_reader", "weft_run_writer", "weft_build_reader", "weft_build_writer",
         "weft_build_run_reader", "weft_build_run_writer", "weft_build_dispatcher", "weft_build_metadata_reader", "weft_qualification_reader", "weft_qualification_writer", "weft_release_reader", "weft_release_writer",
-        "weft_invocation_grant_writer", "weft_invocation_writer", "weft_api_audit_writer"];
+        "weft_invocation_grant_writer", "weft_invocation_writer", "weft_api_audit_writer", .. MappingDraftSchemaTestContract.Roles];
 
     internal static async Task AdmitAsync(PostgresCase test, CancellationToken token = default)
     {
+        await MappingDraftSchemaTestContract.AdmitPreviewParentAsync(test);
         var actor = new ActorContext(new(Guid.NewGuid()));
         var mapping = new MappingScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         foreach (var profile in new[] { RegressionCaseDatabaseProfile.Reader, RegressionCaseDatabaseProfile.Writer })

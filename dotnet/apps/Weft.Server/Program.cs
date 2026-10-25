@@ -30,6 +30,7 @@ if (builder.Environment.IsDevelopment())
     DevelopmentFerruleRunner.Configure(builder.Services, Environment.GetEnvironmentVariable);
 builder.Services.AddWeftNativeExamples();
 var app = builder.Build();
+BrowserContentPolicy.Use(app, hostOptions.Origin);
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapWeftHealth();

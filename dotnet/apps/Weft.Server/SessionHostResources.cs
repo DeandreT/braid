@@ -123,6 +123,8 @@ internal sealed class SessionHostResources
             options.NativeByteLimit, options.DerivedReadByteLimit, options.Builds);
         ChatHostConfiguration.Configure(services, read, options.Chat, true, options.Reports, session: true);
         CatalogPreviewHostConfiguration.Configure(services, options.Previews, read, session: true);
+        CatalogMappingEditingHostConfiguration.Configure(services, read, true, options.Ingestion.Enabled, options.Reports.Enabled,
+            options.Reports.DerivationEnabled, session: true);
         SessionHostDataProtectionPolicy.Apply(services);
     }
 

@@ -55,6 +55,7 @@ internal static class SessionHostEntrypoint
                                 context.Response.Headers.StrictTransportSecurity = "max-age=31536000";
                             }
                         });
+                        BrowserContentPolicy.Use(app, options.Origin);
                         app.UseDefaultFiles();
                         app.UseStaticFiles();
                         app.UseRouting();

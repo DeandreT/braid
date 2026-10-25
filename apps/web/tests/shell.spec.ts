@@ -6,15 +6,19 @@ const healthStatus = (page: Page) =>
 test("the packaged C# host serves nested Angular navigation and preserves API 404s", async ({
   page,
   request,
+  baseURL,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("http://127.0.0.1:4101/examples");
+  const origin = process.env.WEFT_EDIT_SHELL_DLL
+    ? baseURL!
+    : "http://127.0.0.1:4101";
+  await page.goto(origin + "/examples");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
     "Understand your mapping.",
   );
   await expect(healthStatus(page)).toHaveText("Workspace connected");
-  const missing = await request.get("http://127.0.0.1:4101/api/v1/missing");
+  const missing = await request.get(origin + "/api/v1/missing");
   expect(missing.status()).toBe(404);
   expect(missing.headers()["content-type"] ?? "").not.toContain("text/html");
   expect(errors).toEqual([]);

@@ -1,0 +1,476 @@
+@if (admitted()) {
+  <weft-workbench-frame
+    [viewOptions]="['mapping']"
+    [inspector]="inspector"
+    [dock]="dock"
+    [commands]="commands()"
+    (command)="command($event)"
+    dockContext="Private draft"
+  >
+    <div workbench-context class="editor-toolbar">
+      <h1>Editing {{ mapping().name }}</h1>
+      <weft-status-chip [status]="status()" />
+      <span
+        >Private draft · based on version
+        {{ draft()?.base?.sequence ?? revision().sequence }}</span
+      >
+      <button
+        type="button"
+        [disabled]="busy() || savePending() || !view()?.canUndo || conflict()"
+        (click)="undo()"
+      >
+        Undo {{ view()?.undoLabel ?? "edit" }}
+      </button>
+      <button
+        type="button"
+        [disabled]="busy() || savePending() || !view()?.canRedo || conflict()"
+        (click)="redo()"
+      >
+        Redo {{ view()?.redoLabel ?? "edit" }}
+      </button>
+      <button
+        type="button"
+        [disabled]="busy() || conflict() || !view()"
+        (click)="checkpoint()"
+      >
+        Check issues
+      </button>
+      <button
+        type="button"
+        [disabled]="busy() || conflict() || !view()"
+        (click)="checkpoint(true)"
+      >
+        Compare with base
+      </button>
+      <button
+        type="button"
+        [disabled]="
+          busy() || conflict() || !view()?.operations?.operations?.length
+        "
+        (click)="save()"
+      >
+        Save new version
+      </button>
+      <button type="button" [disabled]="busy()" (click)="close()">
+        Back to saved version
+      </button>
+    </div>
+    <section workbench-content aria-label="Editable mapping">
+      <p role="status" aria-live="polite">{{ message() }}</p>
+      <p id="edit-error" role="alert">{{ error() }}</p>
+      @if (conflict()) {
+        <section aria-label="Draft conflict">
+          <h2>Nothing was silently rebased</h2>
+          <p>
+            Latest observed saved version: {{ latestHead()?.sequence }} by
+            {{ latestHead()?.creatorPrincipalId }}. Rebase replays all edits on
+            that exact head; a failure leaves the draft unchanged.
+          </p>
+          <button type="button" [disabled]="busy()" (click)="open(true)">
+            Reload saved draft
+          </button>
+          <button
+            type="button"
+            [disabled]="busy() || dirty()"
+            (click)="rebase()"
+          >
+            Rebase onto latest observed version
+          </button>
+          @if (latestHead(); as head) {
+            <a
+              [routerLink]="headComparisonPath()"
+              [queryParams]="{
+                left: draft()?.base?.revision?.revisionId,
+                right: head.scope.revisionId,
+              }"
+              >Compare newer head with base</a
+            >
+          }
+        </section>
+      }
+      @if (draft()) {
+        <details>
+          <summary>Discard this draft</summary>
+          <p>
+            This deletes its operations and checkpoint, not any saved version.
+          </p>
+          <button
+            type="button"
+            [disabled]="busy() || savePending()"
+            (click)="discard()"
+          >
+            Confirm discard
+          </button>
+        </details>
+      }
+      @if (projection(); as projection) {
+        <weft-workbench-mapping-table
+          [view]="projection"
+          [selected]="selected()"
+          (inspect)="inspect($event)"
+        />
+      } @else if (!busy()) {
+        <button type="button" (click)="open()">
+          Restart editor from retained draft
+        </button>
+      }
+    </section>
+  </weft-workbench-frame>
+
+  <ng-template #inspector>
+    <section aria-label="Edit selected mapping" [attr.aria-busy]="busy()">
+      <h2>Edit mapping</h2>
+      @if (target(); as target) {
+        <p>
+          Target: {{ target.binding.field }} · node
+          {{ target.node ?? "not mapped" }}
+        </p>
+        <label for="edit-expression">Map from</label>
+        <select
+          id="edit-expression"
+          [value]="expressionKind()"
+          (change)="expressionKind.set($any($event.target).value)"
+        >
+          <option value="constant">Typed constant</option>
+          <option value="source">Incoming field</option>
+          <option value="call">Builtin function</option>
+        </select>
+        @if (expressionKind() === "constant") {
+          <label for="edit-value-type">Value type</label>
+          <select
+            id="edit-value-type"
+            [value]="scalarType()"
+            (change)="scalarType.set($any($event.target).value)"
+          >
+            <option value="string">Text</option>
+            <option value="int">Exact integer</option>
+            <option value="float">Floating point</option>
+            <option value="bool">Boolean</option>
+            <option value="null">Absent</option>
+            <option value="json_null">JSON null</option>
+            <option value="xml_nil">XML nil</option>
+          </select>
+          <label for="edit-value">Exact value</label
+          ><input
+            id="edit-value"
+            [value]="valueText()"
+            (input)="valueText.set($any($event.target).value)"
+            aria-describedby="edit-value-help edit-error"
+          />
+          <p id="edit-value-help">
+            Values are passed as text to Ferrule. Integers and floating-point
+            values are never rounded by JavaScript.
+          </p>
+        } @else if (expressionKind() === "source") {
+          <label for="edit-source">Incoming field</label>
+          <select
+            id="edit-source"
+            [value]="sourceId()"
+            (change)="sourceId.set($any($event.target).value)"
+          >
+            <option value="">Choose a field</option>
+            @for (field of sources(); track field.id) {
+              <option [value]="field.id">{{ pathText(field.path) }}</option>
+            }
+          </select>
+        } @else {
+          <label for="edit-function">Builtin function name</label
+          ><input
+            id="edit-function"
+            [value]="functionName()"
+            (input)="functionName.set($any($event.target).value)"
+            aria-describedby="edit-error"
+          />
+          <label for="edit-arguments"
+            >Argument node IDs, separated by commas</label
+          ><input
+            id="edit-arguments"
+            [value]="argumentsText()"
+            (input)="argumentsText.set($any($event.target).value)"
+          />
+        }
+        <button
+          type="button"
+          [disabled]="busy() || savePending() || conflict()"
+          (click)="applyBinding()"
+        >
+          Apply mapping
+        </button>
+        <button
+          type="button"
+          [disabled]="busy() || savePending() || conflict() || !target.node"
+          (click)="apply({ op: 'remove_binding', binding: target.binding })"
+        >
+          Remove mapping
+        </button>
+      } @else {
+        <p>
+          Select a result field in the table. Schemas, named boundaries, user
+          functions, joins, sequences, XML types, dynamic fields and format
+          options are read-only and preserved.
+        </p>
+      }
+      <details>
+        <summary>All typed edit operations</summary>
+        <p>
+          The closed ferrule.edit.v1 format supports every operation below.
+          Scope positions and IDs are exact decimal strings. Ferrule rejects
+          unknown members and incompatible graph changes without partially
+          applying the operation.
+        </p>
+        <label for="edit-operation-kind">Operation</label
+        ><select
+          id="edit-operation-kind"
+          [value]="selectedKind()"
+          (change)="template($any($event.target).value)"
+        >
+          @for (kind of operationKinds; track kind) {
+            <option [value]="kind">{{ operationNames[kind] }}</option>
+          }
+        </select>
+        <label for="edit-operation">Typed operation parameters</label
+        ><textarea
+          id="edit-operation"
+          rows="14"
+          spellcheck="false"
+          [value]="operationText()"
+          (input)="operationText.set($any($event.target).value)"
+          aria-describedby="edit-error"
+        ></textarea>
+        <button
+          type="button"
+          [disabled]="busy() || savePending() || conflict()"
+          (click)="applyJson()"
+        >
+          Apply typed operation
+        </button>
+      </details>
+    </section>
+  </ng-template>
+
+  <ng-template #dock>
+    <section aria-label="Draft checkpoint and changes">
+      <h2>Draft changes</h2>
+      <p>
+        {{ draft()?.operationCount ?? 0 }} autosaved operations ·
+        {{ view()?.validation?.totalIssueCount ?? 0 }} local validation issues
+      </p>
+      <p>
+        The local view is provisional. Check issues, compare, preview and save
+        use a sandboxed server worker.
+      </p>
+      @if (context().features.preview) {
+        <details>
+          <summary>Try a sample against this checkpoint</summary>
+          <label for="edit-sample-target">Outputs</label>
+          <select
+            id="edit-sample-target"
+            [value]="sampleTarget()"
+            (change)="sampleTarget.set($any($event.target).value)"
+          >
+            <option value="all">All outputs</option>
+            <option value="primary">Primary output</option>
+            <option value="named">One named output</option>
+          </select>
+          @if (sampleTarget() === "named") {
+            <label for="edit-sample-target-name">Output name</label
+            ><input
+              id="edit-sample-target-name"
+              [value]="sampleTargetName()"
+              (input)="sampleTargetName.set($any($event.target).value)"
+            />
+          }
+          <label for="edit-sample">Primary sample (text)</label
+          ><textarea
+            id="edit-sample"
+            rows="5"
+            [value]="sampleText()"
+            (input)="sampleText.set($any($event.target).value)"
+          ></textarea>
+          @for (input of sampleNamed(); track $index; let index = $index) {
+            <fieldset>
+              <legend>Named input {{ index + 1 }}</legend>
+              <label [for]="'edit-source-name-' + index">Source name</label
+              ><input
+                [id]="'edit-source-name-' + index"
+                [value]="input.name"
+                (input)="
+                  changeSampleInput(index, 'name', $any($event.target).value)
+                "
+              />
+              <label [for]="'edit-source-content-' + index">Input text</label
+              ><textarea
+                [id]="'edit-source-content-' + index"
+                [value]="input.content"
+                (input)="
+                  changeSampleInput(index, 'content', $any($event.target).value)
+                "
+              ></textarea>
+              <button type="button" (click)="removeSampleInput(index)">
+                Remove named input {{ index + 1 }}
+              </button>
+            </fieldset>
+          }
+          <button
+            type="button"
+            [disabled]="sampleNamed().length >= 15"
+            (click)="addSampleInput()"
+          >
+            Add named input
+          </button>
+          @for (
+            parameter of sampleParameters();
+            track $index;
+            let index = $index
+          ) {
+            <fieldset>
+              <legend>Parameter {{ index + 1 }}</legend>
+              <label [for]="'edit-param-name-' + index">Parameter name</label
+              ><input
+                [id]="'edit-param-name-' + index"
+                [value]="parameter.name"
+                (input)="
+                  changeSampleParameter(
+                    index,
+                    'name',
+                    $any($event.target).value
+                  )
+                "
+              />
+              <label [for]="'edit-param-kind-' + index">Parameter type</label
+              ><select
+                [id]="'edit-param-kind-' + index"
+                [value]="parameter.kind"
+                (change)="
+                  changeSampleParameter(
+                    index,
+                    'kind',
+                    $any($event.target).value
+                  )
+                "
+              >
+                <option value="string">Text</option>
+                <option value="integer">Integer</option>
+                <option value="float">Float</option>
+                <option value="boolean">Boolean</option>
+              </select>
+              <label [for]="'edit-param-value-' + index"
+                >Exact parameter value</label
+              ><input
+                [id]="'edit-param-value-' + index"
+                [value]="parameter.value"
+                (input)="
+                  changeSampleParameter(
+                    index,
+                    'value',
+                    $any($event.target).value
+                  )
+                "
+              />
+              <button type="button" (click)="removeSampleParameter(index)">
+                Remove parameter {{ index + 1 }}
+              </button>
+            </fieldset>
+          }
+          <button
+            type="button"
+            [disabled]="sampleParameters().length >= 32"
+            (click)="addSampleParameter()"
+          >
+            Add parameter
+          </button>
+          <button
+            type="button"
+            [disabled]="busy() || conflict() || !view()"
+            (click)="trySample()"
+          >
+            Try sample
+          </button>
+          @if (preview(); as preview) {
+            <p>
+              Preview {{ preview.runId }} · {{ preview.state }} ·
+              {{ preview.outcome }}
+            </p>
+            <button
+              type="button"
+              [disabled]="busy()"
+              (click)="refreshPreview()"
+            >
+              Read preview progress
+            </button>
+            @for (output of preview.outputs; track output.ordinal) {
+              <p>
+                Output {{ output.ordinal }} · {{ output.byteCount }} bytes ·
+                {{ output.mediaType }}
+                <button
+                  type="button"
+                  [disabled]="busy()"
+                  (click)="readOutput(output.ordinal)"
+                >
+                  Read output {{ output.ordinal }}
+                </button>
+              </p>
+            }
+            @if (sampleOutput()) {
+              <pre aria-label="Preview output">{{ sampleOutput() }}</pre>
+            }
+          }
+        </details>
+      }
+      @if (draft()?.checkpoint; as checkpoint) {
+        <p>
+          Authoritative checkpoint version {{ checkpoint.version }}:
+          {{ checkpoint.totalIssueCount }} issues.
+        </p>
+      }
+      @if (validation(); as validation) {
+        <h3>Authoritative checkpoint issues</h3>
+        <ul>
+          @for (issue of validation.diagnostics; track $index) {
+            <li>
+              {{ issue.severity }} · {{ issue.code }}: {{ issue.message }}
+            </li>
+          }
+        </ul>
+        @if (validation.truncated) {
+          <p>
+            The issue list is truncated; total issues:
+            {{ validation.totalIssueCount }}.
+          </p>
+        }
+      }
+      @if (comparison(); as comparison) {
+        <h3>Compared with exact base</h3>
+        <p>
+          {{ comparison.totalItemCount }} semantic comparison items.
+          {{
+            comparison.hasUncertainty
+              ? "Some facts remain uncertain."
+              : "No unresolved comparison facts."
+          }}
+        </p>
+        <ol>
+          @for (
+            operation of comparison.operations ?? [];
+            track operation.index
+          ) {
+            <li>{{ operation.description }}</li>
+          }
+        </ol>
+        @for (item of comparison.items; track $index) {
+          <p>
+            {{ item.entity }} · {{ item.match }} ·
+            {{ item.facets.length }} compared aspects
+          </p>
+        }
+      }
+      <ol>
+        @for (operation of view()?.operations?.operations ?? []; track $index) {
+          <li>{{ operationNames[operation.op] }}</li>
+        }
+      </ol>
+    </section>
+  </ng-template>
+} @else {
+  <p>Editing is suspended until fresh workspace access is confirmed.</p>
+}

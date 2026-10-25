@@ -125,7 +125,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(PreviewSchemaTestContract.Tables.Concat(RegressionSchemaTestContract.Tables).ToArray());
             command.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).ToArray());
             command.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).ToArray());
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys.Concat(MappingDraftSchemaTestContract.PreviewParentForeignKeys).ToArray());
             command.Parameters.AddWithValue(PreviewSchemaTestContract.MigrationChecksum);
             command.Parameters.AddWithValue(PreviewSchemaTestContract.MessagesMigrationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.CasesChecksum);
@@ -141,6 +141,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(RegressionSchemaTestContract.Tables);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.MachineInvocationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.ApiRequestAuditChecksum);
+            command.Parameters.AddWithValue(MappingDraftSchemaTestContract.DraftChecksum);
+            command.Parameters.AddWithValue(MappingDraftSchemaTestContract.PreviewChecksum);
             var value = await command.ExecuteScalarAsync(cancellationToken);
             Assert.True(value is string, "The private session upgrade conservation observation is unavailable.");
             using var document = JsonDocument.Parse((string)value!);
@@ -342,7 +344,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 16 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 18 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=9+1)=$6::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=11)=$12::text)
@@ -360,6 +362,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=23)=$28::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=24)=$30::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=25)=$31::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=26)=$32::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=27)=$33::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace

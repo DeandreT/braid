@@ -39,6 +39,7 @@ public sealed class ProjectOwnershipTests
         Assert.Equal(canUpload, access.Can(ProjectAction.UploadRevision));
         Assert.Equal(canManage, access.Can(ProjectAction.ManageMembership));
         Assert.Equal(canEditMetadata, access.Can(ProjectAction.EditMetadata));
+        Assert.Equal(canUpload, access.Can(ProjectAction.EditMapping));
     }
 
     [Theory]
@@ -56,7 +57,7 @@ public sealed class ProjectOwnershipTests
     [Theory]
     [InlineData(-1)]
     [InlineData(0)]
-    [InlineData(6)]
+    [InlineData(7)]
     [InlineData(999)]
     [InlineData(int.MaxValue)]
     public void UnknownActionsFailClosed(int unknown)
@@ -76,6 +77,7 @@ public sealed class ProjectOwnershipTests
         Assert.Equal(3, (int)ProjectAction.UploadRevision);
         Assert.Equal(4, (int)ProjectAction.ManageMembership);
         Assert.Equal(5, (int)ProjectAction.EditMetadata);
+        Assert.Equal(6, (int)ProjectAction.EditMapping);
         Assert.Equal(new[] { 1, 2, 3, 4 }, Enum.GetValues<ProjectRole>().Select(role => (int)role));
     }
 

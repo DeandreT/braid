@@ -11,6 +11,8 @@ AGENTS.md
 **/node_modules/
 **/dist/
 **/.vite/
+apps/web/public/edit/
+**/__pycache__/
 
 # Local runtime data and verification artifacts.
 /data/

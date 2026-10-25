@@ -26,7 +26,7 @@ public sealed class OutboxPreviewRunStore(PostgresPreviewRunStore inner, IWolver
             if (submitted.Outcome != PreviewSubmitOutcome.Created)
                 return;
             await context.EnlistInOutboxAsync(new DatabaseEnvelopeTransaction(database, transaction)).ConfigureAwait(false);
-            await context.PublishAsync(new RunPreview(record.Submission.Revision.OrganizationId, submitted.RunId!.Value)).ConfigureAwait(false);
+            await context.PublishAsync(new RunPreview(record.Submission.Subject.ExecutionScope.OrganizationId, submitted.RunId!.Value)).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
         await context.FlushOutgoingMessagesAsync().ConfigureAwait(false);
         return result;

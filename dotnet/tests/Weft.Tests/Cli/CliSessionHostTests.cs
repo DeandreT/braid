@@ -20,7 +20,7 @@ namespace Weft.Tests.Cli;
 /// </summary>
 [Collection(PostgresCollection.Name)]
 [SupportedOSPlatform("linux")]
-public sealed class CliSessionHostTests(PostgresFixture postgres)
+public sealed partial class CliSessionHostTests(PostgresFixture postgres)
 {
     [PostgresFact]
     public Task TheSignedInCliReadsAndEditsAsTheBoundUserWithAnAuditedBearerMutation() => AuthHttpFixture.RunAsync(postgres, async test =>

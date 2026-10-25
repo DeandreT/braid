@@ -8,7 +8,9 @@
 !deploy/container/
 !dotnet/
 !docs/user-guide/
-!engines/ferrule-host/tests/fixtures/
+!engines/ferrule-host/
+!engines/ferrule-edit-wasm/
+!tools/edit-core/
 !engines/compile-sandbox/
 !migrations/
 **/node_modules/
@@ -19,3 +21,5 @@
 **/playwright-report/
 **/test-results/
 **/target/
+**/__pycache__/
+apps/web/public/edit/

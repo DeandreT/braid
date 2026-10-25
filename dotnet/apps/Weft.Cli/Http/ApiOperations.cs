@@ -2,6 +2,7 @@ using Weft.Contracts.Builds;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
 using Weft.Contracts.Comparisons;
+using Weft.Contracts.Editing;
 using Weft.Contracts.Help;
 using Weft.Contracts.Regression;
 
@@ -32,6 +33,8 @@ internal static class ApiOperations
     private const string Mapping = Project + "/mappings/{mappingId}";
     private const string Revision = Mapping + "/revisions/{revisionId}";
     private const string Chat = Revision + "/chat";
+    private const string Drafts = Mapping + "/drafts";
+    private const string Draft = Drafts + "/{draftId}";
 
     private static readonly string[] None = [];
     private static readonly string[] Page = ["limit", "cursor"];
@@ -59,6 +62,17 @@ internal static class ApiOperations
         "application/octet-stream", null, Accepted(typeof(CatalogRevisionIngestionResultV1)),
         query: ["head", "expectedHeadRevisionId", "originalFilename"], headers: Key);
     public static readonly ApiOperation GetCatalogRevision = Get("GetCatalogRevision", Revision, typeof(CatalogRevisionV1));
+    public static readonly ApiOperation CreateMappingDraft = Send("CreateMappingDraft", "POST", Drafts, "application/json", typeof(MappingDraftCreateV1), Created(typeof(MappingDraftResultV1)), headers: Key);
+    public static readonly ApiOperation ListMappingDrafts = Get("ListMappingDrafts", Drafts, typeof(MappingDraftListV1));
+    public static readonly ApiOperation GetMappingDraft = Get("GetMappingDraft", Draft, typeof(MappingDraftV1));
+    public static readonly ApiOperation GetMappingDraftOperations = Get("GetMappingDraftOperations", Draft + "/operations", typeof(EditScriptV1));
+    public static readonly ApiOperation PutMappingDraftOperations = Send("PutMappingDraftOperations", "PUT", Draft + "/operations", "application/json", typeof(EditScriptV1), Ok(typeof(MappingDraftResultV1)), headers: ["If-Match"]);
+    public static readonly ApiOperation CheckpointMappingDraft = Send("CheckpointMappingDraft", "POST", Draft + "/checkpoints", "application/json", typeof(MappingDraftVersionV1), Ok(typeof(MappingDraftResultV1)));
+    public static readonly ApiOperation CompareMappingDraft = Get("CompareMappingDraft", Draft + "/comparison", typeof(RevisionComparisonV1));
+    public static readonly ApiOperation PreviewMappingDraft = Send("PreviewMappingDraft", "POST", Draft + "/previews", "application/json", typeof(CatalogPreviewSubmissionV1), Created(typeof(CatalogPreviewSubmitResultV1)), headers: Key);
+    public static readonly ApiOperation SaveMappingDraft = Send("SaveMappingDraft", "POST", Draft + "/save", "application/json", typeof(MappingDraftSaveV1), Accepted(typeof(CatalogRevisionIngestionResultV1)), headers: Key);
+    public static readonly ApiOperation RebaseMappingDraft = Send("RebaseMappingDraft", "POST", Draft + "/rebase", "application/json", typeof(MappingDraftRebaseV1), Ok(typeof(MappingDraftResultV1)), headers: ["If-Match"]);
+    public static readonly ApiOperation DiscardMappingDraft = Send("DiscardMappingDraft", "DELETE", Draft, null, null, Ok(typeof(MappingDraftResultV1)), headers: ["If-Match"]);
     public static readonly ApiOperation GetCatalogRevisionIngestionReceipt = Get("GetCatalogRevisionIngestionReceipt",
         Project + "/revision-ingestions/{operationId}", typeof(CatalogRevisionIngestionReceiptV1));
     public static readonly ApiOperation ResumeCatalogRevisionIngestion = Send("ResumeCatalogRevisionIngestion", "POST",
@@ -148,6 +162,8 @@ internal static class ApiOperations
         GetCatalogContext, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
         GetCatalogMapping, GetCatalogMappingMetadata, EditCatalogMappingMetadata, GetCatalogRevisions, AppendCatalogRevision,
         GetCatalogRevision, GetCatalogRevisionIngestionReceipt, ResumeCatalogRevisionIngestion, GetCatalogProjectionReport,
+        CreateMappingDraft, ListMappingDrafts, GetMappingDraft, GetMappingDraftOperations, PutMappingDraftOperations,
+        CheckpointMappingDraft, CompareMappingDraft, PreviewMappingDraft, SaveMappingDraft, RebaseMappingDraft, DiscardMappingDraft,
         GetCatalogValidationReport, GetRetainedCatalogProjectionReport, GetRetainedCatalogValidationReport,
         EnsureCatalogProjectionReport, EnsureCatalogValidationReport, GetCatalogRevisionComparison, SubmitCatalogPreview,
         GetCatalogPreview, GetCatalogPreviewOutput, CancelCatalogPreview, GetRegressionCaseCapabilities, GetRegressionCases,
@@ -168,6 +184,9 @@ internal static class ApiOperations
         ["GetProjectionFixture"] = "a Development-only fixture route that the Session host does not map",
         ["GetNativeExamples"] = "a Development-only example route that the Session host does not map",
         ["GetNativeExample"] = "a Development-only example route that the Session host does not map",
+        ["GetMappingDraftBase"] = "the browser edit module consumes opaque native base bytes; the CLI submits typed operation files and has no local core",
+        ["GetMappingDraftValidation"] = "the browser issues view consumes the detailed checkpoint report; the CLI checkpoint command reports its validity and issue count",
+        ["GetMappingDraftProjection"] = "the browser workbench consumes the detailed checkpoint projection; the CLI submits typed intent rather than rendering mappings",
         ["ReadBrowserAuthentication"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["BeginBrowserLogin"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["LogoutBrowserSession"] = "browser cookie-session sign-in; the CLI signs in with MSAL",

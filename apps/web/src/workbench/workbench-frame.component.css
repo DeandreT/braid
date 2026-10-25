@@ -150,6 +150,10 @@ kbd {
   height: 29px;
   padding: 4px 8px;
 }
+.wb-dock-tabs nav {
+  display: flex;
+  flex-shrink: 0;
+}
 .wb-dock-tabs [data-dock="input"]::before,
 .wb-dock-tabs [data-dock="output"]::before {
   content: "";

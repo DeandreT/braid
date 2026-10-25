@@ -9,7 +9,7 @@ public sealed record PreviewDeclaredInput(string? Name, long ByteLength, Sha256D
 
 /// <summary>The decoded canonical request a run was admitted with.</summary>
 public sealed record PreviewRequestDescription(
-    RevisionScope Revision,
+    PreviewSubject Subject,
     PreviewTargetSelection Target,
     IReadOnlyList<PreviewParameter> Parameters,
     IReadOnlyList<PreviewDeclaredInput> Inputs,
@@ -23,6 +23,7 @@ public sealed record PreviewRequestDescription(
 public static class PreviewRequestDocument
 {
     public const string Schema = "weft.preview-request.v1";
+    public const string DraftSchema = "weft.draft-preview-request.v1";
     public const int MaximumBytes = 64 * 1024;
 
     public static string Encode(PreviewRunSubmission submission, PreviewLimits limits)
@@ -32,13 +33,21 @@ public static class PreviewRequestDocument
         using var buffer = new MemoryStream();
         using (var json = new Utf8JsonWriter(buffer))
         {
-            var revision = submission.Revision;
+            var revision = submission.Subject.ExecutionScope;
             json.WriteStartObject();
-            json.WriteString("schema", Schema);
+            json.WriteString("schema", submission.Subject is DraftPreviewSubject ? DraftSchema : Schema);
             json.WriteString("organizationId", revision.OrganizationId.ToString("D"));
             json.WriteString("projectId", revision.ProjectId.ToString("D"));
             json.WriteString("mappingId", revision.MappingId.ToString("D"));
-            json.WriteString("revisionId", revision.RevisionId.ToString("D"));
+            if (submission.Subject is DraftPreviewSubject draft)
+            {
+                json.WriteString("baseRevisionId", revision.RevisionId.ToString("D"));
+                json.WriteString("draftId", draft.DraftId.ToString("D"));
+                json.WriteString("draftVersion", draft.Version.ToString(CultureInfo.InvariantCulture));
+                json.WriteString("nativeDigest", draft.NativeDigest.Value);
+                json.WriteNumber("nativeByteCount", draft.NativeByteCount);
+            }
+            else json.WriteString("revisionId", revision.RevisionId.ToString("D"));
             json.WriteStartObject("target");
             json.WriteString("kind", submission.Target.Kind switch
             {
@@ -95,9 +104,13 @@ public static class PreviewRequestDocument
         {
             using var parsed = JsonDocument.Parse(document, new JsonDocumentOptions { MaxDepth = 8 });
             var root = parsed.RootElement;
-            Require(Text(root, "schema") == Schema);
+            var schema = Text(root, "schema");
+            Require(schema is Schema or DraftSchema);
             var revision = new RevisionScope(Guid.ParseExact(Text(root, "organizationId"), "D"), Guid.ParseExact(Text(root, "projectId"), "D"),
-                Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, "revisionId"), "D"));
+                Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, schema == Schema ? "revisionId" : "baseRevisionId"), "D"));
+            PreviewSubject subject = schema == Schema ? new RevisionPreviewSubject(revision) : new DraftPreviewSubject(revision,
+                Guid.ParseExact(Text(root, "draftId"), "D"), long.Parse(Text(root, "draftVersion"), NumberStyles.None, CultureInfo.InvariantCulture),
+                Sha256Digest.Parse(Text(root, "nativeDigest")), root.GetProperty("nativeByteCount").GetInt32());
             var target = root.GetProperty("target");
             var selection = Text(target, "kind") switch
             {
@@ -119,7 +132,7 @@ public static class PreviewRequestDocument
                 item.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(item, "name"),
                 item.GetProperty("byteLength").GetInt64(), Sha256Digest.Parse(Text(item, "sha256")))).ToArray();
             var limits = root.GetProperty("limits");
-            var description = new PreviewRequestDescription(revision, selection, parameters, inputs, new PreviewLimits(
+            var description = new PreviewRequestDescription(subject, selection, parameters, inputs, new PreviewLimits(
                 limits.GetProperty("maximumInputBytes").GetInt32(), limits.GetProperty("maximumOutputBytes").GetInt32(),
                 limits.GetProperty("maximumArtifacts").GetInt32(), limits.GetProperty("maximumTextBytes").GetInt32()));
             Require(inputs.Length > 0 && inputs[0].Name is null && inputs.Skip(1).All(input => input.Name is not null));

@@ -5651,6 +5651,3210 @@
         ]
       }
     },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts": {
+      "post": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Create an author-private exact-base draft and version-zero checkpoint.",
+        "operationId": "CreateMappingDraft",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "One canonical nonzero lowercase UUID. Repeating the same intent recovers its original receipt.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingDraftCreateV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "List the caller's own open drafts for this mapping.",
+        "operationId": "ListMappingDrafts",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftListV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}": {
+      "get": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Read author-private draft metadata and its strong version ETag.",
+        "operationId": "GetMappingDraft",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Discard the author's operation log and checkpoint content.",
+        "operationId": "DiscardMappingDraft",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The draft's current strong ETag. Missing is 428; a stale version is 412. Weak tags, wildcards, lists and If-None-Match are refused.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/base": {
+      "get": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Read the exact immutable base bytes, never an editable native upload.",
+        "operationId": "GetMappingDraftBase",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/operations": {
+      "get": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Read the closed ferrule.edit.v1 operation log.",
+        "operationId": "GetMappingDraftOperations",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditScriptV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Autosave a complete bounded operation log without starting a worker.",
+        "operationId": "PutMappingDraftOperations",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The draft's current strong ETag. Missing is 428; a stale version is 412. Weak tags, wildcards, lists and If-None-Match are refused.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditScriptV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/checkpoints": {
+      "post": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Replay, encode, validate and project the exact draft version.",
+        "operationId": "CheckpointMappingDraft",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingDraftVersionV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/checkpoints/current/validation": {
+      "get": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Read the current authoritative checkpoint validation.",
+        "operationId": "GetMappingDraftValidation",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationReportV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/checkpoints/current/projection": {
+      "get": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Read the current authoritative checkpoint projection.",
+        "operationId": "GetMappingDraftProjection",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectionReportV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/comparison": {
+      "get": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Compare the checkpoint's semantic facts and typed intent with the immutable base.",
+        "operationId": "CompareMappingDraft",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionComparisonV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/previews": {
+      "post": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Preview an immutable copy of the current checkpoint, retained independently of this draft.",
+        "operationId": "PreviewMappingDraft",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "One canonical nonzero lowercase UUID. Repeating the same intent recovers its original receipt.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogPreviewSubmissionV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPreviewSubmitResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPreviewSubmitResultV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/save": {
+      "post": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Save a nonempty current checkpoint through original-actor conditional ingestion.",
+        "operationId": "SaveMappingDraft",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "One canonical nonzero lowercase UUID. Repeating the same intent recovers its original receipt.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingDraftSaveV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogRevisionIngestionResultV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/rebase": {
+      "post": {
+        "tags": [
+          "Mapping drafts"
+        ],
+        "summary": "Explicitly replay all operations on the current head, or change nothing.",
+        "operationId": "RebaseMappingDraft",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The draft's current strong ETag. Missing is 428; a stale version is 412. Weak tags, wildcards, lists and If-None-Match are refused.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingDraftRebaseV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CatalogErrorV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDraftResultV1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingDraftResultV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/revision-ingestions/{operationId}": {
       "get": {
         "tags": [
@@ -13540,6 +16744,10 @@
           },
           "deriveReports": {
             "type": "boolean"
+          },
+          "edit": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -13754,6 +16962,10 @@
           },
           "deriveReports": {
             "type": "boolean"
+          },
+          "edit": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -13933,6 +17145,38 @@
           }
         }
       },
+      "CatalogPreviewDraftSubjectV1": {
+        "required": [
+          "mapping",
+          "draftId",
+          "version",
+          "baseRevision",
+          "nativeDigest",
+          "nativeByteCount"
+        ],
+        "type": "object",
+        "properties": {
+          "mapping": {
+            "$ref": "#/components/schemas/CatalogMappingScopeV1"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "baseRevision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "nativeDigest": {
+            "type": "string"
+          },
+          "nativeByteCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "CatalogPreviewFailureV1": {
         "required": [
           "code",
@@ -14057,7 +17301,14 @@
             "type": "string"
           },
           "revision": {
-            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+              }
+            ]
           },
           "requestFingerprint": {
             "type": "string"
@@ -14138,6 +17389,22 @@
           "expiresAtUtc": {
             "type": "string",
             "format": "date-time"
+          },
+          "draft": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogPreviewDraftSubjectV1"
+              }
+            ]
+          },
+          "subjectKind": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -15786,6 +19053,52 @@
           }
         }
       },
+      "ComparisonDraftCitationV1": {
+        "required": [
+          "organizationId",
+          "projectId",
+          "mappingId",
+          "draftId",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "mappingId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "ComparisonEditOperationV1": {
+        "required": [
+          "index",
+          "description",
+          "descriptionTruncated"
+        ],
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "descriptionTruncated": {
+            "type": "boolean"
+          }
+        }
+      },
       "ComparisonEntityV1": {
         "enum": [
           "boundary",
@@ -15927,10 +19240,20 @@
         "type": "object",
         "properties": {
           "revision": {
-            "$ref": "#/components/schemas/ScopedRevisionId"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScopedRevisionId"
+              }
+            ]
           },
           "sequence": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "nativeDigest": {
             "$ref": "#/components/schemas/ArtifactDigest"
@@ -15942,7 +19265,14 @@
             "$ref": "#/components/schemas/ProjectionProvenance"
           },
           "projection": {
-            "$ref": "#/components/schemas/ComparisonReportCitationV1"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComparisonReportCitationV1"
+              }
+            ]
           },
           "validation": {
             "oneOf": [
@@ -15952,6 +19282,22 @@
               {
                 "$ref": "#/components/schemas/ComparisonReportCitationV1"
               }
+            ]
+          },
+          "draft": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComparisonDraftCitationV1"
+              }
+            ]
+          },
+          "kind": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }
@@ -16190,6 +19536,1724 @@
           "warning",
           "error"
         ]
+      },
+      "EditBindingV1": {
+        "required": [
+          "scope",
+          "field"
+        ],
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/EditScopeV1"
+          },
+          "field": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditExpressionV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditExpressionV1ExistingEditExpressionV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditExpressionV1SourceEditExpressionV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditExpressionV1OwnedSourceEditExpressionV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditExpressionV1ConstantEditExpressionV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditExpressionV1CallEditExpressionV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "existing": "#/components/schemas/EditExpressionV1ExistingEditExpressionV1",
+            "source": "#/components/schemas/EditExpressionV1SourceEditExpressionV1",
+            "owned_source": "#/components/schemas/EditExpressionV1OwnedSourceEditExpressionV1",
+            "constant": "#/components/schemas/EditExpressionV1ConstantEditExpressionV1",
+            "call": "#/components/schemas/EditExpressionV1CallEditExpressionV1"
+          }
+        }
+      },
+      "EditExpressionV1CallEditExpressionV1": {
+        "required": [
+          "id",
+          "function",
+          "args",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "call"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "function": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditExpressionV1ConstantEditExpressionV1": {
+        "required": [
+          "id",
+          "value",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "constant"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/EditScalarV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditExpressionV1ExistingEditExpressionV1": {
+        "required": [
+          "node",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "existing"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditExpressionV1OwnedSourceEditExpressionV1": {
+        "required": [
+          "id",
+          "owner",
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "owned_source"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/EditSourceOwnerV1"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "frame": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditExpressionV1SourceEditExpressionV1": {
+        "required": [
+          "id",
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "source"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "frame": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditFailureIterationV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditFailureIterationV1SourceEditFailureIterationV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditFailureIterationV1GeneratedEditFailureIterationV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "source": "#/components/schemas/EditFailureIterationV1SourceEditFailureIterationV1",
+            "generated": "#/components/schemas/EditFailureIterationV1GeneratedEditFailureIterationV1"
+          }
+        }
+      },
+      "EditFailureIterationV1GeneratedEditFailureIterationV1": {
+        "required": [
+          "sequence",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "generated"
+            ],
+            "type": "string"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/EditGeneratedSequenceV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditFailureIterationV1SourceEditFailureIterationV1": {
+        "required": [
+          "collection",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "source"
+            ],
+            "type": "string"
+          },
+          "collection": {
+            "$ref": "#/components/schemas/EditSourceCollectionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditFailureRuleDefinitionV1": {
+        "required": [
+          "iteration",
+          "selection"
+        ],
+        "type": "object",
+        "properties": {
+          "iteration": {
+            "$ref": "#/components/schemas/EditFailureIterationV1"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/EditFailureSelectionV1"
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EditExpressionV1"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditFailureSelectionV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditFailureSelectionV1AllEditFailuresV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditFailureSelectionV1TrueEditFailuresV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditFailureSelectionV1FalseEditFailuresV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "all": "#/components/schemas/EditFailureSelectionV1AllEditFailuresV1",
+            "when_true": "#/components/schemas/EditFailureSelectionV1TrueEditFailuresV1",
+            "when_false": "#/components/schemas/EditFailureSelectionV1FalseEditFailuresV1"
+          }
+        }
+      },
+      "EditFailureSelectionV1AllEditFailuresV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "all"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditFailureSelectionV1FalseEditFailuresV1": {
+        "required": [
+          "expression",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "when_false"
+            ],
+            "type": "string"
+          },
+          "expression": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditFailureSelectionV1TrueEditFailuresV1": {
+        "required": [
+          "expression",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "when_true"
+            ],
+            "type": "string"
+          },
+          "expression": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGeneratedSequenceV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditGeneratedSequenceV1GenerateEditSequenceV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditGeneratedSequenceV1TokenizeEditSequenceV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditGeneratedSequenceV1TokenizeLengthEditSequenceV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditGeneratedSequenceV1TokenizeRegexEditSequenceV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "generate": "#/components/schemas/EditGeneratedSequenceV1GenerateEditSequenceV1",
+            "tokenize": "#/components/schemas/EditGeneratedSequenceV1TokenizeEditSequenceV1",
+            "tokenize_by_length": "#/components/schemas/EditGeneratedSequenceV1TokenizeLengthEditSequenceV1",
+            "tokenize_regex": "#/components/schemas/EditGeneratedSequenceV1TokenizeRegexEditSequenceV1"
+          }
+        }
+      },
+      "EditGeneratedSequenceV1GenerateEditSequenceV1": {
+        "required": [
+          "to",
+          "item",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "generate"
+            ],
+            "type": "string"
+          },
+          "to": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          },
+          "item": {
+            "type": "string"
+          },
+          "from": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EditExpressionV1"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGeneratedSequenceV1TokenizeEditSequenceV1": {
+        "required": [
+          "input",
+          "delimiter",
+          "item",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "tokenize"
+            ],
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          },
+          "delimiter": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          },
+          "item": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGeneratedSequenceV1TokenizeLengthEditSequenceV1": {
+        "required": [
+          "input",
+          "length",
+          "item",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "tokenize_by_length"
+            ],
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          },
+          "length": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          },
+          "item": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGeneratedSequenceV1TokenizeRegexEditSequenceV1": {
+        "required": [
+          "input",
+          "pattern",
+          "item",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "tokenize_regex"
+            ],
+            "type": "string"
+          },
+          "input": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          },
+          "pattern": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          },
+          "item": {
+            "type": "string"
+          },
+          "flags": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EditExpressionV1"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGroupingV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditGroupingV1NoEditGroupingV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditGroupingV1ByEditGroupingV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditGroupingV1AdjacentEditGroupingV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditGroupingV1StartingEditGroupingV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditGroupingV1EndingEditGroupingV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditGroupingV1BlocksEditGroupingV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "none": "#/components/schemas/EditGroupingV1NoEditGroupingV1",
+            "by": "#/components/schemas/EditGroupingV1ByEditGroupingV1",
+            "adjacent_by": "#/components/schemas/EditGroupingV1AdjacentEditGroupingV1",
+            "starting_with": "#/components/schemas/EditGroupingV1StartingEditGroupingV1",
+            "ending_with": "#/components/schemas/EditGroupingV1EndingEditGroupingV1",
+            "into_blocks": "#/components/schemas/EditGroupingV1BlocksEditGroupingV1"
+          }
+        }
+      },
+      "EditGroupingV1AdjacentEditGroupingV1": {
+        "required": [
+          "node",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "adjacent_by"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGroupingV1BlocksEditGroupingV1": {
+        "required": [
+          "node",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "into_blocks"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGroupingV1ByEditGroupingV1": {
+        "required": [
+          "node",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "by"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGroupingV1EndingEditGroupingV1": {
+        "required": [
+          "node",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "ending_with"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGroupingV1NoEditGroupingV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "none"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditGroupingV1StartingEditGroupingV1": {
+        "required": [
+          "node",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "starting_with"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1": {
+        "required": [
+          "op"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditOperationV1BindEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1RetargetBindingEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1RemoveBindingEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1ConnectEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1DisconnectEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1EditConstantV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1EditCallV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1EditValueMapV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1RemoveNodesEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1AddScopeEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1RemoveScopeEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1SetIterationEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1SetFilterEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1SetSortEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1SetGroupingEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1AddFailureRuleEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1RemoveFailureRuleEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1MoveFailureRuleEditV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditOperationV1EditFailureRuleV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "op",
+          "mapping": {
+            "bind": "#/components/schemas/EditOperationV1BindEditV1",
+            "retarget_binding": "#/components/schemas/EditOperationV1RetargetBindingEditV1",
+            "remove_binding": "#/components/schemas/EditOperationV1RemoveBindingEditV1",
+            "connect": "#/components/schemas/EditOperationV1ConnectEditV1",
+            "disconnect": "#/components/schemas/EditOperationV1DisconnectEditV1",
+            "edit_constant": "#/components/schemas/EditOperationV1EditConstantV1",
+            "edit_call": "#/components/schemas/EditOperationV1EditCallV1",
+            "edit_value_map": "#/components/schemas/EditOperationV1EditValueMapV1",
+            "remove_nodes": "#/components/schemas/EditOperationV1RemoveNodesEditV1",
+            "add_scope": "#/components/schemas/EditOperationV1AddScopeEditV1",
+            "remove_scope": "#/components/schemas/EditOperationV1RemoveScopeEditV1",
+            "set_iteration": "#/components/schemas/EditOperationV1SetIterationEditV1",
+            "set_filter": "#/components/schemas/EditOperationV1SetFilterEditV1",
+            "set_sort": "#/components/schemas/EditOperationV1SetSortEditV1",
+            "set_grouping": "#/components/schemas/EditOperationV1SetGroupingEditV1",
+            "add_failure_rule": "#/components/schemas/EditOperationV1AddFailureRuleEditV1",
+            "remove_failure_rule": "#/components/schemas/EditOperationV1RemoveFailureRuleEditV1",
+            "move_failure_rule": "#/components/schemas/EditOperationV1MoveFailureRuleEditV1",
+            "edit_failure_rule": "#/components/schemas/EditOperationV1EditFailureRuleV1"
+          }
+        }
+      },
+      "EditOperationV1AddFailureRuleEditV1": {
+        "required": [
+          "rule",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "add_failure_rule"
+            ],
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/EditFailureRuleDefinitionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1AddScopeEditV1": {
+        "required": [
+          "parent",
+          "field",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "add_scope"
+            ],
+            "type": "string"
+          },
+          "parent": {
+            "$ref": "#/components/schemas/EditScopeV1"
+          },
+          "field": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1BindEditV1": {
+        "required": [
+          "binding",
+          "expression",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "bind"
+            ],
+            "type": "string"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/EditBindingV1"
+          },
+          "expression": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1ConnectEditV1": {
+        "required": [
+          "node",
+          "input",
+          "expression",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "connect"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "input": {
+            "type": "string"
+          },
+          "expression": {
+            "$ref": "#/components/schemas/EditExpressionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1DisconnectEditV1": {
+        "required": [
+          "node",
+          "input",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "disconnect"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "input": {
+            "type": "string"
+          },
+          "replacement": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1EditCallV1": {
+        "required": [
+          "node",
+          "function",
+          "args",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "edit_call"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "function": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1EditConstantV1": {
+        "required": [
+          "node",
+          "value",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "edit_constant"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/EditScalarV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1EditFailureRuleV1": {
+        "required": [
+          "index",
+          "rule",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "edit_failure_rule"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/EditFailureRuleDefinitionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1EditValueMapV1": {
+        "required": [
+          "node",
+          "value",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "edit_value_map"
+            ],
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/EditValueMapDefinitionV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1MoveFailureRuleEditV1": {
+        "required": [
+          "from",
+          "to",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "move_failure_rule"
+            ],
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1RemoveBindingEditV1": {
+        "required": [
+          "binding",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "remove_binding"
+            ],
+            "type": "string"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/EditBindingV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1RemoveFailureRuleEditV1": {
+        "required": [
+          "index",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "remove_failure_rule"
+            ],
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1RemoveNodesEditV1": {
+        "required": [
+          "scope",
+          "nodes",
+          "replacements",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "remove_nodes"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/EditScopeV1"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "replacements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1RemoveScopeEditV1": {
+        "required": [
+          "scope",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "remove_scope"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/EditScopeV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1RetargetBindingEditV1": {
+        "required": [
+          "binding",
+          "to",
+          "node",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "retarget_binding"
+            ],
+            "type": "string"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/EditBindingV1"
+          },
+          "to": {
+            "$ref": "#/components/schemas/EditBindingV1"
+          },
+          "node": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1SetFilterEditV1": {
+        "required": [
+          "scope",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "set_filter"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/EditScopeV1"
+          },
+          "node": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1SetGroupingEditV1": {
+        "required": [
+          "scope",
+          "grouping",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "set_grouping"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/EditScopeV1"
+          },
+          "grouping": {
+            "$ref": "#/components/schemas/EditGroupingV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1SetIterationEditV1": {
+        "required": [
+          "scope",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "set_iteration"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/EditScopeV1"
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EditSourceCollectionV1"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditOperationV1SetSortEditV1": {
+        "required": [
+          "scope",
+          "keys",
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "set_sort"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/EditScopeV1"
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditSortKeyV1"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarTypeV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditScalarTypeV1StringEditScalarTypeV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarTypeV1IntEditScalarTypeV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarTypeV1FloatEditScalarTypeV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarTypeV1BoolEditScalarTypeV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "string": "#/components/schemas/EditScalarTypeV1StringEditScalarTypeV1",
+            "int": "#/components/schemas/EditScalarTypeV1IntEditScalarTypeV1",
+            "float": "#/components/schemas/EditScalarTypeV1FloatEditScalarTypeV1",
+            "bool": "#/components/schemas/EditScalarTypeV1BoolEditScalarTypeV1"
+          }
+        }
+      },
+      "EditScalarTypeV1BoolEditScalarTypeV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "bool"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarTypeV1FloatEditScalarTypeV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "float"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarTypeV1IntEditScalarTypeV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "int"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarTypeV1StringEditScalarTypeV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "string"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarV1": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditScalarV1NullEditScalarV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarV1JsonNullEditScalarV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarV1XmlNilEditScalarV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarV1BoolEditScalarV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarV1IntEditScalarV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarV1FloatEditScalarV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditScalarV1StringEditScalarV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "null": "#/components/schemas/EditScalarV1NullEditScalarV1",
+            "json_null": "#/components/schemas/EditScalarV1JsonNullEditScalarV1",
+            "xml_nil": "#/components/schemas/EditScalarV1XmlNilEditScalarV1",
+            "bool": "#/components/schemas/EditScalarV1BoolEditScalarV1",
+            "int": "#/components/schemas/EditScalarV1IntEditScalarV1",
+            "float": "#/components/schemas/EditScalarV1FloatEditScalarV1",
+            "string": "#/components/schemas/EditScalarV1StringEditScalarV1"
+          }
+        }
+      },
+      "EditScalarV1BoolEditScalarV1": {
+        "required": [
+          "text",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "bool"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarV1FloatEditScalarV1": {
+        "required": [
+          "text",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "float"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarV1IntEditScalarV1": {
+        "required": [
+          "text",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "int"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarV1JsonNullEditScalarV1": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "json_null"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarV1NullEditScalarV1": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "null"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarV1StringEditScalarV1": {
+        "required": [
+          "text",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "string"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScalarV1XmlNilEditScalarV1": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "xml_nil"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScopeV1": {
+        "required": [
+          "target",
+          "children"
+        ],
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/EditTargetV1"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditScriptV1": {
+        "required": [
+          "format",
+          "operations"
+        ],
+        "type": "object",
+        "properties": {
+          "format": {
+            "enum": [
+              "ferrule.edit.v1"
+            ],
+            "type": "string"
+          },
+          "operations": {
+            "maxItems": 2000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditOperationV1"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditSortKeyV1": {
+        "required": [
+          "node",
+          "descending"
+        ],
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string"
+          },
+          "descending": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditSourceCollectionV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditSourceCollectionV1LegacyEditCollectionV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditSourceCollectionV1PrimaryEditCollectionV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditSourceCollectionV1NamedEditCollectionV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "legacy": "#/components/schemas/EditSourceCollectionV1LegacyEditCollectionV1",
+            "primary": "#/components/schemas/EditSourceCollectionV1PrimaryEditCollectionV1",
+            "named": "#/components/schemas/EditSourceCollectionV1NamedEditCollectionV1"
+          }
+        }
+      },
+      "EditSourceCollectionV1LegacyEditCollectionV1": {
+        "required": [
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "legacy"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditSourceCollectionV1NamedEditCollectionV1": {
+        "required": [
+          "name",
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "named"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditSourceCollectionV1PrimaryEditCollectionV1": {
+        "required": [
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "primary"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditSourceOwnerV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditSourceOwnerV1PrimaryEditSourceV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditSourceOwnerV1NamedEditSourceV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "primary": "#/components/schemas/EditSourceOwnerV1PrimaryEditSourceV1",
+            "named": "#/components/schemas/EditSourceOwnerV1NamedEditSourceV1"
+          }
+        }
+      },
+      "EditSourceOwnerV1NamedEditSourceV1": {
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "named"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditSourceOwnerV1PrimaryEditSourceV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "primary"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditTargetV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EditTargetV1PrimaryEditTargetV1"
+          },
+          {
+            "$ref": "#/components/schemas/EditTargetV1NamedEditTargetV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "primary": "#/components/schemas/EditTargetV1PrimaryEditTargetV1",
+            "named": "#/components/schemas/EditTargetV1NamedEditTargetV1"
+          }
+        }
+      },
+      "EditTargetV1NamedEditTargetV1": {
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "named"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditTargetV1PrimaryEditTargetV1": {
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "primary"
+            ],
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditValueMapDefinitionV1": {
+        "required": [
+          "table"
+        ],
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditValueMapEntryV1"
+            }
+          },
+          "input_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EditScalarTypeV1"
+              }
+            ]
+          },
+          "default": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EditScalarV1"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditValueMapEntryV1": {
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/EditScalarV1"
+          },
+          "to": {
+            "$ref": "#/components/schemas/EditScalarV1"
+          }
+        },
+        "additionalProperties": false
       },
       "ExactNumberFlavor": {
         "enum": [
@@ -16768,6 +21832,294 @@
             "type": "string"
           }
         }
+      },
+      "MappingDraftBaseV1": {
+        "required": [
+          "revision",
+          "sequence",
+          "nativeDigest",
+          "nativeByteCount"
+        ],
+        "type": "object",
+        "properties": {
+          "revision": {
+            "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+          },
+          "sequence": {
+            "type": "string"
+          },
+          "nativeDigest": {
+            "$ref": "#/components/schemas/ArtifactDigest"
+          },
+          "nativeByteCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftCheckpointV1": {
+        "required": [
+          "version",
+          "nativeDigest",
+          "nativeByteCount",
+          "isValid",
+          "totalIssueCount"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "nativeDigest": {
+            "$ref": "#/components/schemas/ArtifactDigest"
+          },
+          "nativeByteCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isValid": {
+            "type": "boolean"
+          },
+          "totalIssueCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftCreateV1": {
+        "required": [
+          "baseRevisionId"
+        ],
+        "type": "object",
+        "properties": {
+          "baseRevisionId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftFailureV1": {
+        "required": [
+          "code",
+          "message",
+          "messageTruncated",
+          "operationIndex",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "messageTruncated": {
+            "type": "boolean"
+          },
+          "operationIndex": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftListV1": {
+        "required": [
+          "drafts"
+        ],
+        "type": "object",
+        "properties": {
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MappingDraftV1"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftRebaseV1": {
+        "required": [
+          "targetRevisionId"
+        ],
+        "type": "object",
+        "properties": {
+          "targetRevisionId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftResultV1": {
+        "required": [
+          "outcome",
+          "draft"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "draft": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MappingDraftV1"
+              }
+            ]
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MappingDraftFailureV1"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftSaveV1": {
+        "required": [
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "originalFilename": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftV1": {
+        "required": [
+          "id",
+          "mapping",
+          "authorPrincipalId",
+          "base",
+          "state",
+          "version",
+          "operationCount",
+          "operationsDigest",
+          "createdAtUtc",
+          "changedAtUtc",
+          "expiresAtUtc",
+          "checkpoint",
+          "savingOperationId",
+          "savedRevisionId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/CatalogMappingScopeV1"
+          },
+          "authorPrincipalId": {
+            "type": "string"
+          },
+          "base": {
+            "$ref": "#/components/schemas/MappingDraftBaseV1"
+          },
+          "state": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "operationCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "operationsDigest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ArtifactDigest"
+              }
+            ]
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "changedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "checkpoint": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MappingDraftCheckpointV1"
+              }
+            ]
+          },
+          "savingOperationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "savedRevisionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "savingRequestId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "savingFilename": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDraftVersionV1": {
+        "required": [
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "MappingOperation": {
         "enum": [
@@ -18621,6 +23973,15 @@
             "items": {
               "$ref": "#/components/schemas/ComparisonItemV1"
             }
+          },
+          "operations": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ComparisonEditOperationV1"
+            }
           }
         }
       },
@@ -19103,6 +24464,9 @@
     },
     {
       "name": "Catalog"
+    },
+    {
+      "name": "Mapping drafts"
     },
     {
       "name": "Regression cases"

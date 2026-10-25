@@ -21,7 +21,7 @@
   </header>
   <div class="wb-workflow-bar">
     <nav role="tablist" aria-label="Version workflows">
-      @for (view of views; track view) {
+      @for (view of viewOptions(); track view) {
         <button
           type="button"
           role="tab"
@@ -118,29 +118,31 @@
       [maximum]="320"
       (resized)="state.updateLayout({ dockHeight: $event })"
     />
-    <nav class="wb-dock-tabs" role="tablist" aria-label="Investigation views">
-      @for (item of docks; track item.id) {
-        <button
-          type="button"
-          role="tab"
-          [id]="'wb-dock-' + item.id"
-          [attr.data-dock]="item.id"
-          [attr.data-role]="
-            item.id === 'input'
-              ? 'source'
-              : item.id === 'output'
-                ? 'output'
-                : 'evidence'
-          "
-          aria-controls="wb-dock-panel"
-          [tabIndex]="state.selection().dock === item.id ? 0 : -1"
-          [attr.aria-selected]="state.selection().dock === item.id"
-          (click)="selectDock(item.id)"
-          (keydown)="tabKey($event, 'dock')"
-        >
-          {{ item.label }}
-        </button>
-      }
+    <div class="wb-dock-tabs">
+      <nav role="tablist" aria-label="Investigation views">
+        @for (item of docks; track item.id) {
+          <button
+            type="button"
+            role="tab"
+            [id]="'wb-dock-' + item.id"
+            [attr.data-dock]="item.id"
+            [attr.data-role]="
+              item.id === 'input'
+                ? 'source'
+                : item.id === 'output'
+                  ? 'output'
+                  : 'evidence'
+            "
+            aria-controls="wb-dock-panel"
+            [tabIndex]="state.selection().dock === item.id ? 0 : -1"
+            [attr.aria-selected]="state.selection().dock === item.id"
+            (click)="selectDock(item.id)"
+            (keydown)="tabKey($event, 'dock')"
+          >
+            {{ item.label }}
+          </button>
+        }
+      </nav>
       <span class="wb-spacer"></span
       ><span class="wb-dock-context">{{ dockContext() }}</span
       ><button
@@ -156,12 +158,13 @@
       >
         {{ state.layout().dockCollapsed ? "▴" : "▾" }}
       </button>
-    </nav>
+    </div>
     <div
       class="wb-dock-body"
       id="wb-dock-panel"
       role="tabpanel"
       [attr.aria-labelledby]="'wb-dock-' + state.selection().dock"
+      tabindex="0"
       [hidden]="state.layout().dockCollapsed"
     >
       <ng-container [ngTemplateOutlet]="dock()" />

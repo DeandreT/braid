@@ -9,7 +9,7 @@ per-operation Docker runners remain the local development and test runners.
 
 The service keeps the restricted workers' semantics: the same `ferrule-host`
 binary, the same framed protocols (`weft.ferrule-host.v1`,
-`weft.ferrule-preview.v1`, `weft.ferrule-build.v1`) and the same fixed limits. Its
+`weft.ferrule-preview.v1`, `weft.ferrule-edit.v1`, `weft.ferrule-build.v1`) and the same fixed limits. Its
 answers are byte for byte what the Docker runner, or for compilation the Docker
 compiler worker, returns for the same frame.
 

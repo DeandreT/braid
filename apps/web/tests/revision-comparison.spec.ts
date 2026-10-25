@@ -591,7 +591,7 @@ test("comparison refusals, missing reports and unavailable storage recover expli
   // A response citing another derivation is refused whole.
   fixture.compare = () => {
     const wrong = comparison({});
-    wrong.right.projection.derivationId = P[1];
+    wrong.right.projection!.derivationId = P[1];
     return { json: wrong };
   };
   await page.getByRole("button", { name: "Refresh catalog" }).first().click();

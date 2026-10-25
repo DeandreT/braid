@@ -20,10 +20,13 @@ public sealed record ComparisonReportCitationV1(string DerivationId, string Gene
 {
     public override string ToString() => "Revision comparison report citation.";
 }
-public sealed record ComparisonSideCitationV1(ScopedRevisionId Revision, string Sequence,
+public sealed record ComparisonDraftCitationV1(string OrganizationId, string ProjectId, string MappingId, string DraftId, string Version);
+public sealed record ComparisonEditOperationV1(string Index, string Description, bool DescriptionTruncated);
+public sealed record ComparisonSideCitationV1(ScopedRevisionId? Revision, string? Sequence,
     ArtifactDigest NativeDigest, string NativeByteCount, ProjectionProvenance ProjectionProvenance,
-    ComparisonReportCitationV1 Projection, ComparisonReportCitationV1? Validation)
+    ComparisonReportCitationV1? Projection, ComparisonReportCitationV1? Validation, ComparisonDraftCitationV1? Draft = null)
 {
+    public string Kind => Draft is null ? "revision" : "draft";
     public override string ToString() => "Revision comparison side citation.";
 }
 public sealed record ComparisonValidationSummaryV1(bool IsValid, int TotalIssueCount,
@@ -54,7 +57,7 @@ public sealed record RevisionComparisonV1(string SchemaVersion, string PolicyVer
     ProjectionCoverage LeftCoverage, ProjectionCoverage RightCoverage, bool ValidationIncluded,
     ComparisonValidationSummaryV1? LeftValidation, ComparisonValidationSummaryV1? RightValidation,
     bool HasObservedDifferences, bool HasUncertainty, int TotalItemCount, int EmittedItemCount,
-    bool Truncated, IReadOnlyList<ComparisonItemV1> Items)
+    bool Truncated, IReadOnlyList<ComparisonItemV1> Items, IReadOnlyList<ComparisonEditOperationV1>? Operations = null)
 {
     public override string ToString() => "Revision comparison result.";
 }

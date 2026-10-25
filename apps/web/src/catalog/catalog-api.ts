@@ -43,6 +43,7 @@ const actionKeys = [
   "createProjects",
   "createMappings",
   "editMetadata",
+  "edit",
   "uploadRevisions",
   "readReports",
   "chat",

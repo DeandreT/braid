@@ -39,6 +39,7 @@ public static partial class CatalogEndpoints
         MapRevisionReports(routes, mapping + "/revisions/{revisionId}");
         MapRevisionComparisons(routes, mapping);
         MapPreviews(routes, organization, mapping + "/revisions/{revisionId}");
+        MapMappingDrafts(routes, mapping);
         DescribeRevisionUpload(routes.MapPost(project + "/mappings", CreateCatalogMapping), create: true);
         DescribeRevisionUpload(routes.MapPost(mapping + "/revisions", AppendCatalogRevision), create: false);
         DescribeIngestionReceipt(routes.MapGet(project + "/revision-ingestions/{operationId}", GetCatalogIngestionReceipt));
@@ -81,7 +82,7 @@ public static partial class CatalogEndpoints
             return Results.Ok(CatalogPublicMapper.Context(organization, token, admission.ContextMode!, metadataEditOptions.Enabled,
                 ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
                 revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, admission.IdentityContext,
-                context.RequestServices.GetService<Chat.ChatApiOptions>()?.Enabled == true, PreviewEnabled(context)));
+                context.RequestServices.GetService<Chat.ChatApiOptions>()?.Enabled == true, PreviewEnabled(context), MappingEditingEnabled(context)));
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,
@@ -140,7 +141,7 @@ public static partial class CatalogEndpoints
             {
                 RequireAccess(mappings.Access, admission.Actor!, scope);
                 return Results.Ok(CatalogPublicMapper.Mappings(mappings, metadataEditOptions.Enabled, ingestionOptions.Enabled,
-                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context)));
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context), MappingEditingEnabled(context)));
             });
         });
 
@@ -158,7 +159,7 @@ public static partial class CatalogEndpoints
                 RequireScope(mapping.Summary.Scope == scope);
                 RequireAccess(mapping.Access, admission.Actor!, Project(scope));
                 return Results.Ok(CatalogPublicMapper.Mapping(mapping, metadataEditOptions.Enabled, ingestionOptions.Enabled,
-                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context)));
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context), MappingEditingEnabled(context)));
             });
         });
 

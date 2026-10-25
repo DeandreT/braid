@@ -1,7 +1,10 @@
 import type { components } from "../../api/generated";
 import type { CatalogRevision } from "../catalog-types";
 
-export type RevisionComparison = components["schemas"]["RevisionComparisonV1"];
+export type RevisionComparison = Omit<
+  components["schemas"]["RevisionComparisonV1"],
+  "left" | "right"
+> & { left: ComparisonSideCitation; right: ComparisonSideCitation };
 export type ComparisonItem = components["schemas"]["ComparisonItemV1"];
 export type ComparisonFacet = components["schemas"]["ComparisonFacetV1"];
 export type ComparisonCandidate =
@@ -10,8 +13,13 @@ export type ComparisonEntity = components["schemas"]["ComparisonEntityV1"];
 export type ComparisonMatch = components["schemas"]["ComparisonMatchV1"];
 export type ComparisonAspect = components["schemas"]["ComparisonAspectV1"];
 export type ComparisonReason = components["schemas"]["ComparisonReasonV1"];
-export type ComparisonSideCitation =
-  components["schemas"]["ComparisonSideCitationV1"];
+type AnySide = components["schemas"]["ComparisonSideCitationV1"];
+// This reader admits revision/revision comparisons only. Draft comparisons have a separate editor reader.
+export type ComparisonSideCitation = AnySide & {
+  revision: NonNullable<AnySide["revision"]>;
+  projection: NonNullable<AnySide["projection"]>;
+  sequence: string;
+};
 export type ComparisonValidationSummary =
   components["schemas"]["ComparisonValidationSummaryV1"];
 export type ComparisonSideName = "left" | "right";

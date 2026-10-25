@@ -20,6 +20,7 @@ adapters and their own capability checks.
   and private objects can be kept in Azure Blob storage.
 - Microsoft Entra sign-in, server sessions and project-scoped application permissions.
 - A `weft` command line that works with the API as the signed-in user.
+- Opt-in [mapping editing](docs/mapping-editing.md) with private drafts, typed operations and authoritative conditional saves.
 
 Other mapping engines, identity providers, and AI model providers will integrate
 through separate adapters. Web hosting and publishing a mapping as a runnable

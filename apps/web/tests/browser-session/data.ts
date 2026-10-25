@@ -48,6 +48,7 @@ export const actions = {
   createProjects: true,
   createMappings: true,
   editMetadata: true,
+  edit: false,
   uploadRevisions: true,
   readReports: true,
   deriveReports: false,

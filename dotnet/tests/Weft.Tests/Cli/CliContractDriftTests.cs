@@ -87,7 +87,8 @@ public sealed class CliContractDriftTests
             .Select(response => response["content"]?["application/json"]?["schema"]).Where(schema => schema is not null).ToArray();
         Assert.NotEmpty(errors);
         Assert.All(errors, schema => Assert.True(schema!.ToJsonString().Contains(errorSchema, StringComparison.Ordinal) ||
-            schema.ToJsonString().Contains("#/components/schemas/CatalogRevisionIngestionResultV1", StringComparison.Ordinal),
+            schema.ToJsonString().Contains("#/components/schemas/CatalogRevisionIngestionResultV1", StringComparison.Ordinal) ||
+            operation.Path.Contains("/drafts", StringComparison.Ordinal) && schema.ToJsonString().Contains("#/components/schemas/MappingDraftResultV1", StringComparison.Ordinal),
             $"{operationId} documents an error body other than {operation.ErrorBody.Name}"));
         CompareShape(operation.ErrorBody, Spec.Schema(errorSchema), $"{operationId} error");
     }

@@ -1,6 +1,8 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Weft.Api.Catalog;
+using Weft.Application;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 
@@ -19,6 +21,15 @@ public static class InspectionWorkerHostConfiguration
         services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<DockerInspectionWorkerRunner>());
         services.AddSingleton<IHostedService>(provider =>
             new InspectionWorkerHostLifetime(provider.GetRequiredService<DockerInspectionWorkerRunner>().StopAsync));
+        var edit = new DockerInspectionWorkerOptions(options.DockerExecutable, options.ImageId, options.WallTimeout,
+            options.DockerSocketPath, DockerWorkerProfile.Edit);
+        services.AddKeyedSingleton(FerruleServiceProtocol.EditProfile, (_, _) => launcher is null
+            ? new DockerInspectionWorkerRunner(edit) : new DockerInspectionWorkerRunner(edit, launcher));
+        services.AddSingleton<IMappingEditBackend>(provider => new FerruleInspectionBackend(
+            provider.GetRequiredKeyedService<DockerInspectionWorkerRunner>(FerruleServiceProtocol.EditProfile)));
+        services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(() =>
+            provider.GetService<CatalogMappingEditOptions>()?.Enabled == true
+                ? provider.GetRequiredKeyedService<DockerInspectionWorkerRunner>(FerruleServiceProtocol.EditProfile).StopAsync() : Task.CompletedTask));
         AddBackends(services);
     }
 
@@ -60,6 +71,14 @@ public static class InspectionWorkerHostConfiguration
         services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<FerruleServiceRunner>());
         services.AddSingleton<IHostedService>(provider =>
             new InspectionWorkerHostLifetime(provider.GetRequiredService<FerruleServiceRunner>().StopAsync));
+        services.AddKeyedSingleton(FerruleServiceProtocol.EditProfile, (provider, _) => new FerruleServiceRunner(new(
+            provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)), FerruleServiceProtocol.EditProfile,
+            buildIdentity, compileToolchainIdentity)));
+        services.AddSingleton<IMappingEditBackend>(provider => new FerruleInspectionBackend(
+            provider.GetRequiredKeyedService<FerruleServiceRunner>(FerruleServiceProtocol.EditProfile)));
+        services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(() =>
+            provider.GetService<CatalogMappingEditOptions>()?.Enabled == true
+                ? provider.GetRequiredKeyedService<FerruleServiceRunner>(FerruleServiceProtocol.EditProfile).StopAsync() : Task.CompletedTask));
         AddBackends(services);
     }
 

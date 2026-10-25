@@ -541,6 +541,196 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the caller's own open drafts for this mapping. */
+    get: operations["ListMappingDrafts"];
+    put?: never;
+    /** Create an author-private exact-base draft and version-zero checkpoint. */
+    post: operations["CreateMappingDraft"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read author-private draft metadata and its strong version ETag. */
+    get: operations["GetMappingDraft"];
+    put?: never;
+    post?: never;
+    /** Discard the author's operation log and checkpoint content. */
+    delete: operations["DiscardMappingDraft"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/base": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the exact immutable base bytes, never an editable native upload. */
+    get: operations["GetMappingDraftBase"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/checkpoints": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Replay, encode, validate and project the exact draft version. */
+    post: operations["CheckpointMappingDraft"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/checkpoints/current/projection": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the current authoritative checkpoint projection. */
+    get: operations["GetMappingDraftProjection"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/checkpoints/current/validation": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the current authoritative checkpoint validation. */
+    get: operations["GetMappingDraftValidation"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/comparison": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Compare the checkpoint's semantic facts and typed intent with the immutable base. */
+    get: operations["CompareMappingDraft"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/operations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the closed ferrule.edit.v1 operation log. */
+    get: operations["GetMappingDraftOperations"];
+    /** Autosave a complete bounded operation log without starting a worker. */
+    put: operations["PutMappingDraftOperations"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/previews": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Preview an immutable copy of the current checkpoint, retained independently of this draft. */
+    post: operations["PreviewMappingDraft"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/rebase": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Explicitly replay all operations on the current head, or change nothing. */
+    post: operations["RebaseMappingDraft"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/drafts/{draftId}/save": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Save a nonempty current checkpoint through original-actor conditional ingestion. */
+    post: operations["SaveMappingDraft"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/metadata": {
     parameters: {
       query?: never;
@@ -1206,6 +1396,8 @@ export interface components {
       createMappings: boolean;
       createProjects: boolean;
       deriveReports: boolean;
+      /** @default false */
+      edit: boolean;
       editMetadata: boolean;
       manageMembership: boolean;
       preview: boolean;
@@ -1278,6 +1470,8 @@ export interface components {
       createMappings: boolean;
       createProjects: boolean;
       deriveReports: boolean;
+      /** @default false */
+      edit: boolean;
       editMetadata: boolean;
       manageMembership: boolean;
       preview: boolean;
@@ -1331,6 +1525,15 @@ export interface components {
       outcome: string;
       run: components["schemas"]["CatalogPreviewRunV1"];
     };
+    CatalogPreviewDraftSubjectV1: {
+      baseRevision: components["schemas"]["CatalogRevisionScopeV1"];
+      draftId: string;
+      mapping: components["schemas"]["CatalogMappingScopeV1"];
+      /** Format: int32 */
+      nativeByteCount: number;
+      nativeDigest: string;
+      version: string;
+    };
     CatalogPreviewFailureV1: {
       code: string;
       message: string;
@@ -1364,6 +1567,7 @@ export interface components {
       /** Format: date-time */
       createdAtUtc: string;
       currentDateTime: string;
+      draft?: null | components["schemas"]["CatalogPreviewDraftSubjectV1"];
       /** Format: date-time */
       expiresAtUtc: string;
       failure: null | components["schemas"]["CatalogPreviewFailureV1"];
@@ -1376,11 +1580,12 @@ export interface components {
       provenance: null | components["schemas"]["CatalogPreviewProvenanceV1"];
       recordsWritten: null | string;
       requestFingerprint: string;
-      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      revision: null | components["schemas"]["CatalogRevisionScopeV1"];
       runId: string;
       /** Format: date-time */
       startedAtUtc: null | string;
       state: string;
+      subjectKind?: null | string;
     };
     CatalogPreviewSubmissionV1: {
       inputs: {
@@ -1905,6 +2110,18 @@ export interface components {
       node: null | components["schemas"]["ProjectionNodeReference"];
       relationshipId: null | string;
     };
+    ComparisonDraftCitationV1: {
+      draftId: string;
+      mappingId: string;
+      organizationId: string;
+      projectId: string;
+      version: string;
+    };
+    ComparisonEditOperationV1: {
+      description: string;
+      descriptionTruncated: boolean;
+      index: string;
+    };
     /** @enum {unknown} */
     ComparisonEntityV1:
       | "boundary"
@@ -1952,12 +2169,14 @@ export interface components {
       keyFingerprint: string;
     };
     ComparisonSideCitationV1: {
+      draft?: null | components["schemas"]["ComparisonDraftCitationV1"];
+      kind?: null | string;
       nativeByteCount: string;
       nativeDigest: components["schemas"]["ArtifactDigest"];
-      projection: components["schemas"]["ComparisonReportCitationV1"];
+      projection: null | components["schemas"]["ComparisonReportCitationV1"];
       projectionProvenance: components["schemas"]["ProjectionProvenance"];
-      revision: components["schemas"]["ScopedRevisionId"];
-      sequence: string;
+      revision: null | components["schemas"]["ScopedRevisionId"];
+      sequence: null | string;
       validation: null | components["schemas"]["ComparisonReportCitationV1"];
     };
     ComparisonValidationSummaryV1: {
@@ -2033,6 +2252,417 @@ export interface components {
     };
     /** @enum {unknown} */
     DiagnosticSeverity: "information" | "warning" | "error";
+    EditBindingV1: {
+      field: string;
+      scope: components["schemas"]["EditScopeV1"];
+    };
+    EditExpressionV1:
+      | components["schemas"]["EditExpressionV1ExistingEditExpressionV1"]
+      | components["schemas"]["EditExpressionV1SourceEditExpressionV1"]
+      | components["schemas"]["EditExpressionV1OwnedSourceEditExpressionV1"]
+      | components["schemas"]["EditExpressionV1ConstantEditExpressionV1"]
+      | components["schemas"]["EditExpressionV1CallEditExpressionV1"];
+    EditExpressionV1CallEditExpressionV1: {
+      args: string[];
+      function: string;
+      id: string;
+      /** @enum {string} */
+      kind: "call";
+    };
+    EditExpressionV1ConstantEditExpressionV1: {
+      id: string;
+      /** @enum {string} */
+      kind: "constant";
+      value: components["schemas"]["EditScalarV1"];
+    };
+    EditExpressionV1ExistingEditExpressionV1: {
+      /** @enum {string} */
+      kind: "existing";
+      node: string;
+    };
+    EditExpressionV1OwnedSourceEditExpressionV1: {
+      frame?: null | string[];
+      id: string;
+      /** @enum {string} */
+      kind: "owned_source";
+      owner: components["schemas"]["EditSourceOwnerV1"];
+      path: string[];
+    };
+    EditExpressionV1SourceEditExpressionV1: {
+      frame?: null | string[];
+      id: string;
+      /** @enum {string} */
+      kind: "source";
+      path: string[];
+    };
+    EditFailureIterationV1:
+      | components["schemas"]["EditFailureIterationV1SourceEditFailureIterationV1"]
+      | components["schemas"]["EditFailureIterationV1GeneratedEditFailureIterationV1"];
+    EditFailureIterationV1GeneratedEditFailureIterationV1: {
+      /** @enum {string} */
+      kind: "generated";
+      sequence: components["schemas"]["EditGeneratedSequenceV1"];
+    };
+    EditFailureIterationV1SourceEditFailureIterationV1: {
+      collection: components["schemas"]["EditSourceCollectionV1"];
+      /** @enum {string} */
+      kind: "source";
+    };
+    EditFailureRuleDefinitionV1: {
+      iteration: components["schemas"]["EditFailureIterationV1"];
+      message?: null | components["schemas"]["EditExpressionV1"];
+      selection: components["schemas"]["EditFailureSelectionV1"];
+    };
+    EditFailureSelectionV1:
+      | components["schemas"]["EditFailureSelectionV1AllEditFailuresV1"]
+      | components["schemas"]["EditFailureSelectionV1TrueEditFailuresV1"]
+      | components["schemas"]["EditFailureSelectionV1FalseEditFailuresV1"];
+    EditFailureSelectionV1AllEditFailuresV1: {
+      /** @enum {string} */
+      kind: "all";
+    };
+    EditFailureSelectionV1FalseEditFailuresV1: {
+      expression: components["schemas"]["EditExpressionV1"];
+      /** @enum {string} */
+      kind: "when_false";
+    };
+    EditFailureSelectionV1TrueEditFailuresV1: {
+      expression: components["schemas"]["EditExpressionV1"];
+      /** @enum {string} */
+      kind: "when_true";
+    };
+    EditGeneratedSequenceV1:
+      | components["schemas"]["EditGeneratedSequenceV1GenerateEditSequenceV1"]
+      | components["schemas"]["EditGeneratedSequenceV1TokenizeEditSequenceV1"]
+      | components["schemas"]["EditGeneratedSequenceV1TokenizeLengthEditSequenceV1"]
+      | components["schemas"]["EditGeneratedSequenceV1TokenizeRegexEditSequenceV1"];
+    EditGeneratedSequenceV1GenerateEditSequenceV1: {
+      from?: null | components["schemas"]["EditExpressionV1"];
+      item: string;
+      /** @enum {string} */
+      kind: "generate";
+      to: components["schemas"]["EditExpressionV1"];
+    };
+    EditGeneratedSequenceV1TokenizeEditSequenceV1: {
+      delimiter: components["schemas"]["EditExpressionV1"];
+      input: components["schemas"]["EditExpressionV1"];
+      item: string;
+      /** @enum {string} */
+      kind: "tokenize";
+    };
+    EditGeneratedSequenceV1TokenizeLengthEditSequenceV1: {
+      input: components["schemas"]["EditExpressionV1"];
+      item: string;
+      /** @enum {string} */
+      kind: "tokenize_by_length";
+      length: components["schemas"]["EditExpressionV1"];
+    };
+    EditGeneratedSequenceV1TokenizeRegexEditSequenceV1: {
+      flags?: null | components["schemas"]["EditExpressionV1"];
+      input: components["schemas"]["EditExpressionV1"];
+      item: string;
+      /** @enum {string} */
+      kind: "tokenize_regex";
+      pattern: components["schemas"]["EditExpressionV1"];
+    };
+    EditGroupingV1:
+      | components["schemas"]["EditGroupingV1NoEditGroupingV1"]
+      | components["schemas"]["EditGroupingV1ByEditGroupingV1"]
+      | components["schemas"]["EditGroupingV1AdjacentEditGroupingV1"]
+      | components["schemas"]["EditGroupingV1StartingEditGroupingV1"]
+      | components["schemas"]["EditGroupingV1EndingEditGroupingV1"]
+      | components["schemas"]["EditGroupingV1BlocksEditGroupingV1"];
+    EditGroupingV1AdjacentEditGroupingV1: {
+      /** @enum {string} */
+      kind: "adjacent_by";
+      node: string;
+    };
+    EditGroupingV1BlocksEditGroupingV1: {
+      /** @enum {string} */
+      kind: "into_blocks";
+      node: string;
+    };
+    EditGroupingV1ByEditGroupingV1: {
+      /** @enum {string} */
+      kind: "by";
+      node: string;
+    };
+    EditGroupingV1EndingEditGroupingV1: {
+      /** @enum {string} */
+      kind: "ending_with";
+      node: string;
+    };
+    EditGroupingV1NoEditGroupingV1: {
+      /** @enum {string} */
+      kind: "none";
+    };
+    EditGroupingV1StartingEditGroupingV1: {
+      /** @enum {string} */
+      kind: "starting_with";
+      node: string;
+    };
+    EditOperationV1:
+      | components["schemas"]["EditOperationV1BindEditV1"]
+      | components["schemas"]["EditOperationV1RetargetBindingEditV1"]
+      | components["schemas"]["EditOperationV1RemoveBindingEditV1"]
+      | components["schemas"]["EditOperationV1ConnectEditV1"]
+      | components["schemas"]["EditOperationV1DisconnectEditV1"]
+      | components["schemas"]["EditOperationV1EditConstantV1"]
+      | components["schemas"]["EditOperationV1EditCallV1"]
+      | components["schemas"]["EditOperationV1EditValueMapV1"]
+      | components["schemas"]["EditOperationV1RemoveNodesEditV1"]
+      | components["schemas"]["EditOperationV1AddScopeEditV1"]
+      | components["schemas"]["EditOperationV1RemoveScopeEditV1"]
+      | components["schemas"]["EditOperationV1SetIterationEditV1"]
+      | components["schemas"]["EditOperationV1SetFilterEditV1"]
+      | components["schemas"]["EditOperationV1SetSortEditV1"]
+      | components["schemas"]["EditOperationV1SetGroupingEditV1"]
+      | components["schemas"]["EditOperationV1AddFailureRuleEditV1"]
+      | components["schemas"]["EditOperationV1RemoveFailureRuleEditV1"]
+      | components["schemas"]["EditOperationV1MoveFailureRuleEditV1"]
+      | components["schemas"]["EditOperationV1EditFailureRuleV1"];
+    EditOperationV1AddFailureRuleEditV1: {
+      /** @enum {string} */
+      op: "add_failure_rule";
+      rule: components["schemas"]["EditFailureRuleDefinitionV1"];
+    };
+    EditOperationV1AddScopeEditV1: {
+      field: string;
+      /** @enum {string} */
+      op: "add_scope";
+      parent: components["schemas"]["EditScopeV1"];
+    };
+    EditOperationV1BindEditV1: {
+      binding: components["schemas"]["EditBindingV1"];
+      expression: components["schemas"]["EditExpressionV1"];
+      /** @enum {string} */
+      op: "bind";
+    };
+    EditOperationV1ConnectEditV1: {
+      expression: components["schemas"]["EditExpressionV1"];
+      input: string;
+      node: string;
+      /** @enum {string} */
+      op: "connect";
+    };
+    EditOperationV1DisconnectEditV1: {
+      input: string;
+      node: string;
+      /** @enum {string} */
+      op: "disconnect";
+      replacement?: null | string;
+    };
+    EditOperationV1EditCallV1: {
+      args: string[];
+      function: string;
+      node: string;
+      /** @enum {string} */
+      op: "edit_call";
+    };
+    EditOperationV1EditConstantV1: {
+      node: string;
+      /** @enum {string} */
+      op: "edit_constant";
+      value: components["schemas"]["EditScalarV1"];
+    };
+    EditOperationV1EditFailureRuleV1: {
+      index: string;
+      /** @enum {string} */
+      op: "edit_failure_rule";
+      rule: components["schemas"]["EditFailureRuleDefinitionV1"];
+    };
+    EditOperationV1EditValueMapV1: {
+      node: string;
+      /** @enum {string} */
+      op: "edit_value_map";
+      value: components["schemas"]["EditValueMapDefinitionV1"];
+    };
+    EditOperationV1MoveFailureRuleEditV1: {
+      from: string;
+      /** @enum {string} */
+      op: "move_failure_rule";
+      to: string;
+    };
+    EditOperationV1RemoveBindingEditV1: {
+      binding: components["schemas"]["EditBindingV1"];
+      /** @enum {string} */
+      op: "remove_binding";
+    };
+    EditOperationV1RemoveFailureRuleEditV1: {
+      index: string;
+      /** @enum {string} */
+      op: "remove_failure_rule";
+    };
+    EditOperationV1RemoveNodesEditV1: {
+      nodes: string[];
+      /** @enum {string} */
+      op: "remove_nodes";
+      replacements: string[];
+      scope: components["schemas"]["EditScopeV1"];
+    };
+    EditOperationV1RemoveScopeEditV1: {
+      /** @enum {string} */
+      op: "remove_scope";
+      scope: components["schemas"]["EditScopeV1"];
+    };
+    EditOperationV1RetargetBindingEditV1: {
+      binding: components["schemas"]["EditBindingV1"];
+      node: string;
+      /** @enum {string} */
+      op: "retarget_binding";
+      to: components["schemas"]["EditBindingV1"];
+    };
+    EditOperationV1SetFilterEditV1: {
+      node?: null | string;
+      /** @enum {string} */
+      op: "set_filter";
+      scope: components["schemas"]["EditScopeV1"];
+    };
+    EditOperationV1SetGroupingEditV1: {
+      grouping: components["schemas"]["EditGroupingV1"];
+      /** @enum {string} */
+      op: "set_grouping";
+      scope: components["schemas"]["EditScopeV1"];
+    };
+    EditOperationV1SetIterationEditV1: {
+      /** @enum {string} */
+      op: "set_iteration";
+      scope: components["schemas"]["EditScopeV1"];
+      source?: null | components["schemas"]["EditSourceCollectionV1"];
+    };
+    EditOperationV1SetSortEditV1: {
+      keys: components["schemas"]["EditSortKeyV1"][];
+      /** @enum {string} */
+      op: "set_sort";
+      scope: components["schemas"]["EditScopeV1"];
+    };
+    EditScalarTypeV1:
+      | components["schemas"]["EditScalarTypeV1StringEditScalarTypeV1"]
+      | components["schemas"]["EditScalarTypeV1IntEditScalarTypeV1"]
+      | components["schemas"]["EditScalarTypeV1FloatEditScalarTypeV1"]
+      | components["schemas"]["EditScalarTypeV1BoolEditScalarTypeV1"];
+    EditScalarTypeV1BoolEditScalarTypeV1: {
+      /** @enum {string} */
+      kind: "bool";
+    };
+    EditScalarTypeV1FloatEditScalarTypeV1: {
+      /** @enum {string} */
+      kind: "float";
+    };
+    EditScalarTypeV1IntEditScalarTypeV1: {
+      /** @enum {string} */
+      kind: "int";
+    };
+    EditScalarTypeV1StringEditScalarTypeV1: {
+      /** @enum {string} */
+      kind: "string";
+    };
+    EditScalarV1:
+      | components["schemas"]["EditScalarV1NullEditScalarV1"]
+      | components["schemas"]["EditScalarV1JsonNullEditScalarV1"]
+      | components["schemas"]["EditScalarV1XmlNilEditScalarV1"]
+      | components["schemas"]["EditScalarV1BoolEditScalarV1"]
+      | components["schemas"]["EditScalarV1IntEditScalarV1"]
+      | components["schemas"]["EditScalarV1FloatEditScalarV1"]
+      | components["schemas"]["EditScalarV1StringEditScalarV1"];
+    EditScalarV1BoolEditScalarV1: {
+      text: string;
+      /** @enum {string} */
+      type: "bool";
+    };
+    EditScalarV1FloatEditScalarV1: {
+      text: string;
+      /** @enum {string} */
+      type: "float";
+    };
+    EditScalarV1IntEditScalarV1: {
+      text: string;
+      /** @enum {string} */
+      type: "int";
+    };
+    EditScalarV1JsonNullEditScalarV1: {
+      /** @enum {string} */
+      type: "json_null";
+    };
+    EditScalarV1NullEditScalarV1: {
+      /** @enum {string} */
+      type: "null";
+    };
+    EditScalarV1StringEditScalarV1: {
+      text: string;
+      /** @enum {string} */
+      type: "string";
+    };
+    EditScalarV1XmlNilEditScalarV1: {
+      /** @enum {string} */
+      type: "xml_nil";
+    };
+    EditScopeV1: {
+      children: string[];
+      target: components["schemas"]["EditTargetV1"];
+    };
+    EditScriptV1: {
+      /** @enum {string} */
+      format: "ferrule.edit.v1";
+      operations: components["schemas"]["EditOperationV1"][];
+    };
+    EditSortKeyV1: {
+      descending: boolean;
+      node: string;
+    };
+    EditSourceCollectionV1:
+      | components["schemas"]["EditSourceCollectionV1LegacyEditCollectionV1"]
+      | components["schemas"]["EditSourceCollectionV1PrimaryEditCollectionV1"]
+      | components["schemas"]["EditSourceCollectionV1NamedEditCollectionV1"];
+    EditSourceCollectionV1LegacyEditCollectionV1: {
+      /** @enum {string} */
+      kind: "legacy";
+      path: string[];
+    };
+    EditSourceCollectionV1NamedEditCollectionV1: {
+      /** @enum {string} */
+      kind: "named";
+      name: string;
+      path: string[];
+    };
+    EditSourceCollectionV1PrimaryEditCollectionV1: {
+      /** @enum {string} */
+      kind: "primary";
+      path: string[];
+    };
+    EditSourceOwnerV1:
+      | components["schemas"]["EditSourceOwnerV1PrimaryEditSourceV1"]
+      | components["schemas"]["EditSourceOwnerV1NamedEditSourceV1"];
+    EditSourceOwnerV1NamedEditSourceV1: {
+      /** @enum {string} */
+      kind: "named";
+      name: string;
+    };
+    EditSourceOwnerV1PrimaryEditSourceV1: {
+      /** @enum {string} */
+      kind: "primary";
+    };
+    EditTargetV1:
+      | components["schemas"]["EditTargetV1PrimaryEditTargetV1"]
+      | components["schemas"]["EditTargetV1NamedEditTargetV1"];
+    EditTargetV1NamedEditTargetV1: {
+      /** @enum {string} */
+      kind: "named";
+      name: string;
+    };
+    EditTargetV1PrimaryEditTargetV1: {
+      /** @enum {string} */
+      kind: "primary";
+    };
+    EditValueMapDefinitionV1: {
+      default?: null | components["schemas"]["EditScalarV1"];
+      input_type?: null | components["schemas"]["EditScalarTypeV1"];
+      table: components["schemas"]["EditValueMapEntryV1"][];
+    };
+    EditValueMapEntryV1: {
+      from: components["schemas"]["EditScalarV1"];
+      to: components["schemas"]["EditScalarV1"];
+    };
     /** @enum {unknown} */
     ExactNumberFlavor: "integer" | "decimal" | "binaryFloat";
     FieldCardinality: {
@@ -2175,6 +2805,72 @@ export interface components {
       /** @enum {string} */
       kind: "string";
       value: string;
+    };
+    MappingDraftBaseV1: {
+      /** Format: int32 */
+      nativeByteCount: number;
+      nativeDigest: components["schemas"]["ArtifactDigest"];
+      revision: components["schemas"]["CatalogRevisionScopeV1"];
+      sequence: string;
+    };
+    MappingDraftCheckpointV1: {
+      isValid: boolean;
+      /** Format: int32 */
+      nativeByteCount: number;
+      nativeDigest: components["schemas"]["ArtifactDigest"];
+      /** Format: int32 */
+      totalIssueCount: number;
+      version: string;
+    };
+    MappingDraftCreateV1: {
+      baseRevisionId: string;
+    };
+    MappingDraftFailureV1: {
+      code: string;
+      message: string;
+      messageTruncated: boolean;
+      operationIndex: null | string;
+      status: string;
+    };
+    MappingDraftListV1: {
+      drafts: components["schemas"]["MappingDraftV1"][];
+    };
+    MappingDraftRebaseV1: {
+      targetRevisionId: string;
+    };
+    MappingDraftResultV1: {
+      draft: null | components["schemas"]["MappingDraftV1"];
+      failure?: null | components["schemas"]["MappingDraftFailureV1"];
+      outcome: string;
+    };
+    MappingDraftSaveV1: {
+      originalFilename?: null | string;
+      version: string;
+    };
+    MappingDraftV1: {
+      authorPrincipalId: string;
+      base: components["schemas"]["MappingDraftBaseV1"];
+      /** Format: date-time */
+      changedAtUtc: string;
+      checkpoint: null | components["schemas"]["MappingDraftCheckpointV1"];
+      /** Format: date-time */
+      createdAtUtc: string;
+      /** Format: date-time */
+      expiresAtUtc: string;
+      id: string;
+      mapping: components["schemas"]["CatalogMappingScopeV1"];
+      /** Format: int32 */
+      operationCount: number;
+      operationsDigest: null | components["schemas"]["ArtifactDigest"];
+      savedRevisionId: null | string;
+      savingFilename?: null | string;
+      savingOperationId: null | string;
+      savingRequestId?: null | string;
+      state: string;
+      version: string;
+    };
+    MappingDraftVersionV1: {
+      version: string;
     };
     /** @enum {unknown} */
     MappingOperation: "inspect" | "project" | "validate" | "preview" | "build";
@@ -2623,6 +3319,7 @@ export interface components {
       leftCoverage: components["schemas"]["ProjectionCoverage"];
       leftValidation:
         null | components["schemas"]["ComparisonValidationSummaryV1"];
+      operations?: null | components["schemas"]["ComparisonEditOperationV1"][];
       policyVersion: string;
       right: components["schemas"]["ComparisonSideCitationV1"];
       rightCoverage: components["schemas"]["ProjectionCoverage"];
@@ -5929,6 +6626,2037 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ListMappingDrafts: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftListV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  CreateMappingDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description One canonical nonzero lowercase UUID. Repeating the same intent recovers its original receipt. */
+        "Idempotency-Key": string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingDraftCreateV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  GetMappingDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  DiscardMappingDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The draft's current strong ETag. Missing is 428; a stale version is 412. Weak tags, wildcards, lists and If-None-Match are refused. */
+        "If-Match": string;
+      };
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  GetMappingDraftBase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  CheckpointMappingDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingDraftVersionV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  GetMappingDraftProjection: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectionReportV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  GetMappingDraftValidation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ValidationReportV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  CompareMappingDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RevisionComparisonV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  GetMappingDraftOperations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EditScriptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  PutMappingDraftOperations: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The draft's current strong ETag. Missing is 428; a stale version is 412. Weak tags, wildcards, lists and If-None-Match are refused. */
+        "If-Match": string;
+      };
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EditScriptV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  PreviewMappingDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description One canonical nonzero lowercase UUID. Repeating the same intent recovers its original receipt. */
+        "Idempotency-Key": string;
+      };
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CatalogPreviewSubmissionV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogPreviewSubmitResultV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogPreviewSubmitResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  RebaseMappingDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description The draft's current strong ETag. Missing is 428; a stale version is 412. Weak tags, wildcards, lists and If-None-Match are refused. */
+        "If-Match": string;
+      };
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingDraftRebaseV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"];
+        };
+      };
+    };
+  };
+  SaveMappingDraft: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description One canonical nonzero lowercase UUID. Repeating the same intent recovers its original receipt. */
+        "Idempotency-Key": string;
+      };
+      path: {
+        draftId: string;
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingDraftSaveV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"]
+            | components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"]
+            | components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"]
+            | components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"]
+            | components["schemas"]["CatalogRevisionIngestionResultV1"];
         };
       };
     };

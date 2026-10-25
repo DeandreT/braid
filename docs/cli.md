@@ -113,6 +113,8 @@ shaped like a token.
 | `weft projects list/get/create` | Projects; creation makes you the project's administrator |
 | `weft mappings list/get/create` | Mappings; `create` uploads the first native revision |
 | `weft mappings metadata get/edit` | Name and description, edited with `If-Match` |
+| `weft drafts create/list/show/discard`, `drafts ops get/put` | Private exact-base drafts and bounded typed operation logs |
+| `weft drafts checkpoint/compare/preview/save/rebase` | Authoritative replay, semantic comparison, sample runs and conditional save |
 | `weft revisions list/get/append` | Immutable revisions; `append --expected-head` appends only on that head |
 | `weft ingestions status/resume` | Upload receipts and source-free recovery |
 | `weft reports projection/validation get/ensure` | Current or retained (`--derivation`) reports; `ensure` derives and waits |

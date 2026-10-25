@@ -77,6 +77,7 @@ import type { DockView } from "../workbench/workbench-model";
 import { NativeEvidenceComponent } from "../mappings/native-evidence.component";
 import { StatusChipComponent } from "../workbench/status-chip.component";
 import { MetadataValueComponent } from "../workbench/metadata-value.component";
+import { MappingEditorComponent } from "../edit/mapping-editor.component";
 import {
   buildStatus,
   comparisonStatus,
@@ -105,6 +106,7 @@ interface RevisionScreen {
     NativeEvidenceComponent,
     StatusChipComponent,
     MetadataValueComponent,
+    MappingEditorComponent,
   ],
   providers: [
     BuildViewRecovery,
@@ -120,6 +122,15 @@ export class RevisionPageComponent extends CatalogRoutePage<
   CatalogRevisionScope
 > {
   readonly workbench = inject(WorkbenchState);
+  readonly editMode = signal(false);
+  editedRevision(id: string): void {
+    const mapping = this.data()?.mapping.scope;
+    this.editMode.set(false);
+    if (mapping)
+      void this.workbenchRouter.navigateByUrl(
+        this.routes.revision({ ...mapping, revisionId: id }),
+      );
+  }
   readonly comparisonStatus = comparisonStatus;
   readonly buildStatus = buildStatus;
   readonly operationStatus = operationStatus;

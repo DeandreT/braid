@@ -60,11 +60,12 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
 
     /// <summary>Also maps the chat routes on the restricted chat logins; their provider profile is never contacted.</summary>
     internal bool Chat { get; private init; }
+    internal Action<AuthHttpFixture, IServiceCollection>? ConfigureExtra { get; private init; }
 
     internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true, int bearerBurst = 0,
-        bool chat = false)
+        bool chat = false, Action<AuthHttpFixture, IServiceCollection>? configureExtra = null)
     {
-        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat }; Exception? primary = null; var cleanup = new List<Exception>();
+        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat, ConfigureExtra = configureExtra }; Exception? primary = null; var cleanup = new List<Exception>();
         try { await test.InitializeAsync(postgres, bindIssuer); await body(test); }
         catch (Exception error) { primary = Safe(error, "The independent auth HTTP case failed."); }
         finally { try { await test.DisposeAsync(); } catch (Exception error) { cleanup.Add(Safe(error, "The independent auth HTTP cleanup failed.")); } }
@@ -337,6 +338,7 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
         builder.Services.AddSingleton<IMappingMetadataWriter>(new AuthHttpMetadataWriter(test.Data.Writer, test));
         builder.Services.AddSingleton<IOrganizationProjectCreationReader>(new PostgresProjectCreator(CreationPool));
         builder.Services.AddWeftAuthenticationHttp(new(AuthenticationHttpMode.Session, test.Origin.GetLeftPart(UriPartial.Authority)), builder.Environment);
+        test.ConfigureExtra?.Invoke(test, builder.Services);
         if (test.Chat)
         {
             ChatReaderPool = new(test.Data.Case.ChatReaderConnectionString, ChatDatabaseProfile.Reader);

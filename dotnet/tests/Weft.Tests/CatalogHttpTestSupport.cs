@@ -56,7 +56,8 @@ internal sealed class CatalogHttpTestSupport : IAsyncDisposable
     { BaseAddress = Origin, Timeout = TimeSpan.FromSeconds(20) };
 
     internal static async Task<CatalogHttpTestSupport> StartAsync(PostgresCase? test = null,
-        Guid? principal = null, Guid? organization = null, string environment = "Development")
+        Guid? principal = null, Guid? organization = null, string environment = "Development",
+        Action<IServiceCollection>? configure = null)
     {
         var reservation = new TcpListener(IPAddress.Loopback, 0);
         reservation.Start();
@@ -77,6 +78,7 @@ internal sealed class CatalogHttpTestSupport : IAsyncDisposable
             database = new(test.CatalogConnectionString);
             builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(database));
         }
+        configure?.Invoke(builder.Services);
         var app = builder.Build();
         var support = new CatalogHttpTestSupport(app, database, origin);
         app.MapWeftCatalog();

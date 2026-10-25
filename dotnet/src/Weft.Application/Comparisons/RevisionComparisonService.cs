@@ -84,10 +84,10 @@ public sealed partial class RevisionComparisonService
 
         private bool Compatible()
         {
-            var l = _left.Side.Projection.Metadata.Key;
-            var r = _right.Side.Projection.Metadata.Key;
-            var lp = l.Profile;
-            var rp = r.Profile;
+            var l = _left.Side.Format;
+            var r = _right.Side.Format;
+            var lp = _left.Side.Profile;
+            var rp = _right.Side.Profile;
             // Every string comparison is charged, even though metadata has already been verified.
             var same = _budget.Compare(lp.BackendId, rp.BackendId) == 0;
             same &= _budget.Compare(lp.BackendRevision, rp.BackendRevision) == 0;
@@ -96,8 +96,8 @@ public sealed partial class RevisionComparisonService
             same &= _budget.Compare(l.SchemaVersion, r.SchemaVersion) == 0;
             same &= _budget.Compare(l.AlgorithmVersion, r.AlgorithmVersion) == 0;
             same &= _budget.Compare(l.CodecVersion, r.CodecVersion) == 0;
-            var lb = l.Policy.CopyCanonicalUtf8();
-            var rb = r.Policy.CopyCanonicalUtf8();
+            var lb = _left.Side.Policy.CopyCanonicalUtf8();
+            var rb = _right.Side.Policy.CopyCanonicalUtf8();
             _budget.Work(lb.Length + rb.Length);
             same &= _budget.Compare(Sha256Digest.FromBytes(lb).Value, Sha256Digest.FromBytes(rb).Value) == 0;
             return same;
@@ -105,15 +105,17 @@ public sealed partial class RevisionComparisonService
 
         private ComparisonSideCitationV1 Citation(RevisionComparisonSide side)
         {
-            var source = side.Projection.Metadata.Key.Source;
             var p = side.Projection.Report.Document!.Provenance;
             var scope = Scope(side.Scope);
             var provenance = new ProjectionProvenance(Scope(side.Scope), new(p.NativeArtifactDigest.Algorithm,
                 p.NativeArtifactDigest.Value), new(p.Backend.Id, p.Backend.Revision, p.Backend.BuildId),
                 p.AdapterVersion, p.ProjectionVersion);
-            return new(scope, side.Sequence.ToString(CultureInfo.InvariantCulture),
-                new("sha256", source.NativeObject.Digest.Value), source.NativeObject.ByteCount.ToString(CultureInfo.InvariantCulture),
-                provenance, ReportCitation(side.Projection.Metadata), side.Validation is { } v ? ReportCitation(v.Metadata) : null);
+            var draft = side.DraftId is { } id ? new ComparisonDraftCitationV1(side.Scope.OrganizationId.ToString("D"),
+                side.Scope.ProjectId.ToString("D"), side.Scope.MappingId.ToString("D"), id.ToString("D"), side.DraftVersion!.Value.ToString(CultureInfo.InvariantCulture)) : null;
+            return new(draft is null ? scope : null, draft is null ? side.Sequence.ToString(CultureInfo.InvariantCulture) : null,
+                new("sha256", side.NativeDigest.Value), side.NativeByteCount.ToString(CultureInfo.InvariantCulture),
+                provenance, side.Projection.Metadata is { } projection ? ReportCitation(projection) : null,
+                side.Validation?.Metadata is { } validation ? ReportCitation(validation) : null, draft);
         }
         private ComparisonReportCitationV1 ReportCitation(RevisionReportResult metadata)
         {

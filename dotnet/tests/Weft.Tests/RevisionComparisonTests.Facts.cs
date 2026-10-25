@@ -34,9 +34,11 @@ public sealed partial class RevisionComparisonTests
             Assert.All(item.Facets, facet => { Assert.False(facet.HasObservedDifference); Assert.False(facet.HasUncertainty); });
         });
         Assert.Equal("R.a", NodeId(Assert.Single(Item(result, ComparisonEntityV1.Field, "L.a").Right).Node));
+        Assert.NotNull(result.Left.Revision);
         Assert.Equal(left.Catalog.Scope.RevisionId.ToString("D"), result.Left.Revision.RevisionId);
         Assert.Equal("9007199254740992", result.Left.Sequence);
         Assert.Equal("9007199254740993", result.Right.Sequence);
+        Assert.NotNull(result.Left.Projection);
         Assert.Equal("9007199254740993", result.Left.Projection.Generation);
         Assert.Equal(left.Key.Fingerprint.Value, result.Left.Projection.KeyFingerprint);
         Assert.Equal(left.Verified().Metadata.DerivationId.ToString("D"), result.Left.Projection.DerivationId);

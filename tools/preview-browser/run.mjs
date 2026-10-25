@@ -30,6 +30,7 @@ const option = (name) => {
 };
 const publications = option("--publications");
 const workerImage = option("--worker-image");
+const editing = process.argv.includes("--editing");
 const postgresImage =
   "docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc";
 if (
@@ -108,6 +109,8 @@ const roles = [
   ["weft_invocation_grant_writer", "INVOCATION_GRANT_WRITER"],
   ["weft_invocation_writer", "INVOCATION_WRITER"],
   ["weft_api_audit_writer", "API_AUDIT_WRITER"],
+  ["weft_draft_reader", "DRAFT_READER"],
+  ["weft_draft_writer", "DRAFT_WRITER"],
 ];
 const secrets = new Map(
   ["POSTGRES_ADMIN", ...roles.map(([, key]) => key)].map((key) => [
@@ -501,6 +504,9 @@ async function prepare() {
     "preview-csv-source.json",
     1,
   );
+  const editor = editing
+    ? await upload(mutationOrigin, state, project, "valid-basic.json", 2)
+    : null;
   await stopChild("mutation");
   for (const [principal, role] of [
     [ids.publisher, "publisher"],
@@ -521,6 +527,7 @@ async function prepare() {
     project,
     orders,
     unsupported,
+    ...(editor ? { editor } : {}),
   };
 }
 
@@ -534,6 +541,25 @@ const startServer = (profile) =>
         connections.weft_preview_writer,
       WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING:
         connections.weft_preview_reader,
+      ...(editing
+        ? {
+            WEFT_MAPPING_EDITING_ENABLED: "true",
+            WEFT_REVISION_INGESTION_ENABLED: "true",
+            WEFT_REVISION_REPORTS_ENABLED: "true",
+            WEFT_REVISION_REPORT_DERIVATION_ENABLED: "true",
+            WEFT_PRIVATE_STORAGE_ROOT: storageRoot,
+            WEFT_FERRULE_WORKER_IMAGE: workerImage,
+            WEFT_POSTGRES_INGESTION_CONNECTION_STRING: connections.weft_ingest,
+            WEFT_POSTGRES_REPORT_CONNECTION_STRING:
+              connections.weft_report_reader,
+            WEFT_POSTGRES_DERIVATION_CONNECTION_STRING:
+              connections.weft_deriver,
+            WEFT_POSTGRES_DRAFT_READER_CONNECTION_STRING:
+              connections.weft_draft_reader,
+            WEFT_POSTGRES_DRAFT_WRITER_CONNECTION_STRING:
+              connections.weft_draft_writer,
+          }
+        : {}),
     }),
     readOrigin,
   );
@@ -665,7 +691,12 @@ try {
       join(repository, "node_modules/@playwright/test/cli.js"),
       "test",
       "--config=" +
-        join(repository, "apps/web/playwright.preview-live.config.ts"),
+        join(
+          repository,
+          editing
+            ? "apps/web/playwright.edit-live.config.ts"
+            : "apps/web/playwright.preview-live.config.ts",
+        ),
       ...extraPlaywright,
     ],
     {

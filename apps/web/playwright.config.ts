@@ -9,6 +9,7 @@ export default defineConfig({
     "**/revision-chat.spec.ts",
     "**/revision-preview.spec.ts",
     "**/revision-comparison.spec.ts",
+    "**/mapping-editor.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

@@ -181,7 +181,7 @@ internal static class ReportCommands
         return compare;
     }
 
-    private static void WriteComparison(CliOutput output, RevisionComparisonV1 comparison)
+    internal static void WriteComparison(CliOutput output, RevisionComparisonV1 comparison)
     {
         output.Fields(("Observed differences", comparison.HasObservedDifferences), ("Uncertainty", comparison.HasUncertainty),
             ("Items", comparison.TotalItemCount), ("Shown", comparison.EmittedItemCount), ("Truncated", comparison.Truncated),

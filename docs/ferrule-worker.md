@@ -63,6 +63,12 @@ identity. Display-name and diagnostic text truncation is explicit.
 
 ## Protocol and limits
 
+Editing uses the separate `weft.ferrule-edit.v1` protocol: header, exact native
+base and typed operation-log frames. Its result carries authoritative validation,
+projection and a separate exact native frame. It preserves inspection's sandbox
+profile and deadline; only the bounded output framing is enlarged. The shared
+core also builds the dedicated browser wasm module. See [Mapping editing](mapping-editing.md).
+
 `weft.ferrule-host.v1` admits one request per worker process:
 
 1. A four-byte unsigned big-endian header length, followed by UTF-8 JSON.

@@ -6,6 +6,11 @@ the submitted inputs, the admitted request, every attempt and the terminal resul
 Execution uses the [Ferrule preview worker](ferrule-worker.md#json-sample-preview)
 and is delivered durably through Wolverine.
 
+A [mapping draft](mapping-editing.md) can be the immutable subject instead. The
+run retains its checkpoint's native bytes separately from the editable draft and
+remains replayable after draft changes or discard. Draft subjects use author-only
+`EditMapping` authority, not ordinary Runner authority; revision previews are unchanged.
+
 ## Submission and idempotency
 
 `PreviewRunService.SubmitAsync` validates the request against `PreviewPolicy` and

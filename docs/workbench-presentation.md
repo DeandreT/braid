@@ -8,6 +8,11 @@ a separate labeled chip.
 
 ## Vocabulary and status ownership
 
+The mapping editor labels provisional local validation separately from worker
+checkpoints. A draft save creates a version; it does not deploy or activate it.
+Conflicts and uncertain saves remain explicit, and only an acknowledged commit
+navigates to the saved revision. Editing status uses the shared labeled chips.
+
 `presentation.ts` maps workflow identities to primary labels. Keep API values,
 route names, request identities and payload contents unchanged. Keep **Regression
 tests**, the short **Tests** navigation label, and **Diff**.

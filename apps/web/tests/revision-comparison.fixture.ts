@@ -389,6 +389,8 @@ export function comparison(options: {
     const rev = revision(index);
     return {
       revision: rev.scope,
+      kind: "revision",
+      draft: null,
       sequence: rev.sequence,
       nativeDigest: rev.nativeDigest,
       nativeByteCount: String(rev.nativeByteCount),
@@ -437,6 +439,7 @@ export function comparison(options: {
     emittedItemCount: items.length,
     truncated,
     items,
+    operations: null,
   };
 }
 

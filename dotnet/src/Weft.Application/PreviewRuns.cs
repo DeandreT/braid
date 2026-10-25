@@ -33,9 +33,9 @@ public enum PreviewRunOutcome
     AttemptsExhausted
 }
 
-/// <summary>A caller's preview request for one exact revision; RequestKey makes resubmission idempotent.</summary>
+/// <summary>A caller's preview request for one immutable subject; RequestKey makes resubmission idempotent.</summary>
 public sealed record PreviewRunSubmission(
-    RevisionScope Revision,
+    PreviewSubject Subject,
     Guid RequestKey,
     PreviewTargetSelection Target,
     PreviewInputDocument Primary,
@@ -73,7 +73,7 @@ public sealed record PreviewOutputDescriptor(
 /// <summary>The submitter's view of one run; outputs are present only for a succeeded run.</summary>
 public sealed record PreviewRunSnapshot(
     Guid RunId,
-    RevisionScope Revision,
+    PreviewSubject Subject,
     Guid RequestKey,
     string RequestFingerprint,
     string CurrentDateTime,
@@ -108,11 +108,11 @@ public sealed record PreviewRunClaim(
     int Attempt,
     Guid LeaseToken,
     DateTimeOffset LeaseExpiresAtUtc,
-    RevisionScope Revision,
+    PreviewSubject Subject,
     PrincipalId Submitter,
     string RequestDocument,
     string CurrentDateTime,
-    PrivateObjectReference NativeObject);
+    PreviewNativeSource Native);
 
 public sealed record PreviewClaimResult(PreviewClaimOutcome Outcome, PreviewRunClaim? Claim);
 
@@ -154,6 +154,8 @@ public interface IPreviewRunStore
 /// <summary>Submitter-only reads with fresh project authority; unauthorized and missing are indistinguishable.</summary>
 public interface IPreviewRunReader
 {
+    Task<DraftPreviewSubject?> ReadDraftSubjectAsync(ActorContext actor, MappingScope mapping, Guid requestKey,
+        CancellationToken cancellationToken = default) => Task.FromResult<DraftPreviewSubject?>(null);
     Task<PreviewRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken cancellationToken = default);
     Task<PreviewOutputContent?> ReadOutputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
         CancellationToken cancellationToken = default);
