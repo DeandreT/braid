@@ -1,0 +1,25 @@
+{
+  "source": { "name": "Source", "kind": { "kind": "group", "children": [
+    { "name": "code", "kind": { "kind": "scalar", "ty": "string" } }
+  ] } },
+  "target": { "name": "Target", "kind": { "kind": "group", "children": [
+    { "name": "code", "kind": { "kind": "scalar", "ty": "string" } },
+    { "name": "dotted", "kind": { "kind": "scalar", "ty": "string" } },
+    { "name": "spare", "kind": { "kind": "scalar", "ty": "string" } },
+    { "name": "nestedOutput", "kind": { "kind": "group", "children": [
+      { "name": "b", "kind": { "kind": "scalar", "ty": "string" } }
+    ] } },
+    { "name": "extraOutput", "kind": { "kind": "group", "children": [] } }
+  ] } },
+  "graph": { "nodes": {
+    "1": { "kind": "source_field", "path": ["code"] },
+    "2": { "kind": "const", "value": 9007199254740993 },
+    "3": { "kind": "call", "function": "string", "args": [2] },
+    "4": { "kind": "value_map", "input": 2, "input_type": null, "table": [], "default": null },
+    "5": { "kind": "unconnected" },
+    "6": { "kind": "call", "function": "upper", "args": [5] }
+  } },
+  "root": { "target_field": "", "bindings": [
+    { "target_field": "code", "node": 1 }, { "target_field": "dotted", "node": 4 }
+  ], "children": [ { "target_field": "nestedOutput", "bindings": [{"target_field":"b","node":3}], "children": [] } ] }
+}

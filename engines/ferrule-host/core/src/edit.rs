@@ -61,6 +61,93 @@ pub struct View {
     pub can_redo: bool,
     pub undo_label: Option<String>,
     pub redo_label: Option<String>,
+    pub targets: Vec<EditTarget>,
+    pub next_node_id: Option<String>,
+}
+
+/// Ferrule resolves these handles; the page never interprets native JSON or native pointers.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditTarget {
+    pub field_id: String,
+    pub binding: ferrule_edit_ops::BindingRef,
+    pub node: Option<String>,
+}
+
+fn edit_targets(
+    project: &ferrule_mapping::Project,
+    projection: &projection::ProjectionPayload,
+) -> Vec<EditTarget> {
+    use crate::projection::types::PathSegment;
+    let outputs = projection
+        .boundaries
+        .iter()
+        .filter(|b| matches!(b.role.as_str(), "primaryOutput" | "namedOutput"))
+        .collect::<Vec<_>>();
+    let mut result = Vec::new();
+    for field in &projection.fields {
+        let Some(output) = outputs.iter().position(|b| b.id == field.boundary_id) else {
+            continue;
+        };
+        let (root, target) = if output == 0 {
+            (&project.root, ferrule_edit_ops::Target::Primary {})
+        } else if let Some(named) = project.extra_targets.get(output - 1) {
+            (
+                &named.root,
+                ferrule_edit_ops::Target::Named {
+                    name: named.name.clone(),
+                },
+            )
+        } else {
+            continue;
+        };
+        let mut names = field
+            .path
+            .iter()
+            .filter_map(|p| match p {
+                PathSegment::Field { name, .. } | PathSegment::Attribute { name, .. } => Some(name),
+                PathSegment::AnyItem => None,
+            })
+            .collect::<Vec<_>>();
+        let Some(name) = names.pop() else { continue };
+        let mut scope = root;
+        let mut children = Vec::new();
+        let mut found = true;
+        for name in names {
+            let matches = scope
+                .children
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| &c.target_field == name)
+                .collect::<Vec<_>>();
+            if matches.len() != 1 {
+                found = false;
+                break;
+            }
+            let (index, child) = matches[0];
+            let Ok(index) = u32::try_from(index) else {
+                found = false;
+                break;
+            };
+            children.push(ferrule_edit_ops::Index(index));
+            scope = child;
+        }
+        if found && field.data_type.kind == "scalar" {
+            result.push(EditTarget {
+                field_id: field.id.clone(),
+                node: scope
+                    .bindings
+                    .iter()
+                    .find(|b| &b.target_field == name)
+                    .map(|b| b.node.to_string()),
+                binding: ferrule_edit_ops::BindingRef {
+                    scope: ferrule_edit_ops::ScopeRef { target, children },
+                    field: name.clone(),
+                },
+            });
+        }
+    }
+    result
 }
 
 pub fn parse_script(bytes: &[u8]) -> Result<EditScript, EditFailure> {
@@ -159,9 +246,11 @@ impl Session {
         // Locators must refer to that result, not the legacy base representation.
         let native = ferrule_mapping::project_file::encode_pretty(project)
             .map_err(|error| EditFailure::new("nativeEncodeFailed", &error.to_string()))?;
-        let decoded = decode::decode_native(native.as_bytes())
-            .map_err(|error| EditFailure::new("nativeEncodeFailed", &error.to_string()))?;
-        let prefix = decoded.document_prefix.as_str();
+        self.view_at(document_id, decode::document_prefix(native.as_bytes()))
+    }
+
+    fn view_at(&self, document_id: &str, prefix: &str) -> Result<View, EditFailure> {
+        let project = self.inner.project();
         inspect::inspect(project, document_id, prefix, &limits())
             .map_err(|message| EditFailure::new("resultLimitExceeded", message))?;
         let validation = validation::validate(project, document_id, prefix, &limits())
@@ -169,6 +258,15 @@ impl Session {
         let projection = projection::project(project, document_id, prefix, &limits())
             .map_err(|message| EditFailure::new("resultLimitExceeded", message))?;
         let view = View {
+            targets: edit_targets(project, &projection),
+            next_node_id: project
+                .graph
+                .nodes
+                .keys()
+                .copied()
+                .max()
+                .map_or(Some(0), |id| id.checked_add(1))
+                .map(|id| id.to_string()),
             operations: EditScript {
                 format: Format::V1,
                 operations: self.inner.operations().to_vec(),
@@ -201,7 +299,7 @@ impl Session {
         }
         let native_digest = format!("{:x}", Sha256::digest(&native));
         Ok(Checkpoint {
-            view: self.view(document_id)?,
+            view: self.view_at(document_id, decode::document_prefix(&native))?,
             native,
             native_digest,
         })

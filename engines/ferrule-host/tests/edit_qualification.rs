@@ -126,6 +126,43 @@ fn edit_undo_and_redo_restore_the_exact_codec_output() {
 }
 
 #[test]
+fn browser_handles_are_ferrule_resolved_and_allocate_an_unused_exact_node_identity() {
+    let empty = br#"{"format":"ferrule.edit.v1","operations":[]}"#;
+    let mut session = Session::open(BASIC, empty).unwrap();
+    let view = session.view("entry.native.json").unwrap();
+    let target = view
+        .targets
+        .into_iter()
+        .find(|target| target.binding.field == "code")
+        .unwrap();
+    assert!(
+        view.projection
+            .fields
+            .iter()
+            .any(|field| field.id == target.field_id)
+    );
+    let id = view.next_node_id.unwrap();
+    let operation = serde_json::from_value(json!({
+        "op":"bind", "binding":target.binding,
+        "expression":{"kind":"constant","id":id,"value":{"type":"int","text":"9007199254740993"}}
+    }))
+    .unwrap();
+    assert!(session.apply(operation).unwrap());
+    let changed = session.view("entry.native.json").unwrap();
+    assert_eq!(
+        changed
+            .targets
+            .iter()
+            .find(|target| target.binding.field == "code")
+            .unwrap()
+            .node
+            .as_deref(),
+        Some(id.as_str())
+    );
+    assert_ne!(changed.next_node_id.as_deref(), Some(id.as_str()));
+}
+
+#[test]
 fn failed_replay_reports_its_zero_based_operation_and_has_no_partial_checkpoint() {
     let mut script: Value = serde_json::from_slice(&script()).unwrap();
     let second = script["operations"][0].clone();

@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { operationCases } from "./operation-cases.mjs";
 
 const [gluePath, wasmPath, nativePath, ...directories] = process.argv.slice(2);
 assert.ok(gluePath && wasmPath && nativePath && directories.length);
@@ -92,26 +93,33 @@ for (const directory of directories) {
     file.endsWith(".json"),
   )) {
     const native = readFileSync(resolve(directory, file));
-    const scripts = file === "valid-basic.json" ? [empty, edited] : [empty];
+    const scripts =
+      file === "valid-basic.json"
+        ? [empty, edited]
+        : file === "edit-v1.json"
+          ? [empty, ...operationCases]
+          : [empty];
     for (const operations of scripts) {
       const json = JSON.stringify(operations);
       const wasm = JSON.parse(core.qualify_checkpoint(native, json));
       assert.deepEqual(wasm, nativeCheckpoint(native, operations), file);
       // History is the same command-based implementation, not JS project snapshots.
-      if (operations === edited) {
+      if (operations.operations.length > 0) {
         const session = new core.EditorSession(native, JSON.stringify(empty));
         const before = JSON.parse(session.view());
-        for (const operation of edited.operations)
+        for (const operation of operations.operations)
           session.apply(JSON.stringify(operation));
         const after = JSON.parse(session.view());
-        assert.equal(after.operations.operations.length, 2);
-        assert.ok(session.undo());
-        assert.ok(session.undo());
+        let steps = 0;
+        while (JSON.parse(session.view()).canUndo) {
+          assert.ok(session.undo());
+          assert.ok(++steps <= operations.operations.length);
+        }
         const undone = JSON.parse(session.view());
+        assert.deepEqual(undone.operations.operations, []);
         assert.deepEqual(undone.validation, before.validation);
         assert.deepEqual(undone.projection, before.projection);
-        assert.ok(session.redo());
-        assert.ok(session.redo());
+        for (let index = 0; index < steps; index++) assert.ok(session.redo());
         assert.deepEqual(
           JSON.parse(session.view()).projection,
           after.projection,
