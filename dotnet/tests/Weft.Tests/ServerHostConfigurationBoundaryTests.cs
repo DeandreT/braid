@@ -69,7 +69,7 @@ public sealed class ServerHostConfigurationBoundaryTests
             "An invalid selected feature scalar reached sensitive delivery or escaped scalar admission.");
         string? Read(string key)
         {
-            if (key.EndsWith("_FILE", StringComparison.Ordinal)) privateReads++;
+            if (IsPrivateDelivery(key)) privateReads++;
             return values.GetValueOrDefault(key);
         }
     }
@@ -128,7 +128,7 @@ public sealed class ServerHostConfigurationBoundaryTests
             "Session native work admitted an incomplete hosted worker or read a delivery first.");
         string? Read(string key)
         {
-            if (key.EndsWith("_FILE", StringComparison.Ordinal)) privateReads++;
+            if (IsPrivateDelivery(key)) privateReads++;
             return values.GetValueOrDefault(key);
         }
     }
@@ -178,10 +178,15 @@ public sealed class ServerHostConfigurationBoundaryTests
         string? Read(string key) => Count(values, key);
         string? Count(Dictionary<string, string?> source, string key)
         {
-            if (key.EndsWith("_FILE", StringComparison.Ordinal)) privateReads++;
+            if (IsPrivateDelivery(key)) privateReads++;
             return source.GetValueOrDefault(key);
         }
     }
+
+    // Checking whether disabled bearer access has an audit-file path is scalar admission,
+    // not opening a private delivery. Do not exempt any other file selector.
+    private static bool IsPrivateDelivery(string key) => key.EndsWith("_FILE", StringComparison.Ordinal)
+        && key != ServerHostOptions.BearerAuditSetting + "_FILE";
 
     [Fact]
     public void SessionNativeWorkSelectsDynamicSessionsOnlyExplicitlyAndUnambiguously()

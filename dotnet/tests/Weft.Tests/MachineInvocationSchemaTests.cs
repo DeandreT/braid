@@ -70,9 +70,12 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
         Assert.Equal(ReleaseTransitionOutcome.Activated, await releases.Apply(first));
         var before = await SnapshotAsync(test);
 
-        await test.MigrateAsync();
+        // This conservation proof covers the 0024 delta, not later independent schema additions.
+        await using (var upgrade = new MigrationRunner(test.MigrationConnectionString,
+            MigrationRunner.EmbeddedMigrations.Take(PrefixVersion + 1).ToArray()))
+            await upgrade.MigrateAsync();
 
-        Assert.Equal(Enumerable.Range(1, MigrationRunner.EmbeddedMigrations.Count), await test.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, PrefixVersion + 1), await test.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(RegressionSchemaTestContract.MachineInvocationChecksum, await test.ScalarAsync<string>(
             "SELECT checksum FROM weft.schema_migrations WHERE version=24"));

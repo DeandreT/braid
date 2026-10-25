@@ -22,7 +22,7 @@ fail() {
 b64url() { basenc --base64url -w0 "$1" | tr -d '='; }
 
 "$weft" profile set acceptance --server "https://$WEFT_PUBLIC_HOST" --tenant "$WEFT_ENTRA_TENANT_ID" \
-  --client-id "$WEFT_ACCEPTANCE_CLI_CLIENT_ID" --scope "api://$WEFT_ENTRA_CLIENT_ID/weft.api" --default 2>/dev/null
+  --client-id "$WEFT_ACCEPTANCE_CLI_CLIENT_ID" --scope "api://$WEFT_ENTRA_CLIENT_ID/weft.api" --default || fail 'CLI profile configuration'
 [[ $(stat -c %a "$HOME/.config/weft/config.json") == 600 ]] || fail 'the configuration file is not owner-only'
 
 # Device-code sign-in. The issuer's test-only approval stands in for the user entering the code.

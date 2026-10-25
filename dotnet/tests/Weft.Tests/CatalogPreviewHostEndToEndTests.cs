@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using Weft.Api;
 using Weft.Api.Catalog;
 using Weft.Application;
@@ -93,10 +94,19 @@ public sealed class CatalogPreviewHostEndToEndTests(PostgresFixture fixture)
                 Assert.Equal(output.GetProperty("sha256").GetString(), Convert.ToHexStringLower(SHA256.HashData(content)));
             }
 
-            // Kill the worker while it executes; the restarted worker completes the same run once.
-            interrupted = await SubmitAsync(client, test, token);
-            await UntilAsync(client, org, interrupted, run => run.GetProperty("state").GetString() == "running", first);
+            // Submit while the worker is stopped, then hold its input read. A fast completed
+            // run must not race the observer that is arranging an actual interrupted claim.
             first.Kill();
+            interrupted = await SubmitAsync(client, test, token);
+            await using var blocker = await test.Case.Owner.OpenConnectionAsync();
+            await using (var gate = await blocker.BeginTransactionAsync())
+            {
+                await using (var command = new NpgsqlCommand("LOCK TABLE weft.preview_documents IN ACCESS EXCLUSIVE MODE", blocker, gate))
+                    await command.ExecuteNonQueryAsync();
+                first = PreviewWorkerProcess.Start(test, storage);
+                await UntilClaimedAsync(blocker, gate, org, interrupted, first);
+                first.Kill();
+            }
         }
         finally { first.Kill(); }
 
@@ -156,6 +166,24 @@ public sealed class CatalogPreviewHostEndToEndTests(PostgresFixture fixture)
                 throw new InvalidOperationException($"The preview worker exited early: {worker.Diagnostics()}");
             if (DateTime.UtcNow > deadline)
                 throw new TimeoutException($"The preview run did not reach the expected state: {worker.Diagnostics()}");
+            await Task.Delay(100);
+        }
+    }
+
+    private static async Task UntilClaimedAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        Guid org, Guid run, PreviewWorkerProcess worker)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(4);
+        await using var command = new NpgsqlCommand(
+            "SELECT state = 2 AND attempt = 1 FROM weft.preview_runs WHERE organization_id=$1 AND run_id=$2", connection, transaction);
+        command.Parameters.AddWithValue(org);
+        command.Parameters.AddWithValue(run);
+        while (await command.ExecuteScalarAsync() is not true)
+        {
+            if (worker.HasExited)
+                throw new InvalidOperationException($"The preview worker exited before claiming the held input: {worker.Diagnostics()}");
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException($"The preview worker did not claim the held input: {worker.Diagnostics()}");
             await Task.Delay(100);
         }
     }

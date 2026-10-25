@@ -23,7 +23,7 @@ public sealed class DormantToolchainPinTests
         Assert.Throws<InvalidOperationException>(() => ServerHostOptions.Read(Read));
         string? Read(string key)
         {
-            Assert.False(key.EndsWith("_FILE", StringComparison.Ordinal));
+            Assert.False(IsPrivateDelivery(key));
             return values.GetValueOrDefault(key);
         }
     }
@@ -43,12 +43,18 @@ public sealed class DormantToolchainPinTests
         Assert.Null(options.InspectionWorker);
         Assert.Null(options.FerruleService);
         Assert.Null(options.FerruleSessions);
+        Assert.Null(options.Bearer);
         string? Read(string key)
         {
-            Assert.False(key.EndsWith("_FILE", StringComparison.Ordinal));
+            Assert.False(IsPrivateDelivery(key));
             return values.GetValueOrDefault(key);
         }
     }
+
+    // Disabled bearer admission probes the optional path setting for partial configuration;
+    // it does not open that file. Every other private-delivery selector remains forbidden here.
+    private static bool IsPrivateDelivery(string key) => key.EndsWith("_FILE", StringComparison.Ordinal)
+        && key != ServerHostOptions.BearerAuditSetting + "_FILE";
 
     [Fact]
     public void A_dormant_session_without_a_pin_still_does_not_require_a_runner()
