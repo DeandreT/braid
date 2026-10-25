@@ -42,6 +42,23 @@ function requestWorkspaceLeave(component: {
 }
 
 export const routes: Routes = [
+  {
+    path: "administration",
+    canActivate: [requireSignIn],
+    loadComponent: () =>
+      import("./administration/administration-page.component").then(
+        (m) => m.AdministrationPageComponent,
+      ),
+    title: "Administration · Weft",
+  },
+  {
+    path: "invitations",
+    loadComponent: () =>
+      import("./administration/invitation-page.component").then(
+        (m) => m.InvitationPageComponent,
+      ),
+    title: "Organization invitation · Weft",
+  },
   { path: "", pathMatch: "full", redirectTo: "catalog" },
   {
     path: "sign-in",

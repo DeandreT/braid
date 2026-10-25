@@ -6223,6 +6223,2008 @@
         ]
       }
     },
+    "/api/v1/organizations/{organizationId}/administration": {
+      "get": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "GetOrganizationAdministration",
+        "operationId": "GetOrganizationAdministration",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationAdministrationV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/administration": {
+      "get": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "GetProjectAdministration",
+        "operationId": "GetProjectAdministration",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAdministrationV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/administration/members/{principalId}": {
+      "put": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "PutOrganizationMember",
+        "operationId": "PutOrganizationMember",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdministrationMemberPutV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/administration/members/{principalId}": {
+      "put": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "PutProjectMember",
+        "operationId": "PutProjectMember",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdministrationMemberPutV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/administration/members/{principalId}/payload-read": {
+      "put": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "PutProjectPayloadRead",
+        "operationId": "PutProjectPayloadRead",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdministrationPayloadPutV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/administration/principals/{principalId}/disable": {
+      "post": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "DisableAdministrationPrincipal",
+        "operationId": "DisableAdministrationPrincipal",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/administration/bindings/{bindingId}/disable": {
+      "post": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "DisableAdministrationBinding",
+        "operationId": "DisableAdministrationBinding",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bindingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/administration/invitations/{invitationId}/revoke": {
+      "post": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "RevokeOrganizationInvitation",
+        "operationId": "RevokeOrganizationInvitation",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/administration/invocation-grants/{grantId}/revoke": {
+      "post": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "RevokeAdministrationInvocationGrant",
+        "operationId": "RevokeAdministrationInvocationGrant",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/administration/invocation-grants/{grantId}": {
+      "put": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "PutAdministrationInvocationGrant",
+        "operationId": "PutAdministrationInvocationGrant",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "grantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdministrationInvocationGrantPutV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/administration/invitations": {
+      "post": {
+        "tags": [
+          "Administration"
+        ],
+        "summary": "CreateOrganizationInvitation",
+        "operationId": "CreateOrganizationInvitation",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Strong administration ETag from the latest authorized organization or project administration read.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdministrationInvitationPostV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationInvitationCreatedV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Identity refused: no session or a refused bearer token.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-cases/capabilities": {
       "get": {
         "tags": [
@@ -11797,6 +13799,17 @@
             }
           },
           {
+            "name": "X-Weft-Invitation",
+            "in": "header",
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string",
+              "description": "Optional single-use organization invitation from the redemption page. Protected inside the exact login flow state; never matched by email."
+            }
+          },
+          {
             "name": "X-Weft-Return-To",
             "in": "header",
             "schema": {
@@ -12667,6 +14680,268 @@
   },
   "components": {
     "schemas": {
+      "AdministrationAuditV1": {
+        "required": [
+          "sequence",
+          "actorId",
+          "operation",
+          "targetId",
+          "projectId",
+          "before",
+          "after",
+          "recordedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "before": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AdministrationBindingV1": {
+        "required": [
+          "bindingId",
+          "provider",
+          "authority",
+          "subject",
+          "enabled",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "bindingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "authority": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "AdministrationErrorV1": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "AdministrationInvitationCreatedV1": {
+        "required": [
+          "invitationId",
+          "redemptionPath"
+        ],
+        "type": "object",
+        "properties": {
+          "invitationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "redemptionPath": {
+            "type": "string"
+          }
+        }
+      },
+      "AdministrationInvitationPostV1": {
+        "required": [
+          "invitationId",
+          "tenantId",
+          "expectedObjectId",
+          "projectRoles",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "invitationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedObjectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "projectRoles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvitationProjectRoleV1"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AdministrationInvocationGrantPutV1": {
+        "required": [
+          "targetId",
+          "tenantId",
+          "objectId"
+        ],
+        "type": "object",
+        "properties": {
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "objectId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AdministrationInvocationGrantV1": {
+        "required": [
+          "grantId",
+          "targetId",
+          "mappingId",
+          "tenantId",
+          "objectId",
+          "grantedAt",
+          "revokedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "grantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mappingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "objectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "grantedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AdministrationMemberPutV1": {
+        "required": [
+          "active",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "AdministrationPayloadPutV1": {
+        "required": [
+          "active"
+        ],
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AdministrationReceiptV1": {
+        "required": [
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string"
+          }
+        }
+      },
       "ArtifactDigest": {
         "required": [
           "algorithm",
@@ -16666,6 +18941,23 @@
           }
         }
       },
+      "InvitationProjectRoleV1": {
+        "required": [
+          "projectId",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "JsonElement": { },
       "LiteralValue": {
         "required": [
           "kind"
@@ -17299,6 +19591,128 @@
         ],
         "type": "string"
       },
+      "OrganizationAdministrationV1": {
+        "required": [
+          "version",
+          "members",
+          "invitations",
+          "audit"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationMemberV1"
+            }
+          },
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationInvitationV1"
+            }
+          },
+          "audit": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdministrationAuditV1"
+            }
+          }
+        }
+      },
+      "OrganizationInvitationV1": {
+        "required": [
+          "invitationId",
+          "tenantId",
+          "expectedObjectId",
+          "projectRoles",
+          "expiresAt",
+          "revokedAt",
+          "redeemedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "invitationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedObjectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "projectRoles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvitationProjectRoleV1"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "redeemedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "OrganizationMemberV1": {
+        "required": [
+          "principalId",
+          "active",
+          "role",
+          "version",
+          "principalActive",
+          "bindings"
+        ],
+        "type": "object",
+        "properties": {
+          "principalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "role": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "principalActive": {
+            "type": "boolean"
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdministrationBindingV1"
+            }
+          }
+        }
+      },
       "PathSegment": {
         "required": [
           "kind"
@@ -17401,6 +19815,32 @@
           },
           "index": {
             "type": "string"
+          }
+        }
+      },
+      "ProjectAdministrationV1": {
+        "required": [
+          "version",
+          "members",
+          "grants"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectMemberV1"
+            }
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdministrationInvocationGrantV1"
+            }
           }
         }
       },
@@ -17948,6 +20388,40 @@
           },
           "nativeLocator": {
             "$ref": "#/components/schemas/NativeLocator"
+          }
+        }
+      },
+      "ProjectMemberV1": {
+        "required": [
+          "principalId",
+          "active",
+          "role",
+          "version",
+          "payloadRead",
+          "payloadVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "principalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "role": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "payloadRead": {
+            "type": "boolean"
+          },
+          "payloadVersion": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -19047,6 +21521,9 @@
     },
     {
       "name": "Catalog"
+    },
+    {
+      "name": "Administration"
     },
     {
       "name": "Regression cases"

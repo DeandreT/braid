@@ -19,7 +19,7 @@ public sealed class EntraVerifiedLogin
 
     internal EntraVerifiedLogin(EntraBrowserClient owner, HttpContext context, object operation,
         Guid organizationId, ExternalIdentityKey externalIdentity, DateTimeOffset deadlineUtc, string returnPath,
-        string? displayName = null, DateTimeOffset observedAtUtc = default)
+        string? displayName = null, DateTimeOffset observedAtUtc = default, string? invitationSecret = null)
     {
         this.owner = owner;
         this.context = context;
@@ -27,6 +27,7 @@ public sealed class EntraVerifiedLogin
         OrganizationId = organizationId;
         ExternalIdentity = externalIdentity;
         VerifiedDeadlineUtc = deadlineUtc;
+        InvitationSecret = invitationSecret;
         ReturnPath = returnPath;
         DisplayName = displayName;
         ObservedAtUtc = observedAtUtc;
@@ -35,6 +36,7 @@ public sealed class EntraVerifiedLogin
     [JsonIgnore] public Guid OrganizationId { get; }
     [JsonIgnore] public ExternalIdentityKey ExternalIdentity { get; }
     [JsonIgnore] public DateTimeOffset VerifiedDeadlineUtc { get; }
+    internal string? InvitationSecret { get; }
     /// <summary>The validated application path the sign-in returns to, or the application root.</summary>
     [JsonIgnore] public string ReturnPath { get; }
     [JsonIgnore] internal string? DisplayName { get; }

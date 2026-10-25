@@ -28,6 +28,7 @@ internal static class CliApplication
         root.Subcommands.Add(BuildCommands.Builds(globals));
         root.Subcommands.Add(ChatCommands.Chat(globals));
         root.Subcommands.Add(GuideCommands.Guide(globals));
+        root.Subcommands.Add(AdministrationCommands.Administration(globals));
         root.Subcommands.Add(HealthCommands.Health(globals));
         return root;
     }

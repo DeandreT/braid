@@ -124,6 +124,14 @@ internal static class AuthenticationOpenApi
                 RequestBody = null
             };
             if (actionHeader is not null) Header(actionHeader, true, Text("1"));
+            if (path == "/api/auth/login") Header("X-Weft-Invitation", false, new OpenApiSchema
+            {
+                Type = JsonSchemaType.String,
+                MinLength = 64,
+                MaxLength = 64,
+                Pattern = "^[0-9a-f]{64}$",
+                Description = "Optional single-use organization invitation from the redemption page. Protected inside the exact login flow state; never matched by email."
+            });
             if (path == "/api/auth/login") Header("X-Weft-Return-To", false, returnPath);
             if (method == HttpMethod.Post)
             {

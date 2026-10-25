@@ -211,8 +211,15 @@ export class BrowserSessionState {
   }
 
   /** Sign-in returns to `returnTo` when it is a valid return path, otherwise to the catalog. */
-  signIn(returnTo: string | null = null): Observable<void> {
-    return this.perform("login", isReturnPath(returnTo) ? returnTo : null);
+  signIn(
+    returnTo: string | null = null,
+    invitation?: string,
+  ): Observable<void> {
+    return this.perform(
+      "login",
+      isReturnPath(returnTo) ? returnTo : null,
+      invitation,
+    );
   }
 
   logout(): Observable<void> {
@@ -227,6 +234,7 @@ export class BrowserSessionState {
   private perform(
     action: BrowserAuthAction,
     returnTo: string | null = null,
+    invitation?: string,
   ): Observable<void> {
     return defer(() => {
       const selected = this.status();
@@ -267,7 +275,7 @@ export class BrowserSessionState {
             throw new BrowserSessionError();
           dispatched = true;
           this.actionView.set({ kind: "pending", action });
-          return this.dispatch(action, status, returnTo).pipe(
+          return this.dispatch(action, status, returnTo, invitation).pipe(
             map((result) => {
               if (
                 this.destroyed ||
@@ -328,10 +336,11 @@ export class BrowserSessionState {
     action: BrowserAuthAction,
     status: SessionAuthStatus,
     returnTo: string | null,
+    invitation?: string,
   ): Observable<AuthActionResult> {
     switch (action) {
       case "login":
-        return this.api.login(status, returnTo).pipe(
+        return this.api.login(status, returnTo, invitation).pipe(
           map((result) => ({
             kind: "login" as const,
             authorizationUrl: result.authorizationUrl,

@@ -11,8 +11,8 @@ namespace Weft.Cli.Http;
 /// <summary>
 /// One documented Weft API operation exactly as the CLI sends it: the only query parameters and headers it may set,
 /// its request media and body contract, and the success statuses it accepts with their response contracts.
-/// The contract drift test compares every entry with <c>contracts/weft-v1.json</c>. Every request is safe to repeat:
-/// it is a read, or it carries its own idempotency identity (a key header, a client-chosen ID in the path or body).
+/// The contract drift test compares every entry with <c>contracts/weft-v1.json</c>. Reads and idempotent operations
+/// may be repeated; conditional administration edits explicitly disable retries after uncertain failures.
 /// </summary>
 internal sealed record ApiOperation(
     string OperationId,
@@ -25,7 +25,8 @@ internal sealed record ApiOperation(
     IReadOnlyDictionary<int, Type?> Success,
     Type ErrorBody,
     string ResponseMediaType = "application/json",
-    bool RequiresAuthentication = true);
+    bool RequiresAuthentication = true,
+    bool RetryOnFailure = true);
 
 internal static class ApiOperations
 {
@@ -162,7 +163,8 @@ internal static class ApiOperations
         CancelRegressionRun, GetBuildCapabilities, GetBuildEnvironments, GetBuildEnvironment, PutBuildEnvironment,
         GetBuildEnvironmentCapabilities, GetBuildApprovals, GetBuildApproval, PutBuildApproval, RevokeBuildApproval,
         GetBuildRuns, GetBuildRun, PutBuildRun, CancelBuildRun, GetChatAvailability, GetChatConversations,
-        CreateChatConversation, GetChatConversation, CreateChatTurn, CancelChatTurn, StreamChatTurnEvents
+        CreateChatConversation, GetChatConversation, CreateChatTurn, CancelChatTurn, StreamChatTurnEvents,
+        .. AdministrationApiOperations.All
     ];
 
     /// <summary>

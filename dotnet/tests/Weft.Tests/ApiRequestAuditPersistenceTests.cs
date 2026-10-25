@@ -174,11 +174,11 @@ public sealed class ApiRequestAuditPersistenceTests(PostgresFixture fixture, ITe
                     CROSS JOIN LATERAL pg_catalog.aclexplode(n.nspacl) a WHERE n.nspname='weft' AND a.grantee NOT IN (SELECT oid FROM new_roles)),
                 'databaseAcl',(SELECT datacl FROM pg_catalog.pg_database WHERE datname=current_database()),
                 'history',(SELECT jsonb_agg(jsonb_build_array(version,checksum) ORDER BY version) FROM weft.schema_migrations WHERE version<=24))::text
-            """, ApiRequestAuditRoleGuard.Tables, ApiRequestAuditRoleGuard.Names, new[] { Login });
+            """, ApiRequestAuditRoleGuard.Tables.Concat(AdministrationRoleGuard.Objects).ToArray(), ApiRequestAuditRoleGuard.Names.Concat(AdministrationRoleGuard.Names).ToArray(), new[] { Login, "weft_administration" });
         var tables = await test.ScalarAsync<string[]>("""
             SELECT array_agg(c.relname::text ORDER BY c.relname) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='weft' AND c.relkind IN ('r','p') AND NOT c.relname=ANY($1::text[]) AND c.relname<>'schema_migrations'
-            """, new object[] { ApiRequestAuditRoleGuard.Tables });
+            """, new object[] { ApiRequestAuditRoleGuard.Tables.Concat(AdministrationRoleGuard.Objects).ToArray() });
         var rows = new StringBuilder();
         foreach (var table in tables)
             rows.Append(table).Append('=').Append(await test.ScalarAsync<string>(

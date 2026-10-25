@@ -93,13 +93,16 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
     public Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, CancellationToken cancellationToken) =>
         BeginLoginAsync(context, BrowserReturnPath.Root, cancellationToken);
 
-    public async Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, string returnPath,
+    public Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, string returnPath,
+        CancellationToken cancellationToken) => BeginLoginAsync(context, returnPath, null, cancellationToken);
+
+    internal async Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, string returnPath, string? invitation,
         CancellationToken cancellationToken)
     {
         // The return path travels in the protected state and is checked again on the callback.
         if (returnPath != BrowserReturnPath.Root && !BrowserReturnPath.IsValid(returnPath))
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
-        var operation = await RunAsync(context, callback: false, cancellationToken, returnPath);
+        var operation = await RunAsync(context, callback: false, cancellationToken, returnPath, invitation);
         return operation.Challenge ?? throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
     }
 
@@ -112,7 +115,7 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
     }
 
     private async Task<Operation> RunAsync(HttpContext context, bool callback, CancellationToken caller,
-        string returnPath = BrowserReturnPath.Root)
+        string returnPath = BrowserReturnPath.Root, string? invitation = null)
     {
         if (context is null) throw EntraErrors.Create(ServerSessionIdentityFailureKind.UntrustedIssuance);
         var originalAbort = context.RequestAborted;
@@ -173,6 +176,14 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
                     ExpiresUtc = now.Add(FlowLifetime)
                 };
                 properties.Items[".weft.flow"] = "1";
+                if (invitation is not null)
+                {
+                    if (!Weft.Application.OrganizationInvitationSecret.IsValid(invitation))
+                        throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
+                    // Standard protected state binds this credential to the exact correlation,
+                    // nonce, tenant and client. A separate mutable cookie cannot substitute it.
+                    properties.Items[".weft.invitation"] = invitation;
+                }
                 await actual.ChallengeAsync(properties);
                 operation.CheckActive();
                 var location = context.Response.Headers.Location.ToString();

@@ -17,7 +17,8 @@ public static class EntraBrowserAuthenticationRegistration
         RequireSingleton<EntraBrowserClient>(services);
         services.AddSingleton(options);
         services.AddSingleton(provider => new EntraBrowserAuthentication(options, profile, identities,
-            provider.GetRequiredService<ServerSessionBrowser>(), provider.GetRequiredService<EntraBrowserClient>(), displayMetadata));
+            provider.GetRequiredService<ServerSessionBrowser>(), provider.GetRequiredService<EntraBrowserClient>(),
+            displayMetadata, provider.GetService<IOrganizationInvitationRedeemer>()));
         return services;
     }
 

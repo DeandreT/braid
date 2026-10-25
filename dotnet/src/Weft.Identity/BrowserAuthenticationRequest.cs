@@ -23,6 +23,14 @@ internal static class BrowserAuthenticationRequest
             request.PathBase.HasValue || context.Features.Get<ITlsTokenBindingFeature>()?.GetProvidedTokenBindingId() is not null)
             throw Error(BrowserAuthenticationFailureKind.RequestRejected);
         var callback = action == "callback";
+        if (action != "login" && request.Headers.ContainsKey("X-Weft-Invitation"))
+            throw Error(BrowserAuthenticationFailureKind.InvalidRequest);
+        if (action == "login")
+        {
+            var invitation = request.Headers["X-Weft-Invitation"];
+            if (invitation.Count > 1 || invitation.Count == 1 && !Weft.Application.OrganizationInvitationSecret.IsValid(invitation[0]))
+                throw Error(BrowserAuthenticationFailureKind.InvalidRequest);
+        }
         var path = action switch
         {
             "bootstrap" => "/api/auth/session",

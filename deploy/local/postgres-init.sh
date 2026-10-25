@@ -26,6 +26,9 @@ for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER BUILD_READER BUILD_WRI
   regression_passwords+=("${!variable}")
 done
 unset regression_passwords previous
+export WEFT_LOCAL_ADMINISTRATION_PASSWORD=${WEFT_LOCAL_ADMINISTRATION_PASSWORD:-}
+# An absent opt-in credential creates an unusable password login. Existing stacks
+# can migrate without enabling administration or delivering another credential.
 
 # This runs once inside this compose project's new, dedicated database.
 psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL'
@@ -64,6 +67,7 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv invocation_grant_writer_password WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD
 \getenv invocation_writer_password WEFT_LOCAL_INVOCATION_WRITER_PASSWORD
 \getenv api_audit_writer_password WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD
+\getenv administration_password WEFT_LOCAL_ADMINISTRATION_PASSWORD
 CREATE ROLE weft_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
   PASSWORD :'migrator_password';
 CREATE ROLE weft_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
@@ -134,6 +138,8 @@ CREATE ROLE weft_invocation_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOI
   PASSWORD :'invocation_writer_password';
 CREATE ROLE weft_api_audit_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'api_audit_writer_password';
+CREATE ROLE weft_administration LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'administration_password';
 ALTER DATABASE weft OWNER TO weft_migrator;
 -- Chat routines pin these scope settings in function SET clauses.
 GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator;
@@ -143,5 +149,6 @@ GRANT CONNECT ON DATABASE weft TO weft_qualification_reader,weft_qualification_w
 GRANT CONNECT ON DATABASE weft TO weft_release_reader,weft_release_writer;
 GRANT CONNECT ON DATABASE weft TO weft_invocation_grant_writer,weft_invocation_writer;
 GRANT CONNECT ON DATABASE weft TO weft_api_audit_writer;
+GRANT CONNECT ON DATABASE weft TO weft_administration;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SQL

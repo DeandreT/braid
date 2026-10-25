@@ -52,11 +52,14 @@ export class BrowserSessionApi {
   login(
     status: SessionAuthStatus,
     returnTo: string | null,
+    invitation?: string,
   ): Observable<AuthLogin> {
     return defer(() => {
       if (returnTo !== null && !isReturnPath(returnTo))
         throw new BrowserSessionError();
-      const headers = actionHeaders(status, "X-Weft-Login", true);
+      let headers = actionHeaders(status, "X-Weft-Login", true);
+      if (invitation !== undefined)
+        headers = headers.set("X-Weft-Invitation", invitation);
       return this.actions.post<unknown>("/api/auth/login", null, {
         observe: "response",
         headers:

@@ -3,7 +3,7 @@ export const defaultReturnPath = "/catalog";
 
 const maximumLength = 1024;
 // Application sections a return path may open. Sign-in, API and static file paths are never sections.
-const sections = ["catalog", "help"];
+const sections = ["catalog", "help", "administration"];
 const allowed = /^[A-Za-z0-9\-._~!$&'()*+,;=:@/?]$/;
 
 /**

@@ -27,6 +27,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0024_machine_invocation.sql",
   "0025_api_request_audit.sql",
   "0026_account_display_metadata.sql",
+  "0027_administration.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
@@ -40,6 +41,10 @@ export const browserFixtureProtectedTables = Object.freeze([
   "machine_invocation_audit",
   "machine_invocation_results",
   "api_request_audit",
+  "administration_state",
+  "organization_administration_roles",
+  "organization_invitations",
+  "administration_audit",
   "account_display_metadata",
 ]);
 

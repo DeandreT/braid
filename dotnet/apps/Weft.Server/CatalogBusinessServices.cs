@@ -25,6 +25,7 @@ internal static class CatalogBusinessServices
         services.AddSingleton(_ => new PostgresCatalogDatabase(connectionString));
         services.AddSingleton(provider => new PostgresCatalogReader(provider.GetRequiredService<PostgresCatalogDatabase>()));
         services.AddSingleton<ICatalogReader>(provider => provider.GetRequiredService<PostgresCatalogReader>());
+        AdministrationHostConfiguration.Configure(services, readEnvironment);
         if (creationOptions.Enabled)
         {
             var creationConnectionString = readEnvironment("WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING");

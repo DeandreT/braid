@@ -61,11 +61,12 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
 
     /// <summary>Also maps the chat routes on the restricted chat logins; their provider profile is never contacted.</summary>
     internal bool Chat { get; private init; }
+    internal bool Administration { get; private init; }
 
     internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true, int bearerBurst = 0,
-        bool chat = false, bool displayMetadata = false)
+        bool chat = false, bool administration = false, bool displayMetadata = false)
     {
-        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat }; Exception? primary = null; var cleanup = new List<Exception>();
+        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat, Administration = administration }; Exception? primary = null; var cleanup = new List<Exception>();
         try { await test.InitializeAsync(postgres, bindIssuer, displayMetadata); await body(test); }
         catch (Exception error) { primary = Safe(error, "The independent auth HTTP case failed."); }
         finally { try { await test.DisposeAsync(); } catch (Exception error) { cleanup.Add(Safe(error, "The independent auth HTTP cleanup failed.")); } }
@@ -105,6 +106,8 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
     private async Task InitializeAsync(PostgresFixture postgres, bool bindIssuer, bool displayMetadata)
     {
         Data = await PostgresMappingMetadataTestSupport.CreateAsync(postgres); Owner = new(Data.Case.MigrationConnectionString);
+        if (Administration) await OrganizationAdministratorBootstrap.BootstrapAsync(Data.Case.MigrationConnectionString,
+            Data.Seed.OrganizationA, Data.Actor.PrincipalId.Value, EntraProtocolFixturePolicy.Tenant);
         if (displayMetadata) DisplayMetadata = new(postgres.AccountDisplayConnectionString(Data.Case));
         if (bindIssuer)
         {
@@ -325,6 +328,12 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
         Transport = new(test.Issuer.Port, test.Crypto.Root);
         EntraClientRegistration.AddForHttpsFixture(builder.Services, new(EntraProtocolFixturePolicy.Tenant, EntraProtocolFixturePolicy.Client, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, test.Crypto.ClientCertificate, Transport);
         builder.Services.AddSingleton<IExternalIdentityReader>(identities);
+        if (test.Administration)
+        {
+            builder.Services.AddSingleton(_ => new PostgresAdministrationStore(test.Data.Case.RegressionConnectionString("weft_administration")));
+            builder.Services.AddSingleton<IAdministrationStore>(p => p.GetRequiredService<PostgresAdministrationStore>());
+            builder.Services.AddSingleton<IOrganizationInvitationRedeemer>(p => p.GetRequiredService<PostgresAdministrationStore>());
+        }
         builder.Services.AddWeftEntraBrowserAuthentication(new(test.Data.Seed.OrganizationA, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, identities, test.DisplayMetadata);
         builder.Services.AddWeftSessionCatalog(new(test.Data.Seed.OrganizationA), new CatalogMetadataEditOptions(true), new CatalogRevisionIngestionOptions(false), new CatalogProjectCreationOptions(false), new CatalogRevisionReportOptions(false, false));
         if (test.BearerBurst > 0)

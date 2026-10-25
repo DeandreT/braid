@@ -17,7 +17,7 @@ public static class BrowserReturnPath
     public const int MaximumLength = 1024;
 
     // Application sections a return path may open. Sign-in, API and static file paths are never sections.
-    private static readonly string[] Sections = ["catalog", "help"];
+    private static readonly string[] Sections = ["catalog", "help", "administration"];
 
     public static bool IsValid(string? value)
     {

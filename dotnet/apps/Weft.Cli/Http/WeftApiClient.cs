@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text.Json;
 using Weft.Cli.Authentication;
+using Weft.Contracts.Administration;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
 using Weft.Contracts.Projections;
@@ -14,6 +15,7 @@ namespace Weft.Cli.Http;
 /// Sends documented operations as the signed-in user: bearer authorization only, no cookies and no redirects.
 /// Rate-limited and busy responses are retried after the server's <c>Retry-After</c> (bounded), transport failures
 /// with backoff, and an expired token once after a forced refresh. Every attempt replays the same request.
+/// Conditional administration edits opt out of failure retries: a missing acknowledgment may hide a committed change.
 /// </summary>
 internal sealed class WeftApiClient : IDisposable
 {
@@ -94,7 +96,7 @@ internal sealed class WeftApiClient : IDisposable
                     attempt--;
                     continue;
                 }
-                if (request.Operation.RequiresAuthentication && attempt < MaximumAttempts &&
+                if (request.Operation.RequiresAuthentication && request.Operation.RetryOnFailure && attempt < MaximumAttempts &&
                     await RetryableAsync(response, request.Operation, timeout.Token) is { } advised)
                 {
                     delay = advised;
@@ -115,6 +117,8 @@ internal sealed class WeftApiClient : IDisposable
             catch (Exception error) when (error is HttpRequestException or IOException ||
                 error is OperationCanceledException && !cancellationToken.IsCancellationRequested)
             {
+                if (!request.Operation.RetryOnFailure)
+                    throw new CliException(CliExitCode.Transport, "The administrative change was not confirmed and may have committed. Read the current state before sending another edit.", "unconfirmed");
                 if (attempt >= MaximumAttempts)
                     throw new CliException(CliExitCode.Transport, "The Weft server could not be reached.", "transport");
                 delay = Backoff(attempt);
@@ -338,6 +342,12 @@ internal sealed class ApiResponse(HttpResponseMessage response, ApiOperation ope
                 return null;
             if (operation.ErrorBody == typeof(ChatErrorV1))
                 return JsonSerializer.Deserialize<ChatErrorV1>(bytes, WeftApiClient.Json) is { } chat ? Name(chat.Code) : null;
+            if (operation.ErrorBody == typeof(AdministrationErrorV1))
+            {
+                var administration = JsonSerializer.Deserialize<AdministrationErrorV1>(bytes, WeftApiClient.Json);
+                return administration?.Code is "notFound" or "lastAdministrator" or "conflict" or "preconditionFailed" or "preconditionRequired"
+                    or "invalidRequest" or "identityRejected" or "rateLimited" or "unavailable" ? administration.Code : null;
+            }
             return JsonSerializer.Deserialize<CatalogErrorV1>(bytes, WeftApiClient.Json) is { } catalog ? Name(catalog.Code) : null;
         }
         catch (Exception error) when (error is JsonException or ArgumentException or HttpRequestException or IOException)

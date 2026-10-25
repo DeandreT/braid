@@ -1,0 +1,86 @@
+:host {
+  display: block;
+}
+.administration {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+header,
+.controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+header {
+  justify-content: space-between;
+  align-items: center;
+}
+.eyebrow {
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+h2 {
+  margin-top: 2rem;
+}
+label {
+  display: grid;
+  gap: 0.35rem;
+}
+input {
+  min-width: 15rem;
+  max-width: 100%;
+}
+.controls {
+  margin: 1rem 0;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+td,
+th {
+  padding: 0.65rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+button {
+  margin: 0.2rem;
+}
+code,
+pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+li {
+  margin: 0.75rem 0;
+}
+.invitation-link {
+  margin: 1rem 0;
+}
+.invitation-link input {
+  width: 100%;
+}
+@media (max-width: 600px) {
+  .administration {
+    padding: 1rem;
+  }
+  input {
+    min-width: 0;
+    width: 100%;
+  }
+  label {
+    width: 100%;
+  }
+}

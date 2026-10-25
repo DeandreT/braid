@@ -26,8 +26,9 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
         await using var owned = test;
         await using var connection = await test.Owner.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, MachineInvocationRoleGuard.Names,
-            BuildRoleGuard.LoadFunctions("0024_machine_invocation.sql", MachineInvocationRoleGuard.Names.Length), default);
+        var definitions = BuildRoleGuard.LoadFunctions("0024_machine_invocation.sql", MachineInvocationRoleGuard.Names.Length);
+        definitions["guard_machine_invocation"] = BuildRoleGuard.LoadFunctions("0027_administration.sql", AdministrationRoleGuard.Names.Length)["guard_machine_invocation"];
+        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, MachineInvocationRoleGuard.Names, definitions, default);
         var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, MachineInvocationRoleGuard.Tables, default);
         output.WriteLine("MachineInvocationFingerprint=" + fingerprint);
         Assert.Equal(MachineInvocationRoleGuard.Fingerprint, fingerprint);
@@ -137,11 +138,13 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
                     CROSS JOIN LATERAL pg_catalog.aclexplode(n.nspacl) a WHERE n.nspname='weft' AND a.grantee NOT IN (SELECT oid FROM new_roles)),
                 'databaseAcl',(SELECT datacl FROM pg_catalog.pg_database WHERE datname=current_database()),
                 'history',(SELECT jsonb_agg(jsonb_build_array(version,checksum) ORDER BY version) FROM weft.schema_migrations WHERE version<=23))::text
-            """, MachineInvocationRoleGuard.Tables, MachineInvocationRoleGuard.Names, new[] { "weft_invocation_grant_writer", "weft_invocation_writer" });
+            """, MachineInvocationRoleGuard.Tables.Concat(ApiRequestAuditRoleGuard.Tables).Concat(AdministrationRoleGuard.Objects).ToArray(),
+                MachineInvocationRoleGuard.Names.Concat(ApiRequestAuditRoleGuard.Names).Concat(AdministrationRoleGuard.Names).ToArray(),
+                new[] { "weft_invocation_grant_writer", "weft_invocation_writer", "weft_api_audit_writer", "weft_administration" });
         var tables = await test.ScalarAsync<string[]>("""
             SELECT array_agg(c.relname::text ORDER BY c.relname) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='weft' AND c.relkind IN ('r','p') AND NOT c.relname=ANY($1::text[]) AND c.relname<>'schema_migrations'
-            """, new object[] { MachineInvocationRoleGuard.Tables });
+            """, new object[] { MachineInvocationRoleGuard.Tables.Concat(ApiRequestAuditRoleGuard.Tables).Concat(AdministrationRoleGuard.Objects).ToArray() });
         var rows = new StringBuilder();
         foreach (var table in tables)
             rows.Append(table).Append('=').Append(await test.ScalarAsync<string>(

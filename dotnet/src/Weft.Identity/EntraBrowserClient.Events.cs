@@ -177,7 +177,9 @@ public sealed partial class EntraBrowserClient
                 throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
             var key = EntraUserIdentity.Key(Guid.Parse(policy.Tenant), oid);
             RequirePrincipal(context.Principal, key, subject);
-            operation.Candidate = new(key, subject, deadline, context.Principal, context.Properties!, token);
+            var returnPath = BrowserReturnPath.IsValid(context.Properties!.RedirectUri)
+                ? context.Properties.RedirectUri! : BrowserReturnPath.Root;
+            operation.Candidate = new(key, subject, deadline, context.Principal, context.Properties!, token, returnPath);
             // Candidate remains private: framework nonce/ValidateTokenResponse still follow.
             return Task.CompletedTask;
         }
@@ -199,14 +201,19 @@ public sealed partial class EntraBrowserClient
         RequirePrincipal(context.Principal!, candidate.Identity, candidate.Subject);
         if (candidate.Deadline <= DateTimeOffset.UtcNow)
             throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
-        var returnPath = BrowserReturnPath.IsValid(context.Properties!.RedirectUri)
-            ? context.Properties.RedirectUri! : BrowserReturnPath.Root;
+        candidate.Properties.Items.TryGetValue(".weft.invitation", out var invitation);
+        // RemoteAuthenticationHandler moves RedirectUri into ReturnUri and clears
+        // the properties before this event. Keep the path captured from the same
+        // validated state and reject an inconsistent ticket continuation.
+        if (context.ReturnUri != candidate.ReturnPath)
+            throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
+        var returnPath = candidate.ReturnPath;
         // Name is optional presentation data. Publish it only after framework nonce/response validation.
         // Read the validated token's scalar, not framework-mapped/flattened array claims.
         var displayName = candidate.Token.Payload.TryGetValue("name", out var name) && name is string text
             ? AccountDisplayName.Optional(text) : null;
         operation.Verified = new(this, operation.Context, operation, organization, candidate.Identity, candidate.Deadline,
-            returnPath, displayName, DateTimeOffset.UtcNow);
+            returnPath, displayName, DateTimeOffset.UtcNow, invitation);
         return Task.CompletedTask;
     }
 
@@ -240,6 +247,8 @@ public sealed partial class EntraBrowserClient
 
     private static void RequireFlowProperties(AuthenticationProperties? properties)
     {
+        if (properties?.Items.TryGetValue(".weft.invitation", out var invitation) == true && !OrganizationInvitationSecret.IsValid(invitation))
+            throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
         var now = DateTimeOffset.UtcNow;
         if (properties is null || properties.RedirectUri is not (null or "/") && !BrowserReturnPath.IsValid(properties.RedirectUri) ||
             properties.IsPersistent ||
@@ -280,7 +289,7 @@ public sealed partial class EntraBrowserClient
     }
 
     internal sealed record Candidate(ExternalIdentityKey Identity, string Subject, DateTimeOffset Deadline,
-        ClaimsPrincipal Principal, AuthenticationProperties Properties, JwtSecurityToken Token)
+        ClaimsPrincipal Principal, AuthenticationProperties Properties, JwtSecurityToken Token, string ReturnPath)
     {
         public override string ToString() => nameof(Candidate);
     }

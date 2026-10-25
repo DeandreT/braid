@@ -11,7 +11,7 @@ namespace Weft.Tests;
 public sealed class ProjectCreationCapabilityToolTests(PostgresFixture fixture)
 {
     private const string Command = "set-project-creation-capability";
-    private const string Usage = "Usage: Weft.DatabaseTool migrate | provision-development-identity | set-project-creation-capability ORG PRINCIPAL true|false";
+    private const string Usage = "Usage: Weft.DatabaseTool migrate | provision-development-identity | set-project-creation-capability ORG PRINCIPAL true|false | bootstrap-organization-administrator ORG PRINCIPAL TENANT";
     private const string InvalidCapability = "Project creation capability configuration requires canonical nonempty organization and principal IDs and an explicit true|false value.";
     private const string MissingOwnerConfiguration = "Set WEFT_MIGRATION_CONNECTION_STRING for the dedicated migration login.";
     private const string ProviderFailure = "Creation capability provisioning failed.";

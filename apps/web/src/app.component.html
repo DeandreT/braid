@@ -16,6 +16,17 @@
         ></a
       >
       <nav class="workspace-nav" aria-label="Workspace">
+        @if (session.visible()) {
+          <a
+            routerLink="/administration"
+            routerLinkActive="active"
+            ariaCurrentWhenActive="page"
+            aria-label="Administration"
+            title="Administration"
+            ><span class="rail-icon" aria-hidden="true">⚙</span
+            ><span class="rail-label">Administration</span></a
+          >
+        }
         <a
           routerLink="/catalog"
           routerLinkActive="active"

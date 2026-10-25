@@ -245,7 +245,7 @@ public sealed class AuthenticationOpenApiTests
             ? declared.EnumerateArray().ToArray() : [];
         string[] expected = action is null ? [] : method == "get" ? [action] :
             path == "/api/auth/forget-local" ? [action, "Origin", "X-Weft-Auth-Token"] :
-            path == "/api/auth/login" ? [action, "X-Weft-Return-To", "Origin", "X-Weft-Auth-Token", "X-XSRF-TOKEN"] :
+            path == "/api/auth/login" ? [action, "X-Weft-Invitation", "X-Weft-Return-To", "Origin", "X-Weft-Auth-Token", "X-XSRF-TOKEN"] :
             [action, "Origin", "X-Weft-Auth-Token", "X-XSRF-TOKEN"];
         Assert.Equal(expected, parameters.Select(parameter => parameter.GetProperty("name").GetString()!));
         foreach (var parameter in parameters)
@@ -253,11 +253,18 @@ public sealed class AuthenticationOpenApiTests
             Assert.Equal("header", parameter.GetProperty("in").GetString());
             var name = parameter.GetProperty("name").GetString();
             var required = parameter.TryGetProperty("required", out var flag) && flag.GetBoolean();
-            Assert.Equal(name is not ("X-XSRF-TOKEN" or "X-Weft-Return-To"), required);
+            Assert.Equal(name is not ("X-XSRF-TOKEN" or "X-Weft-Invitation" or "X-Weft-Return-To"), required);
             var value = parameter.GetProperty("schema");
             if (name == action) Text(value, "1");
             else if (name == "X-Weft-Return-To") ReturnPath(value);
             else if (name == "Origin") Assert.Equal("string", value.GetProperty("type").GetString());
+            else if (name == "X-Weft-Invitation")
+            {
+                Assert.Equal("string", value.GetProperty("type").GetString());
+                Assert.Equal(64, value.GetProperty("minLength").GetInt32());
+                Assert.Equal(64, value.GetProperty("maxLength").GetInt32());
+                Assert.Equal("^[0-9a-f]{64}$", value.GetProperty("pattern").GetString());
+            }
             else Token(value);
         }
     }

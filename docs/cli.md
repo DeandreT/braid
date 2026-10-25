@@ -1,5 +1,35 @@
 # Weft CLI
 
+## Administration
+
+`weft administration show` reads organization members, invitation states and recent
+changes. Add `--project ID` for project members, payload-read permission and machine
+invocation grants. Normal output includes the strong ETag; every edit requires its
+complete quoted value in `--if-match`. JSON output retains the exact response body.
+
+```sh
+weft administration show
+weft administration member --principal ID --role member --active true --if-match '"admin-ORG-7"'
+weft administration member --project ID --principal ID --role runner --active true --if-match '"admin-ORG-8"'
+weft administration payload --project ID --principal ID --active true --if-match '"admin-ORG-9"'
+weft administration disable-principal ID --if-match '"admin-ORG-10"'
+weft administration disable-binding ID --if-match '"admin-ORG-10"'
+weft administration invitations create --file invitation.json --if-match '"admin-ORG-10"'
+weft administration invitations revoke ID --if-match '"admin-ORG-11"'
+weft administration invocation-grants grant GRANT_ID --project ID --target ID --tenant ID --object ID --if-match '"admin-ORG-12"'
+weft administration invocation-grants revoke GRANT_ID --project ID --if-match '"admin-ORG-13"'
+```
+
+Replace the example ETags with freshly observed values and use canonical UUIDs.
+The invitation JSON has `invitationId`, `tenantId`, `expectedObjectId` (or null),
+`projectRoles` (an array of `{ "projectId": "…", "role": "viewer" }`) and an ISO
+`expiresAt` no more than seven days away. Its private redemption link is deliberate
+output, shown once; never put it in a diagnostic log. `--file -` accepts stdin.
+
+Administrative edits are not retried after uncertain transport results. Read the
+current state before sending another edit. Role boundaries, last-administrator
+protection and soft deactivation are described in [Administration](administration.md).
+
 `weft` works with the Weft API as the signed-in user. It signs in to Microsoft Entra ID as a
 public client application and sends the user's delegated access token, so every command has
 exactly the user's own project roles and the server's feature settings, as in the browser.

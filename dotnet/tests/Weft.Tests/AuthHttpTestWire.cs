@@ -60,10 +60,15 @@ internal sealed partial class AuthHttpFixture
         Check(json.GetProperty("authActionRequestToken").GetString() is { Length: > 0 and <= 4096 }, "Auth action token is missing or oversized.");
         jar.Apply(reply); PrivateResponse(reply); return new(reply);
     }
-    internal async Task<AuthHttpFlow> FlowAsync(AuthHttpJar? jar = null, AuthHttpHost? host = null)
+    internal async Task<AuthHttpFlow> FlowAsync(AuthHttpJar? jar = null, AuthHttpHost? host = null, string? invitation = null, string? returnTo = null)
     {
         jar ??= new(); var status = await StatusAsync(jar, host);
-        var begin = await SendAsync(LoginPath, jar, "POST", status.Action, status.Epoch, host: host); SharedHeaders(begin);
+        var begin = await SendAsync(LoginPath, jar, "POST", status.Action, status.Epoch, host: host,
+            mutate: message =>
+            {
+                if (invitation is not null) message.Headers.Add("X-Weft-Invitation", invitation);
+                if (returnTo is not null) message.Headers.Add("X-Weft-Return-To", returnTo);
+            }); SharedHeaders(begin);
         Check(begin.Status == HttpStatusCode.OK && !begin.Headers.ContainsKey("Location"), "Login fetch did not return its bounded navigation DTO.");
         var json = begin.Json(); Check(json.EnumerateObject().Count() == 2 && json.GetProperty("version").GetInt32() == 1, "Login navigation shape changed.");
         var value = json.GetProperty("authorizationUrl").GetString(); Check(value is { Length: > 0 and <= 16384 }, "Authorization navigation is absent or oversized.");

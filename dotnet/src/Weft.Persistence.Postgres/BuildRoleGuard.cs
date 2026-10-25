@@ -101,7 +101,7 @@ internal static partial class BuildRoleGuard
         if (result.Count != count) throw Invalid();
         return result;
     }
-    [GeneratedRegex(@"CREATE FUNCTION weft\.([a-z_]+)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,weft,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"CREATE (?:OR REPLACE )?FUNCTION weft\.([a-z_]+)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,weft,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex Function();
     private static InvalidOperationException Invalid() => new("Build database contract unavailable.");
 }

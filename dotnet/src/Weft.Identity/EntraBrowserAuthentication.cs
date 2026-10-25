@@ -14,6 +14,7 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
     private readonly IAccountDisplayMetadata? displayMetadata;
     private readonly ServerSessionBrowser browser;
     private readonly EntraBrowserClient entra;
+    private readonly IOrganizationInvitationRedeemer? invitations;
     private readonly BrowserAuthActionAntiforgery antiforgery;
     private readonly EntraOwnedWork methods = new();
     private readonly CancellationTokenSource lifetime = new();
@@ -22,7 +23,7 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
 
     internal EntraBrowserAuthentication(BrowserAuthenticationOptions options, DurableSessionKeyProfile profile,
         IExternalIdentityReader identities, ServerSessionBrowser browser, EntraBrowserClient entra,
-        IAccountDisplayMetadata? displayMetadata = null)
+        IAccountDisplayMetadata? displayMetadata = null, IOrganizationInvitationRedeemer? invitations = null)
     {
         if (!browser.UsesAuthenticationProfile(profile, options.OrganizationId, options.ExpectedOrigin) ||
             !entra.UsesAuthenticationProfile(profile, options.OrganizationId, options.ExpectedOrigin))
@@ -32,6 +33,7 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
         this.displayMetadata = displayMetadata;
         this.browser = browser;
         this.entra = entra;
+        this.invitations = invitations;
         antiforgery = new(options.OrganizationId, profile, browser);
     }
 
@@ -67,7 +69,11 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
         {
             _ = await antiforgery.ValidateAsync(context, "login", token);
             await AdmitPositiveSessionAsync(context, token);
-            return await entra.BeginLoginAsync(context, BrowserAuthenticationRequest.ReturnPath(context), token);
+            var headers = context.Request.Headers["X-Weft-Invitation"];
+            if (headers.Count > 1 || headers.Count == 1 && (invitations is null || !OrganizationInvitationSecret.IsValid(headers[0])))
+                throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.InvalidRequest);
+            return await entra.BeginLoginAsync(context, BrowserAuthenticationRequest.ReturnPath(context),
+                headers.Count == 1 ? headers[0] : null, token);
         }));
 
     /// <summary>Completes sign-in and returns the validated application path it returns to.</summary>
@@ -78,6 +84,9 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
             token.ThrowIfCancellationRequested();
             if (verified.OrganizationId != options.OrganizationId)
                 throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.Unavailable);
+            if (verified.InvitationSecret is { } invitation && (invitations is null ||
+                !await invitations.RedeemAsync(options.OrganizationId, invitation, verified.ExternalIdentity, token)))
+                throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.AuthenticationRequired);
             var resolution = await identities.ResolveAsync(verified.ExternalIdentity, token);
             token.ThrowIfCancellationRequested();
             if (resolution.Outcome != ExternalIdentityResolutionOutcome.Resolved)

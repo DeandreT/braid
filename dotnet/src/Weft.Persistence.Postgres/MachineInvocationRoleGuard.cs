@@ -61,7 +61,14 @@ internal static class MachineInvocationRoleGuard
         await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, LocalReleaseRoleGuard.Names, ReleaseDefinitions.Value, token);
         if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, LocalReleaseRoleGuard.Tables, token) != LocalReleaseRoleGuard.Fingerprint)
             throw Invalid();
-        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
+        var definitions = Definitions.Value;
+        await using (var installed = new NpgsqlCommand("SELECT to_regclass('weft.administration_state') IS NOT NULL", connection, transaction))
+            if (await installed.ExecuteScalarAsync(token) is true)
+            {
+                definitions = new(definitions);
+                definitions["guard_machine_invocation"] = BuildRoleGuard.LoadFunctions("0027_administration.sql", AdministrationRoleGuard.Names.Length)["guard_machine_invocation"];
+            }
+        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, definitions, token);
         if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();
     }
 
