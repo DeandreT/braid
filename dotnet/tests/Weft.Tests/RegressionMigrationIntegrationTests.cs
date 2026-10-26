@@ -70,6 +70,9 @@ public sealed class RegressionMigrationIntegrationTests(PostgresFixture fixture)
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, source[26].Checksum);
         Assert.Equal(InterchangeSchemaTestContract.MigrationChecksum, source[27].Checksum);
         Assert.Equal(CatalogSearchSchemaAdmission.MigrationChecksum, source[28].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.AutomationChecksum, source[29].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.AutomationChecksum,
+            await test.ScalarAsync<string>("SELECT checksum FROM weft.schema_migrations WHERE version=30"));
     }
 
     [PostgresFact]

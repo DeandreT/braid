@@ -259,6 +259,7 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
         schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("catalog_search_report_index").Append("account_display_metadata").ToArray());
         schema.Parameters.AddWithValue(CatalogSearchSchemaAdmission.IndexNames);
+        schema.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames);
         text.Append(Assert.IsType<string>(await schema.ExecuteScalarAsync()));
         return SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()));
     }
@@ -278,7 +279,8 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             JOIN new_roles nr ON nr.rolname=e.role JOIN old_relations r ON r.relname=e.tab
             WHERE a.relname=e.tab AND a.attname=e.col AND a.privilege_type=e.privilege AND a.grantee=nr.oid AND a.grantor=r.relowner AND NOT a.is_grantable))),
         retained_triggers AS (SELECT t.* FROM pg_catalog.pg_trigger t JOIN old_relations r ON r.oid=t.tgrelid
-            WHERE NOT ($2 AND t.tgisinternal AND EXISTS(SELECT 1 FROM pg_catalog.pg_constraint c
+            WHERE NOT ($2 AND t.tgname=ANY($10::text[]))
+            AND NOT ($2 AND t.tgisinternal AND EXISTS(SELECT 1 FROM pg_catalog.pg_constraint c
                 WHERE c.oid=t.tgconstraint AND c.contype='f' AND (c.conrelid=pg_catalog.to_regclass('weft.chat_conversations')
                     AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey')
                     OR c.conrelid=pg_catalog.to_regclass('weft.preview_runs') AND c.conname=ANY($7::text[])

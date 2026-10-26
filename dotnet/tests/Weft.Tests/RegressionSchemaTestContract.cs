@@ -21,6 +21,7 @@ internal static class RegressionSchemaTestContract
     internal const string ApiRequestAuditChecksum = "e8ce44832823c885a709222b66f317c86b2bf789262804266a9920f50e7601a2";
     internal const string AccountDisplayChecksum = "922e9c46ea1ee9374a95ca0e087cf20e4306826dd72aaad7f89292c31ad8760e";
     internal const string AdministrationChecksum = "18b3e19431c2b48c3e506d4e6286c07ea1bf5dbd5a0e9fc2f51226925545743e";
+    internal const string AutomationChecksum = "e4dd2a5c41fed83eb3246aafd144a059c47dc5c476f6bd1247e1153cfc93e1f2";
     internal static readonly string[] Tables = ["regression_cases", "regression_case_versions", "regression_runs", .. BuildRoleGuard.Tables, .. BuildRunRoleGuard.Tables, .. QualificationRoleGuard.Tables, .. LocalReleaseRoleGuard.Tables, .. MachineInvocationRoleGuard.Tables, .. ApiRequestAuditRoleGuard.Tables, .. AdministrationRoleGuard.Objects, .. AutomationSchemaAdmission.Tables];
     internal static readonly string[] Functions = ["case_authorized", "guard_regression_case", "guard_regression_version",
         "save_regression_case", "read_regression_case", "list_regression_cases", "regression_run_authorized", "guard_regression_run",
@@ -34,6 +35,7 @@ internal static class RegressionSchemaTestContract
     {
         Assert.Equal(AccountDisplayChecksum, MigrationRunner.EmbeddedMigrations[25].Checksum);
         Assert.Equal(AdministrationChecksum, MigrationRunner.EmbeddedMigrations[26].Checksum);
+        Assert.Equal(AutomationChecksum, MigrationRunner.EmbeddedMigrations[29].Checksum);
         await using (var administration = new PostgresAdministrationStore(test.RegressionConnectionString("weft_administration")))
             Assert.Null(await administration.ReadOrganizationAsync(new(new(Guid.NewGuid())), Guid.NewGuid(), token));
         var actor = new ActorContext(new(Guid.NewGuid()));
@@ -82,5 +84,8 @@ internal static class RegressionSchemaTestContract
         await using (var audit = new PostgresApiRequestAuditWriter(test.RegressionConnectionString("weft_api_audit_writer")))
             Assert.Equal(ApiRequestAuditOutcome.IdentityChanged, await audit.RecordAsync(new(Guid.NewGuid(), mapping.OrganizationId,
                 actor.PrincipalId, Guid.NewGuid(), Guid.NewGuid(), "AdmitApiAudit", "POST", []), token));
+        await using var connection = await test.Owner.OpenConnectionAsync(token);
+        await using var transaction = await connection.BeginTransactionAsync(token);
+        await AutomationSchemaAdmission.ValidateAsync(connection, transaction, token);
     }
 }

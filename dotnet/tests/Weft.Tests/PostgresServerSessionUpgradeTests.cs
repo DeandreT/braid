@@ -452,7 +452,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
         var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.True(scripts.Count == PrefixVersion + 20
+        Assert.True(scripts.Count == PrefixVersion + 21
             && scripts.Take(PrefixVersion).Select(script => script.Checksum)
                 .SequenceEqual(PostgresServerSessionUpgradeConservation.PrefixChecksums, StringComparer.Ordinal)
             && scripts[PrefixVersion].Checksum == ServerSessionSchemaContract.MigrationChecksum
@@ -475,9 +475,10 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
             && scripts[PrefixVersion + 17].Version == 27 && scripts[PrefixVersion + 17].Checksum == RegressionSchemaTestContract.AdministrationChecksum
             && scripts[PrefixVersion + 18].Version == 28 && scripts[PrefixVersion + 18].Checksum == InterchangeSchemaTestContract.MigrationChecksum
             && scripts[PrefixVersion + 19].Version == 29 && scripts[PrefixVersion + 19].Checksum == CatalogSearchSchemaAdmission.MigrationChecksum
+            && scripts[PrefixVersion + 20].Version == 30 && scripts[PrefixVersion + 20].Checksum == RegressionSchemaTestContract.AutomationChecksum
             && typeof(MigrationRunner).Assembly.GetManifestResourceNames().Contains(
                 "Weft.Persistence.Postgres.Migrations." + ServerSessionSchemaContract.MigrationName + ".sql", StringComparer.Ordinal),
-            "The embedded source is not the trusted prefix, exact session migration and exact chat and preview suffix.");
+            "The embedded source is not the trusted prefix, exact session migration and exact suffix through automation.");
         await PostgresServerSessionUpgradeConservation.AdmitChatSuffixAsync(test);
         Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
             .SequenceEqual(Enumerable.Range(1, scripts.Count)), "The complete journal versions changed.");

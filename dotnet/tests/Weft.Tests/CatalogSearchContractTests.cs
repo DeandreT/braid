@@ -15,6 +15,7 @@ public sealed class CatalogSearchContractTests
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, migrations[26].Checksum);
         Assert.Equal(InterchangeSchemaTestContract.MigrationChecksum, migrations[27].Checksum);
         Assert.Equal(CatalogSearchSchemaAdmission.MigrationChecksum, migrations[28].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.AutomationChecksum, migrations[29].Checksum);
     }
 
     private static readonly Guid Organization = Guid.Parse("10000000-0000-4000-8000-000000000001");
