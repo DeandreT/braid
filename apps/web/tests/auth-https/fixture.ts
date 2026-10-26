@@ -86,6 +86,7 @@ export class HttpsFixture {
     resolve: (url: string | null) => void;
   }> = [];
   private nativeAdmitted = false;
+  private callbackReturn = "/";
   private rejectedCallbackResponse: Response | null = null;
   private mutation: Mutation = null;
   private staleEpoch = "";
@@ -187,7 +188,9 @@ export class HttpsFixture {
     }
     if (url.pathname === "/api/auth/callback/entra") {
       if (response.status() === 303) {
-        requireOwned((await response.headerValue("location")) === "/");
+        requireOwned(
+          (await response.headerValue("location")) === this.callbackReturn,
+        );
         ++this.callbackSuccess;
       } else {
         requireOwned(response.status() === 401 || response.status() === 503);
@@ -294,6 +297,17 @@ export class HttpsFixture {
       );
     if (key !== "POST /api/auth/login" && key !== "POST /api/auth/logout")
       return { headers, negative: null };
+    if (key === "POST /api/auth/login") {
+      const target = headers["x-weft-return-to"] ?? "/";
+      requireOwned(
+        [
+          "/",
+          "/catalog",
+          `/catalog/organizations/${this.cfg.organization}/projects`,
+        ].includes(target),
+      );
+      this.callbackReturn = target;
+    }
     await this.responseTail;
     const status = this.status;
     requireOwned(

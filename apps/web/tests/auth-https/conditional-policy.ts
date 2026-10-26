@@ -39,6 +39,7 @@ export function expectedTuple(
           ? phase === "callback" || phase === "replay"
           : [
               "/",
+              "/catalog",
               "/sign-in",
               "/auth-qualification",
               `/catalog/organizations/${cfg.organization}/projects`,
