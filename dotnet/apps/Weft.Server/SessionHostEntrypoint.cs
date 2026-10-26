@@ -65,6 +65,7 @@ internal static class SessionHostEntrypoint
                             endpoints.MapWeftCatalog();
                             endpoints.MapWeftRegressionCases();
                             endpoints.MapWeftRegressionRuns();
+                            endpoints.MapWeftAutomation();
                             endpoints.MapWeftBuilds();
                             endpoints.MapWeftChat();
                             endpoints.MapWeftHelp();

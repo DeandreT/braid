@@ -7,7 +7,7 @@ using Weft.Persistence.Postgres;
 namespace Weft.Tests;
 
 [Collection(PostgresCollection.Name)]
-public sealed class AdministrationPersistenceTests(PostgresFixture fixture)
+public sealed partial class AdministrationPersistenceTests(PostgresFixture fixture)
 {
     private static readonly Guid Tenant = Guid.Parse("aaaaaaaa-1111-4111-8111-111111111111");
 

@@ -2,6 +2,7 @@ import { DatePipe } from "@angular/common";
 import { Component } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { forkJoin } from "rxjs";
+import { RegressionStatusComponent } from "./automation/regression-status.component";
 import {
   CatalogRoutePage,
   CatalogStatusComponent,
@@ -21,7 +22,12 @@ interface MappingScreen {
 
 @Component({
   selector: "weft-mapping-page",
-  imports: [DatePipe, RouterLink, CatalogStatusComponent],
+  imports: [
+    DatePipe,
+    RouterLink,
+    CatalogStatusComponent,
+    RegressionStatusComponent,
+  ],
   templateUrl: "./mapping-page.component.html",
 })
 export class MappingPageComponent extends CatalogRoutePage<

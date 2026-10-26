@@ -2,7 +2,7 @@
 export const defaultReturnPath = "/catalog";
 export const maximumReturnPathLength = 7 * 1024;
 export const maximumApplicationPathLength = 1024;
-const sections = ["catalog", "help", "administration"];
+const sections = ["catalog", "help", "administration", "notifications"];
 const encoder = new TextEncoder();
 const wire = /^[A-Za-z0-9\-._~!$&'()*+,;=:@/?%#]*$/;
 const pathCharacter = /^[A-Za-z0-9\-._~!$&'()*+,;=:@]$/;
@@ -71,6 +71,12 @@ export function isReturnPath(value: unknown): value is string {
 }
 
 function allowedQuery(path: string[], values: Map<string, string>): boolean {
+  if (path[0] === "notifications")
+    return (
+      path.length === 1 &&
+      keys(values, ["after"]) &&
+      [...values.values()].every(id)
+    );
   if (path.length === 2 && path[0] === "catalog" && path[1] === "search") {
     if (!keys(values, ["q", "cursor"])) return false;
     const text = values.get("q");

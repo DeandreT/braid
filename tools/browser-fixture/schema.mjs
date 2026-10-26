@@ -30,9 +30,22 @@ export const browserFixtureMigrations = Object.freeze([
   "0027_administration.sql",
   "0028_interchange_provenance.sql",
   "0029_catalog_search.sql",
+  "0030_regression_automation.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
+  "automation_projects",
+  "automation_mappings",
+  "automation_suites",
+  "automation_evaluations",
+  "notification_subscriptions",
+  "notification_events",
+  "notifications",
+  "notification_destinations",
+  "notification_deliveries",
+  "notification_delivery_attempts",
+  "notification_endpoint_windows",
+  "organization_notifications",
   "build_qualifications",
   "local_release_targets",
   "local_releases",

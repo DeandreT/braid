@@ -36,6 +36,7 @@ app.MapWeftProjectionFixtures();
 app.MapWeftCatalog();
 app.MapWeftRegressionCases();
 app.MapWeftRegressionRuns();
+app.MapWeftAutomation();
 app.MapWeftBuilds();
 app.MapWeftChat();
 app.MapWeftHelp();

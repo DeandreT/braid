@@ -78,6 +78,7 @@ import type { DockView } from "../workbench/workbench-model";
 import { NativeEvidenceComponent } from "../workbench/native-evidence.component";
 import { StatusChipComponent } from "../workbench/status-chip.component";
 import { MetadataValueComponent } from "../workbench/metadata-value.component";
+import { RegressionStatusComponent } from "./automation/regression-status.component";
 import {
   buildStatus,
   comparisonStatus,
@@ -107,6 +108,7 @@ interface RevisionScreen {
     NativeEvidenceComponent,
     StatusChipComponent,
     MetadataValueComponent,
+    RegressionStatusComponent,
   ],
   providers: [
     BuildViewRecovery,

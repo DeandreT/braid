@@ -1,4 +1,5 @@
 using Weft.Contracts;
+using Weft.Contracts.Automation;
 using Weft.Contracts.Builds;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
@@ -31,15 +32,32 @@ internal sealed record ApiOperation(
 
 internal static class ApiOperations
 {
+    private static readonly string[] None = [];
+    private static readonly string[] Page = ["limit", "cursor"];
+    private static readonly string[] Key = ["Idempotency-Key"];
+    public static readonly ApiOperation GetAutomationPolicy = Get("GetAutomationPolicy", Project + "/automation", typeof(AutomationPolicyV1));
+    public static readonly ApiOperation PutAutomationPolicy = Send("PutAutomationPolicy", "PUT", Project + "/automation", "application/json", typeof(AutomationPolicyV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetMappingAutomation = Get("GetMappingAutomation", Project + "/mappings/{resourceId}/automation", typeof(MappingAutomationV1));
+    public static readonly ApiOperation PutMappingAutomation = Send("PutMappingAutomation", "PUT", Project + "/mappings/{resourceId}/automation", "application/json", typeof(MappingAutomationV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetRegressionSuites = Get("GetRegressionSuites", Project + "/mappings/{resourceId}/regression-suites", typeof(RegressionSuitesV1), ["limit", "afterId"]);
+    public static readonly ApiOperation GetRegressionSuite = Get("GetRegressionSuite", Project + "/regression-suites/{resourceId}", typeof(RegressionSuiteV1));
+    public static readonly ApiOperation PutRegressionRecheck = Send("PutRegressionRecheck", "PUT", Project + "/regression-suites/{resourceId}", "application/json", typeof(RegressionRecheckV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetRegressionEvaluations = Get("GetRegressionEvaluations", Project + "/regression-suites/{resourceId}/cases", typeof(RegressionEvaluationsV1), ["limit", "afterId"]);
+    public static readonly ApiOperation GetNotificationSubscription = Get("GetNotificationSubscription", Project + "/notification-subscription", typeof(NotificationSubscriptionV1));
+    public static readonly ApiOperation PutNotificationSubscription = Send("PutNotificationSubscription", "PUT", Project + "/notification-subscription", "application/json", typeof(NotificationSubscriptionV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetNotifications = Get("GetNotifications", Project + "/notifications", typeof(NotificationsV1), ["limit", "afterId"]);
+    public static readonly ApiOperation GetNotificationInbox = Get("GetNotificationInbox", Organization + "/notifications", typeof(NotificationsV1), ["limit", "afterId"]);
+    public static readonly ApiOperation ReadInboxNotification = Send("ReadInboxNotification", "PUT", Organization + "/notifications/{notificationId}/read", "application/json", typeof(NotificationReadV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation ReadNotification = Send("ReadNotification", "PUT", Project + "/notifications/{resourceId}/read", "application/json", typeof(NotificationReadV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetNotificationOptions = Get("GetNotificationOptions", Project + "/notification-options", typeof(NotificationOptionsV1));
+    public static readonly ApiOperation GetNotificationDeliveries = Get("GetNotificationDeliveries", Project + "/notification-deliveries", typeof(NotificationDeliveriesV1), ["limit", "afterId"]);
+    public static readonly ApiOperation GetNotificationDestinations = Get("GetNotificationDestinations", Project + "/notification-destinations", typeof(NotificationDestinationsV1));
+    public static readonly ApiOperation EnableNotificationDestination = Send("EnableNotificationDestination", "PUT", Project + "/notification-destinations/enable", "application/json", typeof(NotificationDestinationEnableV1), Ok(typeof(AutomationSavedV1)));
     private const string Organization = "/api/v1/organizations/{organizationId}";
     private const string Project = Organization + "/projects/{projectId}";
     private const string Mapping = Project + "/mappings/{mappingId}";
     private const string Revision = Mapping + "/revisions/{revisionId}";
     private const string Chat = Revision + "/chat";
-
-    private static readonly string[] None = [];
-    private static readonly string[] Page = ["limit", "cursor"];
-    private static readonly string[] Key = ["Idempotency-Key"];
 
     public static readonly ApiOperation GetHealth = new("GetHealth", "GET", "/api/v1/health", None, None,
         null, null, Ok(typeof(HealthResponseV1)), typeof(HealthResponseV1), RequiresAuthentication: false);
@@ -169,6 +187,9 @@ internal static class ApiOperations
 
     public static IReadOnlyList<ApiOperation> All { get; } =
     [
+        GetAutomationPolicy, PutAutomationPolicy, GetMappingAutomation, PutMappingAutomation, GetRegressionSuites, GetRegressionSuite, GetRegressionEvaluations, PutRegressionRecheck,
+        GetNotificationSubscription, PutNotificationSubscription, GetNotifications, GetNotificationInbox, ReadInboxNotification, ReadNotification, GetNotificationOptions,
+        GetNotificationDeliveries, GetNotificationDestinations, EnableNotificationDestination,
         GetHealth, GetReadiness, GetCatalogContext, SearchCatalog, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
         GetCatalogMapping, GetCatalogMappingMetadata, EditCatalogMappingMetadata, GetCatalogRevisions, AppendCatalogRevision,
         GetCatalogRevision, GetCatalogRevisionIngestionReceipt, ResumeCatalogRevisionIngestion, GetCatalogProjectionReport,

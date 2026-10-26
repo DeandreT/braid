@@ -6,7 +6,7 @@ namespace Weft.Deployment;
 
 public sealed record BuildEnvironment(BuildEnvironmentReference Reference, BuildRuntimeProfile Profile, bool Active);
 public sealed record BuildApproval(PrincipalId Actor, BuildIntent Intent, PrivateObjectReference Native, Sha256Digest EvidenceDigest);
-public enum BuildControlOutcome { Created, Replayed, Conflict, Refused }
+public enum BuildControlOutcome { Created, Replayed, Conflict, Refused, RegressionRequired }
 
 public interface IBuildControlStore : IBuildEnvironmentCommands, IBuildApprovalRevocation
 {

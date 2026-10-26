@@ -1,0 +1,229 @@
+<p role="status">{{ message() }}</p>
+<button
+  class="catalog-button"
+  type="button"
+  (click)="load()"
+  [disabled]="busy()"
+>
+  Refresh saved settings and inbox
+</button>
+<div class="automation-grid">
+  @if (policy(); as p) {
+    <section class="automation-box" aria-labelledby="policy-title">
+      <h2 id="policy-title">Build policy</h2>
+      <p>
+        When required, approval and qualification are refused unless every
+        current case passes on the exact build revision. A pass on an older
+        revision does not count.
+      </p>
+      <fieldset [disabled]="!admin() || busy()">
+        <label
+          ><input
+            type="checkbox"
+            [(ngModel)]="p.requirePassingRegression"
+            (ngModelChange)="policyDirty.set(true)"
+          />
+          Require passing exact-revision regression</label
+        >
+        <label
+          >Error rate threshold (%)
+          <input
+            type="number"
+            min="1"
+            max="100"
+            [(ngModel)]="p.errorRatePercent"
+            (ngModelChange)="policyDirty.set(true)"
+        /></label>
+        <label
+          >Minimum requests
+          <input
+            type="number"
+            min="1"
+            max="10000"
+            [(ngModel)]="p.minimumRequests"
+            (ngModelChange)="policyDirty.set(true)"
+        /></label>
+        <label
+          >Window (seconds)
+          <input
+            type="number"
+            min="60"
+            max="3600"
+            [(ngModel)]="p.windowSeconds"
+            (ngModelChange)="policyDirty.set(true)"
+        /></label>
+        <button
+          class="catalog-button"
+          type="button"
+          (click)="save('/automation', p)"
+        >
+          Save policy
+        </button>
+      </fieldset>
+      @if (!admin()) {
+        <p>A project administrator can change this policy.</p>
+      }
+    </section>
+  }
+  @if (subscription(); as s) {
+    @if (options(); as o) {
+      <section class="automation-box" aria-labelledby="subscription-title">
+        <h2 id="subscription-title">Your project subscriptions</h2>
+        <p>
+          Notifications contain event identifiers and links, never mapping
+          payloads or private diagnostic content.
+        </p>
+        <fieldset [disabled]="busy()">
+          <legend>Events</legend>
+          @for (eventName of o.events; track eventName) {
+            <label
+              ><input
+                type="checkbox"
+                [checked]="s.events.includes(eventName)"
+                (change)="event(eventName, $any($event.target).checked)"
+              />
+              {{ label(eventName) }}</label
+            >
+          }
+          <legend>Channels</legend>
+          <label
+            ><input
+              type="checkbox"
+              [(ngModel)]="s.inApp"
+              (ngModelChange)="subscriptionDirty.set(true)"
+            />
+            In-app notification centre</label
+          >
+          <label
+            ><input
+              type="checkbox"
+              [(ngModel)]="s.email"
+              (ngModelChange)="subscriptionDirty.set(true)"
+              [disabled]="!o.emailAvailable"
+            />
+            Email</label
+          >
+          @if (!o.emailAvailable) {
+            <p>
+              Email needs an operator-configured provider and verified
+              recipient.
+            </p>
+          }
+          @for (hook of o.webhooks; track hook) {
+            <label
+              ><input
+                type="checkbox"
+                [checked]="s.webhooks.includes(hook)"
+                (change)="webhook(hook, $any($event.target).checked)"
+              />
+              Webhook {{ hook }}</label
+            >
+          }
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="save('/notification-subscription', s)"
+          >
+            Save subscriptions
+          </button>
+        </fieldset>
+      </section>
+    }
+  }
+</div>
+<section class="automation-box" aria-labelledby="inbox-title">
+  <h2 id="inbox-title">Notification centre</h2>
+  @if (inbox(); as inbox) {
+    @for (notification of inbox.notifications; track notification.id) {
+      <article class="automation-event">
+        <strong>{{ label(notification.event) }}</strong> ·
+        <time
+          >{{ notification.createdAtUtc | date: "medium" : "UTC" }} UTC</time
+        >
+        <p>
+          Resource <code>{{ notification.resourceId }}</code>
+        </p>
+        <a [routerLink]="notification.link">Open resource</a>
+        @if (!notification.read) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="save('/notifications/' + notification.id + '/read', {})"
+            [disabled]="busy()"
+          >
+            Mark read
+          </button>
+        } @else {
+          <span>Read</span>
+        }
+      </article>
+    } @empty {
+      <p>
+        No notifications on this page. Select events and save your subscriptions
+        to receive new activity.
+      </p>
+    }
+    @if (inbox.nextId) {
+      <button class="catalog-button" type="button" (click)="nextInbox()">
+        Next notifications
+      </button>
+    }
+  }
+</section>
+@if (admin()) {
+  <section class="automation-box" aria-labelledby="delivery-title">
+    <h2 id="delivery-title">Delivery log</h2>
+    <p>
+      Each delivery has at most five attempts, with exponential backoff. A
+      destination is disabled after ten consecutive failures. Delivery means
+      accepted by the provider, not read by the recipient.
+    </p>
+    @for (
+      destination of destinations()?.destinations ?? [];
+      track destination.id
+    ) {
+      <p>
+        <code>{{ destination.id }}</code
+        >: {{ destination.enabled ? "enabled" : "disabled" }}
+        @if (!destination.enabled) {
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="
+              save('/notification-destinations/enable', {
+                destinationId: destination.id,
+              })
+            "
+            [disabled]="busy()"
+          >
+            Re-enable destination
+          </button>
+        }
+      </p>
+    }
+    @for (delivery of deliveries()?.deliveries ?? []; track delivery.id) {
+      <details class="automation-event">
+        <summary>
+          {{ label(delivery.event) }} · {{ delivery.destinationId }} ·
+          {{ delivery.state }} · {{ delivery.attempts }} attempts
+        </summary>
+        <p>
+          Resource <code>{{ delivery.resourceId }}</code>
+        </p>
+        @for (attempt of delivery.history; track attempt.attempt) {
+          <p>
+            Attempt {{ attempt.attempt }}: {{ attempt.outcome }} ·
+            {{ attempt.recordedAtUtc | date: "medium" : "UTC" }} UTC
+          </p>
+        }
+      </details>
+    } @empty {
+      <p>No delivery attempts on this page.</p>
+    }
+    @if (deliveries()?.nextId) {
+      <button class="catalog-button" type="button" (click)="nextDeliveries()">
+        Next deliveries
+      </button>
+    }
+  </section>
+}

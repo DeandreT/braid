@@ -6,11 +6,15 @@ namespace Weft.Application.Regression;
 internal static class RegressionPreviewOutputs
 {
     internal static RegressionOutputSet Read(RegressionCaseVersion value, MappingPreviewResult result, CancellationToken token)
+        => Read(value, new(value.Revision, value.NativeDigest), result, token);
+
+    internal static RegressionOutputSet Read(RegressionCaseVersion value, RegressionEvaluationTarget target,
+        MappingPreviewResult result, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(result);
         var observed = result.Provenance;
-        if (observed is null || observed.Scope != value.Revision || observed.NativeDigest != value.NativeDigest ||
+        if (observed is null || observed.Scope != target.Revision || observed.NativeDigest != target.NativeDigest ||
             observed.BackendId != value.Runtime.BackendId || observed.EngineRevision != value.Runtime.EngineRevision ||
             observed.BackendBuild != value.Runtime.BackendBuild || observed.AdapterBuild != value.Runtime.AdapterBuild ||
             result.Profile != value.Runtime.Profile || !Enum.IsDefined(result.Status) || result.Artifacts is null || result.RecordsWritten < 0)

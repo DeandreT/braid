@@ -20,6 +20,16 @@
       <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
         Version {{ view.revision.sequence }}
       </h1>
+      @if (context(); as admission) {
+        <weft-regression-status
+          [scope]="view.mapping.scope"
+          [context]="admission"
+          [revisionId]="view.revision.scope.revisionId"
+          [manage]="true"
+          [admin]="view.mapping.access.role === 'administrator'"
+          [canRun]="view.mapping.access.actions.preview"
+        />
+      }
       <span class="wb-badge"
         >Viewing this version{{
           view.mapping.head.scope.revisionId === view.revision.scope.revisionId

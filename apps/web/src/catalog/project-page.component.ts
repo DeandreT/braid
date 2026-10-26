@@ -2,6 +2,7 @@ import { DatePipe } from "@angular/common";
 import { Component } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import { forkJoin } from "rxjs";
+import { RegressionStatusComponent } from "./automation/regression-status.component";
 import {
   CatalogRoutePage,
   CatalogStatusComponent,
@@ -19,7 +20,12 @@ interface ProjectScreen {
 
 @Component({
   selector: "weft-project-page",
-  imports: [DatePipe, RouterLink, CatalogStatusComponent],
+  imports: [
+    DatePipe,
+    RouterLink,
+    CatalogStatusComponent,
+    RegressionStatusComponent,
+  ],
   templateUrl: "./project-page.component.html",
 })
 export class ProjectPageComponent extends CatalogRoutePage<

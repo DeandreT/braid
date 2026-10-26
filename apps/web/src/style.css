@@ -146,6 +146,8 @@ a[aria-busy="true"]::after {
   .workspace-nav {
     order: 3;
     width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
   }
 }
 .welcome {

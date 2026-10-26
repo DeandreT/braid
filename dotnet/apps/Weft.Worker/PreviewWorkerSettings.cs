@@ -31,7 +31,8 @@ internal sealed record PreviewWorkerSettings(
             preview ? Required("WEFT_PREVIEW_WRITER_CONNECTION_STRING") : null,
             // Previews read native objects from the explicitly selected private store.
             preview ? PrivateStorageSettings.Read(environment) : null,
-            Required("WEFT_FERRULE_WORKER_IMAGE"),
+            !preview && environment("WEFT_NOTIFICATIONS_ENABLED") == "true" && environment("WEFT_INSPECTION_WORKER_ENABLED") != "true"
+                ? "" : Required("WEFT_FERRULE_WORKER_IMAGE"),
             environment("WEFT_DOCKER_EXECUTABLE") is { Length: > 0 } docker ? docker : "/usr/bin/docker",
             preview && environment("WEFT_PREVIEW_LEASE_SECONDS") is { Length: > 0 } lease
                 ? TimeSpan.FromSeconds(int.Parse(lease, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture))

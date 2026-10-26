@@ -40,6 +40,14 @@
   </header>
   @if (data(); as view) {
     @if (context(); as context) {
+      <weft-regression-status
+        [scope]="view.mapping.scope"
+        [context]="context"
+        [revisionId]="view.mapping.head.scope.revisionId"
+        [manage]="true"
+        [admin]="view.mapping.access.role === 'administrator'"
+        [canRun]="view.mapping.access.actions.preview"
+      />
       @if (
         context.features.uploadRevisions &&
         view.mapping.access.actions.uploadRevisions &&
@@ -198,6 +206,13 @@
               >
             </div>
             <div class="catalog-item-meta">
+              @if (context(); as admission) {
+                <weft-regression-status
+                  [scope]="view.mapping.scope"
+                  [context]="admission"
+                  [revisionId]="revision.scope.revisionId"
+                />
+              }
               <span>{{ revision.originalFilename }}</span>
               <span
                 ><time

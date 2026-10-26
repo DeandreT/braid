@@ -10,6 +10,7 @@ import { CreateProjectPageComponent } from "./catalog/projects/create-project-pa
 import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-page.component";
 import type { UploadMappingPageComponent } from "./catalog/uploads/upload-mapping-page.component";
 import type { AppendRevisionPageComponent } from "./catalog/uploads/append-revision-page.component";
+import type { AutomationPageComponent } from "./catalog/automation/automation-page.component";
 import { NotFoundComponent } from "./not-found.component";
 
 const leaveMappingEditor: CanDeactivateFn<EditMappingPageComponent> = (
@@ -23,6 +24,9 @@ const leaveMappingUpload: CanDeactivateFn<UploadMappingPageComponent> = (
 const leaveRevisionAppend: CanDeactivateFn<AppendRevisionPageComponent> = (
   component,
 ) => requestWorkspaceLeave(component);
+
+const leaveAutomation: CanDeactivateFn<AutomationPageComponent> = (component) =>
+  requestWorkspaceLeave(component);
 
 function requestWorkspaceLeave(component: {
   requestLeave(): Observable<boolean>;
@@ -42,6 +46,15 @@ function requestWorkspaceLeave(component: {
 }
 
 export const routes: Routes = [
+  {
+    path: "notifications",
+    canActivate: [requireSignIn],
+    loadComponent: () =>
+      import("./catalog/automation/notification-centre.component").then(
+        (m) => m.NotificationCentreComponent,
+      ),
+    title: "Notifications · Weft",
+  },
   {
     path: "administration",
     canActivate: [requireSignIn],
@@ -71,6 +84,15 @@ export const routes: Routes = [
     component: CatalogShellComponent,
     canActivate: [requireSignIn],
     children: [
+      {
+        path: "organizations/:organizationId/projects/:projectId/automation",
+        canDeactivate: [leaveAutomation],
+        loadComponent: () =>
+          import("./catalog/automation/automation-page.component").then(
+            (module) => module.AutomationPageComponent,
+          ),
+        title: "Automation and notifications · Weft",
+      },
       {
         path: "search",
         loadComponent: () =>

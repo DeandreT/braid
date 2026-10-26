@@ -32,6 +32,8 @@ internal static class CliApplication
         root.Subcommands.Add(SearchCommands.Search(globals));
         root.Subcommands.Add(AdministrationCommands.Administration(globals));
         root.Subcommands.Add(HealthCommands.Health(globals));
+        root.Subcommands.Add(AutomationCommands.Automation(globals));
+        root.Subcommands.Add(AutomationCommands.Notifications(globals));
         return root;
     }
 

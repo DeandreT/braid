@@ -2,6 +2,8 @@
   "schemaVersion": "weft.browser-return-paths.v1",
   "description": "Shared vectors for the browser return-path rule. Weft.Identity.BrowserReturnPath and apps/web/src/auth/return-path.ts must classify each value identically.",
   "valid": [
+    "/notifications",
+    "/notifications?after=60000000-0000-4000-8000-000000000020",
     "/catalog/search",
     "/catalog/search?q=caf%C3%A9",
     "/catalog/search?q=Orders%2FOrder%2FId",
@@ -28,6 +30,12 @@
     "/help/reports?view=full&section=summary#coverage-v1_2"
   ],
   "invalid": [
+    "/notifications/other",
+    "/notifications?after=bad",
+    "/notifications?after=00000000-0000-0000-0000-000000000000",
+    "/notifications?after=60000000-0000-4000-8000-000000000020&after=60000000-0000-4000-8000-000000000021",
+    "/notifications?after=60000000-0000-4000-8000-000000000020&next=https%3A%2F%2Fevil.example",
+    "/notifications#fragment",
     "/catalog/search?q=%",
     "/catalog/search?q=%C3",
     "/catalog/search?q=%C0%AF",

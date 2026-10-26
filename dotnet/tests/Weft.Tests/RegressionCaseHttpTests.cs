@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Weft.Api;
 using Weft.Api.Catalog;
 using Weft.Application;
+using Weft.Application.Automation;
 using Weft.Application.Regression;
 using Weft.Contracts.Regression;
 using Weft.Domain;
@@ -402,6 +403,9 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
                 CaseHttp? support = null;
                 if (data is not null)
                 {
+                    builder.Services.AddSingleton(new CatalogAutomationOptions(true));
+                    builder.Services.AddSingleton(NotificationConfiguration.Disabled);
+                    builder.Services.AddSingleton<IAutomationStore>(_ => new PostgresAutomationStore(data.Case.RegressionConnectionString("weft_run_writer"), true));
                     catalog = new(data.Case.CatalogConnectionString);
                     builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(catalog));
                     builder.Services.AddSingleton<IRegressionCaseReader>(_ => new CasePort(support!));
@@ -422,6 +426,7 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
                 app.MapWeftCatalog();
                 app.MapWeftRegressionCases();
                 app.MapWeftRegressionRuns();
+                app.MapWeftAutomation();
                 reservation.Stop();
                 await app.StartAsync();
                 return support;

@@ -183,7 +183,7 @@ public sealed class BuildQualificationPersistenceTests(PostgresFixture fixture)
         Assert.Equal(1L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.build_qualifications"));
     }
 
-    private sealed class Context : IAsyncDisposable
+    internal sealed class Context : IAsyncDisposable
     {
         internal required BuildPersistenceTests.Context Control { get; init; }
         internal required BuildRunSnapshot Build { get; init; }

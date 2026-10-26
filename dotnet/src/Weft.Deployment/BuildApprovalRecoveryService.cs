@@ -43,6 +43,7 @@ public sealed class BuildApprovalRecoveryService(IBuildMetadataReader metadata, 
         var result = await controls.ApproveAsync(actor, intent, token).ConfigureAwait(false);
         if (result == BuildControlOutcome.Conflict) return new(BuildApprovalRequestOutcome.Conflict);
         if (result == BuildControlOutcome.Refused) return new(BuildApprovalRequestOutcome.Refused);
+        if (result == BuildControlOutcome.RegressionRequired) return new(BuildApprovalRequestOutcome.PreconditionFailed);
         if (result is not (BuildControlOutcome.Created or BuildControlOutcome.Replayed)) throw new InvalidOperationException("Build approval receipt refused.");
         var saved = await metadata.ReadApprovalAsync(actor, mapping, approvalId, token).ConfigureAwait(false);
         if (saved is null) return new(BuildApprovalRequestOutcome.Unavailable);

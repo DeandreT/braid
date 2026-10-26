@@ -124,6 +124,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Chat UI](docs/chat-ui.md): revision-pinned conversations and evidence-backed navigation.
 - [Preview runs](docs/preview-runs.md): bounded execution of explicit sample inputs.
 - [Regression cases](docs/regression-cases.md): saved inputs, expected output and immutable case versions.
+- [Automation and notifications](docs/automation-notifications.md): exact-revision checks, project build gates and metadata-only activity delivery.
 - [Build workflow](docs/build-workflow.md) and [compiled runtime](docs/compiled-runtime.md): capability admission, immutable artifacts and restricted execution.
 - [Local releases](docs/local-releases.md): atomic activation, retained audit, explicit rollback and current-release invocation.
 - [Release qualification](docs/release-qualification.md): exact-baseline qualification evidence for builds.

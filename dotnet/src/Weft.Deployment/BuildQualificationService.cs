@@ -4,7 +4,7 @@ using Weft.Domain;
 
 namespace Weft.Deployment;
 
-public enum BuildQualificationWriteOutcome { Created, Replayed, Conflict, Refused }
+public enum BuildQualificationWriteOutcome { Created, Replayed, Conflict, Refused, RegressionRequired }
 public interface IBuildQualificationStore
 {
     Task<BuildQualification?> ReadAsync(ActorContext actor, MappingScope mapping, Guid qualificationId, CancellationToken token = default);
@@ -56,6 +56,7 @@ public sealed class BuildQualificationService(IBuildQualificationStore store, IB
         if (!await Allowed(actor, mapping, token).ConfigureAwait(false)) return new(BuildQualificationRequestOutcome.Refused);
         var write = await store.SaveAsync(actor, candidate, token).ConfigureAwait(false);
         if (write == BuildQualificationWriteOutcome.Refused) return new(BuildQualificationRequestOutcome.Refused);
+        if (write == BuildQualificationWriteOutcome.RegressionRequired) return new(BuildQualificationRequestOutcome.NotQualified);
         if (write == BuildQualificationWriteOutcome.Conflict) return new(BuildQualificationRequestOutcome.Conflict);
         if (write is not (BuildQualificationWriteOutcome.Created or BuildQualificationWriteOutcome.Replayed)) throw new InvalidOperationException("Invalid qualification receipt.");
         var saved = await store.ReadAsync(actor, mapping, qualificationId, token).ConfigureAwait(false);

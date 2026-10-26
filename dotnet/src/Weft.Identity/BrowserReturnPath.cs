@@ -20,7 +20,7 @@ public static class BrowserReturnPath
     // overhead. It remains inside the unchanged 16 KiB authorization/callback budget.
     public const int MaximumProtectedStateLength = 12 * 1024;
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    private static readonly string[] Sections = ["catalog", "help", "administration"];
+    private static readonly string[] Sections = ["catalog", "help", "administration", "notifications"];
 
     public static bool IsValid(string? value)
     {
@@ -52,6 +52,8 @@ public static class BrowserReturnPath
 
     private static bool AllowedQuery(string[] path, Dictionary<string, string> values)
     {
+        if (path[0] == "notifications")
+            return path.Length == 1 && Keys(values, "after") && values.Values.All(Id);
         if (path is ["catalog", "search"])
         {
             if (!Keys(values, "q", "cursor")) return false;

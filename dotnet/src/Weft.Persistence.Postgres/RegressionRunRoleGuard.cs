@@ -36,7 +36,8 @@ internal static partial class RegressionRunRoleGuard
             """, connection, transaction))
         {
             check.Parameters.AddWithValue("role", role);
-            check.Parameters.AddWithValue("functions", writer ? WriterFunctions : ["read_regression_run", "list_regression_run_history"]);
+            check.Parameters.AddWithValue("functions", writer ? WriterFunctions.Concat(AutomationSchemaAdmission.WriteFunctions).ToArray() :
+                new[] { "read_regression_run", "list_regression_run_history" }.Concat(AutomationSchemaAdmission.ReadFunctions).ToArray());
             if (await check.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
         await using (var check = new NpgsqlCommand("""

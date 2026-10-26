@@ -15,6 +15,7 @@ internal static class WorkerCredentialSettings
     internal static readonly string[] Connections =
     [
         "WEFT_PREVIEW_WRITER_CONNECTION_STRING",
+        "WEFT_NOTIFICATION_CONNECTION_STRING",
         "WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING",
         "WEFT_REGRESSION_CASE_READER_CONNECTION_STRING",
         "WEFT_REGRESSION_ACCESS_CONNECTION_STRING",

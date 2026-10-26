@@ -1,0 +1,161 @@
+import { DatePipe } from "@angular/common";
+import { Component, DestroyRef, computed, inject, signal } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
+import { ActivatedRoute, RouterLink } from "@angular/router";
+import { finalize, switchMap } from "rxjs";
+import { CatalogContextStore } from "../catalog-context";
+import { CatalogStatusComponent } from "../catalog-shell.component";
+import { createCatalogRead } from "../catalog-state";
+import { isCatalogId } from "../catalog-types";
+import { UnsentWork } from "../../workbench/unsent-work";
+import {
+  AutomationApi,
+  notificationEventLabel,
+  type Inbox,
+} from "./automation-api";
+
+@Component({
+  selector: "weft-notification-centre",
+  imports: [DatePipe, RouterLink, CatalogStatusComponent],
+  template: ` <section
+    class="catalog-page"
+    aria-labelledby="notifications-title"
+  >
+    <header class="catalog-heading">
+      <div>
+        <p class="catalog-eyebrow">Workspace activity</p>
+        <h1 id="notifications-title">Notification centre</h1>
+      </div>
+      <button
+        type="button"
+        class="catalog-button"
+        (click)="read.retry()"
+        [disabled]="busy()"
+      >
+        Refresh
+      </button>
+    </header>
+    <p>
+      Visible project activity and invitations addressed to you. Notifications
+      contain IDs and links only. Choose subscriptions in each project's
+      automation settings.
+    </p>
+    @if (view(); as v) {
+      <p>
+        <a
+          [routerLink]="[
+            '/catalog/organizations',
+            v.context.allowedOrganizationId,
+            'projects',
+          ]"
+          >Projects and subscriptions</a
+        >
+      </p>
+      <ul class="catalog-list">
+        @for (item of v.data.notifications; track item.id) {
+          <li class="catalog-list-item">
+            <div class="catalog-item-heading">
+              <h2>{{ label(item.event) }}</h2>
+              <span class="catalog-badge">{{
+                item.read ? "Read" : "Unread"
+              }}</span>
+            </div>
+            <p>
+              <time>{{ item.createdAtUtc | date: "medium" : "UTC" }} UTC</time>
+              ·
+              {{
+                item.projectId ? "Project activity" : "Organization invitation"
+              }}
+            </p>
+            <p>
+              Resource <code class="catalog-code">{{ item.resourceId }}</code>
+            </p>
+            <a [routerLink]="item.link">Open related page</a>
+            @if (!item.read) {
+              <button
+                class="catalog-button"
+                type="button"
+                (click)="mark(item.id)"
+                [disabled]="busy()"
+              >
+                Mark read
+              </button>
+            }
+          </li>
+        } @empty {
+          <li class="catalog-state">No notifications on this page.</li>
+        }
+      </ul>
+      <nav class="catalog-pagination" aria-label="Notification pages">
+        <a routerLink="/notifications">Newest</a>
+        @if (v.data.nextId) {
+          <a
+            routerLink="/notifications"
+            [queryParams]="{ after: v.data.nextId }"
+            >Older notifications</a
+          >
+        }
+      </nav>
+    } @else {
+      <weft-catalog-status [kind]="read.state().kind" (retry)="read.retry()" />
+    }
+    @if (message()) {
+      <p role="status">{{ message() }}</p>
+    }
+  </section>`,
+})
+export class NotificationCentreComponent {
+  readonly read = createCatalogRead<Inbox>();
+  readonly view = computed(() => {
+    const value = this.read.state();
+    return value.kind === "ready" ? value : null;
+  });
+  readonly busy = signal(false);
+  readonly message = signal("");
+  readonly label = notificationEventLabel;
+  private readonly api = inject(AutomationApi);
+  private readonly contexts = inject(CatalogContextStore);
+  private readonly destroy = inject(DestroyRef);
+  constructor() {
+    inject(UnsentWork).track(() => this.busy(), this.destroy);
+    inject(ActivatedRoute)
+      .queryParamMap.pipe(takeUntilDestroyed(this.destroy))
+      .subscribe((query) => {
+        const after = query.get("after");
+        if (after !== null && !isCatalogId(after)) {
+          this.read.invalidLink();
+          return;
+        }
+        this.read.select(
+          null,
+          (context) => this.api.inbox(context, after),
+          after,
+        );
+      });
+  }
+  mark(id: string): void {
+    const view = this.view();
+    if (!view || this.busy()) return;
+    this.busy.set(true);
+    this.message.set("");
+    this.contexts
+      .admitted(view.context)
+      .pipe(
+        switchMap((context) => this.api.markInboxRead(context, id)),
+        takeUntilDestroyed(this.destroy),
+        finalize(() => this.busy.set(false)),
+      )
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.read.retry();
+        },
+        error: () => {
+          this.busy.set(false);
+          this.message.set(
+            "Read status was not confirmed. Refresh before retrying.",
+          );
+        },
+      });
+  }
+}

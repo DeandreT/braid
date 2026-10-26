@@ -7,6 +7,36 @@ namespace Weft.Tests;
 public sealed class RegressionCaseExecutionTests
 {
     [Fact]
+    public async Task Evaluates_the_new_revision_without_rewriting_original_case_provenance()
+    {
+        var test = new Harness { ReturnedNative = [8, 7, 6] };
+        var original = test.Reference;
+        var originalBytes = new RegressionCaseEnvelopeCodec().Encode(test.Value).CopyBytes();
+        var revision = new RevisionScope(original.Revision.OrganizationId, original.Revision.ProjectId, original.Revision.MappingId, Guid.NewGuid());
+        var digest = Sha256Digest.FromBytes(test.ReturnedNative);
+        test.Source = new(revision, new(PrivateObjectId.Create(revision, PrivateObjectClass.NativeArtifact), digest, 3),
+            IngestionIntent.EntryDocument, IngestionIntent.EmptyDependencyIdentity, "ferrule");
+        var result = await test.Service.EvaluateAsync(test.Actor, original, new(revision, digest));
+        Assert.Equal(RegressionComparisonOutcome.Passed, result.Comparison!.Outcome);
+        Assert.Equal(revision, Assert.Single(test.Requests).Artifact.Scope);
+        Assert.Equal(digest, test.Requests[0].Artifact.Digest);
+        Assert.Equal(original, test.Reference);
+        Assert.Equal(originalBytes, new RegressionCaseEnvelopeCodec().Encode(test.Value).CopyBytes());
+    }
+
+    [Fact]
+    public async Task New_revision_evaluation_refuses_a_backend_replaying_the_original_revision()
+    {
+        var test = new Harness();
+        var original = test.Reference;
+        var revision = new RevisionScope(original.Revision.OrganizationId, original.Revision.ProjectId, original.Revision.MappingId, Guid.NewGuid());
+        test.Source = new(revision, new(PrivateObjectId.Create(revision, PrivateObjectClass.NativeArtifact), original.NativeDigest, test.Native.Length),
+            IngestionIntent.EntryDocument, IngestionIntent.EmptyDependencyIdentity, "ferrule");
+        test.Transform = result => result with { Provenance = result.Provenance with { Scope = original.Revision } };
+        Refused(await test.Service.EvaluateAsync(test.Actor, original, new(revision, original.NativeDigest)), RegressionCaseExecutionOutcome.ResultRejected);
+    }
+
+    [Fact]
     public void Local_admission_tracks_the_same_backend_without_reading_case_or_payload_data()
     {
         var test = new Harness();

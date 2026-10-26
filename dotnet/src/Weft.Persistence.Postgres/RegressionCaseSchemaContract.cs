@@ -16,8 +16,10 @@ internal static class RegressionCaseSchemaContract
     internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
         => await CaptureAsync(connection, transaction, ["regression_cases", "regression_case_versions"], token);
 
-    internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string[] tables, CancellationToken token)
+    internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string[] tables, CancellationToken token,
+        bool validateAutomation = true)
     {
+        if (validateAutomation) await AutomationSchemaAdmission.ValidateTriggersAsync(connection, transaction, token);
         // Physical search indexes do not alter the logical source contracts. Omit
         // only this exact additive set, after its complete definitions and private
         // extension boundary have been admitted; every other index stays pinned.
@@ -45,6 +47,7 @@ internal static class RegressionCaseSchemaContract
         }
         await using var command = new NpgsqlCommand(CaptureSql, connection, transaction);
         command.Parameters.AddWithValue("tables", tables);
+        command.Parameters.AddWithValue("automationTriggers", AutomationSchemaAdmission.AllTriggerNames);
         command.Parameters.AddWithValue("searchIndexes", searchIndexes);
         return await command.ExecuteScalarAsync(token) as string ?? throw new InvalidOperationException("Regression case schema is unavailable.");
     }
@@ -84,7 +87,7 @@ internal static class RegressionCaseSchemaContract
                     WHERE i.indrelid=c.oid AND NOT (index_relation.relnamespace=c.relnamespace AND index_relation.relname=ANY(@searchIndexes))),
                 'triggers', (SELECT jsonb_agg(jsonb_build_array(t.tgname,t.tgenabled::text,
                     pg_catalog.pg_get_triggerdef(t.oid,false)) ORDER BY t.tgname)
-                    FROM pg_catalog.pg_trigger t WHERE t.tgrelid=c.oid AND NOT t.tgisinternal),
+                    FROM pg_catalog.pg_trigger t WHERE t.tgrelid=c.oid AND NOT t.tgisinternal AND NOT t.tgname=ANY(@automationTriggers)),
                 'internalTriggersEnabled', (SELECT coalesce(bool_and(t.tgenabled='O'),true)
                     FROM pg_catalog.pg_trigger t WHERE t.tgrelid=c.oid AND t.tgisinternal),
                 'policies', (SELECT jsonb_agg(jsonb_build_array(p.polname,p.polcmd::text,p.polpermissive,p.polroles,

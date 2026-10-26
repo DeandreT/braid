@@ -92,7 +92,9 @@ public sealed class CatalogSearchPopulatedUpgradeTests(PostgresFixture fixture)
             foreach (var table in InterchangeSchemaTestContract.Tables)
                 Assert.Equal(1L, await test.ScalarAsync<long>($"SELECT count(*) FROM ONLY weft.{table}"));
         var before = await Snapshot.CaptureAsync(test, prefix);
-        await test.MigrateAsync();
+        // This conservation test admits the exact search delta; automation's 29->30 upgrade is qualified separately.
+        await using (var searchMigration = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(29).ToArray()))
+            await searchMigration.MigrateAsync();
         Assert.Equal(29L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
         Assert.True(await CatalogSearchUpgradeTestSupport.AdmitAsync(test));
         await using (var ingestion = new PostgresIngestionDatabase(test.IngestionConnectionString))
@@ -148,7 +150,8 @@ public sealed class CatalogSearchPopulatedUpgradeTests(PostgresFixture fixture)
             Assert.Equal(export.Digest, (await store.FindExportAsync(data.Actor, data.Revision, export.Id))!.Digest);
             Assert.Equal(imported.Facts.Intent.ImportProvenance, (await store.GetReceiptAsync(data.Actor, data.Project, imported.Facts.OperationId))!.Facts.Intent.ImportProvenance);
         }
-        await test.MigrateAsync();
+        await using (var searchMigration = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(29).ToArray()))
+            await searchMigration.MigrateAsync();
         await before.AssertPreservedAsync(test, prefix);
     }
 
