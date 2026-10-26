@@ -177,7 +177,6 @@ CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
 -- extension's bootstrap-owned PUBLIC grants before admitting the migrations.
 GRANT weft_migrator TO SESSION_USER WITH INHERIT FALSE, SET TRUE;
 ALTER DATABASE weft OWNER TO weft_migrator;
-REVOKE weft_migrator FROM weft_provisioner;
 SET ROLE weft_migrator;
 CREATE EXTENSION pg_trgm WITH SCHEMA weft_search_extensions;
 REVOKE ALL ON SCHEMA weft_search_extensions FROM PUBLIC;
@@ -185,6 +184,7 @@ RESET ROLE;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA weft_search_extensions FROM PUBLIC;
 SET ROLE weft_provisioner;
 REVOKE weft_migrator FROM SESSION_USER;
+REVOKE weft_migrator FROM weft_provisioner;
 RESET ROLE;
 DROP ROLE weft_provisioner;
 -- Chat routines pin these scope settings in function SET clauses (migration 0011).
