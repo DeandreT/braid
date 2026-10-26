@@ -36,6 +36,7 @@ async function fixture(page: Page, initiallyAuthenticated: boolean) {
   document.rules[0]!.id = "rule/café:🧵";
   document.rules[0]!.outputFieldId = document.fields[0]!.id;
   let authenticated = initiallyAuthenticated;
+  let contextAvailable = true;
   let returnTo = "";
   let logins = 0;
   const searches: URL[] = [];
@@ -66,7 +67,9 @@ async function fixture(page: Page, initiallyAuthenticated: boolean) {
         json: { status: "ok", service: "weft-api", apiVersion: "v1" },
       });
     if (path === "/api/v1/catalog/context")
-      return route.fulfill({ json: context });
+      return contextAvailable
+        ? route.fulfill({ json: context })
+        : route.fulfill({ status: 503, json: { code: "unavailable" } });
     if (path === "/api/v1/catalog/interchange")
       return route.fulfill({ json: { enabled: false } });
     if (path.endsWith("/projects"))
@@ -126,6 +129,9 @@ async function fixture(page: Page, initiallyAuthenticated: boolean) {
     logins: () => logins,
     anonymous: () => {
       authenticated = false;
+    },
+    contextAvailable: (available: boolean) => {
+      contextAvailable = available;
     },
   };
 }
@@ -210,6 +216,63 @@ for (const withCursor of [false, true]) {
 }
 
 for (const kind of ["field", "rule"] as const) {
+  test(`retained ${kind} focus returns after same-owner context recovery`, async ({
+    page,
+  }, info) => {
+    const source = await fixture(page, true);
+    const document = source.data.projection.report!.document!;
+    const id =
+      kind === "field" ? document.fields[0]!.id : document.rules[0]!.id;
+    const target = `${source.data.browserPath}?projectionDerivationId=${P}#${encodeURI(kind + ":" + id)}`;
+    const expected =
+      kind === "field" ? "savedValue" : "Controlled saved explanation";
+    const inspector = page.getByRole("complementary", {
+      name: "Context inspector",
+    });
+    await page.goto(target);
+    await expect(inspector).toContainText(expected);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await page.screenshot({
+      path: info.outputPath(`${kind}-before-outage.png`),
+      fullPage: true,
+    });
+
+    source.contextAvailable(false);
+    await page
+      .getByRole("button", { name: "Refresh catalog", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Catalog unavailable", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator("weft-workbench-frame")).toHaveCount(0);
+    source.contextAvailable(true);
+    const requests = source.retained.length;
+    await page.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect.poll(() => source.retained.length).toBeGreaterThan(requests);
+    await expect(page.locator("weft-workbench-frame")).toBeVisible();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await page.screenshot({
+      path: info.outputPath(`${kind}-after-recovery.png`),
+      fullPage: true,
+    });
+    await expect(inspector).toContainText(expected);
+    await expect(page).toHaveURL(new URL(target, "http://127.0.0.1:5184").href);
+    expect(source.logins()).toBe(0);
+    expect(
+      source.retained.slice(requests).every((path) => path.endsWith(`/${P}`)),
+    ).toBe(true);
+  });
+
   test(`new return flow preserves retained ${kind} and resource focus on sign-in again`, async ({
     page,
   }, info) => {

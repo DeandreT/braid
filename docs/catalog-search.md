@@ -36,6 +36,10 @@ retained report and open the field or rule in the workbench inspector, rather
 than silently adopting the current report after a repair or profile change.
 Project results open their project.
 
+After a temporary context failure, recovery rechecks access and reloads the same
+retained report. Its field or rule selection is restored for the new workbench
+binding, rather than treated as already opened by the previous binding.
+
 Titles and context snippets are plain text with bounded, nonoverlapping UTF-16
 highlight offsets. Ranges never split Unicode scalars. Angular interpolates the
 text and renders separate `<mark>` elements; it never interprets result text as

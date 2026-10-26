@@ -527,7 +527,12 @@ export class RevisionPageComponent extends CatalogRoutePage<
           selector
       )
         return;
-      const selected = selector + ":" + fragment;
+      // The same retained report can return in a new, freshly admitted binding.
+      const selected = JSON.stringify([
+        this.workbench.lifetime(),
+        selector,
+        fragment,
+      ]);
       if (selected === openedSearchSelection) return;
       const reference: NodeReference | null = fragment.startsWith("field:")
         ? { kind: "field", fieldId: fragment.slice(6) }
