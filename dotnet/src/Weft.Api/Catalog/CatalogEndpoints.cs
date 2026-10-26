@@ -19,6 +19,7 @@ public static partial class CatalogEndpoints
         Describe<CatalogContextV1>(routes.MapGet("/api/v1/catalog/context", GetContext),
             "GetCatalogContext", "Read the explicitly configured catalog identity context and request token.");
         const string organization = "/api/v1/organizations/{organizationId}";
+        DescribeSearch(routes.MapGet(organization + "/search", SearchCatalog));
         const string project = organization + "/projects/{projectId}";
         const string mapping = project + "/mappings/{mappingId}";
         Describe<CatalogProjectPageV1>(routes.MapGet(organization + "/projects", GetProjects),

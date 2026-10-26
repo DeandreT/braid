@@ -399,6 +399,12 @@ public sealed class PostgresFixture : IAsyncLifetime
             await using var ownerConnection = await test.Owner.OpenConnectionAsync();
             await using var publicSchema = new NpgsqlCommand("REVOKE ALL ON SCHEMA public FROM PUBLIC", ownerConnection);
             await publicSchema.ExecuteNonQueryAsync();
+            await test.BootstrapAsync("""
+                CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
+                CREATE EXTENSION pg_trgm WITH SCHEMA weft_search_extensions;
+                REVOKE ALL ON SCHEMA weft_search_extensions FROM PUBLIC;
+                REVOKE ALL ON ALL FUNCTIONS IN SCHEMA weft_search_extensions FROM PUBLIC;
+                """);
             if (migrate)
                 await test.MigrateAsync();
             return test;

@@ -138,6 +138,8 @@ public sealed class CatalogRevisionReportHostConfigurationTests
         Assert.Null(registry.FindCurrent("ferrule", RevisionReportOperation.Projection));
         Assert.NotNull(registry.FindStored(ProjectionFormat()));
         Assert.NotNull(registry.FindStored(ValidationFormat()));
+        var search = Assert.IsType<PostgresCatalogSearch>(provider.GetRequiredService<ICatalogSearch>());
+        Assert.Same(search, provider.GetRequiredService<ICatalogSearch>());
         Assert.DoesNotContain(WriterCredential, read);
         Assert.DoesNotContain("WEFT_PRIVATE_STORAGE_ROOT", read);
     }

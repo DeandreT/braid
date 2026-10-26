@@ -274,7 +274,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
             "Session upgrade changed the previously selected historical report metadata.");
     }
 
-    private static async Task<ProjectionCacheKey> SeedHistoricalReportAsync(PostgresCase test, ActorContext actor, IngestionReceipt receipt)
+    internal static async Task<ProjectionCacheKey> SeedHistoricalReportAsync(PostgresCase test, ActorContext actor, IngestionReceipt receipt)
     {
         // This is explicitly synthetic metadata authored through genuine0006
         // constraints and transitions. No private report or native bytes exist.
@@ -452,7 +452,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
         var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.True(scripts.Count == PrefixVersion + 19
+        Assert.True(scripts.Count == PrefixVersion + 20
             && scripts.Take(PrefixVersion).Select(script => script.Checksum)
                 .SequenceEqual(PostgresServerSessionUpgradeConservation.PrefixChecksums, StringComparer.Ordinal)
             && scripts[PrefixVersion].Checksum == ServerSessionSchemaContract.MigrationChecksum
@@ -474,6 +474,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
             && scripts[PrefixVersion + 16].Version == 26 && scripts[PrefixVersion + 16].Checksum == RegressionSchemaTestContract.AccountDisplayChecksum
             && scripts[PrefixVersion + 17].Version == 27 && scripts[PrefixVersion + 17].Checksum == RegressionSchemaTestContract.AdministrationChecksum
             && scripts[PrefixVersion + 18].Version == 28 && scripts[PrefixVersion + 18].Checksum == InterchangeSchemaTestContract.MigrationChecksum
+            && scripts[PrefixVersion + 19].Version == 29 && scripts[PrefixVersion + 19].Checksum == CatalogSearchSchemaAdmission.MigrationChecksum
             && typeof(MigrationRunner).Assembly.GetManifestResourceNames().Contains(
                 "Weft.Persistence.Postgres.Migrations." + ServerSessionSchemaContract.MigrationName + ".sql", StringComparer.Ordinal),
             "The embedded source is not the trusted prefix, exact session migration and exact chat and preview suffix.");

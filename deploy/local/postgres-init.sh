@@ -141,6 +141,10 @@ CREATE ROLE weft_api_audit_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOIN
 CREATE ROLE weft_administration LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'administration_password';
 ALTER DATABASE weft OWNER TO weft_migrator;
+CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
+CREATE EXTENSION pg_trgm WITH SCHEMA weft_search_extensions;
+REVOKE ALL ON SCHEMA weft_search_extensions FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA weft_search_extensions FROM PUBLIC;
 -- Chat routines pin these scope settings in function SET clauses.
 GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator;
 REVOKE ALL ON DATABASE weft FROM PUBLIC;

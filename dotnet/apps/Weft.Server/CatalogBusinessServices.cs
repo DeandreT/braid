@@ -25,6 +25,12 @@ internal static class CatalogBusinessServices
         services.AddSingleton(_ => new PostgresCatalogDatabase(connectionString));
         services.AddSingleton(provider => new PostgresCatalogReader(provider.GetRequiredService<PostgresCatalogDatabase>()));
         services.AddSingleton<ICatalogReader>(provider => provider.GetRequiredService<PostgresCatalogReader>());
+        services.AddSingleton(_ => new SearchIndexConnection(() => readEnvironment("WEFT_POSTGRES_DERIVATION_CONNECTION_STRING")));
+        services.AddSingleton<ICatalogSearch>(provider => new PostgresCatalogSearch(
+            provider.GetRequiredService<PostgresCatalogReader>(),
+            () => provider.GetService<IRevisionReportReader>(),
+            () => provider.GetService<PostgresRevisionDerivationDatabase>() ??
+                provider.GetRequiredService<SearchIndexConnection>().Database));
         AdministrationHostConfiguration.Configure(services, readEnvironment);
         if (creationOptions.Enabled)
         {
@@ -122,6 +128,46 @@ internal static class CatalogBusinessServices
         catch (ArgumentException)
         {
             throw new InvalidOperationException("The project creation connection configuration is invalid.");
+        }
+    }
+
+    private static PostgresRevisionDerivationDatabase SearchIndexDatabase(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString)) throw new CatalogSearchIndexPendingException();
+        try { return new(connectionString); }
+        catch (ArgumentException) { throw new CatalogSearchIndexPendingException(); }
+    }
+
+    // Read-only hosts keep native derivation disabled. A cold search may resolve
+    // this separately owned cache connection, but resolving search itself must not.
+    private sealed class SearchIndexConnection(Func<string?> connectionString) : IAsyncDisposable
+    {
+        private readonly Lazy<PostgresRevisionDerivationDatabase> database = new(() => SearchIndexDatabase(connectionString()));
+        private readonly object lifetime = new();
+        private bool disposed;
+
+        internal PostgresRevisionDerivationDatabase Database
+        {
+            get
+            {
+                lock (lifetime)
+                {
+                    ObjectDisposedException.ThrowIf(disposed, this);
+                    return database.Value;
+                }
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            PostgresRevisionDerivationDatabase? value;
+            lock (lifetime)
+            {
+                if (disposed) return;
+                disposed = true;
+                value = database.IsValueCreated ? database.Value : null;
+            }
+            if (value is not null) await value.DisposeAsync();
         }
     }
 

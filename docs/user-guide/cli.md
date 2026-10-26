@@ -45,6 +45,14 @@ Start with `weft projects list`, then use `weft mappings list --project PROJECT_
 and `weft revisions list --project PROJECT_ID --mapping MAPPING_ID`. Replace
 the capitalized IDs with the IDs returned by the previous commands.
 
+Use `weft search "order number"` to search across the catalog resources you can
+read. It includes saved report field and rule names and paths, not sample data.
+Results identify the project, mapping, exact revision, retained report and
+resource when applicable. Add `--json` for highlight spans and structured results.
+Search accepts the same paging options as list commands. If saved reports are
+still being indexed, retry the search; incomplete results are not returned as a
+successful page.
+
 `weft reports projection get` reads an existing explanation. `weft reports
 projection ensure` can generate one if your permissions and the server allow it.
 The validation commands work the same way. Use each command's `--help` to see

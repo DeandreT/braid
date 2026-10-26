@@ -46,6 +46,11 @@
           ><span class="rail-label">Help</span></a
         >
       </nav>
+      @if (session.visible()) {
+        @defer {
+          <weft-header-search />
+        }
+      }
       @if (
         session.state().kind === "development" ||
         session.state().kind === "disabled"

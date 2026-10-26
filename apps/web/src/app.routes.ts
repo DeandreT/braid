@@ -72,6 +72,14 @@ export const routes: Routes = [
     canActivate: [requireSignIn],
     children: [
       {
+        path: "search",
+        loadComponent: () =>
+          import("./catalog/search/search-page.component").then(
+            (module) => module.SearchPageComponent,
+          ),
+        title: "Search · Weft",
+      },
+      {
         path: "organizations/:organizationId/projects/:projectId/mappings/new",
         loadComponent: () =>
           import("./catalog/uploads/upload-mapping-page.component").then(

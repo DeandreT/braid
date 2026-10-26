@@ -42,9 +42,9 @@ internal sealed class PostgresRevisionDerivationTestSupport : IAsyncDisposable
         Store = new(DerivationDatabase);
     }
 
-    internal static async Task<PostgresRevisionDerivationTestSupport> CreateAsync(PostgresFixture fixture)
+    internal static async Task<PostgresRevisionDerivationTestSupport> CreateAsync(PostgresFixture fixture, int? migrationCount = null)
     {
-        var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture);
+        var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture, migrationCount: migrationCount);
         PostgresRevisionDerivationTestSupport? support = null;
         try
         {
@@ -65,6 +65,28 @@ internal sealed class PostgresRevisionDerivationTestSupport : IAsyncDisposable
             else await catalog.DisposeAsync();
             throw;
         }
+    }
+
+    internal static async Task<PostgresRevisionDerivationTestSupport> CreateHistoricalAsync(PostgresFixture fixture, int migrationCount,
+        Func<PostgresCase, ActorContext, IngestionReceipt, IngestionReceipt, Task> seedReports)
+    {
+        var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture, installCatalog: false);
+        try
+        {
+            var receipt = await catalog.CommitCreateAsync("Retained upgrade mapping", filename: "retained-upgrade.native.json");
+            var appended = await catalog.CommitAppendAsync(receipt, filename: "retained-upgrade-v2.native.json");
+            await using (var reports = new MigrationRunner(catalog.Case.MigrationConnectionString,
+                MigrationRunner.EmbeddedMigrations.Take(6).ToArray()))
+                await reports.MigrateAsync();
+            await seedReports(catalog.Case, catalog.Actor, receipt, appended);
+            await using (var prefix = new MigrationRunner(catalog.Case.MigrationConnectionString,
+                MigrationRunner.EmbeddedMigrations.Take(migrationCount).ToArray()))
+                await prefix.MigrateAsync();
+            await catalog.Seed.AddMembershipAsync(catalog.Case, catalog.Seed.OrganizationA,
+                catalog.Seed.ProjectA, catalog.Seed.Admitted, "viewer");
+            return new(catalog, receipt);
+        }
+        catch { await catalog.DisposeAsync(); throw; }
     }
 
     internal ProjectionCacheKey ProjectionKey(RevisionReportPolicy? policy = null,

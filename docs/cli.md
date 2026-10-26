@@ -139,6 +139,7 @@ shaped like a token.
 | Command | Operations |
 | --- | --- |
 | `weft context`, `weft whoami` | Catalog context and admitted identity |
+| `weft search "order number"` | Authorized catalog metadata and retained report field/rule names and paths, with exact revision/resource references |
 | `weft health [--ready]` | Public liveness, or readiness to accept work; does not sign in or read tokens |
 | `weft guide list/get` | The authenticated server's user guide, as readable text or exact structured JSON |
 | `weft projects list/get/create` | Projects; creation makes you the project's administrator |
@@ -157,6 +158,7 @@ shaped like a token.
 `weft <command> --help` lists every option.
 
 - Identifiers are UUIDs. They are canonicalized to lowercase before they are sent.
+- Search text is literal, not a query language. Search cursors bind the exact trimmed query and organization; incomplete retained-report indexing fails explicitly and can be retried.
 - Lists take `--limit`. Catalog lists also take `--cursor`. `--all` reads every page; with `--json` it writes the
   list's usual document with every item and no next cursor.
   A repeated cursor or more than 1,000 pages fails rather than returning an incomplete list as complete;

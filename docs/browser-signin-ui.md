@@ -20,7 +20,25 @@ Unavailable status shows a recovery message rather than assuming a mode.
    path rule. **Sign in again** makes the same deliberate choice from an
   authenticated session and additionally requires its fresh epoch token. Returning
   from the provider is not proof of sign-in: the reloaded application observes
-  fresh status, and catalog access performs its own admission.
+   fresh status, and catalog access performs its own admission.
+
+Return paths keep the original ASCII URI wire representation through protected
+OIDC state and the final redirect. The path portion retains its 1024-character bound
+and reject hidden separators, dot segments, controls and other origins. Query
+data is decoded once as strict UTF-8, not interpreted as path syntax: search
+allows only singular `q` and `cursor` values, with 256 UTF-8 bytes of trimmed text
+and a 4096-character base64url cursor. Retained revision links accept only their
+report selectors and `field:`/`rule:` fragments containing a nonempty resource ID
+of at most 2048 UTF-8 bytes; a projection selector is required for those anchors.
+Unknown or duplicate query keys, malformed escapes and decoded controls fail
+closed. Help anchors keep their separate bounded identifier grammar.
+
+The complete return URI is bounded to 7168 ASCII characters, accommodating
+percent-encoded resource IDs without increasing the path-segment allowance.
+Protected state is capped at 12288 characters after encryption and encoding;
+the existing 16384-byte authorization URL and callback-query limits, cookie
+bounds and request-header limits remain enforced. The host's 65536-byte request
+line allowance also accommodates the sign-in page's nested `returnTo` encoding.
 - **Sign out** requests local Weft revocation. Only an exact 204 acknowledgement
   is presented as acknowledged local sign-out. This does not sign out the provider
   account. An error, timeout, canceled request, malformed response or superseded

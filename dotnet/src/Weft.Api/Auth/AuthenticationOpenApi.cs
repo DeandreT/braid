@@ -33,7 +33,8 @@ internal static class AuthenticationOpenApi
             Type = JsonSchemaType.String,
             MinLength = 1,
             MaxLength = BrowserReturnPath.MaximumLength,
-            Pattern = "^/[A-Za-z0-9\\-._~!$&'()*+,;=:@/?%#]*$"
+            Pattern = "^/[A-Za-z0-9\\-._~!$&'()*+,;=:@/?%#]*$",
+            Description = "Same-origin application wire path; path portion at most 1024 characters. Search permits singular q (256 UTF-8 bytes after trimming) and cursor (4096 base64url characters). Retained revision field/rule fragments require projectionDerivationId and a resource ID of at most 2048 UTF-8 bytes. Percent-encoded query/fragment data is decoded once; controls, malformed escapes, unknown query keys and external paths are refused."
         };
         schemas["AuthSessionV1"] = new OpenApiSchema
         {
@@ -115,7 +116,7 @@ internal static class AuthenticationOpenApi
                 Description = "Supported contract; presence does not activate a runtime route or authentication mode. " +
                     "Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: " +
                     "an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. " +
-                    (callback ? "Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. " +
+                    (callback ? $"Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; protected state at most {BrowserReturnPath.MaximumProtectedStateLength} characters within the unchanged 16384-byte callback query bound. No duplicates, token fields or code+error. " +
                         "Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text."
                         : "One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. " +
                             "Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only."),

@@ -121,7 +121,7 @@ public sealed class AdministrationEnrollmentHttpsTests(PostgresFixture fixture)
             Assert.Equal(0L, await test.Data.Case.ScalarAsync<long>("SELECT count(*) FROM weft.account_display_metadata"));
         }, bindIssuer: false, administration: true, displayMetadata: true);
 
-    private static async Task<string> InviteAsync(AuthHttpFixture test)
+    internal static async Task<string> InviteAsync(AuthHttpFixture test)
     {
         var store = test.First.Services.GetRequiredService<IAdministrationStore>();
         var org = test.Data.Seed.OrganizationA;

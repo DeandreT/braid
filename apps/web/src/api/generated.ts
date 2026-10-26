@@ -12,7 +12,7 @@ export interface paths {
     };
     /**
      * Complete the fixed Entra code flow.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; protected state at most 12288 characters within the unchanged 16384-byte callback query bound. No duplicates, token fields or code+error. Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
      */
     get: operations["CompleteEntraLogin"];
     put?: never;
@@ -1287,6 +1287,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Search freshly authorized catalog metadata and retained report field/rule names and paths.
+     * @description Literal substring search: ASCII case-insensitive, other Unicode exact. No query language, native derivation or sample payload reads. Fresh principal, organization and project authority is checked for each page. Results retain exact revision/report/resource identities and plain text UTF-16 highlight spans. Continuations bind the trimmed query and organization, not a permission grant or snapshot. A 503 response refuses incomplete report indexing; retry continues bounded backfill.
+     */
+    get: operations["SearchCatalog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2029,6 +2049,39 @@ export interface components {
     };
     /** @enum {unknown} */
     CatalogRoleV1: "viewer" | "runner" | "publisher" | "administrator";
+    CatalogSearchHighlightV1: {
+      /** Format: int32 */
+      length: number;
+      /** Format: int32 */
+      start: number;
+    };
+    CatalogSearchHitV1: {
+      description: components["schemas"]["CatalogSearchTextV1"];
+      kind: components["schemas"]["CatalogSearchKindV1"];
+      /** Format: uuid */
+      mappingId: null | string;
+      /** Format: uuid */
+      organizationId: string;
+      /** Format: uuid */
+      projectId: string;
+      /** Format: uuid */
+      projectionDerivationId: null | string;
+      resourceId: null | string;
+      /** Format: uuid */
+      revisionId: null | string;
+      title: components["schemas"]["CatalogSearchTextV1"];
+    };
+    /** @enum {unknown} */
+    CatalogSearchKindV1: "project" | "mapping" | "revision" | "field" | "rule";
+    CatalogSearchPageV1: {
+      hits: components["schemas"]["CatalogSearchHitV1"][];
+      nextCursor: null | string;
+      query: string;
+    };
+    CatalogSearchTextV1: {
+      highlights: components["schemas"]["CatalogSearchHighlightV1"][];
+      text: string;
+    };
     CatalogValidationReportV1: {
       currentAttempt:
         null | components["schemas"]["CatalogRevisionReportAttemptV1"];
@@ -12284,6 +12337,105 @@ export interface operations {
           "application/json":
             | components["schemas"]["CatalogRevisionIngestionResultV1"]
             | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  SearchCatalog: {
+    parameters: {
+      query: {
+        cursor?: string;
+        /** @description Canonical decimal page size, 1–100; default 25. */
+        limit?: string;
+        /** @description Trimmed literal text containing 1–256 UTF-8 bytes without controls. Unicode is preserved; %, _, quotes and backslashes are literal. */
+        q: string;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogSearchPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Two seconds when retained report indexing is incomplete or busy. */
+          "Retry-After"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
     };

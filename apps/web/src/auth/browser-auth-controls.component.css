@@ -62,6 +62,18 @@
   box-shadow: 0 12px 32px rgb(23 77 63 / 14%);
 }
 
+/* The revision workbench has a vertical rail, not a horizontal header. */
+:host-context(.app-workbench) .session-panel {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: 8px;
+  left: 52px;
+  width: min(380px, calc(100vw - 60px));
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+}
+
 .session-copy {
   min-width: 0;
 }

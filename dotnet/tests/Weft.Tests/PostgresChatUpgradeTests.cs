@@ -240,6 +240,7 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             await using var display = new PostgresAccountDisplayMetadata(test.AccountDisplayConnectionString);
             Assert.Null(await display.ReadAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None));
         }
+        if (installed) Assert.True(await CatalogSearchUpgradeTestSupport.AdmitAsync(test));
         await using var connection = PostgresChatSecurityTests.Open(test.MigrationConnectionString); await connection.OpenAsync();
         var text = new StringBuilder();
         foreach (var table in PostgresServerSessionUpgradeConservation.PrefixTables.Append("server_sessions"))
@@ -253,10 +254,11 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         schema.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }.SelectMany(p => ChatSchemaContract.ColumnGrants(p)
             .Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
         schema.Parameters.AddWithValue(ChatSchemaContract.FunctionNames);
-        schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).ToArray());
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).Append("index_catalog_report").ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).Append("weft_account_display").ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
-        schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("account_display_metadata").ToArray());
+        schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("catalog_search_report_index").Append("account_display_metadata").ToArray());
+        schema.Parameters.AddWithValue(CatalogSearchSchemaAdmission.IndexNames);
         text.Append(Assert.IsType<string>(await schema.ExecuteScalarAsync()));
         return SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()));
     }
@@ -293,9 +295,12 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             'constraints',(SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.oid),'[]'::jsonb) FROM pg_catalog.pg_constraint c WHERE c.conrelid IN (SELECT oid FROM old_relations)
                 AND NOT (c.conrelid=pg_catalog.to_regclass('weft.private_object_publications') AND c.conname='private_object_publications_format_check')),
             'triggers',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t.oid),'[]'::jsonb) FROM retained_triggers t),
-            'indexes',(SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY i.indexrelid),'[]'::jsonb) FROM pg_catalog.pg_index i WHERE i.indrelid IN (SELECT oid FROM old_relations)),
+            'indexes',(SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY i.indexrelid),'[]'::jsonb) FROM pg_catalog.pg_index i
+                JOIN pg_catalog.pg_class r ON r.oid=i.indexrelid WHERE i.indrelid IN (SELECT oid FROM old_relations)
+                AND NOT ($2 AND r.relname=ANY($9::text[]))),
             'indexOwners',(SELECT coalesce(jsonb_agg(jsonb_build_array(r.oid,r.relname,r.relowner,r.reloptions,r.relkind,r.relpersistence) ORDER BY r.oid),'[]'::jsonb)
-                FROM pg_catalog.pg_class r WHERE r.oid IN (SELECT indexrelid FROM pg_catalog.pg_index WHERE indrelid IN (SELECT oid FROM old_relations))),
+                FROM pg_catalog.pg_class r WHERE r.oid IN (SELECT indexrelid FROM pg_catalog.pg_index WHERE indrelid IN (SELECT oid FROM old_relations))
+                AND NOT ($2 AND r.relname=ANY($9::text[]))),
             'columnDefaults',(SELECT coalesce(jsonb_agg(to_jsonb(d) ORDER BY d.oid),'[]'::jsonb) FROM pg_catalog.pg_attrdef d WHERE d.adrelid IN (SELECT oid FROM old_relations)),
             'rules',(SELECT coalesce(jsonb_agg(to_jsonb(w) ORDER BY w.oid),'[]'::jsonb) FROM pg_catalog.pg_rewrite w WHERE w.ev_class IN (SELECT oid FROM old_relations)),
             'inherits',(SELECT coalesce(jsonb_agg(to_jsonb(h) ORDER BY inhrelid,inhseqno),'[]'::jsonb) FROM pg_catalog.pg_inherits h WHERE h.inhrelid IN (SELECT oid FROM old_relations) OR h.inhparent IN (SELECT oid FROM old_relations)),

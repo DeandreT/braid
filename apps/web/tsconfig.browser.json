@@ -2,6 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
   "include": [
+    "playwright.search-return-path.config.ts",
+    "tests/search-return-path.spec.ts",
+    "tests/return-path.spec.ts",
     "playwright.workbench.config.ts",
     "playwright.workbench-model.config.ts",
     "tests/workbench*.ts",

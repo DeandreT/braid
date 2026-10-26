@@ -28,12 +28,30 @@ public sealed class BrowserReturnPathTests
         var bound = Vectors.GetProperty("tooLong");
         var prefix = bound.GetProperty("prefix").GetString()!;
         var maximum = bound.GetProperty("maximumLength").GetInt32();
-        Assert.Equal(BrowserReturnPath.MaximumLength, maximum);
+        Assert.Equal(BrowserReturnPath.MaximumPathLength, maximum);
+        Assert.Equal(BrowserReturnPath.MaximumLength, Vectors.GetProperty("bounds").GetProperty("maximumReturnLength").GetInt32());
         var longest = prefix + new string(bound.GetProperty("fill").GetString()![0], maximum - prefix.Length);
         Assert.True(BrowserReturnPath.IsValid(longest));
         Assert.False(BrowserReturnPath.IsValid(longest + "a"));
         Assert.False(BrowserReturnPath.IsValid(null));
         Assert.True(BrowserReturnPath.IsValid(BrowserReturnPath.Default));
+    }
+
+    [Theory]
+    [InlineData("generatedValid", true)]
+    [InlineData("generatedInvalid", false)]
+    public void SharedLargeVectorsRetainTheirComponentBounds(string group, bool expected)
+    {
+        foreach (var item in Vectors.GetProperty(group).EnumerateArray())
+        {
+            var value = item.GetProperty("prefix").GetString()! + string.Concat(Enumerable.Repeat(
+                item.GetProperty("repeat").GetString(), item.GetProperty("count").GetInt32()));
+            Assert.True(BrowserReturnPath.IsValid(value) == expected, item.GetProperty("name").GetString());
+        }
+        Assert.Equal(Weft.Application.CatalogSearchQuery.MaximumBytes, BrowserReturnPath.MaximumSearchQueryBytes);
+        Assert.Equal(4096, BrowserReturnPath.MaximumSearchCursorLength);
+        Assert.Equal(2048, BrowserReturnPath.MaximumResourceBytes);
+        Assert.Equal(12288, BrowserReturnPath.MaximumProtectedStateLength);
     }
 
     private static TheoryData<string> Read(string name)

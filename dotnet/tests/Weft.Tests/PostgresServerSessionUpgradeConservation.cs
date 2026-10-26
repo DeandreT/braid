@@ -126,8 +126,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }
                 .SelectMany(p => ChatSchemaContract.ColumnGrants(p).Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
             command.Parameters.AddWithValue(ChatSchemaContract.MigrationChecksum);
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.Tables.Concat(RegressionSchemaTestContract.Tables).Concat(InterchangeSchemaTestContract.Tables).Append("account_display_metadata").ToArray());
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).ToArray());
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.Tables.Concat(RegressionSchemaTestContract.Tables).Concat(InterchangeSchemaTestContract.Tables).Concat(CatalogSearchSchemaAdmission.ReadObjects).Append("account_display_metadata").ToArray());
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).Append("index_catalog_report").ToArray());
             command.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).Append("weft_account_display").ToArray());
             command.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
             command.Parameters.AddWithValue(PreviewSchemaTestContract.MigrationChecksum);
@@ -142,9 +142,11 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(RegressionSchemaTestContract.QualificationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.LocalReleaseChecksum);
             command.Parameters.AddWithValue(MaintenanceSchemaContract.StoreKindMigrationChecksum);
-            command.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("account_display_metadata").ToArray());
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("catalog_search_report_index").Append("account_display_metadata").ToArray());
             command.Parameters.AddWithValue(RegressionSchemaTestContract.MachineInvocationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.ApiRequestAuditChecksum);
+            command.Parameters.AddWithValue(CatalogSearchSchemaAdmission.MigrationChecksum);
+            command.Parameters.AddWithValue(CatalogSearchSchemaAdmission.IndexNames);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.AccountDisplayChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.AdministrationChecksum);
             command.Parameters.AddWithValue(InterchangeSchemaTestContract.MigrationChecksum);
@@ -349,7 +351,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 19 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 20 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=9+1)=$6::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=11)=$12::text)
@@ -367,9 +369,10 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=23)=$28::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=24)=$30::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=25)=$31::text)
-                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=26)=$32::text)
-                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=27)=$33::text)
-                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=28)=$34::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=26)=$34::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=27)=$35::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=28)=$36::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=29)=$32::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -406,7 +409,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
             'indexes',(SELECT jsonb_agg(jsonb_build_array(r.relname,index_namespace.nspname,x.relname,to_jsonb(i),x.relowner,x.relam,x.reloptions)
                 ORDER BY r.relname,index_namespace.nspname,x.relname) FROM old_relations r JOIN pg_catalog.pg_index i ON i.indrelid=r.oid
                 JOIN pg_catalog.pg_class x ON x.oid=i.indexrelid
-                JOIN pg_catalog.pg_namespace index_namespace ON index_namespace.oid=x.relnamespace),
+                 JOIN pg_catalog.pg_namespace index_namespace ON index_namespace.oid=x.relnamespace
+                 WHERE NOT ($1 AND x.relname=ANY($33::text[]))),
             'policies',(SELECT jsonb_agg(jsonb_build_array(r.relname,to_jsonb(p)) ORDER BY r.relname,p.polname)
                 FROM old_relations r JOIN pg_catalog.pg_policy p ON p.polrelid=r.oid),
             'triggers',(SELECT jsonb_agg(jsonb_build_array(r.relname,to_jsonb(t)) ORDER BY r.relname,t.tgname)

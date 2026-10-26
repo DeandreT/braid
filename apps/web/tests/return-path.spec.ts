@@ -4,6 +4,8 @@ import {
   defaultReturnPath,
   isReturnPath,
   returnPathOrDefault,
+  maximumReturnPathLength,
+  maximumApplicationPathLength,
 } from "../src/auth/return-path";
 
 // The server's rule (Weft.Identity.BrowserReturnPath) is tested against the same vectors.
@@ -15,6 +17,19 @@ const vectors = JSON.parse(
 ) as {
   valid: string[];
   invalid: string[];
+  bounds: { maximumReturnLength: number; maximumPathLength: number };
+  generatedValid: {
+    name: string;
+    prefix: string;
+    repeat: string;
+    count: number;
+  }[];
+  generatedInvalid: {
+    name: string;
+    prefix: string;
+    repeat: string;
+    count: number;
+  }[];
   tooLong: { prefix: string; fill: string; maximumLength: number };
 };
 
@@ -31,4 +46,15 @@ test("return paths accept only application section paths", () => {
   expect(isReturnPath(["/catalog"])).toBe(false);
   expect(returnPathOrDefault("//evil.example")).toBe(defaultReturnPath);
   expect(returnPathOrDefault(vectors.valid[1])).toBe(vectors.valid[1]);
+  expect(maximumReturnPathLength).toBe(vectors.bounds.maximumReturnLength);
+  expect(maximumApplicationPathLength).toBe(vectors.bounds.maximumPathLength);
+  for (const [items, expected] of [
+    [vectors.generatedValid, true],
+    [vectors.generatedInvalid, false],
+  ] as const)
+    for (const item of items) {
+      const value = item.prefix + item.repeat.repeat(item.count);
+      expect(isReturnPath(value), item.name).toBe(expected);
+      if (expected) expect(returnPathOrDefault(value)).toBe(value);
+    }
 });

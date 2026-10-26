@@ -47,6 +47,7 @@ internal static class ApiOperations
         null, null, Ok(typeof(HealthResponseV1)), typeof(HealthResponseV1), RequiresAuthentication: false);
 
     public static readonly ApiOperation GetCatalogContext = Get("GetCatalogContext", "/api/v1/catalog/context", typeof(CatalogContextV1));
+    public static readonly ApiOperation SearchCatalog = Get("SearchCatalog", Organization + "/search", typeof(CatalogSearchPageV1), ["q", "limit", "cursor"]);
     public static readonly ApiOperation GetHelpSections = Get("GetHelpSections", "/api/v1/help/sections", typeof(HelpSectionListV1));
     public static readonly ApiOperation GetHelpSection = Get("GetHelpSection", "/api/v1/help/sections/{sectionId}", typeof(HelpSectionV1));
     public static readonly ApiOperation GetCatalogProjects = Get("GetCatalogProjects", Organization + "/projects", typeof(CatalogProjectPageV1), Page);
@@ -168,7 +169,7 @@ internal static class ApiOperations
 
     public static IReadOnlyList<ApiOperation> All { get; } =
     [
-        GetHealth, GetReadiness, GetCatalogContext, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
+        GetHealth, GetReadiness, GetCatalogContext, SearchCatalog, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
         GetCatalogMapping, GetCatalogMappingMetadata, EditCatalogMappingMetadata, GetCatalogRevisions, AppendCatalogRevision,
         GetCatalogRevision, GetCatalogRevisionIngestionReceipt, ResumeCatalogRevisionIngestion, GetCatalogProjectionReport,
         GetCatalogInterchangeCapabilities, ReviewMfdCreate, ReviewMfdAppend, GetMfdImportReview, ConfirmMfdImport, ReviewMfdExport, DownloadMfdExport,

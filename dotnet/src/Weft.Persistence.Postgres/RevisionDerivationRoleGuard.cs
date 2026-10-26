@@ -121,7 +121,8 @@ internal static class RevisionDerivationRoleGuard
                   SELECT 1 FROM pg_catalog.pg_proc function JOIN pg_catalog.pg_namespace namespace ON namespace.oid = function.pronamespace
                   WHERE namespace.nspname = 'weft' AND
                     (pg_catalog.has_function_privilege('public', function.oid, 'EXECUTE') OR
-                     EXISTS (SELECT 1 FROM reachable_roles role WHERE pg_catalog.has_function_privilege(role.oid, function.oid, 'EXECUTE')))
+                      EXISTS (SELECT 1 FROM reachable_roles role WHERE pg_catalog.has_function_privilege(role.oid, function.oid, 'EXECUTE')
+                        AND NOT ($1 AND function.oid IS NOT DISTINCT FROM pg_catalog.to_regprocedure('weft.index_catalog_report(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb)'))))
               )
               AND NOT EXISTS (
                   SELECT 1 FROM pg_catalog.pg_class sequence JOIN pg_catalog.pg_namespace namespace ON namespace.oid = sequence.relnamespace
@@ -164,6 +165,7 @@ internal static class RevisionDerivationRoleGuard
             string.Join(", ", reads.Select(name => "ONLY weft." + name)) + " IN ACCESS SHARE MODE", connection, transaction))
             await protect.ExecuteNonQueryAsync(cancellationToken);
         await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
+        await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await ValidateRelationsAsync(connection, transaction, reads, cancellationToken);
         await ValidateConstraintTriggersAsync(connection, transaction, reads, cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, reads, cancellationToken);

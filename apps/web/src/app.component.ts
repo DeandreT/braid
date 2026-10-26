@@ -13,6 +13,7 @@ import { BrowserSessionState } from "./auth/browser-session-state";
 import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.component";
 import { CatalogContextStore } from "./catalog/catalog-context";
 import { ConnectionNoticeComponent } from "./workbench/connection-notice.component";
+import { HeaderSearchComponent } from "./catalog/search/header-search.component";
 
 @Component({
   selector: "weft-root",
@@ -22,6 +23,7 @@ import { ConnectionNoticeComponent } from "./workbench/connection-notice.compone
     RouterOutlet,
     BrowserAuthControlsComponent,
     ConnectionNoticeComponent,
+    HeaderSearchComponent,
   ],
   templateUrl: "./app.component.html",
 })

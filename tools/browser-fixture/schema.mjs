@@ -29,6 +29,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0026_account_display_metadata.sql",
   "0027_administration.sql",
   "0028_interchange_provenance.sql",
+  "0029_catalog_search.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([

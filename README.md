@@ -103,6 +103,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
 - [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.
 - [Project ownership](docs/project-ownership.md): qualified scoped PostgreSQL reads, migrations, and local setup.
+- [Catalog search](docs/catalog-search.md): authorized organization-wide search, retained-report backfill, exact workbench links and PostgreSQL indexes.
 - [External identity bindings](docs/external-identity-bindings.md): explicit owner preparation, exact account bindings, and the restricted reader.
 - [Server sessions](docs/server-sessions.md): pure lifetime and conditional-operation contracts, privacy, and separate store/authentication qualification.
 - [Entra browser client](docs/entra-browser-client.md): dormant fixed-tenant OIDC adapter, certificate and key-profile ownership, and separate HTTP/host activation.

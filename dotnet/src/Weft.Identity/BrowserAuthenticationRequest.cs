@@ -103,7 +103,8 @@ internal static class BrowserAuthenticationRequest
             var value = Decode(pair[(equals + 1)..]);
             var bound = name switch
             {
-                "code" or "state" => 8192,
+                "code" => 8192,
+                "state" => BrowserReturnPath.MaximumProtectedStateLength,
                 "error_description" => 4096,
                 "error_uri" or "iss" => 2048,
                 "session_state" => 1024,

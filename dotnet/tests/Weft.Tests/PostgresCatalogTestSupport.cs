@@ -30,11 +30,16 @@ internal sealed class PostgresCatalogTestSupport : IAsyncDisposable
         this.historicalSeed = historicalSeed;
     }
 
-    internal static async Task<PostgresCatalogTestSupport> CreateAsync(PostgresFixture fixture, bool installCatalog = true)
+    internal static async Task<PostgresCatalogTestSupport> CreateAsync(PostgresFixture fixture, bool installCatalog = true, int? migrationCount = null)
     {
-        var test = await fixture.CreateCaseAsync(migrate: installCatalog);
+        var test = await fixture.CreateCaseAsync(migrate: installCatalog && migrationCount is null);
         try
         {
+            if (migrationCount is { } count)
+            {
+                await using var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(count).ToArray());
+                await prefix.MigrateAsync();
+            }
             if (!installCatalog)
             {
                 // Exercise the real previously qualified two-migration database before

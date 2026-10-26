@@ -192,6 +192,10 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
                     !Uri.TryCreate(location, UriKind.Absolute, out var destination) ||
                     destination.GetLeftPart(UriPartial.Path) != policy.Authorize || destination.Fragment.Length != 0)
                     throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
+                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(destination.Query);
+                if (!query.TryGetValue("state", out var state) || state.Count != 1 ||
+                    state[0] is not { Length: > 0 and <= BrowserReturnPath.MaximumProtectedStateLength })
+                    throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
                 context.Response.Headers.Remove("Location");
                 context.Response.StatusCode = StatusCodes.Status200OK;
                 operation.Challenge = new(location);

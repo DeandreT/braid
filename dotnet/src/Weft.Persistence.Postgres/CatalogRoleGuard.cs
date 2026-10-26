@@ -98,7 +98,7 @@ internal static class CatalogRoleGuard
               )
             """, connection, transaction))
         {
-            guard.Parameters.AddWithValue(reads);
+            guard.Parameters.AddWithValue(reads.Concat(CatalogSearchSchemaAdmission.ReadObjects).ToArray());
             guard.Parameters.AddWithValue(reservationColumns);
             guard.Parameters.AddWithValue(sources);
             if (await guard.ExecuteScalarAsync(cancellationToken) is not true)
@@ -117,6 +117,7 @@ internal static class CatalogRoleGuard
             await protectReservations.ExecuteNonQueryAsync(cancellationToken);
 
         await SupplementalMaintenanceSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
+        await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         await ValidateRelationsAsync(connection, transaction, sources, cancellationToken);
         await ValidateConstraintTriggersAsync(connection, transaction, sources, cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, sources, cancellationToken);

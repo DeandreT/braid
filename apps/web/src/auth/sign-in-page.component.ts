@@ -11,7 +11,7 @@ import { ActivatedRoute, Router } from "@angular/router";
 import { map, type Observable } from "rxjs";
 import { BrowserSessionState } from "./browser-session-state";
 import { sessionActionMessage, sessionTone } from "./browser-auth-presentation";
-import { returnPathOrDefault } from "./return-path";
+import { defaultReturnPath, returnPathOrDefault } from "./return-path";
 
 /** The Session profile's entry: one Microsoft sign-in that returns to the requested page. */
 @Component({
@@ -26,7 +26,12 @@ export class SignInPageComponent {
   /** Only a valid return path is honoured; anything else returns to the catalog. */
   readonly returnTo = toSignal(
     inject(ActivatedRoute).queryParamMap.pipe(
-      map((params) => returnPathOrDefault(params.get("returnTo"))),
+      map((params) =>
+        params.keys.some((key) => key !== "returnTo") ||
+        params.getAll("returnTo").length > 1
+          ? defaultReturnPath
+          : returnPathOrDefault(params.get("returnTo")),
+      ),
     ),
     { requireSync: true },
   );

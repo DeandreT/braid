@@ -508,6 +508,36 @@ export class RevisionPageComponent extends CatalogRoutePage<
       this.historyRequest?.unsubscribe();
       this.switcherRequest?.unsubscribe();
     });
+    const searchFragment = signal<string | null>(null);
+    this.route.fragment
+      .pipe(takeUntilDestroyed())
+      .subscribe((value) => searchFragment.set(value));
+    let openedSearchSelection: string | null = null;
+    effect(() => {
+      const fragment = searchFragment(),
+        projection = this.projection();
+      const selector = this.reportSelection()?.selectors.projectionDerivationId;
+      const binding = this.workbench.selection().binding;
+      if (
+        !fragment ||
+        !selector ||
+        !projection ||
+        !binding ||
+        this.reports.projection().response?.body.result?.derivationId !==
+          selector
+      )
+        return;
+      const selected = selector + ":" + fragment;
+      if (selected === openedSearchSelection) return;
+      const reference: NodeReference | null = fragment.startsWith("field:")
+        ? { kind: "field", fieldId: fragment.slice(6) }
+        : fragment.startsWith("rule:")
+          ? { kind: "rule", ruleId: fragment.slice(5) }
+          : null;
+      if (!reference || !this.referenceExists(projection, reference)) return;
+      openedSearchSelection = selected;
+      untracked(() => this.inspect(reference));
+    });
   }
 
   inspect(reference: NodeReference | null): void {

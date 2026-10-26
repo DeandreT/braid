@@ -10,6 +10,7 @@ export default defineConfig({
     "**/revision-chat.spec.ts",
     "**/revision-preview.spec.ts",
     "**/revision-comparison.spec.ts",
+    "**/catalog-search.spec.ts",
     "**/mfd-interchange.spec.ts",
   ],
   fullyParallel: false,
