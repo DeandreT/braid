@@ -817,6 +817,17 @@ export class BrowserRootFetch {
     zeroBaseline(counts, counts.processGeneration);
     this.generation = counts.processGeneration;
   }
+  async settleRequests(): Promise<void> {
+    const deadline = Date.now() + 10000;
+    do {
+      await this.joinHandlers();
+      if (this.plans.size === 0 && this.pauses.active === 0) break;
+      requireOwned(Date.now() < deadline);
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    } while (true);
+    requireOwned(this.failures === 0 && this.refused === 0);
+    await this.control.call("barrier");
+  }
   seal(): Promise<void> {
     if (this.sealOriginal) return this.sealOriginal;
     this.closing = true;
