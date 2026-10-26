@@ -45,12 +45,21 @@ internal static class AutomationSchemaAdmission
 
     internal static async Task<bool> InstalledAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
+        // Any owned-name object is a partial installation, not an old schema.
+        // Otherwise a trigger-only remnant could be hidden by source fingerprints
+        // without ever admitting its attachment, function or permissions.
         await using var command = new NpgsqlCommand("""
             SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
                     WHERE n.nspname='weft' AND c.relname=ANY(@tables))
-                OR to_regprocedure('weft.automation_gate(uuid,uuid,uuid,uuid)') IS NOT NULL
+                OR EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+                    WHERE n.nspname='weft' AND p.proname=ANY(@functions))
+                OR EXISTS(SELECT 1 FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid
+                    JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+                    WHERE n.nspname='weft' AND t.tgname=ANY(@triggers))
             """, connection, transaction);
         command.Parameters.AddWithValue("tables", Tables);
+        command.Parameters.AddWithValue("functions", Functions);
+        command.Parameters.AddWithValue("triggers", AllTriggerNames);
         return await command.ExecuteScalarAsync(token) is true;
     }
 
@@ -69,6 +78,7 @@ internal static class AutomationSchemaAdmission
             SELECT t.tgname,c.relname,p.proname,t.tgtype,t.tgenabled='O' AND t.tgnargs=0 AND t.tgattr::text=''
                 AND t.tgqual IS NULL AND NOT t.tgisinternal AND NOT t.tgdeferrable AND NOT t.tginitdeferred
                 AND t.tgoldtable IS NULL AND t.tgnewtable IS NULL AND t.tgconstraint=0
+                AND (t.tgfoid=pg_catalog.to_regprocedure(pg_catalog.format('weft.%I()',p.proname))) IS TRUE
             FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid
             JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace JOIN pg_catalog.pg_proc p ON p.oid=t.tgfoid
             WHERE n.nspname='weft' AND t.tgname=ANY(@names)

@@ -19,6 +19,9 @@ internal static class RegressionCaseSchemaContract
     internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string[] tables, CancellationToken token,
         bool validateAutomation = true)
     {
+        // This admits complete Automation or rejects any partial installation
+        // before projecting its triggers away. The nonrecursive leaf capture is
+        // used by that admission itself and must keep the same projection.
         if (validateAutomation) await AutomationSchemaAdmission.ValidateTriggersAsync(connection, transaction, token);
         // Physical search indexes do not alter the logical source contracts. Omit
         // only this exact additive set, after its complete definitions and private

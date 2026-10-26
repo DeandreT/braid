@@ -32,6 +32,12 @@ case versions and passes on other revisions do not satisfy the policy. Existing
 build approvals and qualification evidence remain immutable; the policy does not
 retroactively erase them or activate a release.
 
+Database admission verifies each Automation trigger's exact `weft` function
+identity, source, ownership and permissions before excluding the additive triggers
+from historical source fingerprints. Any Automation table, function or named
+trigger requires the complete installation; partial installations are refused.
+Unchanged pre-Automation schemas retain their original source checks.
+
 Use **Run all current cases now** on a revision to create another immutable suite
 after changing a baseline or to check a revision that predates automation. The
 caller-chosen suite ID makes a retry idempotent. The new suite evaluates that same
