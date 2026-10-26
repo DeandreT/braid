@@ -22,6 +22,8 @@ The head marker describes the metadata read, not a continuously refreshed claim.
 - Arrow keys move field focus; Enter selects a field and Escape clears it.
   Source and target remain visible, while transformation and type columns can be
   hidden. Column and panel separators support pointer drag and arrow keys.
+  The table reserves at least 160px of usable row viewport plus the measured
+  horizontal scrollbar height, including native non-overlay scrollbars.
 - The inspector follows the workflow in the bottom tray, alongside Issues,
   Incoming data, Result, Diff and Activity. The tray collapses when not needed.
   Its height is bounded to 40% of the available work region while reserving 240px
@@ -94,6 +96,8 @@ explicitly synthetic API boundary fixtures; these do not establish backend
 authorization or persistence qualification. The existing real-API suites remain
 the separate check for those contracts. Set `WEFT_CHROMIUM_EXECUTABLE` to a verified
 installed Chromium browser when the matching Playwright browser is unavailable.
+The workbench tests retain native scrollbars in headless Chromium; hiding them
+would conceal layout differences from headed browsers.
 The workbench suite uses port 5181 and leaves the local viewer on port 4102 alone.
 Its development server, like the chat and comparison suites', sends unrouted API
 requests to a closed loopback port (`proxy.synthetic.conf.json`), never to a local

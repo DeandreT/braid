@@ -2,6 +2,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -129,8 +130,39 @@ export class WorkbenchMappingTableComponent {
   private destroyed = false;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => {
+    const destroy = inject(DestroyRef);
+    destroy.onDestroy(() => {
       this.destroyed = true;
+    });
+    afterNextRender(() => {
+      const viewport =
+        this.element.nativeElement.querySelector<HTMLElement>(
+          ".wb-table-scroll",
+        );
+      if (!viewport) return;
+      // Non-overlay horizontal scrollbars consume part of the CSS minimum.
+      // Reserve their actual height so the minimum describes usable row space.
+      const reserveScrollbar = () =>
+        viewport.style.setProperty(
+          "--wb-table-scrollbar-height",
+          `${Math.max(0, viewport.offsetHeight - viewport.clientHeight)}px`,
+        );
+      let frame: number | null = null;
+      const observer = new ResizeObserver(() => {
+        // Resize the observed viewport on the next frame, outside the current
+        // observer delivery, to avoid a resize-loop notification.
+        if (frame === null)
+          frame = requestAnimationFrame(() => {
+            frame = null;
+            reserveScrollbar();
+          });
+      });
+      observer.observe(viewport);
+      reserveScrollbar();
+      destroy.onDestroy(() => {
+        observer.disconnect();
+        if (frame !== null) cancelAnimationFrame(frame);
+      });
     });
     effect(() => {
       this.view();
