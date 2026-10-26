@@ -261,9 +261,9 @@ test("layout normalization cannot capture sample bytes or request tokens", () =>
   expect(value).toEqual({
     density: "dense",
     inspectorWidth: 420,
-    inspectorCollapsed: false,
-    dockHeight: 90,
-    dockCollapsed: false,
+    inspectorCollapsed: true,
+    dockHeight: 140,
+    dockCollapsed: true,
   });
   expect(JSON.stringify(value)).not.toContain("private");
 });

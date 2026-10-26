@@ -166,7 +166,10 @@ for (const kind of [
       reportDerivationId: null,
       sectionId: null,
     };
-    await page.goto(citationLink(c));
+    await page.goto(`${citationLink(c)}&conversationId=${legacyId}`);
+    await expect(
+      page.getByRole("link", { name: "Return to conversation", exact: true }),
+    ).toHaveAttribute("href", `/chat?conversationId=${legacyId}`);
     await expect(page.locator("dl")).toContainText(legacyId);
     await expect(
       page.getByRole("link", {
@@ -209,6 +212,17 @@ test("resource links cannot retarget a different organization or silently load m
     reportDerivationId: null,
     sectionId: null,
   };
+  for (const extra of [
+    "conversationId=invalid",
+    `conversationId=${legacyId}&conversationId=${legacyId}`,
+  ]) {
+    await page.goto(`${citationLink(c)}&${extra}`);
+    await expect(page.locator("dl")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Return to conversation", exact: true }),
+    ).toHaveCount(0);
+    expect(f.reads.some((path) => path.includes("/build-runs/"))).toBe(false);
+  }
   await page.goto(
     citationLink({
       ...c,

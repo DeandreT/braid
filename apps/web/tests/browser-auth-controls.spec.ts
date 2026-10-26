@@ -108,10 +108,10 @@ test.describe("controlled sign-in controls, not provider qualification", () => {
       );
       await page.goto(entry);
       await observed;
-      // Without browser sign-in there is no account menu or auth action.
-      await expect(page.locator("#account-trigger")).toHaveCount(0);
-      await expect(controls(page)).toHaveCount(0);
-      await expect(page.locator(".environment-label")).toHaveText(
+      // The shared identity disclosure remains available, but offers no auth mutation.
+      await page.locator("#account-trigger").click();
+      await expect(controls(page)).toBeVisible();
+      await expect(page.locator(".workspace-organization span")).toHaveText(
         mode === "development" ? "Development workspace" : "Workspace",
       );
       for (const name of ["Sign in", "Sign out", "Check session"])

@@ -49,6 +49,7 @@ import {
   type ChatFocus,
   type UiAvailability,
   type WorkspaceCitationEvent,
+  type WorkspaceCitation,
 } from "./workspace-chat-types";
 import { UnsentWork } from "../workbench/unsent-work";
 import { hasChatUnsentWork } from "./chat-unsent-work";
@@ -62,16 +63,29 @@ import { hasChatUnsentWork } from "./chat-unsent-work";
 export class RevisionChatComponent {
   readonly terminal = terminal;
   readonly scope = input<CatalogRevisionScope | null>(null);
+  /** A suggestion for a new conversation only; route changes never rebind a live conversation. */
+  readonly suggestedFocus = input<CatalogRevisionScope | null>(null);
+  readonly inspectionScope = input<CatalogRevisionScope | null>(null);
   readonly context = input.required<CatalogContext>();
   readonly reportsReady = input(false);
   readonly requestedConversation = input<string | null>(null);
+  readonly requestedVersion = input(0);
+  readonly selectionRejected = output<void>();
   readonly requestedLegacyScope = input<CatalogRevisionScope | null>(null);
   readonly projectionId = input<string | null>(null);
   readonly validationId = input<string | null>(null);
   readonly workspaceCitation = output<WorkspaceCitationEvent>();
   readonly selectedConversation = output<AnyConversation>();
   readonly isWorkspace = isWorkspace;
-  readonly citationLink = citationLink;
+  readonly citationLink = (citation: WorkspaceCitation): string => {
+    const link = citationLink(citation),
+      current = this.current();
+    return link.startsWith("/chat/resources?") &&
+      current &&
+      isWorkspace(current)
+      ? `${link}&conversationId=${encodeURIComponent(current.conversationId)}`
+      : link;
+  };
   readonly citation = output<{
     conversation: ChatConversation;
     citation: ChatCitation;
@@ -93,6 +107,21 @@ export class RevisionChatComponent {
   readonly focusMappings = signal<CatalogMapping[]>([]);
   readonly focusRevisions = signal<CatalogRevision[]>([]);
   readonly focusNotice = signal("");
+  readonly unnamedFocus = computed(
+    () =>
+      !!this.newFocus() &&
+      !this.focusMappings().some(
+        (mapping) => mapping.scope.mappingId === this.newFocus()?.mappingId,
+      ),
+  );
+  readonly unlistedRevision = computed(
+    () =>
+      !!this.newFocus()?.revisionId &&
+      !this.focusRevisions().some(
+        (revision) => revision.scope.revisionId === this.newFocus()?.revisionId,
+      ),
+  );
+  private focusChosen = false;
   readonly moreFocus = signal(false);
   private focusScan: {
     query: string;
@@ -224,6 +253,24 @@ export class RevisionChatComponent {
   constructor() {
     inject(UnsentWork).track(() => this.hasUnsent());
     effect(() => {
+      const suggestion = this.suggestedFocus(),
+        ready = this.availability();
+      untracked(() => {
+        if (
+          ready &&
+          suggestion &&
+          !this.current() &&
+          !this.focusChosen &&
+          !this.hasUnsent()
+        )
+          this.newFocus.set({
+            projectId: suggestion.projectId,
+            mappingId: suggestion.mappingId,
+            revisionId: suggestion.revisionId,
+          });
+      });
+    });
+    effect(() => {
       this.owner();
       this.contexts.identityVersion();
       untracked(() => {
@@ -233,14 +280,10 @@ export class RevisionChatComponent {
     });
     effect(() => {
       const id = this.requestedConversation();
+      this.requestedVersion();
       untracked(() => {
-        if (
-          id &&
-          this.availability() &&
-          !this.busy() &&
-          this.current()?.conversationId !== id
-        )
-          void this.show(id);
+        if (id && this.availability() && this.current()?.conversationId !== id)
+          void this.open(id);
       });
     });
     // A failed or negative check is not a new owner: suspend the unsent question rather than discard it.
@@ -341,6 +384,7 @@ export class RevisionChatComponent {
     this.workspaceProfiles = null;
     this.canCreate.set(false);
     this.newFocus.set(null);
+    this.focusChosen = false;
     this.focusMappings.set([]);
     this.focusRevisions.set([]);
     this.focusQuery.set("");
@@ -465,6 +509,7 @@ export class RevisionChatComponent {
   }
   async newConversation(): Promise<void> {
     if (this.busy() || this.pending || !this.canCreate()) return;
+    if (!this.pendingConversation && !this.allowConversationSwitch()) return;
     await this.perform(async () => {
       if (!this.pendingConversation) {
         this.pendingConversation = crypto.randomUUID();
@@ -513,8 +558,28 @@ export class RevisionChatComponent {
     }, "[data-chat-composer]");
   }
   async open(id: string): Promise<void> {
-    if (this.busy() || this.pending) return;
+    if (this.current()?.conversationId === id) return;
+    if (this.busy() || this.pending || this.pendingConversation) {
+      this.selectionRejected.emit();
+      return;
+    }
+    if (!this.allowConversationSwitch()) {
+      const current = this.current();
+      if (current) this.selectedConversation.emit(current);
+      return;
+    }
     await this.show(id);
+  }
+  private allowConversationSwitch(): boolean {
+    if (!this.hasUnsent()) return true;
+    if (!(
+      this.document.defaultView?.confirm(
+        "Switch conversation? Discard the unsent question in this conversation? A previously sent request may already have committed.",
+      ) ?? false
+    ))
+      return false;
+    this.draft.set("");
+    return true;
   }
   private async show(id: string): Promise<void> {
     const entry = this.conversations().find((c) => c.conversationId === id);
@@ -816,7 +881,7 @@ export class RevisionChatComponent {
   }
   canSelect(item: WorkspaceCitationEvent): boolean {
     const c = item.citation,
-      scope = this.scope();
+      scope = this.inspectionScope() ?? this.scope();
     return (
       c.kind === "report" &&
       !!scope &&
@@ -937,6 +1002,7 @@ export class RevisionChatComponent {
   }
   async chooseFocus(mappingId: string): Promise<void> {
     if (this.busy() || this.pendingConversation) return;
+    this.focusChosen = true;
     const mapping = this.focusMappings().find(
       (m) => m.scope.mappingId === mappingId,
     );
@@ -949,6 +1015,12 @@ export class RevisionChatComponent {
     this.revisionCursor = null;
     this.moreRevisions.set(false);
     if (mapping) await this.loadFocusRevisions();
+  }
+  chooseRevision(revisionId: string): void {
+    const focus = this.newFocus();
+    if (!focus || this.busy() || this.pendingConversation) return;
+    this.focusChosen = true;
+    this.newFocus.set({ ...focus, revisionId: revisionId || null });
   }
   async loadFocusRevisions(): Promise<void> {
     const focus = this.newFocus();

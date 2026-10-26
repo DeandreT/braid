@@ -1,5 +1,6 @@
 import { DatePipe } from "@angular/common";
-import { Component } from "@angular/core";
+import { Component, DestroyRef, effect, inject } from "@angular/core";
+import { WorkspaceConversation } from "../workbench/workspace-conversation";
 import { RouterLink } from "@angular/router";
 import { forkJoin } from "rxjs";
 import { RegressionStatusComponent } from "./automation/regression-status.component";
@@ -34,6 +35,16 @@ export class ProjectPageComponent extends CatalogRoutePage<
 > {
   constructor() {
     super();
+    const workspace = inject(WorkspaceConversation);
+    effect(() => {
+      const view = this.data();
+      workspace.viewLabel.set(
+        view
+          ? `${view.project.name} · ${this.roleLabel(view.project.access.role)}`
+          : null,
+      );
+    });
+    inject(DestroyRef).onDestroy(() => workspace.viewLabel.set(null));
     this.bind("project", (scope, cursor) =>
       forkJoin({
         project: this.api.project(scope),

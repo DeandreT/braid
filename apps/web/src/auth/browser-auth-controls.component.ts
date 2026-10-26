@@ -3,6 +3,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  HostListener,
   Injector,
   afterNextRender,
   computed,
@@ -28,6 +29,8 @@ export class BrowserAuthControlsComponent {
   readonly session = inject(BrowserSessionState);
   /** The confirmed workspace's organization, when the catalog has read one. */
   readonly organization = input<string | null>(null);
+  readonly principal = input<string | null>(null);
+  readonly organizationId = input<string | null>(null);
   /** Sign-in navigation or an ended session can discard work held only by this tab. */
   readonly unsentWork = inject(UnsentWork).present;
   readonly open = signal(false);
@@ -143,6 +146,13 @@ export class BrowserAuthControlsComponent {
     if (!this.open()) return;
     this.open.set(false);
     this.document.getElementById("account-trigger")?.focus();
+  }
+  @HostListener("document:keydown", ["$event"])
+  key(event: KeyboardEvent): void {
+    if (event.key === "Escape" && this.open()) {
+      event.preventDefault();
+      this.close();
+    }
   }
 
   signIn(): void {

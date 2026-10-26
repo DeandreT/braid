@@ -4,319 +4,345 @@
     <h2 id="revision-chat-title">
       {{ scope() ? "Mapping chat" : "Workspace chat" }}
     </h2>
-    <p>
-      Ask about any project you can read, saved reports, runs or the user guide.
-      Focus guides context; it never limits access to other authorized projects.
-      Chat cannot edit mappings or start runs. Check citations and coverage.
-    </p>
-  </header>
-  @if (problem()) {
-    <p class="chat-error" role="alert">{{ problem() }}</p>
-  }
-  <div class="chat-actions">
-    <button
-      type="button"
-      (click)="load()"
-      [attr.aria-busy]="busy() ? 'true' : null"
-      [disabled]="busy() || streaming() || hasPending()"
-    >
-      Refresh chat
-    </button>
-    <button
-      type="button"
-      (click)="newConversation()"
-      [attr.aria-busy]="busy() ? 'true' : null"
-      [disabled]="busy() || !canCreate() || hasPending()"
-    >
-      {{
-        hasPendingCreation() && !busy()
-          ? "Recover conversation creation"
-          : "New conversation"
-      }}
-    </button>
-    <weft-help-link [section]="'chat'">About chat</weft-help-link>
-  </div>
-  @if (!scope()) {
-    <details class="chat-focus">
-      <summary>Focus for the next conversation</summary>
+    <details>
+      <summary>Read-only tools · scope and limits</summary>
       <p>
-        A mapping follows its head when each new turn starts. An exact revision
-        stays fixed. Neither restricts tools.
+        Ask about any project you can read, saved reports, runs or the user
+        guide. Focus guides context; it never limits access to other authorized
+        projects. Chat cannot edit mappings or start runs. Check citations and
+        coverage.
       </p>
-      <label
-        >Find mapping<input
-          [value]="focusQuery()"
-          (input)="focusQuery.set($any($event.target).value)"
-          [disabled]="busy() || hasPending()"
-          maxlength="128"
-      /></label>
+    </details>
+  </header>
+  <div class="chat-scroll">
+    @if (problem()) {
+      <p class="chat-error" role="alert">{{ problem() }}</p>
+    }
+    <div class="chat-actions">
       <button
         type="button"
-        (click)="searchFocus()"
-        [disabled]="busy() || hasPending()"
+        (click)="load()"
+        [attr.aria-busy]="busy() ? 'true' : null"
+        [disabled]="busy() || streaming() || hasPending()"
       >
-        Search mappings
+        Refresh chat
       </button>
-      <p role="status">{{ focusNotice() }}</p>
-      @if (moreFocus()) {
+      <button
+        type="button"
+        (click)="newConversation()"
+        [attr.aria-busy]="busy() ? 'true' : null"
+        [disabled]="busy() || !canCreate() || hasPending()"
+      >
+        {{
+          hasPendingCreation() && !busy()
+            ? "Recover conversation creation"
+            : "New conversation"
+        }}
+      </button>
+      <weft-help-link [section]="'chat'">About chat</weft-help-link>
+    </div>
+    @if (!scope()) {
+      <details class="chat-focus">
+        <summary>Focus for the next conversation</summary>
+        <p>
+          A mapping follows its head when each new turn starts. An exact
+          revision stays fixed. Neither restricts tools.
+        </p>
+        <label
+          >Find mapping<input
+            [value]="focusQuery()"
+            (input)="focusQuery.set($any($event.target).value)"
+            [disabled]="busy() || hasPending()"
+            maxlength="128"
+        /></label>
         <button
           type="button"
-          (click)="searchFocus(true)"
+          (click)="searchFocus()"
           [disabled]="busy() || hasPending()"
         >
-          Search more mappings
+          Search mappings
         </button>
-      }
-      <label
-        >Mapping focus<select
-          aria-label="Mapping focus"
-          [value]="newFocus()?.mappingId ?? ''"
-          (change)="chooseFocus($any($event.target).value)"
-          [disabled]="busy() || hasPending()"
-        >
-          <option value="">No focus — whole workspace</option>
-          @for (mapping of focusMappings(); track mapping.scope.mappingId) {
-            <option [value]="mapping.scope.mappingId">
-              {{ mapping.name }}
-            </option>
-          }
-        </select></label
-      >
-      @if (newFocus(); as focus) {
-        <label
-          >Revision focus<select
-            aria-label="Revision focus"
-            [value]="focus.revisionId ?? ''"
-            (change)="
-              newFocus.set({
-                projectId: focus.projectId,
-                mappingId: focus.mappingId,
-                revisionId: $any($event.target).value || null,
-              })
-            "
+        <p role="status">{{ focusNotice() }}</p>
+        @if (moreFocus()) {
+          <button
+            type="button"
+            (click)="searchFocus(true)"
             [disabled]="busy() || hasPending()"
           >
-            <option value="">Current head at each turn</option>
-            @for (
-              revision of focusRevisions();
-              track revision.scope.revisionId
-            ) {
-              <option [value]="revision.scope.revisionId">
-                Revision {{ revision.sequence }} —
-                {{ revision.originalFilename }}
+            Search more mappings
+          </button>
+        }
+        <label
+          >Mapping focus<select
+            aria-label="Mapping focus"
+            [value]="newFocus()?.mappingId ?? ''"
+            (change)="chooseFocus($any($event.target).value)"
+            [disabled]="busy() || hasPending()"
+          >
+            <option value="">No focus — whole workspace</option>
+            @if (unnamedFocus()) {
+              <option [value]="newFocus()!.mappingId">
+                Viewed mapping · {{ newFocus()!.mappingId }}
+              </option>
+            }
+            @for (mapping of focusMappings(); track mapping.scope.mappingId) {
+              <option [value]="mapping.scope.mappingId">
+                {{ mapping.name }}
               </option>
             }
           </select></label
         >
-        @if (moreRevisions()) {
-          <button
-            type="button"
-            (click)="loadFocusRevisions()"
-            [disabled]="busy()"
+        @if (newFocus(); as focus) {
+          <label
+            >Revision focus<select
+              aria-label="Revision focus"
+              [value]="focus.revisionId ?? ''"
+              (change)="chooseRevision($any($event.target).value)"
+              [disabled]="busy() || hasPending()"
+            >
+              <option value="">Current head at each turn</option>
+              @if (unlistedRevision()) {
+                <option [value]="focus.revisionId">
+                  Exact revision · {{ focus.revisionId }}
+                </option>
+              }
+              @for (
+                revision of focusRevisions();
+                track revision.scope.revisionId
+              ) {
+                <option [value]="revision.scope.revisionId">
+                  Revision {{ revision.sequence }} —
+                  {{ revision.originalFilename }}
+                </option>
+              }
+            </select></label
           >
-            Load older revisions
-          </button>
-        }
-      }
-    </details>
-  }
-  @if (availability(); as available) {
-    <p>
-      {{
-        available.toolsEnabled
-          ? "Read-only mapping tools available."
-          : "Mapping tools are not configured."
-      }}
-    </p>
-    <label
-      >Saved conversations
-      <select
-        [value]="current()?.conversationId ?? ''"
-        (change)="open($any($event.target).value)"
-        [disabled]="busy() || hasPending()"
-      >
-        <option value="" disabled>Select a conversation</option>
-        @for (
-          conversation of conversations();
-          track conversation.conversationId
-        ) {
-          <option [value]="conversation.conversationId">
-            {{ conversation.title || conversation.createdAtUtc }}
-          </option>
-        }
-      </select>
-    </label>
-    @if (hasMore()) {
-      <button
-        type="button"
-        (click)="moreConversations()"
-        [disabled]="busy() || hasPending()"
-      >
-        Load older conversations
-      </button>
-    }
-    @if (current(); as conversation) {
-      <p class="chat-pin">
-        @if (isWorkspace(conversation)) {
-          @if (conversation.focus) {
-            Focused on
-            {{
-              conversation.focus.revisionId
-                ? "an exact revision"
-                : "a mapping's current head"
-            }}.
-          }
-          Read-only tools can also read other authorized projects and help.
-        } @else {
-          Legacy conversation: pinned to its original revision and saved
-          reports.
-        }
-        Citations never change the panel's revision.
-      </p>
-      @if (scope()) {
-        <a
-          routerLink="/chat"
-          [queryParams]="openInChat()"
-          target="_blank"
-          rel="noopener"
-          >Open in chat</a
-        >
-      }
-      @if (hasEarlier()) {
-        <p>Only the most recent 100 questions are shown.</p>
-      }
-      <ol class="chat-history" aria-label="Questions">
-        @for (turn of turns(); track turn.turnId) {
-          <li>
+          @if (moreRevisions()) {
             <button
               type="button"
-              (click)="selectTurn(turn)"
-              [disabled]="busy() || hasPending()"
-              [attr.aria-pressed]="selected()?.turnId === turn.turnId"
+              (click)="loadFocusRevisions()"
+              [disabled]="busy()"
             >
-              {{ turn.text }}</button
-            ><small>{{ turn.phase }}</small>
-          </li>
+              Load older revisions
+            </button>
+          }
         }
-      </ol>
-      @if (selected()) {
-        <section
-          class="chat-answer"
-          aria-label="Selected answer"
-          aria-live="polite"
-          aria-atomic="false"
+      </details>
+    }
+    @if (availability(); as available) {
+      <p>
+        {{
+          available.toolsEnabled
+            ? "Read-only mapping tools available."
+            : "Mapping tools are not configured."
+        }}
+      </p>
+      <label
+        >Saved conversations
+        <select
+          [value]="current()?.conversationId ?? ''"
+          (change)="open($any($event.target).value)"
+          [disabled]="busy() || hasPending()"
         >
-          <p class="chat-answer-text">{{ answer() }}</p>
-          <p role="status">{{ status() }}</p>
-          @if (selected()?.focus; as focus) {
-            <p class="chat-pin">
-              Turn focus: {{ focus.state }}
-              @if (focus.state === "resolved") {
-                — revision {{ focus.revision?.revisionId }}
-              }
-              . The recorded revision does not follow a later head.
-            </p>
+          <option value="" disabled>Select a conversation</option>
+          @for (
+            conversation of conversations();
+            track conversation.conversationId
+          ) {
+            <option [value]="conversation.conversationId">
+              {{ conversation.title || conversation.createdAtUtc }}
+            </option>
           }
-          @if (sharedData().length) {
-            <p class="chat-data-shared" role="note">
-              Data shared with {{ selected()?.profile?.modelId }}. This answer
-              may contain sample-derived content and follows conversation
-              retention.
-            </p>
-          }
-        </section>
-        @if (tools().length) {
-          <details>
-            <summary>Read-only tool activity</summary>
-            <ul>
-              @for (tool of tools(); track tool.sequence) {
-                <li>
-                  {{ tool.name }} —
-                  {{ tool.type === "tool.started" ? "started" : "completed" }}
-                </li>
-              }
-            </ul>
-          </details>
-        }
-        @if (usage().length) {
-          <details>
-            <summary>Token usage (latest snapshot per round)</summary>
-            <ul>
-              @for (round of usage(); track round.roundId) {
-                <li>
-                  Input {{ round.inputTokens ?? "unknown" }} · Output
-                  {{ round.outputTokens ?? "unknown" }} · Total
-                  {{ round.totalTokens ?? "unknown" }}
-                </li>
-              }
-            </ul>
-          </details>
-        }
-        @if (citations().length) {
-          <ul class="chat-citations" aria-label="Answer citations">
-            @for (item of citations(); track item.sequence) {
-              <li>
-                @if (scope()) {
-                  <button type="button" (click)="follow(item)">
-                    Show {{ item.target.kind }}
-                    {{
-                      item.target.resourceId ??
-                        item.target.diagnosticOrdinal ??
-                        ""
-                    }}
-                  </button>
-                } @else {
-                  <a
-                    [href]="legacyCitationLink(item)"
-                    target="_blank"
-                    rel="noopener"
-                    >Open saved {{ item.target.kind }} report</a
-                  >
-                }
-              </li>
-            }
-          </ul>
-        }
-        @if (workspaceCitations().length) {
-          <ul class="chat-citations" aria-label="Workspace answer citations">
-            @for (item of workspaceCitations(); track item.sequence) {
-              <li>
-                @if (canSelect(item)) {
-                  <button type="button" (click)="workspaceCitation.emit(item)">
-                    Show {{ item.citation.target?.kind }}
-                    {{
-                      item.citation.target?.resourceId ??
-                        item.citation.target?.diagnosticOrdinal ??
-                        ""
-                    }}
-                  </button>
-                } @else {
-                  <a
-                    [href]="citationLink(item.citation)"
-                    target="_blank"
-                    rel="noopener"
-                    >Open {{ item.citation.kind }}
-                    {{ item.citation.sectionId ?? "" }}</a
-                  >
-                }
-              </li>
-            }
-          </ul>
-        }
-        <div class="chat-actions">
-          @if (disconnected()) {
-            <button type="button" (click)="reconnect()" [disabled]="busy()">
-              Reconnect answer
-            </button>
-          }
-          @if (selected()?.phase === "active" && !events().some(terminal)) {
-            <button type="button" (click)="cancel()" [disabled]="busy()">
-              Cancel answer
-            </button>
-          }
-        </div>
+        </select>
+      </label>
+      @if (hasMore()) {
+        <button
+          type="button"
+          (click)="moreConversations()"
+          [disabled]="busy() || hasPending()"
+        >
+          Load older conversations
+        </button>
       }
-      <form (submit)="$event.preventDefault(); send()">
+      @if (current(); as conversation) {
+        <p class="chat-pin">
+          @if (isWorkspace(conversation)) {
+            @if (conversation.focus) {
+              Focused on
+              {{
+                conversation.focus.revisionId
+                  ? "an exact revision"
+                  : "a mapping's current head"
+              }}. Mapping <code>{{ conversation.focus.mappingId }}</code
+              >.
+              @if (conversation.focus.revisionId) {
+                Revision <code>{{ conversation.focus.revisionId }}</code
+                >.
+              }
+            }
+            Read-only tools can also read other authorized projects and help.
+          } @else {
+            Legacy conversation: pinned to its original revision and saved
+            reports. Revision
+            <code>{{ conversation.revision.revisionId }}</code
+            >.
+          }
+          Citations never change the panel's revision.
+        </p>
+        @if (current()) {
+          <a
+            routerLink="/chat"
+            [queryParams]="openInChat()"
+            target="_blank"
+            rel="noopener"
+            >Open in chat</a
+          >
+        }
+        @if (hasEarlier()) {
+          <p>Only the most recent 100 questions are shown.</p>
+        }
+        <ol class="chat-history" aria-label="Questions">
+          @for (turn of turns(); track turn.turnId) {
+            <li>
+              <button
+                type="button"
+                (click)="selectTurn(turn)"
+                [disabled]="busy() || hasPending()"
+                [attr.aria-pressed]="selected()?.turnId === turn.turnId"
+              >
+                {{ turn.text }}</button
+              ><small>{{ turn.phase }}</small>
+            </li>
+          }
+        </ol>
+        @if (selected()) {
+          <section
+            class="chat-answer"
+            aria-label="Selected answer"
+            aria-live="polite"
+            aria-atomic="false"
+          >
+            <p class="chat-answer-text">{{ answer() }}</p>
+            <p role="status">{{ status() }}</p>
+            @if (selected()?.focus; as focus) {
+              <p class="chat-pin">
+                Turn focus: {{ focus.state }}
+                @if (focus.state === "resolved") {
+                  — revision {{ focus.revision?.revisionId }}
+                }
+                . The recorded revision does not follow a later head.
+              </p>
+            }
+            @if (sharedData().length) {
+              <p class="chat-data-shared" role="note">
+                Data shared with {{ selected()?.profile?.modelId }}. This answer
+                may contain sample-derived content and follows conversation
+                retention.
+              </p>
+            }
+          </section>
+          @if (tools().length) {
+            <details>
+              <summary>Read-only tool activity</summary>
+              <ul>
+                @for (tool of tools(); track tool.sequence) {
+                  <li>
+                    {{ tool.name }} —
+                    {{ tool.type === "tool.started" ? "started" : "completed" }}
+                  </li>
+                }
+              </ul>
+            </details>
+          }
+          @if (usage().length) {
+            <details>
+              <summary>Token usage (latest snapshot per round)</summary>
+              <ul>
+                @for (round of usage(); track round.roundId) {
+                  <li>
+                    Input {{ round.inputTokens ?? "unknown" }} · Output
+                    {{ round.outputTokens ?? "unknown" }} · Total
+                    {{ round.totalTokens ?? "unknown" }}
+                  </li>
+                }
+              </ul>
+            </details>
+          }
+          @if (citations().length) {
+            <ul class="chat-citations" aria-label="Answer citations">
+              @for (item of citations(); track item.sequence) {
+                <li>
+                  @if (scope()) {
+                    <button type="button" (click)="follow(item)">
+                      Show {{ item.target.kind }}
+                      {{
+                        item.target.resourceId ??
+                          item.target.diagnosticOrdinal ??
+                          ""
+                      }}
+                    </button>
+                  } @else {
+                    <a
+                      [href]="legacyCitationLink(item)"
+                      target="_blank"
+                      rel="noopener"
+                      >Open saved {{ item.target.kind }} report</a
+                    >
+                  }
+                </li>
+              }
+            </ul>
+          }
+          @if (workspaceCitations().length) {
+            <ul class="chat-citations" aria-label="Workspace answer citations">
+              @for (item of workspaceCitations(); track item.sequence) {
+                <li>
+                  @if (canSelect(item)) {
+                    <button
+                      type="button"
+                      (click)="workspaceCitation.emit(item)"
+                    >
+                      Show {{ item.citation.target?.kind }}
+                      {{
+                        item.citation.target?.resourceId ??
+                          item.citation.target?.diagnosticOrdinal ??
+                          ""
+                      }}
+                    </button>
+                  } @else {
+                    <a
+                      [href]="citationLink(item.citation)"
+                      target="_blank"
+                      rel="noopener"
+                      >Open {{ item.citation.kind }}
+                      {{ item.citation.sectionId ?? "" }}</a
+                    >
+                  }
+                </li>
+              }
+            </ul>
+          }
+          <div class="chat-actions">
+            @if (disconnected()) {
+              <button type="button" (click)="reconnect()" [disabled]="busy()">
+                Reconnect answer
+              </button>
+            }
+            @if (selected()?.phase === "active" && !events().some(terminal)) {
+              <button type="button" (click)="cancel()" [disabled]="busy()">
+                Cancel answer
+              </button>
+            }
+          </div>
+        }
+      } @else {
+        <p>Create or open a conversation to ask a question.</p>
+      }
+    }
+  </div>
+  @if (availability(); as available) {
+    @if (current(); as conversation) {
+      <form class="chat-composer" (submit)="$event.preventDefault(); send()">
         <label
           >Model profile<select
             [value]="profile()"
@@ -353,8 +379,6 @@
         </p>
         <button type="submit" [disabled]="!canSend()">Send question</button>
       </form>
-    } @else {
-      <p>Create or open a conversation to ask a question.</p>
     }
   }
   @if (hasPending() && !busy()) {

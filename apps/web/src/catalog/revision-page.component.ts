@@ -48,8 +48,7 @@ import {
 } from "./reports/revision-report-state";
 import { RevisionReportsComponent } from "./reports/revision-reports.component";
 import { MfdExportComponent } from "./uploads/mfd-export.component";
-import { RevisionChatComponent } from "../chat/revision-chat.component";
-import { ChatViewRecovery } from "../chat/chat-view-recovery";
+import { WorkspaceConversation } from "../workbench/workspace-conversation";
 import { RevisionPreviewComponent } from "./previews/revision-preview.component";
 import { RevisionRegressionComponent } from "./regression/revision-regression.component";
 import { RevisionBuildsComponent } from "./builds/revision-builds.component";
@@ -99,7 +98,6 @@ interface RevisionScreen {
     CatalogStatusComponent,
     RevisionReportsComponent,
     MfdExportComponent,
-    RevisionChatComponent,
     RevisionPreviewComponent,
     RevisionRegressionComponent,
     RevisionBuildsComponent,
@@ -110,12 +108,7 @@ interface RevisionScreen {
     MetadataValueComponent,
     RegressionStatusComponent,
   ],
-  providers: [
-    BuildViewRecovery,
-    RegressionViewRecovery,
-    ChatViewRecovery,
-    WorkbenchState,
-  ],
+  providers: [BuildViewRecovery, RegressionViewRecovery, WorkbenchState],
   templateUrl: "./revision-page.component.html",
   styleUrl: "./revision-page.component.css",
 })
@@ -323,16 +316,9 @@ export class RevisionPageComponent extends CatalogRoutePage<
   private readonly contexts = inject(CatalogContextStore);
   private readonly buildRecovery = inject(BuildViewRecovery);
   private readonly regressionRecovery = inject(RegressionViewRecovery);
-  private readonly chatRecovery = inject(ChatViewRecovery);
-  private readonly chatPanel = viewChild(RevisionChatComponent);
+  readonly workspaceChat = inject(WorkspaceConversation);
   requestChatLeave(): boolean {
-    return (
-      !(this.chatPanel()?.hasUnsent() || this.chatRecovery.hasWork()) ||
-      (this.document.defaultView?.confirm(
-        "Leave this revision? Unsent chat work or recovery information kept only in this tab may be lost. A sent question may already have committed.",
-      ) ??
-        false)
-    );
+    return true; // Shared conversation remains mounted; form guards keep their own ownership.
   }
   private readonly injector = inject(Injector);
   private readonly document = inject(DOCUMENT);
@@ -349,6 +335,36 @@ export class RevisionPageComponent extends CatalogRoutePage<
 
   constructor() {
     super();
+    effect(() => {
+      this.workspaceChat.revision.set(this.data()?.revision.scope ?? null);
+      const view = this.data();
+      this.workspaceChat.viewLabel.set(
+        view
+          ? `${view.project.name} / ${view.mapping.name} / Version ${view.revision.sequence} · ${this.roleLabel(view.mapping.access.role)}`
+          : null,
+      );
+      this.workspaceChat.projectionId.set(
+        this.reportView()?.projectionPin()?.projectionDerivationId ?? null,
+      );
+      this.workspaceChat.validationId.set(
+        this.reportView()?.validationPin()?.validationDerivationId ?? null,
+      );
+    });
+    const citations = this.workspaceChat.citation.subscribe((value) =>
+      this.reportView()?.showChatCitation(value),
+    );
+    citations.add(
+      this.workspaceChat.workspaceCitation.subscribe((value) =>
+        this.reportView()?.showWorkspaceChatCitation(value),
+      ),
+    );
+    inject(DestroyRef).onDestroy(() => {
+      citations.unsubscribe();
+      this.workspaceChat.revision.set(null);
+      this.workspaceChat.viewLabel.set(null);
+      this.workspaceChat.projectionId.set(null);
+      this.workspaceChat.validationId.set(null);
+    });
     effect(() => {
       const context = this.context(),
         value = this.data(),
@@ -491,7 +507,6 @@ export class RevisionPageComponent extends CatalogRoutePage<
         const scope = this.reportSelection()?.scope ?? null;
         this.buildRecovery.routeScope(scope);
         this.regressionRecovery.routeScope(scope);
-        this.chatRecovery.routeScope(scope);
       });
     effect(() => {
       const selection = this.reportSelection();
@@ -570,8 +585,12 @@ export class RevisionPageComponent extends CatalogRoutePage<
     });
     if (reference) {
       this.workbench.dispatch({ kind: "view", view: "mapping" });
-      this.workbench.updateLayout({ inspectorCollapsed: false });
-      this.frame()?.mobileInspector.set(true);
+      this.workbench.dispatch({ kind: "dock", dock: "inspector" });
+      this.workbench.updateLayout({
+        inspectorCollapsed: false,
+        dockCollapsed: false,
+      });
+      this.frame()?.openInspector();
     }
   }
 
@@ -615,7 +634,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
   returnToTest(): void {
     if (!this.investigation()) return;
     this.workbench.dispatch({ kind: "view", view: "tests" });
-    this.frame()?.mobileInspector.set(false);
+    if (this.frame()?.focusedTray()) this.frame()?.closeTray();
     afterNextRender(
       () =>
         this.document

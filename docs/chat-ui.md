@@ -1,13 +1,14 @@
 # Workspace chat in the browser
 
-`/chat` and the workbench panel share private workspace conversations through the
+`/chat` is the conversation library in the same shell as the catalog and workbench.
+One persistent right panel shares private workspace conversations through the
 [chat HTTP API](chat-http.md). Chat never edits mappings, derives reports or
 starts runs. Citations outside the open report are links to their own views;
 they never retarget the workbench panel.
 
 ## Conversations and questions
 
-Choose **New conversation** for an organization-scoped thread. The standalone
+Choose **New conversation** for an organization-scoped thread. The panel's
 focus picker searches readable mappings and selects either the current head at
 each turn or an exact revision. Workbench creation focuses the exact open
 revision. Focus guides context, not access: read-only tools can still answer
@@ -15,7 +16,7 @@ questions about other authorized projects and the shipped user guide.
 
 The list includes workspace and existing revision-pinned conversations; legacy
 threads continue through their original revision/report-pinned routes. The
-workbench list filters to the exact open revision. **Open in chat** opens the
+shared list is organization-scoped. **Open in chat** opens the
 same server conversation in a separate tab, leaving the panel and any unsent
 draft in place. **Load older conversations** pages beyond the newest 50. Up to 100
 recent questions are listed. Selecting a question reads its answer from the
@@ -39,13 +40,15 @@ If a question's POST acknowledgement is lost, **Recover original question**
 resends the exact original ID and body only when requested. No timer retries a
 mutation. Confirmed admission refusals retain the draft so the user can correct
 it; uncertain requests retain their original identity in tab memory. Nothing is
-written to local storage, session storage or a browser database. After a reload,
+written to local storage, session storage or a browser database; only harmless
+layout preferences are stored. After a reload,
 open the saved conversation explicitly to recover acknowledged server work.
 An unacknowledged creation is labeled **Recover conversation creation** and
-replays its original identity and focus. Leaving a view warns only when unsent
-or uncertain in-tab work exists; an accepted active server turn is not an
-unsent draft.
-The panel and its page-scoped recovery provider report that same state through
+replays its original identity and focus. Content-route navigation and hiding chat
+retain the same mounted conversation, draft and stream. Changing conversations
+or leaving the shell for an identity entry protects unsent work; an accepted active
+server turn is not an unsent draft.
+The panel and its workspace-scoped recovery provider report that same state through
 the shared `UnsentWork` service used by the account menu. A running or reconnectable
 acknowledged turn alone does not warn on sign-in, sign-out or navigation.
 The standalone chat and reference routes use the shared sign-in guard; their
@@ -72,15 +75,16 @@ document diagnostics are not substituted for operation diagnostics.
 
 Each operation observes fresh session status and catalog context. A routine
 check keeps the conversation on screen, and so does a catalog re-read by the same
-owner for the same revision and workspace features. Session boundaries, and a
-re-read for another owner, revision or set of features, invalidate outstanding
+owner and workspace features. Session boundaries, and a
+re-read for another owner or set of features, invalidate outstanding
 requests and clear displayed conversations.
 An unsent question, an unacknowledged question and an unconfirmed
-new-conversation request are instead suspended in a page-scoped provider. After
+new-conversation request are instead suspended in a workspace-scoped provider. After
 the panel's next availability read, the same owner (mode, principal,
 organization and Session identity context) on the same view scope gets them back,
 and the conversation they belong to is reopened. Nothing is sent again. A fresh
-context for another owner, another revision or leaving the page discards them.
+context for another owner or leaving the workspace shell discards them. Switching
+the viewed revision does not change the conversation's recorded focus.
 Expired or rejected sessions, unconfigured chat, missing reports, unavailable
 profiles, provider failure and interrupted streams remain distinct from a
 successful answer. The server remains responsible for fresh project authorization.

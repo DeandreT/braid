@@ -14,6 +14,7 @@ export const workbenchLabels: Readonly<Record<WorkbenchView, string>> = {
 
 export const dockLabels: Readonly<Record<DockView, string>> = {
   ask: "Ask Weft",
+  inspector: "Inspector",
   diagnostics: "Issues",
   input: "Incoming data",
   output: "Result",

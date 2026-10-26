@@ -1,5 +1,11 @@
-import { DOCUMENT } from "@angular/common";
-import { Component, computed, inject, signal, viewChild } from "@angular/core";
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router } from "@angular/router";
 import { of } from "rxjs";
@@ -10,18 +16,16 @@ import {
   type CatalogContext,
   type CatalogRevisionScope,
 } from "../catalog/catalog-types";
-import { RevisionChatComponent } from "./revision-chat.component";
-import { ChatViewRecovery } from "./chat-view-recovery";
+import { WorkspaceConversation } from "../workbench/workspace-conversation";
 import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
 
 @Component({
   selector: "weft-chat-page",
-  imports: [RevisionChatComponent, CatalogStatusComponent],
-  providers: [ChatViewRecovery],
+  imports: [CatalogStatusComponent],
   template: ` <section class="workspace-chat-page">
     <header>
       <p class="chat-page-eyebrow">Your workspace</p>
-      <h1>Chat</h1>
+      <h1>Conversations</h1>
       <p>
         Reason about mappings in their wider context. Conversations are private
         to you.
@@ -35,12 +39,40 @@ import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
     } @else {
       @if (read.state(); as state) {
         @if (state.kind === "ready") {
-          <weft-revision-chat
-            [context]="state.context"
-            [requestedConversation]="conversationId()"
-            [requestedLegacyScope]="legacyScope()"
-            (selectedConversation)="selected($event)"
-          />
+          @if (!state.context.features.chat) {
+            <p role="status">Chat is not configured for this workspace.</p>
+          }
+          <p>
+            Use the shared panel to continue a conversation without leaving your
+            work.
+          </p>
+          <button
+            class="catalog-button"
+            type="button"
+            (click)="workspace.open()"
+          >
+            Open chat
+          </button>
+          <ul class="conversation-library">
+            @for (
+              conversation of workspace.panel()?.conversations() ?? [];
+              track conversation.conversationId
+            ) {
+              <li>
+                <button
+                  class="catalog-button"
+                  type="button"
+                  (click)="choose(conversation)"
+                >
+                  {{ conversation.title || conversation.createdAtUtc }}</button
+                ><span>{{
+                  isWorkspace(conversation)
+                    ? "Workspace conversation"
+                    : "Legacy · pinned revision"
+                }}</span>
+              </li>
+            }
+          </ul>
         } @else {
           <weft-catalog-status [kind]="state.kind" (retry)="read.retry()" />
         }
@@ -55,17 +87,18 @@ import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
     .workspace-chat-page {
       max-width: 72rem;
       margin: 0 auto;
-      padding: 2rem clamp(1rem, 3vw, 3rem) 4rem;
+      padding: 16px;
     }
     .workspace-chat-page > header {
-      margin-bottom: 1.5rem;
+      margin-bottom: 16px;
       color: #213b34;
     }
     .workspace-chat-page h1 {
-      font-size: 2.25rem;
+      font-size: 1.5rem;
       margin: 0.3rem 0;
     }
     .chat-page-eyebrow {
+      display: none;
       text-transform: uppercase;
       letter-spacing: 0.12em;
       font-size: 0.75rem;
@@ -75,6 +108,8 @@ import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
 })
 export class ChatPageComponent {
   readonly read = createCatalogRead<CatalogContext>();
+  readonly workspace = inject(WorkspaceConversation);
+  readonly isWorkspace = isWorkspace;
   readonly conversationId = signal<string | null>(null);
   readonly invalidLink = signal(false);
   private readonly legacyIds = signal<{
@@ -90,9 +125,7 @@ export class ChatPageComponent {
       : null;
   });
   private readonly router = inject(Router);
-  private readonly document = inject(DOCUMENT);
-  private readonly recovery = inject(ChatViewRecovery);
-  private readonly chat = viewChild(RevisionChatComponent);
+  private lastRouteSelection: string | null = null;
   constructor() {
     inject(ActivatedRoute)
       .queryParamMap.pipe(takeUntilDestroyed())
@@ -125,12 +158,37 @@ export class ChatPageComponent {
         );
       });
     this.read.select(null, (context) => of(context));
+    effect(() => {
+      const state = this.read.state();
+      const id = this.conversationId(),
+        scope = this.legacyScope();
+      if (state.kind !== "ready" || this.invalidLink()) return;
+      const key = JSON.stringify([
+        id,
+        scope,
+        state.context.allowedOrganizationId,
+      ]);
+      untracked(() => {
+        if (key === this.lastRouteSelection) return;
+        this.lastRouteSelection = key;
+        this.workspace.select(id, scope);
+      });
+    });
+    this.workspace.selected
+      .pipe(takeUntilDestroyed())
+      .subscribe((conversation) => {
+        if (!this.invalidLink()) this.selected(conversation);
+      });
   }
-  selected(conversation: AnyConversation): void {
+  choose(conversation: AnyConversation): void {
+    this.workspace.open();
+    void this.workspace.panel()?.open(conversation.conversationId);
+  }
+  selected(conversation: AnyConversation | null): void {
     void this.router.navigate([], {
       queryParams: {
-        conversationId: conversation.conversationId,
-        ...(!isWorkspace(conversation) && conversation.revision
+        conversationId: conversation?.conversationId ?? null,
+        ...(conversation && !isWorkspace(conversation) && conversation.revision
           ? {
               projectId: conversation.revision.projectId,
               mappingId: conversation.revision.mappingId,
@@ -142,12 +200,7 @@ export class ChatPageComponent {
     });
   }
   requestLeave(): boolean {
-    return (
-      !(this.chat()?.hasUnsent() || this.recovery.hasWork()) ||
-      (this.document.defaultView?.confirm(
-        "Leave chat? Unsent work or recovery information kept only in this tab may be lost. A sent question may already have committed.",
-      ) ??
-        false)
-    );
+    // The conversation and its in-tab recovery now outlive route content.
+    return true;
   }
 }

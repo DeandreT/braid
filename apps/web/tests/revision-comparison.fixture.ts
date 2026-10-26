@@ -515,7 +515,20 @@ export class ComparisonFixture {
       reply = { status: 404, json: { code: "notFound" } };
     } else if (path === "/api/auth/session")
       reply = { json: { version: 1, mode: "development" } };
+    else if (path === "/api/v1/health") reply = { json: { status: "ok" } };
     else if (path === "/api/v1/catalog/context") reply = { json: this.context };
+    else if (path === "/api/v1/catalog/interchange")
+      reply = { json: { enabled: false } };
+    else if (
+      path === `${catalogApi(projectPath(this.project.scope))}/automation` ||
+      path === `${this.mappingApi}/automation` ||
+      this.revisions.some(
+        (revision) =>
+          path ===
+          `${catalogApi(projectPath(this.project.scope))}/regression-suites/${revision.scope.revisionId}`,
+      )
+    )
+      reply = { status: 404, json: { code: "notFound" } };
     else if (path === catalogApi(projectPath(this.project.scope)))
       reply = { json: this.project };
     else if (path === this.mappingApi) reply = { json: this.mapping };

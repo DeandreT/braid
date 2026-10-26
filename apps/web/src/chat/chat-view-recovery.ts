@@ -27,7 +27,7 @@ export interface ChatWork {
   readonly focus?: ChatFocus | null;
 }
 
-/** Provided by the revision page: a refresh or failed session check can replace the chat panel without losing an unsent or unacknowledged question. */
+/** Provided by the shared panel: a failed session check can replace its content without losing an unsent or unacknowledged question. */
 @Injectable()
 export class ChatViewRecovery {
   private readonly contexts = inject(CatalogContextStore);

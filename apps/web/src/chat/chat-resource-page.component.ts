@@ -1,4 +1,4 @@
-import { Component, inject } from "@angular/core";
+import { Component, inject, signal } from "@angular/core";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { firstValueFrom, from } from "rxjs";
@@ -7,6 +7,7 @@ import { createCatalogRead } from "../catalog/catalog-state";
 import { CatalogStatusComponent } from "../catalog/catalog-shell.component";
 import {
   catalogRoutes,
+  isCatalogId,
   type CatalogContext,
   type CatalogMappingScope,
   type CatalogRevisionScope,
@@ -52,7 +53,15 @@ type ResourceView = {
         <weft-catalog-status [kind]="state.kind" (retry)="read.retry()" />
       }
     }
-    <p><a routerLink="/chat">Open chat</a></p>
+    <p>
+      <a
+        routerLink="/chat"
+        [queryParams]="
+          returnConversation() ? { conversationId: returnConversation() } : {}
+        "
+        >{{ returnConversation() ? "Return to conversation" : "Open chat" }}</a
+      >
+    </p>
   </section>`,
   styles: `
     :host {
@@ -61,7 +70,7 @@ type ResourceView = {
     .chat-resource-page {
       max-width: 64rem;
       margin: 0 auto;
-      padding: 2rem;
+      padding: 16px;
       color: #213b34;
     }
     .chat-resource-page h1 {
@@ -71,9 +80,9 @@ type ResourceView = {
       display: grid;
       grid-template-columns: minmax(8rem, 1fr) minmax(0, 3fr);
       gap: 0.75rem;
-      padding: 1.5rem;
+      padding: 12px 16px;
       background: #f0f6f2;
-      border-radius: 12px;
+      border-radius: 4px;
     }
     dt {
       font-weight: 600;
@@ -97,6 +106,7 @@ type ResourceView = {
   `,
 })
 export class ChatResourcePageComponent {
+  readonly returnConversation = signal<string | null>(null);
   readonly read = createCatalogRead<ResourceView>();
   private readonly catalog = inject(CatalogApi);
   private readonly previews = inject(PreviewApi);
@@ -106,6 +116,7 @@ export class ChatResourcePageComponent {
     inject(ActivatedRoute)
       .queryParamMap.pipe(takeUntilDestroyed())
       .subscribe((query) => {
+        this.returnConversation.set(null);
         this.read.select(null, (context) => {
           const keys = [
             "kind",
@@ -115,6 +126,7 @@ export class ChatResourcePageComponent {
             "revisionId",
             "subjectId",
             "version",
+            "conversationId",
           ];
           const c: unknown = {
             kind: query.get("kind"),
@@ -132,6 +144,8 @@ export class ChatResourcePageComponent {
             query.keys.some(
               (key) => !keys.includes(key) || query.getAll(key).length !== 1,
             ) ||
+            (query.has("conversationId") &&
+              !isCatalogId(query.get("conversationId"))) ||
             !workspaceCitation(c, context.allowedOrganizationId) ||
             ![
               "previewRun",
@@ -143,6 +157,7 @@ export class ChatResourcePageComponent {
             ].includes(c.kind)
           )
             throw new ChatError("invalidRequest");
+          this.returnConversation.set(query.get("conversationId"));
           return from(this.resource(context, c));
         });
       });

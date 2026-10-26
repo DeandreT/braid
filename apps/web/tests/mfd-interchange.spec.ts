@@ -347,6 +347,10 @@ test("uncertain confirmation cannot become a new draft when recovery reads fail"
     return route.fulfill({ status: 503, json: { code: "unavailable" } });
   });
   const check = async () => {
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
     if (!(await page.locator("#account-menu").isVisible()))
       await page.locator("#account-trigger").click();
     await page

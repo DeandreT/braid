@@ -129,3 +129,68 @@ details {
 .chat-citations a {
   color: var(--accent);
 }
+:host-context(weft-workspace-chat-panel) {
+  display: block;
+  height: 100%;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.8125rem;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel > header {
+  padding: 8px 12px;
+  border-bottom: 1px solid #d7e2d1;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel > header h2,
+:host-context(weft-workspace-chat-panel) .chat-eyebrow {
+  display: none;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel > header p {
+  margin: 0;
+  font-size: 0.75rem;
+}
+:host-context(weft-workspace-chat-panel) .chat-scroll {
+  flex: 1;
+  min-height: 80px;
+  overflow: auto;
+  padding: 12px;
+}
+:host-context(weft-workspace-chat-panel) .chat-composer {
+  flex-shrink: 0;
+  max-height: 55%;
+  overflow: auto;
+  padding: 8px 12px;
+  border-top: 1px solid #d7e2d1;
+  background: #f7faf2;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel :is(p, label) {
+  margin: 6px 0;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel :is(select, textarea) {
+  padding: 6px 8px;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel textarea {
+  min-height: 64px;
+  max-height: 140px;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel .chat-policy {
+  padding: 6px;
+  font-size: 0.75rem;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel button {
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+  border-radius: 4px;
+}
+:host-context(weft-workspace-chat-panel) .chat-history {
+  max-height: none;
+}
+:host-context(weft-workspace-chat-panel) #chat-question-limit {
+  font-size: 0.6875rem;
+}

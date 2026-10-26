@@ -8,12 +8,12 @@ summary: Ask read-only questions about mappings, projects, runs and the user gui
 Chat answers questions about projects and mappings you can read, saved reports,
 runs and this user guide. It never generates reports, starts runs or changes
 mappings. Chat must be set up for your workspace; if it isn't, the chat
-panel says **Chat is not configured for this workspace**.
+entry is unavailable; the Conversations page explains when chat is not configured.
 
 ## Ask a question
 
-1. Open **Chat** in the header, or open a revision and choose **Ask Weft** in the
-   investigation dock.
+1. Choose **Show chat** in the header. The same right-hand panel is available
+   from mappings, projects, the guide and other workspace views.
 2. Choose **New conversation**, or pick one under **Saved conversations**.
 3. Choose a **Model profile**, type your **Question** and choose
    **Send question**.
@@ -22,9 +22,10 @@ A new workspace conversation does not need saved reports. Report tools only
 read retained reports; they say when a report has not been generated. You can
 [generate a report](reports.md#generate-a-report) yourself when appropriate.
 
-On the chat page, use **Focus for the next conversation** to search mappings.
+Use **Focus for the next conversation** to search mappings.
 Choose the current head at each turn or an exact revision. New conversations
-from the workbench focus its exact revision. Focus guides context; it never
+from a revision initially suggest that exact revision; you can choose another focus.
+Focus guides context; it never
 limits tools to that mapping. **Open in chat** continues the same conversation
 in a separate tab without changing the panel's revision.
 
@@ -52,6 +53,10 @@ Conversations are private: only you can see yours. The exact focus resolved for
 each turn is recorded, so an answer never silently follows a later head.
 Existing revision-pinned conversations also appear in the list and keep their
 original revision and report pins.
+The **Conversations** navigation entry opens your library. Moving to another
+workspace page or hiding chat keeps the same conversation and unsent question.
+Use the left-edge splitter or width control to resize the panel. On a narrow
+screen it opens as a focused view; **Hide chat** returns to your work.
 Choose an earlier question in a conversation to read its answer again; this
 doesn't ask the model again.
 
@@ -77,6 +82,6 @@ to the model again automatically. Ask it to read the current data again; the
 same profile and current project permission checks apply.
 
 If conversation creation was not acknowledged, **Recover conversation creation**
-reuses its original identity and focus. Unsent and uncertain work stays in page
-memory only. Leaving warns when such work could be lost; nothing is sent again
+reuses its original identity and focus. Unsent and uncertain work stays in tab
+memory only. Switching conversations or leaving the workspace warns when such work could be lost; nothing is sent again
 automatically.

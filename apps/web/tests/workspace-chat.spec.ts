@@ -44,7 +44,7 @@ test("the hosted session summary check dismisses its menu before workbench chat 
   );
   await page.goto(f.data.browserPath);
   await expectSignedInAccount(page);
-  await page.getByRole("tab", { name: "Ask Weft", exact: true }).click();
+  await page.getByRole("button", { name: "Show chat", exact: true }).click();
   await expect(panel(page)).toBeVisible();
   await create(page);
   await ask(page);
@@ -74,6 +74,14 @@ test("new conversation route echoes do not replace an explicitly selected model 
   }
 });
 async function create(page: Page, acknowledged = true) {
+  await page.locator("#workspace-chat-toggle").waitFor();
+  if (
+    (await page
+      .locator("#workspace-chat-toggle")
+      .getAttribute("aria-expanded")) === "false"
+  )
+    await page.locator("#workspace-chat-toggle").click();
+  await expect(panel(page)).toBeVisible();
   const created = acknowledged
     ? page.waitForResponse(
         (response) =>
@@ -115,7 +123,7 @@ test("standalone chat lists both kinds, searches mappings, pins focus and links 
   const f = await workspaceFixture(page);
   await page.goto("/chat");
   await expect(
-    page.getByRole("heading", { name: "Chat", exact: true }),
+    page.getByRole("heading", { name: "Conversations", exact: true }),
   ).toBeVisible();
   await expect(panel(page).getByLabel("Saved conversations")).toContainText(
     "Earlier revision conversation",
@@ -455,7 +463,9 @@ test("foreign workspace citations are refused before link or answer adoption", a
   );
 });
 
-test("leaving chat warns only for unsent in-tab work", async ({ page }) => {
+test("content navigation preserves unsent chat without a discard warning", async ({
+  page,
+}) => {
   await workspaceFixture(page);
   await page.goto("/chat");
   await create(page);
@@ -471,8 +481,11 @@ test("leaving chat warns only for unsent in-tab work", async ({ page }) => {
     .getByRole("navigation", { name: "Workspace", exact: true })
     .getByRole("link", { name: "Catalog", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/chat/);
-  expect(count).toBe(1);
+  await expect(page).toHaveURL(/\/catalog/);
+  expect(count).toBe(0);
+  await expect(panel(page).getByLabel("Question", { exact: true })).toHaveValue(
+    "Unsent private draft",
+  );
   await panel(page).getByLabel("Question", { exact: true }).fill("");
 });
 
@@ -499,7 +512,7 @@ test("capture sanitized chat page and workbench at a fixed viewport", async ({
   await ask(page);
   await expect(panel(page)).toContainText("Answer complete.");
   const resize = page.getByRole("separator", {
-    name: "Resize investigation dock",
+    name: "Resize chat",
   });
   await resize.focus();
   await resize.press("End");

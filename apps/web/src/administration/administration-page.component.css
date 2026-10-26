@@ -3,8 +3,8 @@
 }
 .administration {
   max-width: 80rem;
-  margin: 0 auto;
-  padding: 1.5rem;
+  margin: 0;
+  padding: 16px;
 }
 header,
 .controls {
@@ -28,14 +28,14 @@ fieldset {
   min-width: 0;
 }
 h2 {
-  margin-top: 2rem;
+  margin-top: 24px;
 }
 label {
   display: grid;
   gap: 0.35rem;
 }
 input {
-  min-width: 15rem;
+  min-width: min(15rem, 100%);
   max-width: 100%;
 }
 .controls {
@@ -51,8 +51,8 @@ table {
 }
 td,
 th {
-  padding: 0.65rem;
-  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  border-bottom: 1px solid #d7e2d1;
   vertical-align: top;
 }
 button {

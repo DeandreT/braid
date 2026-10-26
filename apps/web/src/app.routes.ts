@@ -1,6 +1,11 @@
 import { DOCUMENT } from "@angular/common";
 import { inject } from "@angular/core";
-import { type CanDeactivateFn, type Routes } from "@angular/router";
+import {
+  type CanActivateFn,
+  type CanDeactivateFn,
+  type Routes,
+} from "@angular/router";
+import { UnsentWork } from "./workbench/unsent-work";
 import type { Observable } from "rxjs";
 import { BrowserSessionState } from "./auth/browser-session-state";
 import { requireSignIn, signInEntry } from "./auth/sign-in-guards";
@@ -18,6 +23,13 @@ import type { RevisionPageComponent } from "./catalog/revision-page.component";
 
 const leaveChat: CanDeactivateFn<ChatPageComponent> = (component) =>
   component.requestLeave();
+/** Auth entry replaces the mounted workspace; ordinary content navigation does not. */
+const leaveWorkspaceEntry: CanActivateFn = () =>
+  !inject(UnsentWork).present() ||
+  (inject(DOCUMENT).defaultView?.confirm(
+    "Leave this workspace? Unsent work and recovery information kept only in this tab may be lost. A sent request may already have committed.",
+  ) ??
+    false);
 const leaveRevisionChat: CanDeactivateFn<RevisionPageComponent> = (component) =>
   component.requestChatLeave();
 
@@ -95,6 +107,7 @@ export const routes: Routes = [
   },
   {
     path: "invitations",
+    canActivate: [leaveWorkspaceEntry],
     loadComponent: () =>
       import("./administration/invitation-page.component").then(
         (m) => m.InvitationPageComponent,
@@ -105,7 +118,7 @@ export const routes: Routes = [
   {
     path: "sign-in",
     component: SignInPageComponent,
-    canActivate: [signInEntry],
+    canActivate: [signInEntry, leaveWorkspaceEntry],
     title: "Sign in · Weft",
   },
   {

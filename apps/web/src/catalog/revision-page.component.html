@@ -43,13 +43,6 @@
       >
       <button
         type="button"
-        (click)="frame()?.openPalette()"
-        aria-label="Switch project or mapping"
-      >
-        Switch…
-      </button>
-      <button
-        type="button"
         (click)="retry()"
         title="Refresh current catalog access and metadata"
       >
@@ -555,23 +548,6 @@
     }
   </ng-template>
   <ng-template #dock>
-    <div [hidden]="workbench.selection().dock !== 'ask'">
-      @if (context(); as current) {
-        <weft-revision-chat
-          [scope]="view.revision.scope"
-          [context]="current"
-          [reportsReady]="reports.readsSettled()"
-          (citation)="reportView()?.showChatCitation($event)"
-          [projectionId]="
-            reportView()?.projectionPin()?.projectionDerivationId ?? null
-          "
-          [validationId]="
-            reportView()?.validationPin()?.validationDerivationId ?? null
-          "
-          (workspaceCitation)="reportView()?.showWorkspaceChatCitation($event)"
-        />
-      }
-    </div>
     @switch (workbench.selection().dock) {
       @case ("diagnostics") {
         @for (group of diagnostics(); track group.kind) {

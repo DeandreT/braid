@@ -33,88 +33,92 @@ import {
         {{ s.failedCases }} failed · {{ s.pendingCases }} pending</span
       >
     }
-    @if (policy(); as p) {
-      <p>
-        Build policy:
-        {{
-          p.requirePassingRegression
-            ? "passing exact-revision regression required"
-            : "regression gate not required"
-        }}.
-      </p>
-    }
-    @if (manage()) {
-      @if (canRun()) {
-        <button
-          type="button"
-          class="catalog-button"
-          [disabled]="saving()"
-          (click)="recheck()"
-        >
-          Run all current cases now
-        </button>
+    <details>
+      <summary>Check controls and policy</summary>
+      @if (policy(); as p) {
+        <p>
+          Build policy:
+          {{
+            p.requirePassingRegression
+              ? "passing exact-revision regression required"
+              : "regression gate not required"
+          }}.
+        </p>
       }
-      @if (suite()) {
-        <button type="button" class="catalog-button" (click)="cases()">
-          Show case results
-        </button>
-      }
-      @if (evaluations(); as page) {
-        <ul>
-          @for (item of page.cases; track item.caseId) {
-            <li>
-              <code>{{ item.caseId }}</code> v{{ item.version }}:
-              {{ item.state }} ({{ item.attempts }} attempts); original revision
-              <code>{{ item.originalRevisionId }}</code>
-            </li>
-          }
-        </ul>
-        @if (page.nextCaseId) {
-          <button type="button" (click)="cases(page.nextCaseId)">
-            Next case results
-          </button>
-        }
-      }
-      <p>
-        Automatic checks:
-        {{
-          enabled() === null
-            ? "unavailable"
-            : enabled()
-              ? "on (all current cases)"
-              : "off"
-        }}.
-        @if (admin() && enabled() !== null) {
+      @if (manage()) {
+        @if (canRun()) {
           <button
             type="button"
             class="catalog-button"
             [disabled]="saving()"
-            (click)="toggle()"
+            (click)="recheck()"
           >
-            {{
-              pendingToggle() !== null
-                ? "Retry change"
-                : enabled()
-                  ? "Turn off"
-                  : "Turn on"
-            }}
+            Run all current cases now
           </button>
         }
-      </p>
-      <a
-        [routerLink]="[
-          '/catalog/organizations',
-          scope().organizationId,
-          'projects',
-          scope().projectId,
-          'automation',
-        ]"
-        >Automation and notifications</a
-      >
-      @if (message()) {
-        <p role="status">{{ message() }}</p>
+        @if (suite()) {
+          <button type="button" class="catalog-button" (click)="cases()">
+            Show case results
+          </button>
+        }
+        @if (evaluations(); as page) {
+          <ul>
+            @for (item of page.cases; track item.caseId) {
+              <li>
+                <code>{{ item.caseId }}</code> v{{ item.version }}:
+                {{ item.state }} ({{ item.attempts }} attempts); original
+                revision
+                <code>{{ item.originalRevisionId }}</code>
+              </li>
+            }
+          </ul>
+          @if (page.nextCaseId) {
+            <button type="button" (click)="cases(page.nextCaseId)">
+              Next case results
+            </button>
+          }
+        }
+        <p>
+          Automatic checks:
+          {{
+            enabled() === null
+              ? "unavailable"
+              : enabled()
+                ? "on (all current cases)"
+                : "off"
+          }}.
+          @if (admin() && enabled() !== null) {
+            <button
+              type="button"
+              class="catalog-button"
+              [disabled]="saving()"
+              (click)="toggle()"
+            >
+              {{
+                pendingToggle() !== null
+                  ? "Retry change"
+                  : enabled()
+                    ? "Turn off"
+                    : "Turn on"
+              }}
+            </button>
+          }
+        </p>
+        <a
+          [routerLink]="[
+            '/catalog/organizations',
+            scope().organizationId,
+            'projects',
+            scope().projectId,
+            'automation',
+          ]"
+          >Automation and notifications</a
+        >
+        @if (message()) {
+          <p role="status">{{ message() }}</p>
+        }
       }
-    }
+    </details>
   `,
 })
 export class RegressionStatusComponent {

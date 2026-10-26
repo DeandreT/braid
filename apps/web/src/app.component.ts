@@ -1,5 +1,5 @@
 import { DOCUMENT } from "@angular/common";
-import { Component, inject, signal } from "@angular/core";
+import { Component, computed, inject, signal } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import {
   NavigationEnd,
@@ -14,6 +14,8 @@ import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.compo
 import { CatalogContextStore } from "./catalog/catalog-context";
 import { ConnectionNoticeComponent } from "./workbench/connection-notice.component";
 import { HeaderSearchComponent } from "./catalog/search/header-search.component";
+import { WorkspaceChatPanelComponent } from "./workbench/workspace-chat-panel.component";
+import { WorkspaceConversation } from "./workbench/workspace-conversation";
 
 @Component({
   selector: "weft-root",
@@ -24,11 +26,20 @@ import { HeaderSearchComponent } from "./catalog/search/header-search.component"
     BrowserAuthControlsComponent,
     ConnectionNoticeComponent,
     HeaderSearchComponent,
+    WorkspaceChatPanelComponent,
   ],
   templateUrl: "./app.component.html",
 })
 export class AppComponent {
   readonly contexts = inject(CatalogContextStore);
+  readonly chat = inject(WorkspaceConversation);
+  readonly chatVisible = computed(
+    () =>
+      this.chat.opened() &&
+      this.contexts.canPresent(this.contexts.context()) &&
+      this.contexts.context()?.features.chat === true,
+  );
+  readonly navigationOpen = signal(false);
   private readonly document = inject(DOCUMENT);
   readonly session = inject(BrowserSessionState);
   readonly workbench = signal(false);
@@ -46,20 +57,24 @@ export class AppComponent {
         filter((event) => event instanceof NavigationEnd),
         tap((event) => {
           this.workbench.set(
-            /\/mappings\/[^/]+\/revisions\/(?!new(?:[?#]|$))[^/?#]+(?:[?#]|$)/.test(
+            !/^\/(?:sign-in|invitations)(?:[?#]|$)/.test(
               event.urlAfterRedirects,
             ),
           );
           this.signInPage.set(
-            /^\/sign-in(?:[?#]|$)/.test(event.urlAfterRedirects),
+            /^\/(?:sign-in|invitations)(?:[?#]|$)/.test(
+              event.urlAfterRedirects,
+            ),
           );
+          this.navigationOpen.set(false);
           if (initialNavigation) {
             initialNavigation = false;
             return;
           }
-          queueMicrotask(() =>
-            this.document.getElementById("main-content")?.focus(),
-          );
+          if (!this.document.activeElement?.closest("#workspace-chat"))
+            queueMicrotask(() =>
+              this.document.getElementById("main-content")?.focus(),
+            );
         }),
         // Help has no catalog page to load the account's organization. Read once
         // per navigation, not per session observation: a denied organization can
@@ -86,6 +101,10 @@ export class AppComponent {
       event.metaKey
     )
       return;
-    this.document.getElementById("main-content")?.focus();
+    const main = this.document.getElementById("main-content");
+    if (main && !main.getClientRects().length && this.chatVisible()) {
+      event.preventDefault();
+      this.document.getElementById("workspace-chat-heading")?.focus();
+    } else main?.focus();
   }
 }

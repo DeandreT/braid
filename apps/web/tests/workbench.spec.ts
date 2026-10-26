@@ -61,7 +61,7 @@ test("layout preferences survive reload and Reset layout without persisting priv
   });
   await resize.focus();
   await page.keyboard.press("ArrowRight");
-  await page.getByRole("button", { name: "compact · 28px rows" }).click();
+  await page.getByRole("button", { name: "comfortable · 32px rows" }).click();
   await page
     .getByRole("button", {
       name: 'Inspect field ["group0"]["value0"]',
@@ -85,7 +85,7 @@ test("layout preferences survive reload and Reset layout without persisting priv
   ).toHaveCount(3);
   await expect(resize).toHaveAttribute("aria-valuenow", "200");
   await expect(
-    page.getByRole("button", { name: "comfortable · 32px rows" }),
+    page.getByRole("button", { name: "dense · 24px rows" }),
   ).toBeVisible();
   await expect(page.getByLabel("Filter mapping fields")).toHaveValue("");
   await expect(page.locator("tr.wb-selected")).toHaveCount(0);
@@ -97,7 +97,7 @@ test("layout preferences survive reload and Reset layout without persisting priv
   ).toHaveCount(4);
   await expect(resize).toHaveAttribute("aria-valuenow", "190");
   await expect(
-    page.getByRole("button", { name: "compact · 28px rows" }),
+    page.getByRole("button", { name: "comfortable · 32px rows" }),
   ).toBeVisible();
 });
 
@@ -590,12 +590,15 @@ test("palette, responsive inspector and unavailable release state do not invent 
   const fixture = await workbench(page);
   await page.keyboard.press("Control+k");
   await expect(
-    page.getByRole("dialog", { name: "Go to…", exact: true }),
+    page.getByRole("dialog", { name: "Search / Go to", exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("combobox", { name: "Search commands and current context" })
+    .getByRole("searchbox", { name: "Search catalog" })
     .fill(workbenchLabels.releases);
-  await page.keyboard.press("Enter");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /^In use/ })
+    .click();
   await expect(
     page.getByRole("table").filter({ hasText: "Version currently in use" }),
   ).toContainText("This workspace can't show which version is in use.");
@@ -604,7 +607,9 @@ test("palette, responsive inspector and unavailable release state do not invent 
   await page
     .getByRole("tab", { name: workbenchLabels.mapping, exact: true })
     .click();
-  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Show inspector", exact: true })
+    .click();
   await expect(
     page.getByRole("complementary", { name: "Context inspector" }),
   ).toBeVisible();
@@ -668,8 +673,11 @@ test("columns, density and both resize handles work together on the dense layout
   await expect(table.getByRole("columnheader")).toHaveCount(4);
   await page.keyboard.press("Escape");
   await expect(page.locator(".wb-columns")).not.toHaveAttribute("open", "");
+  await page
+    .getByRole("button", { name: "Show inspector", exact: true })
+    .click();
   for (const [name, key] of [
-    ["Resize inspector", "ArrowLeft"],
+    ["Resize Incoming field column", "ArrowRight"],
     ["Resize investigation dock", "ArrowUp"],
   ]) {
     const separator = page.getByRole("separator", { name: name!, exact: true });
@@ -682,16 +690,16 @@ test("columns, density and both resize handles work together on the dense layout
     );
   }
   await page
-    .getByRole("button", { name: "compact · 28px rows", exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "comfortable · 32px rows", exact: true }),
-  ).toBeVisible();
-  await page
     .getByRole("button", { name: "comfortable · 32px rows", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "dense · 24px rows", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "dense · 24px rows", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "compact · 28px rows", exact: true }),
   ).toBeVisible();
   await table.locator("[data-row-key]").first().click();
   await page.getByRole("button", { name: "Data flow", exact: true }).click();
@@ -706,13 +714,15 @@ test("narrow scaled text keeps role, controls and overflow inside the workbench"
   await page.setViewportSize({ width: 390, height: 844 });
   await workbench(page, 60);
   await page.addStyleTag({ content: ":root {font-size:24px !important}" });
-  const catalog = await page.locator(".catalog-context").boundingBox();
+  const catalog = await page.locator(".app-header").boundingBox();
   const context = await page.locator(".wb-context-path").boundingBox();
   expect(catalog).not.toBeNull();
   expect(context).not.toBeNull();
   expect(context!.y).toBeGreaterThanOrEqual(catalog!.y + catalog!.height);
   await expect(page.locator(".wb-role")).toBeVisible();
-  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Show inspector", exact: true })
+    .click();
   const inspector = page.getByRole("complementary", {
     name: "Context inspector",
   });
@@ -720,7 +730,7 @@ test("narrow scaled text keeps role, controls and overflow inside the workbench"
   await inspector.getByRole("tab", { name: "Rule", exact: true }).focus();
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "Inspector", exact: true }),
+    page.getByRole("button", { name: "Show inspector", exact: true }),
   ).toBeFocused();
   expect(
     await page.evaluate(

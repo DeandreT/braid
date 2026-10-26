@@ -1,0 +1,415 @@
+import { expect, test, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+import { workspaceFixture, legacyId } from "./workspace-chat.fixture";
+import { projectPath } from "./catalog.fixture";
+
+const chat = (page: Page) => page.locator("#workspace-chat");
+async function createConversation(page: Page): Promise<string> {
+  const previous = await chat(page)
+    .getByLabel("Saved conversations")
+    .inputValue();
+  await chat(page)
+    .getByRole("button", { name: "New conversation", exact: true })
+    .click();
+  const selector = chat(page).getByLabel("Saved conversations");
+  await expect(selector).not.toHaveValue("");
+  await expect(selector).not.toHaveValue(previous);
+  return selector.inputValue();
+}
+
+test("returning to a previous chat URL reconciles with the actual panel and protects its draft", async ({
+  page,
+}) => {
+  await workspaceFixture(page);
+  await page.goto("/chat");
+  const a = await createConversation(page),
+    b = await createConversation(page);
+  await chat(page).getByLabel("Saved conversations").selectOption(a);
+  await expect(page).toHaveURL(new RegExp(`conversationId=${a}`));
+  await page
+    .getByRole("navigation", { name: "Workspace", exact: true })
+    .getByRole("link", { name: "Help", exact: true })
+    .click();
+  await chat(page).getByLabel("Saved conversations").selectOption(b);
+  await chat(page).getByLabel("Question", { exact: true }).fill("Keep B draft");
+  let warnings = 0;
+  page.on("dialog", async (dialog) => {
+    warnings++;
+    await dialog.dismiss();
+  });
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`conversationId=${b}`));
+  await expect(chat(page).getByLabel("Saved conversations")).toHaveValue(b);
+  await expect(chat(page).getByLabel("Question", { exact: true })).toHaveValue(
+    "Keep B draft",
+  );
+  expect(warnings).toBe(1);
+});
+
+for (const ambiguous of [false, true])
+  test(`a busy question keeps its conversation URL and recovery owner (${ambiguous ? "ambiguous" : "accepted"})`, async ({
+    page,
+  }) => {
+    const fixture = await workspaceFixture(page);
+    await page.goto("/chat");
+    const b = await createConversation(page);
+    await page
+      .getByRole("navigation", { name: "Workspace", exact: true })
+      .getByRole("link", { name: "Catalog", exact: true })
+      .click();
+    await page
+      .getByRole("link", { name: fixture.data.project.name, exact: true })
+      .click();
+    await page
+      .getByRole("link", { name: fixture.data.mapping.name, exact: true })
+      .click();
+    await page.locator(`a[href="${fixture.data.browserPath}"]`).first().click();
+    await expect(page).toHaveURL(new RegExp(fixture.data.browserPath + "$"));
+    const a = await createConversation(page);
+    let release!: () => void, arrived!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve)),
+      pending = new Promise<void>((resolve) => (arrived = resolve));
+    await page.route("**/turns", async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      arrived();
+      await held;
+      await route.fallback();
+    });
+    fixture.state.loseSend = ambiguous;
+    try {
+      await chat(page)
+        .getByLabel("Question", { exact: true })
+        .fill("Only send this to A");
+      await chat(page)
+        .getByRole("button", { name: "Send question", exact: true })
+        .click();
+      await pending;
+      for (
+        let steps = 0;
+        steps < 6 && !new URL(page.url()).pathname.startsWith("/chat");
+        steps++
+      )
+        await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`conversationId=${a}`));
+      expect(a).not.toBe(b);
+      release();
+      if (ambiguous)
+        await expect(
+          chat(page).getByRole("button", {
+            name: "Recover original question",
+            exact: true,
+          }),
+        ).toBeVisible();
+      else await expect(chat(page)).toContainText("Answer complete.");
+      await expect(chat(page).getByLabel("Saved conversations")).toHaveValue(a);
+      const sends = fixture.posts.filter((p) => p.path.endsWith("/turns"));
+      expect(sends).toHaveLength(1);
+      expect(sends[0]!.path).toContain(a);
+      expect(sends[0]!.body.text).toBe("Only send this to A");
+    } finally {
+      release();
+    }
+  });
+
+test("the conversation library stays visible after hiding chat and reactive refreshes", async ({
+  page,
+}) => {
+  await workspaceFixture(page);
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto("/chat");
+  await expect(chat(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(chat(page)).not.toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Conversations", exact: true }),
+  ).toBeVisible();
+  const url = page.url();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.locator("#workspace-chat-toggle")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await page.getByRole("button", { name: "Open chat", exact: true }).click();
+  await chat(page)
+    .getByRole("button", { name: "Hide chat", exact: true })
+    .click();
+  await expect(chat(page)).not.toBeVisible();
+  await expect(page).toHaveURL(url);
+});
+async function openChat(page: Page) {
+  if (!(await chat(page).isVisible())) {
+    await page.locator("#workspace-chat-toggle").click();
+    await expect(page.locator("#workspace-chat-heading")).toBeFocused();
+  }
+  await expect(chat(page)).toBeVisible();
+}
+
+test("an in-flight answer survives hiding and content navigation without another send", async ({
+  page,
+}) => {
+  const fixture = await workspaceFixture(page);
+  let release!: () => void, arrived!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve)),
+    requested = new Promise<void>((resolve) => (arrived = resolve));
+  let streams = 0;
+  await page.route("**/events*", async (route) => {
+    streams++;
+    arrived();
+    await held;
+    await route.fallback();
+  });
+  try {
+    await page.goto("/chat");
+    await chat(page)
+      .getByRole("button", { name: "New conversation", exact: true })
+      .click();
+    await chat(page)
+      .getByLabel("Question", { exact: true })
+      .fill("Explain the mapping");
+    await chat(page)
+      .getByRole("button", { name: "Send question", exact: true })
+      .click();
+    await requested;
+    await chat(page)
+      .getByRole("button", { name: "Hide chat", exact: true })
+      .click();
+    await page
+      .getByRole("navigation", { name: "Workspace", exact: true })
+      .getByRole("link", { name: "Help", exact: true })
+      .click();
+    await openChat(page);
+    expect(streams).toBe(1);
+    expect(fixture.posts.filter((p) => p.path.endsWith("/turns"))).toHaveLength(
+      1,
+    );
+    release();
+    await expect(chat(page)).toContainText("Answer complete.");
+  } finally {
+    release();
+  }
+});
+
+test("project content fits the shared shell at every supported width", async ({
+  page,
+}) => {
+  const fixture = await workspaceFixture(page);
+  await page.goto(projectPath(fixture.data.project.scope));
+  await expect(
+    page.getByRole("heading", { name: fixture.data.project.name, exact: true }),
+  ).toBeVisible();
+  for (const width of [1440, 1024, 720, 360]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await capture(page, `project-${width}`);
+  }
+});
+async function capture(page: Page, name: string) {
+  const directory = process.env.WEFT_UI_CAPTURE_DIR;
+  if (directory) {
+    await mkdir(directory, { recursive: true });
+    await page.screenshot({ path: `${directory}/${name}.png`, fullPage: true });
+  }
+}
+
+test("one conversation and unsent draft survive route changes, resizing and hide/restore", async ({
+  page,
+}) => {
+  const fixture = await workspaceFixture(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(fixture.data.browserPath);
+  await openChat(page);
+  await chat(page)
+    .getByRole("button", { name: "New conversation", exact: true })
+    .click();
+  const question = chat(page).getByLabel("Question", { exact: true });
+  await question.fill("Keep this draft across workspace contexts");
+  const conversation = await chat(page)
+    .getByLabel("Saved conversations")
+    .inputValue();
+  const separator = page.getByRole("separator", {
+    name: "Resize chat",
+    exact: true,
+  });
+  await separator.focus();
+  await page.keyboard.press("End");
+  await expect(separator).toHaveAttribute("aria-valuenow", "560");
+  await capture(page, "mapping-chat-wide");
+  await page.keyboard.press("Home");
+  await expect(separator).toHaveAttribute("aria-valuenow", "300");
+  const box = await separator.boundingBox();
+  await page.mouse.move(box!.x + 3, box!.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box!.x - 57, box!.y + 30);
+  await page.mouse.up();
+  await expect(separator).toHaveAttribute("aria-valuenow", "360");
+  await chat(page)
+    .getByRole("button", { name: "Hide chat", exact: true })
+    .click();
+  await expect(question).not.toBeVisible();
+  await capture(page, "mapping-chat-hidden");
+  await page.locator("#workspace-chat-toggle").click();
+  await expect(question).toHaveValue(
+    "Keep this draft across workspace contexts",
+  );
+  await page
+    .getByRole("navigation", { name: "Workspace", exact: true })
+    .getByRole("link", { name: "Help", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/help$/);
+  await expect(question).toHaveValue(
+    "Keep this draft across workspace contexts",
+  );
+  await expect(chat(page).getByLabel("Saved conversations")).toHaveValue(
+    conversation,
+  );
+  await expect(page.locator("weft-revision-chat")).toHaveCount(1);
+  await capture(page, "guide-shared-chat");
+  await page
+    .getByRole("navigation", { name: "Workspace", exact: true })
+    .getByRole("link", { name: "Conversations", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Conversations", exact: true }),
+  ).toBeVisible();
+  await expect(question).toHaveValue(
+    "Keep this draft across workspace contexts",
+  );
+  expect(
+    fixture.posts.filter((p) => p.path.endsWith("/conversations")),
+  ).toHaveLength(1);
+  expect(fixture.posts.filter((p) => p.path.endsWith("/turns"))).toHaveLength(
+    0,
+  );
+});
+
+test("cancelled conversation changes restore the URL and retain the draft", async ({
+  page,
+}) => {
+  const fixture = await workspaceFixture(page);
+  await page.goto("/chat");
+  await expect(chat(page)).toBeVisible();
+  await chat(page)
+    .getByRole("button", { name: "New conversation", exact: true })
+    .click();
+  const selected = await chat(page)
+    .getByLabel("Saved conversations")
+    .inputValue();
+  await chat(page)
+    .getByLabel("Question", { exact: true })
+    .fill("Do not discard this question");
+  let warnings = 0;
+  page.on("dialog", async (dialog) => {
+    warnings++;
+    await dialog.dismiss();
+  });
+  await chat(page).getByLabel("Saved conversations").selectOption(legacyId);
+  await expect(page).toHaveURL(new RegExp(`conversationId=${selected}`));
+  await expect(chat(page).getByLabel("Question", { exact: true })).toHaveValue(
+    "Do not discard this question",
+  );
+  expect(warnings).toBe(1);
+  expect(fixture.posts.filter((p) => p.path.endsWith("/turns"))).toHaveLength(
+    0,
+  );
+});
+
+test("actual shell and inspector fit desktop, narrow and phone viewports", async ({
+  page,
+}) => {
+  const fixture = await workspaceFixture(page);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(fixture.data.browserPath);
+  await expect(
+    page.getByRole("table", { name: "Mapping field connections" }),
+  ).toBeVisible();
+  for (const width of [1440, 1024, 720, 360]) {
+    await page.setViewportSize({ width, height: 1000 });
+    if (await chat(page).isVisible())
+      await chat(page)
+        .getByRole("button", { name: "Hide chat", exact: true })
+        .click();
+    await capture(page, `mapping-${width}`);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await openChat(page);
+    await expect(page.locator("#workspace-chat-heading")).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await capture(page, `chat-${width}`);
+    if (width === 360) {
+      await expect(page.locator("#main-content")).not.toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#workspace-chat-toggle")).toBeFocused();
+    } else
+      await chat(page)
+        .getByRole("button", { name: "Hide chat", exact: true })
+        .click();
+    await page
+      .getByRole("button", { name: "Show inspector", exact: true })
+      .click();
+    await expect(
+      page.getByRole("complementary", { name: "Context inspector" }),
+    ).toBeVisible();
+    await capture(page, `inspector-${width}`);
+    await page
+      .getByRole("button", { name: /^(Hide inspector|Back to work)$/ })
+      .click();
+  }
+  await page.setViewportSize({ width: 720, height: 800 });
+  await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
+  await capture(page, "mapping-200-percent-text");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("global navigation, search and account remain inside the unified shell", async ({
+  page,
+}) => {
+  const fixture = await workspaceFixture(page);
+  await page.goto(fixture.data.browserPath);
+  await page.keyboard.press("Control+k");
+  const dialog = page.getByRole("dialog", {
+    name: "Search / Go to",
+    exact: true,
+  });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Guide", exact: true }).click();
+  await expect(page).toHaveURL(/\/help$/);
+  await expect(page.locator(".app-shell.app-workbench")).toBeVisible();
+  for (const [label, path] of [
+    ["Catalog", "/catalog"],
+    ["Notifications", "/notifications"],
+    ["Administration", "/administration"],
+  ]) {
+    await page
+      .getByRole("navigation", { name: "Workspace", exact: true })
+      .getByRole("link", { name: label, exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(path + "(?:/.*)?$"));
+    await expect(page.locator("main h1").first()).toBeVisible();
+    await expect(page.locator(".app-shell.app-workbench")).toBeVisible();
+    await capture(page, label.toLowerCase());
+  }
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.locator("#account-trigger").click();
+  const menu = await page.locator(".session-panel").boundingBox();
+  expect(menu!.x).toBeGreaterThanOrEqual(0);
+  expect(menu!.x + menu!.width).toBeLessThanOrEqual(360);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#account-trigger")).toBeFocused();
+});

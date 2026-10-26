@@ -59,6 +59,7 @@ test("catalog header exposes accessible search without overflowing", async ({
     await expect(
       page.getByRole("link", { name: "Synthetic project", exact: true }),
     ).toBeVisible();
+    await page.getByRole("button", { name: /^Search \/ Go to/ }).click();
     await expect(
       page.getByRole("searchbox", { name: "Search catalog" }),
     ).toBeVisible();
@@ -211,9 +212,12 @@ test("header search, literal safe highlights and query-bound paging", async ({
 }, testInfo) => {
   const source = await fixture(page);
   await page.goto("/catalog/search");
+  await page.getByRole("button", { name: /^Search \/ Go to/ }).click();
   const header = page.getByRole("search");
   await header.getByRole("searchbox", { name: "Search catalog" }).fill("Order");
-  await header.getByRole("button", { name: "Search", exact: true }).click();
+  await header
+    .getByRole("button", { name: "Search catalog", exact: true })
+    .click();
   await expect(
     page.getByRole("status").filter({ hasText: "result on this page" }),
   ).toHaveText("1 result on this page for “Order”");
@@ -320,7 +324,9 @@ test("signed-in search input and navigation do not claim unsent authoring work",
   await fixture(page, true);
   await page.goto("/catalog/search?q=Order");
   await expect(page.locator(".catalog-search-results li")).toHaveCount(1);
+  await page.getByRole("button", { name: /^Search \/ Go to/ }).click();
   await page.getByRole("searchbox", { name: "Search catalog" }).fill("Invoice");
+  await page.getByRole("button", { name: "Close search", exact: true }).click();
   await page.getByLabel("Search text", { exact: true }).fill("Customer");
   await page.locator("#account-trigger").click();
   const menu = page.getByRole("region", { name: "Sign-in and session" });
@@ -434,10 +440,13 @@ test("session search keeps retained navigation and MFD warning ownership separat
     await expect(page.locator("#sign-in-navigation-warning")).toHaveCount(0);
     await page.locator("#account-trigger").click();
     const header = page.getByRole("search");
+    await page.getByRole("button", { name: /^Search \/ Go to/ }).click();
     await header
       .getByRole("searchbox", { name: "Search catalog" })
       .fill("Order");
-    await header.getByRole("button", { name: "Search", exact: true }).click();
+    await header
+      .getByRole("button", { name: "Search catalog", exact: true })
+      .click();
     await expect(page.locator(".catalog-search-results li")).toHaveCount(1);
     await page.locator("#account-trigger").click();
     await expect(page.locator("#sign-in-navigation-warning")).toHaveCount(0);

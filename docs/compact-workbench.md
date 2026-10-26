@@ -1,7 +1,10 @@
-# Compact revision workbench
+# Unified workbench
 
-The revision page uses a full-width data canvas, a compact application rail,
-a contextual inspector and a shared investigation dock. The displayed revision
+Authenticated catalog, mapping, search, operations, administration, notifications,
+guide and conversation routes share a full-width shell, navigation rail, account
+menu and Search / Go to palette. Sign-in and invitation entry remain separate
+identity boundaries. Existing URLs and admission checks keep their meanings.
+The revision page uses a data canvas and a bottom inspector/evidence tray. The displayed revision
 is immutable: opening a workflow tab does not follow the mapping's current head.
 The head marker describes the metadata read, not a continuously refreshed claim.
 
@@ -19,11 +22,22 @@ The head marker describes the metadata read, not a continuously refreshed claim.
 - Arrow keys move field focus; Enter selects a field and Escape clears it.
   Source and target remain visible, while transformation and type columns can be
   hidden. Column and panel separators support pointer drag and arrow keys.
-- The inspector follows the workflow. Its narrow-screen toggle overlays the
-  canvas rather than shrinking the table. The dock and inspector can collapse.
+- The inspector follows the workflow in the bottom tray, alongside Issues,
+  Incoming data, Result, Diff and Activity. The tray collapses when not needed.
+  Its height is bounded to 40% of the available work region while reserving 240px
+  for the canvas. Small or short regions use a focused details view with a Back
+  action instead of an overlay.
 - Compact, comfortable and dense settings use minimum row heights of 28, 32 and
   24 CSS pixels. Content can increase a row's height. Text remains relative to
-  user scaling.
+  user scaling. Comfortable (32px) is the default.
+
+The right conversation is one mounted surface across route changes. Hiding it
+does not cancel a stream, send a draft or discard recovery. Its width starts at
+360px, ranges from 300–560px and is clamped to preserve the main content region.
+At phone width it becomes a focused panel rather than covering the canvas.
+The labeled separator supports pointer drag, Left/Right (10px), Shift (20px),
+and Home/End. Width and open-state preferences are harmless per-user layout
+data; conversations, drafts, tokens and request recovery never enter storage.
 
 ## Evidence and private state
 
@@ -69,6 +83,9 @@ no simulated activation or rollback action.
 ## Checks
 
 `playwright.workbench-model.config.ts` covers the pure selection and JSON rules.
+`playwright.unified-workbench.config.ts` covers the shared shell and preserved
+route, form, chat and workbench workflows on a synthetic API boundary at port
+5186. `WEFT_UI_CAPTURE_DIR` optionally retains its responsive screenshots.
 `playwright.workbench.config.ts` covers the integrated Angular interactions using
 explicitly synthetic API boundary fixtures; these do not establish backend
 authorization or persistence qualification. The existing real-API suites remain

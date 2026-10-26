@@ -1,4 +1,34 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+
+test("capture authorized operations in the shared shell", async ({ page }) => {
+  const directory = process.env.WEFT_UI_CAPTURE_DIR;
+  test.skip(!directory, "Optional sanitized UI captures");
+  await fixture(page);
+  await mkdir(directory!, { recursive: true });
+  for (const width of [1440, 1024, 720, 360]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(
+      page.getByRole("heading", { name: "Operations", exact: true }),
+    ).toBeVisible();
+    expect(
+      await page
+        .locator("weft-operations-page dt")
+        .evaluateAll((terms) =>
+          terms.every((term) => term.scrollWidth <= term.clientWidth),
+        ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `${directory}/operations-${width}.png`,
+      fullPage: true,
+    });
+  }
+});
 import {
   synthetic,
   syntheticCatalog,
@@ -28,6 +58,16 @@ async function fixture(page: Page, session = false) {
     replyGate: null as Promise<void> | null,
   };
   await syntheticCatalog(page);
+  await page.route("**/api/v1/health", (route) =>
+    route.fulfill({
+      json: {
+        status: "ok",
+        service: "weft-api",
+        version: "0.1.0",
+        apiVersion: "v1",
+      },
+    }),
+  );
   if (session)
     await page.route("**/api/auth/session", (route) =>
       route.fulfill(

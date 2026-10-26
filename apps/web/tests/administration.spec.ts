@@ -1,4 +1,30 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+
+test("capture authorized administration in the shared shell", async ({
+  page,
+}) => {
+  const directory = process.env.WEFT_UI_CAPTURE_DIR;
+  test.skip(!directory, "Optional sanitized UI captures");
+  await install(page, true);
+  await page.goto("/administration");
+  await expect(
+    page.getByRole("heading", { name: "Organization members", exact: true }),
+  ).toBeVisible();
+  await mkdir(directory!, { recursive: true });
+  for (const width of [1440, 1024, 720, 360]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `${directory}/administration-${width}.png`,
+      fullPage: true,
+    });
+  }
+});
 
 const org = "11111111-1111-4111-8111-111111111111";
 const principal = "22222222-2222-4222-8222-222222222222";
@@ -170,8 +196,16 @@ test("account warning follows unsent administration forms independently", async 
   ).toBeVisible();
   const warning = page.locator("#sign-in-navigation-warning");
   const openAccount = async () => {
-    if (!(await page.locator("#account-menu").isVisible()))
-      await page.locator("#account-trigger").click();
+    // Outside pointer presses close the menu on the next Angular render.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    await expect(async () => {
+      if (!(await page.locator("#account-menu").isVisible()))
+        await page.locator("#account-trigger").click();
+      await expect(page.locator("#account-menu")).toBeVisible();
+    }).toPass();
   };
   await openAccount();
   await expect(warning).toHaveCount(0);

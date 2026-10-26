@@ -118,7 +118,7 @@ async function fixture(page: Page, initiallyAuthenticated: boolean) {
     authenticated = true;
     await route.fulfill({
       status: 302,
-      headers: { Location: new URL(returnTo, "http://127.0.0.1:5184").href },
+      headers: { Location: new URL(returnTo, page.url()).href },
     });
   });
   return {
@@ -200,7 +200,7 @@ for (const withCursor of [false, true]) {
     await page
       .getByRole("button", { name: "Sign in with Microsoft", exact: true })
       .click();
-    await expect(page).toHaveURL(new URL(target, "http://127.0.0.1:5184").href);
+    await expect(page).toHaveURL(new URL(target, page.url()).href);
     await expect(page.locator(".catalog-search-results li")).toHaveCount(1);
     expect(source.returnTo()).toBe(target);
     expect(source.logins()).toBe(1);
@@ -266,7 +266,7 @@ for (const kind of ["field", "rule"] as const) {
       fullPage: true,
     });
     await expect(inspector).toContainText(expected);
-    await expect(page).toHaveURL(new URL(target, "http://127.0.0.1:5184").href);
+    await expect(page).toHaveURL(new URL(target, page.url()).href);
     expect(source.logins()).toBe(0);
     expect(
       source.retained.slice(requests).every((path) => path.endsWith(`/${P}`)),
@@ -316,7 +316,7 @@ for (const kind of ["field", "rule"] as const) {
         .every((path) => path.endsWith(`/${P}`)),
     ).toBe(true);
     expect(source.returnTo()).toBe(target);
-    await expect(page).toHaveURL(new URL(target, "http://127.0.0.1:5184").href);
+    await expect(page).toHaveURL(new URL(target, page.url()).href);
     await expect(inspector).toBeVisible();
     await expect(inspector).toContainText(expected);
     await page.screenshot({

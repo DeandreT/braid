@@ -510,8 +510,13 @@ test("derives and shows the revision's explanation and validation", async () => 
 
 test("answers a workspace chat question with a catalog tool and verified mapping citations", async () => {
   test.setTimeout(900_000);
-  const chat = page.getByRole("complementary", { name: "Mapping chat" });
-  await page.getByRole("tab", { name: "Ask Weft", exact: true }).click();
+  const chat = page.getByRole("complementary", { name: "Workspace chat" });
+  if (
+    (await page
+      .locator("#workspace-chat-toggle")
+      .getAttribute("aria-expanded")) === "false"
+  )
+    await page.locator("#workspace-chat-toggle").click();
   const question = chat.getByRole("textbox", { name: "Question" });
   const questions = chat
     .getByRole("list", { name: "Questions" })
@@ -662,18 +667,31 @@ test("standalone workspace chat gates payload bytes by both profile and fresh pr
       expect(advertised?.payloadsAllowed).toBe(
         profile === "local-acceptance-payloads",
       );
-      const created = page.waitForResponse(
-        (response) =>
-          response.request().method() === "POST" &&
-          new URL(response.url()).pathname ===
-            `/api/v1/organizations/${organization}/chat/conversations`,
-      );
+      const created = page
+        .waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            new URL(response.url()).pathname ===
+              `/api/v1/organizations/${organization}/chat/conversations`,
+        )
+        .then((response) => ({
+          status: response.status(),
+          conversation: response.request().postDataJSON(),
+        }));
       await chat
         .getByRole("button", { name: "New conversation", exact: true })
         .click();
-      const conversationResponse = await created;
-      expect(conversationResponse.status()).toBe(201);
-      const conversation = await conversationResponse.json();
+      const { status, conversation } = await created;
+      expect(status).toBe(201);
+      // The library updates its history entry on creation. Verify the durable
+      // server identity rather than retaining a Chromium response-body handle.
+      const saved = await read<{ conversation: { conversationId: string } }>(
+        page,
+        `/api/v1/organizations/${organization}/chat/conversations/${conversation.conversationId}`,
+      );
+      expect(saved.conversation.conversationId).toBe(
+        conversation.conversationId,
+      );
       await expect(
         chat.getByRole("combobox", {
           name: "Saved conversations",
@@ -703,9 +721,18 @@ test("standalone workspace chat gates payload bytes by both profile and fresh pr
         .click();
       const response = await accepted;
       proof.responseStatus = response.status();
-      proof.sentProfile = response.request().postDataJSON().profileId;
-      const receipt = await response.json();
-      proof.acceptedProfile = receipt.profile?.profileId;
+      const sent = response.request().postDataJSON();
+      proof.sentProfile = sent.profileId;
+      expect(response.ok()).toBe(true);
+      const detail = await read<{
+        turns: { turnId: string; profile: { profileId: string } }[];
+      }>(
+        page,
+        `/api/v1/organizations/${organization}/chat/conversations/${conversation.conversationId}`,
+      );
+      const receipt = detail.turns.find((turn) => turn.turnId === sent.turnId);
+      expect(receipt).toBeDefined();
+      proof.acceptedProfile = receipt!.profile.profileId;
       expect(proof.sentProfile).toBe(profile);
       expect(proof.acceptedProfile).toBe(profile);
       const answer = chat.getByRole("region", { name: "Selected answer" });
@@ -1293,8 +1320,13 @@ test("recovers retained work across a server restart and Ferrule service scaling
       stack("logs", "--no-color", "issuer"),
       /issuer token/,
     );
-    await page.getByRole("tab", { name: "Ask Weft", exact: true }).click();
-    const chat = page.getByRole("complementary", { name: "Mapping chat" });
+    if (
+      (await page
+        .locator("#workspace-chat-toggle")
+        .getAttribute("aria-expanded")) === "false"
+    )
+      await page.locator("#workspace-chat-toggle").click();
+    const chat = page.getByRole("complementary", { name: "Workspace chat" });
     await chat.getByRole("button", { name: "New conversation" }).click();
     let turnId = "";
     let conversationId = "";
@@ -1335,7 +1367,12 @@ test("recovers retained work across a server restart and Ferrule service scaling
       if (inFlight) break;
       expect(attempt).toBeLessThan(3);
       await openCatalog(revisionPath(first), revisionReady);
-      await page.getByRole("tab", { name: "Ask Weft", exact: true }).click();
+      if (
+        (await page
+          .locator("#workspace-chat-toggle")
+          .getAttribute("aria-expanded")) === "false"
+      )
+        await page.locator("#workspace-chat-toggle").click();
       await chat
         .getByRole("combobox", { name: "Saved conversations" })
         .selectOption(conversationId);
@@ -1367,7 +1404,12 @@ test("recovers retained work across a server restart and Ferrule service scaling
     await readHostedState(
       page,
       async () => {
-        await page.getByRole("tab", { name: "Ask Weft", exact: true }).click();
+        if (
+          (await page
+            .locator("#workspace-chat-toggle")
+            .getAttribute("aria-expanded")) === "false"
+        )
+          await page.locator("#workspace-chat-toggle").click();
         if (reopen) {
           await chat
             .getByRole("button", { name: "Refresh chat", exact: true })

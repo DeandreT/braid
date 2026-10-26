@@ -1091,8 +1091,15 @@ test("result polling waits out a routine check without taking keyboard focus", a
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
   await expect.poll(() => fixture.runReads).toBeGreaterThan(0);
+  await expect(
+    panel(page).getByRole("heading", {
+      name: "Regression run result",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(history).toBeEnabled();
   await history.focus();
+  await expect(history).toBeFocused();
   const held = await holdRead(page, "/api/auth/session", () => ({
     version: 1,
     mode: "development",
@@ -1103,7 +1110,14 @@ test("result polling waits out a routine check without taking keyboard focus", a
     // The two-second poll comes due during the check and skips its turn.
     const reads = fixture.runReads;
     await page.waitForTimeout(3000);
-    await expect(history).toBeFocused();
+    await expect(
+      history,
+      await page.evaluate(
+        () =>
+          document.activeElement?.outerHTML.slice(0, 500) ??
+          "no active element",
+      ),
+    ).toBeFocused();
     await expect(history).toBeEnabled();
     expect(fixture.runReads).toBe(reads);
     fixture.response = run("completed", "passed");

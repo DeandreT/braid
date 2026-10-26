@@ -1,4 +1,8 @@
-<div class="app-shell" [class.app-workbench]="workbench()">
+<div
+  class="app-shell"
+  [class.app-workbench]="workbench()"
+  [class.workspace-chat-open]="chatVisible()"
+>
   <a
     class="skip-link"
     [routerLink]="[]"
@@ -15,7 +19,115 @@
           >weft<span class="brand-period">.</span></span
         ></a
       >
-      <nav class="workspace-nav" aria-label="Workspace">
+      <button
+        class="workspace-menu"
+        type="button"
+        [attr.aria-expanded]="navigationOpen()"
+        aria-controls="workspace-nav"
+        (click)="navigationOpen.set(!navigationOpen())"
+      >
+        Menu
+      </button>
+      <div class="workspace-organization">
+        @if (contexts.canPresent(contexts.context())) {
+          <strong>{{ contexts.context()?.organizationName }}</strong>
+        }
+        <span>{{
+          session.state().kind === "development"
+            ? "Development workspace"
+            : "Workspace"
+        }}</span>
+      </div>
+      @if (session.visible()) {
+        <weft-header-search />
+      }
+      @if (session.visible() && contexts.context()?.features?.chat) {
+        <button
+          id="workspace-chat-toggle"
+          type="button"
+          [attr.aria-expanded]="chat.opened()"
+          aria-controls="workspace-chat"
+          (click)="chat.opened() ? chat.hide() : chat.open()"
+        >
+          {{ chat.opened() ? "Chat" : "Show chat"
+          }}{{
+            chat.unsent() ? " · Draft" : chat.streaming() ? " · Reading" : ""
+          }}
+        </button>
+      }
+      <weft-browser-auth-controls
+        [organization]="
+          contexts.canPresent(contexts.context())
+            ? (contexts.context()?.organizationName ?? null)
+            : null
+        "
+        [principal]="
+          contexts.canPresent(contexts.context())
+            ? (contexts.context()?.actorPrincipalId ?? null)
+            : null
+        "
+        [organizationId]="
+          contexts.canPresent(contexts.context())
+            ? (contexts.context()?.allowedOrganizationId ?? null)
+            : null
+        "
+      />
+    </header>
+  }
+  <weft-connection-notice />
+  @if (
+    chat.opened() && contexts.canPresent(contexts.context()) && chat.viewLabel()
+  ) {
+    <div class="workspace-mobile-context" aria-label="Viewed workspace context">
+      {{ chat.viewLabel() }}
+    </div>
+  }
+  <div class="workspace-body">
+    @if (!signInPage()) {
+      <nav
+        id="workspace-nav"
+        class="workspace-nav"
+        [class.workspace-nav-open]="navigationOpen()"
+        aria-label="Workspace"
+      >
+        <a
+          routerLink="/catalog"
+          routerLinkActive="active"
+          ariaCurrentWhenActive="page"
+          aria-label="Catalog"
+          title="Catalog"
+          ><span class="rail-icon" aria-hidden="true">▦</span
+          ><span class="rail-label">Catalog</span></a
+        >
+        @if (session.visible() && contexts.context()?.features?.chat) {
+          <a
+            routerLink="/chat"
+            routerLinkActive="active"
+            ariaCurrentWhenActive="page"
+            aria-label="Conversations"
+            title="Conversations"
+            ><span class="rail-icon" aria-hidden="true">☰</span
+            ><span class="rail-label">Conversations</span></a
+          >
+        }
+        <a
+          routerLink="/notifications"
+          routerLinkActive="active"
+          ariaCurrentWhenActive="page"
+          aria-label="Notifications"
+          title="Notifications"
+          ><span class="rail-icon" aria-hidden="true">♧</span
+          ><span class="rail-label">Notifications</span></a
+        >
+        <a
+          routerLink="/help"
+          routerLinkActive="active"
+          ariaCurrentWhenActive="page"
+          aria-label="Help"
+          title="Help"
+          ><span class="rail-icon" aria-hidden="true">?</span
+          ><span class="rail-label">Guide</span></a
+        >
         @if (session.visible()) {
           <a
             routerLink="/administration"
@@ -27,72 +139,13 @@
             ><span class="rail-label">Administration</span></a
           >
         }
-        <a
-          routerLink="/catalog"
-          routerLinkActive="active"
-          ariaCurrentWhenActive="page"
-          aria-label="Catalog"
-          title="Catalog"
-          ><span class="rail-icon" aria-hidden="true">▦</span
-          ><span class="rail-label">Catalog</span></a
-        >
-        <a
-          routerLink="/notifications"
-          routerLinkActive="active"
-          ariaCurrentWhenActive="page"
-          aria-label="Notifications"
-          title="Notifications"
-          ><span class="rail-icon" aria-hidden="true">◇</span
-          ><span class="rail-label">Notifications</span></a
-        >
-        <a
-          routerLink="/help"
-          routerLinkActive="active"
-          ariaCurrentWhenActive="page"
-          aria-label="Help"
-          title="Help"
-          ><span class="rail-icon" aria-hidden="true">?</span
-          ><span class="rail-label">Help</span></a
-        >
-        @if (session.visible() && contexts.context()?.features?.chat) {
-          <a
-            routerLink="/chat"
-            routerLinkActive="active"
-            ariaCurrentWhenActive="page"
-            aria-label="Chat"
-            title="Chat"
-            ><span class="rail-icon" aria-hidden="true">◇</span
-            ><span class="rail-label">Chat</span></a
-          >
-        }
       </nav>
-      @if (session.visible()) {
-        @defer {
-          <weft-header-search />
-        }
+    }
+    <div class="workspace-content">
+      <main id="main-content" tabindex="-1"><router-outlet /></main>
+      @if (!signInPage()) {
+        <weft-workspace-chat-panel />
       }
-      @if (
-        session.state().kind === "development" ||
-        session.state().kind === "disabled"
-      ) {
-        <span class="environment-label">{{
-          session.state().kind === "development"
-            ? "Development workspace"
-            : "Workspace"
-        }}</span>
-      } @else {
-        <weft-browser-auth-controls
-          [organization]="contexts.context()?.organizationName ?? null"
-        />
-      }
-    </header>
-  }
-  <weft-connection-notice />
-  <main id="main-content" tabindex="-1">
-    <router-outlet />
-  </main>
-  <footer>
-    <span>Built around your mappings.</span
-    ><span>Weft · Early development</span>
-  </footer>
+    </div>
+  </div>
 </div>

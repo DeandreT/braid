@@ -183,6 +183,10 @@ export async function workspaceFixture(
       return route.fulfill({ json: data.project });
     if (path === catalogApi(mappingPath(data.mapping.scope)))
       return route.fulfill({ json: data.mapping });
+    if (path === catalogApi(mappingPath(data.mapping.scope)) + "/revisions")
+      return route.fulfill({
+        json: { revisions: [data.revision], nextCursor: null },
+      });
     if (path === data.apiPath) return route.fulfill({ json: data.revision });
     if (path.startsWith(data.reportPath("projection")))
       return route.fulfill({ json: data.projection });

@@ -100,9 +100,7 @@ for (const development of [false, true]) {
     await expect(page).toHaveURL(
       new RegExp(`/catalog/organizations/${organizationId}/projects$`),
     );
-    await expect(page.locator("#account-trigger")).toHaveCount(
-      development ? 0 : 1,
-    );
+    await expect(page.locator("#account-trigger")).toHaveCount(1);
     expect(fixture.helpReads).toBe(0);
     expect(fixture.unexpected).toEqual([]);
   });

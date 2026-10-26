@@ -36,6 +36,17 @@
         <p class="session-organization">{{ name }}</p>
       }
       <p class="session-detail">{{ detail() }}</p>
+      @if (principal(); as value) {
+        <details class="session-detail">
+          <summary>Identity details</summary>
+          <p>
+            Principal <code>{{ value }}</code>
+          </p>
+          <p>
+            Organization <code>{{ organizationId() }}</code>
+          </p>
+        </details>
+      }
     </div>
     @if (
       unsentWork() &&
@@ -90,18 +101,23 @@
           Sign out
         </button>
       }
-      <button
-        class="secondary-button"
-        type="button"
-        [disabled]="
-          session.busy() ||
-          session.checking() ||
-          session.state().kind === 'checking'
-        "
-        (click)="check()"
-      >
-        Check session
-      </button>
+      @if (
+        session.state().kind !== "disabled" &&
+        session.state().kind !== "development"
+      ) {
+        <button
+          class="secondary-button"
+          type="button"
+          [disabled]="
+            session.busy() ||
+            session.checking() ||
+            session.state().kind === 'checking'
+          "
+          (click)="check()"
+        >
+          Check session
+        </button>
+      }
       @if (session.state().kind === "authenticationRequired") {
         <button
           id="review-forget-local"

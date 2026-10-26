@@ -21,7 +21,7 @@ EXPOSE 8080
 ENTRYPOINT ["/usr/bin/caddy", "run", "--config", "/etc/weft/Caddyfile", "--adapter", "caddyfile"]
 
 FROM ${NODE_IMAGE} AS web
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false NG_BUILD_MAX_WORKERS=2
 RUN npm install --global npm@12.1.0
 WORKDIR /src
 COPY package.json package-lock.json .npmrc ./

@@ -118,10 +118,15 @@ for (const kind of ["centre", "project", "deliveries", "cases"] as const) {
           ? mappingPath(synthetic.mapping.scope)
           : projectPath(synthetic.project.scope) + "/automation",
     );
-    if (kind === "cases")
+    if (kind === "cases") {
+      await page
+        .getByText("Check controls and policy", { exact: true })
+        .first()
+        .click();
       await page
         .getByRole("button", { name: "Show case results", exact: true })
         .click();
+    }
     const rows =
       kind === "centre"
         ? page.locator(".catalog-list-item").filter({ hasText: "Resource" })
@@ -415,6 +420,10 @@ test("mapping list status is for the selected exact revision and switch applies 
   await expect(
     page.getByText("1/3 passed · 0 failed · 2 pending").first(),
   ).toBeVisible();
+  await page
+    .getByText("Check controls and policy", { exact: true })
+    .first()
+    .click();
   await page.getByRole("button", { name: "Turn off", exact: true }).click();
   await expect.poll(() => data.writes.length).toBe(1);
   expect(data.writes[0]).toMatchObject({

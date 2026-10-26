@@ -5,8 +5,10 @@ order: 6
 summary: Find your way around the revision workbench, its views, inspector and investigation dock.
 ---
 
-Opening a revision shows it in the workbench. Everything in the workbench
-belongs to that one revision. If a newer revision is uploaded while you work,
+Catalog, projects, mappings, operations, administration and the guide use the
+same workbench shell. Opening a revision fixes the main work area's revision;
+the shared conversation can have a different, explicitly labeled focus.
+If a newer revision is uploaded while you work,
 the page keeps showing the one you opened; the badge next to the version says
 **a newer version is available** when it last checked.
 
@@ -14,17 +16,19 @@ the page keeps showing the one you opened; the badge next to the version says
 
 - **Views** along the top choose what you're working on. See
   [Views](#views).
-- The **inspector** on the right shows details of what you selected. Its tabs
-  change with the view. Use **Hide inspector** to give the main view more room.
-- The **investigation dock** at the bottom holds chat, issues, saved test data
-  and differences. Drag its edge to resize it, or collapse it with the arrow
-  button.
+- The **inspector** in the bottom tray shows details of what you selected. Its
+  Rule, Data flow and Details tabs change with the view. **Hide inspector** gives
+  the main view more room. Narrow screens use **Back to work** instead of an overlay.
+- The **investigation dock** also holds issues, saved test data and differences.
+  Drag its edge to resize it, or collapse it with the arrow button.
+- **Show chat** opens the shared conversation on the right. Drag its left edge
+  or use the width control to resize it. **Hide chat** preserves your question
+  and conversation. On a phone, chat replaces the work area until hidden.
 - The status bar at the bottom shows the revision's file status and how
   complete its explanation is.
 
-Choose **Go to…** or press **Ctrl+K** (**Cmd+K** on a Mac) to jump to a view, a
+Choose **Search / Go to** or press **Ctrl+K** (**Cmd+K** on a Mac) to search the catalog or jump to a view, a
 project, a mapping in this project or a mapping you opened recently.
-**Switch…** opens the same list.
 
 ## Views
 
@@ -43,7 +47,7 @@ project, a mapping in this project or a mapping you opened recently.
 
 | Tab | What it shows |
 | --- | --- |
-| Ask Weft | Chat about this revision. See [Chat](chat.md). |
+| Inspector | Details of the selected field, rule or workflow evidence. |
 | Issues | The problems listed in this revision's explanation and validation. |
 | Incoming data | The saved input documents of the regression test you selected. |
 | Result | The output documents of the regression run you selected. |

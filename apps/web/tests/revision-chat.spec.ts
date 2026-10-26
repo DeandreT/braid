@@ -347,7 +347,17 @@ async function fixture(
   };
 }
 const panel = (page: Page) =>
-  page.getByRole("complementary", { name: "Mapping chat" });
+  page.getByRole("complementary", { name: "Workspace chat", exact: true });
+async function openPanel(page: Page) {
+  await page.locator("#workspace-chat-toggle").waitFor();
+  if (
+    (await page
+      .locator("#workspace-chat-toggle")
+      .getAttribute("aria-expanded")) === "false"
+  )
+    await page.locator("#workspace-chat-toggle").click();
+  await expect(panel(page)).toBeVisible();
+}
 
 async function holdSessionCheck(page: Page) {
   let release!: () => void;
@@ -366,6 +376,13 @@ async function holdSessionCheck(page: Page) {
   return { release, arrived };
 }
 async function start(page: Page) {
+  await page.locator("#workspace-chat-toggle").waitFor();
+  if (
+    (await page
+      .locator("#workspace-chat-toggle")
+      .getAttribute("aria-expanded")) === "false"
+  )
+    await page.locator("#workspace-chat-toggle").click();
   await panel(page)
     .getByRole("button", { name: "New conversation", exact: true })
     .click();
@@ -421,6 +438,7 @@ test("workspace chat admission does not wait for retained report reads", async (
   });
   try {
     await page.goto(f.data.browserPath);
+    await openPanel(page);
     await expect(
       panel(page).getByRole("button", {
         name: "New conversation",
@@ -465,6 +483,7 @@ for (const failed of ["projection", "validation"] as const) {
     );
     try {
       await page.goto(f.data.browserPath);
+      await openPanel(page);
       await expect(
         panel(page).getByRole("button", {
           name: "New conversation",
@@ -488,6 +507,7 @@ test("keyboard creation restores focus to the composer after a delayed session c
 }) => {
   const f = await fixture(page);
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   const create = panel(page).getByRole("button", {
     name: "New conversation",
     exact: true,
@@ -540,6 +560,7 @@ test("an unacknowledged keyboard send focuses explicit recovery after admission"
 }) => {
   const f = await fixture(page);
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   await panel(page)
     .getByRole("button", { name: "New conversation", exact: true })
     .click();
@@ -572,6 +593,7 @@ test("admission completion does not steal deliberate focus outside chat", async 
 }) => {
   const f = await fixture(page);
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   const create = panel(page).getByRole("button", {
     name: "New conversation",
     exact: true,
@@ -603,6 +625,7 @@ test("unavailable report reading does not leave chat waiting for a nonexistent r
   f.data.mapping.access.actions.readReports = false;
   f.data.mapping.access.actions.deriveReports = false;
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   await expect(
     panel(page).getByRole("button", { name: "New conversation", exact: true }),
   ).toBeEnabled();
@@ -796,9 +819,11 @@ test("a saved conversation reopens after reload without another turn POST", asyn
   const f = await fixture(page);
   f.saved();
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   await panel(page).getByLabel("Saved conversations").selectOption(C);
   await expect(panel(page)).toContainText("Answer complete.");
   await page.reload();
+  await openPanel(page);
   await panel(page).getByLabel("Saved conversations").selectOption(C);
   await expect(panel(page)).toContainText("This maps the saved value.");
   expect(f.posts).toHaveLength(0);
@@ -832,14 +857,18 @@ test("identity changes clear private chat instead of adopting another owner's co
   await panel(page)
     .getByRole("button", { name: "Refresh chat", exact: true })
     .click();
-  await expect(panel(page)).not.toContainText("This maps the saved value.");
+  await expect(
+    page.getByText("This maps the saved value.", { exact: true }),
+  ).toHaveCount(0);
   await expect(panel(page).getByLabel("Question", { exact: true })).toHaveCount(
     0,
   );
   expect(f.posts).toHaveLength(2);
   expect(
     await page.evaluate(() => ({
-      local: localStorage.length,
+      local: Object.keys(localStorage).filter(
+        (key) => !key.startsWith("weft.chat-width.v1:"),
+      ).length,
       session: sessionStorage.length,
     })),
   ).toEqual({ local: 0, session: 0 });
@@ -862,7 +891,9 @@ test("a same-owner refresh that disables chat clears the open conversation", asy
     "aria-busy",
     "true",
   );
-  await expect(panel(page)).not.toContainText("This maps the saved value.");
+  await expect(
+    page.getByText("This maps the saved value.", { exact: true }),
+  ).toHaveCount(0);
   await expect(panel(page).getByLabel("Question", { exact: true })).toHaveCount(
     0,
   );
@@ -895,6 +926,7 @@ async function failSessionCheck(page: Page) {
 }
 
 async function unsentQuestion(page: Page) {
+  await openPanel(page);
   await panel(page)
     .getByRole("button", { name: "New conversation", exact: true })
     .click();
@@ -957,6 +989,7 @@ test("a different actor after a failed session check clears the unsent question"
   await unsentQuestion(page);
   f.data.context.actorPrincipalId = "b0000000-0000-4000-8000-000000000001";
   await failSessionCheck(page);
+  await openPanel(page);
   await expect(
     panel(page).getByRole("button", { name: "New conversation", exact: true }),
   ).toBeEnabled();
@@ -1038,6 +1071,7 @@ for (const mode of [
       profiles: mode !== "profiles",
     });
     await page.goto(f.data.browserPath);
+    if (mode !== "disabled") await openPanel(page);
     if (mode === "missingReports") {
       await expect(
         panel(page).getByRole("button", {
@@ -1067,7 +1101,8 @@ for (const mode of [
     } else if (mode === "profiles")
       await expect(panel(page)).toContainText("No selectable model profile");
     else {
-      await expect(panel(page)).toContainText("Chat is not configured");
+      await expect(page.locator("#workspace-chat-toggle")).toHaveCount(0);
+      await expect(panel(page)).toHaveCount(0);
       expect(f.reads.filter((p) => p.endsWith("/chat"))).toHaveLength(0);
     }
   });
@@ -1112,6 +1147,7 @@ test("provider failure is explicit and keyboard/mobile controls fit", async ({
   ]);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   const create = panel(page).getByRole("button", {
     name: "New conversation",
     exact: true,
