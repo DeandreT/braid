@@ -67,6 +67,7 @@ internal static class SessionHostEntrypoint
                             endpoints.MapWeftRegressionRuns();
                             endpoints.MapWeftAutomation();
                             endpoints.MapWeftBuilds();
+                            endpoints.MapWeftReleaseOperations();
                             endpoints.MapWeftChat();
                             endpoints.MapWeftHelp();
                             endpoints.Map("/api/{**path}", () => Results.NotFound());

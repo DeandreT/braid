@@ -9,7 +9,7 @@ using Weft.Domain;
 namespace Weft.Persistence.Postgres;
 
 /// <summary>Atomic local target-pointer changes and immutable audit. This adapter never contacts an external deployment service.</summary>
-public sealed class PostgresLocalReleaseStore(string connectionString, bool writer) : ILocalReleaseStore, IAsyncDisposable
+public sealed partial class PostgresLocalReleaseStore(string connectionString, bool writer) : ILocalReleaseStore, IReleaseOperationsStore, IAsyncDisposable
 {
     private readonly NpgsqlDataSource source = NpgsqlDataSource.Create(PostgresConfiguration.Normalize(connectionString));
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);

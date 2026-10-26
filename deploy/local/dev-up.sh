@@ -279,6 +279,10 @@ WEFT_BUILD_CASE_READER_CONNECTION_STRING=$(connection weft_case_reader CASE_READ
 WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING=$(connection weft_run_reader RUN_READER)
 WEFT_BUILD_RUN_READER_CONNECTION_STRING=$(connection weft_build_run_reader BUILD_RUN_READER)
 WEFT_BUILD_RUN_WRITER_CONNECTION_STRING=$(connection weft_build_run_writer BUILD_RUN_WRITER)
+WEFT_RELEASE_OPERATIONS_ENABLED=true
+WEFT_RELEASE_READER_CONNECTION_STRING=$(connection weft_release_reader RELEASE_READER)
+WEFT_RELEASE_WRITER_CONNECTION_STRING=$(connection weft_release_writer RELEASE_WRITER)
+WEFT_QUALIFICATION_READER_CONNECTION_STRING=$(connection weft_qualification_reader QUALIFICATION_READER)
 EOF
 worker_env=$dev_config/worker.env
 cat >"$worker_env" <<EOF

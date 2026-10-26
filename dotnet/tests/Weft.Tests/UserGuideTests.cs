@@ -7,7 +7,7 @@ namespace Weft.Tests;
 public sealed partial class UserGuideTests
 {
     private static readonly string[] CoreSections = ["overview", "sign-in", "catalog", "uploads", "metadata", "workbench",
-        "reports", "comparisons", "previews", "regression-tests", "builds", "chat", "unconfirmed-results", "cli"];
+        "reports", "comparisons", "previews", "regression-tests", "builds", "chat", "unconfirmed-results", "cli", "administration", "automation", "operations"];
 
     [Fact]
     public void EveryGuideFileIsEmbeddedWithItsExactBytes()

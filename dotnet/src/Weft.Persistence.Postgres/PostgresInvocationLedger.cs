@@ -11,7 +11,13 @@ public sealed class PostgresInvocationLedger(string connectionString) : IMachine
 {
     private readonly NpgsqlDataSource source = NpgsqlDataSource.Create(PostgresConfiguration.Normalize(connectionString));
 
-    public async Task<MachineInvocationClaim> ClaimAsync(MachineInvocationKey key, Guid applicationId, Sha256Digest requestDigest, CancellationToken token = default)
+    public Task<MachineInvocationClaim> ClaimAsync(MachineInvocationKey key, Guid applicationId, Sha256Digest requestDigest, CancellationToken token = default) =>
+        ClaimCoreAsync(key, applicationId, requestDigest, null, token);
+
+    public Task<MachineInvocationClaim> ClaimWithMetadataAsync(MachineInvocationKey key, Guid applicationId, Sha256Digest requestDigest, int inputBytes, CancellationToken token = default) =>
+        ClaimCoreAsync(key, applicationId, requestDigest, inputBytes, token);
+
+    private async Task<MachineInvocationClaim> ClaimCoreAsync(MachineInvocationKey key, Guid applicationId, Sha256Digest requestDigest, int? inputBytes, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(key); ArgumentNullException.ThrowIfNull(requestDigest);
         if (applicationId == Guid.Empty) throw new ArgumentException("A client application ID is required.", nameof(applicationId));
@@ -45,6 +51,17 @@ public sealed class PostgresInvocationLedger(string connectionString) : IMachine
                 MachineInvocationOutcome.Busy or MachineInvocationOutcome.ReleaseChanged || result.RetainedResponse is { } retained &&
                 (result.Outcome != MachineInvocationOutcome.Completed || retained.Length > MachineInvocationPolicy.MaximumRetainedBytes)))
             throw Invalid();
+        if (inputBytes is { } size && result.Status is MachineInvocationClaimStatus.Claimed or MachineInvocationClaimStatus.Recorded &&
+            await ReleaseOperationsRoleGuard.InstalledAsync(tx.Connection, tx.Transaction, token))
+        {
+            await using var metadata = tx.CreateCommand("SELECT weft.record_invocation_metadata(@org,@target,@issuer,@tenant,@principal,@request,@application,@digest,@bytes,@replayed)");
+            Arguments(metadata, key);
+            metadata.Parameters.AddWithValue("application", applicationId);
+            metadata.Parameters.AddWithValue("digest", requestDigest.Value);
+            metadata.Parameters.AddWithValue("bytes", size);
+            metadata.Parameters.AddWithValue("replayed", result.Status == MachineInvocationClaimStatus.Recorded);
+            if (await metadata.ExecuteScalarAsync(token) is not true) throw Invalid();
+        }
         await tx.CommitAsync(token);
         return result;
     }

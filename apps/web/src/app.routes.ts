@@ -10,6 +10,7 @@ import { CreateProjectPageComponent } from "./catalog/projects/create-project-pa
 import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-page.component";
 import type { UploadMappingPageComponent } from "./catalog/uploads/upload-mapping-page.component";
 import type { AppendRevisionPageComponent } from "./catalog/uploads/append-revision-page.component";
+import type { OperationsPageComponent } from "./catalog/operations/operations-page.component";
 import type { AutomationPageComponent } from "./catalog/automation/automation-page.component";
 import { NotFoundComponent } from "./not-found.component";
 
@@ -24,6 +25,8 @@ const leaveMappingUpload: CanDeactivateFn<UploadMappingPageComponent> = (
 const leaveRevisionAppend: CanDeactivateFn<AppendRevisionPageComponent> = (
   component,
 ) => requestWorkspaceLeave(component);
+const leaveOperations: CanDeactivateFn<OperationsPageComponent> = (component) =>
+  requestWorkspaceLeave(component);
 
 const leaveAutomation: CanDeactivateFn<AutomationPageComponent> = (component) =>
   requestWorkspaceLeave(component);
@@ -84,6 +87,15 @@ export const routes: Routes = [
     component: CatalogShellComponent,
     canActivate: [requireSignIn],
     children: [
+      {
+        path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/operations",
+        loadComponent: () =>
+          import("./catalog/operations/operations-page.component").then(
+            (module) => module.OperationsPageComponent,
+          ),
+        canDeactivate: [leaveOperations],
+        title: "Operations · Weft",
+      },
       {
         path: "organizations/:organizationId/projects/:projectId/automation",
         canDeactivate: [leaveAutomation],

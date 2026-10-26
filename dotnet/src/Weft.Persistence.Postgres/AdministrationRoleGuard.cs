@@ -5,7 +5,8 @@ namespace Weft.Persistence.Postgres;
 
 internal static class AdministrationRoleGuard
 {
-    internal const string Fingerprint = "f35b0b26429ffd6f9c5ee9eb03ede7073b9e5c7476ab9e67e3d9ae297e62fb70";
+    internal const string Fingerprint = "5e0e08d979ba04d41915459f894b3b3eaad76a0765f157e853e85178ef2a6fe1";
+    private const string PreOperationsFingerprint = "f35b0b26429ffd6f9c5ee9eb03ede7073b9e5c7476ab9e67e3d9ae297e62fb70";
     internal static readonly string[] Tables = ["administration_state", "organization_administration_roles", "organization_invitations", "administration_audit"];
     internal static readonly string[] Objects = [.. Tables, "administration_audit_sequence_seq"];
     internal static readonly string[] AuthorityTables = [.. Tables, "organizations", "principals", "organization_memberships",
@@ -40,7 +41,13 @@ internal static class AdministrationRoleGuard
             if (await command.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
         await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
-        if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, AuthorityTables, token) != Fingerprint)
+        var fingerprint = PreOperationsFingerprint;
+        if (await ReleaseOperationsRoleGuard.InstalledAsync(connection, transaction, token))
+        {
+            await ReleaseOperationsRoleGuard.ValidateAsync(connection, transaction, token);
+            fingerprint = Fingerprint;
+        }
+        if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, AuthorityTables, token) != fingerprint)
             throw Invalid();
     }
     private static InvalidOperationException Invalid() => new("Administration database contract unavailable.");

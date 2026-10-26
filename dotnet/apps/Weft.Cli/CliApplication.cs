@@ -27,6 +27,7 @@ internal static class CliApplication
         root.Subcommands.Add(PreviewCommands.Previews(globals));
         root.Subcommands.Add(RegressionCommands.Regression(globals));
         root.Subcommands.Add(BuildCommands.Builds(globals));
+        root.Subcommands.Add(OperationsCommands.Operations(globals));
         root.Subcommands.Add(ChatCommands.Chat(globals));
         root.Subcommands.Add(GuideCommands.Guide(globals));
         root.Subcommands.Add(SearchCommands.Search(globals));

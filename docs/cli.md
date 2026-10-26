@@ -153,6 +153,7 @@ shaped like a token.
 | `weft previews create/get/cancel/download` | Sample previews and verified output downloads |
 | `weft regression capabilities`, `cases list/get/create`, `runs list/create/get/cancel` | Saved cases and their runs |
 | `weft builds capabilities`, `environment-capabilities`, `environments list/get/create`, `approvals list/get/create/revoke`, `runs list/create/get/cancel` | Build environments, approvals and runs |
+| `weft operations targets/releases/history/actions/invocations/summary/callers`, `activate/rollback/disable/enable` | [Release operations](release-operations.md), monitoring and version-conditional target changes |
 | `weft chat availability`, `conversations list/get/create`, `ask`, `follow`, `cancel` | Grounded chat about a revision |
 
 `weft <command> --help` lists every option.

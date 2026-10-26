@@ -23,16 +23,8 @@ public sealed class LocalReleaseService(ILocalReleaseStore releases, IBuildQuali
             Check(old, actor, target, request.ReleaseId);
             return Same(old.Intent, request) ? new(ReleaseWriteOutcome.Replayed, old) : new(ReleaseWriteOutcome.Conflict);
         }
-        var qualified = await qualifications.ReadAsync(actor, target.Mapping, request.QualificationId, token).ConfigureAwait(false);
-        if (qualified is null) return new(ReleaseWriteOutcome.Refused);
-        if (qualified.Id != request.QualificationId || qualified.Actor != actor.PrincipalId)
-            throw new InvalidOperationException("Local release qualification identity mismatch.");
-        var registration = await releases.ReadTargetAsync(actor, target, token).ConfigureAwait(false);
-        if (registration is null || !registration.Enabled || registration.Target.Reference != target ||
-            registration.Target.RuntimeImage != qualified.RuntimeImage || registration.Target.Profile != qualified.Artifact.Intent.Profile)
-            return new(ReleaseWriteOutcome.Refused);
-        var intent = new ReleaseIntent(request.ReleaseId, actor.PrincipalId, target, qualified, request.Action,
-            request.ExpectedActiveReleaseId, request.RollbackOfReleaseId);
+        var intent = await PrepareIntentAsync(actor, target, request, token).ConfigureAwait(false);
+        if (intent is null) return new(ReleaseWriteOutcome.Refused);
         var result = await releases.RequestAsync(actor, intent, token).ConfigureAwait(false);
         if (result is not (ReleaseWriteOutcome.Created or ReleaseWriteOutcome.Replayed)) return new(result);
         var saved = await releases.ReadAsync(actor, target, request.ReleaseId, token).ConfigureAwait(false);
@@ -41,6 +33,23 @@ public sealed class LocalReleaseService(ILocalReleaseStore releases, IBuildQuali
         if (saved.Intent.Fingerprint != intent.Fingerprint) throw new InvalidOperationException("Local release request changed during persistence.");
         token.ThrowIfCancellationRequested();
         return new(result, saved);
+    }
+
+    /// <summary>Shared admission without a write, for callers that commit a target-version CAS with the original release functions.</summary>
+    internal async Task<ReleaseIntent?> PrepareIntentAsync(ActorContext actor, ReleaseTargetReference target,
+        LocalReleaseRequest request, CancellationToken token)
+    {
+        var qualified = await qualifications.ReadAsync(actor, target.Mapping, request.QualificationId, token).ConfigureAwait(false);
+        if (qualified is null) return null;
+        if (qualified.Id != request.QualificationId || qualified.Actor != actor.PrincipalId)
+            throw new InvalidOperationException("Local release qualification identity mismatch.");
+        var registration = await releases.ReadTargetAsync(actor, target, token).ConfigureAwait(false);
+        if (registration is null || !registration.Enabled || registration.Target.Reference != target ||
+            registration.Target.RuntimeImage != qualified.RuntimeImage || registration.Target.Profile != qualified.Artifact.Intent.Profile ||
+            qualified.Artifact.Intent.Environment != target.Environment)
+            return null;
+        return new ReleaseIntent(request.ReleaseId, actor.PrincipalId, target, qualified, request.Action,
+            request.ExpectedActiveReleaseId, request.RollbackOfReleaseId);
     }
 
     public Task<ReleaseTransitionOutcome> ApplyAsync(ActorContext actor, ReleaseTargetReference target, Guid releaseId, CancellationToken token = default) =>

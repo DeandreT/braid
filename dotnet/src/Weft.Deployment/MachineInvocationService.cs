@@ -105,7 +105,8 @@ public sealed class MachineInvocationService
         ArgumentNullException.ThrowIfNull(target); ArgumentNullException.ThrowIfNull(caller); ArgumentNullException.ThrowIfNull(request);
         token.ThrowIfCancellationRequested();
         var key = new MachineInvocationKey(target, caller.Principal, requestId);
-        var claim = await ledger.ClaimAsync(key, caller.ApplicationId, request.Digest, token).ConfigureAwait(false);
+        var claim = await ledger.ClaimWithMetadataAsync(key, caller.ApplicationId, request.Digest,
+            checked(request.Primary.ByteCount + request.NamedInputs.Sum(input => input.ByteCount)), token).ConfigureAwait(false);
         switch (claim.Status)
         {
             case MachineInvocationClaimStatus.Recorded: return Recorded(claim.Outcome!.Value, claim.RetainedResponse, claim.ReleaseId, replayed: true);

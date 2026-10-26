@@ -127,6 +127,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Automation and notifications](docs/automation-notifications.md): exact-revision checks, project build gates and metadata-only activity delivery.
 - [Build workflow](docs/build-workflow.md) and [compiled runtime](docs/compiled-runtime.md): capability admission, immutable artifacts and restricted execution.
 - [Local releases](docs/local-releases.md): atomic activation, retained audit, explicit rollback and current-release invocation.
+- [Release operations](docs/release-operations.md): conditional release actions, metadata-only invocation monitoring, caller access and CLI commands.
 - [Release qualification](docs/release-qualification.md): exact-baseline qualification evidence for builds.
 - [Mapping endpoint](docs/mapping-endpoint.md) and [machine authorization](docs/machine-authorization.md): the machine-facing HTTP host, app-only tokens, invocation grants and idempotent calls.
 - [Ferrule service](docs/ferrule-service.md), [build compiler](docs/build-compiler.md) and [compiled service runtime](docs/compiled-service-runtime.md): sandboxed hosted inspection, compilation and compiled execution without Docker.

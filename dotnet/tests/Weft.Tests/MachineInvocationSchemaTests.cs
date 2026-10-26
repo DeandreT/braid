@@ -33,11 +33,11 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
         output.WriteLine("MachineInvocationFingerprint=" + fingerprint);
         Assert.Equal(MachineInvocationRoleGuard.Fingerprint, fingerprint);
         // The release contract the 0024 functions read is unchanged by the new foreign keys.
-        Assert.Equal(LocalReleaseRoleGuard.Fingerprint, await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, LocalReleaseRoleGuard.Tables, default));
+        Assert.Equal(ReleaseOperationsRoleGuard.ReleaseFingerprint, await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, LocalReleaseRoleGuard.Tables, default));
         Assert.Equal(RegressionSchemaTestContract.MachineInvocationChecksum, MigrationRunner.EmbeddedMigrations[PrefixVersion].Checksum);
         // Each login executes only its own functions, and neither has any table privilege.
         foreach (var (role, functions) in new[] { ("weft_invocation_grant_writer", MachineInvocationRoleGuard.GrantFunctions),
-            ("weft_invocation_writer", MachineInvocationRoleGuard.InvocationFunctions) })
+            ("weft_invocation_writer", MachineInvocationRoleGuard.InvocationFunctions.Append("record_invocation_metadata").ToArray()) })
         {
             await using var command = new NpgsqlCommand("""
                 SELECT array_agg(p.proname::text ORDER BY p.proname) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace

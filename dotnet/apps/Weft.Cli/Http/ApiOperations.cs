@@ -5,6 +5,7 @@ using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
 using Weft.Contracts.Comparisons;
 using Weft.Contracts.Help;
+using Weft.Contracts.Operations;
 using Weft.Contracts.Regression;
 
 namespace Weft.Cli.Http;
@@ -58,6 +59,13 @@ internal static class ApiOperations
     private const string Mapping = Project + "/mappings/{mappingId}";
     private const string Revision = Mapping + "/revisions/{revisionId}";
     private const string Chat = Revision + "/chat";
+
+    private static readonly string[] OperationsQuery = ["offset", "limit", "since", "until", "caller", "outcome"];
+    public static readonly ApiOperation GetReleaseTargets = Get("GetReleaseTargets", Mapping + "/operations", typeof(ReleaseOperationsPageV1), OperationsQuery);
+    public static readonly ApiOperation GetReleaseOperations = Get("GetReleaseOperations", Mapping + "/operations/{targetId}/{section}", typeof(ReleaseOperationsPageV1), OperationsQuery);
+    public static readonly ApiOperation GetReleaseSummary = Get("GetReleaseSummary", Mapping + "/operations/{targetId}/summary", typeof(ReleaseOperationsSummaryV1), OperationsQuery);
+    public static readonly ApiOperation ApplyReleaseOperation = Send("ApplyReleaseOperation", "POST", Mapping + "/operations/{targetId}/actions/{operationId}",
+        "application/json", typeof(ReleaseOperationV1), Ok(typeof(ReleaseOperationReceiptV1)), headers: ["If-Match"]);
 
     public static readonly ApiOperation GetHealth = new("GetHealth", "GET", "/api/v1/health", None, None,
         null, null, Ok(typeof(HealthResponseV1)), typeof(HealthResponseV1), RequiresAuthentication: false);
@@ -202,6 +210,7 @@ internal static class ApiOperations
         GetBuildEnvironmentCapabilities, GetBuildApprovals, GetBuildApproval, PutBuildApproval, RevokeBuildApproval,
         GetBuildRuns, GetBuildRun, PutBuildRun, CancelBuildRun, GetChatAvailability, GetChatConversations,
         CreateChatConversation, GetChatConversation, CreateChatTurn, CancelChatTurn, StreamChatTurnEvents,
+        GetReleaseTargets, GetReleaseOperations, GetReleaseSummary, ApplyReleaseOperation,
         .. AdministrationApiOperations.All
     ];
 

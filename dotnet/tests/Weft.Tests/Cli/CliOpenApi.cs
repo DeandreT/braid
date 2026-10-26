@@ -28,7 +28,10 @@ internal sealed class CliOpenApi
 
     public CliOpenApiOperation? Match(string method, string path, out Dictionary<string, string> values)
     {
-        foreach (var operation in Operations.Where(operation => operation.Method == method))
+        // A literal summary route takes precedence over the same prefix's section parameter,
+        // just as it does in ASP.NET routing; document insertion order is not routing precedence.
+        foreach (var operation in Operations.Where(operation => operation.Method == method)
+            .OrderBy(operation => operation.Path.Count(character => character == '{')))
         {
             var match = operation.Pattern.Match(path);
             if (!match.Success)

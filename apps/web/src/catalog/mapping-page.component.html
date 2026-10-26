@@ -40,6 +40,21 @@
   </header>
   @if (data(); as view) {
     @if (context(); as context) {
+      <p>
+        <a
+          class="catalog-button"
+          [routerLink]="[
+            '/catalog/organizations',
+            view.mapping.scope.organizationId,
+            'projects',
+            view.mapping.scope.projectId,
+            'mappings',
+            view.mapping.scope.mappingId,
+            'operations',
+          ]"
+          >Operations</a
+        >
+      </p>
       <weft-regression-status
         [scope]="view.mapping.scope"
         [context]="context"

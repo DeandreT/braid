@@ -19,6 +19,7 @@ internal static class MachineInvocationRoleGuard
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool grants, CancellationToken token)
     {
+        var operations = await ReleaseOperationsRoleGuard.InstalledAsync(connection, transaction, token);
         await using (var command = new NpgsqlCommand("""
             SELECT current_user=session_user AND current_user=@role AND r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls
                 AND NOT r.rolinherit AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication AND r.rolconfig IS NULL AND r.rolvaliduntil IS NULL
@@ -48,7 +49,7 @@ internal static class MachineInvocationRoleGuard
             """, connection, transaction))
         {
             command.Parameters.AddWithValue("role", grants ? "weft_invocation_grant_writer" : "weft_invocation_writer");
-            command.Parameters.AddWithValue("functions", grants ? GrantFunctions : InvocationFunctions);
+            command.Parameters.AddWithValue("functions", grants ? GrantFunctions : operations ? [.. InvocationFunctions, "record_invocation_metadata"] : InvocationFunctions);
             if (await command.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
         await ValidateContractAsync(connection, transaction, token);
@@ -59,8 +60,20 @@ internal static class MachineInvocationRoleGuard
         // The grant and claim functions read the release pointer and its qualified build; admit that contract unchanged.
         await QualificationRoleGuard.ValidateContractAsync(connection, transaction, token);
         await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, LocalReleaseRoleGuard.Names, ReleaseDefinitions.Value, token);
-        if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, LocalReleaseRoleGuard.Tables, token) != LocalReleaseRoleGuard.Fingerprint)
-            throw Invalid();
+        if (await ReleaseOperationsRoleGuard.InstalledAsync(connection, transaction, token))
+            await ReleaseOperationsRoleGuard.ValidateAsync(connection, transaction, token);
+        else
+        {
+            if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, LocalReleaseRoleGuard.Tables, token) != LocalReleaseRoleGuard.Fingerprint)
+                throw Invalid();
+            await ValidateLedgerContractAsync(connection, transaction, token);
+        }
+    }
+
+    // Schema and function admission only: callers such as the operations reader have
+    // their own login contract. Keep this leaf independent of release/operations guards.
+    internal static async Task ValidateLedgerContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
         var definitions = Definitions.Value;
         await using (var installed = new NpgsqlCommand("SELECT to_regclass('weft.administration_state') IS NOT NULL", connection, transaction))
             if (await installed.ExecuteScalarAsync(token) is true)

@@ -31,6 +31,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0028_interchange_provenance.sql",
   "0029_catalog_search.sql",
   "0030_regression_automation.sql",
+  "0031_release_operations.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
@@ -61,6 +62,9 @@ export const browserFixtureProtectedTables = Object.freeze([
   "organization_invitations",
   "administration_audit",
   "account_display_metadata",
+  "release_target_operations",
+  "release_target_events",
+  "invocation_operations_metadata",
   "import_reviews",
   "export_reviews",
   "revision_import_provenance",

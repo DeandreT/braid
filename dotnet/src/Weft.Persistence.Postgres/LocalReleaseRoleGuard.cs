@@ -14,6 +14,7 @@ internal static class LocalReleaseRoleGuard
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool writer, CancellationToken token)
     {
+        var operations = await ReleaseOperationsRoleGuard.InstalledAsync(connection, transaction, token);
         await using (var command = new NpgsqlCommand("""
             SELECT current_user=session_user AND current_user=@role AND r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls
                 AND NOT r.rolinherit AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication AND r.rolconfig IS NULL AND r.rolvaliduntil IS NULL
@@ -41,14 +42,17 @@ internal static class LocalReleaseRoleGuard
             """, connection, transaction))
         {
             command.Parameters.AddWithValue("role", writer ? "weft_release_writer" : "weft_release_reader");
-            command.Parameters.AddWithValue("functions", writer
-                ? new[] { "read_local_target", "read_local_release", "write_local_target", "write_local_release", "transition_local_release" }
-                : ["read_local_target", "read_local_release"]);
+            string[] functions = writer
+                ? ["read_local_target", "read_local_release", "write_local_target", "write_local_release", "transition_local_release"]
+                : ["read_local_target", "read_local_release"];
+            if (operations) functions = [.. functions, "read_release_operations", .. writer ? new[] { "operate_release_target", "read_release_operation" } : []];
+            command.Parameters.AddWithValue("functions", functions);
             if (await command.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
         await QualificationRoleGuard.ValidateContractAsync(connection, transaction, token);
         await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
-        if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();
+        if (operations) await ReleaseOperationsRoleGuard.ValidateAsync(connection, transaction, token);
+        else if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();
     }
     private static InvalidOperationException Invalid() => new("Local release database contract unavailable.");
 }

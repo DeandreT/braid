@@ -120,6 +120,7 @@ internal static class CatalogBusinessServices
         CatalogRegressionHostConfiguration.Configure(services, readEnvironment, catalogEnabled: true);
         CatalogBuildHostConfiguration.Configure(services, environment, readEnvironment,
             buildRuntime ?? CatalogBuildHostConfiguration.ReadRuntime(readEnvironment, catalogEnabled: true));
+        ReleaseOperationsHostConfiguration.Configure(services, readEnvironment);
     }
 
     private static PostgresProjectCreationDatabase CreateProjectCreationDatabase(string connectionString)

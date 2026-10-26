@@ -48,6 +48,13 @@ services:
       WEFT_DELIVER_FILE_BUILD_RUN_READER: Host=postgres;Database=weft;Username=weft_build_run_reader;Password=${WEFT_LOCAL_BUILD_RUN_READER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_BUILD_RUN_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/build-run-writer
       WEFT_DELIVER_FILE_BUILD_RUN_WRITER: Host=postgres;Database=weft;Username=weft_build_run_writer;Password=${WEFT_LOCAL_BUILD_RUN_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_RELEASE_OPERATIONS_ENABLED: "true"
+      WEFT_RELEASE_READER_CONNECTION_STRING_FILE: /run/weft/secrets/release-reader
+      WEFT_DELIVER_FILE_RELEASE_READER: Host=postgres;Database=weft;Username=weft_release_reader;Password=${WEFT_LOCAL_RELEASE_READER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_RELEASE_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/release-writer
+      WEFT_DELIVER_FILE_RELEASE_WRITER: Host=postgres;Database=weft;Username=weft_release_writer;Password=${WEFT_LOCAL_RELEASE_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_QUALIFICATION_READER_CONNECTION_STRING_FILE: /run/weft/secrets/qualification-reader
+      WEFT_DELIVER_FILE_QUALIFICATION_READER: Host=postgres;Database=weft;Username=weft_qualification_reader;Password=${WEFT_LOCAL_QUALIFICATION_READER_PASSWORD:?};GSS Encryption Mode=Disable
 
   # Previews, the regression runs that execute them and approved builds, through the Ferrule
   # service with this worker's own pinned client certificate. No Docker socket, egress or

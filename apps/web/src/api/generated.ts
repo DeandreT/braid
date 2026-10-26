@@ -820,6 +820,74 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List endpoint targets and active release identities. */
+    get: operations["GetReleaseTargets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/{section}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read paged release, history, actions, callers or invocation metadata. No payload bytes. */
+    get: operations["GetReleaseOperations"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/actions/{operationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Apply a version-conditional idempotent release operation. */
+    post: operations["ApplyReleaseOperation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/summary": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read failure and latency summaries over a selected window. */
+    get: operations["GetReleaseSummary"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-cases": {
     parameters: {
       query?: never;
@@ -3477,6 +3545,203 @@ export interface components {
       | "dependsOn"
       | "produces"
       | "boundaryMember";
+    ReleaseActiveMetadataV1: {
+      /** Format: uuid */
+      actorId: string;
+      approval: components["schemas"]["ReleaseApprovalMetadataV1"];
+      /** Format: uuid */
+      approvalId: string;
+      artifactDigest: string;
+      /** Format: uuid */
+      buildId: string;
+      /** Format: uuid */
+      qualificationId: string;
+      /** Format: uuid */
+      releaseId: string;
+    };
+    ReleaseApprovalMetadataV1: {
+      /** Format: uuid */
+      approvalId: string;
+      /** Format: date-time */
+      createdAt: string;
+      revoked: boolean;
+    };
+    ReleaseOperationReceiptV1: {
+      operationId: string;
+      outcome: string;
+    };
+    ReleaseOperationsItemV1:
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseTargetMetadataV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseMetadataV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseTargetEventV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseActionAuditV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseCallerGrantV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseInvocationMetadataV1"];
+    ReleaseOperationsItemV1ReleaseActionAuditV1: {
+      action: string;
+      /** Format: uuid */
+      actor_id: string;
+      expected_version: string;
+      /** @enum {string} */
+      kind: "action";
+      /** Format: uuid */
+      operation_id: string;
+      /** Format: int32 */
+      outcome: number;
+      /** Format: uuid */
+      qualification_id: null | string;
+      /** Format: date-time */
+      recorded_at: string;
+      /** Format: uuid */
+      source_release_id: null | string;
+    };
+    ReleaseOperationsItemV1ReleaseCallerGrantV1: {
+      /** Format: uuid */
+      grant_id: string;
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: uuid */
+      granted_by: string;
+      /** @enum {string} */
+      kind: "caller";
+      /** Format: uuid */
+      object_id: string;
+      provider: string;
+      /** Format: date-time */
+      revoked_at: null | string;
+      /** Format: uuid */
+      revoked_by: null | string;
+      /** Format: uuid */
+      tenant_id: string;
+    };
+    ReleaseOperationsItemV1ReleaseInvocationMetadataV1: {
+      /** Format: int32 */
+      attempt: number;
+      /** Format: uuid */
+      caller_client_id: string;
+      /** Format: date-time */
+      finished_at: null | string;
+      /** Format: int32 */
+      input_bytes: null | number;
+      /** @enum {string} */
+      kind: "invocation";
+      /** Format: double */
+      latency_ms: null | number;
+      /** Format: uuid */
+      object_id: string;
+      outcome: null | string;
+      /** Format: int32 */
+      output_bytes: null | number;
+      provider: string;
+      /** Format: uuid */
+      release_id: null | string;
+      /** Format: int64 */
+      replay_count: null | number;
+      replayed: null | boolean;
+      /** Format: uuid */
+      request_id: string;
+      /** Format: date-time */
+      started_at: string;
+      state: string;
+      /** Format: uuid */
+      tenant_id: string;
+    };
+    ReleaseOperationsItemV1ReleaseMetadataV1: {
+      /** Format: uuid */
+      actor_id: string;
+      /** Format: date-time */
+      approval_created_at: string;
+      /** Format: uuid */
+      approval_id: string;
+      approval_revoked: boolean;
+      artifact_digest: string;
+      /** Format: uuid */
+      build_id: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      finished_at: null | string;
+      /** @enum {string} */
+      kind: "release";
+      phase: string;
+      /** Format: uuid */
+      qualification_id: string;
+      rejection: string;
+      /** Format: uuid */
+      release_id: string;
+      /** Format: uuid */
+      rollback_of_id: null | string;
+      runtime_image: string;
+    };
+    ReleaseOperationsItemV1ReleaseTargetEventV1: {
+      action: string;
+      /** Format: uuid */
+      active_release_id: null | string;
+      /** Format: uuid */
+      actor_id: null | string;
+      enabled: boolean;
+      /** @enum {string} */
+      kind: "history";
+      origin: string;
+      /** Format: date-time */
+      recorded_at: string;
+      version: string;
+    };
+    ReleaseOperationsItemV1ReleaseTargetMetadataV1: {
+      active: null | components["schemas"]["ReleaseActiveMetadataV1"];
+      /** Format: uuid */
+      active_release_id: null | string;
+      enabled: boolean;
+      /** Format: uuid */
+      environment_id: string;
+      environment_version: string;
+      /** @enum {string} */
+      kind: "target";
+      profile: components["schemas"]["ReleaseRuntimeProfileV1"];
+      runtime_image: string;
+      /** Format: uuid */
+      target_id: string;
+      version: string;
+    };
+    ReleaseOperationsPageV1: {
+      items: components["schemas"]["ReleaseOperationsItemV1"][];
+      /** Format: int32 */
+      nextOffset: null | number;
+    };
+    ReleaseOperationsSummaryV1: {
+      /** Format: int64 */
+      count: number;
+      /** Format: int64 */
+      failed: number;
+      failuresByCategory: {
+        [key: string]: number;
+      };
+      /** Format: double */
+      meanLatencyMs: null | number;
+      /** Format: double */
+      p95LatencyMs: null | number;
+      /** Format: int64 */
+      retryable: number;
+      /** Format: int64 */
+      running: number;
+    };
+    ReleaseOperationV1: {
+      action: string;
+      environmentId: string;
+      environmentVersion: string;
+      qualificationId: null | string;
+      sourceReleaseId: null | string;
+    };
+    ReleaseRuntimeProfileV1: {
+      artifactFormat: string;
+      id: string;
+      /** Format: int64 */
+      maximumArtifactBytes: number;
+      runtime: string;
+      runtimeVersion: string;
+      /** Format: int64 */
+      version: number;
+    };
     RevisionComparisonV1: {
       /** Format: int32 */
       emittedItemCount: number;
@@ -8953,6 +9218,483 @@ export interface operations {
         headers: {
           /** @description Always no-store; receipts and operation results are not cacheable. */
           "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetReleaseTargets: {
+    parameters: {
+      query?: {
+        /** @description Operations page or window filter. */
+        caller?: string;
+        /** @description Operations page or window filter. */
+        limit?: string;
+        /** @description Operations page or window filter. */
+        offset?: string;
+        /** @description Operations page or window filter. */
+        outcome?: string;
+        /** @description Operations page or window filter. */
+        since?: string;
+        /** @description Operations page or window filter. */
+        until?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReleaseOperationsPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetReleaseOperations: {
+    parameters: {
+      query?: {
+        /** @description Operations page or window filter. */
+        caller?: string;
+        /** @description Operations page or window filter. */
+        limit?: string;
+        /** @description Operations page or window filter. */
+        offset?: string;
+        /** @description Operations page or window filter. */
+        outcome?: string;
+        /** @description Operations page or window filter. */
+        since?: string;
+        /** @description Operations page or window filter. */
+        until?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        section: string;
+        targetId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReleaseOperationsPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ApplyReleaseOperation: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Quoted target version. */
+        "If-Match": string;
+      };
+      path: {
+        mappingId: string;
+        operationId: string;
+        organizationId: string;
+        projectId: string;
+        targetId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReleaseOperationV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReleaseOperationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetReleaseSummary: {
+    parameters: {
+      query?: {
+        /** @description Operations page or window filter. */
+        caller?: string;
+        /** @description Operations page or window filter. */
+        limit?: string;
+        /** @description Operations page or window filter. */
+        offset?: string;
+        /** @description Operations page or window filter. */
+        outcome?: string;
+        /** @description Operations page or window filter. */
+        since?: string;
+        /** @description Operations page or window filter. */
+        until?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        targetId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReleaseOperationsSummaryV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
           [name: string]: unknown;
         };
         content: {

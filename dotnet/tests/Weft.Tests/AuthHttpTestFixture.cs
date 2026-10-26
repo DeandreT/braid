@@ -63,11 +63,13 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
     internal bool Chat { get; private init; }
     internal Action<AuthHttpFixture, IServiceCollection>? ConfigureCatalogServices { get; private init; }
     internal bool Administration { get; private init; }
+    internal bool Operations { get; private init; }
 
     internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true, int bearerBurst = 0,
-        bool chat = false, bool administration = false, bool displayMetadata = false, Action<AuthHttpFixture, IServiceCollection>? configureCatalogServices = null)
+        bool chat = false, bool administration = false, bool displayMetadata = false, Action<AuthHttpFixture, IServiceCollection>? configureCatalogServices = null,
+        bool operations = false)
     {
-        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat, Administration = administration, ConfigureCatalogServices = configureCatalogServices }; Exception? primary = null; var cleanup = new List<Exception>();
+        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat, Administration = administration, Operations = operations, ConfigureCatalogServices = configureCatalogServices }; Exception? primary = null; var cleanup = new List<Exception>();
         try { await test.InitializeAsync(postgres, bindIssuer, displayMetadata); await body(test); }
         catch (Exception error) { primary = Safe(error, "The independent auth HTTP case failed."); }
         finally { try { await test.DisposeAsync(); } catch (Exception error) { cleanup.Add(Safe(error, "The independent auth HTTP cleanup failed.")); } }
@@ -371,6 +373,7 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
             Application.Use((HttpContext context, RequestDelegate next) => test.MiddlewareAsync(this, context, next)); Application.UseAuthentication();
             Application.MapWeftAuthentication(); Application.MapWeftCatalog(); Application.MapWeftHelp();
             if (test.Chat) Application.MapWeftChat();
+            if (test.Operations) Application.MapWeftReleaseOperations();
             Client = AuthHttpFixture.NewClient(test.Crypto.Root, "127.0.0.1", test.Origin.Port, port); Client.BaseAddress = test.Origin;
             reservation.Stop(); using var start = new CancellationTokenSource(TimeSpan.FromSeconds(15)); await Application.StartAsync(start.Token);
             AuthHttpFixture.Check(Transport.SnapshotAttempts().Count == 0, "Dormant registration sent provider HTTP.");

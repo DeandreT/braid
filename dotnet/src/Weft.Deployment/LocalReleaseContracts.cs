@@ -42,7 +42,7 @@ public sealed record LocalReleaseTarget
 
 public sealed record LocalReleaseTargetSnapshot(LocalReleaseTarget Target, bool Enabled, Guid? ActiveReleaseId);
 public enum ReleaseWriteOutcome { Created, Replayed, Conflict, Refused }
-public enum ReleaseTransitionOutcome { Activated, Replayed, Canceled, Conflict, Refused }
+public enum ReleaseTransitionOutcome { Activated, Replayed, Canceled, Conflict, Refused, IdempotencyConflict }
 public enum ReleaseAuditKind { Requested, Activated, Canceled, Rejected }
 public enum ReleaseRejection { None, StaleActiveRelease, TargetUnavailable, ApprovalRevoked }
 public sealed record ReleaseAuditEntry(int Sequence, ReleaseAuditKind Kind, DateTimeOffset RecordedAt, ReleaseRejection Rejection);

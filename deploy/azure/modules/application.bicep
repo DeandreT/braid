@@ -140,6 +140,9 @@ var nativeWorkFiles = [
   { key: 'run-reader', setting: 'WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING', file: 'build-evidence' }
   { key: 'build-run-reader', setting: 'WEFT_BUILD_RUN_READER_CONNECTION_STRING', file: 'build-run-reader' }
   { key: 'build-run-writer', setting: 'WEFT_BUILD_RUN_WRITER_CONNECTION_STRING', file: 'build-run-writer' }
+  { key: 'release-reader', setting: 'WEFT_RELEASE_READER_CONNECTION_STRING', file: 'release-reader' }
+  { key: 'release-writer', setting: 'WEFT_RELEASE_WRITER_CONNECTION_STRING', file: 'release-writer' }
+  { key: 'qualification-reader', setting: 'WEFT_QUALIFICATION_READER_CONNECTION_STRING', file: 'qualification-reader' }
 ]
 var chatFiles = [
   { key: 'chat-reader', setting: 'WEFT_CHAT_READER_CONNECTION_STRING', file: 'chat-reader-connection' }
@@ -230,6 +233,7 @@ var serverEnvironment = concat([
   { name: 'WEFT_PREVIEWS_ENABLED', value: 'true' }
   { name: 'WEFT_REGRESSIONS_ENABLED', value: 'true' }
   { name: 'WEFT_BUILDS_ENABLED', value: 'true' }
+  { name: 'WEFT_RELEASE_OPERATIONS_ENABLED', value: 'true' }
 ] : [], chatEnabled ? [
   // The profile document and the model credential are private files; the profile's credential entry names
   // /run/weft/secrets/model-provider-credential or a managed-identity token.

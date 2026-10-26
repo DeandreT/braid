@@ -148,6 +148,7 @@ public sealed partial class BearerSecurityContractTests
             builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, port, listen =>
             { listen.Protocols = HttpProtocols.Http1; listen.UseHttps(crypto.ApplicationTls); }));
             builder.Services.AddWeftApi();
+            builder.Services.AddSingleton(new ReleaseOperationsOptions(true));
             builder.Services.AddSingleton<IExternalIdentityReader>(identities);
             builder.Services.AddWeftBrowserSessions(new(origin), profile, new PostgresServerSessionReader(sessionReader),
                 new PostgresServerSessionWriter(sessionWriter), TimeProvider.System);
@@ -181,6 +182,7 @@ public sealed partial class BearerSecurityContractTests
             app.MapWeftRegressionCases();
             app.MapWeftRegressionRuns();
             app.MapWeftBuilds();
+            app.MapWeftReleaseOperations();
             app.MapWeftChat();
             using var start = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await app.StartAsync(start.Token);

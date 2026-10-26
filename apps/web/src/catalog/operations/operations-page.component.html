@@ -1,0 +1,154 @@
+<section class="catalog-page" aria-labelledby="operations-title">
+  <h1 id="operations-title">Operations</h1>
+  <p>
+    Release state, invocation metadata and caller access. Payload bytes are
+    never shown.
+  </p>
+  @if (!presented()) {
+    <p>Refresh to confirm access before viewing operations or retained work.</p>
+    <button class="catalog-button" [disabled]="busy()" (click)="load(0, true)">
+      Refresh operations
+    </button>
+  }
+  <div [hidden]="!presented()" [attr.inert]="presented() ? null : ''">
+    <form (ngSubmit)="load()">
+      <label>Target ID <input name="target" [(ngModel)]="target" /></label>
+      <label
+        >View
+        <select name="section" [(ngModel)]="section">
+          <option value="targets">Targets</option>
+          <option value="releases">Releases</option>
+          <option value="history">Target history</option>
+          <option value="actions">Action audit</option>
+          <option value="invocations">Invocations</option>
+          <option value="summary">Failure and latency summary</option>
+          <option value="callers">Caller grants</option>
+        </select></label
+      >
+      <details>
+        <summary>Invocation filters</summary>
+        <label
+          >Since (ISO UTC)
+          <input
+            name="since"
+            [(ngModel)]="since"
+            placeholder="2026-10-24T00:00:00.0000000+00:00"
+        /></label>
+        <label
+          >Until (exclusive, ISO UTC) <input name="until" [(ngModel)]="until"
+        /></label>
+        <label
+          >Caller client ID <input name="caller" [(ngModel)]="caller"
+        /></label>
+        <label>Outcome <input name="outcome" [(ngModel)]="outcome" /></label>
+      </details>
+      <button class="catalog-button" [disabled]="busy()">Refresh</button>
+    </form>
+    <p role="status">{{ message() }}</p>
+    @if (busy()) {
+      <p role="status">Loading…</p>
+    }
+    @if (summary(); as value) {
+      <dl>
+        @for (entry of entries(value); track entry[0]) {
+          <dt>{{ entry[0] }}</dt>
+          <dd>{{ text(entry[1]) }}</dd>
+        }
+      </dl>
+    }
+    @if (data(); as page) {
+      @for (row of page.items; track $index) {
+        <article class="catalog-summary">
+          <dl>
+            @for (entry of entries(row); track entry[0]) {
+              <dt>{{ entry[0] }}</dt>
+              <dd class="catalog-code">{{ text(entry[1]) }}</dd>
+            }
+          </dl>
+          @if (section === "targets") {
+            <button class="catalog-button" (click)="select(row)">
+              Operate this target
+            </button>
+          }
+        </article>
+      } @empty {
+        <p>No records in this selection.</p>
+      }
+      @if (page.nextOffset !== null) {
+        <button
+          class="catalog-button"
+          [disabled]="busy()"
+          (click)="load(page.nextOffset)"
+        >
+          Next page
+        </button>
+      }
+    }
+    <h2>Change target</h2>
+    <p>
+      Publishers can activate and roll back. Disabling and enabling require an
+      Administrator. Activation and rollback use your own existing qualified
+      build and preserve its approval checks.
+    </p>
+    @if (visiblePending(); as original) {
+      <p>
+        An operation may already have committed. Recovery reuses exactly the
+        same body, target version and ID: <code>{{ original.id }}</code
+        >.
+      </p>
+      <button class="catalog-button" [disabled]="busy()" (click)="send()">
+        Recover original operation
+      </button>
+    } @else {
+      <form (ngSubmit)="send()">
+        <label
+          >Action
+          <select name="action" [(ngModel)]="action">
+            <option>activate</option>
+            <option>rollback</option>
+            <option>disable</option>
+            <option>enable</option>
+          </select></label
+        >
+        <label
+          >Environment ID
+          <input name="environment" [(ngModel)]="environment" required
+        /></label>
+        <label
+          >Environment version
+          <input
+            name="environmentVersion"
+            [(ngModel)]="environmentVersion"
+            required
+        /></label>
+        <label
+          >Reviewed target version
+          <input name="version" [(ngModel)]="version" required
+        /></label>
+        @if (action === "activate" || action === "rollback") {
+          <label
+            >Qualification ID
+            <input name="qualification" [(ngModel)]="qualification" required
+          /></label>
+        }
+        @if (action === "rollback") {
+          <label
+            >Previous release ID
+            <input name="source" [(ngModel)]="source" required
+          /></label>
+        }
+        <label
+          ><input type="checkbox" name="confirm" [(ngModel)]="confirming" /> I
+          reviewed this target, action and version.</label
+        >
+        <button class="catalog-button" [disabled]="busy() || !confirming">
+          Apply action
+        </button>
+      </form>
+    }
+    <p>
+      Machine caller changes remain administrator-only. See
+      <a routerLink="/administration">caller administration</a>.
+    </p>
+  </div>
+</section>

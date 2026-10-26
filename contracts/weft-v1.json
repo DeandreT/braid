@@ -17234,6 +17234,886 @@
         ]
       }
     },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "List endpoint targets and active release identities.",
+        "operationId": "GetReleaseTargets",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caller",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseOperationsPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/{section}": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Read paged release, history, actions, callers or invocation metadata. No payload bytes.",
+        "operationId": "GetReleaseOperations",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "section",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caller",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseOperationsPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/summary": {
+      "get": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Read failure and latency summaries over a selected window.",
+        "operationId": "GetReleaseSummary",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "caller",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "description": "Operations page or window filter.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseOperationsSummaryV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/actions/{operationId}": {
+      "post": {
+        "tags": [
+          "Operations"
+        ],
+        "summary": "Apply a version-conditional idempotent release operation.",
+        "operationId": "ApplyReleaseOperation",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mappingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Quoted target version.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseOperationV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseOperationReceiptV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "Request Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat": {
       "get": {
         "tags": [
@@ -27060,6 +27940,682 @@
           "boundaryMember"
         ]
       },
+      "ReleaseActiveMetadataV1": {
+        "required": [
+          "releaseId",
+          "actorId",
+          "qualificationId",
+          "buildId",
+          "artifactDigest",
+          "approvalId",
+          "approval"
+        ],
+        "type": "object",
+        "properties": {
+          "releaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualificationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "buildId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "artifactDigest": {
+            "type": "string"
+          },
+          "approvalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/ReleaseApprovalMetadataV1"
+          }
+        }
+      },
+      "ReleaseApprovalMetadataV1": {
+        "required": [
+          "approvalId",
+          "revoked",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "approvalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReleaseOperationReceiptV1": {
+        "required": [
+          "operationId",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseOperationsItemV1": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ReleaseOperationsItemV1ReleaseTargetMetadataV1"
+          },
+          {
+            "$ref": "#/components/schemas/ReleaseOperationsItemV1ReleaseMetadataV1"
+          },
+          {
+            "$ref": "#/components/schemas/ReleaseOperationsItemV1ReleaseTargetEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ReleaseOperationsItemV1ReleaseActionAuditV1"
+          },
+          {
+            "$ref": "#/components/schemas/ReleaseOperationsItemV1ReleaseCallerGrantV1"
+          },
+          {
+            "$ref": "#/components/schemas/ReleaseOperationsItemV1ReleaseInvocationMetadataV1"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "target": "#/components/schemas/ReleaseOperationsItemV1ReleaseTargetMetadataV1",
+            "release": "#/components/schemas/ReleaseOperationsItemV1ReleaseMetadataV1",
+            "history": "#/components/schemas/ReleaseOperationsItemV1ReleaseTargetEventV1",
+            "action": "#/components/schemas/ReleaseOperationsItemV1ReleaseActionAuditV1",
+            "caller": "#/components/schemas/ReleaseOperationsItemV1ReleaseCallerGrantV1",
+            "invocation": "#/components/schemas/ReleaseOperationsItemV1ReleaseInvocationMetadataV1"
+          }
+        }
+      },
+      "ReleaseOperationsItemV1ReleaseActionAuditV1": {
+        "required": [
+          "operation_id",
+          "actor_id",
+          "action",
+          "expected_version",
+          "qualification_id",
+          "source_release_id",
+          "outcome",
+          "recorded_at",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "action"
+            ],
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "string"
+          },
+          "qualification_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "source_release_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReleaseOperationsItemV1ReleaseCallerGrantV1": {
+        "required": [
+          "grant_id",
+          "provider",
+          "tenant_id",
+          "object_id",
+          "granted_by",
+          "granted_at",
+          "revoked_by",
+          "revoked_at",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "caller"
+            ],
+            "type": "string"
+          },
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "object_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "granted_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "granted_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revoked_by": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "revoked_at": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ReleaseOperationsItemV1ReleaseInvocationMetadataV1": {
+        "required": [
+          "request_id",
+          "caller_client_id",
+          "provider",
+          "tenant_id",
+          "object_id",
+          "release_id",
+          "started_at",
+          "finished_at",
+          "state",
+          "outcome",
+          "attempt",
+          "output_bytes",
+          "input_bytes",
+          "replay_count",
+          "replayed",
+          "latency_ms",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "invocation"
+            ],
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caller_client_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "object_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "release_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "output_bytes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "input_bytes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "replay_count": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "replayed": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "latency_ms": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "ReleaseOperationsItemV1ReleaseMetadataV1": {
+        "required": [
+          "release_id",
+          "actor_id",
+          "qualification_id",
+          "rollback_of_id",
+          "phase",
+          "rejection",
+          "created_at",
+          "finished_at",
+          "build_id",
+          "artifact_digest",
+          "runtime_image",
+          "approval_id",
+          "approval_revoked",
+          "approval_created_at",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "release"
+            ],
+            "type": "string"
+          },
+          "release_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualification_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rollback_of_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "rejection": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "build_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "artifact_digest": {
+            "type": "string"
+          },
+          "runtime_image": {
+            "type": "string"
+          },
+          "approval_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approval_revoked": {
+            "type": "boolean"
+          },
+          "approval_created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReleaseOperationsItemV1ReleaseTargetEventV1": {
+        "required": [
+          "version",
+          "actor_id",
+          "enabled",
+          "active_release_id",
+          "origin",
+          "action",
+          "recorded_at",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "history"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "active_release_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReleaseOperationsItemV1ReleaseTargetMetadataV1": {
+        "required": [
+          "target_id",
+          "environment_id",
+          "environment_version",
+          "enabled",
+          "active_release_id",
+          "runtime_image",
+          "profile",
+          "version",
+          "active",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "target"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "environment_version": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "active_release_id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "runtime_image": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReleaseRuntimeProfileV1"
+          },
+          "version": {
+            "type": "string"
+          },
+          "active": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReleaseActiveMetadataV1"
+              }
+            ]
+          }
+        }
+      },
+      "ReleaseOperationsPageV1": {
+        "required": [
+          "items",
+          "nextOffset"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseOperationsItemV1"
+            }
+          },
+          "nextOffset": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReleaseOperationsSummaryV1": {
+        "required": [
+          "count",
+          "failed",
+          "running",
+          "retryable",
+          "failuresByCategory",
+          "meanLatencyMs",
+          "p95LatencyMs"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "running": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "retryable": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failuresByCategory": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "meanLatencyMs": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "p95LatencyMs": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "ReleaseOperationV1": {
+        "required": [
+          "action",
+          "environmentId",
+          "environmentVersion",
+          "qualificationId",
+          "sourceReleaseId"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentVersion": {
+            "type": "string"
+          },
+          "qualificationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sourceReleaseId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ReleaseRuntimeProfileV1": {
+        "required": [
+          "id",
+          "version",
+          "runtime",
+          "runtimeVersion",
+          "artifactFormat",
+          "maximumArtifactBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "runtimeVersion": {
+            "type": "string"
+          },
+          "artifactFormat": {
+            "type": "string"
+          },
+          "maximumArtifactBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "RevisionComparisonV1": {
         "required": [
           "schemaVersion",
@@ -27631,6 +29187,9 @@
     },
     {
       "name": "Builds"
+    },
+    {
+      "name": "Operations"
     },
     {
       "name": "Chat"
