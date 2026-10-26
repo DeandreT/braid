@@ -41,38 +41,41 @@ import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
         @if (state.kind === "ready") {
           @if (!state.context.features.chat) {
             <p role="status">Chat is not configured for this workspace.</p>
+          } @else {
+            <p>
+              Use the shared panel to continue a conversation without leaving
+              your work.
+            </p>
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="workspace.open()"
+            >
+              Open chat
+            </button>
+            <ul class="conversation-library">
+              @for (
+                conversation of workspace.panel()?.conversations() ?? [];
+                track conversation.conversationId
+              ) {
+                <li>
+                  <button
+                    class="catalog-button"
+                    type="button"
+                    (click)="choose(conversation)"
+                  >
+                    {{
+                      conversation.title || conversation.createdAtUtc
+                    }}</button
+                  ><span>{{
+                    isWorkspace(conversation)
+                      ? "Workspace conversation"
+                      : "Legacy · pinned revision"
+                  }}</span>
+                </li>
+              }
+            </ul>
           }
-          <p>
-            Use the shared panel to continue a conversation without leaving your
-            work.
-          </p>
-          <button
-            class="catalog-button"
-            type="button"
-            (click)="workspace.open()"
-          >
-            Open chat
-          </button>
-          <ul class="conversation-library">
-            @for (
-              conversation of workspace.panel()?.conversations() ?? [];
-              track conversation.conversationId
-            ) {
-              <li>
-                <button
-                  class="catalog-button"
-                  type="button"
-                  (click)="choose(conversation)"
-                >
-                  {{ conversation.title || conversation.createdAtUtc }}</button
-                ><span>{{
-                  isWorkspace(conversation)
-                    ? "Workspace conversation"
-                    : "Legacy · pinned revision"
-                }}</span>
-              </li>
-            }
-          </ul>
         } @else {
           <weft-catalog-status [kind]="state.kind" (retry)="read.retry()" />
         }
@@ -162,7 +165,12 @@ export class ChatPageComponent {
       const state = this.read.state();
       const id = this.conversationId(),
         scope = this.legacyScope();
-      if (state.kind !== "ready" || this.invalidLink()) return;
+      if (
+        state.kind !== "ready" ||
+        !state.context.features.chat ||
+        this.invalidLink()
+      )
+        return;
       const key = JSON.stringify([
         id,
         scope,

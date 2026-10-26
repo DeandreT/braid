@@ -194,3 +194,19 @@ details {
 :host-context(weft-workspace-chat-panel) #chat-question-limit {
   font-size: 0.6875rem;
 }
+/* Short or enlarged-text panels use one scroll surface so fixed headers and
+   composer minima cannot clip controls outside the reachable scroll area. */
+@container workspace-conversation (max-height: 28rem) {
+  :host-context(weft-workspace-chat-panel) .chat-panel {
+    height: auto;
+  }
+  :host-context(weft-workspace-chat-panel) .chat-scroll {
+    flex: none;
+    min-height: 0;
+    overflow: visible;
+  }
+  :host-context(weft-workspace-chat-panel) .chat-composer {
+    max-height: none;
+    overflow: visible;
+  }
+}

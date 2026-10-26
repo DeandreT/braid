@@ -111,6 +111,108 @@ for (const ambiguous of [false, true])
     }
   });
 
+for (const outcome of ["ready", "unavailable", "identityRejected"] as const)
+  test(`a held availability refresh keeps route and conversation aligned (${outcome})`, async ({
+    page,
+  }) => {
+    const fixture = await workspaceFixture(page);
+    await page.goto("/chat");
+    const b = await createConversation(page);
+    await page
+      .getByRole("navigation", { name: "Workspace", exact: true })
+      .getByRole("link", { name: "Catalog", exact: true })
+      .click();
+    await page
+      .getByRole("link", { name: fixture.data.project.name, exact: true })
+      .click();
+    await page
+      .getByRole("link", { name: fixture.data.mapping.name, exact: true })
+      .click();
+    await page.locator(`a[href="${fixture.data.browserPath}"]`).first().click();
+    const a = await createConversation(page);
+    expect(a).not.toBe(b);
+    await chat(page)
+      .getByLabel("Question", { exact: true })
+      .fill("Retain A while availability refreshes");
+    let release!: () => void, arrived!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const pending = new Promise<void>((resolve) => (arrived = resolve));
+    await page.route("**/api/v1/organizations/*/chat", async (route) => {
+      arrived();
+      await held;
+      if (outcome === "ready") await route.fallback();
+      else
+        await route.fulfill({
+          status: outcome === "identityRejected" ? 403 : 503,
+          json: { code: outcome },
+        });
+    });
+    let warnings = 0;
+    page.on("dialog", async (dialog) => {
+      warnings++;
+      await dialog.dismiss();
+    });
+    try {
+      await chat(page)
+        .getByRole("button", { name: "Refresh chat", exact: true })
+        .click();
+      await pending;
+      for (
+        let steps = 0;
+        steps < 6 && !new URL(page.url()).pathname.startsWith("/chat");
+        steps++
+      )
+        await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`conversationId=${a}`));
+      await chat(page)
+        .getByRole("button", { name: "Hide chat", exact: true })
+        .click();
+      release();
+      await expect(
+        chat(page).getByRole("button", {
+          name: "Refresh chat",
+          exact: true,
+          includeHidden: true,
+        }),
+      ).toBeEnabled();
+      await expect(page.locator("#workspace-chat-toggle")).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+      await page.locator("#workspace-chat-toggle").click();
+      if (outcome === "identityRejected") {
+        await expect(chat(page)).toContainText("The session was rejected.");
+        await expect(
+          chat(page).getByLabel("Question", { exact: true }),
+        ).not.toBeVisible();
+        await expect(chat(page)).not.toContainText(
+          "Retain A while availability refreshes",
+        );
+      } else {
+        if (outcome === "unavailable") {
+          await expect(chat(page)).toContainText("Chat is unavailable.");
+          await page.unroute("**/api/v1/organizations/*/chat");
+          await chat(page)
+            .getByRole("button", { name: "Refresh chat", exact: true })
+            .click();
+        }
+        await expect(chat(page).getByLabel("Saved conversations")).toHaveValue(
+          a,
+        );
+        await expect(
+          chat(page).getByLabel("Question", { exact: true }),
+        ).toHaveValue("Retain A while availability refreshes");
+      }
+      await expect(page).toHaveURL(new RegExp(`conversationId=${a}`));
+      expect(warnings).toBe(0);
+      expect(
+        fixture.posts.filter((post) => post.path.endsWith("/turns")),
+      ).toHaveLength(0);
+    } finally {
+      release();
+    }
+  });
+
 test("the conversation library stays visible after hiding chat and reactive refreshes", async ({
   page,
 }) => {
@@ -143,6 +245,143 @@ async function openChat(page: Page) {
   }
   await expect(chat(page)).toBeVisible();
 }
+
+test("chat mobile behavior matches the viewport boundary at 627, 628, 679 and 680", async ({
+  page,
+}) => {
+  await workspaceFixture(page);
+  await page.goto("/chat");
+  await createConversation(page);
+  for (const width of [627, 628, 679, 680]) {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openChat(page);
+    await page.setViewportSize({ width, height: 900 });
+    if (width < 680) {
+      await expect(chat(page)).not.toBeVisible();
+      await openChat(page);
+      await expect(page.locator("#main-content")).not.toBeVisible();
+      await expect(
+        page.getByRole("separator", { name: "Resize chat", exact: true }),
+      ).not.toBeVisible();
+      await expect
+        .poll(async () => Math.round((await chat(page).boundingBox())!.width))
+        .toBe(width);
+      await page.keyboard.press("Escape");
+      await expect(chat(page)).not.toBeVisible();
+      await expect(page.locator("#workspace-chat-toggle")).toBeFocused();
+      await openChat(page);
+      await chat(page)
+        .getByRole("button", { name: "Hide chat", exact: true })
+        .click();
+      await expect(page.locator("#main-content")).toBeVisible();
+    } else {
+      await expect(chat(page)).toBeVisible();
+      await expect(page.locator("#main-content")).toBeVisible();
+      await expect(
+        page.getByRole("separator", { name: "Resize chat", exact: true }),
+      ).toBeVisible();
+    }
+  }
+});
+
+for (const [width, height, textSize] of [
+  [360, 400, "100%"],
+  [1024, 450, "100%"],
+  [1024, 700, "200%"],
+] as const)
+  test(`populated short chat keeps model, composer, send and cancel reachable (${width}x${height}, ${textSize})`, async ({
+    page,
+  }) => {
+    await workspaceFixture(page);
+    await page.goto("/chat");
+    await createConversation(page);
+    const question = chat(page).getByLabel("Question", { exact: true });
+    await question.fill("Explain this mapping");
+    await chat(page)
+      .getByRole("button", { name: "Send question", exact: true })
+      .click();
+    await expect(chat(page)).toContainText("Answer complete.");
+    await page.setViewportSize({ width, height });
+    if (width < 680) await expect(chat(page)).not.toBeVisible();
+    await page.evaluate(
+      (size) => (document.documentElement.style.fontSize = size),
+      textSize,
+    );
+    await openChat(page);
+    const model = chat(page).getByRole("combobox", {
+      name: "Model profile",
+      exact: true,
+    });
+    await model.focus();
+    await expect(model).toBeFocused();
+    await expect(model).toBeInViewport({ ratio: 1 });
+    await question.fill("A second question");
+    await expect(question).toBeInViewport({ ratio: 1 });
+    await page.keyboard.press("Tab");
+    const send = chat(page).getByRole("button", {
+      name: "Send question",
+      exact: true,
+    });
+    await expect(send).toBeFocused();
+    await expect(send).toBeInViewport({ ratio: 1 });
+    await capture(
+      page,
+      `populated-chat-short-${width}-${height}-${textSize.replace("%", "")}`,
+    );
+    let release!: () => void, arrived!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve)),
+      pending = new Promise<void>((resolve) => (arrived = resolve));
+    await page.route("**/events*", async (route) => {
+      arrived();
+      await held;
+      await route.fallback();
+    });
+    try {
+      await send.press("Enter");
+      await pending;
+      const cancel = chat(page).getByRole("button", {
+        name: "Cancel answer",
+        exact: true,
+      });
+      await cancel.focus();
+      await expect(cancel).toBeFocused();
+      await expect(cancel).toBeInViewport({ ratio: 1 });
+      await expect(chat(page)).toBeVisible();
+    } finally {
+      release();
+    }
+  });
+
+test("a disabled chat route offers no panel action or misleading instructions", async ({
+  page,
+}) => {
+  const fixture = await workspaceFixture(page);
+  await page.route("**/api/v1/catalog/context", (route) =>
+    route.fulfill({
+      json: {
+        ...fixture.data.context,
+        features: { ...fixture.data.context.features, chat: false },
+      },
+    }),
+  );
+  await page.goto("/chat");
+  await expect(page.getByRole("status")).toContainText(
+    "Chat is not configured for this workspace.",
+  );
+  await expect(
+    page.getByRole("button", { name: "Open chat", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator("#workspace-chat-toggle")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Use the shared panel to continue a conversation without leaving your work.",
+    ),
+  ).toHaveCount(0);
+  await expect(page.locator("weft-workspace-chat-panel")).not.toHaveClass(
+    /chat-open/,
+  );
+  await expect(page.locator("#main-content")).toBeVisible();
+});
 
 test("an in-flight answer survives hiding and content navigation without another send", async ({
   page,

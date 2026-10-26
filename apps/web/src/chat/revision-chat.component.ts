@@ -282,8 +282,12 @@ export class RevisionChatComponent {
       const id = this.requestedConversation();
       this.requestedVersion();
       untracked(() => {
-        if (id && this.availability() && this.current()?.conversationId !== id)
-          void this.open(id);
+        if (!id || this.current()?.conversationId === id) return;
+        if (this.availability()) void this.open(id);
+        // Refresh temporarily removes availability while retaining the active
+        // conversation. Reject route switches just as for other busy work; do
+        // not leave its draft or recovery under a different conversation URL.
+        else if (this.current()) this.selectionRejected.emit();
       });
     });
     // A failed or negative check is not a new owner: suspend the unsent question rather than discard it.

@@ -149,7 +149,9 @@ import { ResizeHandleComponent } from "./resize-handle.component";
     weft-revision-chat {
       flex: 1;
       min-height: 0;
-      overflow: hidden;
+      overflow: auto;
+      container-type: size;
+      container-name: workspace-conversation;
     }
     .chat-width {
       display: flex;
@@ -195,8 +197,13 @@ export class WorkspaceChatPanelComponent {
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly panel = viewChild(RevisionChatComponent);
   private readonly available = signal(0);
+  private readonly viewportWidth = signal(
+    this.document.defaultView?.innerWidth ?? 0,
+  );
   private readonly preferred = signal(360);
-  readonly narrow = computed(() => this.available() < 628);
+  readonly narrow = computed(
+    () => this.viewportWidth() < 680 || this.available() < 628,
+  );
   readonly maximum = computed(() =>
     Math.max(
       300,
@@ -272,6 +279,7 @@ export class WorkspaceChatPanelComponent {
     const resize = () => {
       const parent = this.element.nativeElement.parentElement;
       const previous = this.narrow();
+      this.viewportWidth.set(this.document.defaultView?.innerWidth ?? 0);
       this.available.set(parent?.clientWidth ?? 0);
       if (!previous && this.narrow()) this.chat.hide();
     };
@@ -293,8 +301,10 @@ export class WorkspaceChatPanelComponent {
         this.chat.hide();
     };
     this.document.addEventListener("keydown", escape);
+    this.document.defaultView?.addEventListener("resize", resize);
     this.destroy.onDestroy(() => {
       this.document.removeEventListener("keydown", escape);
+      this.document.defaultView?.removeEventListener("resize", resize);
       this.chat.panel.set(null);
     });
   }

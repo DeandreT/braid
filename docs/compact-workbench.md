@@ -35,6 +35,9 @@ The right conversation is one mounted surface across route changes. Hiding it
 does not cancel a stream, send a draft or discard recovery. Its width starts at
 360px, ranges from 300–560px and is clamped to preserve the main content region.
 At phone width it becomes a focused panel rather than covering the canvas.
+Below 680px it fills the content width, hides resizing and closes on Escape.
+Short panels and enlarged text use one scroll surface so the model selector,
+transcript and composer remain reachable instead of competing for fixed height.
 The labeled separator supports pointer drag, Left/Right (10px), Shift (20px),
 and Home/End. Width and open-state preferences are harmless per-user layout
 data; conversations, drafts, tokens and request recovery never enter storage.
