@@ -23,11 +23,18 @@ The exact emitted field order and closed shapes are owned by:
   turn UUID, embedded original envelope, complete profile pin and fingerprint
   schema, persistence budget and absolute turn deadline. Stored original text,
   request UUID, canonical envelope and fingerprint must match on reopen.
+- A workspace turn's original envelope is `weft.chat.original.v2`: the v1 fields
+  plus the turn's resolved focus (`None`, `Unavailable`, or `Resolved` with its
+  complete revision scope). Its canonical turn is `weft.chat.workspace-turn.v1`:
+  the organization, creator, conversation UUID, optional conversation focus and
+  retention instant in place of the revision scope and report pins, then the same
+  turn fields. Revision turns keep both v1 shapes.
 - `ChatAiBridge.PinProfile`: `weft.chat.profile.v1`, provider ID and **every**
   nonsecret `AiProfileSpec` property: key/version, dialect, model, absolute
   normalized endpoint, loopback-fixture flag, authentication mode, credential
   reference, capabilities, metadata-policy ID/version/allow flag, think-false
-  flag. No secret resolver/value is used. Configuration changes under an existing
+  flag, and the payload flag only when it is set, so profiles without it keep
+  their earlier fingerprints. No secret resolver/value is used. Configuration changes under an existing
   key therefore fail pin matching. The canonical profile body is not persisted;
   its versioned fingerprint and explicit display/policy identity are.
 - `ChatAiBridge.PinGroundingPolicy` pins exact trusted instruction UTF-8 with
@@ -88,7 +95,10 @@ provider qualification.
 
 Existing event numbers remain unchanged: 1 start, 2 text, 3/4 tool activity, 5
 completed, 6 failed, 7 cancelled, 8 interrupted. New kinds are 9 usage, 10 closed
-provider failure, 11 validated citation and 12 round completion. All are ordered
+provider failure, 11 validated citation and 12 round completion. Workspace
+conversations add 13 workspace citation and 14 shared data; kind 11 is admitted
+only in revision conversations and kinds 13 and 14 only in workspace
+conversations. All are ordered
 by durable sequence, not provider arrival timestamps. Event-ID replay compares
 kind, exact text/metadata, round and fence and never appends again.
 

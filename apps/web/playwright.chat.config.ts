@@ -4,7 +4,11 @@ import { defineConfig } from "@playwright/test";
 // Synthetic API fixtures exercise the Angular boundary, not the provider/backend.
 export default defineConfig({
   testDir: "./tests",
-  testMatch: "revision-chat.spec.ts",
+  testMatch: [
+    "revision-chat.spec.ts",
+    "workspace-chat.spec.ts",
+    "workspace-chat-resources.spec.ts",
+  ],
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -17,6 +21,9 @@ export default defineConfig({
     screenshot: "off",
   },
   webServer: {
+    cwd: process.env.WEFT_CHAT_UI_SOURCE
+      ? `${process.env.WEFT_CHAT_UI_SOURCE}/apps/web`
+      : undefined,
     command:
       "npm run dev -- --port 5178 --proxy-config proxy.synthetic.conf.json --no-hmr",
     url: "http://127.0.0.1:5178",

@@ -18,6 +18,7 @@ using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
 using Weft.Application;
+using Weft.Application.Automation;
 using Weft.Application.Regression;
 using Weft.Deployment;
 using Weft.Identity;
@@ -167,6 +168,8 @@ public sealed partial class BearerSecurityContractTests
             builder.Services.AddWeftRegressionCases(new(true, new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
                 FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile)));
             builder.Services.AddWeftRegressionRuns(new(true));
+            builder.Services.AddSingleton(new CatalogAutomationOptions(true));
+            builder.Services.AddSingleton<IAutomationStore>(_ => throw new InvalidOperationException("Refused credentials must not resolve automation stores."));
             builder.Services.AddWeftBuildApi(new(true, new BuildBackendIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
                 FerrulePreviewBackend.AdapterBuild), FerruleBuildCompiler.Profile));
             builder.Services.AddWeftPreviews(new CatalogPreviewOptions(true));
@@ -181,6 +184,7 @@ public sealed partial class BearerSecurityContractTests
             app.MapWeftHelp();
             app.MapWeftRegressionCases();
             app.MapWeftRegressionRuns();
+            app.MapWeftAutomation();
             app.MapWeftBuilds();
             app.MapWeftReleaseOperations();
             app.MapWeftChat();

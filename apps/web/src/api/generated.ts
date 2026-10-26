@@ -322,6 +322,109 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/chat": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the model profiles that can answer organization-wide questions, their data policy and the limits. */
+    get: operations["GetWorkspaceChatAvailability"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the caller's conversations of both kinds in the organization, newest first, optionally about one revision. */
+    get: operations["GetOrganizationChatConversations"];
+    put?: never;
+    /** Create or replay a private workspace conversation, optionally focused on a mapping or revision. */
+    post: operations["CreateWorkspaceChatConversation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one private workspace conversation and its most recent turns. */
+    get: operations["GetWorkspaceChatConversation"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start or replay a workspace turn identified by its client-generated turn ID. */
+    post: operations["CreateWorkspaceChatTurn"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Cancel an active workspace turn; a terminal turn is returned unchanged. */
+    post: operations["CancelWorkspaceChatTurn"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Stream the workspace turn's durable events after a sequence number using SSE framing. */
+    get: operations["StreamWorkspaceChatTurnEvents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/notifications": {
     parameters: {
       query?: never;
@@ -2439,6 +2542,8 @@ export interface components {
       hasEarlierTurns: boolean;
       turns: components["schemas"]["ChatTurnV1"][];
     };
+    /** @enum {unknown} */
+    ChatConversationKindV1: "revision" | "workspace";
     ChatConversationPageV1: {
       conversations: components["schemas"]["ChatConversationV1"][];
       hasMore: boolean;
@@ -2477,6 +2582,11 @@ export interface components {
     ChatErrorV1: {
       code: components["schemas"]["ChatErrorCodeV1"];
     };
+    ChatFocusV1: {
+      mappingId: string;
+      projectId: string;
+      revisionId: null | string;
+    };
     ChatLimitsV1: {
       /** Format: int32 */
       maxSelectors: number;
@@ -2485,6 +2595,31 @@ export interface components {
       /** Format: int32 */
       turnSeconds: number;
     };
+    ChatOrganizationConversationPageV1: {
+      conversations: components["schemas"]["ChatOrganizationConversationV1"][];
+      hasMore: boolean;
+    };
+    ChatOrganizationConversationV1: {
+      conversationId: string;
+      /** Format: date-time */
+      createdAtUtc: string;
+      focus: null | components["schemas"]["ChatFocusV1"];
+      kind: components["schemas"]["ChatConversationKindV1"];
+      /** Format: date-time */
+      lastTurnAtUtc: null | string;
+      /** Format: date-time */
+      retainUntilUtc: string;
+      revision: null | components["schemas"]["CatalogRevisionScopeV1"];
+      title: null | string;
+      /** Format: int32 */
+      turnCount: number;
+    };
+    /** @enum {unknown} */
+    ChatPayloadSourceV1:
+      | "previewInput"
+      | "previewOutput"
+      | "regressionCase"
+      | "regressionRunOutput";
     ChatProfileV1: {
       displayName: string;
       modelId: string;
@@ -2560,6 +2695,8 @@ export interface components {
       | components["schemas"]["ChatTurnEventV1ChatToolCompletedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatUsageEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatCitationEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatWorkspaceCitationEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatDataSharedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnCompletedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnFailedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnCancelledEventV1"];
@@ -2571,6 +2708,19 @@ export interface components {
       target: components["schemas"]["ChatSelectorV1"];
       /** @enum {string} */
       type: "citation";
+    };
+    ChatTurnEventV1ChatDataSharedEventV1: {
+      /** Format: int32 */
+      bytes: number;
+      projectId: string;
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      source: components["schemas"]["ChatPayloadSourceV1"];
+      subjectId: string;
+      /** @enum {string} */
+      type: "data.shared";
+      version: null | string;
     };
     ChatTurnEventV1ChatTextDeltaEventV1: {
       roundId: string;
@@ -2644,6 +2794,14 @@ export interface components {
       /** @enum {string} */
       type: "usage";
     };
+    ChatTurnEventV1ChatWorkspaceCitationEventV1: {
+      citation: components["schemas"]["ChatWorkspaceCitationV1"];
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "workspace.citation";
+    };
     /** @enum {unknown} */
     ChatTurnFailureV1:
       | "provider"
@@ -2652,6 +2810,12 @@ export interface components {
       | "contentFiltered"
       | "interrupted"
       | "stopped";
+    /** @enum {unknown} */
+    ChatTurnFocusStateV1: "none" | "resolved" | "unavailable";
+    ChatTurnFocusV1: {
+      revision: null | components["schemas"]["CatalogRevisionScopeV1"];
+      state: components["schemas"]["ChatTurnFocusStateV1"];
+    };
     /** @enum {unknown} */
     ChatTurnPhaseV1:
       "active" | "completed" | "failed" | "cancelled" | "interrupted";
@@ -2670,6 +2834,7 @@ export interface components {
       deadlineUtc: string;
       /** Format: date-time */
       finishedAtUtc: null | string;
+      focus?: null | components["schemas"]["ChatTurnFocusV1"];
       /** Format: int32 */
       lastSequence: number;
       phase: components["schemas"]["ChatTurnPhaseV1"];
@@ -2680,6 +2845,55 @@ export interface components {
     };
     /** @enum {unknown} */
     ChatUsageOriginV1: "observation" | "roundTerminal" | "openRejection";
+    ChatWorkspaceAvailabilityV1: {
+      limits: components["schemas"]["ChatLimitsV1"];
+      organizationId: string;
+      profiles: components["schemas"]["ChatWorkspaceProfileV1"][];
+      /** @enum {string} */
+      readonly schemaVersion: "weft.chat.v1";
+    };
+    /** @enum {unknown} */
+    ChatWorkspaceCitationKindV1:
+      | "project"
+      | "mapping"
+      | "revision"
+      | "report"
+      | "previewRun"
+      | "regressionCase"
+      | "regressionRun"
+      | "buildRun"
+      | "buildApproval"
+      | "buildEnvironment"
+      | "guideSection";
+    ChatWorkspaceCitationV1: {
+      kind: components["schemas"]["ChatWorkspaceCitationKindV1"];
+      mappingId: null | string;
+      organizationId: string;
+      projectId: null | string;
+      reportDerivationId: null | string;
+      revisionId: null | string;
+      sectionId: null | string;
+      subjectId: null | string;
+      target: null | components["schemas"]["ChatSelectorV1"];
+      version: null | string;
+    };
+    ChatWorkspaceConversationCreateV1: {
+      conversationId: string;
+      focus?: null | {
+        mappingId: string;
+        projectId: string;
+        revisionId?: null | string;
+      };
+    };
+    ChatWorkspaceConversationDetailV1: {
+      conversation: components["schemas"]["ChatOrganizationConversationV1"];
+      hasEarlierTurns: boolean;
+      turns: components["schemas"]["ChatTurnV1"][];
+    };
+    ChatWorkspaceProfileV1: {
+      payloadsAllowed: boolean;
+      profile: components["schemas"]["ChatProfileV1"];
+    };
     /** @enum {unknown} */
     ComparisonAspectV1:
       | "shape"
@@ -5432,6 +5646,969 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  GetWorkspaceChatAvailability: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatWorkspaceAvailabilityV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetOrganizationChatConversations: {
+    parameters: {
+      query?: {
+        /** @description Continue after the last conversation identity from the previous page. */
+        after?: string;
+        /** @description Maximum conversations, newest first; canonical decimal. */
+        limit?: number;
+        /** @description Only conversations about this freshly readable exact revision. */
+        revisionId?: string;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatOrganizationConversationPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CreateWorkspaceChatConversation: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatWorkspaceConversationCreateV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatOrganizationConversationV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatOrganizationConversationV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetWorkspaceChatConversation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversationId: string;
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatWorkspaceConversationDetailV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CreateWorkspaceChatTurn: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        conversationId: string;
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatTurnCreateV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CancelWorkspaceChatTurn: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        conversationId: string;
+        organizationId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  StreamWorkspaceChatTurnEvents: {
+    parameters: {
+      query?: {
+        /** @description Resume strictly after this durable event sequence; canonical decimal. */
+        after?: number;
+      };
+      header?: never;
+      path: {
+        conversationId: string;
+        organizationId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "X-Accel-Buffering"?: "no";
+          [name: string]: unknown;
+        };
+        content: {
+          "text/event-stream": components["schemas"]["ChatTurnEventV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
     };
@@ -10959,6 +12136,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10968,6 +12146,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10979,6 +12158,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10990,6 +12170,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10999,6 +12180,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11008,6 +12190,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11017,6 +12200,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11026,15 +12210,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -11046,6 +12232,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11055,6 +12242,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11083,6 +12271,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11092,6 +12281,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11103,6 +12293,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11114,6 +12305,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11123,6 +12315,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11132,6 +12325,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11141,6 +12335,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11150,15 +12345,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -11170,6 +12367,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11179,6 +12377,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11190,7 +12389,12 @@ export interface operations {
   CreateChatConversation: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
       path: {
         mappingId: string;
         organizationId: string;
@@ -11208,6 +12412,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11217,6 +12422,7 @@ export interface operations {
       /** @description Created */
       201: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11226,6 +12432,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11237,6 +12444,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11248,6 +12456,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11257,6 +12466,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11266,6 +12476,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11275,6 +12486,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11284,15 +12496,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -11304,6 +12518,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11313,6 +12528,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11339,6 +12555,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11348,6 +12565,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11359,6 +12577,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11370,6 +12589,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11379,6 +12599,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11388,6 +12609,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11397,6 +12619,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11406,15 +12629,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -11426,6 +12651,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11435,6 +12661,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11446,7 +12673,12 @@ export interface operations {
   CreateChatTurn: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
       path: {
         conversationId: string;
         mappingId: string;
@@ -11465,6 +12697,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11474,6 +12707,7 @@ export interface operations {
       /** @description Created */
       201: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11483,6 +12717,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11494,6 +12729,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11505,6 +12741,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11514,6 +12751,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11523,6 +12761,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11532,6 +12771,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11541,15 +12781,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -11561,6 +12803,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11570,6 +12813,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11581,7 +12825,12 @@ export interface operations {
   CancelChatTurn: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
       path: {
         conversationId: string;
         mappingId: string;
@@ -11597,6 +12846,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11606,6 +12856,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11617,6 +12868,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11628,6 +12880,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11637,6 +12890,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11646,6 +12900,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11655,6 +12910,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11664,15 +12920,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -11684,6 +12942,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11693,6 +12952,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11723,6 +12983,8 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
+          "X-Accel-Buffering"?: "no";
           [name: string]: unknown;
         };
         content: {
@@ -11732,6 +12994,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11743,6 +13006,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -11754,6 +13018,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11763,6 +13028,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11772,6 +13038,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11781,6 +13048,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11790,15 +13058,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -11810,6 +13080,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11819,6 +13090,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {

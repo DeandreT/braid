@@ -52,17 +52,17 @@ public sealed class AutomationSchemaAdmissionTests(PostgresFixture fixture)
     public async Task Historical_schema_rejects_every_partial_installation_before_excluding_trigger_names(string partial)
     {
         await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture, 29);
-        Assert.Equal(RegressionCaseSaveOutcome.Created, (await data.Writer.SaveAsync(data.Actor, data.Version(1))).Outcome);
+        Assert.Equal(RegressionCaseSaveOutcome.Created, (await data.SaveAsync(data.Actor, data.Version(1))).Outcome);
         var (mutation, repair) = PartialInstallation(partial);
         await data.Case.ExecuteAsync(mutation);
         await Assert.ThrowsAsync<InvalidOperationException>(() => ValidateSourcesAsync(data.Case));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => data.Reader.ReadAsync(data.Actor, data.Mapping, data.CaseId, 1));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => data.Writer.SaveAsync(data.Actor, data.Version(2)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => data.ReadAsync(data.Actor, data.Mapping, data.CaseId, 1));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => data.SaveAsync(data.Actor, data.Version(2)));
         Assert.Equal(1L, await data.Case.ScalarAsync<long>("SELECT count(*) FROM weft.regression_case_versions"));
         await data.Case.ExecuteAsync(repair);
         await ValidateSourcesAsync(data.Case);
-        Assert.NotNull(await data.Reader.ReadAsync(data.Actor, data.Mapping, data.CaseId, 1));
-        Assert.Equal(RegressionCaseSaveOutcome.Appended, (await data.Writer.SaveAsync(data.Actor, data.Version(2))).Outcome);
+        Assert.NotNull(await data.ReadAsync(data.Actor, data.Mapping, data.CaseId, 1));
+        Assert.Equal(RegressionCaseSaveOutcome.Appended, (await data.SaveAsync(data.Actor, data.Version(2))).Outcome);
     }
 
     [RegressionPostgresTheory]
@@ -76,8 +76,8 @@ public sealed class AutomationSchemaAdmissionTests(PostgresFixture fixture)
     {
         await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture, prefix);
         await ValidateSourcesAsync(data.Case, validateMaintenance: prefix >= 28);
-        Assert.Equal(RegressionCaseSaveOutcome.Created, (await data.Writer.SaveAsync(data.Actor, data.Version(1))).Outcome);
-        Assert.NotNull(await data.Reader.ReadAsync(data.Actor, data.Mapping, data.CaseId, 1));
+        Assert.Equal(RegressionCaseSaveOutcome.Created, (await data.SaveAsync(data.Actor, data.Version(1))).Outcome);
+        Assert.NotNull(await data.ReadAsync(data.Actor, data.Mapping, data.CaseId, 1));
         await using var connection = await data.Case.Owner.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
         Assert.Equal(prefix is 30 or 31, await AutomationSchemaAdmission.InstalledAsync(connection, transaction, default));
@@ -181,9 +181,9 @@ public sealed class AutomationSchemaAdmissionTests(PostgresFixture fixture)
         await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture, 29);
         var definition = await data.Case.ScalarAsync<string>("SELECT pg_get_functiondef('weft.guard_regression_case()'::regprocedure)");
         await data.Case.ExecuteAsync("CREATE OR REPLACE FUNCTION weft.guard_regression_case() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,weft,pg_temp AS $$BEGIN RETURN NEW; END$$");
-        await Assert.ThrowsAsync<InvalidOperationException>(() => data.Writer.SaveAsync(data.Actor, data.Version(1)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => data.SaveAsync(data.Actor, data.Version(1)));
         await data.Case.ExecuteAsync(definition);
-        Assert.Equal(RegressionCaseSaveOutcome.Created, (await data.Writer.SaveAsync(data.Actor, data.Version(1))).Outcome);
+        Assert.Equal(RegressionCaseSaveOutcome.Created, (await data.SaveAsync(data.Actor, data.Version(1))).Outcome);
     }
 
     private static async Task ValidateSourcesAsync(PostgresCase test, bool validateMaintenance = true)

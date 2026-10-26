@@ -65,8 +65,12 @@ public static class CatalogRegressionHostConfiguration
         services.AddWeftRegressionRuns(new(true));
         Automation(runWriter);
         services.AddSingleton<IRegressionCaseReader>(_ => new PostgresRegressionCaseStore(caseReader, RegressionCaseDatabaseProfile.Reader));
+        services.AddSingleton<IRegressionCaseMetadataReader>(provider =>
+            (IRegressionCaseMetadataReader)provider.GetRequiredService<IRegressionCaseReader>());
         services.AddSingleton<IRegressionCaseWriter>(_ => new PostgresRegressionCaseStore(caseWriter, RegressionCaseDatabaseProfile.Writer));
         services.AddSingleton<IRegressionRunReader>(_ => new PostgresRegressionRunStore(runReader, writer: false));
+        services.AddSingleton<IRegressionRunMetadataReader>(provider =>
+            (IRegressionRunMetadataReader)provider.GetRequiredService<IRegressionRunReader>());
         services.AddSingleton<IRegressionRunStore>(_ => new PostgresRegressionRunStore(runWriter, writer: true));
         services.AddSingleton(provider => new RegressionRunReadService(provider.GetRequiredService<IRegressionRunReader>(), provider.GetRequiredService<IRegressionCaseReader>()));
     }

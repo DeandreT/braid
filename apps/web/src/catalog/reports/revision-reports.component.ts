@@ -10,6 +10,7 @@ import {
   viewChild,
 } from "@angular/core";
 import type { ChatCitation, ChatConversation } from "../../chat/chat-types";
+import type { WorkspaceCitationEvent } from "../../chat/workspace-chat-types";
 import { sameScope } from "../../chat/chat-types";
 import {
   ProjectionView,
@@ -117,11 +118,43 @@ export class RevisionReportsComponent {
     const pin = validation
       ? conversation.validationDerivationId
       : conversation.projectionDerivationId;
+    this.showReportTarget(
+      target,
+      citation.reportDerivationId,
+      pin,
+      sameScope(conversation.revision, this.revision().scope),
+    );
+  }
+
+  showWorkspaceChatCitation(value: WorkspaceCitationEvent): void {
+    const c = value.citation,
+      scope = this.revision().scope;
+    if (c.kind !== "report" || !c.target || !c.reportDerivationId) return;
+    this.showReportTarget(
+      c.target,
+      c.reportDerivationId,
+      c.reportDerivationId,
+      c.organizationId === scope.organizationId &&
+        c.projectId === scope.projectId &&
+        c.mappingId === scope.mappingId &&
+        c.revisionId === scope.revisionId,
+    );
+  }
+
+  private showReportTarget(
+    target: ChatCitation["target"],
+    reportDerivationId: string,
+    pin: string,
+    scopeMatches: boolean,
+  ): void {
+    const validation =
+      target.kind === "validationDiagnostic" ||
+      target.kind === "validationReport";
     const pane = validation ? this.validation() : this.projection();
     this.citationNotice.set("");
     if (
-      !sameScope(conversation.revision, this.revision().scope) ||
-      citation.reportDerivationId !== pin ||
+      !scopeMatches ||
+      reportDerivationId !== pin ||
       pane.response?.body.result?.derivationId !== pin ||
       !pane.response.body.report
     ) {

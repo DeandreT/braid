@@ -151,6 +151,8 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(RegressionSchemaTestContract.AccountDisplayChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.AdministrationChecksum);
             command.Parameters.AddWithValue(InterchangeSchemaTestContract.MigrationChecksum);
+            command.Parameters.AddWithValue(ChatSchemaContract.WorkspaceMigrationChecksum);
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.ReadsMigrationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.AutomationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.ReleaseOperationsChecksum);
             command.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames);
@@ -355,7 +357,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 22 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 24 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=9+1)=$6::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=11)=$12::text)
@@ -377,8 +379,10 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=27)=$35::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=28)=$36::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=29)=$32::text)
-                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=30)=$37::text)
-                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=31)=$38::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=30)=$39::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=31)=$40::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=32)=$37::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=33)=$38::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -421,10 +425,11 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 FROM old_relations r JOIN pg_catalog.pg_policy p ON p.polrelid=r.oid),
             'triggers',(SELECT jsonb_agg(jsonb_build_array(r.relname,to_jsonb(t)) ORDER BY r.relname,t.tgname)
                 FROM old_relations r JOIN pg_catalog.pg_trigger t ON t.tgrelid=r.oid
-                WHERE NOT ($1 AND (t.oid IN (SELECT oid FROM intended_parent_triggers) OR EXISTS(
+                WHERE NOT ($1 AND NOT t.tgisinternal AND t.tgname=ANY($41::text[]))
+                AND NOT ($1 AND (t.oid IN (SELECT oid FROM intended_parent_triggers) OR EXISTS(
                     SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND c.conrelid=to_regclass('weft.chat_conversations')
-                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey'))
-                 OR (NOT t.tgisinternal AND t.tgname=ANY($39::text[]))
+                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey',
+                        'chat_conversations_focus_mapping_fkey','chat_conversations_focus_revision_fkey'))
                  OR EXISTS(SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND t.tgisinternal AND c.contype='f'
                     AND (c.conrelid=to_regclass('weft.preview_runs') AND c.conname=ANY($16::text[])
                         OR c.conrelid IN (SELECT to_regclass('weft.' || suffix) FROM unnest($29::text[]) suffix)))))),

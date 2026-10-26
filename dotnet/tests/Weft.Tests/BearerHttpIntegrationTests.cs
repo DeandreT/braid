@@ -15,7 +15,7 @@ namespace Weft.Tests;
 /// </summary>
 [Collection(PostgresCollection.Name)]
 [SupportedOSPlatform("linux")]
-public sealed class BearerHttpIntegrationTests(PostgresFixture postgres)
+public sealed partial class BearerHttpIntegrationTests(PostgresFixture postgres)
 {
     private const string Context = AuthHttpFixture.ContextPath;
 

@@ -2,7 +2,7 @@
 export const defaultReturnPath = "/catalog";
 export const maximumReturnPathLength = 7 * 1024;
 export const maximumApplicationPathLength = 1024;
-const sections = ["catalog", "help", "administration", "notifications"];
+const sections = ["catalog", "help", "administration", "chat", "notifications"];
 const encoder = new TextEncoder();
 const wire = /^[A-Za-z0-9\-._~!$&'()*+,;=:@/?%#]*$/;
 const pathCharacter = /^[A-Za-z0-9\-._~!$&'()*+,;=:@]$/;
@@ -71,6 +71,60 @@ export function isReturnPath(value: unknown): value is string {
 }
 
 function allowedQuery(path: string[], values: Map<string, string>): boolean {
+  if (path.length === 1 && path[0] === "chat") {
+    if (
+      !keys(values, [
+        "conversationId",
+        "projectId",
+        "mappingId",
+        "revisionId",
+      ]) ||
+      ![...values.values()].every(id)
+    )
+      return false;
+    if (values.size === 0) return true;
+    const scoped = ["projectId", "mappingId", "revisionId"].filter((key) =>
+      values.has(key),
+    ).length;
+    return values.has("conversationId") && (scoped === 0 || scoped === 3);
+  }
+  if (path.length === 2 && path[0] === "chat" && path[1] === "resources") {
+    if (
+      !keys(values, [
+        "kind",
+        "organizationId",
+        "projectId",
+        "mappingId",
+        "revisionId",
+        "subjectId",
+        "version",
+      ]) ||
+      !["organizationId", "projectId", "subjectId"].every((key) =>
+        id(values.get(key) ?? ""),
+      )
+    )
+      return false;
+    const kind = values.get("kind"),
+      mappingId = values.get("mappingId"),
+      revisionId = values.get("revisionId"),
+      version = values.get("version");
+    const numbered =
+      version !== undefined && /^[1-9][0-9]{0,19}$/.test(version);
+    if (kind === "buildEnvironment")
+      return mappingId === undefined && revisionId === undefined && numbered;
+    if (mappingId === undefined || !id(mappingId)) return false;
+    if (kind === "previewRun")
+      return (
+        revisionId !== undefined && id(revisionId) && version === undefined
+      );
+    if (kind === "regressionCase") return revisionId === undefined && numbered;
+    return (
+      ["regressionRun", "buildRun", "buildApproval"].includes(kind ?? "") &&
+      revisionId === undefined &&
+      version === undefined
+    );
+  }
+  if (path[0] === "chat") return false;
   if (path[0] === "notifications")
     return (
       path.length === 1 &&

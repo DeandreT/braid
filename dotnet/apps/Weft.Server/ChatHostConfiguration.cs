@@ -1,8 +1,11 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Weft.Ai;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
+using Weft.Api.Chat.Workspace;
+using Weft.Api.Help;
 using Weft.Application;
 using Weft.Application.MappingTools;
 using Weft.Domain;
@@ -55,10 +58,34 @@ internal static class ChatHostConfiguration
                 provider.GetRequiredService<IRevisionReportReader>());
             return new ChatToolRegistry(MappingToolRegistry.Definitions, tools, tools);
         });
+        services.TryAddSingleton<IUserGuideReader>(_ => UserGuide.Embedded);
+        services.TryAddSingleton<IWorkspaceUserGuide>(provider => new WorkspaceUserGuide(provider.GetRequiredService<IUserGuideReader>()));
+        // Payload data reaches a model only through the restricted grant reader; without its connection no payload tool exists.
+        if (OptionalConnection("WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING") is { } payloadConnection)
+        {
+            if (payloadConnection == readerConnection || payloadConnection == writerConnection) throw ServerHostOptions.Failure();
+            services.AddSingleton(_ => new PostgresPayloadPermissionDatabase(payloadConnection));
+            services.AddSingleton(provider => new PostgresProjectPayloadPermissionReader(provider.GetRequiredService<PostgresPayloadPermissionDatabase>()));
+            services.AddSingleton<IProjectPayloadPermissionReader>(provider => provider.GetRequiredService<PostgresProjectPayloadPermissionReader>());
+            services.AddSingleton<IProjectPayloadGrantPresence>(provider => provider.GetRequiredService<PostgresProjectPayloadPermissionReader>());
+        }
+        // Workspace conversations read the families this host serves, as the signed-in user, through their own routes' reads.
+        services.AddSingleton(provider =>
+        {
+            var guide = provider.GetService<IWorkspaceUserGuide>();
+            return new WorkspaceToolService(provider, configuration.Options, new WorkspaceToolFeatures(
+                provider.GetService<CatalogPreviewOptions>()?.Enabled == true,
+                provider.GetService<CatalogRegressionCaseOptions>()?.Enabled == true,
+                provider.GetService<CatalogBuildOptions>()?.Enabled == true,
+                guide is not null), guide);
+        });
         services.AddWeftChat(configuration.Options);
 
         string Connection(string name) => session
             ? SessionHostResources.ReadProtectedConnection(read, name) : ServerHostOptions.Required(read, name);
+        string? OptionalConnection(string name) => session
+            ? read(name) is null && read(name + "_FILE") is null ? null : SessionHostResources.ReadProtectedConnection(read, name)
+            : read(name) is null ? null : ServerHostOptions.Required(read, name);
     }
 
     internal static ChatHostProfiles Parse(string text)
@@ -131,14 +158,15 @@ internal static class ChatHostConfiguration
             if ((capabilities & flag) != 0) throw ServerHostOptions.Failure();
             capabilities |= flag;
         }
-        var policy = Object(item["metadataPolicy"], ["id", "version", "mappingMetadataAllowed"], ["id", "version", "mappingMetadataAllowed"]);
+        var policy = Object(item["metadataPolicy"], ["id", "version", "mappingMetadataAllowed", "payloadsAllowed"], ["id", "version", "mappingMetadataAllowed"]);
         string? reference = item["credentialReference"].ValueKind == JsonValueKind.Null ? null : ChatBounds.Identifier(String(item["credentialReference"]));
         var endpoint = new Uri(String(item["endpoint"]), UriKind.Absolute);
         var spec = AiProfileSpec.Create(AiProfileKey.Create(String(item["id"]), Int(item["version"])), dialect, String(item["model"]),
             endpoint, item.TryGetValue("loopbackFixture", out var fixture) && Bool(fixture),
             reference is null ? AiAuthentication.None : AiAuthentication.Bearer, reference, capabilities,
             String(policy["id"]), Int(policy["version"]), Bool(policy["mappingMetadataAllowed"]),
-            item.TryGetValue("requestThinkFalse", out var think) && Bool(think));
+            item.TryGetValue("requestThinkFalse", out var think) && Bool(think),
+            policy.TryGetValue("payloadsAllowed", out var payloads) && Bool(payloads));
         return new(String(item["displayName"]), String(item["provider"]), spec);
     }
 

@@ -57,6 +57,26 @@ async function fixture(
   data.context.features.chat = options.enabled !== false;
   data.mapping.access.actions.chat = true;
   let conversation: ChatConversation | null = null;
+  let workspaceCreated = false;
+  const organizationRoot = `/api/v1/organizations/${data.revision.scope.organizationId}/chat`;
+  const organizationConversation = () =>
+    conversation && {
+      conversationId: conversation.conversationId,
+      kind: workspaceCreated ? "workspace" : "revision",
+      revision: workspaceCreated ? null : conversation.revision,
+      focus: workspaceCreated
+        ? {
+            projectId: data.revision.scope.projectId,
+            mappingId: data.revision.scope.mappingId,
+            revisionId: data.revision.scope.revisionId,
+          }
+        : null,
+      createdAtUtc: conversation.createdAtUtc,
+      retainUntilUtc: conversation.retainUntilUtc,
+      title: conversation.title,
+      turnCount: conversation.turnCount,
+      lastTurnAtUtc: conversation.lastTurnAtUtc,
+    };
   let turns: ChatTurn[] = [];
   const posts: { path: string; body: unknown; token?: string }[] = [];
   const reads: string[] = [];
@@ -149,23 +169,47 @@ async function fixture(
       }
       return route.fulfill({ json: validation });
     }
-    const root = `${data.apiPath}/chat`;
+    const workspace = path.startsWith(organizationRoot);
+    const root = workspace ? organizationRoot : `${data.apiPath}/chat`;
     if (error && path.startsWith(root))
       return route.fulfill({
         status: error.status,
         json: { code: error.code },
       });
-    if (path === root) return route.fulfill({ json: availability });
+    if (path === root)
+      return workspace
+        ? route.fulfill(
+            options.profiles === false
+              ? { status: 409, json: { code: "profileUnavailable" } }
+              : {
+                  json: {
+                    schemaVersion: "weft.chat.v1",
+                    organizationId: data.revision.scope.organizationId,
+                    limits: availability.limits,
+                    profiles: availability.profiles.map((profile) => ({
+                      profile,
+                      payloadsAllowed: false,
+                    })),
+                  },
+                },
+          )
+        : route.fulfill({ json: availability });
     if (path === `${root}/conversations`) {
       if (request.method() === "POST") {
         conversation = makeConversation(
           request.postDataJSON().conversationId as string,
         );
-        return route.fulfill({ status: 201, json: conversation });
+        workspaceCreated = workspace;
+        return route.fulfill({
+          status: 201,
+          json: workspace ? organizationConversation() : conversation,
+        });
       }
       return route.fulfill({
         json: {
-          conversations: conversation ? [conversation] : [],
+          conversations: conversation
+            ? [workspace ? organizationConversation() : conversation]
+            : [],
           hasMore: false,
         },
       });
@@ -178,6 +222,24 @@ async function fixture(
         body:
           streamOverride ??
           responseEvents
+            .map((e) =>
+              workspace && e.type === "citation"
+                ? ({
+                    type: "workspace.citation",
+                    sequence: e.sequence,
+                    roundId: e.roundId,
+                    citation: {
+                      kind: "report",
+                      ...data.revision.scope,
+                      target: e.target,
+                      reportDerivationId: e.reportDerivationId,
+                      subjectId: null,
+                      version: null,
+                      sectionId: null,
+                    },
+                  } as ChatEvent)
+                : e,
+            )
             .filter((e) => e.sequence > after)
             .map(frame)
             .join(""),
@@ -214,6 +276,14 @@ async function fixture(
           deadlineUtc: "2026-01-01T00:02:00Z",
           finishedAtUtc: null,
           lastSequence: 1,
+          ...(workspace
+            ? {
+                focus: {
+                  state: "resolved" as const,
+                  revision: data.revision.scope,
+                },
+              }
+            : {}),
         },
       ];
       if (failSend) {
@@ -227,7 +297,11 @@ async function fixture(
       path === `${root}/conversations/${conversation.conversationId}`
     )
       return route.fulfill({
-        json: { conversation, turns, hasEarlierTurns: false },
+        json: {
+          conversation: workspace ? organizationConversation() : conversation,
+          turns,
+          hasEarlierTurns: false,
+        },
       });
     return route.fulfill({ status: 404, json: { code: "notFound" } });
   });
@@ -303,7 +377,7 @@ async function start(page: Page) {
     .click();
 }
 
-test("creates, streams, and reopens a private revision conversation", async ({
+test("creates, streams, and reopens a private workspace conversation focused on the revision", async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -333,7 +407,7 @@ test("creates, streams, and reopens a private revision conversation", async ({
   expect(f.posts).toHaveLength(2);
 });
 
-test("chat admission waits for the page's initial report reads", async ({
+test("workspace chat admission does not wait for retained report reads", async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -348,14 +422,14 @@ test("chat admission waits for the page's initial report reads", async ({
   try {
     await page.goto(f.data.browserPath);
     await expect(
-      panel(page).getByText(
-        "Waiting for the initial report reads before loading chat.",
-      ),
-    ).toBeVisible();
-    await expect(
-      panel(page).getByRole("button", { name: "Refresh chat", exact: true }),
-    ).toBeDisabled();
-    expect(f.reads.filter((path) => path.endsWith("/chat"))).toHaveLength(0);
+      panel(page).getByRole("button", {
+        name: "New conversation",
+        exact: true,
+      }),
+    ).toBeEnabled();
+    expect(
+      f.reads.filter((path) => path.endsWith("/chat")).length,
+    ).toBeGreaterThan(0);
     release();
     await expect(
       panel(page).getByRole("button", {
@@ -508,15 +582,15 @@ test("admission completion does not steal deliberate focus outside chat", async 
     await create.focus();
     await page.keyboard.press("Enter");
     await held.arrived;
-    const examples = page
+    const catalog = page
       .getByRole("navigation", { name: "Workspace", exact: true })
-      .getByRole("link", { name: "Examples", exact: true });
-    await examples.focus();
+      .getByRole("link", { name: "Catalog", exact: true });
+    await catalog.focus();
     held.release();
     await expect(
       panel(page).getByLabel("Question", { exact: true }),
     ).toBeVisible();
-    await expect(examples).toBeFocused();
+    await expect(catalog).toBeFocused();
   } finally {
     held.release();
   }
@@ -630,7 +704,7 @@ test("citations select the exact report's field without changing the revision UR
   expect(page.url()).toBe(url);
 });
 
-test("a citation with another report pin cannot select viewer resources", async ({
+test("a citation with another report pin links to its own view without selecting local resources", async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -650,15 +724,15 @@ test("a citation with another report pin cannot select viewer resources", async 
   ]);
   await page.goto(f.data.browserPath);
   await start(page);
-  await panel(page)
-    .getByRole("button", { name: "Show field controlled-field" })
-    .click();
   await expect(
-    page.getByText(
-      "This citation belongs to a saved report that is not displayed.",
-      { exact: false },
-    ),
-  ).toBeVisible();
+    panel(page).getByRole("button", { name: "Show field controlled-field" }),
+  ).toHaveCount(0);
+  await expect(
+    panel(page).getByRole("link", { name: "Open report" }),
+  ).toHaveAttribute(
+    "href",
+    `${f.data.browserPath}?projectionDerivationId=${V}#field:controlled-field`,
+  );
 });
 
 for (const kind of [
@@ -1002,7 +1076,10 @@ for (const mode of [
 test("signed-out session cannot load private chat", async ({ page }) => {
   const f = await fixture(page, { session: true });
   await page.goto(f.data.browserPath);
-  await expect(page.getByText("Not signed in", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Weft", exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/sign-in\?returnTo=/);
   expect(f.reads.filter((p) => p.includes("/chat"))).toHaveLength(0);
 });
 

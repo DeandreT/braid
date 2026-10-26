@@ -19,6 +19,8 @@ internal sealed class PostgresChatTestSupport : IAsyncDisposable
     internal PostgresChatStore Reader { get; }
     internal PostgresChatStore Writer { get; }
     internal ActorContext OtherActor => _reports.AdmittedActor;
+    internal PostgresSeedData Seed => _reports.Seed;
+    internal RevisionScope Revision => _reports.Revision;
     internal ChatErasurePolicy ErasurePolicy => new("fixture-retention", 1, Conversation.RetainUntilUtc.AddHours(1));
     internal VerifiedValidationReport VerifiedValidation { get; }
 

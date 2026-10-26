@@ -29,6 +29,8 @@ public enum ChatProviderFailureV1
 [JsonDerivedType(typeof(ChatToolCompletedEventV1), "tool.completed")]
 [JsonDerivedType(typeof(ChatUsageEventV1), "usage")]
 [JsonDerivedType(typeof(ChatCitationEventV1), "citation")]
+[JsonDerivedType(typeof(ChatWorkspaceCitationEventV1), "workspace.citation")]
+[JsonDerivedType(typeof(ChatDataSharedEventV1), "data.shared")]
 [JsonDerivedType(typeof(ChatTurnCompletedEventV1), "turn.completed")]
 [JsonDerivedType(typeof(ChatTurnFailedEventV1), "turn.failed")]
 [JsonDerivedType(typeof(ChatTurnCancelledEventV1), "turn.cancelled")]

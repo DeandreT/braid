@@ -11,6 +11,7 @@ adapters and their own capability checks.
 - A mapping catalog with immutable revisions, native-file uploads and project ownership.
 - A compact source-to-rule-to-target workbench with a contextual inspector and investigation dock.
 - Revision-pinned AI chat with permission-controlled mapping tools and verified citations.
+- An organization-wide, read-only workspace assistant whose every tool call is freshly authorized as the user.
 - Bounded sample previews, revision comparison and saved regression cases.
 - Immutable build preparation, qualification, and local release activation, audit and rollback.
 - A machine-facing mapping endpoint that serves the active qualified release to callers
@@ -121,7 +122,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Persisted report API](docs/persisted-report-api.md): current and retained report reads, explicit derivation, and complete-response limits.
 - [Maintenance metadata](docs/private-object-maintenance-metadata.md): permanent retirement, fenced cleanup claims, and positive publication registration.
 - [Workbench presentation](docs/workbench-presentation.md): semantic colors, exact-value details, safe layout preferences and action confirmations.
-- [Chat UI](docs/chat-ui.md): revision-pinned conversations and evidence-backed navigation.
+- [Chat UI](docs/chat-ui.md): shared workspace conversations, legacy revision pins and evidence-backed navigation.
 - [Preview runs](docs/preview-runs.md): bounded execution of explicit sample inputs.
 - [Regression cases](docs/regression-cases.md): saved inputs, expected output and immutable case versions.
 - [Automation and notifications](docs/automation-notifications.md): exact-revision checks, project build gates and metadata-only activity delivery.
@@ -137,6 +138,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Weft CLI](docs/cli.md): the `weft` command line as the signed-in user, its profiles, sign-in, protected token cache and commands.
 - [Revision comparison](docs/revision-comparison.md) and [compact workbench](docs/compact-workbench.md): semantic differences between revisions and the workbench layout.
 - [AI chat architecture](docs/ai-chat.md): provider independence, context, and tools.
+- [Workspace chat](docs/workspace-chat.md): organization-scoped conversations, the read-only workspace tools and their budgets.
 - [Delivery plan](ROADMAP.md): focused PRs, dependencies, and acceptance checks.
 
 Stack: Angular frontend, C#/.NET 10 modular backend, PostgreSQL metadata,

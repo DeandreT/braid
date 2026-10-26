@@ -85,8 +85,8 @@ public sealed class MappingToolOrchestrationTests
             new(ChatCitationKind.ProjectionReport), new(ChatCitationKind.Rule, "rule.first"), new(ChatCitationKind.Control, "control.filter"),
             new(ChatCitationKind.ValidationReport), new(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 0)
         }, citations.Select(c => c.Target));
-        Assert.All(citations.Take(3), c => Assert.Equal(mapping.Conversation.Projection, c.Report));
-        Assert.All(citations.Skip(3), c => Assert.Equal(mapping.Conversation.Validation, c.Report));
+        Assert.All(citations.Take(3), c => Assert.Equal(mapping.Conversation.PinnedProjection, c.Report));
+        Assert.All(citations.Skip(3), c => Assert.Equal(mapping.Conversation.PinnedValidation, c.Report));
         Assert.All(citations, c => Assert.Equal(MappingToolFixture.Scope, c.Revision));
         Assert.All(events.Where(e => e.Kind == ChatEventKind.Citation), e => Assert.Equal(round.RoundId, e.RoundId));
         // Model text naming another rule is answer text only; it is not a citation candidate.
@@ -122,13 +122,13 @@ public sealed class MappingToolOrchestrationTests
         var tools = mapping.Service();
         // A different report body for the same revision: a citation verified against it carries another pin.
         var other = new MappingToolFixture(partial: false);
-        Assert.NotEqual(mapping.Conversation.Projection, other.Conversation.Projection);
+        Assert.NotEqual(mapping.Conversation.PinnedProjection, other.Conversation.PinnedProjection);
         // A trusted port must answer only for the offered candidates of this conversation; anything else is omitted.
         var substituted = new SubstitutingCitations(async (actor, conversation, candidates, ct) =>
         {
             var genuine = await tools.FilterCitationsAsync(actor, conversation, candidates, ct);
             var unrequested = await tools.ValidateCitationsAsync(actor, conversation, [new ChatCitationTarget(ChatCitationKind.Rule, "rule.second")], ct);
-            return [.. unrequested.Citations, .. genuine.Citations.Where(c => c.Facts.Target.Kind != ChatCitationKind.ProjectionReport),
+            return [.. unrequested.Citations, .. genuine.Citations.Where(c => c.Facts!.Target.Kind != ChatCitationKind.ProjectionReport),
                 ChatValidatedCitation.Validate(other.Conversation, other.Projection, new(ChatCitationKind.ProjectionReport))];
         });
         await using var f = new ChatOrchestrationFixture((exchange, ct) => exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(

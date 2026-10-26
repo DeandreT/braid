@@ -31,7 +31,7 @@ internal sealed record ApiOperation(
     bool RequiresAuthentication = true,
     bool RetryOnFailure = true);
 
-internal static class ApiOperations
+internal static partial class ApiOperations
 {
     private static readonly string[] None = [];
     private static readonly string[] Page = ["limit", "cursor"];
@@ -193,7 +193,7 @@ internal static class ApiOperations
         Chat + "/conversations/{conversationId}/turns/{turnId}/events", ["after"], None, null, null, Ok(typeof(ChatTurnEventV1)),
         typeof(ChatErrorV1), "text/event-stream");
 
-    public static IReadOnlyList<ApiOperation> All { get; } =
+    public static IReadOnlyList<ApiOperation> All =>
     [
         GetAutomationPolicy, PutAutomationPolicy, GetMappingAutomation, PutMappingAutomation, GetRegressionSuites, GetRegressionSuite, GetRegressionEvaluations, PutRegressionRecheck,
         GetNotificationSubscription, PutNotificationSubscription, GetNotifications, GetNotificationInbox, ReadInboxNotification, ReadNotification, GetNotificationOptions,
@@ -210,6 +210,8 @@ internal static class ApiOperations
         GetBuildEnvironmentCapabilities, GetBuildApprovals, GetBuildApproval, PutBuildApproval, RevokeBuildApproval,
         GetBuildRuns, GetBuildRun, PutBuildRun, CancelBuildRun, GetChatAvailability, GetChatConversations,
         CreateChatConversation, GetChatConversation, CreateChatTurn, CancelChatTurn, StreamChatTurnEvents,
+        GetWorkspaceChatAvailability, GetWorkspaceChatConversations, CreateWorkspaceChatConversation, GetWorkspaceChatConversation,
+        CreateWorkspaceChatTurn, CancelWorkspaceChatTurn, StreamWorkspaceChatTurnEvents,
         GetReleaseTargets, GetReleaseOperations, GetReleaseSummary, ApplyReleaseOperation,
         .. AdministrationApiOperations.All
     ];

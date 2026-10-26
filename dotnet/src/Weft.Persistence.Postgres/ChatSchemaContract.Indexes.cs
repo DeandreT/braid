@@ -10,6 +10,7 @@ internal static partial class ChatSchemaContract
         var expected = table.Constraints.Where(c => c.Kind is 'p' or 'u').ToDictionary(c => c.Name, c => new Index(c.Kind == 'p', c.Columns), StringComparer.Ordinal);
         if (table.Name == "chat_turns") expected.Add("chat_one_active_turn", new(false, ["organization_id", "creator_id", "conversation_id"], "(phase = 1)"));
         if (table.Name == "chat_identities") expected.Add("chat_identities_conversation", new(false, ["organization_id", "creator_id", "conversation_id"], Unique: false));
+        if (table.Name == "chat_conversations") expected.Add("chat_conversations_recent", new(false, ["organization_id", "creator_id", "created_at", "conversation_id"], Unique: false));
         await using var command = new NpgsqlCommand("""
             SELECT r.relname,i.indisprimary,pg_catalog.pg_get_expr(i.indpred,i.indrelid,false),
                 ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY k(attnum,ord)

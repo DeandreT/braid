@@ -107,13 +107,28 @@ public sealed partial class ChatTurnOrchestrator
             if (result is null || result.Result.ByteCount > grounding.MaxToolResultBytes - s.ResultBytes ||
                 result.RetrievedNodes > grounding.MaxRetrievedNodes - s.RetrievedNodes)
                 throw Stop(ChatOrchestrationOutcome.BudgetExceeded);
+            // Payload data is shared only in workspace conversations; a revision conversation never adopts such a result.
+            if (result.DataShared is not null && s.Conversation.Key.Kind != ChatConversationKind.Workspace)
+                throw Stop(ChatOrchestrationOutcome.Denied);
+            if (result.DataShared is { } source)
+            {
+                await CheckPayloadAuthorityAsync(s, [.. s.PayloadSources, source]).ConfigureAwait(false);
+                s.PayloadSources.Add(source);
+            }
             s.ResultBytes += result.Result.ByteCount; s.RetrievedNodes += result.RetrievedNodes; s.ToolCalls++;
             var message = AiToolMessage.Create(call.CallId, call.Name, result.Result);
             s.Messages.Add(message);
             CheckContext(s.Messages);
             await AppendAsync(s, new(Guid.NewGuid(), ChatEventKind.ToolCompleted,
                 ToolEvent(call, i + 1, result.Result.ByteCount, result.RetrievedNodes))).ConfigureAwait(false);
+            if (result.DataShared is { } shared)
+            {
+                // Shared payload bytes are recorded, and audited by the ledger, before any later round can send them.
+                await AppendAsync(s, ChatEventData.ForDataShared(Guid.NewGuid(), shared)).ConfigureAwait(false);
+                await RecheckAsync(s).ConfigureAwait(false);
+            }
             await DeliverCitationsAsync(s, result.Citations).ConfigureAwait(false);
+            await DeliverWorkspaceCitationsAsync(s, result.WorkspaceCitations).ConfigureAwait(false);
         }
     }
 
@@ -123,7 +138,7 @@ public sealed partial class ChatTurnOrchestrator
     /// </summary>
     private async Task DeliverCitationsAsync(State s, IReadOnlyList<ChatCitationTarget> candidates)
     {
-        if (_citationPort is null) return;
+        if (_citationPort is null || s.Conversation.Key.Kind != ChatConversationKind.Revision) return;
         var fresh = candidates.Where(candidate => !s.Cited.Contains(candidate)).Distinct().ToArray();
         if (fresh.Length == 0) return;
         CheckTime(s.Execution, s.Facts.Intent);
@@ -140,7 +155,28 @@ public sealed partial class ChatTurnOrchestrator
                 await AppendCitationAsync(s, new(Guid.NewGuid(), citation)).ConfigureAwait(false);
     }
 
-    private static ChatReportPin Pin(ChatConversationIntent conversation, ChatCitationTarget target) =>
+    /// <summary>
+    /// The workspace form: candidates of any resource kind, each verified freshly by the trusted workspace port and
+    /// published at most once per turn, in candidate order. Only candidates the tool offered are accepted back.
+    /// </summary>
+    private async Task DeliverWorkspaceCitationsAsync(State s, IReadOnlyList<ChatWorkspaceCitationFact> candidates)
+    {
+        if (_workspaceCitationPort is null || s.Conversation.Key.Kind != ChatConversationKind.Workspace) return;
+        var fresh = candidates.Where(candidate => !s.CitedWorkspace.Contains(candidate)).Distinct().ToArray();
+        if (fresh.Length == 0) return;
+        CheckTime(s.Execution, s.Facts.Intent);
+        var verified = await _workspaceCitationPort.VerifyAsync(s.Actor, s.Conversation, fresh, s.Execution.Token).ConfigureAwait(false);
+        await RecheckAsync(s).ConfigureAwait(false);
+        var accepted = new Dictionary<ChatWorkspaceCitationFact, ChatValidatedCitation>();
+        foreach (var citation in verified ?? [])
+            if (citation?.Workspace is { } fact && fact.OrganizationId == s.Conversation.Key.OrganizationId)
+                accepted.TryAdd(fact, citation);
+        foreach (var candidate in fresh)
+            if (accepted.TryGetValue(candidate, out var citation) && s.CitedWorkspace.Add(candidate))
+                await AppendCitationAsync(s, new(Guid.NewGuid(), citation)).ConfigureAwait(false);
+    }
+
+    private static ChatReportPin? Pin(ChatConversationIntent conversation, ChatCitationTarget target) =>
         target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport
             ? conversation.Validation : conversation.Projection;
 

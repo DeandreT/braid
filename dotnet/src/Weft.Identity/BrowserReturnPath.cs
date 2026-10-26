@@ -20,7 +20,7 @@ public static class BrowserReturnPath
     // overhead. It remains inside the unchanged 16 KiB authorization/callback budget.
     public const int MaximumProtectedStateLength = 12 * 1024;
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    private static readonly string[] Sections = ["catalog", "help", "administration", "notifications"];
+    private static readonly string[] Sections = ["catalog", "help", "administration", "chat", "notifications"];
 
     public static bool IsValid(string? value)
     {
@@ -52,6 +52,27 @@ public static class BrowserReturnPath
 
     private static bool AllowedQuery(string[] path, Dictionary<string, string> values)
     {
+        if (path is ["chat"])
+        {
+            if (!Keys(values, "conversationId", "projectId", "mappingId", "revisionId") || !values.Values.All(Id)) return false;
+            if (values.Count == 0) return true;
+            var scoped = new[] { "projectId", "mappingId", "revisionId" }.Count(values.ContainsKey);
+            return values.ContainsKey("conversationId") && scoped is 0 or 3;
+        }
+        if (path is ["chat", "resources"])
+        {
+            if (!Keys(values, "kind", "organizationId", "projectId", "mappingId", "revisionId", "subjectId", "version") ||
+                !new[] { "organizationId", "projectId", "subjectId" }.All(key => values.TryGetValue(key, out var value) && Id(value))) return false;
+            values.TryGetValue("kind", out var kind); values.TryGetValue("mappingId", out var mapping);
+            values.TryGetValue("revisionId", out var revision); values.TryGetValue("version", out var version);
+            var numbered = version is { Length: > 0 and <= 20 } && version[0] is >= '1' and <= '9' && version.All(char.IsAsciiDigit);
+            if (kind == "buildEnvironment") return mapping is null && revision is null && numbered;
+            if (mapping is null || !Id(mapping)) return false;
+            if (kind == "previewRun") return revision is not null && Id(revision) && version is null;
+            if (kind == "regressionCase") return revision is null && numbered;
+            return kind is "regressionRun" or "buildRun" or "buildApproval" && revision is null && version is null;
+        }
+        if (path[0] == "chat") return false;
         if (path[0] == "notifications")
             return path.Length == 1 && Keys(values, "after") && values.Values.All(Id);
         if (path is ["catalog", "search"])

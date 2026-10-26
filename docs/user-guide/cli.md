@@ -61,10 +61,22 @@ for what explanation coverage and validation results mean.
 
 Other command groups cover [uploads](uploads.md), [sample previews](previews.md),
 [regression tests](regression-tests.md), [builds and approvals](builds.md), and
-[revision chat](chat.md). Commands that change saved data still require the
+[workspace chat](chat.md). Commands that change saved data still require the
 appropriate project role.
 
 ## Output and waiting
+
+For read-only questions across your workspace, run `weft chat workspace availability`
+and `weft chat workspace ask "How does this mapping work?"`. Add `--focus-project`,
+`--focus-mapping` and optionally `--focus-revision` to guide the conversation without
+restricting its tools. `weft chat workspace conversations list` includes both new
+workspace and older revision-pinned conversations; older ones still use the original
+`weft chat` commands with their original project, mapping and revision.
+
+The workspace profile shows whether sample data is allowed, but your current project
+payload-read grant is also required. Answers that actually share sample bytes are marked.
+Use `weft chat workspace follow --conversation CONVERSATION_ID TURN_ID` to resume
+reading a saved answer without sending another question.
 
 - Human-readable output is the default. Add `--json` for structured output in a
   script. Read the command's exit code too; printed progress is not proof of success.

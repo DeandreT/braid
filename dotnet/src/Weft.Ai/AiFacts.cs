@@ -71,9 +71,9 @@ public sealed class AiTurnLimits
 
 internal static class AiCeilings
 {
-    internal const int Profiles = 64, Messages = 64, Definitions = 16, Calls = 8;
+    internal const int Profiles = 64, Messages = 64, Definitions = 24, Calls = 8;
     internal const int MessageBytes = 65_536, MessageTotalBytes = 131_072, RequestBytes = 262_144;
-    internal const int SchemaBytes = 8_192, SchemasTotalBytes = 32_768, DescriptionBytes = 1_024;
+    internal const int SchemaBytes = 8_192, SchemasTotalBytes = 49_152, DescriptionBytes = 1_024;
     internal const int ArgumentBytes = 16_384, ResultBytes = 32_768, JsonBytes = 131_072;
     internal const int RoundWireBytes = 2_097_152, LineBytes = 131_072, DeltaBytes = 8_192;
     internal const int Frames = 8_192, Events = 16_384, JsonDepth = 16, JsonTokens = 4_096, JsonElements = 2_048;

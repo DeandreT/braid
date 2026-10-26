@@ -52,7 +52,7 @@ public sealed class ChatHttpSyntheticReportTests(PostgresFixture fixture)
     }
 
     /// <summary>Fresh metadata authority per read; verified bodies come from the synthetic codec fixtures.</summary>
-    private sealed class SyntheticReports(PostgresRevisionDerivationTestSupport reports) : IRevisionReportReader
+    internal sealed class SyntheticReports(PostgresRevisionDerivationTestSupport reports) : IRevisionReportReader
     {
         private readonly ProjectionCacheKey projection = reports.ProjectionKey();
         private readonly ValidationCacheKey validation = reports.ValidationKey();

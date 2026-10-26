@@ -16,9 +16,9 @@ public sealed class ChatToolRegistry
         ArgumentNullException.ThrowIfNull(definitions);
         ArgumentNullException.ThrowIfNull(port);
         Definitions = definitions.ToImmutableArray();
-        if (Definitions.Length > 16 || Definitions.Any(tool => tool is null) ||
+        if (Definitions.Length > ChatAiBridge.MaxTools || Definitions.Any(tool => tool is null) ||
             Definitions.Select(tool => tool.Name).Distinct(StringComparer.Ordinal).Count() != Definitions.Length)
-            throw new ArgumentException("Chat tools must be at most 16 distinct definitions.", nameof(definitions));
+            throw new ArgumentException("Chat tools must be at most 24 distinct definitions.", nameof(definitions));
         Port = port;
         Citations = citations;
     }

@@ -28,6 +28,11 @@ select a current report, call Ensure/repair, read native or payload bytes, or
 contact a provider. Its local capacity of two concurrent reads/checks belongs to
 the instance; creating one per request would bypass that bound.
 
+[Workspace chat](workspace-chat.md) reuses the same five tools at any readable
+revision through `MappingToolService.InvokeAsync(actor, MappingReportContext, …)`.
+There the revision and its current retained report pins are resolved by the
+workspace tool service, which never derives a report.
+
 ## Authority and report identity
 
 Each call is bound to `ChatReadOnlyToolContext.Actor` and

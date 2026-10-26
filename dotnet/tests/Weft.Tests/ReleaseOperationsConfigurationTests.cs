@@ -9,14 +9,16 @@ public sealed class ReleaseOperationsConfigurationTests
     public void Operations_follow_the_exact_preceding_migration_prefix()
     {
         var migrations = MigrationRunner.EmbeddedMigrations;
-        Assert.Equal(31, migrations.Count);
-        Assert.Equal(Enumerable.Range(1, 31), migrations.Select(migration => migration.Version));
+        Assert.Equal(33, migrations.Count);
+        Assert.Equal(Enumerable.Range(1, 33), migrations.Select(migration => migration.Version));
         Assert.Equal(RegressionSchemaTestContract.AccountDisplayChecksum, migrations[25].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, migrations[26].Checksum);
         Assert.Equal(InterchangeSchemaTestContract.MigrationChecksum, migrations[27].Checksum);
         Assert.Equal(CatalogSearchSchemaAdmission.MigrationChecksum, migrations[28].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AutomationChecksum, migrations[29].Checksum);
         Assert.Equal(RegressionSchemaTestContract.ReleaseOperationsChecksum, migrations[30].Checksum);
+        Assert.Equal(ChatSchemaContract.WorkspaceMigrationChecksum, migrations[31].Checksum);
+        Assert.Equal(PreviewSchemaTestContract.ReadsMigrationChecksum, migrations[32].Checksum);
         Assert.Contains("CREATE TABLE weft.account_display_metadata", migrations[25].Sql, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE weft.release_target_operations", migrations[30].Sql, StringComparison.Ordinal);
         Assert.Equal(ReleaseOperationsRoleGuard.Names.Order(StringComparer.Ordinal),

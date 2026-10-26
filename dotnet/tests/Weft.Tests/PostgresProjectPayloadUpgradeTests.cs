@@ -282,8 +282,9 @@ public sealed class PostgresProjectPayloadUpgradeTests(PostgresFixture fixture)
                 RegressionSchemaTestContract.CasesChecksum, RegressionSchemaTestContract.RunsChecksum, RegressionSchemaTestContract.DispatchChecksum, RegressionSchemaTestContract.HistoryChecksum, RegressionSchemaTestContract.BuildChecksum, RegressionSchemaTestContract.BuildDispatchChecksum, RegressionSchemaTestContract.BuildMetadataChecksum, RegressionSchemaTestContract.QualificationChecksum, RegressionSchemaTestContract.LocalReleaseChecksum,
                 MaintenanceSchemaContract.StoreKindMigrationChecksum, RegressionSchemaTestContract.MachineInvocationChecksum, RegressionSchemaTestContract.ApiRequestAuditChecksum,
                 RegressionSchemaTestContract.AccountDisplayChecksum, RegressionSchemaTestContract.AdministrationChecksum,
-                InterchangeSchemaTestContract.MigrationChecksum, CatalogSearchSchemaAdmission.MigrationChecksum, RegressionSchemaTestContract.AutomationChecksum, RegressionSchemaTestContract.ReleaseOperationsChecksum }, StringComparer.Ordinal),
-            "The current migration supplements do not match the payload, session, chat, preview, administration, interchange, search, automation and operations sources.");
+                InterchangeSchemaTestContract.MigrationChecksum, CatalogSearchSchemaAdmission.MigrationChecksum, RegressionSchemaTestContract.AutomationChecksum, RegressionSchemaTestContract.ReleaseOperationsChecksum,
+                ChatSchemaContract.WorkspaceMigrationChecksum, PreviewSchemaTestContract.ReadsMigrationChecksum }, StringComparer.Ordinal),
+            "The current migration supplements do not match the payload, session, workspace chat, preview, administration, interchange, search, automation and operations sources.");
         Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
             .SequenceEqual(Enumerable.Range(1, scripts.Count)), "The complete migration versions do not match this build.");
         Assert.True((await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"))

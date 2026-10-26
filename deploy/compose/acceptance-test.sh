@@ -214,8 +214,8 @@ export WEFT_FERRULE_SERVICE_IDENTITY WEFT_FERRULE_SERVICE_PEM WEFT_FERRULE_SERVI
   WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256 \
   WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256 WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256
 export WEFT_FERRULE_SERVICE_REPLICAS=${WEFT_FERRULE_SERVICE_REPLICAS:-2}
-WEFT_CHAT_PROFILES_JSON=$(printf '{"version":1,"retentionDays":7,"turnSeconds":180,"maxOutputTokens":512,"profiles":[{"id":"local-acceptance","version":1,"displayName":"Local acceptance model","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-metadata","version":1,"mappingMetadataAllowed":true}}],"credentials":[]}' \
-  "$WEFT_ACCEPTANCE_CHAT_MODEL")
+WEFT_CHAT_PROFILES_JSON=$(printf '{"version":1,"retentionDays":7,"turnSeconds":180,"maxOutputTokens":512,"profiles":[{"id":"local-acceptance","version":1,"displayName":"Local acceptance model","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-metadata","version":1,"mappingMetadataAllowed":true,"payloadsAllowed":false}},{"id":"local-acceptance-payloads","version":1,"displayName":"Local acceptance samples","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-and-samples","version":1,"mappingMetadataAllowed":true,"payloadsAllowed":true}}],"credentials":[]}' \
+  "$WEFT_ACCEPTANCE_CHAT_MODEL" "$WEFT_ACCEPTANCE_CHAT_MODEL")
 export WEFT_CHAT_PROFILES_JSON
 
 compose config --quiet || fail 'acceptance stack configuration'

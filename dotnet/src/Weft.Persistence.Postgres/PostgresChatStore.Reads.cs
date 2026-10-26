@@ -7,19 +7,51 @@ namespace Weft.Persistence.Postgres;
 
 public sealed partial class PostgresChatStore
 {
-    private const string AuthorizedParent = "EXISTS(SELECT 1 FROM ONLY weft.chat_conversations c WHERE c.organization_id=@org AND c.creator_id=@creator AND c.conversation_id=@conversation AND c.project_id=@project AND c.mapping_id=@mapping AND c.revision_id=@revision AND (NOT @visibleOnly OR c.retain_until>statement_timestamp()) AND weft.chat_authorized(c.organization_id,c.project_id,c.creator_id))";
+    private const string AuthorizedParent = "EXISTS(SELECT 1 FROM ONLY weft.chat_conversations c WHERE c.organization_id=@org AND c.creator_id=@creator AND c.conversation_id=@conversation AND c.conversation_kind=@conversationKind AND c.project_id IS NOT DISTINCT FROM @project AND c.mapping_id IS NOT DISTINCT FROM @mapping AND c.revision_id IS NOT DISTINCT FROM @revision AND (NOT @visibleOnly OR c.retain_until>statement_timestamp()) AND weft.chat_authorized(c.organization_id,c.project_id,c.creator_id))";
     private static async Task<ChatConversationIntent?> ConversationAsync(PostgresTransaction tx, ChatConversationKey key, CancellationToken ct)
     {
-        await using var command = Command(tx, $"SELECT * FROM ONLY weft.chat_conversations WHERE {Scope} AND project_id=@project AND mapping_id=@mapping AND revision_id=@revision AND weft.chat_authorized(organization_id,project_id,creator_id)", key);
+        await using var command = Command(tx, $"SELECT * FROM ONLY weft.chat_conversations WHERE {Scope} AND {ExactScope} AND weft.chat_authorized(organization_id,project_id,creator_id)", key);
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
-        var result = new ChatConversationIntent(key,
-            new(Id(reader, "projection_entry_id"), Id(reader, "projection_id"), Digest(reader, "projection_key"), Digest(reader, "projection_digest")),
-            new(Id(reader, "validation_entry_id"), Id(reader, "validation_id"), Digest(reader, "validation_key"), Digest(reader, "validation_digest")),
-            Instant(reader, "retain_until"));
+        var result = Conversation(reader, key);
         if (await reader.ReadAsync(ct)) throw Invalid();
         return result;
     }
+
+    /// <summary>The stored conversation row as an intent of its own kind; any other column shape is invalid.</summary>
+    private static ChatConversationIntent Conversation(NpgsqlDataReader reader, ChatConversationKey key)
+    {
+        if (Id(reader, "organization_id") != key.OrganizationId || Id(reader, "creator_id") != key.Creator.Value ||
+            Id(reader, "conversation_id") != key.ConversationId || Int(reader, "conversation_kind") != (int)key.Kind) throw Invalid();
+        if (key.Revision is { } revision)
+        {
+            if (Id(reader, "project_id") != revision.ProjectId || Id(reader, "mapping_id") != revision.MappingId ||
+                Id(reader, "revision_id") != revision.RevisionId || !Null(reader, "focus_project_id") || !Null(reader, "focus_mapping_id") ||
+                !Null(reader, "focus_revision_id")) throw Invalid();
+            return new(key,
+                new(Id(reader, "projection_entry_id"), Id(reader, "projection_id"), Digest(reader, "projection_key"), Digest(reader, "projection_digest")),
+                new(Id(reader, "validation_entry_id"), Id(reader, "validation_id"), Digest(reader, "validation_key"), Digest(reader, "validation_digest")),
+                Instant(reader, "retain_until"));
+        }
+        foreach (var column in new[] { "project_id", "mapping_id", "revision_id", "projection_entry_id", "projection_id", "projection_key",
+            "projection_digest", "validation_entry_id", "validation_id", "validation_key", "validation_digest" })
+            if (!Null(reader, column)) throw Invalid();
+        ChatConversationFocus? focus = Null(reader, "focus_mapping_id") ? null
+            : new(new(key.OrganizationId, Id(reader, "focus_project_id"), Id(reader, "focus_mapping_id")),
+                Null(reader, "focus_revision_id") ? null : Id(reader, "focus_revision_id"));
+        if (focus is null && (!Null(reader, "focus_project_id") || !Null(reader, "focus_revision_id"))) throw Invalid();
+        return ChatConversationIntent.ForWorkspace(key, focus, Instant(reader, "retain_until"));
+    }
+
+    /// <summary>The complete key a stored row belongs to, for listings that do not yet know its kind.</summary>
+    private static ChatConversationKey Key(NpgsqlDataReader reader, PrincipalId creator) =>
+        (ChatConversationKind)Int(reader, "conversation_kind") switch
+        {
+            ChatConversationKind.Revision => new(new(Id(reader, "organization_id"), Id(reader, "project_id"), Id(reader, "mapping_id"),
+                Id(reader, "revision_id")), creator, Id(reader, "conversation_id")),
+            ChatConversationKind.Workspace => ChatConversationKey.ForWorkspace(Id(reader, "organization_id"), creator, Id(reader, "conversation_id")),
+            _ => throw Invalid()
+        };
 
     private static async Task<ChatTurnFacts?> TurnAsync(PostgresTransaction tx, ChatConversationKey key, Guid turn, CancellationToken ct, bool visibleOnly = false)
     {
@@ -76,6 +108,7 @@ public sealed partial class PostgresChatStore
     }
 
     private static Guid Id(NpgsqlDataReader reader, string column) => reader.GetGuid(reader.GetOrdinal(column));
+    private static bool Null(NpgsqlDataReader reader, string column) => reader.IsDBNull(reader.GetOrdinal(column));
     private static int Int(NpgsqlDataReader reader, string column) => reader.GetInt32(reader.GetOrdinal(column));
     private static string Text(NpgsqlDataReader reader, string column) => reader.GetString(reader.GetOrdinal(column));
     private static Sha256Digest Digest(NpgsqlDataReader reader, string column) => Sha256Digest.Parse(Text(reader, column));

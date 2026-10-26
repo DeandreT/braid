@@ -36,15 +36,24 @@ internal sealed class RegressionRunPostgresTestSupport : IAsyncDisposable
         try
         {
             var value = cases.Version(1);
-            await cases.Writer.SaveAsync(cases.Actor, value);
+            await cases.SaveAsync(cases.Actor, value);
             return new(fixture, cases, value);
         }
         catch { await cases.DisposeAsync(); throw; }
     }
 
-    internal Task<RegressionRunSubmitOutcome> SubmitAsync() => Writer.SubmitAsync(new(Actor, RunId, Reference));
-    internal async Task<RegressionRunClaim> ClaimAsync() => (await Writer.ClaimAsync(Organization, RunId, Guid.NewGuid())).Claim
-        ?? throw new InvalidOperationException("Expected a claim.");
+    internal async Task<RegressionRunSubmitOutcome> SubmitAsync() =>
+        await HistoricalRegressionAccess.AppliesAsync(Cases)
+            ? await HistoricalRegressionAccess.SubmitAsync(this) : await Writer.SubmitAsync(new(Actor, RunId, Reference));
+    internal async Task<RegressionRunClaim> ClaimAsync() => await HistoricalRegressionAccess.AppliesAsync(Cases)
+        ? await HistoricalRegressionAccess.ClaimAsync(this)
+        : (await Writer.ClaimAsync(Organization, RunId, Guid.NewGuid())).Claim ?? throw new InvalidOperationException("Expected a claim.");
+    internal async Task<bool> CompleteAsync(RegressionRunClaim claim, RegressionCaseExecution result) =>
+        await HistoricalRegressionAccess.AppliesAsync(Cases)
+            ? await HistoricalRegressionAccess.CompleteAsync(this, claim, result) : await Writer.CompleteAsync(claim, result);
+    internal async Task<RegressionRunSnapshot?> ReadAsync(ActorContext actor, Guid organization, Guid id) =>
+        await HistoricalRegressionAccess.AppliesAsync(Cases)
+            ? await HistoricalRegressionAccess.ReadRunAsync(this, actor, organization, id) : await Reader.ReadAsync(actor, organization, id);
     internal RegressionCaseExecution Success()
     {
         var outputs = Value.Expected;

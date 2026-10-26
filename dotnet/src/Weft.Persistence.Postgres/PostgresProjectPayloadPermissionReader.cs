@@ -7,7 +7,7 @@ using Weft.Domain;
 namespace Weft.Persistence.Postgres;
 
 /// <summary>Fresh exact project authority intersected with an explicit active payload-read grant.</summary>
-public sealed class PostgresProjectPayloadPermissionReader : IProjectPayloadPermissionReader
+public sealed class PostgresProjectPayloadPermissionReader : IProjectPayloadPermissionReader, IProjectPayloadGrantPresence
 {
     private readonly PostgresPayloadPermissionDatabase _database;
 
@@ -67,6 +67,49 @@ public sealed class PostgresProjectPayloadPermissionReader : IProjectPayloadPerm
             }
             await transaction.CommitAsync(cancellationToken);
             return result;
+        }
+        catch (NpgsqlException) when (cancellationToken.IsCancellationRequested)
+        { throw new OperationCanceledException(cancellationToken); }
+        catch (NpgsqlException)
+        { throw new InvalidOperationException("Project payload permission persistence failed."); }
+    }
+
+    public async Task<bool> AnyAsync(ActorContext actor, Guid organizationId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        if (organizationId == Guid.Empty) throw new ArgumentException("An organization identity cannot be empty.", nameof(organizationId));
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            await using var connection = await _database.DataSource.OpenConnectionAsync(cancellationToken);
+            await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+            await using (var mode = new NpgsqlCommand("SET TRANSACTION READ ONLY", connection, transaction))
+                await mode.ExecuteNonQueryAsync(cancellationToken);
+            await PostgresProjectPayloadPermissionFacts.SetLimitsAsync(connection, transaction, cancellationToken);
+            await PostgresProjectPayloadPermissionFacts.BindOrganizationAsync(connection, transaction, organizationId, cancellationToken);
+            await PayloadPermissionRoleGuard.ValidateReaderAsync(connection, transaction, cancellationToken);
+            // The same authority joins as ObserveAsync, for any project of the organization.
+            await using var command = new NpgsqlCommand("""
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM ONLY weft.projects project
+                    JOIN ONLY weft.principals principal ON principal.id=@principalId AND principal.active
+                    JOIN ONLY weft.organization_memberships admission
+                        ON admission.organization_id=project.organization_id
+                       AND admission.principal_id=principal.id AND admission.active
+                    JOIN ONLY weft.project_memberships membership
+                        ON membership.organization_id=project.organization_id
+                       AND membership.project_id=project.id AND membership.principal_id=principal.id AND membership.active
+                    JOIN ONLY weft.project_payload_read_grants payload
+                        ON payload.organization_id=project.organization_id AND payload.project_id=project.id
+                       AND payload.principal_id=principal.id AND payload.active
+                    WHERE project.organization_id=@organizationId)
+                """, connection, transaction);
+            PostgresProjectPayloadPermissionFacts.Add(command, "organizationId", NpgsqlDbType.Uuid, organizationId);
+            PostgresProjectPayloadPermissionFacts.Add(command, "principalId", NpgsqlDbType.Uuid, actor.PrincipalId.Value);
+            var any = await command.ExecuteScalarAsync(cancellationToken) is bool value ? value : throw PostgresProjectPayloadPermissionFacts.InvalidFacts();
+            await transaction.CommitAsync(cancellationToken);
+            return any;
         }
         catch (NpgsqlException) when (cancellationToken.IsCancellationRequested)
         { throw new OperationCanceledException(cancellationToken); }

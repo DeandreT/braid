@@ -1,10 +1,12 @@
 # Chat turn HTTP API
 
-Private, revision-pinned chat is exposed under the existing catalog identity
+Private revision-pinned and organization-wide workspace chat are exposed under the existing catalog identity
 boundary. Development and session hosts use the same routes; the catalog request
-boundary admits the caller, and every operation then reads fresh project/revision
-authority before touching the chat ledger. The ledger independently rechecks the
-creator's active principal, organization and project membership. Conversations
+boundary admits the caller. Revision operations read fresh project/revision
+authority before touching the ledger; workspace operations require current
+organization admission and re-authorize each tool's resources independently.
+The ledger independently rechecks the creator's active principal and organization
+membership, plus project membership for revision conversations. Conversations
 are private to their creator; project administrators cannot read them.
 
 ## Configuration
@@ -20,6 +22,12 @@ revision's verified reports; an inconsistent profile fails host startup.
 | `WEFT_CHAT_ENABLED` | `true` or `false` (case-sensitive). |
 | `WEFT_CHAT_PROFILES_FILE` | Canonical absolute path of a private profile document (owned by the effective user, mode 0600, at most 64 KiB, protected ancestors). |
 | `WEFT_CHAT_READER_CONNECTION_STRING` / `WEFT_CHAT_WRITER_CONNECTION_STRING` | Distinct `weft_chat_reader` and `weft_chat_writer` logins (see [chat security](private-chat-security-and-upgrade.md)). Pools open lazily. The Session host reads only the `_FILE` forms (`WEFT_CHAT_READER_CONNECTION_STRING_FILE` / `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE`) through its [protected connection delivery](session-host.md); a plain connection-string setting refuses Session startup. |
+| `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING` | Optional. The restricted `weft_payload_permission_reader` login (see [payload permission](project-payload-permissions.md)), distinct from both chat logins. Without it no workspace payload tool exists. The Session host reads only `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE`. |
+
+The Compose feature profile and Azure chat template deliver that existing
+payload-permission reader through an owner-only file. Delivering the reader does
+not grant any user payload access, and model profiles still default to refusing
+payload data.
 
 The profile document is strict JSON; unknown or duplicate properties are refused:
 
@@ -56,6 +64,11 @@ The profile document is strict JSON; unknown or duplicate properties are refused
   `ollamaChatNdjson` (`/api/chat`). Endpoints are fixed HTTPS URLs; a plain HTTP
   loopback endpoint requires `"loopbackFixture": true`. `requestThinkFalse` is
   allowed only for the Ollama dialect. Up to 16 profiles with distinct IDs.
+- `metadataPolicy.payloadsAllowed` (optional, default `false`) records that the
+  destination may also receive sample payload data in
+  [workspace chat](workspace-chat.md#payload-data). It requires
+  `mappingMetadataAllowed`; set it only when the provider's data handling
+  permits sample data.
 - `credentialReference` is `null` for unauthenticated local endpoints, otherwise
   an identifier naming one `credentials` entry. Every bearer reference must
   resolve and every listed credential must be used. The credential file holds
@@ -79,7 +92,41 @@ The profile document is strict JSON; unknown or duplicate properties are refused
 The browser selects a profile by ID and version; it never supplies an endpoint.
 Each turn records the selected profile version and model.
 
-## Routes
+## Workspace routes
+
+Workspace routes are relative to `/api/v1/organizations/{organizationId}/chat`.
+They share revision chat's request admission, creator privacy, idempotency,
+retention, streaming, cancellation and interrupted-turn recovery rules.
+
+| Method and path | Result |
+| --- | --- |
+| `GET` | Workspace-capable profiles, their `payloadsAllowed` destination policy, and turn limits. |
+| `GET /conversations?limit=1..100&after=<conversationId>&revisionId=<revisionId>` | Both conversation kinds, newest first, with `hasMore`. Default limit 50; continue after the final identity from the preceding page. The optional revision filter requires fresh read access. |
+| `POST /conversations` | `{"conversationId":"<uuid>","focus":null}` or focus `{ "projectId":"<uuid>","mappingId":"<uuid>","revisionId":null }`. An exact revision can replace the null revision. Creates (201) or replays (200); a different focus for the same identity conflicts. No reports are derived or required. |
+| `GET /conversations/{conversationId}` | Workspace conversation and its most recent 100 turns, oldest first. |
+| `POST /conversations/{conversationId}/turns` | The same turn body as revision chat. A mapping focus resolves its head once when the turn starts; `focus` in the returned turn records that exact revision or its unavailability. |
+| `GET /conversations/{conversationId}/turns/{turnId}/events?after=N` | The durable event stream, strictly after `N`, default 0. |
+| `POST /conversations/{conversationId}/turns/{turnId}/cancel` | Bodyless cancellation, unchanged for a terminal turn. |
+
+Focus supplies context, not authority or a tool restriction: workspace tools can
+read any resource the caller can currently read in the organization. A missing
+or revoked focus does not remove access to other readable projects. Profiles
+without function tools and mapping-metadata permission cannot start workspace
+turns. Payload reads additionally require the destination policy and a freshly
+observed project-specific payload-read grant; profile availability alone never
+grants payload access. See [workspace chat](workspace-chat.md).
+
+The organization listing also returns legacy revision-pinned conversations.
+Those retain `kind: "revision"` and their pinned revision and continue through
+the revision routes below; the workspace detail/turn routes do not reinterpret
+them as workspace conversations.
+
+Workspace streams add `workspace.citation` (a freshly verified resource reference)
+and `data.shared` (project, source identity and byte count, never the shared
+content). Shared-data records do not claim that every payload tool call was
+permitted; each call is checked independently for its own project.
+
+## Revision routes
 
 All routes are relative to
 `/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/chat`.

@@ -282,7 +282,7 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             WHERE NOT ($2 AND t.tgname=ANY($10::text[]))
             AND NOT ($2 AND t.tgisinternal AND EXISTS(SELECT 1 FROM pg_catalog.pg_constraint c
                 WHERE c.oid=t.tgconstraint AND c.contype='f' AND (c.conrelid=pg_catalog.to_regclass('weft.chat_conversations')
-                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey')
+                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey','chat_conversations_focus_mapping_fkey','chat_conversations_focus_revision_fkey')
                     OR c.conrelid=pg_catalog.to_regclass('weft.preview_runs') AND c.conname=ANY($7::text[])
                     OR c.conrelid IN (SELECT pg_catalog.to_regclass('weft.' || suffix) FROM unnest($8::text[]) suffix))))),
         namespace_acls AS (SELECT a.* FROM pg_catalog.pg_namespace n CROSS JOIN LATERAL pg_catalog.aclexplode(n.nspacl) a

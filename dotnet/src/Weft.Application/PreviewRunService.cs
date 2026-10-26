@@ -57,6 +57,15 @@ public sealed class PreviewRunService
     public Task<PreviewOutputContent?> ReadOutputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
         CancellationToken cancellationToken = default) => _reader.ReadOutputAsync(actor, organizationId, runId, ordinal, cancellationToken);
 
+    public Task<PreviewRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null,
+        CancellationToken cancellationToken = default) => _reader.ListAsync(actor, mapping, limit, afterRunId, cancellationToken);
+
+    public Task<IReadOnlyList<PreviewInputDescriptor>?> ReadInputDescriptorsAsync(ActorContext actor, Guid organizationId, Guid runId,
+        CancellationToken cancellationToken = default) => _reader.ReadInputDescriptorsAsync(actor, organizationId, runId, cancellationToken);
+
+    public Task<PreviewOutputContent?> ReadInputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
+        CancellationToken cancellationToken = default) => _reader.ReadInputAsync(actor, organizationId, runId, ordinal, cancellationToken);
+
     public Task<PreviewCancelOutcome> CancelAsync(ActorContext actor, Guid organizationId, Guid runId,
         CancellationToken cancellationToken = default) => _store.CancelAsync(actor, organizationId, runId, cancellationToken);
 

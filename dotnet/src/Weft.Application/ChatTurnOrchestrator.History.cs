@@ -9,6 +9,7 @@ public sealed partial class ChatTurnOrchestrator
     private async Task AddHistoryAsync(State s, IReadOnlyList<Guid> history)
     {
         int scanned = 0, bytes = 0;
+        var omitted = false;
         DateTimeOffset? lastFinished = null;
         foreach (var id in history)
         {
@@ -18,6 +19,17 @@ public sealed partial class ChatTurnOrchestrator
                 turn.FinishedAtUtc > s.Facts.CreatedAtUtc || lastFinished is { } prior && turn.CreatedAtUtc < prior)
                 throw Stop(ChatOrchestrationOutcome.InvalidRequest);
             lastFinished = turn.FinishedAtUtc;
+            if (_contextPort?.IncludeHistory(turn.Intent) == false)
+            {
+                if (!omitted)
+                {
+                    s.Messages.Add(AiUserMessage.Create("Some earlier turns are not included because they may contain sample data. " +
+                        "Use the currently offered tools to read current sources again if needed."));
+                    CheckContext(s.Messages);
+                    omitted = true;
+                }
+                continue;
+            }
             // Bound the full scan before loading any event page; no partially truncated history.
             if (turn.EventCount > _limits.MaxHistoryEvents - scanned) throw Stop(ChatOrchestrationOutcome.BudgetExceeded);
             scanned += turn.EventCount;

@@ -54,6 +54,17 @@
           ><span class="rail-icon" aria-hidden="true">?</span
           ><span class="rail-label">Help</span></a
         >
+        @if (session.visible() && contexts.context()?.features?.chat) {
+          <a
+            routerLink="/chat"
+            routerLinkActive="active"
+            ariaCurrentWhenActive="page"
+            aria-label="Chat"
+            title="Chat"
+            ><span class="rail-icon" aria-hidden="true">◇</span
+            ><span class="rail-label">Chat</span></a
+          >
+        }
       </nav>
       @if (session.visible()) {
         @defer {

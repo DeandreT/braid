@@ -147,6 +147,7 @@ var nativeWorkFiles = [
 var chatFiles = [
   { key: 'chat-reader', setting: 'WEFT_CHAT_READER_CONNECTION_STRING', file: 'chat-reader-connection' }
   { key: 'chat-writer', setting: 'WEFT_CHAT_WRITER_CONNECTION_STRING', file: 'chat-writer-connection' }
+  { key: 'payload-permission', setting: 'WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING', file: 'chat-payload-permission-connection' }
 ]
 // Mutating bearer requests are audited through their own append-only login.
 var bearerFiles = [

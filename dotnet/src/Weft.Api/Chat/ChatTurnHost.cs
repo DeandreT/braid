@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Weft.Ai;
+using Weft.Api.Chat.Workspace;
 using Weft.Application;
 using Weft.Domain;
 
@@ -31,7 +32,7 @@ public sealed class ChatPersistencePorts
 internal readonly record struct ChatTurnKey(Guid OrganizationId, Guid CreatorId, Guid TurnId)
 {
     internal static ChatTurnKey Of(ChatConversationKey key, Guid turnId) =>
-        new(key.Revision.OrganizationId, key.Creator.Value, turnId);
+        new(key.OrganizationId, key.Creator.Value, turnId);
 }
 
 /// <summary>
@@ -49,6 +50,7 @@ public sealed class ChatTurnHost : IAsyncDisposable
     private readonly AiRoundClient _client;
     private readonly IChatTurnStore _signalingTurns;
     private readonly Dictionary<AiProfileKey, ChatTurnOrchestrator> _orchestrators = [];
+    private readonly Dictionary<(AiProfileKey Profile, bool Payloads), ChatTurnOrchestrator> _workspaceOrchestrators = [];
     private readonly ConcurrentDictionary<ChatTurnKey, ChatTurnExecution> _live = new();
     private readonly ConcurrentDictionary<ChatTurnKey, DateTimeOffset> _finished = new();
     private readonly Dictionary<ChatTurnKey, ChangeSignal> _signals = [];
@@ -57,7 +59,7 @@ public sealed class ChatTurnHost : IAsyncDisposable
     private Task? _disposal;
 
     internal ChatTurnHost(ChatApiOptions options, ChatPersistencePorts stores, IAiCredentialResolver credentials,
-        ChatToolRegistry tools, IChatProfilePolicy policy, TimeProvider time)
+        ChatToolRegistry tools, IChatProfilePolicy policy, TimeProvider time, WorkspaceToolService? workspace = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(stores);
@@ -70,6 +72,7 @@ public sealed class ChatTurnHost : IAsyncDisposable
         _stores = stores;
         _tools = tools;
         _policy = policy;
+        Workspace = workspace;
         Clock = time;
         _client = new AiRoundClient(AiProfileCatalog.Create(options.Profiles.Select(profile => profile.Spec)), credentials, time);
         _signalingTurns = new SignalingTurnStore(stores.WriterTurns, this);
@@ -87,6 +90,18 @@ public sealed class ChatTurnHost : IAsyncDisposable
         (profile.Spec.Capabilities & AiCapability.FunctionTools) != 0 ? _tools : ChatToolRegistry.Empty;
 
     internal ChatGroundingPolicyPin GroundingPolicy(ChatModelProfile profile) => ChatGrounding.Pin(Tools(profile));
+
+    /// <summary>The workspace tools and ports; null when this host serves no workspace conversations.</summary>
+    internal WorkspaceToolService? Workspace { get; }
+
+    /// <summary>
+    /// A new workspace turn's pinned grounding, observed freshly as its creator, or null when the profile cannot run
+    /// one: workspace answers come from the read-only tools, so a profile without function tools never opens a
+    /// workspace turn. The payload tools are pinned only when the profile and the creator's grants allow them.
+    /// </summary>
+    internal Task<ChatGroundingPolicyPin?> WorkspaceGroundingPolicyAsync(ActorContext actor, Guid organizationId, ChatModelProfile profile,
+        CancellationToken ct) =>
+        Workspace is { } tools ? tools.GroundingForAsync(actor, organizationId, profile, ct) : Task.FromResult<ChatGroundingPolicyPin?>(null);
     internal ChatPersistencePorts Stores => _stores;
     internal IChatTurnStore WriterTurns => _signalingTurns;
 
@@ -109,7 +124,20 @@ public sealed class ChatTurnHost : IAsyncDisposable
         lock (_gate)
         {
             if (_disposal is not null || _live.ContainsKey(turn)) return null;
-            if (!_orchestrators.TryGetValue(profile.Spec.Key, out orchestrator!))
+            if (key.Kind == ChatConversationKind.Workspace)
+            {
+                // The turn's own pin selects the manifest; one the profile may not run is refused here, before the ledger.
+                if (Workspace is not { } tools || !tools.Allows(profile, intent)) return null;
+                var payloads = tools.PayloadGrounding is { } pin && intent.Envelope.GroundingPolicy == pin;
+                if (!_workspaceOrchestrators.TryGetValue((profile.Spec.Key, payloads), out orchestrator!))
+                {
+                    orchestrator = new ChatTurnOrchestrator(_stores.WriterConversations, _signalingTurns, _client, profile.Spec,
+                        WorkspaceChatGrounding.Instructions, payloads ? tools.PayloadManifest!.Value : tools.Manifest, _policy, tools, Clock,
+                        InstanceId, ChatGrounding.Limits, workspaceCitationPort: tools, contextPort: tools, payloadAuthorization: tools);
+                    _workspaceOrchestrators.Add((profile.Spec.Key, payloads), orchestrator);
+                }
+            }
+            else if (!_orchestrators.TryGetValue(profile.Spec.Key, out orchestrator!))
             {
                 var tools = Tools(profile);
                 orchestrator = new ChatTurnOrchestrator(_stores.WriterConversations, _signalingTurns, _client, profile.Spec,

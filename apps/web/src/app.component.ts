@@ -28,9 +28,9 @@ import { HeaderSearchComponent } from "./catalog/search/header-search.component"
   templateUrl: "./app.component.html",
 })
 export class AppComponent {
+  readonly contexts = inject(CatalogContextStore);
   private readonly document = inject(DOCUMENT);
   readonly session = inject(BrowserSessionState);
-  readonly contexts = inject(CatalogContextStore);
   readonly workbench = signal(false);
   /** The sign-in page is a full page of its own, without the workspace header. */
   readonly signInPage = signal(false);

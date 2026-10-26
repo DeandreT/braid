@@ -28,8 +28,8 @@ public sealed class PostgresChatLifecycleDatabase : IAsyncDisposable
             transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
             await using (var settings = new NpgsqlCommand("SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL search_path=pg_catalog,weft,pg_temp; SET LOCAL TimeZone='UTC'", connection, transaction))
                 await settings.ExecuteNonQueryAsync(ct);
-            var result = new PostgresTransaction(connection, transaction, key.Revision.OrganizationId);
-            await result.BindOrganizationAsync(key.Revision.OrganizationId, ct);
+            var result = new PostgresTransaction(connection, transaction, key.OrganizationId);
+            await result.BindOrganizationAsync(key.OrganizationId, ct);
             await using (var scope = result.CreateCommand("SELECT pg_catalog.set_config('weft.chat_principal_id',$1,true)"))
             {
                 scope.Parameters.AddWithValue(key.Creator.Value.ToString("D")); await scope.ExecuteNonQueryAsync(ct);
@@ -102,9 +102,11 @@ public sealed class PostgresChatLifecycleStore(PostgresChatLifecycleDatabase dat
     }
     private static NpgsqlCommand Command(PostgresTransaction tx, string sql, ChatConversationKey key)
     {
-        var command = tx.CreateCommand(sql); command.Parameters.AddWithValue("org", key.Revision.OrganizationId);
+        var command = tx.CreateCommand(sql); command.Parameters.AddWithValue("org", key.OrganizationId);
         command.Parameters.AddWithValue("creator", key.Creator.Value); command.Parameters.AddWithValue("conversation", key.ConversationId);
-        command.Parameters.AddWithValue("project", key.Revision.ProjectId); command.Parameters.AddWithValue("mapping", key.Revision.MappingId); command.Parameters.AddWithValue("revision", key.Revision.RevisionId);
+        // A workspace conversation's exact target has no revision scope; the routines match it by null.
+        foreach (var (name, value) in new[] { ("project", key.Revision?.ProjectId), ("mapping", key.Revision?.MappingId), ("revision", key.Revision?.RevisionId) })
+            command.Parameters.Add(new NpgsqlParameter(name, NpgsqlDbType.Uuid) { Value = value is { } id ? id : DBNull.Value });
         return command;
     }
     private static ChatStoreOutcome Outcome(object? value) => value is string text && Enum.TryParse<ChatStoreOutcome>(text, out var result) && Enum.IsDefined(result)

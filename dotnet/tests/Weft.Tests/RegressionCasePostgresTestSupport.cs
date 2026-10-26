@@ -11,11 +11,12 @@ internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
 {
     private readonly IngestionReceipt receipt;
 
-    private RegressionCasePostgresTestSupport(PostgresFixture fixture, PostgresCase test, PostgresSeedData seed, IngestionReceipt receipt)
+    private RegressionCasePostgresTestSupport(PostgresFixture fixture, PostgresCase test, PostgresSeedData seed, IngestionReceipt receipt, int? historicalPrefix)
     {
         Case = test;
         Seed = seed;
         this.receipt = receipt;
+        HistoricalPrefix = historicalPrefix;
         Actor = new(new(seed.Alice));
         Mapping = new(seed.OrganizationA, seed.ProjectA, receipt.Facts.FutureRevision.MappingId);
         ReaderConnection = fixture.RegressionConnectionString(test, "weft_case_reader");
@@ -38,12 +39,13 @@ internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
             var actor = new ActorContext(new(seed.Alice));
             var receipt = await HistoricalIngestionSeed.CommitCreateAsync(test, actor, new(seed.OrganizationA, seed.ProjectA));
             await using (var baseline = new MigrationRunner(test.MigrationConnectionString, scripts.Take(migrations ?? scripts.Count).ToArray())) await baseline.MigrateAsync();
-            return new(fixture, test, seed, receipt);
+            return new(fixture, test, seed, receipt, migrations);
         }
         catch { await test.DisposeAsync(); throw; }
     }
 
     internal PostgresCase Case { get; }
+    internal int? HistoricalPrefix { get; }
     internal PostgresSeedData Seed { get; }
     internal Guid CaseId { get; } = Guid.NewGuid();
     internal ActorContext Actor { get; }
@@ -53,6 +55,12 @@ internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
     internal string WriterConnection { get; }
     internal PostgresRegressionCaseStore Reader { get; }
     internal PostgresRegressionCaseStore Writer { get; }
+    internal async Task<RegressionCaseSaveResult> SaveAsync(ActorContext actor, RegressionCaseVersion value) =>
+        await HistoricalRegressionAccess.AppliesAsync(this)
+            ? await HistoricalRegressionAccess.SaveAsync(this, actor, value) : await Writer.SaveAsync(actor, value);
+    internal async Task<RegressionCaseVersion?> ReadAsync(ActorContext actor, MappingScope mapping, Guid id, long version) =>
+        await HistoricalRegressionAccess.AppliesAsync(this)
+            ? await HistoricalRegressionAccess.ReadAsync(this, actor, mapping, id, version) : await Reader.ReadAsync(actor, mapping, id, version);
     internal RegressionCaseVersion Version(long version, string name = "case", Guid? caseId = null, PrincipalId? owner = null) =>
         new(caseId ?? CaseId, version, owner ?? Actor.PrincipalId, name, receipt.Facts.FutureRevision, receipt.Facts.NativeObject.Digest,
             Runtime, new(PreviewTargetSelection.All, "2026-10-20T12:00:00Z", PreviewLimits.Default,

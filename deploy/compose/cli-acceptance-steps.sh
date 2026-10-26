@@ -160,6 +160,20 @@ done
 [[ $answered == true ]] || { cat chat.err >&2; fail 'chat'; }
 step "chat answered with $(jq '.citations | length' chat.json) citation(s)"
 
+"$weft" chat workspace availability --json >workspace-availability.json
+jq -e '.profiles | any(.payloadsAllowed == false)' workspace-availability.json >/dev/null || fail 'workspace profile policy'
+"$weft" chat workspace ask --focus-project "$project" --focus-mapping "$mapping" --focus-revision "$first" --json \
+  'Find the order mappings in the catalog and cite them.' >workspace-chat.json 2>workspace-chat.err ||
+  { cat workspace-chat.err >&2; fail 'workspace chat'; }
+jq -e --arg mapping "$mapping" '.outcome == "completed" and (.text | length > 0) and
+  any(.citations[]; .citation.kind == "mapping" and .citation.mappingId == $mapping) and (.sharedData | length == 0)' \
+  workspace-chat.json >/dev/null || fail 'workspace mapping citation or payload policy'
+workspace_conversation=$(jq -r '.conversationId' workspace-chat.json)
+"$weft" chat workspace conversations get "$workspace_conversation" --json >workspace-detail.json
+jq -e --arg revision "$first" '.conversation.kind == "workspace" and .conversation.focus.revisionId == $revision' \
+  workspace-detail.json >/dev/null || fail 'workspace exact focus'
+step 'workspace question cited the mapping with exact focus and no payload disclosure'
+
 "$weft" logout 2>/dev/null
 code=0
 "$weft" projects list >/dev/null 2>&1 || code=$?

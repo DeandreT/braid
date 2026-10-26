@@ -217,7 +217,7 @@ public sealed class MappingToolBoundaryTests
         fixture.WrongActor = true;
         Assert.Equal(MappingToolOutcome.ReportUnavailable, (await fixture.InvokeAsync("get_mapping_summary", "{}")).Outcome);
         fixture.WrongActor = false;
-        var pin = fixture.Conversation.Projection;
+        var pin = fixture.Conversation.PinnedProjection;
         foreach (var forged in new[]
         {
             new ChatReportPin(Guid.Parse("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"), pin.DerivationId, pin.KeyFingerprint, pin.ObjectDigest),
@@ -235,7 +235,7 @@ public sealed class MappingToolBoundaryTests
     public async Task A_conversation_pinning_another_attempt_never_reads_a_different_or_current_report()
     {
         var fixture = new MappingToolFixture();
-        var pin = fixture.Conversation.Projection;
+        var pin = fixture.Conversation.PinnedProjection;
         var historical = fixture.ConversationWith(projection: new(pin.CacheEntryId, Guid.Parse("f0f0f0f0-f0f0-40f0-80f0-f0f0f0f0f0f0"),
             pin.KeyFingerprint, pin.ObjectDigest));
         var result = await fixture.InvokeAsync(fixture.Service(), "get_mapping_summary", "{}", fixture.Context(conversation: historical));

@@ -12,12 +12,14 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { confirmAction } from "./confirmation.fixture";
 import { confirmHostedMutation } from "./hosted-mutation.fixture";
 import { readHostedState } from "./hosted-read.fixture";
+import { expectSignedInAccount } from "./hosted-account.fixture";
 
 /**
  * P8 local acceptance on the packaged Session stack owned by deploy/compose/acceptance-test.sh:
  * one signed-in browser drives the main workflows through the Angular application, then the
  * server restarts and the Ferrule service scales while work is queued or running. Nothing here
- * scripts an API reply; database reads only confirm what the application already reported.
+ * scripts an API reply. Database reads confirm the outcomes; the payload-policy case also
+ * prepares and revokes its explicit test-owned grant.
  */
 function setting(name: string): string {
   const value = process.env[name];
@@ -108,6 +110,7 @@ interface Scope {
 }
 const scopes: { first?: Scope; second?: Scope } = {};
 let projectId = "";
+let previewRunId = "";
 // Unique per run so a repeated run against a kept stack never matches an earlier project.
 const projectName = `Acceptance orders ${Date.now().toString(36)}`;
 const order =
@@ -156,16 +159,6 @@ const signInStatus = (page: Page) =>
     .getByRole("region", { name: "Sign in to Weft" })
     .getByRole("status")
     .first();
-/** Opens the header account menu and returns its session summary. */
-async function accountSummary(target: Page): Promise<Locator> {
-  const trigger = target.locator("#account-trigger");
-  if ((await trigger.getAttribute("aria-expanded")) !== "true")
-    await trigger.click();
-  return target
-    .getByRole("region", { name: "Sign-in and session" })
-    .getByRole("status")
-    .first();
-}
 const workflow = (page: Page, name: string) =>
   page.getByRole("tab", { name, exact: true });
 
@@ -350,7 +343,7 @@ test("signs in through the Session host's Microsoft sign-in", async () => {
   }
   // The callback returned to the requested page.
   expect(new URL(page.url()).pathname).toBe(returnTo);
-  await expect(await accountSummary(page)).toHaveText("Signed in to Weft");
+  await expectSignedInAccount(page);
   const status = await read<{ mode: string; state: string }>(
     page,
     "/api/auth/session",
@@ -515,7 +508,7 @@ test("derives and shows the revision's explanation and validation", async () => 
   await expect(table).toContainText('["items"][*]["quantity"]');
 });
 
-test("answers a chat question with a mapping tool and verified citations", async () => {
+test("answers a workspace chat question with a catalog tool and verified mapping citations", async () => {
   test.setTimeout(900_000);
   const chat = page.getByRole("complementary", { name: "Mapping chat" });
   await page.getByRole("tab", { name: "Ask Weft", exact: true }).click();
@@ -530,7 +523,7 @@ test("answers a chat question with a mapping tool and verified citations", async
     await chat.getByRole("button", { name: "New conversation" }).click();
     await expect(questions).toHaveCount(0);
     await question.fill(
-      'Call search_mapping with {"query": "orderId"} and then say in one sentence which source field fills orderId.',
+      'Call search_catalog with {"query": "order"} and summarize the mapping names with citations.',
     );
     await chat.getByRole("button", { name: "Send question" }).click();
     await expect(questions).toHaveCount(1);
@@ -545,7 +538,7 @@ test("answers a chat question with a mapping tool and verified citations", async
         "Answer complete." &&
       (await citations.getByRole("listitem").count()) > 0
     ) {
-      await expect(citations).toContainText(/field|projection/i);
+      await expect(citations).toContainText(/mapping/i);
       chatAttempts = attempt;
       break;
     }
@@ -602,6 +595,7 @@ test("runs a preview of sample JSON through the worker and the Ferrule service",
   await workflow(page, "Try sample").click();
   await fillPreview(page);
   const runId = await submitPreview(page);
+  previewRunId = runId;
   const region = preview(page);
   await expect(region.locator(".preview-status")).toContainText(
     "Sample ran successfully",
@@ -613,6 +607,143 @@ test("runs a preview of sample JSON through the worker and the Ferrule service",
   const text = (await region.locator("pre").textContent())!;
   const generatedAt = /"generatedAt": "([^"]+)"/.exec(text)![1];
   expect(text).toBe(shipment(generatedAt));
+});
+
+test("standalone workspace chat gates payload bytes by both profile and fresh project permission", async () => {
+  test.skip(
+    process.env.WEFT_ACCEPTANCE_MODEL_FIXTURE !== "true",
+    "Exact policy assertions use the owned deterministic provider; live model coverage is separate.",
+  );
+  test.setTimeout(900_000);
+  expect(previewRunId).toMatch(/^[0-9a-f-]{36}$/);
+  await openCatalog("/chat", (target) =>
+    target.getByRole("complementary", { name: "Workspace chat" }),
+  );
+  const chat = page.getByRole("complementary", { name: "Workspace chat" });
+  const actor = await read<{ actorPrincipalId: string }>(
+    page,
+    "/api/v1/catalog/context",
+  );
+  expect(actor.actorPrincipalId).toMatch(/^[0-9a-f-]{36}$/);
+  const grant = `organization_id='${organization}' and project_id='${projectId}' and principal_id='${actor.actorPrincipalId}'`;
+  expect(
+    sql(`select count(*) from weft.project_payload_read_grants where ${grant}`),
+  ).toEqual(["0"]);
+  const observations: Record<string, unknown>[] = [];
+  function recordPolicyEvidence() {
+    const provider = stack("logs", "--no-color", "model")
+      .split("\n")
+      .filter((line) => line.includes("fixture-policy "))
+      .map((line) =>
+        JSON.parse(line.slice(line.indexOf("fixture-policy ") + 15)),
+      );
+    writeFileSync(
+      `${process.env.WEFT_ACCEPTANCE_LOG_DIRECTORY ?? work}/payload-policy.json`,
+      JSON.stringify({ observations, provider }, null, 2),
+    );
+  }
+  async function ask(profile: string, shared: boolean) {
+    const available = await read<{
+      profiles: { profile: { profileId: string }; payloadsAllowed: boolean }[];
+    }>(page, `/api/v1/organizations/${organization}/chat`);
+    const advertised = available.profiles.find(
+      (item) => item.profile.profileId === profile,
+    );
+    const proof: Record<string, unknown> = {
+      requestedProfile: profile,
+      expectShared: shared,
+      advertisedPayloadsAllowed: advertised?.payloadsAllowed,
+      grantActive: sql(
+        `select active from weft.project_payload_read_grants where ${grant}`,
+      ),
+    };
+    observations.push(proof);
+    try {
+      expect(advertised?.payloadsAllowed).toBe(
+        profile === "local-acceptance-payloads",
+      );
+      const created = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            `/api/v1/organizations/${organization}/chat/conversations`,
+      );
+      await chat
+        .getByRole("button", { name: "New conversation", exact: true })
+        .click();
+      const conversationResponse = await created;
+      expect(conversationResponse.status()).toBe(201);
+      const conversation = await conversationResponse.json();
+      await expect(
+        chat.getByRole("combobox", {
+          name: "Saved conversations",
+          exact: true,
+        }),
+      ).toHaveValue(conversation.conversationId);
+      const selector = chat.getByRole("combobox", {
+        name: "Model profile",
+        exact: true,
+      });
+      await selector.selectOption(profile);
+      await expect(selector).toHaveValue(profile);
+      proof.selectedProfile = await selector.inputValue();
+      await chat
+        .getByRole("textbox", { name: "Question", exact: true })
+        .fill(`Read preview input ${previewRunId}.`);
+      const accepted = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname.startsWith(
+            `/api/v1/organizations/${organization}/chat/conversations/`,
+          ) &&
+          new URL(response.url()).pathname.endsWith("/turns"),
+      );
+      await chat
+        .getByRole("button", { name: "Send question", exact: true })
+        .click();
+      const response = await accepted;
+      proof.responseStatus = response.status();
+      proof.sentProfile = response.request().postDataJSON().profileId;
+      const receipt = await response.json();
+      proof.acceptedProfile = receipt.profile?.profileId;
+      expect(proof.sentProfile).toBe(profile);
+      expect(proof.acceptedProfile).toBe(profile);
+      const answer = chat.getByRole("region", { name: "Selected answer" });
+      await expect(answer.getByRole("status")).toHaveText("Answer complete.", {
+        timeout: 240_000,
+      });
+      proof.dataSharedMarkers = await chat
+        .getByText(/Data shared with/)
+        .count();
+      await expect(answer).toContainText(
+        shared
+          ? `Received ${Buffer.byteLength(order)} sample bytes`
+          : "Payload tools were not offered.",
+      );
+      await expect(chat.getByText(/Data shared with/)).toHaveCount(
+        shared ? 1 : 0,
+      );
+    } finally {
+      recordPolicyEvidence();
+    }
+  }
+  await ask("local-acceptance", false);
+  await ask("local-acceptance-payloads", false);
+  sql(`insert into weft.project_payload_read_grants(organization_id,project_id,principal_id)
+       values('${organization}','${projectId}','${actor.actorPrincipalId}')`);
+  try {
+    await ask("local-acceptance", false);
+    await ask("local-acceptance-payloads", true);
+    expect(
+      sql(`select byte_count from weft.chat_payload_audit where creator_id='${actor.actorPrincipalId}'
+      and project_id='${projectId}' and subject_id='${previewRunId}' and profile_id='local-acceptance-payloads'`),
+    ).toEqual([String(Buffer.byteLength(order))]);
+  } finally {
+    sql(
+      `update weft.project_payload_read_grants set active=false,version=version+1 where ${grant} and active`,
+    );
+  }
+  await ask("local-acceptance-payloads", false);
 });
 
 test("compares two revisions of the mapping", async () => {
@@ -1219,7 +1350,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
 
     // The same browser session and every retained record reopen on the restarted replica.
     await openCatalog(revisionPath(first), revisionReady);
-    await expect(await accountSummary(page)).toHaveText("Signed in to Weft");
+    await expectSignedInAccount(page);
     const reports = page.getByRole("region", { name: "Saved reports" });
     await settleReports(reports);
     await expect(

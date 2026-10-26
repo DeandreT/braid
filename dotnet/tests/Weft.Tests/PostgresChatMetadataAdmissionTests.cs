@@ -39,8 +39,8 @@ public sealed class PostgresChatMetadataAdmissionTests(PostgresFixture fixture)
 
         foreach (var target in new ChatCitationTarget[] { new(ChatCitationKind.ProjectionReport), new(ChatCitationKind.ValidationReport) })
         {
-            var pin = target.Kind == ChatCitationKind.ValidationReport ? f.Conversation.Validation : f.Conversation.Projection;
-            var citation = ChatMetadataCodec.Citation(new(f.Key.Revision, pin, target));
+            var pin = target.Kind == ChatCitationKind.ValidationReport ? f.Conversation.PinnedValidation : f.Conversation.PinnedProjection;
+            var citation = ChatMetadataCodec.Citation(new(f.Key.PinnedRevision, pin, target));
             foreach (var malformed in RequiredMutations(citation, ["v", "organization", "project", "mapping", "revision", "entry", "attempt", "key", "digest", "kind"])
                 .Concat(NullableMutations(citation, ["resource", "ordinal"]))
                 .Append(With(citation, "resource", JsonValue.Create("not-a-whole-report-target")))
@@ -53,10 +53,10 @@ public sealed class PostgresChatMetadataAdmissionTests(PostgresFixture fixture)
                     With(citation, field, JsonValue.Create(Guid.NewGuid())), before, structurallyValid: true);
         }
         var diagnostic = ChatMetadataCodec.Citation(ChatValidatedCitation.Validate(f.Conversation, f.VerifiedValidation,
-            new(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 0)).Facts);
+            new(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 0)).Facts!);
         foreach (var malformed in RequiredMutations(diagnostic, ["ordinal"]))
             await RefuseAsync(f, turn.Intent.TurnId, round, ChatEventKind.Citation, malformed, before);
-        var fieldShape = ChatMetadataCodec.Citation(new(f.Key.Revision, f.Conversation.Projection, new(ChatCitationKind.Field, "synthetic-field")));
+        var fieldShape = ChatMetadataCodec.Citation(new(f.Key.PinnedRevision, f.Conversation.PinnedProjection, new(ChatCitationKind.Field, "synthetic-field")));
         // This checks the conditional resource representation, not node existence;
         // production proof admission still requires an exact verified report.
         foreach (var malformed in RequiredMutations(fieldShape, ["resource"]))
@@ -65,8 +65,8 @@ public sealed class PostgresChatMetadataAdmissionTests(PostgresFixture fixture)
         var controls = new (ChatEventKind Kind, string Metadata)[]
         {
             (ChatEventKind.Usage, unknown), (ChatEventKind.Usage, partial), (ChatEventKind.ProviderFailure, failure),
-            (ChatEventKind.Citation, ChatMetadataCodec.Citation(new(f.Key.Revision, f.Conversation.Projection, new(ChatCitationKind.ProjectionReport)))),
-            (ChatEventKind.Citation, ChatMetadataCodec.Citation(new(f.Key.Revision, f.Conversation.Validation, new(ChatCitationKind.ValidationReport)))),
+            (ChatEventKind.Citation, ChatMetadataCodec.Citation(new(f.Key.PinnedRevision, f.Conversation.PinnedProjection, new(ChatCitationKind.ProjectionReport)))),
+            (ChatEventKind.Citation, ChatMetadataCodec.Citation(new(f.Key.PinnedRevision, f.Conversation.PinnedValidation, new(ChatCitationKind.ValidationReport)))),
             (ChatEventKind.Citation, diagnostic)
         };
         foreach (var control in controls)

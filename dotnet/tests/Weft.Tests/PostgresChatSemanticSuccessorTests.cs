@@ -34,9 +34,9 @@ public sealed class PostgresChatSemanticSuccessorTests(PostgresFixture fixture)
             Assert.Equal(0L, await f.Case.ScalarAsync<long>($"SELECT count(*) FROM weft.{table}")); // Fixed fixture-owned table set.
         await WaitUntilAsync(f, policyMinimum); // Policy time passing never releases replay protection.
         var now = new DateTimeOffset(await f.Case.ScalarAsync<DateTime>("SELECT statement_timestamp()"));
-        var clone = new ChatConversationIntent(f.Key, f.Conversation.Projection, f.Conversation.Validation, now.AddHours(1));
+        var clone = new ChatConversationIntent(f.Key, f.Conversation.PinnedProjection, f.Conversation.PinnedValidation, now.AddHours(1));
         Assert.Equal(ChatStoreOutcome.IdentityRetired, await f.Writer.CreateAsync(f.Actor, clone));
-        var fresh = new ChatConversationIntent(new(f.Key.Revision, f.Actor.PrincipalId, Guid.NewGuid()), clone.Projection, clone.Validation, clone.RetainUntilUtc);
+        var fresh = new ChatConversationIntent(new(f.Key.PinnedRevision, f.Actor.PrincipalId, Guid.NewGuid()), clone.PinnedProjection, clone.PinnedValidation, clone.RetainUntilUtc);
         Assert.Equal(ChatStoreOutcome.Applied, await f.Writer.CreateAsync(f.Actor, fresh));
         var prototype = new ChatTurnIntent(Guid.NewGuid(), new ChatOriginalEnvelope(Guid.NewGuid(), "new request", [], ChatTurnPolicyTests.ProviderBudget(), ChatTurnPolicyTests.Grounding()), ChatTurnPolicyTests.Profile(), new(16, 65536, 3), now.AddMinutes(1));
         var reusedTurn = new ChatTurnIntent(turn.Intent.TurnId, prototype.Envelope, prototype.Profile, prototype.Budget, prototype.DeadlineUtc);
@@ -87,21 +87,21 @@ public sealed class PostgresChatSemanticSuccessorTests(PostgresFixture fixture)
         foreach (var usage in new[] { unknown, known })
         {
             var result = await f.Writer.AppendAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, round.RoundId, round.Fence, ChatEventData.ForUsage(Guid.NewGuid(), usage));
-            Assert.Equal(ChatStoreOutcome.Applied, result.Outcome); turn = Assert.IsType<ChatTurnFacts>(result.Facts);
+            Assert.Equal(ChatStoreOutcome.Applied, result.Outcome); turn = Assert.IsType<ChatTurnFacts>(result.Facts!);
         }
         var citation = ChatValidatedCitation.Validate(f.Conversation, f.VerifiedValidation, new(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 0));
         var appended = await f.Writer.AppendCitationAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, round.RoundId, round.Fence, new(Guid.NewGuid(), citation));
-        Assert.Equal(ChatStoreOutcome.Applied, appended.Outcome); turn = Assert.IsType<ChatTurnFacts>(appended.Facts);
+        Assert.Equal(ChatStoreOutcome.Applied, appended.Outcome); turn = Assert.IsType<ChatTurnFacts>(appended.Facts!);
         var terminal = new ChatTerminalMetadata(new(round.RoundId, ChatUsageOrigin.ProviderRoundTerminal, 0, 7, null), new(round.RoundId, ChatProviderFailureCode.TruncatedResponse, ChatDispatchObservation.Attempted));
         var completion = await f.Writer.CompleteRoundAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, round.RoundId, round.Fence, new ChatRoundCompletion(ChatRoundOutcome.Failed, terminal));
-        Assert.Equal(ChatStoreOutcome.Applied, completion.Outcome); turn = Assert.IsType<ChatTurnFacts>(completion.Facts);
+        Assert.Equal(ChatStoreOutcome.Applied, completion.Outcome); turn = Assert.IsType<ChatTurnFacts>(completion.Facts!);
         Assert.Equal(ChatStoreOutcome.Applied, (await f.Writer.FinishAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, ChatTurnPhase.Failed)).Outcome);
         await using var reopened = new PostgresChatDatabase(f.Case.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
         var events = await new PostgresChatStore(reopened).ReadEventsAsync(f.Actor, f.Key, turn.Intent.TurnId, 0, 100);
         Assert.Equal(new[] { ChatEventKind.Started, ChatEventKind.Usage, ChatEventKind.Usage, ChatEventKind.Citation, ChatEventKind.RoundCompleted, ChatEventKind.Failed }, events.Select(e => e.Kind));
         Assert.False(events[1].Usage!.IsKnown); Assert.Null(events[1].Usage!.TotalTokens);
         Assert.True(events[2].Usage!.IsKnown); Assert.Equal(0L, events[2].Usage!.InputTokens); Assert.Null(events[2].Usage!.TotalTokens);
-        Assert.Equal(f.Conversation.Validation, events[3].Citation!.Report); Assert.Equal(0, events[3].Citation!.Target.DiagnosticOrdinal);
+        Assert.Equal(f.Conversation.PinnedValidation, events[3].Citation!.Report); Assert.Equal(0, events[3].Citation!.Target.DiagnosticOrdinal);
         Assert.Equal(terminal, events[^1].TerminalMetadata); Assert.Equal(terminal, events[^2].TerminalMetadata);
     }
 

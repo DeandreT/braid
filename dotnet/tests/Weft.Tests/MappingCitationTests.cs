@@ -20,10 +20,10 @@ public sealed class MappingCitationTests
         };
         var check = await service.ValidateCitationsAsync(MappingToolFixture.Actor, fixture.Conversation, targets);
         Assert.Equal(MappingCitationOutcome.Valid, check.Outcome);
-        Assert.Equal(targets, check.Citations.Select(citation => citation.Facts.Target));
-        Assert.All(check.Citations, citation => Assert.Equal(MappingToolFixture.Scope, citation.Facts.Revision));
-        Assert.All(check.Citations.Take(6), citation => Assert.Equal(fixture.Conversation.Projection, citation.Facts.Report));
-        Assert.All(check.Citations.Skip(6), citation => Assert.Equal(fixture.Conversation.Validation, citation.Facts.Report));
+        Assert.Equal(targets, check.Citations.Select(citation => citation.Facts!.Target));
+        Assert.All(check.Citations, citation => Assert.Equal(MappingToolFixture.Scope, citation.Facts!.Revision));
+        Assert.All(check.Citations.Take(6), citation => Assert.Equal(fixture.Conversation.PinnedProjection, citation.Facts!.Report));
+        Assert.All(check.Citations.Skip(6), citation => Assert.Equal(fixture.Conversation.PinnedValidation, citation.Facts!.Report));
         // Each pinned report is read once per check; authority is fresh before reading and before delivery.
         Assert.Equal(new[] { RevisionReportOperation.Projection, RevisionReportOperation.Validation, RevisionReportOperation.Projection },
             fixture.Reads.Select(read => read.Operation));
@@ -71,12 +71,12 @@ public sealed class MappingCitationTests
         };
         var check = await service.FilterCitationsAsync(MappingToolFixture.Actor, fixture.Conversation, targets);
         Assert.Equal(MappingCitationOutcome.Valid, check.Outcome);
-        Assert.Equal(new[] { targets[1], targets[3], targets[5] }, check.Citations.Select(citation => citation.Facts.Target));
+        Assert.Equal(new[] { targets[1], targets[3], targets[5] }, check.Citations.Select(citation => citation.Facts!.Target));
         Assert.Equal(2, fixture.AuthorityCalls);
         // The port form returns the same verified subset and nothing for an unauthorized reader.
         IChatCitationPort port = service;
-        Assert.Equal(check.Citations.Select(citation => citation.Facts),
-            (await port.VerifyAsync(MappingToolFixture.Actor, fixture.Conversation, targets, default)).Select(citation => citation.Facts));
+        Assert.Equal(check.Citations.Select(citation => citation.Facts!),
+            (await port.VerifyAsync(MappingToolFixture.Actor, fixture.Conversation, targets, default)).Select(citation => citation.Facts!));
         Assert.Empty(await port.VerifyAsync(MappingToolFixture.Actor, fixture.Conversation, [], default));
         Assert.Equal(MappingCitationOutcome.Invalid, (await service.FilterCitationsAsync(MappingToolFixture.Actor, fixture.Conversation,
             Enumerable.Repeat(targets[5], 65).ToArray())).Outcome);
@@ -84,7 +84,7 @@ public sealed class MappingCitationTests
             new ChatCitationTarget[] { targets[5], null! })).Outcome);
         fixture.Role = null;
         Assert.Empty(await port.VerifyAsync(MappingToolFixture.Actor, fixture.Conversation, targets, default));
-        var pin = fixture.Conversation.Validation;
+        var pin = fixture.Conversation.PinnedValidation;
         var forged = fixture.ConversationWith(validation: new(pin.CacheEntryId, pin.DerivationId, pin.KeyFingerprint, Sha256Digest.FromBytes([7])));
         fixture.Role = ProjectRole.Viewer;
         Assert.Equal(MappingCitationOutcome.ReportUnavailable, (await service.FilterCitationsAsync(MappingToolFixture.Actor, forged,
@@ -97,7 +97,7 @@ public sealed class MappingCitationTests
         var fixture = new MappingToolFixture();
         var service = fixture.Service();
         var report = new ChatCitationTarget(ChatCitationKind.ProjectionReport);
-        var pin = fixture.Conversation.Projection;
+        var pin = fixture.Conversation.PinnedProjection;
         var forged = fixture.ConversationWith(projection: new(pin.CacheEntryId, pin.DerivationId, pin.KeyFingerprint, Sha256Digest.FromBytes([7])));
         Assert.Equal(MappingCitationOutcome.ReportUnavailable,
             (await service.ValidateCitationsAsync(MappingToolFixture.Actor, forged, new[] { report })).Outcome);
@@ -146,7 +146,7 @@ public sealed class MappingCitationTests
         var check = await service.ValidateCitationsAsync(MappingToolFixture.Actor, fixture.Conversation, mutable);
         Assert.Equal(MappingCitationOutcome.Valid, check.Outcome);
         mutable[1] = new ChatCitationTarget(ChatCitationKind.Rule, "forged");
-        Assert.Equal(new ChatCitationTarget(ChatCitationKind.Rule, "rule.first"), check.Citations[1].Facts.Target);
+        Assert.Equal(new ChatCitationTarget(ChatCitationKind.Rule, "rule.first"), check.Citations[1].Facts!.Target);
         Assert.NotSame(mutable, check.Citations);
         var invalid = await service.ValidateCitationsAsync(MappingToolFixture.Actor, fixture.Conversation, mutable);
         Assert.Equal(MappingCitationOutcome.Invalid, invalid.Outcome);

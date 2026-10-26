@@ -312,7 +312,7 @@ public sealed class ReleaseOperationsPersistenceTests(PostgresFixture fixture)
         var history = await data.Case.ScalarAsync<string>(
             "SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m");
         await data.Case.MigrateAsync();
-        Assert.Equal(Enumerable.Range(1, 31), await data.Case.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, 33), await data.Case.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(history, await data.Case.ScalarAsync<string>(
             "SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m WHERE version<=$1", prefixVersion));
@@ -384,26 +384,8 @@ public sealed class ReleaseOperationsPersistenceTests(PostgresFixture fixture)
         Assert.Equal(1L, await data.Case.ScalarAsync<long>("SELECT count(*) FROM weft.catalog_search_report_index"));
         if (prefixVersion < 30) return;
 
-        await using var automation = new PostgresAutomationStore(data.Case.RegressionConnectionString("weft_run_writer"), true);
-        Assert.True(await automation.WriteAsync(data.Actor, project, "subscription", null,
-            System.Text.Json.JsonSerializer.SerializeToElement(new
-            {
-                events = new[] { "regressionFailed" },
-                inApp = true,
-                email = false,
-                webhooks = Array.Empty<string>()
-            })));
         var suiteId = Guid.NewGuid();
-        Assert.True(await automation.WriteAsync(data.Actor, project, "recheck", suiteId,
-            System.Text.Json.JsonSerializer.SerializeToElement(new
-            {
-                mappingId = mapping.MappingId,
-                revisionId = data.Control.Intent.Revision.RevisionId
-            })));
-        var evaluation = Assert.IsType<Weft.Application.Automation.AutomationClaim>(await automation.ClaimEvaluationAsync(default));
-        Assert.Equal(suiteId, evaluation.SuiteId);
-        Assert.True(await automation.FinishEvaluationAsync(evaluation,
-            Weft.Application.Regression.RegressionCaseExecution.Refused(Weft.Application.Regression.RegressionCaseExecutionOutcome.ResultRejected), default));
+        await HistoricalRegressionAccess.SeedAutomationFailureAsync(data.Control.Runs, suiteId);
         foreach (var table in new[] { "automation_suites", "automation_evaluations", "notification_events", "notifications" })
             Assert.True(await data.Case.ScalarAsync<long>($"SELECT count(*) FROM ONLY weft.{table}") > 0);
     }

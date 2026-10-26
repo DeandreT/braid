@@ -13,6 +13,13 @@ import type { AppendRevisionPageComponent } from "./catalog/uploads/append-revis
 import type { OperationsPageComponent } from "./catalog/operations/operations-page.component";
 import type { AutomationPageComponent } from "./catalog/automation/automation-page.component";
 import { NotFoundComponent } from "./not-found.component";
+import type { ChatPageComponent } from "./chat/chat-page.component";
+import type { RevisionPageComponent } from "./catalog/revision-page.component";
+
+const leaveChat: CanDeactivateFn<ChatPageComponent> = (component) =>
+  component.requestLeave();
+const leaveRevisionChat: CanDeactivateFn<RevisionPageComponent> = (component) =>
+  component.requestChatLeave();
 
 const leaveMappingEditor: CanDeactivateFn<EditMappingPageComponent> = (
   component,
@@ -49,6 +56,25 @@ function requestWorkspaceLeave(component: {
 }
 
 export const routes: Routes = [
+  {
+    path: "chat/resources",
+    canActivate: [requireSignIn],
+    loadComponent: () =>
+      import("./chat/chat-resource-page.component").then(
+        (module) => module.ChatResourcePageComponent,
+      ),
+    title: "Workspace reference · Weft",
+  },
+  {
+    path: "chat",
+    canActivate: [requireSignIn],
+    loadComponent: () =>
+      import("./chat/chat-page.component").then(
+        (module) => module.ChatPageComponent,
+      ),
+    canDeactivate: [leaveChat],
+    title: "Chat · Weft",
+  },
   {
     path: "notifications",
     canActivate: [requireSignIn],
@@ -158,6 +184,7 @@ export const routes: Routes = [
             (module) => module.RevisionPageComponent,
           ),
         title: "Revision · Weft",
+        canDeactivate: [leaveRevisionChat],
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId",

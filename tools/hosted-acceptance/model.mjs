@@ -1,11 +1,11 @@
 // Explicit local provider fixture. It never manufactures application data or citations:
-// the application executes search_mapping and verifies its own returned citation targets.
+// the application executes the offered read-only tools and verifies its own citation targets.
 import http from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const model = process.env.WEFT_ACCEPTANCE_CHAT_MODEL ?? "weft-fixture";
-export const createModelFixture = () =>
+export const createModelFixture = (observe = () => {}) =>
   http.createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/api/tags") {
       response.writeHead(200, { "content-type": "application/json" });
@@ -52,10 +52,37 @@ export const createModelFixture = () =>
       const lastUserIndex = body.messages.findLastIndex(
         (item) => item.role === "user",
       );
-      if (
-        lastTool < lastUserIndex &&
-        body.tools?.some((item) => item.function?.name === "search_mapping")
-      ) {
+      const offered = (name) =>
+        body.tools?.some((item) => item.function?.name === name);
+      const preview = /^Read preview input ([0-9a-f-]{36})\.$/.exec(
+        lastUser?.content ?? "",
+      );
+      const toolName = preview
+        ? "get_preview_input"
+        : offered("search_catalog")
+          ? "search_catalog"
+          : "search_mapping";
+      const afterToolReply = lastTool > lastUserIndex;
+      observe({
+        previewRequest: preview !== null,
+        offeredTools: (body.tools ?? [])
+          .slice(0, 64)
+          .map((item) =>
+            /^[a-z_]{1,64}$/.test(item?.function?.name ?? "")
+              ? item.function.name
+              : "invalid",
+          ),
+        afterToolReply,
+        decision:
+          lastTool < lastUserIndex && offered(toolName)
+            ? `call:${toolName}`
+            : preview && !offered("get_preview_input")
+              ? "payload-not-offered"
+              : preview
+                ? "inspect-payload-result"
+                : "metadata-answer",
+      });
+      if (lastTool < lastUserIndex && offered(toolName)) {
         send(
           {
             role: "assistant",
@@ -63,8 +90,10 @@ export const createModelFixture = () =>
             tool_calls: [
               {
                 function: {
-                  name: "search_mapping",
-                  arguments: { query: "order", limit: 4 },
+                  name: toolName,
+                  arguments: preview
+                    ? { runId: preview[1], ordinal: 0 }
+                    : { query: "order", limit: 4 },
                 },
               },
             ],
@@ -73,10 +102,26 @@ export const createModelFixture = () =>
         );
       } else {
         const slow = lastUser?.content?.includes("Describe every output field");
+        let payloadAnswer;
+        if (preview) {
+          if (!offered("get_preview_input")) {
+            payloadAnswer = "Payload tools were not offered.";
+          } else {
+            const result = JSON.parse(body.messages[lastTool]?.content ?? "{}");
+            const data = result.data;
+            payloadAnswer =
+              result.outcome === "available" &&
+              typeof data?.text === "string" &&
+              Buffer.byteLength(data.text) === data.sharedBytes
+                ? `Received ${data.sharedBytes} sample bytes through the authorized tool.`
+                : "Sample data was not available.";
+          }
+        }
         const parts = slow
           ? Array(60).fill("Reviewing the retained mapping evidence. ")
           : [
-              "The mapping search completed. Review the verified citations below.",
+              payloadAnswer ??
+                "The mapping search completed. Review the verified citations below.",
             ];
         for (const content of parts) {
           if (response.destroyed) break;
@@ -104,7 +149,9 @@ if (
   process.argv[1] &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  const server = createModelFixture();
+  const server = createModelFixture((entry) =>
+    console.log("fixture-policy " + JSON.stringify(entry)),
+  );
   server.listen(11434, "0.0.0.0");
   process.once("SIGTERM", () => server.close());
 }

@@ -32,11 +32,12 @@ public sealed class AiProfileSpec
 {
     private AiProfileSpec(AiProfileKey key, AiDialect dialect, string model, Uri endpoint,
         bool loopbackFixture, AiAuthentication authentication, string? credentialReference,
-        AiCapability capabilities, string policy, int policyVersion, bool allowed, bool thinkFalse)
+        AiCapability capabilities, string policy, int policyVersion, bool allowed, bool thinkFalse, bool payloads)
     {
         Key = key; Dialect = dialect; Model = model; Endpoint = endpoint; LoopbackFixture = loopbackFixture;
         Authentication = authentication; CredentialReference = credentialReference; Capabilities = capabilities;
         MetadataPolicyId = policy; MetadataPolicyVersion = policyVersion; MappingMetadataAllowed = allowed; RequestThinkFalse = thinkFalse;
+        PayloadsAllowed = payloads;
     }
     public AiProfileKey Key { get; }
     public AiDialect Dialect { get; }
@@ -50,20 +51,23 @@ public sealed class AiProfileSpec
     public int MetadataPolicyVersion { get; }
     public bool MappingMetadataAllowed { get; }
     public bool RequestThinkFalse { get; }
+    /// <summary>The destination may receive sample payload data (preview inputs/outputs, regression case data). Implies mapping metadata.</summary>
+    public bool PayloadsAllowed { get; }
     public static AiProfileSpec Create(AiProfileKey key, AiDialect dialect, string model, Uri endpoint,
         bool loopbackFixture, AiAuthentication authentication, string? credentialReference,
         AiCapability capabilities, string metadataPolicyId, int metadataPolicyVersion,
-        bool mappingMetadataAllowed, bool requestThinkFalse)
+        bool mappingMetadataAllowed, bool requestThinkFalse, bool payloadsAllowed = false)
     {
         if (!key.Valid || !Enum.IsDefined(dialect) || !Enum.IsDefined(authentication)
             || (capabilities & AiCapability.Text) == 0 || (capabilities & ~(AiCapability.Text | AiCapability.FunctionTools)) != 0
-            || metadataPolicyVersion <= 0 || (requestThinkFalse && dialect != AiDialect.OllamaChatNdjsonV1)) throw AiGuard.Invalid();
+            || metadataPolicyVersion <= 0 || (requestThinkFalse && dialect != AiDialect.OllamaChatNdjsonV1)
+            || (payloadsAllowed && !mappingMetadataAllowed)) throw AiGuard.Invalid();
         AiGuard.Token(model, 256); AiGuard.Identifier(metadataPolicyId);
         if (authentication == AiAuthentication.None && credentialReference is not null) throw AiGuard.Invalid();
         if (authentication == AiAuthentication.Bearer) AiGuard.Token(credentialReference!, 128);
         ValidateEndpoint(endpoint, dialect, loopbackFixture);
         return new AiProfileSpec(key, dialect, model, new Uri(endpoint.AbsoluteUri, UriKind.Absolute), loopbackFixture, authentication, credentialReference,
-            capabilities, metadataPolicyId, metadataPolicyVersion, mappingMetadataAllowed, requestThinkFalse);
+            capabilities, metadataPolicyId, metadataPolicyVersion, mappingMetadataAllowed, requestThinkFalse, payloadsAllowed);
     }
     private static void ValidateEndpoint(Uri endpoint, AiDialect dialect, bool fixture)
     {

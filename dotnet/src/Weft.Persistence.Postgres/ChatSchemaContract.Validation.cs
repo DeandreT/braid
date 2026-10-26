@@ -7,7 +7,7 @@ internal static partial class ChatSchemaContract
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         ChatDatabaseProfile profile, CancellationToken ct)
     {
-        _ = Source.Value;
+        _ = Source.Value; _ = WorkspaceSource.Value;
         // Reader also needs the tombstone relation protected without a tombstone
         // SELECT/listing grant. All profiles receive only this bounded lock capability.
         {
@@ -68,7 +68,8 @@ internal static partial class ChatSchemaContract
     private static async Task ValidateHistoryAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
     {
         var expected = MigrationRunner.EmbeddedMigrations;
-        if (expected.Count < 11 || expected[10].Checksum != MigrationChecksum ||
+        var workspace = WorkspaceMigrationVersion;
+        if (expected.Count < workspace || expected[10].Checksum != MigrationChecksum || expected[workspace - 1].Checksum != WorkspaceMigrationChecksum ||
             !expected.Take(10).Select(script => script.Checksum).SequenceEqual(PrefixChecksums, StringComparer.Ordinal)) throw Refusal();
         await using var command = new NpgsqlCommand("SELECT version,checksum FROM ONLY weft.schema_migrations ORDER BY version", connection, transaction);
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -194,14 +195,17 @@ internal static partial class ChatSchemaContract
         {
             var conversation = table == "chat_conversations";
             var identity = table == "chat_identities";
-            var function = identity ? "guard_chat_identity" : conversation ? "guard_chat_conversation" : "guard_chat_child";
+            var audit = table == "chat_payload_audit";
+            var function = audit ? "guard_chat_payload_audit" : identity ? "guard_chat_identity" : conversation ? "guard_chat_conversation" : "guard_chat_child";
             var expected = new Dictionary<string, Trigger>(StringComparer.Ordinal)
             {
-                [identity ? "chat_identity_guard" : conversation ? "chat_conversation_guard" : "chat_child_guard"] = new(function, 31),
-                [identity ? "chat_identity_truncate" : conversation ? "chat_conversation_truncate" : "chat_child_truncate"] = new(function, 34)
+                // The append-only audit refuses UPDATE/DELETE (27); the ledger guards also see INSERT (31).
+                [audit ? "chat_payload_audit_guard" : identity ? "chat_identity_guard" : conversation ? "chat_conversation_guard" : "chat_child_guard"] = new(function, (short)(audit ? 27 : 31)),
+                [audit ? "chat_payload_audit_truncate" : identity ? "chat_identity_truncate" : conversation ? "chat_conversation_truncate" : "chat_child_truncate"] = new(function, 34)
             };
             if (identity) expected.Add("chat_identity_erasure", new("check_chat_identity_erasure", 17, true));
-            else if (!conversation) expected.Add("chat_counters", new("check_chat_counters", 21, true));
+            else if (!conversation && !audit) expected.Add("chat_counters", new("check_chat_counters", 21, true));
+            if (table == "chat_events") expected.Add("chat_payload_audit", new("audit_chat_payload", 5));
             await using var command = new NpgsqlCommand("""
                 SELECT t.tgname,t.tgtype,t.tgenabled::text,t.tgnargs,t.tgattr::text,t.tgqual IS NULL,
                     t.tgdeferrable,t.tginitdeferred,t.tgoldtable IS NULL AND t.tgnewtable IS NULL,

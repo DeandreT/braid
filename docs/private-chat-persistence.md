@@ -10,7 +10,13 @@ reader and writer pools are owned/disposed by their caller; stores borrow them.
 Transaction-local RLS scope supplements, rather than replaces, server identity
 and explicit project authorization.
 
-Each conversation pins retained usable projection and validation attempts by
+A workspace conversation belongs to one organization instead of a revision: it
+pins no reports, its optional focus grants nothing, and its organization-level
+authority is an active creator with a current organization admission. Ownership,
+identity, retention, lifecycle and erasure are otherwise the same; see
+[Workspace chat](workspace-chat.md).
+
+Each revision conversation pins retained usable projection and validation attempts by
 cache entry, attempt UUID, complete-key fingerprint and derived-object digest.
 Creation verifies the exact operation and revision, not a mutable selected-report
 pointer. Restrictive references retain reports/revisions. Chat erasure never

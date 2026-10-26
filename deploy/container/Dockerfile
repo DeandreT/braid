@@ -43,7 +43,7 @@ RUN apt-get update \
     && echo "${DOTNET_SDK_SHA512}  /tmp/dotnet-sdk.tar.gz" | sha512sum --check --status \
     && tar --extract --gzip --file /tmp/dotnet-sdk.tar.gz --directory /usr/share/dotnet \
     && rm /tmp/dotnet-sdk.tar.gz
-ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false DOTNET_PROCESSOR_COUNT=2
 WORKDIR /src
 COPY global.json ./
 COPY migrations migrations

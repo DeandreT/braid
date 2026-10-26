@@ -62,7 +62,7 @@ public sealed class ChatSemanticSuccessorTests
         Assert.Throws<ArgumentException>(() => new ChatOriginalEnvelope(id, "text", [a, a], Budget(), original.GroundingPolicy));
         var conversation = Conversation(); var turn = new ChatTurnIntent(Guid.NewGuid(), original, ChatAiBridge.PinProfile("provider", Profile()), new(8, 10000, 3), ChatTurnPolicyTests.Now.AddMinutes(1));
         Assert.NotEqual(ChatCanonicalEnvelope.Fingerprint(ChatCanonicalEnvelope.Turn(conversation, turn)),
-            ChatCanonicalEnvelope.Fingerprint(ChatCanonicalEnvelope.Turn(new(conversation.Key, conversation.Projection, conversation.Validation, conversation.RetainUntilUtc.AddSeconds(1)), turn)));
+            ChatCanonicalEnvelope.Fingerprint(ChatCanonicalEnvelope.Turn(new(conversation.Key, conversation.PinnedProjection, conversation.PinnedValidation, conversation.RetainUntilUtc.AddSeconds(1)), turn)));
     }
 
     [Fact]
@@ -119,17 +119,17 @@ public sealed class ChatSemanticSuccessorTests
             new(p.CacheEntryId, p.DerivationId, p.Key.Fingerprint, p.DerivedObject.Digest), new(v.CacheEntryId, v.DerivationId, v.Key.Fingerprint, v.DerivedObject.Digest), ChatTurnPolicyTests.Now.AddHours(1));
         var proof = ChatValidatedCitation.Validate(conversation, validation, new(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 0));
         var reportProof = ChatValidatedCitation.Validate(conversation, validation, new(ChatCitationKind.ValidationReport));
-        Assert.Equal(reportProof.Facts, ChatMetadataCodec.ReadCitation(ChatMetadataCodec.Citation(reportProof.Facts)));
+        Assert.Equal(reportProof.Facts!, ChatMetadataCodec.ReadCitation(ChatMetadataCodec.Citation(reportProof.Facts!)));
         Assert.NotNull(ChatValidatedCitation.Validate(conversation, projection, new(ChatCitationKind.ProjectionReport)));
         Assert.Throws<ArgumentException>(() => new ChatCitationTarget(ChatCitationKind.ValidationReport, resourceId: "invented"));
         Assert.Throws<ArgumentException>(() => ChatValidatedCitation.Validate(conversation, validation, new(ChatCitationKind.ProjectionReport)));
-        Assert.Equal(0, proof.Facts.Target.DiagnosticOrdinal); Assert.Null(proof.Facts.Target.ResourceId);
-        Assert.Equal(proof.Facts, ChatMetadataCodec.ReadCitation(ChatMetadataCodec.Citation(proof.Facts)));
+        Assert.Equal(0, proof.Facts!.Target.DiagnosticOrdinal); Assert.Null(proof.Facts!.Target.ResourceId);
+        Assert.Equal(proof.Facts!, ChatMetadataCodec.ReadCitation(ChatMetadataCodec.Citation(proof.Facts!)));
         Assert.Throws<ArgumentException>(() => ChatValidatedCitation.Validate(conversation, validation, new(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 1)));
         Assert.Throws<ArgumentException>(() => ChatValidatedCitation.Validate(conversation, projection, new(ChatCitationKind.Field, "invented")));
         Assert.Throws<ArgumentException>(() => ChatValidatedCitation.Validate(conversation, validation, new(ChatCitationKind.ProjectionDiagnostic, diagnosticOrdinal: 0)));
-        var altered = new ChatConversationIntent(conversation.Key, conversation.Projection,
+        var altered = new ChatConversationIntent(conversation.Key, conversation.PinnedProjection,
             new(v.CacheEntryId, v.DerivationId, v.Key.Fingerprint, Sha256Digest.FromBytes([9])), conversation.RetainUntilUtc);
-        Assert.Throws<ArgumentException>(() => ChatValidatedCitation.Validate(altered, validation, proof.Facts.Target));
+        Assert.Throws<ArgumentException>(() => ChatValidatedCitation.Validate(altered, validation, proof.Facts!.Target));
     }
 }

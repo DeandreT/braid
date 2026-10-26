@@ -10,7 +10,7 @@ namespace Weft.Persistence.Postgres;
 public enum RegressionCaseDatabaseProfile { Reader, Writer }
 
 /// <summary>Dedicated resetting pool for explicit saved samples, never production payloads.</summary>
-public sealed class PostgresRegressionCaseStore : IRegressionCaseReader, IRegressionCaseWriter, IAsyncDisposable
+public sealed class PostgresRegressionCaseStore : IRegressionCaseReader, IRegressionCaseMetadataReader, IRegressionCaseWriter, IAsyncDisposable
 {
     private readonly NpgsqlDataSource source;
     private readonly RegressionCaseDatabaseProfile profile;
@@ -52,6 +52,37 @@ public sealed class PostgresRegressionCaseStore : IRegressionCaseReader, IRegres
                 RegressionCaseSaveResult.Saved((RegressionCaseSaveOutcome)outcome, envelope.Reference),
             _ => RegressionCaseSaveResult.Refused((RegressionCaseSaveOutcome)outcome)
         };
+    }
+
+    public async Task<RegressionCaseSummary?> ReadMetadataAsync(ActorContext actor, MappingScope mapping, Guid caseId, long version,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(mapping);
+        if (caseId == Guid.Empty || version < 1) throw new ArgumentException("A regression case and positive version are required.");
+        await using var transaction = await BeginAsync(actor, mapping, write: false, cancellationToken);
+        await using var command = transaction.CreateCommand("SELECT * FROM weft.read_regression_case_metadata(@org,@project,@mapping,@id,@version)");
+        AddScope(command, mapping);
+        Add(command, "id", NpgsqlDbType.Uuid, caseId);
+        Add(command, "version", NpgsqlDbType.Bigint, version);
+        RegressionCaseSummary? result = null;
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                result = new(reader.GetGuid(0), reader.GetInt64(1),
+                    new(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, reader.GetGuid(3)),
+                    new(reader.GetGuid(2)), reader.GetString(4), new(reader.GetDateTime(6)), new(reader.GetGuid(5)));
+                if (result.CaseId != caseId || result.Version != version || await reader.ReadAsync(cancellationToken)) throw Integrity();
+            }
+        }
+        if (result is not null)
+        {
+            command.CommandText = "SELECT EXISTS(SELECT 1 FROM weft.read_regression_case_metadata(@org,@project,@mapping,@id,@version))";
+            if (await command.ExecuteScalarAsync(cancellationToken) is not true) result = null;
+        }
+        await transaction.CommitAsync(cancellationToken);
+        return result;
     }
 
     public async Task<RegressionCaseVersion?> ReadAsync(ActorContext actor, MappingScope mapping, Guid caseId, long version,

@@ -22,12 +22,132 @@ import {
   type ChatPage,
   type ChatTurn,
 } from "./chat-types";
+import {
+  focus,
+  organizationConversation,
+  workspaceAvailability,
+  workspaceEvent,
+  revisionScope,
+  type ChatScope,
+  type ChatFocus,
+  type OrganizationConversation,
+  type UiAvailability,
+} from "./workspace-chat-types";
 
 /** Same-origin, private-tab transport. No automatic mutation retries or provider URLs. */
 @Injectable({ providedIn: "root" })
 export class ChatApi {
   private readonly contexts = inject(CatalogContextStore);
   private readonly sessions = inject(BrowserSessionState);
+
+  async workspaceAvailability(
+    scope: ChatScope,
+    context: CatalogContext,
+    signal: AbortSignal,
+  ): Promise<UiAvailability> {
+    const value = workspaceAvailability(
+      await this.json(
+        { organizationId: scope.organizationId },
+        "",
+        context,
+        signal,
+      ),
+      scope.organizationId,
+    );
+    if (!value) throw new ChatError("incompatible");
+    return value;
+  }
+  async organizationList(
+    scope: ChatScope,
+    context: CatalogContext,
+    signal: AbortSignal,
+    revisionId?: string,
+    after?: string,
+  ): Promise<{ conversations: OrganizationConversation[]; hasMore: boolean }> {
+    if (revisionId) this.id(revisionId);
+    if (after) this.id(after);
+    const value = await this.json(
+      { organizationId: scope.organizationId },
+      `/conversations?limit=50${revisionId ? `&revisionId=${revisionId}` : ""}${after ? `&after=${after}` : ""}`,
+      context,
+      signal,
+    );
+    if (
+      !object(value) ||
+      !Array.isArray(value.conversations) ||
+      value.conversations.length > 50 ||
+      !value.conversations.every((c) =>
+        organizationConversation(c, scope.organizationId),
+      ) ||
+      new Set(value.conversations.map((c) => c.conversationId)).size !==
+        value.conversations.length ||
+      typeof value.hasMore !== "boolean"
+    )
+      throw new ChatError("incompatible");
+    return { conversations: value.conversations, hasMore: value.hasMore };
+  }
+  async createWorkspace(
+    scope: ChatScope,
+    context: CatalogContext,
+    signal: AbortSignal,
+    id: string,
+    selectedFocus: ChatFocus | null,
+  ): Promise<OrganizationConversation> {
+    this.id(id);
+    if (!focus(selectedFocus)) throw new ChatError("invalidRequest");
+    const value = await this.json(
+      { organizationId: scope.organizationId },
+      "/conversations",
+      context,
+      signal,
+      { conversationId: id, focus: selectedFocus },
+    );
+    if (
+      !organizationConversation(value, scope.organizationId) ||
+      value.kind !== "workspace" ||
+      value.conversationId !== id ||
+      JSON.stringify(value.focus) !== JSON.stringify(selectedFocus)
+    )
+      throw new ChatError("incompatible");
+    return value;
+  }
+  async workspaceDetail(
+    scope: ChatScope,
+    context: CatalogContext,
+    signal: AbortSignal,
+    id: string,
+  ): Promise<{
+    conversation: OrganizationConversation;
+    turns: ChatTurn[];
+    hasEarlierTurns: boolean;
+  }> {
+    this.id(id);
+    const value = await this.json(
+      { organizationId: scope.organizationId },
+      `/conversations/${id}`,
+      context,
+      signal,
+    );
+    if (
+      !object(value) ||
+      !organizationConversation(value.conversation, scope.organizationId) ||
+      value.conversation.kind !== "workspace" ||
+      value.conversation.conversationId !== id ||
+      !Array.isArray(value.turns) ||
+      value.turns.length > 100 ||
+      !value.turns.every(
+        (t) => turn(t, id) && validTurnFocus(t.focus, scope.organizationId),
+      ) ||
+      new Set(value.turns.map((t) => t.turnId)).size !== value.turns.length ||
+      typeof value.hasEarlierTurns !== "boolean"
+    )
+      throw new ChatError("incompatible");
+    return {
+      conversation: value.conversation,
+      turns: value.turns,
+      hasEarlierTurns: value.hasEarlierTurns,
+    };
+  }
 
   async availability(
     scope: CatalogRevisionScope,
@@ -102,7 +222,7 @@ export class ChatApi {
     return value as ChatDetail;
   }
   async send(
-    scope: CatalogRevisionScope,
+    scope: ChatScope,
     context: CatalogContext,
     signal: AbortSignal,
     id: string,
@@ -119,6 +239,8 @@ export class ChatApi {
     );
     if (
       !turn(value, id) ||
+      (!("revisionId" in scope) &&
+        !validTurnFocus(value.focus, scope.organizationId)) ||
       value.turnId !== body.turnId ||
       value.text !== body.text ||
       value.profile.profileId !== body.profileId ||
@@ -129,7 +251,7 @@ export class ChatApi {
     return value;
   }
   async cancel(
-    scope: CatalogRevisionScope,
+    scope: ChatScope,
     context: CatalogContext,
     signal: AbortSignal,
     id: string,
@@ -149,7 +271,7 @@ export class ChatApi {
     return value;
   }
   async stream(
-    scope: CatalogRevisionScope,
+    scope: ChatScope,
     context: CatalogContext,
     signal: AbortSignal,
     id: string,
@@ -171,6 +293,11 @@ export class ChatApi {
     )
       throw new ChatError("incompatible");
     const reader = response.body.getReader();
+    const acceptsEvent: (value: unknown) => value is ChatEvent =
+      "revisionId" in scope
+        ? event
+        : (value: unknown): value is ChatEvent =>
+            workspaceEvent(value, scope.organizationId);
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let buffer = "",
       bytes = 0,
@@ -199,7 +326,7 @@ export class ChatApi {
           const ids = lines.filter((line) => line.startsWith("id:"));
           const names = lines.filter((line) => line.startsWith("event:"));
           if (
-            !event(value) ||
+            !acceptsEvent(value) ||
             ids.length !== 1 ||
             names.length !== 1 ||
             ids[0]!.slice(3).trim() !== String(value.sequence) ||
@@ -224,19 +351,18 @@ export class ChatApi {
     if (!isCatalogId(id)) throw new ChatError("invalidRequest");
   }
   private async request(
-    scope: CatalogRevisionScope,
+    scope: ChatScope,
     suffix: string,
     context: CatalogContext,
     signal: AbortSignal,
     body?: unknown,
   ): Promise<Response> {
     if (
-      ![
-        scope.organizationId,
-        scope.projectId,
-        scope.mappingId,
-        scope.revisionId,
-      ].every(isCatalogId) ||
+      !isCatalogId(scope.organizationId) ||
+      ("revisionId" in scope &&
+        ![scope.projectId, scope.mappingId, scope.revisionId].every(
+          isCatalogId,
+        )) ||
       context.allowedOrganizationId !== scope.organizationId ||
       !this.contexts.canDispatch(context)
     )
@@ -257,7 +383,7 @@ export class ChatApi {
     ]);
     const generation = this.sessions.generation();
     const response = await fetch(
-      `/api/v1/organizations/${scope.organizationId}/projects/${scope.projectId}/mappings/${scope.mappingId}/revisions/${scope.revisionId}/chat${suffix}`,
+      `/api/v1/organizations/${scope.organizationId}${"revisionId" in scope ? `/projects/${scope.projectId}/mappings/${scope.mappingId}/revisions/${scope.revisionId}` : ""}/chat${suffix}`,
       {
         method: body === undefined ? "GET" : "POST",
         headers,
@@ -291,7 +417,7 @@ export class ChatApi {
     return response;
   }
   private async json(
-    scope: CatalogRevisionScope,
+    scope: ChatScope,
     suffix: string,
     context: CatalogContext,
     signal: AbortSignal,
@@ -302,6 +428,16 @@ export class ChatApi {
       throw new ChatError("incompatible");
     return JSON.parse(await boundedText(response, 4 * 1024 * 1024)) as unknown;
   }
+}
+
+function validTurnFocus(value: unknown, organizationId: string): boolean {
+  return (
+    object(value) &&
+    (value.state === "resolved"
+      ? revisionScope(value.revision, organizationId)
+      : ["none", "unavailable"].includes(String(value.state)) &&
+        value.revision === null)
+  );
 }
 
 async function boundedText(response: Response, limit: number): Promise<string> {

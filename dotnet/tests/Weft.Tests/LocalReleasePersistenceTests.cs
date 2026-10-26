@@ -318,7 +318,7 @@ public sealed class LocalReleasePersistenceTests(PostgresFixture fixture)
             Assert.Equal(BuildPublicationOutcome.Created, await publishing.PublishAsync(Actor, publication));
             Assert.True(await dispatcher.CompleteAsync(claim, new(BuildExecutionOutcome.Created, publication)));
             var run = (await runs.ReadAsync(Actor, intent.Revision.OrganizationId, intent.BuildId))!;
-            var evidence = (await Control.Runs.Reader.ReadAsync(Actor, intent.Revision.OrganizationId, intent.RegressionEvidenceId))!;
+            var evidence = (await Control.Runs.ReadAsync(Actor, intent.Revision.OrganizationId, intent.RegressionEvidenceId))!;
             var proof = BuildQualification.Create(Guid.NewGuid(), Actor.PrincipalId, run, evidence, Control.Runs.Value, Target.RuntimeImage,
                 new(CompiledBuildOutcome.Completed, Control.Runs.Value.Expected));
             Assert.Equal(BuildQualificationWriteOutcome.Created, await Qualifications.SaveAsync(Actor, proof));

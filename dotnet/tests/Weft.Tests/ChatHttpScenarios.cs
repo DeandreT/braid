@@ -18,8 +18,9 @@ internal sealed record ChatTestEnvironment(PostgresCase Case, ActorContext Actor
     IRevisionReportReader Reports, IRevisionReportMetadataReader Metadata, Func<Task> PublishReportsAsync, bool DerivedReports = false)
 {
     internal Task<ChatHttpTestSupport> StartAsync(ChatApiOptions options, Guid? principal = null,
-        Func<IChatReadOnlyToolPort, IChatReadOnlyToolPort>? tools = null) =>
-        H.StartAsync(Case, new ActorContext(new PrincipalId(principal ?? Actor.PrincipalId.Value)), Revision, options, Reports, Metadata, tools);
+        Func<IChatReadOnlyToolPort, IChatReadOnlyToolPort>? tools = null, bool workspace = false) =>
+        H.StartAsync(Case, new ActorContext(new PrincipalId(principal ?? Actor.PrincipalId.Value)), Revision, options, Reports, Metadata, tools,
+            workspace);
     public override string ToString() => nameof(ChatTestEnvironment);
 }
 

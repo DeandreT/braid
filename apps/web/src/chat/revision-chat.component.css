@@ -33,6 +33,7 @@ label {
   font-weight: 600;
 }
 select,
+input,
 textarea {
   box-sizing: border-box;
   width: 100%;
@@ -105,4 +106,26 @@ small {
 }
 details {
   margin: 0.75rem 0;
+}
+.chat-data-shared,
+.chat-policy {
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: #f0f6f2;
+  font-size: 0.85rem;
+}
+.chat-data-shared {
+  border-left: 3px solid #287a60;
+}
+.chat-focus {
+  padding: 0.75rem;
+  background: #f7faf8;
+  border-radius: 6px;
+}
+.chat-focus summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.chat-citations a {
+  color: var(--accent);
 }

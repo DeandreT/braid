@@ -75,6 +75,7 @@ Session snapshots every feature flag before it opens any PEM, ring or credential
 | Session credential file | Login |
 | --- | --- |
 | `WEFT_CHAT_READER_CONNECTION_STRING_FILE` / `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE` | `weft_chat_reader` / `weft_chat_writer` |
+| `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE` (optional) | `weft_payload_permission_reader` |
 | `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE` / `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE` | `weft_preview_reader` / `weft_preview_writer` |
 
 A plain chat or preview connection-string setting refuses Session startup rather than being ignored, and each pair must name two different deliveries. The files use the same admission as the session/identity credentials: private-file checks, explicit username and password, no passfile, client certificate/key or ambient `PG*` credential, and password-only authentication.

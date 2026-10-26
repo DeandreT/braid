@@ -46,10 +46,10 @@ public static partial class CatalogEndpoints
             limit = (int)parsed;
         }
         var after = context.Request.Query.TryGetValue("afterRunId", out var cursor) ? CatalogRegressionCaseRequest.Id(cursor[0]!) : (Guid?)null;
-        var page = await context.RequestServices.GetRequiredService<IRegressionRunReader>().ListAsync(admission.Actor!, mapping, limit, after, context.RequestAborted);
-        if (page.Runs.Count > limit || page.Runs.Any(run => !Belongs(run.Revision, mapping))) throw new InvalidOperationException("Run history scope mismatch.");
+        var page = await RegressionRunPageAsync(context.RequestServices, admission.Actor!, mapping, limit, after, context.RequestAborted);
+        if (page is null) return NotFound();
         var bytes = PrepareCase(new RegressionRunPageV1(page.Runs.Select(RunSummary).ToArray(), page.NextRunId?.ToString("D")), context.RequestAborted);
-        return await RunAccess(context, admission, mapping) ? CaseResponse(bytes) : NotFound();
+        return CaseResponse(bytes);
     });
 
     private static Task<IResult> GetRegressionRun(string organizationId, string projectId, string mappingId, string runId,
@@ -113,13 +113,13 @@ public static partial class CatalogEndpoints
         return runs.Enabled ? WithCaseAdmission(context, cases, action, unsafeRequest) : Task.FromResult(Error(CatalogErrorCodeV1.Unavailable, StatusCodes.Status404NotFound));
     }
 
-    private static async Task<bool> RunAccess(HttpContext context, CatalogRequestAdmission admission, MappingScope mapping) =>
-        await CaseCatalogMapping(context, admission.Actor!, mapping) is { } current && CanReadCase(current.Access);
+    private static Task<bool> RunAccess(HttpContext context, CatalogRequestAdmission admission, MappingScope mapping) =>
+        RegressionRunAccessAsync(context.RequestServices, admission.Actor!, mapping, context.RequestAborted);
 
     private static async Task<IResult> RunResponse(HttpContext context, CatalogRequestAdmission admission, MappingScope mapping, Guid id)
     {
-        var view = await context.RequestServices.GetRequiredService<RegressionRunReadService>().ReadAsync(admission.Actor!, mapping.OrganizationId, id, context.RequestAborted);
-        if (view is null || !Belongs(view.Run.Case.Revision, mapping)) return NotFound();
+        var view = await RegressionRunViewAsync(context.RequestServices, admission.Actor!, mapping, id, context.RequestAborted);
+        if (view is null) return NotFound();
         var result = view.Result;
         var comparison = result?.Comparison;
         var response = new RegressionRunV1(RunSummary(new(view.Run.RunId, view.Run.Case.CaseId, view.Run.Case.Version,
@@ -132,7 +132,7 @@ public static partial class CatalogEndpoints
                     difference.ActualDigest?.Value, difference.FirstDifferentByte)).ToArray()),
             result?.Outputs?.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()))).ToArray());
         var bytes = PrepareCase(response, context.RequestAborted);
-        return await RunAccess(context, admission, mapping) ? CaseResponse(bytes) : NotFound();
+        return CaseResponse(bytes);
     }
 
     private static RegressionRunSummaryV1 RunSummary(RegressionRunSummary value) => new(value.RunId.ToString("D"), value.CaseId.ToString("D"),

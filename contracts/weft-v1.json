@@ -18158,6 +18158,16 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18169,6 +18179,14 @@
           "400": {
             "description": "Bad Request",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -18188,6 +18206,14 @@
           "401": {
             "description": "Unauthorized",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -18206,6 +18232,16 @@
           },
           "403": {
             "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18216,6 +18252,16 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18226,6 +18272,16 @@
           },
           "409": {
             "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18236,6 +18292,16 @@
           },
           "413": {
             "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18246,6 +18312,43 @@
           },
           "415": {
             "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18256,6 +18359,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18266,22 +18379,13 @@
           },
           "503": {
             "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatErrorV1"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
             "headers": {
-              "Retry-After": {
-                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+              "Cache-Control": {
                 "schema": {
-                  "minimum": 1,
-                  "type": "integer"
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
                 }
               }
             },
@@ -18361,6 +18465,16 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18372,6 +18486,14 @@
           "400": {
             "description": "Bad Request",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -18391,6 +18513,14 @@
           "401": {
             "description": "Unauthorized",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -18409,6 +18539,16 @@
           },
           "403": {
             "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18419,6 +18559,16 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18429,6 +18579,16 @@
           },
           "409": {
             "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18439,6 +18599,16 @@
           },
           "413": {
             "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18449,6 +18619,43 @@
           },
           "415": {
             "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18459,6 +18666,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18469,22 +18686,13 @@
           },
           "503": {
             "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatErrorV1"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
             "headers": {
-              "Retry-After": {
-                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+              "Cache-Control": {
                 "schema": {
-                  "minimum": 1,
-                  "type": "integer"
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
                 }
               }
             },
@@ -18546,6 +18754,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -18561,6 +18785,16 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18571,6 +18805,16 @@
           },
           "201": {
             "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18582,6 +18826,14 @@
           "400": {
             "description": "Bad Request",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -18601,6 +18853,14 @@
           "401": {
             "description": "Unauthorized",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -18619,6 +18879,16 @@
           },
           "403": {
             "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18629,6 +18899,16 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18639,6 +18919,16 @@
           },
           "409": {
             "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18649,6 +18939,16 @@
           },
           "413": {
             "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18659,6 +18959,43 @@
           },
           "415": {
             "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18669,6 +19006,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18679,22 +19026,13 @@
           },
           "503": {
             "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatErrorV1"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
             "headers": {
-              "Retry-After": {
-                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+              "Cache-Control": {
                 "schema": {
-                  "minimum": 1,
-                  "type": "integer"
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
                 }
               }
             },
@@ -18772,6 +19110,16 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18783,6 +19131,14 @@
           "400": {
             "description": "Bad Request",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -18802,6 +19158,14 @@
           "401": {
             "description": "Unauthorized",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -18820,6 +19184,16 @@
           },
           "403": {
             "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18830,6 +19204,16 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18840,6 +19224,16 @@
           },
           "409": {
             "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18850,6 +19244,16 @@
           },
           "413": {
             "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18860,6 +19264,43 @@
           },
           "415": {
             "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18870,6 +19311,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18880,22 +19331,13 @@
           },
           "503": {
             "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatErrorV1"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
             "headers": {
-              "Retry-After": {
-                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+              "Cache-Control": {
                 "schema": {
-                  "minimum": 1,
-                  "type": "integer"
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
                 }
               }
             },
@@ -18967,6 +19409,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -18982,6 +19440,16 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18992,6 +19460,16 @@
           },
           "201": {
             "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19003,6 +19481,14 @@
           "400": {
             "description": "Bad Request",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -19022,6 +19508,14 @@
           "401": {
             "description": "Unauthorized",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -19040,6 +19534,16 @@
           },
           "403": {
             "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19050,6 +19554,16 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19060,6 +19574,16 @@
           },
           "409": {
             "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19070,6 +19594,16 @@
           },
           "413": {
             "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19080,6 +19614,43 @@
           },
           "415": {
             "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19090,6 +19661,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19100,22 +19681,13 @@
           },
           "503": {
             "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatErrorV1"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
             "headers": {
-              "Retry-After": {
-                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+              "Cache-Control": {
                 "schema": {
-                  "minimum": 1,
-                  "type": "integer"
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
                 }
               }
             },
@@ -19196,11 +19768,37 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19212,6 +19810,14 @@
           "400": {
             "description": "Bad Request",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -19231,6 +19837,14 @@
           "401": {
             "description": "Unauthorized",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -19249,6 +19863,16 @@
           },
           "403": {
             "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19259,6 +19883,16 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19269,6 +19903,16 @@
           },
           "409": {
             "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19279,6 +19923,16 @@
           },
           "413": {
             "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19289,6 +19943,43 @@
           },
           "415": {
             "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19299,6 +19990,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19309,22 +20010,13 @@
           },
           "503": {
             "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatErrorV1"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
             "headers": {
-              "Retry-After": {
-                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+              "Cache-Control": {
                 "schema": {
-                  "minimum": 1,
-                  "type": "integer"
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
                 }
               }
             },
@@ -19421,6 +20113,24 @@
         "responses": {
           "200": {
             "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Accel-Buffering": {
+                "schema": {
+                  "enum": [
+                    "no"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "text/event-stream": {
                 "schema": {
@@ -19432,6 +20142,14 @@
           "400": {
             "description": "Bad Request",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -19451,6 +20169,14 @@
           "401": {
             "description": "Unauthorized",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "WWW-Authenticate": {
                 "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
                 "schema": {
@@ -19469,6 +20195,16 @@
           },
           "403": {
             "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19479,6 +20215,16 @@
           },
           "404": {
             "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19489,6 +20235,16 @@
           },
           "409": {
             "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19499,6 +20255,16 @@
           },
           "413": {
             "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19509,6 +20275,43 @@
           },
           "415": {
             "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19519,6 +20322,16 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19529,6 +20342,221 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/chat": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Read the model profiles that can answer organization-wide questions, their data policy and the limits.",
+        "operationId": "GetWorkspaceChatAvailability",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatWorkspaceAvailabilityV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19538,13 +20566,1900 @@
             }
           },
           "429": {
-            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "description": "Too Many Requests",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
               "Retry-After": {
                 "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
                 "schema": {
                   "minimum": 1,
                   "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/chat/conversations": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Read the caller's conversations of both kinds in the organization, newest first, optionally about one revision.",
+        "operationId": "GetOrganizationChatConversations",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum conversations, newest first; canonical decimal.",
+            "schema": {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Continue after the last conversation identity from the previous page.",
+            "schema": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "query",
+            "description": "Only conversations about this freshly readable exact revision.",
+            "schema": {
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatOrganizationConversationPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Create or replay a private workspace conversation, optionally focused on a mapping or revision.",
+        "operationId": "CreateWorkspaceChatConversation",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatWorkspaceConversationCreateV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatOrganizationConversationV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatOrganizationConversationV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Read one private workspace conversation and its most recent turns.",
+        "operationId": "GetWorkspaceChatConversation",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatWorkspaceConversationDetailV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Start or replay a workspace turn identified by its client-generated turn ID.",
+        "operationId": "CreateWorkspaceChatTurn",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatTurnCreateV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnV1"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/cancel": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Cancel an active workspace turn; a terminal turn is returned unchanged.",
+        "operationId": "CancelWorkspaceChatTurn",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "turnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/events": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Stream the workspace turn's durable events after a sequence number using SSE framing.",
+        "operationId": "StreamWorkspaceChatTurnEvents",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "turnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Resume strictly after this durable event sequence; canonical decimal.",
+            "schema": {
+              "maximum": 4096,
+              "minimum": 0,
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Accel-Buffering": {
+                "schema": {
+                  "enum": [
+                    "no"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnEventV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
                 }
               }
             },
@@ -23896,6 +26811,12 @@
           }
         }
       },
+      "ChatConversationKindV1": {
+        "enum": [
+          "revision",
+          "workspace"
+        ]
+      },
       "ChatConversationPageV1": {
         "required": [
           "conversations",
@@ -23996,6 +26917,29 @@
           }
         }
       },
+      "ChatFocusV1": {
+        "required": [
+          "projectId",
+          "mappingId",
+          "revisionId"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "mappingId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "ChatLimitsV1": {
         "required": [
           "maxTextBytes",
@@ -24017,6 +26961,99 @@
             "format": "int32"
           }
         }
+      },
+      "ChatOrganizationConversationPageV1": {
+        "required": [
+          "conversations",
+          "hasMore"
+        ],
+        "type": "object",
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatOrganizationConversationV1"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChatOrganizationConversationV1": {
+        "required": [
+          "conversationId",
+          "kind",
+          "revision",
+          "focus",
+          "createdAtUtc",
+          "retainUntilUtc",
+          "title",
+          "turnCount",
+          "lastTurnAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ChatConversationKindV1"
+          },
+          "revision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+              }
+            ]
+          },
+          "focus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatFocusV1"
+              }
+            ]
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "retainUntilUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "turnCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastTurnAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatPayloadSourceV1": {
+        "enum": [
+          "previewInput",
+          "previewOutput",
+          "regressionCase",
+          "regressionRunOutput"
+        ]
       },
       "ChatProfileV1": {
         "required": [
@@ -24201,6 +27238,12 @@
             "$ref": "#/components/schemas/ChatTurnEventV1ChatCitationEventV1"
           },
           {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatWorkspaceCitationEventV1"
+          },
+          {
+            "$ref": "#/components/schemas/ChatTurnEventV1ChatDataSharedEventV1"
+          },
+          {
             "$ref": "#/components/schemas/ChatTurnEventV1ChatTurnCompletedEventV1"
           },
           {
@@ -24219,6 +27262,8 @@
             "tool.completed": "#/components/schemas/ChatTurnEventV1ChatToolCompletedEventV1",
             "usage": "#/components/schemas/ChatTurnEventV1ChatUsageEventV1",
             "citation": "#/components/schemas/ChatTurnEventV1ChatCitationEventV1",
+            "workspace.citation": "#/components/schemas/ChatTurnEventV1ChatWorkspaceCitationEventV1",
+            "data.shared": "#/components/schemas/ChatTurnEventV1ChatDataSharedEventV1",
             "turn.completed": "#/components/schemas/ChatTurnEventV1ChatTurnCompletedEventV1",
             "turn.failed": "#/components/schemas/ChatTurnEventV1ChatTurnFailedEventV1",
             "turn.cancelled": "#/components/schemas/ChatTurnEventV1ChatTurnCancelledEventV1"
@@ -24248,6 +27293,52 @@
           },
           "reportDerivationId": {
             "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ChatTurnEventV1ChatDataSharedEventV1": {
+        "required": [
+          "roundId",
+          "projectId",
+          "source",
+          "subjectId",
+          "version",
+          "bytes",
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "data.shared"
+            ],
+            "type": "string"
+          },
+          "roundId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ChatPayloadSourceV1"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int32"
           },
           "sequence": {
             "type": "integer",
@@ -24490,6 +27581,32 @@
           }
         }
       },
+      "ChatTurnEventV1ChatWorkspaceCitationEventV1": {
+        "required": [
+          "roundId",
+          "citation",
+          "sequence",
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "workspace.citation"
+            ],
+            "type": "string"
+          },
+          "roundId": {
+            "type": "string"
+          },
+          "citation": {
+            "$ref": "#/components/schemas/ChatWorkspaceCitationV1"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "ChatTurnFailureV1": {
         "enum": [
           "provider",
@@ -24499,6 +27616,35 @@
           "interrupted",
           "stopped"
         ]
+      },
+      "ChatTurnFocusStateV1": {
+        "enum": [
+          "none",
+          "resolved",
+          "unavailable"
+        ]
+      },
+      "ChatTurnFocusV1": {
+        "required": [
+          "state",
+          "revision"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/ChatTurnFocusStateV1"
+          },
+          "revision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogRevisionScopeV1"
+              }
+            ]
+          }
+        }
       },
       "ChatTurnPhaseV1": {
         "enum": [
@@ -24587,6 +27733,16 @@
           "lastSequence": {
             "type": "integer",
             "format": "int32"
+          },
+          "focus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatTurnFocusV1"
+              }
+            ]
           }
         }
       },
@@ -24596,6 +27752,204 @@
           "roundTerminal",
           "openRejection"
         ]
+      },
+      "ChatWorkspaceAvailabilityV1": {
+        "required": [
+          "organizationId",
+          "profiles",
+          "limits",
+          "schemaVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "enum": [
+              "weft.chat.v1"
+            ],
+            "type": "string",
+            "readOnly": true
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatWorkspaceProfileV1"
+            }
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ChatLimitsV1"
+          }
+        }
+      },
+      "ChatWorkspaceCitationKindV1": {
+        "enum": [
+          "project",
+          "mapping",
+          "revision",
+          "report",
+          "previewRun",
+          "regressionCase",
+          "regressionRun",
+          "buildRun",
+          "buildApproval",
+          "buildEnvironment",
+          "guideSection"
+        ]
+      },
+      "ChatWorkspaceCitationV1": {
+        "required": [
+          "kind",
+          "organizationId",
+          "projectId",
+          "mappingId",
+          "revisionId",
+          "target",
+          "reportDerivationId",
+          "subjectId",
+          "version",
+          "sectionId"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ChatWorkspaceCitationKindV1"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mappingId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "revisionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChatSelectorV1"
+              }
+            ]
+          },
+          "reportDerivationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "subjectId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sectionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ChatWorkspaceConversationCreateV1": {
+        "required": [
+          "conversationId"
+        ],
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "focus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "required": [
+                  "projectId",
+                  "mappingId"
+                ],
+                "type": "object",
+                "properties": {
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "mappingId": {
+                    "type": "string"
+                  },
+                  "revisionId": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChatWorkspaceConversationDetailV1": {
+        "required": [
+          "conversation",
+          "turns",
+          "hasEarlierTurns"
+        ],
+        "type": "object",
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/ChatOrganizationConversationV1"
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatTurnV1"
+            }
+          },
+          "hasEarlierTurns": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChatWorkspaceProfileV1": {
+        "required": [
+          "profile",
+          "payloadsAllowed"
+        ],
+        "type": "object",
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/ChatProfileV1"
+          },
+          "payloadsAllowed": {
+            "type": "boolean"
+          }
+        }
       },
       "ComparisonAspectV1": {
         "enum": [

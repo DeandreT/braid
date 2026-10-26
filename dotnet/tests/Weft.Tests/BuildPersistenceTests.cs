@@ -411,7 +411,7 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                     Weft.Application.Regression.RegressionOutputSet.Capture([Weft.Application.Regression.RegressionOutput.Capture(Weft.Application.Regression.RegressionOutputKey.Primary, [1])]),
                     new Weft.Application.Regression.RegressionComparisonService().Compare(runs.Value.Expected,
                         new(OperationStatusV1.Succeeded, Weft.Application.Regression.RegressionOutputSet.Capture([Weft.Application.Regression.RegressionOutput.Capture(Weft.Application.Regression.RegressionOutputKey.Primary, [1])]))));
-                if (!nullContent) await runs.Writer.CompleteAsync(claim, result);
+                if (!nullContent) await runs.CompleteAsync(claim, result);
                 else
                 {
                     var document = JsonNode.Parse(new Weft.Application.Regression.RegressionRunResultCodec().Encode(runs.RunId, runs.Reference, result))!;
@@ -431,7 +431,7 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                     command.Parameters.AddWithValue("length", bytes.Length);
                     await command.ExecuteNonQueryAsync(); await transaction.CommitAsync();
                 }
-                var snapshot = (await runs.Reader.ReadAsync(runs.Actor, runs.Organization, runs.RunId))!;
+                var snapshot = (await runs.ReadAsync(runs.Actor, runs.Organization, runs.RunId))!;
                 var connection = runs.Cases.Case.RegressionConnectionString("weft_build_writer");
                 store = new PostgresBuildStore(connection, true);
                 var scope = runs.Value.Revision;

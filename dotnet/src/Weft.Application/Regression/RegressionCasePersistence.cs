@@ -102,3 +102,10 @@ public interface IRegressionCaseReader
     Task<RegressionCaseVersion?> ReadAsync(ActorContext actor, MappingScope mapping, Guid caseId, long version,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>Exact retained case-version metadata under current project-read authority. Never opens the sample envelope.</summary>
+public interface IRegressionCaseMetadataReader
+{
+    Task<RegressionCaseSummary?> ReadMetadataAsync(ActorContext actor, MappingScope mapping, Guid caseId, long version,
+        CancellationToken cancellationToken = default);
+}

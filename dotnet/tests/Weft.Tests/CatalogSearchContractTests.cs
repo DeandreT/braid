@@ -10,13 +10,15 @@ public sealed class CatalogSearchContractTests
     public void EmbeddedHistoryKeepsDisplayAndSearchAsSeparateAdditiveMigrations()
     {
         var migrations = MigrationRunner.EmbeddedMigrations;
-        Assert.Equal(Enumerable.Range(1, 31), migrations.Select(migration => migration.Version));
+        Assert.Equal(Enumerable.Range(1, 33), migrations.Select(migration => migration.Version));
         Assert.Equal(AccountDisplayMetadataTestContract.MigrationChecksum, migrations[25].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, migrations[26].Checksum);
         Assert.Equal(InterchangeSchemaTestContract.MigrationChecksum, migrations[27].Checksum);
         Assert.Equal(CatalogSearchSchemaAdmission.MigrationChecksum, migrations[28].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AutomationChecksum, migrations[29].Checksum);
         Assert.Equal(RegressionSchemaTestContract.ReleaseOperationsChecksum, migrations[30].Checksum);
+        Assert.Equal(ChatSchemaContract.WorkspaceMigrationChecksum, migrations[31].Checksum);
+        Assert.Equal(PreviewSchemaTestContract.ReadsMigrationChecksum, migrations[32].Checksum);
     }
 
     private static readonly Guid Organization = Guid.Parse("10000000-0000-4000-8000-000000000001");

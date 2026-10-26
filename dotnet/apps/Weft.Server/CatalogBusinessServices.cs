@@ -25,6 +25,7 @@ internal static class CatalogBusinessServices
         services.AddSingleton(_ => new PostgresCatalogDatabase(connectionString));
         services.AddSingleton(provider => new PostgresCatalogReader(provider.GetRequiredService<PostgresCatalogDatabase>()));
         services.AddSingleton<ICatalogReader>(provider => provider.GetRequiredService<PostgresCatalogReader>());
+        services.AddSingleton<ICatalogResourceLocator>(provider => provider.GetRequiredService<PostgresCatalogReader>());
         services.AddSingleton(_ => new SearchIndexConnection(() => readEnvironment("WEFT_POSTGRES_DERIVATION_CONNECTION_STRING")));
         services.AddSingleton<ICatalogSearch>(provider => new PostgresCatalogSearch(
             provider.GetRequiredService<PostgresCatalogReader>(),

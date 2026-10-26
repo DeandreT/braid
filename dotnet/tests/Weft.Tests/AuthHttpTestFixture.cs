@@ -19,6 +19,7 @@ using Weft.Api;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
+using Weft.Api.Chat.Workspace;
 using Weft.Application;
 using Weft.Identity;
 using Weft.Persistence.Postgres;
@@ -61,15 +62,16 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
 
     /// <summary>Also maps the chat routes on the restricted chat logins; their provider profile is never contacted.</summary>
     internal bool Chat { get; private init; }
+    internal bool WorkspaceChat { get; private init; }
     internal Action<AuthHttpFixture, IServiceCollection>? ConfigureCatalogServices { get; private init; }
     internal bool Administration { get; private init; }
     internal bool Operations { get; private init; }
 
     internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true, int bearerBurst = 0,
         bool chat = false, bool administration = false, bool displayMetadata = false, Action<AuthHttpFixture, IServiceCollection>? configureCatalogServices = null,
-        bool operations = false)
+        bool workspaceChat = false, bool operations = false)
     {
-        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat, Administration = administration, Operations = operations, ConfigureCatalogServices = configureCatalogServices }; Exception? primary = null; var cleanup = new List<Exception>();
+        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat || workspaceChat, WorkspaceChat = workspaceChat, Administration = administration, Operations = operations, ConfigureCatalogServices = configureCatalogServices }; Exception? primary = null; var cleanup = new List<Exception>();
         try { await test.InitializeAsync(postgres, bindIssuer, displayMetadata); await body(test); }
         catch (Exception error) { primary = Safe(error, "The independent auth HTTP case failed."); }
         finally { try { await test.DisposeAsync(); } catch (Exception error) { cleanup.Add(Safe(error, "The independent auth HTTP cleanup failed.")); } }
@@ -361,8 +363,17 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
             builder.Services.AddSingleton<IAiCredentialResolver>(new AuthHttpNoCredentials());
             var profile = AiProfileSpec.Create(AiProfileKey.Create("chat-fixture", 1), AiDialect.ChatCompletionsSseV1, "fixture-model",
                 new Uri("http://127.0.0.1:9/v1/chat/completions"), true, AiAuthentication.Bearer, "fixture-credential",
-                AiCapability.Text, "mapping-metadata", 1, true, false);
-            builder.Services.AddWeftChat(new([new ChatModelProfile("Fixture model", "fixture", profile)], TimeSpan.FromDays(1), TimeSpan.FromSeconds(60), 128));
+                AiCapability.Text | (test.WorkspaceChat ? AiCapability.FunctionTools : 0), "mapping-metadata", 1, true, false);
+            var chatOptions = new ChatApiOptions([new ChatModelProfile("Fixture model", "fixture", profile)], TimeSpan.FromDays(1), TimeSpan.FromSeconds(60), 128);
+            if (test.WorkspaceChat)
+            {
+                builder.Services.AddSingleton<ICatalogResourceLocator>(test.Data.Reader);
+                var noReports = new AuthHttpWorkspaceNoReports();
+                builder.Services.AddSingleton<IRevisionReportReader>(noReports);
+                builder.Services.AddSingleton<IRevisionReportMetadataReader>(noReports);
+                builder.Services.AddSingleton(provider => new WorkspaceToolService(provider, chatOptions, new(false, false, false, false)));
+            }
+            builder.Services.AddWeftChat(chatOptions);
         }
         test.ConfigureCatalogServices?.Invoke(test, builder.Services);
         var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start(1); var port = ((IPEndPoint)reservation.LocalEndpoint).Port; PhysicalPort = port;

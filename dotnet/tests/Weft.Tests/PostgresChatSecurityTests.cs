@@ -166,7 +166,7 @@ public sealed class PostgresChatSecurityTests(PostgresFixture fixture)
         // Positive command conserves exactly one completion and exactly one version.
         var finished = await f.Writer.CompleteRoundAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, round.RoundId, round.Fence, ChatRoundOutcome.Stopped);
         Assert.Equal(ChatStoreOutcome.Applied, finished.Outcome);
-        turn = Assert.IsType<ChatTurnFacts>(finished.Facts);
+        turn = Assert.IsType<ChatTurnFacts>(finished.Facts!);
         Assert.Equal(ChatStoreOutcome.Applied, (await f.Writer.FinishAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, ChatTurnPhase.Completed)).Outcome);
         Assert.True(await f.Case.ScalarAsync<bool>("""
             SELECT bool_and(t.version=t.event_count+t.round_count+(SELECT count(*) FROM weft.chat_rounds r
@@ -182,8 +182,8 @@ public sealed class PostgresChatSecurityTests(PostgresFixture fixture)
         var before = await RowsAsync(f);
         foreach (var revision in new[]
         {
-            new RevisionScope(Guid.NewGuid(), f.Key.Revision.ProjectId, f.Key.Revision.MappingId, f.Key.Revision.RevisionId),
-            new RevisionScope(f.Key.Revision.OrganizationId, Guid.NewGuid(), f.Key.Revision.MappingId, f.Key.Revision.RevisionId)
+            new RevisionScope(Guid.NewGuid(), f.Key.PinnedRevision.ProjectId, f.Key.PinnedRevision.MappingId, f.Key.PinnedRevision.RevisionId),
+            new RevisionScope(f.Key.PinnedRevision.OrganizationId, Guid.NewGuid(), f.Key.PinnedRevision.MappingId, f.Key.PinnedRevision.RevisionId)
         })
         {
             var key = new ChatConversationKey(revision, f.Actor.PrincipalId, f.Key.ConversationId);
@@ -220,7 +220,7 @@ public sealed class PostgresChatSecurityTests(PostgresFixture fixture)
     internal static async Task BindAsync(NpgsqlConnection c, NpgsqlTransaction t, PostgresChatTestSupport f)
     {
         await using var bind = new NpgsqlCommand("SELECT set_config('weft.organization_id',$1,true),set_config('weft.chat_principal_id',$2,true)", c, t);
-        bind.Parameters.AddWithValue(f.Key.Revision.OrganizationId.ToString("D")); bind.Parameters.AddWithValue(f.Actor.PrincipalId.Value.ToString("D"));
+        bind.Parameters.AddWithValue(f.Key.PinnedRevision.OrganizationId.ToString("D")); bind.Parameters.AddWithValue(f.Actor.PrincipalId.Value.ToString("D"));
         await bind.ExecuteNonQueryAsync();
     }
     private static async Task RefusedSqlAsync(PostgresChatTestSupport f, string route, string sql, string state)

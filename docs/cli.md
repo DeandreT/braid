@@ -155,6 +155,7 @@ shaped like a token.
 | `weft builds capabilities`, `environment-capabilities`, `environments list/get/create`, `approvals list/get/create/revoke`, `runs list/create/get/cancel` | Build environments, approvals and runs |
 | `weft operations targets/releases/history/actions/invocations/summary/callers`, `activate/rollback/disable/enable` | [Release operations](release-operations.md), monitoring and version-conditional target changes |
 | `weft chat availability`, `conversations list/get/create`, `ask`, `follow`, `cancel` | Grounded chat about a revision |
+| `weft chat workspace availability`, `conversations list/get/create`, `ask`, `follow`, `cancel` | Organization-wide read-only chat, with optional mapping or exact revision focus |
 
 `weft <command> --help` lists every option.
 
@@ -219,6 +220,18 @@ terminal. Progress, retries and sign-in prompts go to standard error.
     before it exits.
   - `weft chat follow` replays and follows an existing turn.
   - Conversation reads explicitly say when earlier turns are omitted from the returned window.
+  - `weft chat workspace ask "How does this project work?"` uses organization-wide read-only tools.
+    Add `--focus-project <ID> --focus-mapping <ID>` to resolve that mapping's head at each turn,
+    or also `--focus-revision <ID>` to pin an exact revision. Focus never restricts access to other authorized tools.
+    Existing conversations keep their original focus; omit focus options with `--conversation <ID>`.
+  - Workspace availability shows the profile's payload policy. A current project payload-read grant is also
+    required before sample tools can be offered. Answers that actually share samples show **Data shared**;
+    JSON output includes verified workspace citations and disclosure events without payload bytes.
+    Earlier payload-capable turns remain in the saved conversation but are not automatically resent to the
+    model; ask it to read the current data again under current permissions.
+  - `weft chat workspace conversations list --after <ID>` continues the newest-first list. It includes legacy
+    revision conversations; those continue through the original `weft chat` commands with their original scope.
+    Workspace creation accepts `--conversation-id <ID>` for deliberate recovery using the same focus.
 - **Preview downloads** stream to a temporary file beside the destination. The file is kept
   only when its size and SHA-256 match the run's output record and the `Content-Digest` header.
   Standard-output downloads are staged within the server's 8 MiB output bound and fully verified

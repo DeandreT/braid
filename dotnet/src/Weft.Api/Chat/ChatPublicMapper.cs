@@ -15,15 +15,35 @@ internal static class ChatPublicMapper
     internal static ChatConversationV1 Conversation(ChatConversationSummary summary)
     {
         var conversation = summary.Conversation;
-        return new(Id(conversation.Key.ConversationId), CatalogPublicMapper.RevisionScope(conversation.Key.Revision),
-            summary.CreatedAtUtc, conversation.RetainUntilUtc, Id(conversation.Projection.DerivationId),
-            Id(conversation.Validation.DerivationId), summary.Title, summary.TurnCount, summary.LastTurnAtUtc);
+        return new(Id(conversation.Key.ConversationId), CatalogPublicMapper.RevisionScope(conversation.Key.PinnedRevision),
+            summary.CreatedAtUtc, conversation.RetainUntilUtc, Id(conversation.PinnedProjection.DerivationId),
+            Id(conversation.PinnedValidation.DerivationId), summary.Title, summary.TurnCount, summary.LastTurnAtUtc);
+    }
+
+    /// <summary>Either kind in an organization listing: a revision conversation by its pinned revision, a workspace one by its focus.</summary>
+    internal static ChatOrganizationConversationV1 OrganizationConversation(ChatConversationSummary summary)
+    {
+        var conversation = summary.Conversation;
+        var key = conversation.Key;
+        return new(Id(key.ConversationId), key.Kind == ChatConversationKind.Revision ? ChatConversationKindV1.Revision : ChatConversationKindV1.Workspace,
+            key.Revision is { } revision ? CatalogPublicMapper.RevisionScope(revision) : null,
+            conversation.Focus is { } focus ? new(Id(focus.Mapping.ProjectId), Id(focus.Mapping.MappingId), focus.RevisionId is { } id ? Id(id) : null) : null,
+            summary.CreatedAtUtc, conversation.RetainUntilUtc, summary.Title, summary.TurnCount, summary.LastTurnAtUtc);
     }
 
     internal static ChatTurnV1 Turn(ChatTurnFacts facts, Guid conversationId) => new(Id(facts.Intent.TurnId), Id(conversationId),
         Phase(facts.Phase), facts.Intent.OriginalRequest, [.. facts.Intent.Envelope.Selectors.Select(Selector)],
         new(facts.Intent.Profile.ProfileId, facts.Intent.Profile.Version, facts.Intent.Profile.ProviderId, facts.Intent.Profile.ModelId),
-        facts.CreatedAtUtc, facts.Intent.DeadlineUtc, facts.FinishedAtUtc, facts.EventCount);
+        facts.CreatedAtUtc, facts.Intent.DeadlineUtc, facts.FinishedAtUtc, facts.EventCount, Focus(facts.Intent.Envelope.Focus));
+
+    private static ChatTurnFocusV1? Focus(ChatTurnFocus? focus) => focus?.State switch
+    {
+        null => null,
+        ChatTurnFocusState.None => new(ChatTurnFocusStateV1.None, null),
+        ChatTurnFocusState.Unavailable => new(ChatTurnFocusStateV1.Unavailable, null),
+        ChatTurnFocusState.Resolved => new(ChatTurnFocusStateV1.Resolved, CatalogPublicMapper.RevisionScope(focus.Revision!)),
+        _ => throw new InvalidOperationException("The chat turn focus is unknown.")
+    };
 
     internal static ChatSelectorV1 Selector(ChatCitationTarget target) =>
         new((ChatSelectorKindV1)(int)target.Kind, target.ResourceId, target.DiagnosticOrdinal);
@@ -46,6 +66,8 @@ internal static class ChatPublicMapper
         ChatToolCompletedEventV1 => "tool.completed",
         ChatUsageEventV1 => "usage",
         ChatCitationEventV1 => "citation",
+        ChatWorkspaceCitationEventV1 => "workspace.citation",
+        ChatDataSharedEventV1 => "data.shared",
         ChatTurnCompletedEventV1 => "turn.completed",
         ChatTurnFailedEventV1 => "turn.failed",
         ChatTurnCancelledEventV1 => "turn.cancelled",
@@ -103,10 +125,22 @@ internal static class ChatPublicMapper
                 }, null);
             case ChatEventKind.ProviderFailure:
                 return null;
+            case ChatEventKind.WorkspaceCitation:
+                return new ChatWorkspaceCitationEventV1(sequence, Round(stored), WorkspaceCitation(stored.WorkspaceCitation!));
+            case ChatEventKind.DataShared:
+                var shared = stored.DataShared!;
+                return new ChatDataSharedEventV1(sequence, Round(stored), Id(shared.ProjectId), (ChatPayloadSourceV1)(int)shared.Source,
+                    Id(shared.SubjectId), shared.Version?.ToString(System.Globalization.CultureInfo.InvariantCulture), shared.ByteCount);
             default:
                 throw new InvalidOperationException("The chat event kind is unknown.");
         }
     }
+
+    internal static ChatWorkspaceCitationV1 WorkspaceCitation(ChatWorkspaceCitationFact fact) => new((ChatWorkspaceCitationKindV1)(int)fact.Kind,
+        Id(fact.OrganizationId), fact.ProjectId is { } project ? Id(project) : null, fact.MappingId is { } mapping ? Id(mapping) : null,
+        fact.RevisionId is { } revision ? Id(revision) : null, fact.Target is { } target ? Selector(target) : null,
+        fact.Report is { } report ? Id(report.DerivationId) : null, fact.SubjectId is { } subject ? Id(subject) : null,
+        fact.Version?.ToString(System.Globalization.CultureInfo.InvariantCulture), fact.SectionId);
 
     private static ChatUsageEventV1 Usage(int sequence, ChatUsageFact usage) => new(sequence, Id(usage.RoundId), usage.Origin switch
     {

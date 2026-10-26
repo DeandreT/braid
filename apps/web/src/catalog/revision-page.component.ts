@@ -324,6 +324,16 @@ export class RevisionPageComponent extends CatalogRoutePage<
   private readonly buildRecovery = inject(BuildViewRecovery);
   private readonly regressionRecovery = inject(RegressionViewRecovery);
   private readonly chatRecovery = inject(ChatViewRecovery);
+  private readonly chatPanel = viewChild(RevisionChatComponent);
+  requestChatLeave(): boolean {
+    return (
+      !(this.chatPanel()?.hasUnsent() || this.chatRecovery.hasWork()) ||
+      (this.document.defaultView?.confirm(
+        "Leave this revision? Unsent chat work or recovery information kept only in this tab may be lost. A sent question may already have committed.",
+      ) ??
+        false)
+    );
+  }
   private readonly injector = inject(Injector);
   private readonly document = inject(DOCUMENT);
   private readonly reportDestroyRef = inject(DestroyRef);

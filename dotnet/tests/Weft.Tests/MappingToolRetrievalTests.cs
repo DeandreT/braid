@@ -208,7 +208,7 @@ public sealed class MappingToolRetrievalTests
             new ChatCitationTarget(ChatCitationKind.ValidationDiagnostic, diagnosticOrdinal: 1) }, result.Citations);
         var check = await service.ValidateCitationsAsync(MappingToolFixture.Actor, fixture.Conversation, result.Citations);
         Assert.Equal(MappingCitationOutcome.Valid, check.Outcome);
-        Assert.All(check.Citations, citation => Assert.Equal(fixture.Conversation.Validation, citation.Facts.Report));
+        Assert.All(check.Citations, citation => Assert.Equal(fixture.Conversation.PinnedValidation, citation.Facts!.Report));
         Assert.Equal(new[] { (RevisionReportOperation.Validation, fixture.Validation.Metadata.DerivationId, (Guid?)fixture.Projection.Metadata.DerivationId),
             (RevisionReportOperation.Projection, fixture.Projection.Metadata.DerivationId, (Guid?)null) }, fixture.Reads.Take(2));
         var empty = await fixture.InvokeAsync(service, "get_validation_issues", """{"offset":5}""");

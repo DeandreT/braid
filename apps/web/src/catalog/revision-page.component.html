@@ -562,6 +562,13 @@
           [context]="current"
           [reportsReady]="reports.readsSettled()"
           (citation)="reportView()?.showChatCitation($event)"
+          [projectionId]="
+            reportView()?.projectionPin()?.projectionDerivationId ?? null
+          "
+          [validationId]="
+            reportView()?.validationPin()?.validationDerivationId ?? null
+          "
+          (workspaceCitation)="reportView()?.showWorkspaceChatCitation($event)"
         />
       }
     </div>
