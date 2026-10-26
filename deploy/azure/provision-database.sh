@@ -33,6 +33,9 @@ for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READE
   regression_passwords+=("${!variable}")
 done
 unset regression_passwords previous
+export WEFT_ADMINISTRATION_PASSWORD=${WEFT_ADMINISTRATION_PASSWORD:-}
+# The role is required by the schema even without administration enabled. An
+# absent opt-in credential leaves its password login unusable.
 
 if [[ -z $(psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=postgres --tuples-only --no-align \
   --command="SELECT 1 FROM pg_database WHERE datname = 'weft'") ]]; then
@@ -77,6 +80,7 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=weft --quiet <<'SQL'
 \getenv invocation_grant_writer_password WEFT_INVOCATION_GRANT_WRITER_PASSWORD
 \getenv invocation_writer_password WEFT_INVOCATION_WRITER_PASSWORD
 \getenv api_audit_writer_password WEFT_API_AUDIT_WRITER_PASSWORD
+\getenv administration_password WEFT_ADMINISTRATION_PASSWORD
 BEGIN;
 -- PostgreSQL 16 records a non-superuser creator as an ADMIN member of every role it creates,
 -- and the migrations refuse any membership on the restricted profiles. A temporary creator
@@ -159,11 +163,14 @@ CREATE ROLE weft_invocation_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOI
   PASSWORD :'invocation_writer_password';
 CREATE ROLE weft_api_audit_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'api_audit_writer_password';
+CREATE ROLE weft_administration LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'administration_password';
 GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer, weft_case_reader, weft_case_writer, weft_run_reader, weft_run_writer, weft_build_reader, weft_build_writer, weft_build_run_reader, weft_build_run_writer, weft_build_dispatcher, weft_build_metadata_reader;
 GRANT CONNECT ON DATABASE weft TO weft_qualification_reader,weft_qualification_writer,weft_comparison_settler;
 GRANT CONNECT ON DATABASE weft TO weft_release_reader,weft_release_writer;
 GRANT CONNECT ON DATABASE weft TO weft_invocation_grant_writer,weft_invocation_writer;
 GRANT CONNECT ON DATABASE weft TO weft_api_audit_writer;
+GRANT CONNECT ON DATABASE weft TO weft_administration;
 GRANT weft_migrator TO weft_provisioner WITH INHERIT FALSE, SET TRUE;
 ALTER DATABASE weft OWNER TO weft_migrator;
 REVOKE weft_migrator FROM weft_provisioner;

@@ -38,9 +38,11 @@ public sealed class RegressionDeploymentProvisioningTests
     }
 
     [RegressionNativeTheory]
-    [InlineData("deploy/local/postgres-init.sh")]
-    [InlineData("deploy/azure/provision-database.sh")]
-    public async Task Provisioning_SQL_creates_the_logins_required_by_the_full_migration_manifest(string script)
+    [InlineData("deploy/local/postgres-init.sh", true)]
+    [InlineData("deploy/local/postgres-init.sh", false)]
+    [InlineData("deploy/azure/provision-database.sh", true)]
+    [InlineData("deploy/azure/provision-database.sh", false)]
+    public async Task Provisioning_SQL_creates_the_logins_required_by_the_full_migration_manifest(string script, bool administration)
     {
         var bin = Environment.GetEnvironmentVariable("WEFT_POSTGRES_BIN")!;
         var root = Environment.GetEnvironmentVariable("WEFT_POSTGRES_WORK_ROOT") ?? Path.GetTempPath();
@@ -91,8 +93,9 @@ public sealed class RegressionDeploymentProvisioningTests
         start.Environment["PGGSSENCMODE"] = "disable";
         foreach (var (name, password) in passwords)
         {
-            start.Environment["WEFT_" + name + "_PASSWORD"] = password;
-            start.Environment["WEFT_LOCAL_" + name + "_PASSWORD"] = password;
+            var value = name == "ADMINISTRATION" && !administration ? "" : password;
+            start.Environment["WEFT_" + name + "_PASSWORD"] = value;
+            start.Environment["WEFT_LOCAL_" + name + "_PASSWORD"] = value;
         }
         using var process = Process.Start(start)!;
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -111,6 +114,12 @@ public sealed class RegressionDeploymentProvisioningTests
         }
         string Login(string name, string login) => new NpgsqlConnectionStringBuilder(baseline)
         { Database = "weft", Username = login, Password = passwords[name] }.ConnectionString;
+        await using (var admin = new NpgsqlConnection(baseline))
+        {
+            await admin.OpenAsync();
+            await using var optional = new NpgsqlCommand("SELECT rolpassword IS NULL FROM pg_catalog.pg_authid WHERE rolname='weft_administration'", admin);
+            Assert.Equal(!administration, (bool)(await optional.ExecuteScalarAsync())!);
+        }
         await using (var migrations = new MigrationRunner(Login("MIGRATOR", "weft_migrator"))) await migrations.MigrateAsync();
         await using var reader = new PostgresRegressionRunStore(Login("RUN_READER", "weft_run_reader"), writer: false);
         Assert.Null(await reader.ReadAsync(new ActorContext(new(Guid.NewGuid())), Guid.NewGuid(), Guid.NewGuid()));
