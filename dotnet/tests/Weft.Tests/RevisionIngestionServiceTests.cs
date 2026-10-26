@@ -12,6 +12,30 @@ namespace Weft.Tests;
 public sealed class RevisionIngestionServiceTests
 {
     [Fact]
+    public async Task ReviewedConversionCarriesOriginalPackageIntoImmutableIngestionFacts()
+    {
+        var fixture = new Fixture();
+        var package = new InterchangePackage("design.mfd", [new("design.mfd", "<self-authored/>"u8)]);
+        var conversion = new InterchangeImportOutput(fixture.Profile, package.Digest, "converted-native"u8,
+            new("One mapping", [new("unsupported", "Explicit warning")]));
+        var review = new ImportReview(Guid.NewGuid(), fixture.Actor.PrincipalId,
+            ImportDestination.Create(fixture.Project, fixture.Profile.BackendId, fixture.Request.Metadata),
+            package, conversion, DateTimeOffset.UtcNow.AddHours(1));
+        var result = await fixture.Service().CreateReviewedAsync(fixture.Actor, fixture.Project, fixture.Key,
+            fixture.Request, review.Revision);
+        Assert.Equal(RevisionIngestionOutcome.CommittedValid, result.Outcome);
+        Assert.Equal("converted-native"u8.ToArray(), fixture.Storage.PublishedBytes);
+        Assert.Equal(package.Digest, fixture.Metadata.Receipt!.Facts.Intent.ImportProvenance!.Package.Digest);
+        Assert.Equal(review.Digest, fixture.Metadata.Receipt.Facts.Intent.ImportProvenance!.ReviewDigest);
+        Assert.Equal(fixture.Profile, fixture.Metadata.Receipt.Facts.BackendProfile);
+        Assert.Equal(1, fixture.Backend.Calls);
+        var replay = await fixture.Service().CreateReviewedAsync(fixture.Actor, fixture.Project, fixture.Key,
+            fixture.Request, review.Revision);
+        Assert.Equal(result.Receipt!.FutureRevision, replay.Receipt!.FutureRevision);
+        Assert.Equal(1, fixture.Backend.Calls);
+    }
+
+    [Fact]
     public async Task ExactCurrentPositionBytesAreOwnedAndSeparatelyVerifiedBeforeOneValidation()
     {
         var fixture = new Fixture();

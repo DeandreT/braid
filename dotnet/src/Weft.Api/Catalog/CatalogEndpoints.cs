@@ -38,6 +38,7 @@ public static partial class CatalogEndpoints
             "GetCatalogRevision", "Read one scoped immutable revision's catalog metadata.");
         MapRevisionReports(routes, mapping + "/revisions/{revisionId}");
         MapRevisionComparisons(routes, mapping);
+        MapInterchange(routes, project, mapping);
         MapPreviews(routes, organization, mapping + "/revisions/{revisionId}");
         Administration.AdministrationEndpoints.MapWeftAdministration(endpoints);
         DescribeRevisionUpload(routes.MapPost(project + "/mappings", CreateCatalogMapping), create: true);

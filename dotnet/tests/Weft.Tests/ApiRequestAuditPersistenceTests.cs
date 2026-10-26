@@ -122,9 +122,12 @@ public sealed class ApiRequestAuditPersistenceTests(PostgresFixture fixture, ITe
             binding, key.Provider, key.Authority, key.Subject, seed.Alice);
         var before = await SnapshotAsync(test);
 
-        await test.MigrateAsync();
+        // This snapshot admits the audit migration's exact delta, not later independent additions.
+        await using (var upgrade = new MigrationRunner(test.MigrationConnectionString,
+            MigrationRunner.EmbeddedMigrations.Take(PrefixVersion + 1).ToArray()))
+            await upgrade.MigrateAsync();
 
-        Assert.Equal(Enumerable.Range(1, MigrationRunner.EmbeddedMigrations.Count), await test.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, PrefixVersion + 1), await test.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(RegressionSchemaTestContract.ApiRequestAuditChecksum, await test.ScalarAsync<string>(
             "SELECT checksum FROM weft.schema_migrations WHERE version=25"));

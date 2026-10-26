@@ -13,14 +13,15 @@ namespace Weft.Tests;
 /// <summary>Authored identity/provenance cases; not worker, image, storage or migration qualification.</summary>
 public sealed class FerrulePinUpgradeTests
 {
-    private const string CurrentRevision = "0169809123b8caebd141b26a625be4c07e750536";
+    private const string CurrentRevision = "576012aa17c403d9c3fcb8659ed4d3a47ba06864";
     private const string CurrentAdapter = "weft.ferrule-adapter.v3";
 
-    /// <summary>Every earlier qualified profile: engine, its qualified worker image and adapter.</summary>
+    /// <summary>Historical engine/adapter pairs, with immutable image identities (including a synthetic prior-pin fixture).</summary>
     public static TheoryData<string, string, string> PreviousProfiles => new()
     {
         { "0495822e102bba3f97d9bffd3c665adfb6138bec", "sha256:247f7e82f965ced7f6dcde5970d3dc3c584c6f648c9d4f359a9bb5b6ed3985a3", "weft.ferrule-adapter.v2" },
         { "577359a991a7dd44172a3c4af91fdcab7592457c", "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184", "weft.ferrule-adapter.v3" },
+        { "0169809123b8caebd141b26a625be4c07e750536", "sha256:" + new string('e', 64), "weft.ferrule-adapter.v3" },
     };
 
     private static RevisionReportBackendProfile Previous(string revision, string image, string adapter) => new("ferrule", revision, image, adapter);
@@ -122,6 +123,7 @@ public sealed class FerrulePinUpgradeTests
     [Theory]
     [InlineData("0495822e102bba3f97d9bffd3c665adfb6138bec")]
     [InlineData("577359a991a7dd44172a3c4af91fdcab7592457c")]
+    [InlineData("0169809123b8caebd141b26a625be4c07e750536")]
     [InlineData("ffffffffffffffffffffffffffffffffffffffff")]
     public async Task OldAndForgedLiveRepliesFailDefaultProjectionReportsAndIngestion(string revision)
     {

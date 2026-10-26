@@ -116,17 +116,22 @@ public sealed partial class FerruleDockerRunnerTests
         await runner.DisposeAsync();
     }
 
-    [Fact]
-    public async Task ProviderDisposalCannotReleaseTheRunnerBeforeItsOriginalCreateEnds()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProviderDisposalCannotReleaseTheRunnerBeforeItsOriginalCreateEnds(bool interchange)
     {
         var creation = FakeProcess.GatedCreation();
         var launcher = new FakeLauncher { Create = creation };
         var services = new ServiceCollection();
         InspectionWorkerHostConfiguration.Configure(services, new("/usr/bin/docker", ImageId), launcher);
         var provider = services.BuildServiceProvider();
-        var runner = provider.GetRequiredService<DockerInspectionWorkerRunner>();
-        Assert.Same(runner, provider.GetRequiredService<IInspectionWorkerRunner>());
-        Assert.Single(provider.GetServices<IHostedService>().OfType<InspectionWorkerHostLifetime>());
+        var inspection = provider.GetRequiredService<DockerInspectionWorkerRunner>();
+        Assert.Same(inspection, provider.GetRequiredService<IInspectionWorkerRunner>());
+        var conversion = provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange");
+        Assert.NotSame(inspection, conversion);
+        Assert.Equal(2, provider.GetServices<IHostedService>().OfType<InspectionWorkerHostLifetime>().Count());
+        var runner = interchange ? conversion : inspection;
         var work = runner.RunAsync(ReadOnlyMemory<byte>.Empty, CancellationToken.None);
         await creation.ExitWaitStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
         var disposal = provider.DisposeAsync().AsTask();

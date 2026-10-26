@@ -48,5 +48,7 @@ public static partial class CatalogEndpoints
         services.AddSingleton(reports);
         services.AddSingleton<CatalogRevisionIngestionGate>();
         services.AddSingleton<CatalogProjectCreationGate>();
+        services.AddSingleton(new CatalogInterchangeOptions());
+        services.AddSingleton<CatalogInterchangeGate>();
     }
 }

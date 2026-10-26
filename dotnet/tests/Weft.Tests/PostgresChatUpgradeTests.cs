@@ -235,6 +235,10 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
             await using var database = new PostgresChatDatabase(test.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
             await using var admitted = await database.BeginAsync(new(principal), key, false, CancellationToken.None);
             await RegressionSchemaTestContract.AdmitAsync(test);
+            await using var ingestion = new PostgresIngestionDatabase(test.IngestionConnectionString);
+            await using var admittedInterchange = await ingestion.BeginTransactionAsync(Guid.NewGuid());
+            await using var display = new PostgresAccountDisplayMetadata(test.AccountDisplayConnectionString);
+            Assert.Null(await display.ReadAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None));
         }
         await using var connection = PostgresChatSecurityTests.Open(test.MigrationConnectionString); await connection.OpenAsync();
         var text = new StringBuilder();
@@ -249,10 +253,10 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         schema.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }.SelectMany(p => ChatSchemaContract.ColumnGrants(p)
             .Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
         schema.Parameters.AddWithValue(ChatSchemaContract.FunctionNames);
-        schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).ToArray());
-        schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).ToArray());
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).ToArray());
+        schema.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).Append("weft_account_display").ToArray());
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys);
-        schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables);
+        schema.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("account_display_metadata").ToArray());
         text.Append(Assert.IsType<string>(await schema.ExecuteScalarAsync()));
         return SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()));
     }

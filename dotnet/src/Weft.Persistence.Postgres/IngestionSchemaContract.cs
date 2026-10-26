@@ -21,24 +21,22 @@ internal static class IngestionSchemaContract
         ["mappings"] = ["head_revision_id", "head_sequence", "updated_at"],
         ["revision_ingestions"] = ["phase", "lease_owner_id", "lease_token", "lease_generation", "lease_expires_at", "claim_count", "verified_stage_generation", "verified_stage_at", "eligible_attempt_generation", "eligible_admission", "last_error", "completed_at", "committed_revision_id"],
         ["revision_ingestion_attempts"] = ["verified_stage_at", "finished_at", "completion_kind", "backend_status", "admission_classification", "provenance_confirmed", "provenance_organization_id", "provenance_project_id", "provenance_mapping_id", "provenance_revision_id", "provenance_native_digest", "provenance_backend_id", "provenance_engine_revision", "provenance_backend_build", "provenance_adapter_build", "is_valid", "total_issue_count", "emitted_issue_count", "issues_truncated", "evidence_version", "evidence", "reused_attempt_generation", "reused_admission", "last_error"],
-        ["mapping_revisions"] = []
+        ["mapping_revisions"] = [],
+        ["revision_import_provenance"] = [],
+        ["import_reviews"] = [],
+        ["export_reviews"] = []
     };
 
     private static IReadOnlyDictionary<string, Table> Load()
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(
-            "Weft.Persistence.Postgres.Migrations.0002_catalog_ingestion.sql") ??
-            throw new InvalidOperationException("The accepted ingestion migration is missing.");
-        using var bytes = new MemoryStream();
-        stream.CopyTo(bytes);
-        var sql = new UTF8Encoding(false, true).GetString(bytes.ToArray());
+        var sql = ReadMigration("0002_catalog_ingestion.sql") + "\n" + ReadMigration("0028_interchange_provenance.sql");
         var tables = new Dictionary<string, Table>(StringComparer.Ordinal);
         foreach (Match match in Regex.Matches(sql, @"CREATE TABLE weft\.(?<name>[a-z_]+) \(\n(?<body>.*?)\n\);", RegexOptions.Singleline | RegexOptions.CultureInvariant))
         {
             var name = match.Groups["name"].Value;
             var body = match.Groups["body"].Value;
             var columns = new List<Column>();
-            foreach (Match column in Regex.Matches(body, @"^    (?<name>[a-z_]+) (?<type>timestamp with time zone|uuid|text|integer|bigint|boolean|jsonb)(?<tail>[^\n]*)$", RegexOptions.Multiline | RegexOptions.CultureInvariant))
+            foreach (Match column in Regex.Matches(body, @"^    (?<name>[a-z_]+) (?<type>timestamp with time zone|uuid|text|integer|bigint|boolean|jsonb|bytea)(?<tail>[^\n]*)$", RegexOptions.Multiline | RegexOptions.CultureInvariant))
             {
                 var type = column.Groups["type"].Value;
                 var tail = column.Groups["tail"].Value.TrimEnd(',');
@@ -59,9 +57,19 @@ internal static class IngestionSchemaContract
             tables.Add(name, new Table(name, columns.ToArray(), constraints.ToArray(),
                 name == "mappings" ? MappingMetadataSchemaContract.MappingTransitionBody : function.Groups["body"].Value));
         }
-        if (tables.Count != 4)
-            throw new InvalidOperationException("The accepted ingestion schema requires exactly four workflow tables.");
+        if (tables.Count != 7)
+            throw new InvalidOperationException("The accepted ingestion schema requires exactly seven workflow tables.");
         return tables;
+    }
+
+    private static string ReadMigration(string name)
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(
+            "Weft.Persistence.Postgres.Migrations." + name) ??
+            throw new InvalidOperationException("The accepted ingestion migration is missing.");
+        using var bytes = new MemoryStream();
+        stream.CopyTo(bytes);
+        return new UTF8Encoding(false, true).GetString(bytes.ToArray());
     }
 
     private static Constraint ParseConstraint(Match match)

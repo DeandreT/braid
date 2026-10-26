@@ -28,6 +28,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0025_api_request_audit.sql",
   "0026_account_display_metadata.sql",
   "0027_administration.sql",
+  "0028_interchange_provenance.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
@@ -46,6 +47,9 @@ export const browserFixtureProtectedTables = Object.freeze([
   "organization_invitations",
   "administration_audit",
   "account_display_metadata",
+  "import_reviews",
+  "export_reviews",
+  "revision_import_provenance",
 ]);
 
 /** Read-side regression hosts may derive the same saved reports that the UI reads. */

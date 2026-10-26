@@ -98,6 +98,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Projection v1](docs/projection-contract.md): public read model and fixture behavior.
 - [Mapping viewer](docs/mapping-viewer.md): navigation, exact values, coverage, and validation.
 - [Revision upload](docs/native-revision-append-ui.md): reviewed heads, immutable history, and explicit recovery.
+- [MFD interchange](docs/mfd-interchange.md): bounded packages, warning review, immutable provenance, and disabled-by-default import/export integration.
 - [Ferrule worker](docs/ferrule-worker.md): native authority, transport, isolation, and qualification.
 - [Ferrule projection](docs/ferrule-projection.md): native explanation coverage and viewer integration.
 - [Catalog persistence plan](docs/catalog-persistence-plan.md): ordered ownership, storage, revision, API, and browser increments.

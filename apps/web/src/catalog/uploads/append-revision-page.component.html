@@ -40,6 +40,40 @@
     </div>
   </header>
 
+  @if (mfdDraftRecovery.hasWork()) {
+    <section class="append-card append-notice" role="status">
+      <p>
+        Local MapForce work is retained privately. Refresh access to restore it,
+        or discard the local draft before leaving. Discarding does not cancel a
+        request already sent or remove a server-owned review.
+      </p>
+      @if (mfdDraftRecovery.protectedReview()) {
+        <label>
+          <input
+            type="checkbox"
+            [checked]="mfdDraftRecovery.discardAcknowledged()"
+            (change)="
+              mfdDraftRecovery.discardAcknowledged.set(
+                $any($event.target).checked
+              )
+            "
+          />
+          I understand this does not cancel or undo a saved revision.
+        </label>
+      }
+      <button
+        type="button"
+        (click)="mfdDraftRecovery.requestDiscard()"
+        [disabled]="
+          mfdDraftRecovery.protectedReview() &&
+          !mfdDraftRecovery.discardAcknowledged()
+        "
+      >
+        Discard retained MFD draft
+      </button>
+    </section>
+  }
+
   @if (state.leavePrompt(); as risk) {
     <section
       class="append-card append-notice"
@@ -550,6 +584,14 @@
     view.mapping?.backendId === "ferrule" &&
     view.formVisible
   ) {
+    @if (view.mapping; as mapping) {
+      <weft-mfd-import
+        [project]="mapping.scope"
+        [mappingId]="mapping.scope.mappingId"
+        [expectedHead]="mapping.head.scope.revisionId"
+        [blocked]="!view.canChooseFile || uiBlocked()"
+      />
+    }
     <form
       class="append-card append-form"
       [formGroup]="form"
@@ -625,7 +667,7 @@
         <button
           class="append-primary"
           type="submit"
-          [disabled]="!view.canAppend || uiBlocked()"
+          [disabled]="!view.canAppend || uiBlocked() || mfdImport()?.busy()"
         >
           Append revision
         </button>

@@ -80,6 +80,7 @@
           (entitySelected)="inspect($event)"
           (diagnosticSelected)="showDiagnostic($event)"
         />
+        <weft-mfd-export [scope]="view.revision.scope" />
       </div>
       @if (context(); as current) {
         <div

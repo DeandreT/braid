@@ -8,6 +8,7 @@ services:
   server:
     environment:
       WEFT_REVISION_INGESTION_ENABLED: "true"
+      WEFT_MFD_INTERCHANGE_ENABLED: "true"
       WEFT_POSTGRES_INGESTION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_ingest;Password=${WEFT_LOCAL_INGEST_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_REVISION_REPORT_DERIVATION_ENABLED: "true"
       WEFT_POSTGRES_DERIVATION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_deriver;Password=${WEFT_LOCAL_DERIVATION_PASSWORD:?};GSS Encryption Mode=Disable

@@ -138,6 +138,8 @@ internal sealed class WeftApiClient : IDisposable
         var message = new HttpRequestMessage(new HttpMethod(request.Operation.Method), new Uri(_server, request.Target()));
         if (token is not null) message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(request.Operation.ResponseMediaType));
+        foreach (var media in request.Operation.AlternateResponseMediaTypes ?? [])
+            message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(media));
         message.Headers.UserAgent.ParseAdd(UserAgent);
         foreach (var (name, value) in request.Headers)
             message.Headers.TryAddWithoutValidation(name, value);

@@ -106,7 +106,7 @@ external side effects in v1.
 ## Ferrule integration
 
 The restricted worker pins:
-[`0169809123b8caebd141b26a625be4c07e750536`](https://github.com/DeandreT/ferrule/commit/0169809123b8caebd141b26a625be4c07e750536).
+[`576012aa17c403d9c3fcb8659ed4d3a47ba06864`](https://github.com/DeandreT/ferrule/commit/576012aa17c403d9c3fcb8659ed4d3a47ba06864).
 It consumes `mapping`, `ir`, and `engine` for inspection, validation and
 projection, the `cli` library's in-memory payload API for bounded JSON preview,
 and `codegen` and `codegen-csharp` for in-memory C# source generation in the
@@ -190,7 +190,7 @@ from interpreter validation alone.
 
 ## Source references
 
-- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/0169809123b8caebd141b26a625be4c07e750536/crates/mapping/src/project_file.rs).
-- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/0169809123b8caebd141b26a625be4c07e750536/crates/cli/src/lib.rs).
-- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/0169809123b8caebd141b26a625be4c07e750536/crates/cli/src/payload.rs).
-- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/0169809123b8caebd141b26a625be4c07e750536/docs/architecture.md).
+- [Ferrule project codec at the selected revision](https://github.com/DeandreT/ferrule/blob/576012aa17c403d9c3fcb8659ed4d3a47ba06864/crates/mapping/src/project_file.rs).
+- [Ferrule public host exports](https://github.com/DeandreT/ferrule/blob/576012aa17c403d9c3fcb8659ed4d3a47ba06864/crates/cli/src/lib.rs).
+- [Ferrule in-memory execution](https://github.com/DeandreT/ferrule/blob/576012aa17c403d9c3fcb8659ed4d3a47ba06864/crates/cli/src/payload.rs).
+- [Ferrule architecture and capability boundaries](https://github.com/DeandreT/ferrule/blob/576012aa17c403d9c3fcb8659ed4d3a47ba06864/docs/architecture.md).

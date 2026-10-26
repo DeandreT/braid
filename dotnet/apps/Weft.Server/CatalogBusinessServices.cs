@@ -73,7 +73,9 @@ internal static class CatalogBusinessServices
                 return new IngestionBackendRegistry(runner is null ? [] : [FerruleIngestionAdmissionBackend.CreateRegistration(runner)]);
             });
             services.AddSingleton(new RevisionIngestionOptions(nativeLimit));
-            services.AddSingleton<IRevisionIngestionService, RevisionIngestionService>();
+            services.AddSingleton<RevisionIngestionService>();
+            services.AddSingleton<IRevisionIngestionService>(provider => provider.GetRequiredService<RevisionIngestionService>());
+            services.AddSingleton<IReviewedRevisionIngestionService>(provider => provider.GetRequiredService<RevisionIngestionService>());
         }
         if (ingestionOptions.Enabled || reportOptions.Enabled)
         {
@@ -92,6 +94,23 @@ internal static class CatalogBusinessServices
             services.AddSingleton<IPrivateObjectPublicationStore>(provider => provider.GetRequiredService<LazyPrivateObjectStore>());
         }
         CatalogRevisionReportHostConfiguration.Configure(services, environment, reportOptions, readEnvironment, derivedReadByteLimit);
+        var interchange = readEnvironment("WEFT_MFD_INTERCHANGE_ENABLED");
+        if (interchange is not (null or "false" or "true"))
+            throw new InvalidOperationException("WEFT_MFD_INTERCHANGE_ENABLED must be true or false.");
+        if (interchange == "true")
+        {
+            if (!ingestionOptions.Enabled || !reportOptions.Enabled)
+                throw new InvalidOperationException("MFD interchange requires revision ingestion and revision report read storage.");
+            services.AddSingleton(new CatalogInterchangeOptions(true));
+            services.AddSingleton<IImportReviewStore>(provider => provider.GetRequiredService<PostgresRevisionIngestionStore>());
+            services.AddSingleton<IExportReviewStore>(provider => provider.GetRequiredService<PostgresRevisionIngestionStore>());
+            services.AddSingleton(provider => new InterchangeImportService(provider.GetRequiredService<IProjectReader>(),
+                provider.GetRequiredService<IIngestionWorkflowReader>(), provider.GetRequiredService<IInterchangeBackendRegistry>(),
+                provider.GetRequiredService<IImportReviewStore>(), provider.GetRequiredService<IReviewedRevisionIngestionService>(), TimeProvider.System));
+            services.AddSingleton(provider => new InterchangeExportService(provider.GetRequiredService<IRevisionReportMetadataReader>(),
+                provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IInterchangeBackendRegistry>(),
+                provider.GetRequiredService<IExportReviewStore>(), TimeProvider.System));
+        }
         CatalogRegressionHostConfiguration.Configure(services, readEnvironment, catalogEnabled: true);
         CatalogBuildHostConfiguration.Configure(services, environment, readEnvironment,
             buildRuntime ?? CatalogBuildHostConfiguration.ReadRuntime(readEnvironment, catalogEnabled: true));

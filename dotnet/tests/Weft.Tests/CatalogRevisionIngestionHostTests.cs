@@ -21,6 +21,28 @@ namespace Weft.Tests;
 public sealed class CatalogRevisionIngestionHostTests(PostgresFixture fixture)
 {
     [Fact]
+    public async Task MfdEnablementUsesOnlyTheSeparateRealRunnerWithoutEagerDatabaseAccess()
+    {
+        using var root = new PrivateStorageTestRoot();
+        var builder = Builder(root.ApplicationRoot);
+        var values = Enabled(root);
+        values["WEFT_MFD_INTERCHANGE_ENABLED"] = "true";
+        values["WEFT_REVISION_REPORTS_ENABLED"] = "true";
+        values["WEFT_POSTGRES_REPORT_CONNECTION_STRING"] = "Host=127.0.0.1;Port=1;Database=unused;Username=weft_report_reader;Timeout=1";
+        Configure(builder, values);
+        var launcher = new NoLaunchWorkerProcessLauncher();
+        InspectionWorkerHostConfiguration.Configure(builder.Services, new("/usr/bin/docker", "sha256:" + new string('a', 64)), launcher);
+        await using var services = builder.Services.BuildServiceProvider();
+        Assert.True(services.GetRequiredService<CatalogInterchangeOptions>().Enabled);
+        Assert.True(services.GetRequiredService<IServiceProviderIsService>().IsService(typeof(InterchangeImportService)));
+        Assert.True(services.GetRequiredService<IServiceProviderIsService>().IsService(typeof(InterchangeExportService)));
+        Assert.NotNull(services.GetRequiredService<IInterchangeBackendRegistry>().GetCurrent("ferrule"));
+        Assert.NotSame(services.GetRequiredService<IInspectionWorkerRunner>(),
+            services.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange"));
+        Assert.Equal(0, launcher.Calls);
+    }
+
+    [Fact]
     public void DefaultsStayClosedAndUnusedIngestionConfigurationDoesNotResolveDependencies()
     {
         var builder = Builder();

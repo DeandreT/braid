@@ -7,8 +7,9 @@
     <p class="upload-eyebrow">Original mapping file</p>
     <h1 id="upload-title" tabindex="-1">Upload mapping</h1>
     <p>
-      Choose a Ferrule native JSON mapping. The original file is stored
-      unchanged. Files can be up to 4 MiB; this service may have a lower limit.
+      Upload a Ferrule native JSON mapping unchanged (up to 4 MiB; this service
+      may have a lower limit). When MapForce import is enabled, its separate
+      review workflow appears below.
     </p>
     <p>
       This creates a new mapping and its first saved revision. It does not
@@ -35,6 +36,40 @@
       Refresh access
     </button>
   </header>
+
+  @if (mfdDraftRecovery.hasWork()) {
+    <section class="upload-card upload-notice" role="status">
+      <p>
+        Local MapForce work is retained privately. Refresh access to restore it,
+        or discard the local draft before leaving. Discarding does not cancel a
+        request already sent or remove a server-owned review.
+      </p>
+      @if (mfdDraftRecovery.protectedReview()) {
+        <label>
+          <input
+            type="checkbox"
+            [checked]="mfdDraftRecovery.discardAcknowledged()"
+            (change)="
+              mfdDraftRecovery.discardAcknowledged.set(
+                $any($event.target).checked
+              )
+            "
+          />
+          I understand this does not cancel or undo a saved revision.
+        </label>
+      }
+      <button
+        type="button"
+        (click)="mfdDraftRecovery.requestDiscard()"
+        [disabled]="
+          mfdDraftRecovery.protectedReview() &&
+          !mfdDraftRecovery.discardAcknowledged()
+        "
+      >
+        Discard retained MFD draft
+      </button>
+    </section>
+  }
 
   @if (leaveDecision(); as risk) {
     <section
@@ -366,6 +401,18 @@
     </button>
   }
 
+  @if (mfdProject(); as project) {
+    <weft-mfd-import
+      [project]="project"
+      [blocked]="
+        !state.canEdit() ||
+        state.busy() ||
+        state.preparingFile() ||
+        leaveDecision() !== null
+      "
+    />
+  }
+
   @if (state.formVisible()) {
     @let errors = state.fieldErrors();
     @let fileError = state.fileError();
@@ -550,7 +597,11 @@
         <button
           class="upload-primary"
           type="submit"
-          [disabled]="!state.canUpload() || leaveDecision() !== null"
+          [disabled]="
+            !state.canUpload() ||
+            leaveDecision() !== null ||
+            mfdImport()?.busy()
+          "
         >
           Upload mapping
         </button>

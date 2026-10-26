@@ -47,6 +47,7 @@ import {
   type RevisionReportSelectors,
 } from "./reports/revision-report-state";
 import { RevisionReportsComponent } from "./reports/revision-reports.component";
+import { MfdExportComponent } from "./uploads/mfd-export.component";
 import { RevisionChatComponent } from "../chat/revision-chat.component";
 import { ChatViewRecovery } from "../chat/chat-view-recovery";
 import { RevisionPreviewComponent } from "./previews/revision-preview.component";
@@ -96,6 +97,7 @@ interface RevisionScreen {
     RouterLink,
     CatalogStatusComponent,
     RevisionReportsComponent,
+    MfdExportComponent,
     RevisionChatComponent,
     RevisionPreviewComponent,
     RevisionRegressionComponent,

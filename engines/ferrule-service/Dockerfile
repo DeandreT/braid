@@ -114,7 +114,7 @@ ARG WEFT_NATIVE_BINARY_SHA256
 LABEL org.opencontainers.image.title="Weft Ferrule service" \
       org.opencontainers.image.source="https://github.com/DeandreT/weft" \
       org.opencontainers.image.revision="$WEFT_REVISION" \
-      io.weft.ferrule.revision="0169809123b8caebd141b26a625be4c07e750536" \
+      io.weft.ferrule.revision="576012aa17c403d9c3fcb8659ed4d3a47ba06864" \
       io.weft.ferrule.worker-sha256="$WEFT_NATIVE_BINARY_SHA256" \
       io.weft.ferrule.compile-sdk="10.0.112"
 COPY --from=native / /

@@ -90,7 +90,7 @@ internal static class CatalogRevisionRequestParser
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private static Dictionary<string, string> Query(HttpRequest request, params string[] allowed)
+    internal static Dictionary<string, string> Query(HttpRequest request, params string[] allowed)
     {
         var query = request.QueryString.Value ?? "";
         if (query.Length > MaximumQueryCharacters || query.Any(character => character > 0x7f))
@@ -140,7 +140,7 @@ internal static class CatalogRevisionRequestParser
         _ => null
     };
 
-    private static Guid CanonicalId(string value)
+    internal static Guid CanonicalId(string value)
     {
         if (!Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty || value != id.ToString("D"))
             throw CatalogRevisionRequestException.Invalid();

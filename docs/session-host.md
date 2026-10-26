@@ -40,6 +40,7 @@ Each business feature stays off until its own flag is `true`. The table lists wh
 | Metadata edits, project creation | `WEFT_METADATA_EDITS_ENABLED`, `WEFT_PROJECT_CREATION_ENABLED` and their connection strings | no | yes | yes |
 | Retained report reads and revision comparison | `WEFT_REVISION_REPORTS_ENABLED`, `WEFT_POSTGRES_REPORT_CONNECTION_STRING`, private storage | no | yes | yes |
 | Native upload and report derivation | `WEFT_REVISION_INGESTION_ENABLED`, `WEFT_REVISION_REPORT_DERIVATION_ENABLED` and their connection strings | no | yes; native work needs the Development worker runner (`WEFT_FERRULE_WORKER_IMAGE` in the Development environment) | yes, through the hosted inspection worker (below); startup refuses without it |
+| MFD import and export | `WEFT_MFD_INTERCHANGE_ENABLED`, native ingestion and retained report-read storage | no | separate Docker or Ferrule-service `interchange` profile | Ferrule service or dynamic sessions; not the inspection-only worker |
 | Chat | `WEFT_CHAT_ENABLED`, `WEFT_CHAT_PROFILES_FILE`, chat reader/writer | no | connection strings | Session `_FILE` |
 | Previews (submission, reads, cancel) | `WEFT_PREVIEWS_ENABLED`, preview reader/writer | no | connection strings | Session `_FILE` |
 | Regression cases and runs | `WEFT_REGRESSIONS_ENABLED`, `WEFT_FERRULE_WORKER_IMAGE`, four regression logins | no | connection strings | Session `_FILE` |

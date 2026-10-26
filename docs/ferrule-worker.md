@@ -17,7 +17,7 @@ Inspection and validation were qualified in
 
 ## Native authority and results
 
-Ferrule libraries are pinned to `0169809123b8caebd141b26a625be4c07e750536`.
+Ferrule libraries are pinned to `576012aa17c403d9c3fcb8659ed4d3a47ba06864`.
 `mapping::project_file::decode_bytes` admits the file;
 `engine::validate` supplies validation issues and typed owners. The worker never
 evaluates mappings or resolves design-time resources. Inspection returns boundary

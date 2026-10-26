@@ -34,7 +34,7 @@ internal static class FerruleServiceOpenApi
     internal static readonly string[] Profiles =
     [
         FerruleServiceProtocol.InspectionProfile, FerruleServiceProtocol.PreviewProfile, FerruleServiceProtocol.CompileProfile,
-        FerruleServiceProtocol.CompiledProfile
+        FerruleServiceProtocol.CompiledProfile, FerruleServiceProtocol.InterchangeProfile
     ];
 
     /// <summary>
@@ -247,7 +247,7 @@ internal static class FerruleServiceOpenApi
         Name = "profile",
         In = ParameterLocation.Path,
         Required = true,
-        Description = "`inspection` and `preview` are always served. `compile` and `execute` are served only when enabled and " +
+        Description = "`inspection`, `preview` and `interchange` are always served. `compile` and `execute` are served only when enabled and " +
             "otherwise answer `501`; another name answers `404` (`400` for a cancellation).",
         Schema = Text(Profiles)
     };

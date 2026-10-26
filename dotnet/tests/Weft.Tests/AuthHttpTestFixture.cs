@@ -61,12 +61,13 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
 
     /// <summary>Also maps the chat routes on the restricted chat logins; their provider profile is never contacted.</summary>
     internal bool Chat { get; private init; }
+    internal Action<AuthHttpFixture, IServiceCollection>? ConfigureCatalogServices { get; private init; }
     internal bool Administration { get; private init; }
 
     internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true, int bearerBurst = 0,
-        bool chat = false, bool administration = false, bool displayMetadata = false)
+        bool chat = false, bool administration = false, bool displayMetadata = false, Action<AuthHttpFixture, IServiceCollection>? configureCatalogServices = null)
     {
-        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat, Administration = administration }; Exception? primary = null; var cleanup = new List<Exception>();
+        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat, Administration = administration, ConfigureCatalogServices = configureCatalogServices }; Exception? primary = null; var cleanup = new List<Exception>();
         try { await test.InitializeAsync(postgres, bindIssuer, displayMetadata); await body(test); }
         catch (Exception error) { primary = Safe(error, "The independent auth HTTP case failed."); }
         finally { try { await test.DisposeAsync(); } catch (Exception error) { cleanup.Add(Safe(error, "The independent auth HTTP cleanup failed.")); } }
@@ -361,6 +362,7 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
                 AiCapability.Text, "mapping-metadata", 1, true, false);
             builder.Services.AddWeftChat(new([new ChatModelProfile("Fixture model", "fixture", profile)], TimeSpan.FromDays(1), TimeSpan.FromSeconds(60), 128));
         }
+        test.ConfigureCatalogServices?.Invoke(test, builder.Services);
         var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start(1); var port = ((IPEndPoint)reservation.LocalEndpoint).Port; PhysicalPort = port;
         try
         {

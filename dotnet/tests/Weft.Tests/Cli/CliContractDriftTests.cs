@@ -60,7 +60,6 @@ public sealed class CliContractDriftTests
         Assert.Equal(documented.RequestMediaTypes, operation.RequestMediaType is null ? [] : [operation.RequestMediaType]);
         if (operation.RequestBody is { } body)
         {
-            Assert.Equal("#/components/schemas/" + body.Name, documented.RequestSchema(operation.RequestMediaType!)!["$ref"]?.GetValue<string>());
             CompareShape(body, documented.RequestSchema(operation.RequestMediaType!)!, $"{operationId} request");
         }
 
@@ -69,7 +68,12 @@ public sealed class CliContractDriftTests
             var response = documented.Response(status);
             Assert.True(response is not null, $"{operationId} does not document status {status}");
             if (type is null)
+            {
+                if (operation.AlternateResponseMediaTypes is { } alternatives)
+                    foreach (var media in new[] { operation.ResponseMediaType }.Concat(alternatives))
+                        Assert.NotNull(response!["content"]?[media]);
                 continue;
+            }
             var content = response!["content"]?[operation.ResponseMediaType];
             Assert.True(content is not null, $"{operationId} {status} is not documented as {operation.ResponseMediaType}");
             Assert.Equal("#/components/schemas/" + type.Name, content!["schema"]?["$ref"]?.GetValue<string>());

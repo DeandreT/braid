@@ -221,6 +221,7 @@ var serverEnvironment = concat([
   // Native upload, report reads and derivation run here through the selected runner; previews, regression runs
   // and builds are recorded here and executed by the worker app.
   { name: 'WEFT_REVISION_INGESTION_ENABLED', value: 'true' }
+  { name: 'WEFT_MFD_INTERCHANGE_ENABLED', value: ferruleRunner == 'worker' ? 'false' : 'true' }
   { name: 'WEFT_POSTGRES_INGESTION_CONNECTION_STRING', secretRef: 'ingest-connection' }
   { name: 'WEFT_REVISION_REPORTS_ENABLED', value: 'true' }
   { name: 'WEFT_POSTGRES_REPORT_CONNECTION_STRING', secretRef: 'report-connection' }

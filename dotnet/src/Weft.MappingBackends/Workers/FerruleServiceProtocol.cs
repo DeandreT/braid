@@ -25,6 +25,7 @@ public static class FerruleServiceProtocol
 
     /// <summary>Bounded JSON sample previews (<c>weft.ferrule-preview.v1</c>).</summary>
     public const string PreviewProfile = "preview";
+    public const string InterchangeProfile = "interchange";
 
     /// <summary>
     /// Compilation of deployable mapping libraries (<c>weft.ferrule-build.v1</c>). A service serves it only when
@@ -38,6 +39,7 @@ public static class FerruleServiceProtocol
     {
         InspectionProfile => DockerWorkerProfile.Inspection,
         PreviewProfile => DockerWorkerProfile.Preview,
+        InterchangeProfile => DockerWorkerProfile.Interchange,
         CompileProfile => DockerWorkerProfile.Build,
         CompiledProfile => DockerWorkerProfile.Compiled,
         _ => null

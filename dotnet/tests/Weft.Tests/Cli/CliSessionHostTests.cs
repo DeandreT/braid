@@ -197,7 +197,7 @@ public sealed class CliSessionHostTests(PostgresFixture postgres)
         Assert.Equal(4, cli.Time.Delays.Count);
     }, bearerBurst: 1);
 
-    private static CliHarness Harness(AuthHttpFixture test, ConcurrentQueue<AuthHttpRecord> records)
+    internal static CliHarness Harness(AuthHttpFixture test, ConcurrentQueue<AuthHttpRecord> records)
     {
         test.Issuer.PublicClients = [UserTokenValidationTests.Cli];
         test.Issuer.PublicScope = UserTokenValidationTests.Scope;

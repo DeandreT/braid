@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Weft.Application;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 
@@ -19,6 +20,15 @@ public static class InspectionWorkerHostConfiguration
         services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<DockerInspectionWorkerRunner>());
         services.AddSingleton<IHostedService>(provider =>
             new InspectionWorkerHostLifetime(provider.GetRequiredService<DockerInspectionWorkerRunner>().StopAsync));
+        services.AddKeyedSingleton<IInspectionWorkerRunner>("interchange", (_, _) =>
+            launcher is null
+                ? new DockerInspectionWorkerRunner(new(options.DockerExecutable, options.ImageId,
+                    dockerSocketPath: options.DockerSocketPath, profile: DockerWorkerProfile.Interchange))
+                : new DockerInspectionWorkerRunner(new(options.DockerExecutable, options.ImageId,
+                    dockerSocketPath: options.DockerSocketPath, profile: DockerWorkerProfile.Interchange), launcher));
+        services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(
+            ((DockerInspectionWorkerRunner)provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange")).StopAsync));
+        AddInterchange(services);
         AddBackends(services);
     }
 
@@ -66,7 +76,20 @@ public static class InspectionWorkerHostConfiguration
         services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<FerruleServiceRunner>());
         services.AddSingleton<IHostedService>(provider =>
             new InspectionWorkerHostLifetime(provider.GetRequiredService<FerruleServiceRunner>().StopAsync));
+        services.AddKeyedSingleton<IInspectionWorkerRunner>("interchange", (provider, _) => new FerruleServiceRunner(new(
+            provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)),
+            FerruleServiceProtocol.InterchangeProfile, buildIdentity, compileToolchainIdentity)));
+        services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(
+            ((FerruleServiceRunner)provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange")).StopAsync));
+        AddInterchange(services);
         AddBackends(services);
+    }
+
+    private static void AddInterchange(IServiceCollection services)
+    {
+        services.AddSingleton(provider => new FerruleInterchangeBackend(
+            provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange")));
+        services.AddSingleton<IInterchangeBackendRegistry>(provider => provider.GetRequiredService<FerruleInterchangeBackend>());
     }
 
     private static void AddBackends(IServiceCollection services)

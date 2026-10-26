@@ -13,7 +13,7 @@ public sealed class FerruleServiceRunnerOptions
     {
         ArgumentNullException.ThrowIfNull(connector);
         Profile = FerruleServiceProtocol.Profile(profile) ??
-            throw new ArgumentException("The Ferrule service profile must be inspection, preview, compile or execute.", nameof(profile));
+            throw new ArgumentException("The Ferrule service profile must be inspection, preview, interchange, compile or execute.", nameof(profile));
         Connector = connector;
         ProfileName = profile;
         BuildIdentity = InspectionTransport.RequireImage(buildIdentity);

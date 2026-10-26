@@ -7,6 +7,11 @@ internal static class IngestionCheckDefinitions
     // Source SHA256: d61a8bc2d56b6a39607414cf0f14c58db511594369ac124fd270a08f77455ae5
     internal static readonly IReadOnlyDictionary<string, string> Values = new Dictionary<string, string>(StringComparer.Ordinal)
     {
+        ["revision_import_provenance_bound"] = "CHECK (((octet_length(provenance) >= 1) AND (octet_length(provenance) <= 25165824)))",
+        ["import_reviews_bound"] = "CHECK (((octet_length(payload) >= 1) AND (octet_length(payload) <= 33554432)))",
+        ["import_reviews_identity"] = "CHECK (((id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (review_digest ~ '^[0-9a-f]{64}$'::text)))",
+        ["export_reviews_bound"] = "CHECK (((octet_length(payload) >= 1) AND (octet_length(payload) <= 33554432)))",
+        ["export_reviews_identity"] = "CHECK (((id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (review_digest ~ '^[0-9a-f]{64}$'::text)))",
         ["mapping_revisions_admission_check"] = "CHECK ((initial_admission = ANY (ARRAY['eligible_valid'::text, 'eligible_decoded_invalid'::text])))",
         ["mapping_revisions_ids_check"] = "CHECK (((id <> '00000000-0000-0000-0000-000000000000'::uuid) AND (native_object_id <> '00000000-0000-0000-0000-000000000000'::uuid)))",
         ["mapping_revisions_native_check"] = "CHECK (((native_class = 'native'::text) AND (native_digest ~ '^[0-9a-f]{64}$'::text) AND ((native_byte_count >= 1) AND (native_byte_count <= 4194304)) AND (logical_entry_document = 'entry.native.json'::text) AND (dependency_manifest_id = 'weft.dependencies.empty.v1'::text)))",

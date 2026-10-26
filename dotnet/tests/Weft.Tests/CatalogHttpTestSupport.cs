@@ -56,7 +56,8 @@ internal sealed class CatalogHttpTestSupport : IAsyncDisposable
     { BaseAddress = Origin, Timeout = TimeSpan.FromSeconds(20) };
 
     internal static async Task<CatalogHttpTestSupport> StartAsync(PostgresCase? test = null,
-        Guid? principal = null, Guid? organization = null, string environment = "Development")
+        Guid? principal = null, Guid? organization = null, string environment = "Development",
+        Action<IServiceCollection>? configureServices = null, long? maximumRequestBodyBytes = null)
     {
         var reservation = new TcpListener(IPAddress.Loopback, 0);
         reservation.Start();
@@ -64,7 +65,11 @@ internal sealed class CatalogHttpTestSupport : IAsyncDisposable
         var origin = new Uri($"http://127.0.0.1:{port}");
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environment });
         builder.Logging.ClearProviders();
-        builder.WebHost.ConfigureKestrel(server => server.Listen(IPAddress.Loopback, port));
+        builder.WebHost.ConfigureKestrel(server =>
+        {
+            if (maximumRequestBodyBytes is not null) server.Limits.MaxRequestBodySize = maximumRequestBodyBytes;
+            server.Listen(IPAddress.Loopback, port);
+        });
         builder.Services.AddWeftApi();
         builder.Services.AddSingleton(SharedTestKeys);
         var options = test is null ? new CatalogApiOptions() : new CatalogApiOptions(true, true,
@@ -77,6 +82,7 @@ internal sealed class CatalogHttpTestSupport : IAsyncDisposable
             database = new(test.CatalogConnectionString);
             builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(database));
         }
+        configureServices?.Invoke(builder.Services);
         var app = builder.Build();
         var support = new CatalogHttpTestSupport(app, database, origin);
         app.MapWeftCatalog();

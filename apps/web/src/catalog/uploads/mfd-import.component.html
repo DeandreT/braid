@@ -1,0 +1,178 @@
+@if (enabled()) {
+  <section
+    class="mfd-card"
+    aria-labelledby="mfd-import-title"
+    [attr.aria-busy]="busy()"
+  >
+    <h2 id="mfd-import-title">Import MapForce design</h2>
+    <p>
+      Select an .mfd and its referenced schemas, or a folder containing them. Up
+      to 128 files, 4 MiB each and 16 MiB total. Conversion warnings must be
+      reviewed before any revision is saved.
+    </p>
+    @if (!review() && !saved() && !recoveryPending()) {
+      @if (!mappingId()) {
+        <label
+          >Mapping name
+          <input
+            type="text"
+            [value]="name"
+            (input)="name = $any($event.target).value"
+            [disabled]="busy() || blocked()"
+        /></label>
+        <label
+          >Description
+          <textarea
+            [value]="description"
+            (input)="description = $any($event.target).value"
+            [disabled]="busy() || blocked()"
+          ></textarea>
+        </label>
+      }
+      <label
+        >Design and schema files
+        <input
+          type="file"
+          multiple
+          (change)="selectFiles($event)"
+          [disabled]="busy() || blocked()"
+      /></label>
+      <label
+        >Or select a package folder
+        <input
+          type="file"
+          multiple
+          webkitdirectory
+          (change)="selectFiles($event)"
+          [disabled]="busy() || blocked()"
+      /></label>
+      <label
+        >Design entry
+        <select
+          [value]="design"
+          (change)="design = $any($event.target).value"
+          [disabled]="busy() || blocked()"
+        >
+          @for (path of designs(); track path) {
+            <option [value]="path">{{ path }}</option>
+          }
+        </select></label
+      >
+      @if (selectedFiles().length) {
+        <ul aria-label="Selected package files">
+          @for (path of selectedFiles(); track $index) {
+            <li>{{ path }}</li>
+          }
+        </ul>
+      }
+      @if (mappingId()) {
+        <p>
+          Append requires the displayed head to remain current. A conflict never
+          overwrites a newer revision.
+        </p>
+      }
+      <button
+        type="button"
+        (click)="prepare()"
+        [disabled]="!canSend() || !design"
+      >
+        Review conversion
+      </button>
+    }
+    @if (recoveryPending()) {
+      <section role="status">
+        <p>
+          The original import review must be recovered before starting another
+          conversion. A confirmation may already have saved its revision.
+        </p>
+        <button type="button" (click)="retryRecovery()" [disabled]="!canSend()">
+          Retry original review recovery
+        </button>
+      </section>
+    }
+    @if (review(); as value) {
+      <h3>Review before saving</h3>
+      <p>{{ value.summary }}</p>
+      <p>
+        {{
+          value.targetMappingId
+            ? "Append to mapping " +
+              value.targetMappingId +
+              " at head " +
+              value.expectedHeadRevisionId
+            : "Create mapping: " + value.mappingName
+        }}
+      </p>
+      <p>
+        Engine: {{ value.engine.backendId }} · {{ value.engine.engineRevision }}
+      </p>
+      <p>
+        Package SHA-256: <code>{{ value.packageDigest }}</code>
+      </p>
+      <ul>
+        @for (warning of value.warnings; track $index) {
+          <li>
+            <strong>{{ warning.code }}</strong
+            >: {{ warning.message }}
+          </li>
+        }
+      </ul>
+      @if (value.warnings.length) {
+        <label
+          ><input
+            type="checkbox"
+            [checked]="acknowledged()"
+            (change)="acknowledged.set($any($event.target).checked)"
+            [disabled]="busy()"
+          />
+          I have reviewed all conversion warnings.</label
+        >
+      }
+      <button
+        type="button"
+        (click)="confirm()"
+        [disabled]="
+          !canSend() || (value.warnings.length > 0 && !acknowledged())
+        "
+      >
+        Confirm or recover import
+      </button>
+    }
+    @if (message()) {
+      <p role="status">{{ message() }}</p>
+    }
+    @if (forgetWarning()) {
+      <section role="alert">
+        <p>
+          A sent import may already have saved a revision. Forgetting recovery
+          does not cancel or undo it. Check revision history before starting
+          another import.
+        </p>
+        <label
+          ><input
+            type="checkbox"
+            [checked]="forgetAcknowledged()"
+            (change)="forgetAcknowledged.set($any($event.target).checked)"
+          />
+          I understand this only forgets local recovery.</label
+        >
+        <button type="button" (click)="forgetWarning.set(false)">
+          Keep recovery
+        </button>
+        <button
+          type="button"
+          (click)="forget()"
+          [disabled]="!forgetAcknowledged()"
+        >
+          Forget review
+        </button>
+      </section>
+    }
+    @if (saved(); as revision) {
+      <a [routerLink]="routes.revision(revision)">Open saved revision</a>
+    }
+    <button type="button" (click)="clear()" [disabled]="busy() || blocked()">
+      Clear this import
+    </button>
+  </section>
+}

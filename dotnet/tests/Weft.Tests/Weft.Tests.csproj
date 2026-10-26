@@ -68,7 +68,7 @@
     <None Include="Fixtures/*.json"
           Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Committed OpenAPI documents that the hosts' own routes and generated documents are compared with. -->
-    <None Include="../../../contracts/weft-endpoint-v1.json;../../../contracts/ferrule-service-v1.json"
+    <None Include="../../../contracts/weft-v1.json;../../../contracts/weft-endpoint-v1.json;../../../contracts/ferrule-service-v1.json"
           Link="Contracts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../contracts/weft-v1.json" Link="Contracts/weft-v1.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

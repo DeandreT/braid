@@ -9,6 +9,7 @@ pub mod build;
 pub mod decode;
 pub mod framing;
 pub mod inspect;
+pub mod interchange;
 pub mod preview;
 pub mod projection;
 pub mod protocol;
@@ -32,11 +33,16 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
             );
         }
     };
-    // Only the preview protocol selects the separate multi-document request shape.
+    // Select independent bounded request shapes before native inspection.
     #[derive(Deserialize)]
     struct ProtocolProbe {
         #[serde(rename = "protocolVersion")]
         protocol_version: Option<String>,
+    }
+    if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
+        .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(interchange::PROTOCOL))
+    {
+        return interchange::handle(&header_bytes, reader, writer);
     }
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
         .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(build::PROTOCOL))

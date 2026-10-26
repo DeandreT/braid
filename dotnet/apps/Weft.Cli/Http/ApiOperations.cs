@@ -25,6 +25,7 @@ internal sealed record ApiOperation(
     IReadOnlyDictionary<int, Type?> Success,
     Type ErrorBody,
     string ResponseMediaType = "application/json",
+    IReadOnlyList<string>? AlternateResponseMediaTypes = null,
     bool RequiresAuthentication = true,
     bool RetryOnFailure = true);
 
@@ -71,6 +72,20 @@ internal static class ApiOperations
         Project + "/revision-ingestions/{operationId}", typeof(CatalogRevisionIngestionReceiptV1));
     public static readonly ApiOperation ResumeCatalogRevisionIngestion = Send("ResumeCatalogRevisionIngestion", "POST",
         Project + "/revision-ingestions/{operationId}/resume", null, null, Accepted(typeof(CatalogRevisionIngestionResultV1)));
+
+    public static readonly ApiOperation GetCatalogInterchangeCapabilities = Get("GetCatalogInterchangeCapabilities", "/api/v1/catalog/interchange", typeof(CatalogInterchangeCapabilitiesV1));
+    public static readonly ApiOperation ReviewMfdCreate = Send("ReviewMfdCreate", "POST", Project + "/mfd-imports/review",
+        "application/vnd.weft.mfd-package.v1", null, Ok(typeof(CatalogInterchangeReviewV1)), query: ["name", "description", "backendId"]);
+    public static readonly ApiOperation ReviewMfdAppend = Send("ReviewMfdAppend", "POST", Mapping + "/mfd-imports/review",
+        "application/vnd.weft.mfd-package.v1", null, Ok(typeof(CatalogInterchangeReviewV1)), query: ["expectedHeadRevisionId"]);
+    public static readonly ApiOperation GetMfdImportReview = Get("GetMfdImportReview", Project + "/mfd-imports/{reviewId}", typeof(CatalogInterchangeReviewV1));
+    public static readonly ApiOperation ConfirmMfdImport = Send("ConfirmMfdImport", "POST", Project + "/mfd-imports/{reviewId}/confirm",
+        "application/json", typeof(CatalogInterchangeConfirmationV1), Accepted(typeof(CatalogRevisionIngestionResultV1)), headers: Key);
+    public static readonly ApiOperation ReviewMfdExport = Send("ReviewMfdExport", "POST", Revision + "/mfd-exports/review",
+        null, null, Ok(typeof(CatalogInterchangeReviewV1)));
+    public static readonly ApiOperation DownloadMfdExport = new("DownloadMfdExport", "POST", Revision + "/mfd-exports/{reviewId}/download",
+        None, None, "application/json", typeof(CatalogInterchangeConfirmationV1), Ok(null), typeof(CatalogErrorV1),
+        "application/xml", ["application/zip"]);
 
     public static readonly ApiOperation GetCatalogProjectionReport = Get("GetCatalogProjectionReport", Revision + "/reports/projection",
         typeof(CatalogProjectionReportV1));
@@ -156,6 +171,7 @@ internal static class ApiOperations
         GetHealth, GetReadiness, GetCatalogContext, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
         GetCatalogMapping, GetCatalogMappingMetadata, EditCatalogMappingMetadata, GetCatalogRevisions, AppendCatalogRevision,
         GetCatalogRevision, GetCatalogRevisionIngestionReceipt, ResumeCatalogRevisionIngestion, GetCatalogProjectionReport,
+        GetCatalogInterchangeCapabilities, ReviewMfdCreate, ReviewMfdAppend, GetMfdImportReview, ConfirmMfdImport, ReviewMfdExport, DownloadMfdExport,
         GetCatalogValidationReport, GetRetainedCatalogProjectionReport, GetRetainedCatalogValidationReport,
         EnsureCatalogProjectionReport, EnsureCatalogValidationReport, GetCatalogRevisionComparison, SubmitCatalogPreview,
         GetCatalogPreview, GetCatalogPreviewOutput, CancelCatalogPreview, GetRegressionCaseCapabilities, GetRegressionCases,

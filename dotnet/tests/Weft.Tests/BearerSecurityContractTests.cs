@@ -157,6 +157,10 @@ public sealed partial class BearerSecurityContractTests
             builder.Services.AddWeftSessionCatalog(new(organization), new CatalogMetadataEditOptions(true), new CatalogRevisionIngestionOptions(true),
                 new CatalogProjectCreationOptions(true), new CatalogRevisionReportOptions(true, true));
             builder.Services.AddWeftBearerAccess(new(organization), validator, identities, audit);
+            builder.Services.AddSingleton(new CatalogInterchangeOptions(true));
+            builder.Services.AddSingleton<IInterchangeBackendRegistry>(_ => throw new InvalidOperationException("Refused credentials must not resolve interchange workers."));
+            builder.Services.AddSingleton<InterchangeImportService>(_ => throw new InvalidOperationException("Refused credentials must not resolve import storage."));
+            builder.Services.AddSingleton<InterchangeExportService>(_ => throw new InvalidOperationException("Refused credentials must not resolve export storage."));
             // Every business feature is on, so each route reaches its admission.
             var image = "sha256:" + new string('a', 64);
             builder.Services.AddWeftRegressionCases(new(true, new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,

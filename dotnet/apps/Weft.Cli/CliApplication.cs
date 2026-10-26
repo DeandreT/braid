@@ -21,6 +21,7 @@ internal static class CliApplication
         root.Subcommands.Add(CatalogCommands.Mappings(globals));
         root.Subcommands.Add(CatalogCommands.Revisions(globals));
         root.Subcommands.Add(CatalogCommands.Ingestions(globals));
+        root.Subcommands.Add(MfdCommands.Create(globals));
         root.Subcommands.Add(ReportCommands.Reports(globals));
         root.Subcommands.Add(ReportCommands.Compare(globals));
         root.Subcommands.Add(PreviewCommands.Previews(globals));

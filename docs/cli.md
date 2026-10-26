@@ -144,6 +144,7 @@ shaped like a token.
 | `weft projects list/get/create` | Projects; creation makes you the project's administrator |
 | `weft mappings list/get/create` | Mappings; `create` uploads the first native revision |
 | `weft mappings metadata get/edit` | Name and description, edited with `If-Match` |
+| `weft mfd capabilities/import/review/confirm/export/download` | Closed MFD packages, complete warning review, explicit same-review confirmation and verified downloads |
 | `weft revisions list/get/append` | Immutable revisions; `append --expected-head` appends only on that head |
 | `weft ingestions status/resume` | Upload receipts and source-free recovery |
 | `weft reports projection/validation get/ensure` | Current or retained (`--derivation`) reports; `ensure` derives and waits |
@@ -171,6 +172,13 @@ shaped like a token.
   - uploads wait for validation unless `--no-wait` is given.
 
 ## Output
+
+MFD import and export are two-step operations: `mfd import` or `mfd export`
+prints the complete review, and `mfd confirm` or `mfd download` requires its exact
+review ID/digest. Warnings are acknowledged only with `--acknowledge-warnings`;
+confirmation can wait with `--wait` without changing its idempotency key. See
+[MFD interchange](mfd-interchange.md#command-line-workflow) for asset selection,
+append heads and recovery examples.
 
 Human-readable tables and fields are the default. `--json` writes the exact response document
 of the API contract instead, for scripts; browser-session request tokens are always withheld.
