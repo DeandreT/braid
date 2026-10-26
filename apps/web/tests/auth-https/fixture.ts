@@ -16,7 +16,7 @@ import {
   type Reply,
 } from "./wire";
 import { BrowserRootFetch, type AppRequest } from "./root-fetch";
-import { blinkRestriction } from "./conditional-policy";
+import { blinkRestriction, browserRestriction } from "./conditional-policy";
 import { sessionSummaryMatches } from "./summary";
 
 const unresolved = [
@@ -125,6 +125,7 @@ export class HttpsFixture {
         "--host-resolver-rules=" +
           unresolved.map((host) => `MAP ${host} ~NOTFOUND`).join(", "),
         blinkRestriction,
+        browserRestriction,
       ],
     });
     requireOwned(this.browser.version() === "157.0.8090.0");
