@@ -74,6 +74,10 @@ operation diagnostic ordinals refer to their own report lists; explanation
 document diagnostics are not substituted for operation diagnostics.
 
 Each operation observes fresh session status and catalog context. A routine
+check that starts while catalog context is in flight must settle before chat
+dispatches. Temporary dispatch suspension does not discard an original question;
+an identity boundary during the wait cancels that operation.
+A routine
 check keeps the conversation on screen, and so does a catalog re-read by the same
 owner and workspace features. Session boundaries, and a
 re-read for another owner or set of features, invalidate outstanding

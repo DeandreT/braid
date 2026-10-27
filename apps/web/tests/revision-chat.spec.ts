@@ -981,6 +981,143 @@ test("an unacknowledged question keeps its original request across a failed sess
   await expect(panel(page)).toContainText("Answer complete.");
 });
 
+for (const outcome of ["ready", "unavailable", "identityChanged"] as const) {
+  test(`original-question recovery waits for an overlapping session check (${outcome})`, async ({
+    page,
+  }) => {
+    const f = await fixture(page);
+    let identityContext = `v1.${"A".repeat(43)}`;
+    const requestToken = "ZXBvY2gtYQ";
+    const context = () =>
+      outcome === "identityChanged"
+        ? { ...f.data.context, mode: "session", identityContext, requestToken }
+        : f.data.context;
+    const session = () => ({
+      version: 1,
+      mode: "session",
+      state: "authenticated",
+      authActionRequestToken: "YXV0aC1h",
+      requestToken,
+      identityContext,
+      displayName: "Fixture account",
+    });
+    if (outcome === "identityChanged") {
+      await page.route("**/api/v1/catalog/context", (route) =>
+        route.fulfill({ json: context() }),
+      );
+      await page.route("**/api/auth/session*", (route) =>
+        route.fulfill({ json: session() }),
+      );
+    }
+    f.loseSend();
+    await page.goto(f.data.browserPath);
+    await start(page);
+    const recover = panel(page).getByRole("button", {
+      name: "Recover original question",
+    });
+    await expect(recover).toBeVisible();
+    let releaseContext!: () => void;
+    const contextGate = new Promise<void>((resolve) => {
+      releaseContext = resolve;
+    });
+    let contextHeld!: () => void;
+    const heldContext = new Promise<void>((resolve) => {
+      contextHeld = resolve;
+    });
+    await page.route(
+      "**/api/v1/catalog/context",
+      async (route) => {
+        contextHeld();
+        await contextGate;
+        await route.fulfill({ json: context() });
+      },
+      { times: 1 },
+    );
+    await recover.click();
+    await heldContext;
+    let releaseSession!: () => void;
+    const sessionGate = new Promise<void>((resolve) => {
+      releaseSession = resolve;
+    });
+    let sessionHeld!: () => void;
+    const heldSession = new Promise<void>((resolve) => {
+      sessionHeld = resolve;
+    });
+    await page.route(
+      "**/api/auth/session*",
+      async (route) => {
+        sessionHeld();
+        await sessionGate;
+        if (outcome === "unavailable")
+          await route.fulfill({ status: 503, json: { code: "unavailable" } });
+        else if (outcome === "identityChanged") {
+          identityContext = `v1.${"B".repeat(42)}A`;
+          await route.fulfill({ json: session() });
+        } else await route.fallback();
+      },
+      { times: 1 },
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await heldSession;
+    const contextReceived = page.waitForResponse("**/api/v1/catalog/context");
+    releaseContext();
+    await contextReceived;
+    // Let the context continuation render while session admission remains held.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    expect(f.posts).toHaveLength(2);
+    await expect(
+      panel(page).getByLabel("Question", { exact: true }),
+    ).toHaveValue("How does this map?");
+    await expect(
+      panel(page).getByLabel("Question", { exact: true }),
+    ).toBeDisabled();
+    releaseSession();
+    if (outcome !== "ready") {
+      expect(f.posts).toHaveLength(2);
+      if (outcome === "identityChanged") {
+        await expect(panel(page)).toHaveCount(0);
+        await page.getByRole("button", { name: "Retry", exact: true }).click();
+        await openPanel(page);
+        await expect(
+          panel(page).getByRole("button", {
+            name: "New conversation",
+            exact: true,
+          }),
+        ).toBeEnabled();
+        await expect(recover).toHaveCount(0);
+        expect(f.posts).toHaveLength(2);
+        return;
+      }
+      await expect(panel(page)).toHaveCount(0);
+      await page
+        .getByRole("alert")
+        .filter({
+          has: page.getByRole("heading", {
+            name: "Workspace access unavailable",
+            exact: true,
+          }),
+        })
+        .getByRole("button", { name: "Retry", exact: true })
+        .click();
+      await expect(
+        page.getByRole("heading", { name: "Catalog unavailable", exact: true }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Retry", exact: true }).click();
+      await expect(recover).toBeVisible();
+      expect(f.posts).toHaveLength(2);
+      await recover.click();
+    }
+    await expect.poll(() => f.posts.length).toBe(3);
+    expect(f.posts[2]!.body).toEqual(f.posts[1]!.body);
+    await expect(panel(page)).toContainText("Answer complete.");
+  });
+}
+
 test("a different actor after a failed session check clears the unsent question", async ({
   page,
 }) => {

@@ -13,7 +13,8 @@ import {
   signal,
   untracked,
 } from "@angular/core";
-import { firstValueFrom, fromEvent, takeUntil } from "rxjs";
+import { firstValueFrom, fromEvent, map, switchMap, takeUntil } from "rxjs";
+import { BrowserSessionState } from "../auth/browser-session-state";
 import { RouterLink } from "@angular/router";
 import { CatalogContextStore } from "../catalog/catalog-context";
 import { CatalogApi } from "../catalog/catalog-api";
@@ -208,6 +209,7 @@ export class RevisionChatComponent {
       this.draft().trim().length > 0,
   );
   private generation = 0;
+  private readonly sessions = inject(BrowserSessionState);
   private operations = new Set<AbortController>();
   private streamController: AbortController | null = null;
   private lastSequence = 0;
@@ -430,9 +432,14 @@ export class RevisionChatComponent {
     this.operations.add(controller);
     try {
       const context = await firstValueFrom(
-        this.catalog
-          .context()
-          .pipe(takeUntil(fromEvent(controller.signal, "abort"))),
+        this.catalog.context().pipe(
+          // Another routine check can start while catalog context is in flight.
+          // Wait for it; temporary dispatch suspension is not an owner change.
+          switchMap((context) =>
+            this.sessions.whenSettled().pipe(map(() => context)),
+          ),
+          takeUntil(fromEvent(controller.signal, "abort")),
+        ),
       );
       const expected = this.context();
       if (generation !== this.generation || controller.signal.aborted)

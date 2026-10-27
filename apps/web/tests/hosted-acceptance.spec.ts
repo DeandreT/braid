@@ -609,7 +609,11 @@ test("runs a preview of sample JSON through the worker and the Ferrule service",
   await expect(region).toContainText(runId);
   await expect(region).toContainText("1 of 3");
   await region.getByRole("button", { name: "Show Shipment" }).click();
-  const text = (await region.locator("pre").textContent())!;
+  const text = (await page
+    .getByRole("tabpanel", { name: "Result", exact: true })
+    .getByRole("region", { name: "Document bytes", exact: true })
+    .locator("pre")
+    .textContent())!;
   const generatedAt = /"generatedAt": "([^"]+)"/.exec(text)![1];
   expect(text).toBe(shipment(generatedAt));
 });
