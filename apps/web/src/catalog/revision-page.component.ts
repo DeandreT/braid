@@ -78,6 +78,7 @@ import { NativeEvidenceComponent } from "../workbench/native-evidence.component"
 import { StatusChipComponent } from "../workbench/status-chip.component";
 import { MetadataValueComponent } from "../workbench/metadata-value.component";
 import { RegressionStatusComponent } from "./automation/regression-status.component";
+import { DocumentViewComponent } from "../workbench/document-view.component";
 import {
   buildStatus,
   comparisonStatus,
@@ -107,6 +108,7 @@ interface RevisionScreen {
     StatusChipComponent,
     MetadataValueComponent,
     RegressionStatusComponent,
+    DocumentViewComponent,
   ],
   providers: [BuildViewRecovery, RegressionViewRecovery, WorkbenchState],
   templateUrl: "./revision-page.component.html",
@@ -157,6 +159,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
   private readonly sessions = inject(BrowserSessionState);
   private readonly workbenchRouter = inject(Router);
   readonly selectedDocument = signal<string | null>(null);
+  readonly regressionDocumentKind = signal<"observed" | "expected">("observed");
   readonly documentKey = documentKey;
   readonly diagnostic = signal<{ validation: boolean; ordinal: number } | null>(
     null,
@@ -224,6 +227,31 @@ export class RevisionPageComponent extends CatalogRoutePage<
   readonly outputDocuments = computed(() =>
     (this.selectedRun()?.outputs ?? []).map(displayDocument),
   );
+  readonly expectedDocuments = computed(() =>
+    (this.selectedCase()?.definition.expected ?? []).map(displayDocument),
+  );
+  readonly displayedOutputs = computed(() =>
+    this.regressionDocumentKind() === "expected"
+      ? this.expectedDocuments()
+      : this.outputDocuments(),
+  );
+  readonly selectedPreview = computed(() => {
+    const component = this.previewView(),
+      view = this.data(),
+      context = this.context();
+    const shown = component?.shown();
+    return component &&
+      view &&
+      context &&
+      shown &&
+      this.sessions.presents(context) &&
+      component.context() === context &&
+      component.allowed() &&
+      sameRevision(component.revision().scope, view.revision.scope) &&
+      component.preview.run()?.runId === shown.runId
+      ? shown
+      : null;
+  });
   readonly differences = computed(() => {
     const value = this.selectedCase(),
       run = this.selectedRun();
@@ -451,6 +479,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
       this.workbench.lifetime();
       untracked(() => {
         this.selectedDocument.set(null);
+        this.regressionDocumentKind.set("observed");
         this.diagnostic.set(null);
         this.historyRequest?.unsubscribe();
         this.historyRequest = null;
@@ -684,10 +713,10 @@ export class RevisionPageComponent extends CatalogRoutePage<
   }
   displayedOutput() {
     return (
-      this.outputDocuments().find(
+      this.displayedOutputs().find(
         (value) => documentKey(value.name) === this.selectedDocument(),
       ) ??
-      this.outputDocuments()[0] ??
+      this.displayedOutputs()[0] ??
       null
     );
   }
@@ -705,8 +734,24 @@ export class RevisionPageComponent extends CatalogRoutePage<
   }
 
   openDock(dock: DockView): void {
+    if (this.frame()) {
+      this.frame()!.selectDock(dock, true);
+      return;
+    }
     this.workbench.dispatch({ kind: "dock", dock });
     this.workbench.updateLayout({ dockCollapsed: false });
+  }
+  showRegressionDocument(value: {
+    name: string | null;
+    expected: boolean;
+  }): void {
+    const documents = value.expected
+      ? this.expectedDocuments()
+      : this.outputDocuments();
+    if (!documents.some((document) => document.name === value.name)) return;
+    this.regressionDocumentKind.set(value.expected ? "expected" : "observed");
+    this.selectedDocument.set(documentKey(value.name));
+    this.openDock("output");
   }
   sampleMode(enabled: boolean): void {
     const { binding, epoch } = this.workbench.selection();

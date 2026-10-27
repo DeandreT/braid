@@ -164,3 +164,14 @@
     align-items: stretch;
   }
 }
+.preview-output ol {
+  max-height: 28rem;
+  overflow: auto;
+  padding-inline-start: 3.5rem;
+}
+
+.preview-output li {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-block: 0.2rem;
+}

@@ -20,7 +20,7 @@ public sealed class AutomationPersistenceTests(PostgresFixture fixture, ITestOut
         await using var transaction = await connection.BeginTransactionAsync();
         var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, AutomationSchemaAdmission.Tables, default, validateAutomation: false);
         output.WriteLine("AutomationFingerprint=" + fingerprint);
-        Assert.Equal(AutomationSchemaAdmission.Fingerprint, fingerprint);
+        Assert.Equal(AutomationSchemaAdmission.ComparisonFingerprint, fingerprint);
     }
     [PostgresFact]
     public async Task Automation_admission_rejects_new_table_drift_and_expanded_runtime_privileges()
@@ -48,16 +48,17 @@ public sealed class AutomationPersistenceTests(PostgresFixture fixture, ITestOut
     [PostgresFact]
     public async Task Exact_schema_and_populated_upgrade_preserve_original_cases_runs_and_revision_bytes()
     {
-        await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture, 29);
-        var value = data.Version(1);
-        var saved = await data.Writer.SaveAsync(data.Actor, value);
-        await using var runs = new PostgresRegressionRunStore(data.Case.RegressionConnectionString("weft_run_writer"), true);
-        var id = Guid.NewGuid();
-        Assert.Equal(RegressionRunSubmitOutcome.Created, await runs.SubmitAsync(new(data.Actor, id, saved.Reference!)));
+        await using var runs = await RegressionRunPostgresTestSupport.CreateAsync(fixture, 29);
+        var data = runs.Cases;
+        Assert.Equal(RegressionRunSubmitOutcome.Created, await runs.SubmitAsync());
         var before = await data.Case.ScalarAsync<string>("SELECT md5(string_agg(t::text,',' ORDER BY t.case_id)) FROM weft.regression_case_versions t");
-        await using (var runner = new MigrationRunner(data.Case.MigrationConnectionString)) await runner.MigrateAsync();
+        // Observe only Automation's delta before later document-profile replacements.
+        await using (var runner = new MigrationRunner(data.Case.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(30).ToArray())) await runner.MigrateAsync();
+        Assert.Equal(30L, await data.Case.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+        Assert.Equal(RegressionSchemaTestContract.AutomationChecksum,
+            await data.Case.ScalarAsync<string>("SELECT checksum FROM weft.schema_migrations WHERE version=30"));
         Assert.Equal(before, await data.Case.ScalarAsync<string>("SELECT md5(string_agg(t::text,',' ORDER BY t.case_id)) FROM weft.regression_case_versions t"));
-        Assert.Equal(saved.Reference, (await runs.ReadAsync(data.Actor, data.Mapping.OrganizationId, id))!.Case);
+        Assert.Equal(runs.Reference, (await runs.ReadAsync(data.Actor, data.Mapping.OrganizationId, runs.RunId))!.Case);
         await using var connection = await data.Case.Owner.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
         await AutomationSchemaAdmission.ValidateAsync(connection, transaction, default);

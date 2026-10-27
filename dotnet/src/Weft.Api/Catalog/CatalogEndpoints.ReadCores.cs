@@ -46,7 +46,9 @@ public static partial class CatalogEndpoints
         if (fresh is null) return null;
         return new RegressionCaseCapabilitiesV1(Runtime(options.Runtime!), Limits(PreviewLimits.Default),
             RegressionComparisonService.ExactBytesPolicy, CanReadCase(fresh.Access),
-            CanPublishCase(fresh.Access) && fresh.Summary.BackendId == options.Runtime!.BackendId);
+            CanPublishCase(fresh.Access) && fresh.Summary.BackendId == options.Runtime!.BackendId,
+            options.DocumentRuntime is { } documentRuntime ? Runtime(documentRuntime) : null,
+            options.DocumentRuntime is not null ? [RegressionComparisonService.ExactBytesPolicy, RegressionComparisonService.EdiSegmentsPolicy] : null);
     }
 
     internal static async Task<RegressionCasePage?> RegressionCasePageAsync(IServiceProvider services, ActorContext actor, MappingScope mapping,
@@ -118,7 +120,10 @@ public static partial class CatalogEndpoints
         var current = await ReadableMappingAsync(services, actor, mapping, ct);
         if (current is null || !current.Access.Can(ProjectAction.UploadRevision)) return null;
         var supported = current.Summary.BackendId == options.Backend!.BackendId;
-        var response = new BuildCapabilitiesV1(CatalogBuildMapping.Backend(options.Backend), CatalogBuildMapping.Profile(options.Profile!), true, supported, supported);
+        var response = new BuildCapabilitiesV1(CatalogBuildMapping.Backend(options.Backend), CatalogBuildMapping.Profile(options.Profile!), true, supported, supported,
+            options.DocumentBackend is { } documentBackend ? CatalogBuildMapping.Backend(documentBackend) : null,
+            options.DocumentProfile is { } documentProfile ? CatalogBuildMapping.Profile(documentProfile) : null,
+            options.InterchangeProfile is { } interchangeProfile ? CatalogBuildMapping.Profile(interchangeProfile) : null);
         return await BuildMappingAccessAsync(services, actor, mapping, ct) ? response : null;
     }
 

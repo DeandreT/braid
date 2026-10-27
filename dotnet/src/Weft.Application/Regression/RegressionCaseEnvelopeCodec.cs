@@ -26,6 +26,7 @@ public sealed class RegressionCaseEnvelope
 public sealed partial class RegressionCaseEnvelopeCodec
 {
     public const string Schema = "weft.regression-case.v1";
+    public const string DocumentSchema = "weft.document-regression-case.v1";
     public const int MaximumHeaderBytes = 256 * 1024;
     public const int MaximumEnvelopeBytes = 4 + MaximumHeaderBytes +
         4 * (PreviewPolicy.MaximumInputDocuments + PreviewPolicy.MaximumArtifacts) +
@@ -87,7 +88,8 @@ public sealed partial class RegressionCaseEnvelopeCodec
     {
         var replay = value.Replay;
         json.WriteStartObject();
-        json.WriteString("schema", Schema);
+        var documents = value.Runtime.Profile == DocumentPreviewPolicy.Profile;
+        json.WriteString("schema", documents ? DocumentSchema : Schema);
         json.WriteString("caseId", value.CaseId.ToString("D"));
         json.WriteNumber("version", value.Version);
         json.WriteString("owner", value.Owner.Value.ToString("D"));
@@ -118,6 +120,19 @@ public sealed partial class RegressionCaseEnvelopeCodec
         json.WriteEndObject();
         json.WriteString("currentDateTime", replay.CurrentDateTime);
         json.WriteString("comparisonPolicy", value.ComparisonPolicy);
+        if (documents)
+        {
+            json.WritePropertyName("comparisonOptions");
+            if (value.EdiOptions is not { } options) json.WriteNullValue();
+            else
+            {
+                json.WriteStartObject();
+                json.WriteBoolean("compareSeparators", options.CompareSeparators);
+                json.WriteBoolean("ignoreControlNumbers", options.IgnoreControlNumbers);
+                json.WriteBoolean("ignoreDates", options.IgnoreDates);
+                json.WriteEndObject();
+            }
+        }
         json.WriteStartObject("limits");
         json.WriteNumber("maximumInputBytes", replay.Limits.MaximumInputBytes);
         json.WriteNumber("maximumOutputBytes", replay.Limits.MaximumOutputBytes);
@@ -154,18 +169,19 @@ public sealed partial class RegressionCaseEnvelopeCodec
         foreach (var output in value.Expected.Outputs)
         {
             token.ThrowIfCancellationRequested();
-            WriteFrameHeader(json, output.Key.Name, output.ByteCount, output.Digest);
+            WriteFrameHeader(json, output.Key.Name, output.ByteCount, output.Digest, documents ? output.MediaType : null);
         }
         json.WriteEndArray();
         json.WriteEndObject();
     }
 
-    private static void WriteFrameHeader(Utf8JsonWriter json, string? name, int length, Sha256Digest digest)
+    private static void WriteFrameHeader(Utf8JsonWriter json, string? name, int length, Sha256Digest digest, string? mediaType = null)
     {
         json.WriteStartObject();
         json.WriteString("name", name);
         json.WriteNumber("byteCount", length);
         json.WriteString("sha256", digest.Value);
+        if (mediaType is not null) json.WriteString("mediaType", mediaType);
         json.WriteEndObject();
     }
 

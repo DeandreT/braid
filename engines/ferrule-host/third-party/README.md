@@ -2,7 +2,7 @@
 
 The restricted worker uses Ferrule's `mapping`, `ir`, `engine`, `cli`, `mfd`,
 `codegen`, and `codegen-csharp` libraries at revision
-`576012aa17c403d9c3fcb8659ed4d3a47ba06864`, with every transitive Ferrule
+`dddc4dce6c93f4137fb2aa2a011360d089e0a51b`, with every transitive Ferrule
 package locked to the same revision. The `cli` library supplies only its public
 in-memory payload API to the preview operation; the worker does not run the
 Ferrule command-line program. `codegen` and `codegen-csharp` supply only

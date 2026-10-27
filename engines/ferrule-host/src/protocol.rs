@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL_VERSION: &str = "weft.ferrule-host.v1";
-pub const ENGINE_REVISION: &str = "576012aa17c403d9c3fcb8659ed4d3a47ba06864";
+pub const ENGINE_REVISION: &str = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b";
 pub const MAX_HEADER_BYTES: usize = 16 * 1024;
 pub const MAX_NATIVE_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;

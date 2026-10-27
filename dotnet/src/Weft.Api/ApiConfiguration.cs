@@ -51,6 +51,7 @@ public static class ApiConfiguration
             }
             CatalogEndpoints.TransformRevisionIngestionSchemas(document);
             CatalogEndpoints.TransformRevisionReportSchemas(document);
+            CatalogEndpoints.TransformPreviewSchemas(document);
             ChatEndpoints.TransformSchemas(document);
             AuthenticationOpenApi.Transform(document);
             // Last: every operation, including the authentication routes added above, declares its admitted schemes.

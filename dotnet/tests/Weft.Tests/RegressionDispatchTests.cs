@@ -79,18 +79,22 @@ public sealed class RegressionDispatchTests
     }
 
     [Fact]
-    public void Enabled_worker_registers_one_background_dispatcher_without_opening_a_pool()
+    public void Enabled_worker_registers_regression_and_automation_without_opening_a_pool()
     {
         var services = new ServiceCollection();
-        services.AddWeftRegressionWorker(name => name == "WEFT_REGRESSION_WORKER_ENABLED" ? "true" : "private-synthetic",
-            () => new("ferrule", "engine", "build", "adapter", PreviewPolicy.Profile));
-        Assert.Single(services, service => service.ServiceType == typeof(IHostedService));
+        services.AddWeftRegressionWorker(name => name == "WEFT_REGRESSION_WORKER_ENABLED" ? "true" : Variables.Contains(name) ? "private-synthetic" : null,
+            () => new("ferrule", "engine", "build", "adapter", PreviewPolicy.Profile),
+            () => new("ferrule", "engine", "build", "document-adapter", DocumentPreviewPolicy.Profile));
+        Assert.Equal(new[] { typeof(AutomationWorker), typeof(RegressionWorkerService) },
+            services.Where(service => service.ServiceType == typeof(IHostedService)).Select(service => service.ImplementationType));
+        Assert.Single(services, service => service.ServiceType == typeof(IRegressionCaseExecutor));
+        Assert.Single(services, service => service.ServiceType == typeof(IRegressionEvaluationExecutor));
         Assert.Single(services, service => service.ServiceType == typeof(IRegressionRunQueue));
         Assert.Single(services, service => service.ServiceType == typeof(IRegressionRunDispatcher));
     }
 
     private static readonly string[] Variables = ["WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING", "WEFT_REGRESSION_CASE_READER_CONNECTION_STRING",
-        "WEFT_REGRESSION_ACCESS_CONNECTION_STRING", "WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING"];
+        "WEFT_REGRESSION_ACCESS_CONNECTION_STRING", "WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING", "WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING"];
 
     private sealed class Queue(IReadOnlyList<RegressionRunReady> items) : IRegressionRunQueue
     {

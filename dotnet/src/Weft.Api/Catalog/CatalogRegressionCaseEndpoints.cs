@@ -132,7 +132,8 @@ public static partial class CatalogEndpoints
         if (!CanPublishCase(current.Access)) return Error(CatalogErrorCodeV1.PermissionDenied, StatusCodes.Status403Forbidden);
         // No body or private store is touched before session/CSRF and current project publication admission.
         var incoming = await CatalogRegressionCaseRequest.ReadAsync(context.Request, context.RequestAborted);
-        if (incoming.Runtime != options.Runtime || current.Summary.BackendId != options.Runtime!.BackendId)
+        var selectedRuntime = options.SelectRuntime(incoming.Runtime);
+        if (selectedRuntime is null || current.Summary.BackendId != options.Runtime!.BackendId)
             return Error(CatalogErrorCodeV1.PreconditionFailed, StatusCodes.Status412PreconditionFailed);
         var revisionScope = new RevisionScope(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, incoming.RevisionId);
         var revision = await CaseCatalogRevision(context, admission.Actor!, revisionScope);
@@ -154,8 +155,8 @@ public static partial class CatalogEndpoints
         RegressionCaseReference expected;
         try
         {
-            value = new(id, number, owner, incoming.Name, revisionScope, revision.Summary.NativeDigest, options.Runtime!,
-                incoming.Replay, incoming.Policy, incoming.Expected);
+            value = new(id, number, owner, incoming.Name, revisionScope, revision.Summary.NativeDigest, selectedRuntime,
+                incoming.Replay, incoming.Policy, incoming.Expected, incoming.EdiOptions);
             expected = new RegressionCaseEnvelopeCodec().Encode(value, context.RequestAborted).Reference;
         }
         catch (RegressionCaseException error)
@@ -236,7 +237,7 @@ public static partial class CatalogEndpoints
     private static RegressionCasePutV1 Definition(RegressionCaseVersion value) => new(value.Name, value.Revision.RevisionId.ToString("D"), Runtime(value.Runtime),
         value.Replay.CurrentDateTime, new(value.Replay.Target.Kind switch { PreviewTargetKind.All => "all", PreviewTargetKind.Primary => "primary", _ => "named" }, value.Replay.Target.Name),
         Limits(value.Replay.Limits), WebEncoders.Base64UrlEncode(value.Replay.Primary.CopyBytes()),
-        value.Replay.NamedInputs.Select(input => new RegressionDocumentV1(input.Name, WebEncoders.Base64UrlEncode(input.CopyBytes()))).ToArray(),
+        value.Replay.NamedInputs.Select(input => new RegressionInputDocumentV1(input.Name, WebEncoders.Base64UrlEncode(input.CopyBytes()))).ToArray(),
         value.Replay.Parameters.Select(parameter => new RegressionParameterV1(parameter.Name, parameter.Kind switch
         {
             PreviewParameterKind.String => "string",
@@ -244,5 +245,7 @@ public static partial class CatalogEndpoints
             PreviewParameterKind.Float => "float",
             _ => "boolean"
         }, parameter.Value)).ToArray(), value.ComparisonPolicy,
-        value.Expected.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()))).ToArray());
+        value.Expected.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()),
+            value.Runtime.Profile == DocumentPreviewPolicy.Profile ? output.MediaType : null)).ToArray(),
+        value.EdiOptions is { } options ? new(options.CompareSeparators, options.IgnoreControlNumbers, options.IgnoreDates) : null);
 }

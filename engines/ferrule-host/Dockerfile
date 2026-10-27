@@ -110,7 +110,7 @@ ARG WEFT_REVISION=""
 LABEL org.opencontainers.image.title="Weft Ferrule worker" \
       org.opencontainers.image.source="https://github.com/DeandreT/weft" \
       org.opencontainers.image.revision="$WEFT_REVISION" \
-      io.weft.ferrule.revision="576012aa17c403d9c3fcb8659ed4d3a47ba06864" \
+      io.weft.ferrule.revision="dddc4dce6c93f4137fb2aa2a011360d089e0a51b" \
       io.weft.rust.toolchain="1.98.1"
 COPY --from=build /runtime/ /
 USER 65532:65532

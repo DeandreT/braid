@@ -149,7 +149,7 @@ public sealed partial class WorkspaceToolService
     private static bool Textual(string mediaType)
     {
         var type = mediaType.Split(';', 2)[0].Trim().ToLowerInvariant();
-        return type.StartsWith("text/", StringComparison.Ordinal) || type is "application/json" or "application/xml" or "application/csv" ||
+        return type.StartsWith("text/", StringComparison.Ordinal) || type is "application/json" or "application/xml" or "application/csv" or "application/edi-x12" or "application/edifact" ||
             type.EndsWith("+json", StringComparison.Ordinal) || type.EndsWith("+xml", StringComparison.Ordinal);
     }
 

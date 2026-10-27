@@ -67,6 +67,12 @@ public sealed class CliContractDriftTests
         {
             var response = documented.Response(status);
             Assert.True(response is not null, $"{operationId} does not document status {status}");
+            if (response!["content"] is JsonObject contents)
+            {
+                var media = new[] { operation.ResponseMediaType }.Concat(operation.AlternateResponseMediaTypes ?? []).ToArray();
+                Assert.Equal(media.Length, media.Distinct(StringComparer.Ordinal).Count());
+                Assert.Equal(contents.Select(item => item.Key).Order(StringComparer.Ordinal), media.Order(StringComparer.Ordinal));
+            }
             if (type is null)
             {
                 if (operation.AlternateResponseMediaTypes is { } alternatives)

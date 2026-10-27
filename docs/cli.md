@@ -233,13 +233,28 @@ terminal. Progress, retries and sign-in prompts go to standard error.
     revision conversations; those continue through the original `weft chat` commands with their original scope.
     Workspace creation accepts `--conversation-id <ID>` for deliberate recovery using the same focus.
 - **Preview downloads** stream to a temporary file beside the destination. The file is kept
-  only when its size and SHA-256 match the run's output record and the `Content-Digest` header.
+  only when its media type, size and SHA-256 match the run's output record and the `Content-Digest` header.
   Standard-output downloads are staged within the server's 8 MiB output bound and fully verified
   before any bytes are written to standard output.
 
 Requests retain their 120-second deadline through response-body reads. Successful chat SSE bodies
 remain long-lived; their connection and headers still have a deadline. Waiting commands' `--timeout`
 also cancels in-flight polling requests and their body reads, rather than only stopping between polls.
+
+### Document previews and regression cases
+
+`weft previews create --document` selects the separately admitted document profile.
+The revision's explicit boundary settings determine JSON, X12 or EDIFACT input and
+output formats; filenames never select them. Without `--document`, the legacy
+JSON profile is unchanged. Output downloads accept only those admitted media types
+and preserve the exact bytes.
+
+Regression case definition files carry the document runtime, expected-output media
+types and explicit EDI comparison options. `weft regression capabilities` lists
+the offered runtimes and comparison policies. Run results show EDI locations for
+differences or invalid documents without printing payload fragments. Build and
+environment capabilities similarly show the separate document profile when it is
+available; use that profile's ID and version when creating its build environment.
 
 ## Exit codes
 

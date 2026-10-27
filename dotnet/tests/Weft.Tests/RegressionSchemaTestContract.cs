@@ -19,6 +19,9 @@ internal static class RegressionSchemaTestContract
     internal const string LocalReleaseChecksum = "91ea3ec6ca0652000a319b565f699a53f296c44f0c2f633670cfce83f9eb63e3";
     internal const string MachineInvocationChecksum = "8a1b8ec1221b58a5cb102b76dba7c17be0855e07097275b323a324a51f981b13";
     internal const string ApiRequestAuditChecksum = "e8ce44832823c885a709222b66f317c86b2bf789262804266a9920f50e7601a2";
+    internal const string DocumentPreviewsChecksum = "849f17688af5f6dc46dfc8792ffe6578ac491a8083b581f0d1221d5a30808254";
+    internal const string X12InterchangeBuildsChecksum = "c17397b4829cb9bcbcfbd49a4bae1612c839e61d39c84104115b1eede1ea0cb2";
+    internal const string ComparisonSettlementChecksum = "52f31240810b895e9b858fd58dc5bec08457b998189224c066b49b346645f4d3";
     internal const string AccountDisplayChecksum = "922e9c46ea1ee9374a95ca0e087cf20e4306826dd72aaad7f89292c31ad8760e";
     internal const string ReleaseOperationsChecksum = "926d5bc816765c6b4263c78e129337eb3f1fe4ec7794e1ed276fb6923dfe640d";
     internal const string AutomationChecksum = "e4dd2a5c41fed83eb3246aafd144a059c47dc5c476f6bd1247e1153cfc93e1f2";
@@ -30,7 +33,7 @@ internal static class RegressionSchemaTestContract
         "cancel_regression_run", "read_regression_run", "read_regression_run_metadata", "list_ready_regression_runs", "list_regression_run_history", .. BuildRoleGuard.Names, .. BuildRunRoleGuard.Names, .. BuildMetadataRoleGuard.Names, .. QualificationRoleGuard.Names, .. LocalReleaseRoleGuard.Names, .. MachineInvocationRoleGuard.Names, .. ApiRequestAuditRoleGuard.Names, .. AdministrationRoleGuard.Names.Where(name => name != "guard_machine_invocation"), .. ReleaseOperationsRoleGuard.Names, .. AutomationSchemaAdmission.Functions];
     internal static readonly string[] Roles = ["weft_case_reader", "weft_case_writer", "weft_run_reader", "weft_run_writer", "weft_build_reader", "weft_build_writer",
         "weft_build_run_reader", "weft_build_run_writer", "weft_build_dispatcher", "weft_build_metadata_reader", "weft_qualification_reader", "weft_qualification_writer", "weft_release_reader", "weft_release_writer",
-        "weft_invocation_grant_writer", "weft_invocation_writer", "weft_api_audit_writer", "weft_administration"];
+        "weft_invocation_grant_writer", "weft_invocation_writer", "weft_api_audit_writer", "weft_administration", "weft_comparison_settler"];
 
     internal static async Task AdmitAsync(PostgresCase test, CancellationToken token = default)
     {
@@ -38,6 +41,11 @@ internal static class RegressionSchemaTestContract
         Assert.Equal(AdministrationChecksum, MigrationRunner.EmbeddedMigrations[26].Checksum);
         Assert.Equal(AutomationChecksum, MigrationRunner.EmbeddedMigrations[29].Checksum);
         Assert.Equal(ReleaseOperationsChecksum, MigrationRunner.EmbeddedMigrations[30].Checksum);
+        Assert.Equal(ChatSchemaContract.WorkspaceMigrationChecksum, MigrationRunner.EmbeddedMigrations[31].Checksum);
+        Assert.Equal(PreviewSchemaTestContract.ReadsMigrationChecksum, MigrationRunner.EmbeddedMigrations[32].Checksum);
+        Assert.Equal(DocumentPreviewsChecksum, MigrationRunner.EmbeddedMigrations[33].Checksum);
+        Assert.Equal(X12InterchangeBuildsChecksum, MigrationRunner.EmbeddedMigrations[34].Checksum);
+        Assert.Equal(ComparisonSettlementChecksum, MigrationRunner.EmbeddedMigrations[35].Checksum);
         await using (var administration = new PostgresAdministrationStore(test.RegressionConnectionString("weft_administration")))
             Assert.Null(await administration.ReadOrganizationAsync(new(new(Guid.NewGuid())), Guid.NewGuid(), token));
         var actor = new ActorContext(new(Guid.NewGuid()));

@@ -13,7 +13,10 @@ public sealed record PreviewRequestDescription(
     PreviewTargetSelection Target,
     IReadOnlyList<PreviewParameter> Parameters,
     IReadOnlyList<PreviewDeclaredInput> Inputs,
-    PreviewLimits Limits);
+    PreviewLimits Limits)
+{
+    public PreviewExecutionProfile Profile { get; init; } = PreviewExecutionProfile.LegacyJson;
+}
 
 /// <summary>
 /// Canonical UTF-8 JSON for a preview request. Its SHA-256 is the request fingerprint, so a
@@ -23,6 +26,7 @@ public sealed record PreviewRequestDescription(
 public static class PreviewRequestDocument
 {
     public const string Schema = "weft.preview-request.v1";
+    public const string DocumentSchema = "weft.document-preview-request.v1";
     public const int MaximumBytes = 64 * 1024;
 
     public static string Encode(PreviewRunSubmission submission, PreviewLimits limits)
@@ -34,7 +38,8 @@ public static class PreviewRequestDocument
         {
             var revision = submission.Revision;
             json.WriteStartObject();
-            json.WriteString("schema", Schema);
+            if (!Enum.IsDefined(submission.Profile)) throw new PreviewRunException("Unknown preview profile.");
+            json.WriteString("schema", submission.Profile == PreviewExecutionProfile.Document ? DocumentSchema : Schema);
             json.WriteString("organizationId", revision.OrganizationId.ToString("D"));
             json.WriteString("projectId", revision.ProjectId.ToString("D"));
             json.WriteString("mappingId", revision.MappingId.ToString("D"));
@@ -95,7 +100,8 @@ public static class PreviewRequestDocument
         {
             using var parsed = JsonDocument.Parse(document, new JsonDocumentOptions { MaxDepth = 8 });
             var root = parsed.RootElement;
-            Require(Text(root, "schema") == Schema);
+            var schema = Text(root, "schema");
+            Require(schema is Schema or DocumentSchema);
             var revision = new RevisionScope(Guid.ParseExact(Text(root, "organizationId"), "D"), Guid.ParseExact(Text(root, "projectId"), "D"),
                 Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, "revisionId"), "D"));
             var target = root.GetProperty("target");
@@ -121,7 +127,8 @@ public static class PreviewRequestDocument
             var limits = root.GetProperty("limits");
             var description = new PreviewRequestDescription(revision, selection, parameters, inputs, new PreviewLimits(
                 limits.GetProperty("maximumInputBytes").GetInt32(), limits.GetProperty("maximumOutputBytes").GetInt32(),
-                limits.GetProperty("maximumArtifacts").GetInt32(), limits.GetProperty("maximumTextBytes").GetInt32()));
+                limits.GetProperty("maximumArtifacts").GetInt32(), limits.GetProperty("maximumTextBytes").GetInt32()))
+            { Profile = schema == DocumentSchema ? PreviewExecutionProfile.Document : PreviewExecutionProfile.LegacyJson };
             Require(inputs.Length > 0 && inputs[0].Name is null && inputs.Skip(1).All(input => input.Name is not null));
             return description;
         }

@@ -95,6 +95,7 @@
             [mapping]="view.mapping"
             [revision]="view.revision"
             [workbench]="true"
+            (documentSelected)="showRegressionDocument($event)"
           />
         </div>
         <div
@@ -117,6 +118,8 @@
               [context]="current"
               [mapping]="view.mapping"
               [revision]="view.revision"
+              [workbench]="true"
+              (outputSelected)="openDock('output')"
             />
           } @else {
             <p class="wb-empty">
@@ -611,10 +614,7 @@
               Download exact bytes
             </button>
           </div>
-          <pre>{{ item.text }}</pre>
-          @if (item.truncated) {
-            <p>Display truncated. Download retains the full bytes.</p>
-          }
+          <weft-document-view [data]="item" />
         } @else {
           <p>
             Select an authorized saved case for this pinned revision in Tests.
@@ -623,37 +623,76 @@
         }
       }
       @case ("output") {
-        @if (displayedOutput(); as item) {
-          <div class="wb-command-bar">
-            <label
-              >Observed output
-              <select
-                [value]="documentKey(item.name)"
-                (change)="selectedDocument.set($any($event.target).value)"
+        @if (workbench.selection().view === "preview") {
+          @if (selectedPreview(); as item) {
+            <div class="wb-command-bar">
+              <strong
+                >Preview output ·
+                {{ item.output.targetName || "Primary output" }}</strong
               >
-                @for (document of outputDocuments(); track document.name) {
-                  <option [value]="documentKey(document.name)">
-                    {{ document.name ?? "Primary output" }}
-                  </option>
-                }
-              </select></label
-            ><span>{{ item.byteCount }} bytes · {{ item.format }}</span
-            ><button
-              type="button"
-              (click)="regressionView()?.download(item.document)"
-            >
-              Download exact bytes
-            </button>
-          </div>
-          <pre>{{ item.text }}</pre>
-          @if (item.truncated) {
-            <p>Display truncated. Download retains the full bytes.</p>
+              <span
+                >Run <code>{{ item.runId }}</code></span
+              >
+              <button
+                type="button"
+                (click)="previewView()?.download(item.output)"
+              >
+                Download exact bytes
+              </button>
+            </div>
+            <weft-document-view [data]="item.display" />
+          } @else {
+            <p>
+              Choose Show beside an output in Try sample. Preview evidence stays
+              tied to its own run.
+            </p>
           }
         } @else {
-          <p>
-            No observed regression output is available for this selection.
-            Sample results remain in Try sample with their own run identity.
-          </p>
+          <div class="wb-command-bar">
+            <label
+              >Document evidence
+              <select
+                [value]="regressionDocumentKind()"
+                (change)="regressionDocumentKind.set($any($event.target).value)"
+              >
+                <option value="observed">Observed · selected run</option>
+                <option value="expected">Expected · saved case</option>
+              </select>
+            </label>
+            @if (displayedOutput(); as item) {
+              <label
+                >{{
+                  regressionDocumentKind() === "expected"
+                    ? "Expected output"
+                    : "Observed output"
+                }}
+                <select
+                  [value]="documentKey(item.name)"
+                  (change)="selectedDocument.set($any($event.target).value)"
+                >
+                  @for (document of displayedOutputs(); track document.name) {
+                    <option [value]="documentKey(document.name)">
+                      {{ document.name ?? "Primary output" }}
+                    </option>
+                  }
+                </select></label
+              >
+              <button
+                type="button"
+                (click)="regressionView()?.download(item.document)"
+              >
+                Download exact bytes
+              </button>
+            }
+          </div>
+          @if (displayedOutput(); as item) {
+            <weft-document-view [data]="item" />
+          } @else {
+            <p>
+              No {{ regressionDocumentKind() }} regression output is available
+              for this selection. Use Try sample for preview evidence.
+            </p>
+          }
         }
       }
       @case ("diff") {
@@ -684,17 +723,36 @@
           <div class="wb-diff" [class.wb-diff-changed]="!diff.equal">
             <section>
               <h3><span aria-hidden="true">− </span>Expected · saved result</h3>
-              <pre>{{ diff.expected?.text ?? "No expected document" }}</pre>
+              @if (diff.expected; as expected) {
+                <weft-document-view [data]="expected" />
+              } @else {
+                <p>No expected document</p>
+              }
             </section>
             <section>
               <h3><span aria-hidden="true">+ </span>Actual · selected run</h3>
-              <pre>{{ diff.actual?.text ?? "No observed document" }}</pre>
+              @if (diff.actual; as actual) {
+                <weft-document-view [data]="actual" />
+              } @else {
+                <p>No observed document</p>
+              }
             </section>
           </div>
           <p class="wb-muted">
-            Exact comparison, including formatting. Red and green identify the
-            two sides, not a test pass. No expected result is changed.
+            Byte-level comparison, including formatting. Red and green identify
+            the two sides, not a test pass. No expected result is changed. Saved
+            policy: {{ selectedCase()?.definition?.comparisonPolicy }}.
           </p>
+          @if (
+            diff.expected &&
+            diff.actual &&
+            (diff.expected.mediaType ?? "application/json") !==
+              (diff.actual.mediaType ?? "application/json")
+          ) {
+            <p class="wb-muted">
+              Declared media types differ, independently of the byte comparison.
+            </p>
+          }
         } @else {
           <p>
             Select a completed run and its saved case for this pinned revision.

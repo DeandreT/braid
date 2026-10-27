@@ -11,6 +11,7 @@ namespace Weft.Deployment;
 public static class CompiledRuntimeProtocol
 {
     public const string Protocol = "weft.ferrule-compiled-json.v1";
+    public const string DocumentProtocol = "weft.ferrule-compiled-document.v1";
     // 32 parameter values of 4096 UTF-8 bytes can expand sixfold under JSON escaping.
     public const int MaximumHeaderBytes = 1024 * 1024;
     public const int MaximumIntentBytes = 1024 * 1024;
@@ -24,7 +25,8 @@ public static class CompiledRuntimeProtocol
         RespectRequiredConstructorParameters = true,
     };
 
-    public sealed record Document(string? Name, int ByteCount, string Sha256);
+    public sealed record Document(string? Name, int ByteCount, string Sha256,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null);
     public sealed record Parameter(string Name, string Kind, string Value);
     public sealed record Replay(string Target, string? TargetName, string CurrentDateTime, PreviewLimits Limits,
         Document[] Inputs, Parameter[] Parameters)
@@ -51,15 +53,15 @@ public static class CompiledRuntimeProtocol
     {
         ArgumentNullException.ThrowIfNull(artifact);
         ArgumentNullException.ThrowIfNull(replay);
-        var body = Describe(replay);
-        return new(Protocol, Guid.NewGuid().ToString("D"), artifact.Intent.BuildId, artifact.Intent.Fingerprint.Value,
+        var body = Describe(replay, artifact.Intent);
+        return new(ProtocolFor(artifact.Intent), Guid.NewGuid().ToString("D"), artifact.Intent.BuildId, artifact.Intent.Fingerprint.Value,
             artifact.ContentDigest.Value, checked((int)artifact.ByteCount), Digest(body), body);
     }
 
     public static byte[] EncodeRequest(Request request, BuildIntent intent, BuildBytes artifact, RegressionReplay replay)
     {
         Validate(request, intent);
-        if (artifact.Length != request.ArtifactBytes || artifact.Digest.Value != request.ArtifactDigest || Digest(Describe(replay)) != request.ReplayDigest)
+        if (artifact.Length != request.ArtifactBytes || artifact.Digest.Value != request.ArtifactDigest || Digest(Describe(replay, intent)) != request.ReplayDigest)
             throw Invalid();
         using var output = new MemoryStream();
         Write(output, JsonSerializer.SerializeToUtf8Bytes(request, Json), MaximumHeaderBytes);
@@ -76,7 +78,13 @@ public static class CompiledRuntimeProtocol
         ArgumentNullException.ThrowIfNull(bytes);
         if (bytes.Length > MaximumRequestBytes) throw Invalid();
         var offset = 0;
-        var header = ReadJson<Request>(Read(bytes, ref offset, MaximumHeaderBytes));
+        var rawHeader = Read(bytes, ref offset, MaximumHeaderBytes);
+        var header = ReadJson<Request>(rawHeader);
+        if (header.ProtocolVersion == Protocol)
+        {
+            using var legacy = JsonDocument.Parse(rawHeader);
+            if (legacy.RootElement.GetProperty("replay").GetProperty("inputs").EnumerateArray().Any(value => value.TryGetProperty("mediaType", out _))) throw Invalid();
+        }
         var intent = BuildIntentCodec.Decode(Read(bytes, ref offset, MaximumIntentBytes));
         Validate(header, intent);
         var artifactBytes = Read(bytes, ref offset, header.ArtifactBytes);
@@ -95,16 +103,18 @@ public static class CompiledRuntimeProtocol
         var replay = new RegressionReplay(Target(header.Replay.Target, header.Replay.TargetName), header.Replay.CurrentDateTime,
             header.Replay.Limits, inputs[0], inputs.Skip(1).ToArray(), header.Replay.Parameters.Select(value =>
                 new PreviewParameter(value.Name, Kind(value.Kind), value.Value)).ToArray());
-        if (Digest(Describe(replay)) != header.ReplayDigest) throw Invalid();
+        if (Digest(Describe(replay, intent)) != header.ReplayDigest) throw Invalid();
         return new(header, intent, new(artifactBytes, intent.Profile.MaximumArtifactBytes), replay);
     }
 
     public static byte[] EncodeResponse(Invocation invocation, string status, RegressionOutputSet? outputs = null)
     {
         ArgumentNullException.ThrowIfNull(invocation);
-        var documents = outputs?.Outputs.Select(value => new Document(value.Key.Name, value.ByteCount, value.Digest.Value)).ToArray() ?? [];
+        var documents = outputs?.Outputs.Select(value => new Document(value.Key.Name, value.ByteCount, value.Digest.Value,
+            invocation.Header.ProtocolVersion == DocumentProtocol ? value.MediaType : null)).ToArray() ?? [];
+        if (invocation.Header.ProtocolVersion == Protocol && outputs?.Outputs.Any(value => value.MediaType != PreviewPolicy.MediaType) == true) throw Invalid();
         var request = invocation.Header;
-        var header = new Response(Protocol, request.RequestId, request.BuildId, request.IntentDigest, request.ArtifactDigest,
+        var header = new Response(request.ProtocolVersion, request.RequestId, request.BuildId, request.IntentDigest, request.ArtifactDigest,
             request.ReplayDigest, status, documents);
         ValidateResponse(header, request, invocation.Intent);
         using var buffer = new MemoryStream();
@@ -120,7 +130,13 @@ public static class CompiledRuntimeProtocol
         Validate(request, intent);
         if (bytes.Length > MaximumResponseBytes) throw Invalid();
         var offset = 0;
-        var header = ReadJson<Response>(Read(bytes, ref offset, MaximumHeaderBytes));
+        var rawHeader = Read(bytes, ref offset, MaximumHeaderBytes);
+        var header = ReadJson<Response>(rawHeader);
+        if (request.ProtocolVersion == Protocol)
+        {
+            using var legacy = JsonDocument.Parse(rawHeader);
+            if (legacy.RootElement.GetProperty("outputs").EnumerateArray().Any(value => value.TryGetProperty("mediaType", out _))) throw Invalid();
+        }
         ValidateResponse(header, request, intent);
         var values = new List<RegressionOutput>();
         var remaining = request.Replay.Limits.MaximumOutputBytes;
@@ -130,7 +146,8 @@ public static class CompiledRuntimeProtocol
             var value = Read(bytes, ref offset, document.ByteCount);
             if (value.Length != document.ByteCount || Sha256Digest.FromBytes(value).Value != document.Sha256) throw Invalid();
             remaining -= value.Length;
-            values.Add(RegressionOutput.Capture(document.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(document.Name), value));
+            values.Add(RegressionOutput.Capture(document.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(document.Name), value,
+                mediaType: document.MediaType ?? PreviewPolicy.MediaType));
         }
         if (offset != bytes.Length) throw Invalid();
         return new(header, header.Status == "succeeded" ? RegressionOutputSet.Capture(values) : null);
@@ -138,7 +155,7 @@ public static class CompiledRuntimeProtocol
 
     private static void Validate(Request request, BuildIntent intent)
     {
-        if (request is null || intent is null || request.ProtocolVersion != Protocol ||
+        if (request is null || intent is null || request.ProtocolVersion != ProtocolFor(intent) ||
             !Guid.TryParseExact(request.RequestId, "D", out var id) || id == Guid.Empty || id.ToString("D") != request.RequestId ||
             request.BuildId != intent.BuildId || request.IntentDigest != intent.Fingerprint.Value ||
             request.ArtifactBytes is < 1 or > BuildWorkerProtocol.MaximumSourceBytes || request.ArtifactBytes > intent.Profile.MaximumArtifactBytes ||
@@ -158,6 +175,7 @@ public static class CompiledRuntimeProtocol
             if (input is null || input.ByteCount is < 1 || input.ByteCount > remaining || !Hash(input.Sha256) ||
                 (i == 0 ? input.Name is not null : !Name(input.Name) || !names.Add(input.Name!))) throw Invalid();
             remaining -= input.ByteCount;
+            if (input.MediaType != DeclaredMedia(intent, input.Name, input: true)) throw Invalid();
         }
         _ = Target(request.Replay.Target, request.Replay.TargetName);
         names.Clear();
@@ -171,7 +189,7 @@ public static class CompiledRuntimeProtocol
 
     private static void ValidateResponse(Response response, Request request, BuildIntent intent)
     {
-        if (response is null || response.ProtocolVersion != Protocol || response.RequestId != request.RequestId || response.BuildId != request.BuildId ||
+        if (response is null || response.ProtocolVersion != request.ProtocolVersion || response.RequestId != request.RequestId || response.BuildId != request.BuildId ||
             response.IntentDigest != request.IntentDigest || response.ArtifactDigest != request.ArtifactDigest || response.ReplayDigest != request.ReplayDigest ||
             response.Status is not ("succeeded" or "invalidInput" or "invalidParameter" or "unsupported" or "executionFailed" or "resourceLimit" or "invalidArtifact") ||
             response.Outputs is null || response.Outputs.Length > request.Replay.Limits.MaximumArtifacts) throw Invalid();
@@ -184,20 +202,41 @@ public static class CompiledRuntimeProtocol
         foreach (var document in response.Outputs)
         {
             if (document is null || document.ByteCount < 1 || document.ByteCount > remaining ||
-                !Hash(document.Sha256) || !expected.Remove(document.Name)) throw Invalid();
+                !Hash(document.Sha256) || !expected.Remove(document.Name) || document.MediaType != DeclaredMedia(intent, document.Name, input: false)) throw Invalid();
             remaining -= document.ByteCount;
         }
         if (expected.Count != 0) throw Invalid();
     }
 
-    private static Replay Describe(RegressionReplay replay) => new(replay.Target.Kind switch
+    public static string ProtocolFor(BuildIntent intent) => intent.Profile.Id switch
+    {
+        BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile => DocumentProtocol,
+        // Legacy qualification also uses this grammar to bind replay digests for
+        // other backends. Execution admission independently checks runtime support.
+        _ => Protocol
+    };
+    private static string? DeclaredMedia(BuildIntent intent, string? name, bool input)
+    {
+        if (ProtocolFor(intent) == Protocol) return null;
+        var kind = (input, name is null) switch
+        {
+            (true, true) => BuildBoundaryKind.PrimaryInput,
+            (true, false) => BuildBoundaryKind.NamedInput,
+            (false, true) => BuildBoundaryKind.PrimaryOutput,
+            _ => BuildBoundaryKind.NamedOutput
+        };
+        var boundary = intent.Boundaries.SingleOrDefault(value => value.Kind == kind && value.Name == name) ?? throw Invalid();
+        return BuildWorkerProtocol.MediaType(boundary.Format);
+    }
+    private static Replay Describe(RegressionReplay replay, BuildIntent intent) => new(replay.Target.Kind switch
     {
         PreviewTargetKind.All => "all",
         PreviewTargetKind.Primary => "primary",
         PreviewTargetKind.Named => "named",
         _ => throw Invalid()
     }, replay.Target.Name, replay.CurrentDateTime, replay.Limits,
-        new[] { replay.Primary }.Concat(replay.NamedInputs).Select(value => new Document(value.Name, value.ByteCount, value.Digest.Value)).ToArray(),
+        new[] { replay.Primary }.Concat(replay.NamedInputs).Select(value => new Document(value.Name, value.ByteCount, value.Digest.Value,
+            DeclaredMedia(intent, value.Name, input: true))).ToArray(),
         replay.Parameters.Select(value => new Parameter(value.Name, value.Kind switch
         {
             PreviewParameterKind.String => "string",

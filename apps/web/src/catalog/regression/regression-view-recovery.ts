@@ -6,6 +6,7 @@ export interface DocumentDraft {
   id: number;
   name: string;
   text: string;
+  mediaType?: string;
   file: { name: string; encoded: string; length: number } | null;
 }
 export interface ParameterDraft {
@@ -30,6 +31,11 @@ export interface RegressionDraft {
   readonly clock: string;
   readonly target: string;
   readonly targetName: string;
+  readonly documentMode?: boolean;
+  readonly comparisonPolicy?: string;
+  readonly compareSeparators?: boolean;
+  readonly ignoreControlNumbers?: boolean;
+  readonly ignoreDates?: boolean;
   readonly inputs: readonly DocumentDraft[];
   readonly outputs: readonly DocumentDraft[];
   readonly parameters: readonly ParameterDraft[];

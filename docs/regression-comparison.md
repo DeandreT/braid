@@ -1,4 +1,4 @@
-# Exact-output regression comparison
+# Regression output comparison
 
 `Weft.Application.Regression` provides the pure output-comparison boundary for
 persisted regression cases. It does not read storage, authorize access, execute
@@ -47,5 +47,37 @@ budget or malformed input fails categorically, rather than returning a partial
 pass. Cancellation is checked before work, between outputs and between byte
 chunks. An independent output limit bounds retained differences to at most 256.
 
-Persistence, expected-output approval, runtime identity, run diagnostics,
-retention, API/UI and actual worker replay belong to the later P10 increments.
+## Declared document comparison
+
+`weft.regression.edi-segments.v1` requires all three explicit boolean choices:
+`compareSeparators`, `ignoreControlNumbers`, and `ignoreDates`. JSON outputs
+still use exact byte comparison. X12 and EDIFACT outputs use ordered lexical
+segments, elements, repetitions and components. Output media types must match;
+neither filenames nor content sniffing select a family. Missing and unexpected
+logical outputs remain differences.
+
+The comparer requires complete scalar envelope controls and counts before any
+comparison masks apply. Unescaped composites or repetitions are invalid in those
+fields; released literal separators remain part of the complete reference.
+The comparer validates X12 ISA/GS/ST/SE/GE/IEA and EDIFACT
+UNB/UNG/UNH/UNT/UNE/UNZ envelope references and counts before masking. Standalone
+EDIFACT messages and X12 TA1 interchange acknowledgements are admitted. Multiple
+interchanges, functional groups and messages retain their original order.
+EDIFACT release characters are decoded lexically; service separators are compared
+unless explicitly disabled. This is a bounded lexical/envelope validator, not a
+trading-partner implementation-guide validator.
+
+Control-number masking covers X12 ISA13, GS06, ST02, SE02, GE02, IEA02, TA101,
+AK102, AK202 and IK202; EDIFACT UNB05, UNG05, UNH01, UNT02, UNE02, UNZ02 and
+UCI01/UCF01/UCM01. Acknowledgement response/action codes remain significant.
+Date masking covers X12 ISA09/10, GS04/05, BHT04/05, DTM02/03, G6202/04 and
+TA102/03; EDIFACT UNB04, UNG04 and the date/time value component of DTM01.
+Other values remain significant, including qualifiers and date-format codes.
+Masking does not remove elements, repetitions or components.
+
+Invalid documents produce `NotEvaluated` with an `invalidDocument` reason and
+a payload-free expected/actual diagnostic location. Differences carry one-based
+interchange, segment, element, repetition and component locations; zero denotes
+a whole segment or separator set. Parsing admits at most 2 MiB per EDI output,
+32,768 segments, 16 KiB per segment and 65,536 lexical values. Resource-bounded
+refusals cannot become passes.

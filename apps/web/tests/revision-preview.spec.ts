@@ -48,7 +48,7 @@ const succeeded = run("completed", {
   recordsWritten: "1",
   provenance: {
     confirmed: true,
-    engineRevision: "576012aa17c403d9c3fcb8659ed4d3a47ba06864",
+    engineRevision: "dddc4dce6c93f4137fb2aa2a011360d089e0a51b",
     backendBuild: "sha256:" + "c".repeat(64),
     adapterBuild: "weft.ferrule-preview-adapter.v1",
     profile: "weft.ferrule-json-preview.v1",
@@ -69,6 +69,8 @@ const succeeded = run("completed", {
 
 /** A controlled preview API: each GET of the run returns the next scripted state. */
 class Previews {
+  outputBytes = output;
+  outputMedia = "application/json";
   readonly submissions: { key: string; body: Submission }[] = [];
   cancels = 0;
   reads = 0;
@@ -130,8 +132,8 @@ class Previews {
     if (request.method() === "GET" && path === `${runPath}/outputs/0`) {
       await route.fulfill({
         status: 200,
-        headers: { "Content-Type": "application/json" },
-        body: output,
+        headers: { "Content-Type": this.outputMedia },
+        body: this.outputBytes,
       });
       return;
     }
@@ -148,12 +150,313 @@ class Previews {
 
 const panel = (page: Page) =>
   page.getByRole("region", { name: "Sample preview", exact: true });
+const documentView = (page: Page) =>
+  page.getByRole("region", { name: "Document bytes", exact: true });
+
+for (const family of ["x12", "edifact"] as const) {
+  test(`explicit document admission renders and downloads ${family} segments`, async ({
+    page,
+  }) => {
+    const previews = new Previews(page);
+    const bytes =
+      family === "x12"
+        ? "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*PO*WEFTSENDER*WEFTRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*WEFT-330~SE*3*0330~GE*1*330~IEA*1*000000330~"
+        : "UNH+330+ORDERS:D:96A:UN'BGM+220+WEFT?'330'UNT+3+330'";
+    const media =
+      family === "x12" ? "application/edi-x12" : "application/edifact";
+    previews.outputBytes = bytes;
+    previews.outputMedia = media;
+    previews.states = [
+      run("completed", {
+        ...succeeded,
+        provenance: {
+          ...succeeded.provenance!,
+          profile: "weft.ferrule-document-preview.v1",
+          adapterBuild: "weft.ferrule-document-preview-adapter.v1",
+        },
+        outputs: [
+          {
+            ...succeeded.outputs[0]!,
+            mediaType: media,
+            byteCount: Buffer.byteLength(bytes),
+            sha256: createHash("sha256").update(bytes).digest("hex"),
+          },
+        ],
+      }),
+    ];
+    await previews.install();
+    await open(page);
+    const region = panel(page);
+    await region.getByLabel("Preview admission").selectOption("document");
+    await region.getByLabel("Primary input (document)").fill(bytes);
+    await region
+      .getByRole("button", { name: "Run preview", exact: true })
+      .click();
+    await expect(
+      region.getByRole("button", { name: "Show Primary output" }),
+    ).toBeVisible();
+    expect(previews.submissions[0]!.body.profile).toBe(
+      "weft.ferrule-document-preview.v1",
+    );
+    expect(
+      Buffer.from(
+        previews.submissions[0]!.body.inputs[0]!.content,
+        "base64",
+      ).toString(),
+    ).toBe(bytes);
+    await region.getByRole("button", { name: "Show Primary output" }).click();
+    await expect(
+      documentView(page)
+        .getByRole("list", { name: "EDI segments" })
+        .getByRole("listitem"),
+    ).toHaveCount(family === "x12" ? 7 : 3);
+    if (process.env.WEFT_EDI_SCREENSHOT_ROOT) {
+      await documentView(page).screenshot({
+        path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/preview-${family}.png`,
+      });
+    }
+    const downloaded = page.waitForEvent("download");
+    await region
+      .getByRole("button", { name: "Download Primary output" })
+      .click();
+    const download = await downloaded;
+    expect(download.suggestedFilename()).toBe(
+      `preview-0-primary.${family === "x12" ? "x12" : "edi"}`,
+    );
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks).toString()).toBe(bytes);
+    await documentView(page)
+      .getByRole("button", { name: "Raw text", exact: true })
+      .click();
+    await expect(documentView(page).locator("pre")).toHaveText(bytes);
+    await region
+      .getByRole("button", { name: "Start a new preview", exact: true })
+      .click();
+    await expect(documentView(page)).toHaveCount(0);
+  });
+}
+
+test("headerless custom X12 stays raw without guessed boundaries", async ({
+  page,
+}) => {
+  const previews = new Previews(page);
+  const bytes = "BGM|220|ONE!BGM|220|TWO!";
+  previews.outputBytes = bytes;
+  previews.outputMedia = "application/edi-x12";
+  previews.states = [
+    run("completed", {
+      ...succeeded,
+      provenance: {
+        ...succeeded.provenance!,
+        profile: "weft.ferrule-document-preview.v1",
+        adapterBuild: "weft.ferrule-document-preview-adapter.v1",
+      },
+      outputs: [
+        {
+          ...succeeded.outputs[0]!,
+          mediaType: previews.outputMedia,
+          byteCount: Buffer.byteLength(bytes),
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+        },
+      ],
+    }),
+  ];
+  await previews.install();
+  await open(page);
+  const region = panel(page);
+  await region.getByLabel("Preview admission").selectOption("document");
+  await region.getByLabel("Primary input (document)").fill(bytes);
+  await region
+    .getByRole("button", { name: "Run preview", exact: true })
+    .click();
+  await region.getByRole("button", { name: "Show Primary output" }).click();
+  await expect(documentView(page)).toBeVisible();
+  if (process.env.WEFT_EDI_SCREENSHOT_ROOT) {
+    await documentView(page).screenshot({
+      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/preview-headerless-x12.png`,
+    });
+  }
+  await expect(
+    documentView(page).getByRole("list", { name: "EDI segments" }),
+  ).toHaveCount(0);
+  await expect(documentView(page).locator("pre")).toHaveText(bytes);
+});
 
 async function open(page: Page) {
   await page.goto(revisionPath(scope));
   await page.getByRole("tab", { name: "Try sample", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
 }
+
+test("mixed X12 output keeps each interchange declaration and both business records", async ({
+  page,
+}) => {
+  const first =
+    "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*PO*S*R*20261024*1200*330*X*005010~ST*850*1~BEG*ONE*A:B^C:D~SE*3*1~GE*1*330~IEA*1*000000330~";
+  const second = [...first.replace("ONE", "TWO")]
+    .map(
+      (value) =>
+        (
+          ({ "*": "|", ":": "~", "~": ":", "^": "!" }) as Record<string, string>
+        )[value] ?? value,
+    )
+    .join("");
+  const bytes = first + "\n" + second;
+  const previews = new Previews(page);
+  previews.outputBytes = bytes;
+  previews.outputMedia = "application/edi-x12";
+  previews.states = [
+    run("completed", {
+      ...succeeded,
+      outputs: [
+        {
+          ...succeeded.outputs[0]!,
+          mediaType: previews.outputMedia,
+          byteCount: Buffer.byteLength(bytes),
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+        },
+      ],
+    }),
+  ];
+  await previews.install();
+  await open(page);
+  const region = panel(page);
+  await region.getByLabel("Primary input (JSON)").fill("{}");
+  await region
+    .getByRole("button", { name: "Run preview", exact: true })
+    .click();
+  await region.getByRole("button", { name: "Show Primary output" }).click();
+  await expect(documentView(page)).toBeVisible();
+  if (process.env.WEFT_EDI_SCREENSHOT_ROOT)
+    await documentView(page).screenshot({
+      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/mixed-x12.png`,
+    });
+  const segments = documentView(page)
+    .getByRole("list", { name: "EDI segments" })
+    .getByRole("listitem");
+  await expect(segments).toHaveCount(14);
+  await expect(segments.nth(3)).toContainText("BEG*ONE*A:B^C:D~");
+  await expect(segments.nth(10)).toContainText("BEG|TWO|A~B!C~D:");
+});
+
+test("mixed EDIFACT advice stays local in the Result viewer and raw download", async ({
+  page,
+}, testInfo) => {
+  const first =
+    "UNB+UNOC:3+S+R+261026:1200+A'UNH+MA+ORDERS:D:96A:UN'BGM+220+FIRST?'VALUE'UNT+3+MA'UNZ+1+A'";
+  const second =
+    "UNA'|.! ?UNB|UNOC'3|S|R|261026'1200|B?UNH|MB|ORDERS'D'96A'UN?BGM|220|SECOND!!VALUE!?LITERAL?UNT|3|MB?UNZ|1|B?";
+  const bytes = first + "\r\n \t" + second;
+  const previews = new Previews(page);
+  previews.outputBytes = bytes;
+  previews.outputMedia = "application/edifact";
+  previews.states = [
+    run("completed", {
+      ...succeeded,
+      provenance: {
+        ...succeeded.provenance!,
+        profile: "weft.ferrule-document-preview.v1",
+        adapterBuild: "weft.ferrule-document-preview-adapter.v1",
+      },
+      outputs: [
+        {
+          ...succeeded.outputs[0]!,
+          mediaType: previews.outputMedia,
+          byteCount: Buffer.byteLength(bytes),
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+        },
+      ],
+    }),
+  ];
+  await previews.install();
+  await open(page);
+  const region = panel(page);
+  await region.getByLabel("Preview admission").selectOption("document");
+  await region.getByLabel("Primary input (document)").fill(bytes);
+  await region
+    .getByRole("button", { name: "Run preview", exact: true })
+    .click();
+  await region
+    .getByRole("button", { name: "Show Primary output", exact: true })
+    .click();
+  const segments = documentView(page).getByRole("listitem");
+  await expect(segments).toHaveCount(11);
+  await expect(segments.nth(5)).toHaveText("UNA'|.! ?");
+  await expect(segments.nth(8)).toHaveText("BGM|220|SECOND!!VALUE!?LITERAL?");
+  await page.screenshot({
+    path: testInfo.outputPath("mixed-una-result.png"),
+    fullPage: true,
+  });
+  await documentView(page)
+    .getByRole("button", { name: "Raw text", exact: true })
+    .click();
+  await expect(documentView(page).locator("pre")).toHaveText(bytes);
+  const pending = page.waitForEvent("download");
+  await region
+    .getByRole("button", { name: "Download Primary output", exact: true })
+    .click();
+  const stream = await (await pending).createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  expect(Buffer.concat(chunks).toString()).toBe(bytes);
+});
+
+test("document preview drafts participate in the shared sign-in warning", async ({
+  page,
+}) => {
+  const previews = new Previews(page);
+  await previews.install();
+  const identityContext = `v1.${"A".repeat(43)}`;
+  await page.route("**/api/auth/session", (route) =>
+    route.fulfill({
+      json: {
+        version: 1,
+        mode: "session",
+        state: "authenticated",
+        authActionRequestToken: "YXV0aC1h",
+        requestToken: "ZXBvY2gtYQ",
+        identityContext,
+        displayName: "Synthetic publisher",
+      },
+    }),
+  );
+  await page.route("**/api/v1/catalog/context", (route) =>
+    route.fulfill({
+      json: {
+        ...synthetic.context,
+        mode: "session",
+        identityContext,
+        requestToken: "ZXBvY2gtYQ",
+        features: { ...synthetic.context.features, preview: true },
+      },
+    }),
+  );
+  await open(page);
+  const region = panel(page);
+  const account = page.locator("#account-trigger");
+  const warning = page.locator("#sign-in-navigation-warning");
+  await account.click();
+  await expect(warning).toHaveCount(0);
+  await account.click();
+  await region.getByLabel("Preview admission").selectOption("document");
+  await account.click();
+  await expect(warning).toBeVisible();
+  await account.click();
+  await region.getByLabel("Preview admission").selectOption("json");
+  await account.click();
+  await expect(warning).toHaveCount(0);
+  await account.click();
+  await region.getByLabel("Primary input (JSON)").fill('{"local":"sample"}');
+  await account.click();
+  await expect(warning).toBeVisible();
+  await account.click();
+  await region.getByLabel("Primary input (JSON)").fill("");
+  await account.click();
+  await expect(warning).toHaveCount(0);
+  expect(previews.submissions).toHaveLength(0);
+});
 
 test("a preview runs, shows its outputs and downloads their exact bytes", async ({
   page,
@@ -162,6 +465,11 @@ test("a preview runs, shows its outputs and downloads their exact bytes", async 
   await previews.install();
   await open(page);
   const region = panel(page);
+  if (process.env.WEFT_EDI_SCREENSHOT_ROOT) {
+    await region.screenshot({
+      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/preview-default.png`,
+    });
+  }
   await region.getByLabel("Primary input (JSON)").fill('{"id":"SO-1"}');
   await region.getByRole("button", { name: "Add named input" }).click();
   await region.getByLabel("Source name").fill("rates");
@@ -194,7 +502,7 @@ test("a preview runs, shows its outputs and downloads their exact bytes", async 
   await expect(outputs).toContainText(String(Buffer.byteLength(output)));
 
   await region.getByRole("button", { name: "Show Primary output" }).click();
-  await expect(region.locator("pre")).toHaveText(output);
+  await expect(documentView(page).locator("pre")).toHaveText(output);
   const download = page.waitForEvent("download");
   await region.getByRole("button", { name: "Download Primary output" }).click();
   const file = await download;
@@ -233,9 +541,7 @@ test("invalid input and unsupported mappings show bounded failures", async ({
   await region.getByLabel("Primary input (JSON)").fill("not json");
   await region.getByRole("button", { name: "Run preview" }).click();
   const failure = region.locator(".preview-failure");
-  await expect(failure).toContainText(
-    "An input is not valid JSON for this mapping",
-  );
+  await expect(failure).toContainText("An input is not valid for this mapping");
   await expect(failure).toContainText("rates");
   await expect(failure).toContainText("Input is not JSON.");
 

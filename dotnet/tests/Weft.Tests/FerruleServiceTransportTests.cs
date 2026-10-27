@@ -99,7 +99,7 @@ public sealed class FerruleServiceTransportTests
         var root = document.RootElement;
         Assert.Equal(FerruleServiceProtocol.Version, root.GetProperty("protocol").GetString());
         Assert.Equal(Identity, root.GetProperty("buildIdentity").GetString());
-        Assert.Equal("576012aa17c403d9c3fcb8659ed4d3a47ba06864", root.GetProperty("engineRevision").GetString());
+        Assert.Equal("dddc4dce6c93f4137fb2aa2a011360d089e0a51b", root.GetProperty("engineRevision").GetString());
         Assert.Equal(3, root.GetProperty("concurrency").GetInt32());
         Assert.Equal(5, root.GetProperty("capacity").GetInt32());
         var profiles = root.GetProperty("profiles").EnumerateArray().ToArray();
@@ -578,7 +578,7 @@ public sealed class FerruleServiceTransportTests
                 AdmissionWait = admissionWait ?? TimeSpan.FromSeconds(5),
                 HealthListen = health ? new IPEndPoint(IPAddress.Loopback, 0) : null,
                 Healthy = healthy,
-                EngineRevision = "576012aa17c403d9c3fcb8659ed4d3a47ba06864",
+                EngineRevision = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b",
                 CompileToolchain = compile ? compileToolchain ?? Toolchain : null,
                 CompiledRuntimeIdentity = execute ? runtimeIdentity ?? RuntimeIdentity : null
             }, served);

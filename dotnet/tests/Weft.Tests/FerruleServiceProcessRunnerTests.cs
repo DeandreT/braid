@@ -18,6 +18,31 @@ namespace Weft.Tests;
 public sealed class FerruleServiceProcessRunnerTests
 {
     [ServiceEquivalenceFact]
+    public async Task AuthoredEnvelopesHaveExactDockerAndServiceChildEquivalence()
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            await using var docker = new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
+                Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview));
+            await using var child = new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview));
+            var comparing = new ComparingRunner(docker, child);
+            var backend = new FerrulePreviewBackend(comparing);
+            foreach (var family in new[] { "x12", "edifact" })
+            {
+                var result = await backend.PreviewAsync(DocumentPreviewTestData.Request(Scope, family));
+                Assert.True(result.Status == MappingPreviewStatus.Succeeded, result.Failure?.Message);
+                Assert.Equal(DocumentPreviewPolicy.Profile, result.Profile);
+                Assert.Single(result.Artifacts);
+            }
+            Assert.Equal(2, comparing.Compared);
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+            Assert.Empty(WorkerChildren());
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [ServiceEquivalenceFact]
     public async Task ChildOutputsEqualTheDockerRunnerByteForByte()
     {
         var root = TemporaryRoot();
@@ -54,7 +79,13 @@ public sealed class FerruleServiceProcessRunnerTests
                 Assert.NotEqual(MappingPreviewStatus.Succeeded, (await previews.PreviewAsync(request)).Status);
 
             Assert.True(inspection.Compared >= 3 * Fixtures().Count());
-            Assert.Equal(7, preview.Compared);
+            foreach (var family in new[] { "x12", "edifact" })
+            {
+                var result = await previews.PreviewAsync(DocumentPreviewTestData.Request(Scope, family));
+                Assert.True(result.Status == MappingPreviewStatus.Succeeded, result.Failure?.Message);
+                Assert.Equal(DocumentPreviewPolicy.Profile, result.Profile);
+            }
+            Assert.Equal(9, preview.Compared);
             Assert.Empty(Directory.EnumerateFileSystemEntries(root));
         }
         finally

@@ -223,13 +223,16 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
     {
         using var document = JsonDocument.Parse(body, JsonOptions);
         var root = document.RootElement;
-        Object(root, "inputs", "parameters");
+        Object(root, "inputs", "parameters", "schema");
+        var documentProfile = root.TryGetProperty("schema", out var schema);
+        if (documentProfile && (schema.ValueKind != JsonValueKind.String || schema.GetString() != "weft.document-invocation-request.v1")) throw new FormatException();
         if (!root.TryGetProperty("inputs", out var inputs) || inputs.ValueKind != JsonValueKind.Array || inputs.GetArrayLength() is < 1 or > PreviewPolicy.MaximumInputDocuments)
             throw new FormatException();
         var documents = new List<PreviewInputDocument>();
+        var media = new List<MachineInputMedia>();
         foreach (var input in inputs.EnumerateArray())
         {
-            Object(input, "name", "content");
+            Object(input, documentProfile ? ["name", "content", "mediaType"] : ["name", "content"]);
             string? name = null;
             if (input.TryGetProperty("name", out var named) && named.ValueKind != JsonValueKind.Null)
                 name = named.ValueKind == JsonValueKind.String ? named.GetString() : throw new FormatException();
@@ -238,6 +241,7 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
             var bytes = Convert.FromBase64String(content.GetString()!);
             if (bytes.Length == 0) throw new FormatException();
             documents.Add(new(name, bytes));
+            if (documentProfile) media.Add(new(name, Text(input, "mediaType")));
         }
         var parameters = new List<PreviewParameter>();
         if (root.TryGetProperty("parameters", out var values))
@@ -256,7 +260,7 @@ internal sealed class MappingEndpointRoutes(MappingEndpointCalls calls)
                 }, Text(value, "value")));
             }
         }
-        return new(documents[0], documents.Skip(1).ToArray(), parameters);
+        return new(documents[0], documents.Skip(1).ToArray(), parameters, documentProfile ? media : null);
     }
 
     private static void Object(JsonElement element, params string[] allowed)

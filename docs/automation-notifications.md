@@ -11,6 +11,35 @@ the **separate target revision and native digest**. Only that target's native by
 are dispatched to the existing preview backend. The returned provenance must match
 the target before comparison with the original expected output.
 
+Document cases keep their separately pinned preview profile, output media and
+EDI comparison options when evaluating a new revision. Selecting a different
+revision changes neither the saved replay inputs nor the original baseline.
+
+Document results are staged, not passed, by the ordinary run writer. A separate
+`weft_comparison_settler` login reads the locked original case and staged bytes,
+verifies their digests, and recomputes the saved policy with the same C# comparer
+used for interactive runs. It accepts no caller-supplied pass flag. Its decision
+is bound to that case version, result digest and unexpired execution lease, and
+current authority is checked again before commit. Malformed documents and wrong
+media fail; explicitly ignored EDI fields retain their saved comparison meaning.
+Legacy exact-byte JSON results keep their existing database comparison path.
+
+Before reading a staged result and again before settlement, the verifier admits
+the inherited regression-run routines and schema, including the authorization
+helper. These are catalog-only checks; the comparison role receives no run-role
+identity, direct table access or additional execution grants.
+
+The regression worker requires `WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING`
+(or its protected `_FILE` form) in addition to its run credentials. Deliver this
+credential only to the trusted worker, never the API host or ordinary run-writer
+clients. It has no table access and can execute only the two settlement entry
+functions. There is no fallback to trusting the ordinary writer when it is absent.
+Provision this distinct CONNECT-only login before applying the comparison
+settlement migration. Fresh local/Azure provisioning includes it; an existing
+local database uses `deploy/local/postgres-add-comparison-role.sh` with a separate
+`WEFT_LOCAL_COMPARISON_PASSWORD`. Existing hosted installations must provision the
+same role with their normal administrator/secret-delivery process before migrating.
+
 Cases have independent fenced leases and at most three infrastructure attempts.
 A comparison failure is terminal for that case, but other cases continue. Expired
 workers cannot replace a result. Restarting a worker resumes unfinished cases and
@@ -31,6 +60,14 @@ current case version. Disabled checks, no cases, pending checks, failures, stale
 case versions and passes on other revisions do not satisfy the policy. Existing
 build approvals and qualification evidence remain immutable; the policy does not
 retroactively erase them or activate a release.
+
+The approval and qualification gate triggers are independent of the evidence
+validation functions. Document-profile migrations replace only those evidence
+functions; they leave the Automation triggers and their exact admission intact.
+
+The gate rechecks durable comparison evidence as well as suite state. Historical
+document passes without trusted settlement are retained as history but cannot
+qualify a build; request a fresh suite under the corrected settlement path.
 
 Database admission verifies each Automation trigger's exact `weft` function
 identity, source, ownership and permissions before excluding the additive triggers

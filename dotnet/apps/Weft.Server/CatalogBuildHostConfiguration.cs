@@ -58,7 +58,10 @@ public static class CatalogBuildHostConfiguration
         var runWriter = Connection("WEFT_BUILD_RUN_WRITER_CONNECTION_STRING");
         var backend = new BuildBackendIdentity("ferrule", FerruleInspectionBackend.EngineRevision, runtime.Image!, FerrulePreviewBackend.AdapterBuild);
         var profile = FerruleBuildCompiler.Profile;
-        services.AddWeftBuildApi(new(true, backend, profile));
+        var documentBackend = new BuildBackendIdentity("ferrule", FerruleInspectionBackend.EngineRevision, runtime.Image!, FerrulePreviewBackend.DocumentAdapterBuild);
+        var documentProfile = FerruleBuildCompiler.DocumentProfile;
+        var interchangeProfile = FerruleBuildCompiler.X12InterchangesProfile;
+        services.AddWeftBuildApi(new(true, backend, profile, documentBackend, documentProfile, interchangeProfile));
         services.AddKeyedSingleton<PostgresBuildMetadataReader>(Key, (_, _) => new(metadata));
         services.AddSingleton<IBuildMetadataReader>(provider => provider.GetRequiredKeyedService<PostgresBuildMetadataReader>(Key));
         services.AddKeyedSingleton<PostgresBuildStore>(Key, (_, _) => new(controls, writer: true));
@@ -92,7 +95,7 @@ public static class CatalogBuildHostConfiguration
             () => throw new InvalidOperationException("Build HTTP does not publish private objects.")));
         services.AddKeyedSingleton<PersistedBuildIntentFactory>(Key, (provider, _) => new(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredKeyedService<IRevisionReportMetadataReader>(Key), provider.GetRequiredKeyedService<IRevisionReportReader>(Key),
-            provider.GetRequiredKeyedService<RegressionRunReadService>(Key), backend, profile));
+            provider.GetRequiredKeyedService<RegressionRunReadService>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile));
         services.AddSingleton<IBuildIntentFactory>(provider => new LazyIntentFactory(() => provider.GetRequiredKeyedService<PersistedBuildIntentFactory>(Key)));
         services.AddSingleton<IBuildApprovalWriter>(provider => new LazyApprovalWriter(() => provider.GetRequiredKeyedService<BuildControlService>(Key)));
         services.AddSingleton<IBuildAdmissionReader>(provider => new LazyAdmission(() => provider.GetRequiredKeyedService<BuildControlService>(Key)));
@@ -100,13 +103,13 @@ public static class CatalogBuildHostConfiguration
             provider.GetRequiredService<IBuildIntentFactory>(), provider.GetRequiredService<IBuildApprovalWriter>(), provider.GetRequiredKeyedService<IProjectReader>(Key)));
         services.AddSingleton(provider => new BuildSubmissionService(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredService<IBuildRunReader>(), provider.GetRequiredService<IBuildRunCommands>(), provider.GetRequiredService<IBuildAdmissionReader>(),
-            provider.GetRequiredKeyedService<IProjectReader>(Key), backend, profile));
+            provider.GetRequiredKeyedService<IProjectReader>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile));
         services.AddSingleton(provider => new LazyAdministration(() => provider.GetRequiredKeyedService<PostgresBuildStore>(Key)));
         services.AddSingleton<IBuildEnvironmentCommands>(provider => provider.GetRequiredService<LazyAdministration>());
         services.AddSingleton<IBuildApprovalRevocation>(provider => provider.GetRequiredService<LazyAdministration>());
         services.AddSingleton(provider => new BuildAdministrationService(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredService<IBuildEnvironmentCommands>(), provider.GetRequiredService<IBuildApprovalRevocation>(),
-            provider.GetRequiredKeyedService<IProjectReader>(Key), profile));
+            provider.GetRequiredKeyedService<IProjectReader>(Key), profile, documentProfile, interchangeProfile));
     }
 
     private sealed class LazyIntentFactory(Func<IBuildIntentFactory> factory) : IBuildIntentFactory

@@ -480,7 +480,7 @@ test("real packaged saved reports: explicit derivation, exact native explanation
       basic.nativeDigest.value,
     );
     await expect(panel(page, "projection")).toContainText(
-      "576012aa17c403d9c3fcb8659ed4d3a47ba06864",
+      "dddc4dce6c93f4137fb2aa2a011360d089e0a51b",
     );
     await page.screenshot({
       path: testInfo.outputPath("saved-reports-desktop.png"),

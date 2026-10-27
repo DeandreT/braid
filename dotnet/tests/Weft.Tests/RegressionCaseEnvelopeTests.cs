@@ -20,6 +20,42 @@ public sealed class RegressionCaseEnvelopeTests
     private const string Clock = "2026-10-20T12:34:56.123456789+01:00";
     private readonly RegressionCaseEnvelopeCodec codec = new();
 
+    [Theory]
+    [InlineData("application/edi-x12")]
+    [InlineData("application/edifact")]
+    public void Document_case_grammar_round_trips_media_options_and_explicit_replay_profile(string media)
+    {
+        var legacy = Case();
+        var options = new EdiComparisonOptions(false, true, true);
+        var output = RegressionOutput.Capture(RegressionOutputKey.Primary,
+            Encoding.UTF8.GetBytes(media == "application/edi-x12" ? DocumentPreviewTestData.X12 : DocumentPreviewTestData.Edifact), mediaType: media);
+        var runtime = Runtime(profile: DocumentPreviewPolicy.Profile);
+        var value = new RegressionCaseVersion(legacy.CaseId, legacy.Version, legacy.Owner, legacy.Name, legacy.Revision,
+            legacy.NativeDigest, runtime, legacy.Replay, RegressionComparisonService.EdiSegmentsPolicy, RegressionOutputSet.Capture([output]), options);
+        var encoded = codec.Encode(value);
+        var restored = codec.Decode(encoded.Reference, encoded.CopyBytes());
+        Assert.Equal(options, restored.EdiOptions);
+        Assert.Equal(media, Assert.Single(restored.Expected.Outputs).MediaType);
+        Assert.Equal(encoded.CopyBytes(), codec.Encode(restored).CopyBytes());
+        Assert.Equal(PreviewExecutionProfile.Document, restored.CreatePreviewRequest(NativeArtifact.Admit(Scope, Native, 10), runtime).Profile);
+        Assert.Equal(RegressionComparisonOutcome.Passed, new RegressionComparisonService().Compare(restored.Expected,
+            new(OperationStatusV1.Succeeded, restored.Expected), restored.ComparisonPolicy, ediOptions: restored.EdiOptions).Outcome);
+        var header = Encoding.UTF8.GetString(encoded.CopyBytes(), 4, BinaryPrimitives.ReadInt32BigEndian(encoded.CopyBytes()));
+        Assert.Contains(RegressionCaseEnvelopeCodec.DocumentSchema, header);
+        var downgrade = ChangeHeader(encoded.CopyBytes(), root => { root["schema"] = RegressionCaseEnvelopeCodec.Schema; return root; });
+        Failure(RegressionCaseFailure.StorageIntegrity, () => codec.Decode(Rehash(encoded.Reference, downgrade), downgrade));
+    }
+
+    [Fact]
+    public void Legacy_case_encoding_keeps_its_original_schema_and_omits_document_fields()
+    {
+        var encoded = codec.Encode(Case());
+        var header = Encoding.UTF8.GetString(encoded.CopyBytes(), 4, BinaryPrimitives.ReadInt32BigEndian(encoded.CopyBytes()));
+        Assert.Contains("\"schema\":\"weft.regression-case.v1\"", header);
+        Assert.DoesNotContain("mediaType", header);
+        Assert.DoesNotContain("comparisonOptions", header);
+    }
+
     [Fact]
     public void Exact_private_bytes_parameters_and_provenance_round_trip()
     {

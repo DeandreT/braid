@@ -32,7 +32,9 @@ internal static class HistoricalRegressionAccess
         var history = await data.Case.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations");
         if (history.Length >= MetadataVersion) return false;
         Assert.InRange(prefix, 17, MetadataVersion - 1);
-        Assert.Equal(MigrationRunner.EmbeddedMigrations.Take(prefix).Select(script => script.Checksum), history);
+        // A fixture can advance through other historical prefixes before installing the metadata readers.
+        Assert.InRange(history.Length, prefix, MetadataVersion - 1);
+        Assert.Equal(MigrationRunner.EmbeddedMigrations.Take(history.Length).Select(script => script.Checksum), history);
         return true;
     }
 
@@ -117,10 +119,18 @@ internal static class HistoricalRegressionAccess
             var reference = new RegressionCaseReference(row.GetGuid(3), row.GetInt64(4), new(row.GetGuid(5)),
                 new(organization, row.GetGuid(0), row.GetGuid(1), row.GetGuid(6)),
                 Sha256Digest.Parse(row.GetString(7)), Sha256Digest.Parse(row.GetString(8)), row.GetInt32(9));
-            Assert.Equal(data.Reference, reference); Assert.Equal("completed", row.GetString(10));
-            var bytes = row.GetFieldValue<byte[]>(15); Assert.Equal(row.GetInt32(14), bytes.Length);
-            var snapshot = new RegressionRunSnapshot(id, new(row.GetGuid(2)), reference, RegressionRunState.Completed,
-                row.GetInt32(11), new(row.GetDateTime(12)), bytes, Sha256Digest.Parse(row.GetString(13)));
+            Assert.Equal(data.Reference, reference);
+            Assert.True(Enum.TryParse<RegressionRunState>(row.GetString(10), true, out var state));
+            byte[]? bytes = null;
+            Sha256Digest? digest = null;
+            if (state == RegressionRunState.Completed)
+            {
+                bytes = row.GetFieldValue<byte[]>(15); Assert.Equal(row.GetInt32(14), bytes.Length);
+                digest = Sha256Digest.Parse(row.GetString(13));
+            }
+            else Assert.True(row.IsDBNull(13) && row.IsDBNull(14) && row.IsDBNull(15));
+            var snapshot = new RegressionRunSnapshot(id, new(row.GetGuid(2)), reference, state,
+                row.GetInt32(11), new(row.GetDateTime(12)), bytes, digest);
             Assert.False(await row.ReadAsync());
             return snapshot;
         });

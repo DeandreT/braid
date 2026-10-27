@@ -49,6 +49,8 @@ export class RegressionError extends Error {
   }
 }
 export const exactPolicy = "weft.regression.exact-bytes.v1";
+export const ediPolicy = "weft.regression.edi-segments.v1";
+export const documentProfile = "weft.ferrule-document-preview.v1";
 const maxBytes = 8 * 1024 * 1024;
 type Obj = Record<string, unknown>;
 const scopeKeys = ["organizationId", "projectId", "mappingId"] as const;
@@ -79,18 +81,32 @@ export class RegressionApi {
       undefined,
       (v) => {
         if (
-          !shape(v, [
-            "runtime",
-            "limits",
-            "comparisonPolicy",
-            "readSamples",
-            "publishCases",
-          ]) ||
+          !optionalShape(
+            v,
+            [
+              "runtime",
+              "limits",
+              "comparisonPolicy",
+              "readSamples",
+              "publishCases",
+            ],
+            ["documentRuntime", "comparisonPolicies"],
+          ) ||
           !runtime(v.runtime) ||
           !limits(v.limits) ||
           v.comparisonPolicy !== exactPolicy ||
           typeof v.readSamples !== "boolean" ||
-          typeof v.publishCases !== "boolean"
+          typeof v.publishCases !== "boolean" ||
+          (v.documentRuntime !== undefined &&
+            (!runtime(v.documentRuntime) ||
+              (v.documentRuntime as Obj).profile !== documentProfile)) ||
+          (v.comparisonPolicies !== undefined &&
+            (!Array.isArray(v.comparisonPolicies) ||
+              v.comparisonPolicies.length !== 2 ||
+              v.comparisonPolicies[0] !== exactPolicy ||
+              v.comparisonPolicies[1] !== ediPolicy)) ||
+          (v.documentRuntime === undefined) !==
+            (v.comparisonPolicies === undefined)
         )
           invalid();
         return v as unknown as CaseCapabilities;
@@ -457,6 +473,17 @@ function shape(v: unknown, keys: string[]): v is Obj {
     Object.keys(v).sort().join("|") === [...keys].sort().join("|")
   );
 }
+function optionalShape(
+  v: unknown,
+  keys: string[],
+  optional: string[],
+): v is Obj {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  return shape(v, [
+    ...keys,
+    ...optional.filter((key) => Object.hasOwn(v, key)),
+  ]);
+}
 function integer(v: unknown, max: number): v is number {
   return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 && v <= max;
 }
@@ -498,13 +525,29 @@ function limits(v: unknown): boolean {
     integer(v.maximumTextBytes, 2048)
   );
 }
-function documents(v: unknown, count: number): v is RegressionDocument[] {
+function documents(
+  v: unknown,
+  count: number,
+  media: "none" | "required" | "optional" = "optional",
+): v is RegressionDocument[] {
   if (!Array.isArray(v) || v.length > count) return false;
   const names = new Set();
   let total = 0;
   for (const item of v) {
     if (
-      !shape(item, ["name", "bytesBase64Url"]) ||
+      !(media === "required"
+        ? shape(item, ["name", "bytesBase64Url", "mediaType"])
+        : optionalShape(
+            item,
+            ["name", "bytesBase64Url"],
+            media === "optional" ? ["mediaType"] : [],
+          )) ||
+      (item.mediaType !== undefined &&
+        !oneOf(item.mediaType, [
+          "application/json",
+          "application/edi-x12",
+          "application/edifact",
+        ])) ||
       !(item.name === null || (text(item.name, 256) && item.name.length > 0)) ||
       typeof item.bytesBase64Url !== "string" ||
       names.has(item.name)
@@ -518,33 +561,45 @@ function documents(v: unknown, count: number): v is RegressionDocument[] {
 }
 function definition(v: unknown): v is CaseDefinition {
   return (
-    shape(v, [
-      "name",
-      "revisionId",
-      "runtime",
-      "currentDateTime",
-      "target",
-      "limits",
-      "primaryBase64Url",
-      "namedInputs",
-      "parameters",
-      "comparisonPolicy",
-      "expected",
-    ]) &&
+    optionalShape(
+      v,
+      [
+        "name",
+        "revisionId",
+        "runtime",
+        "currentDateTime",
+        "target",
+        "limits",
+        "primaryBase64Url",
+        "namedInputs",
+        "parameters",
+        "comparisonPolicy",
+        "expected",
+      ],
+      ["comparisonOptions"],
+    ) &&
     text(v.name, 256) &&
     isCatalogId(v.revisionId) &&
     runtime(v.runtime) &&
     date(v.currentDateTime) &&
     limits(v.limits) &&
-    v.comparisonPolicy === exactPolicy &&
+    (v.comparisonPolicy === exactPolicy
+      ? v.comparisonOptions === undefined
+      : v.comparisonPolicy === ediPolicy &&
+        ediOptions(v.comparisonOptions) &&
+        (v.runtime as Obj).profile === documentProfile) &&
     shape(v.target, ["kind", "name"]) &&
     ((oneOf(v.target.kind, ["all", "primary"]) && v.target.name === null) ||
       (v.target.kind === "named" && text(v.target.name, 256))) &&
     typeof v.primaryBase64Url === "string" &&
     decodeBytes(v.primaryBase64Url).length <= maxBytes &&
-    documents(v.namedInputs, 15) &&
+    documents(v.namedInputs, 15, "none") &&
     v.namedInputs.every((x) => x.name !== null) &&
-    documents(v.expected, 64) &&
+    documents(
+      v.expected,
+      64,
+      (v.runtime as Obj).profile === documentProfile ? "required" : "none",
+    ) &&
     Array.isArray(v.parameters) &&
     v.parameters.length <= 32 &&
     v.parameters.every(
@@ -580,23 +635,39 @@ function comparison(
   v: unknown,
 ): v is components["schemas"]["RegressionComparisonV1"] {
   return (
-    shape(v, [
-      "policy",
-      "outcome",
-      "notEvaluatedReason",
-      "expectedOutputs",
-      "actualOutputs",
-      "totalDifferences",
-      "truncated",
-      "differences",
-    ]) &&
-    v.policy === exactPolicy &&
+    optionalShape(
+      v,
+      [
+        "policy",
+        "outcome",
+        "notEvaluatedReason",
+        "expectedOutputs",
+        "actualOutputs",
+        "totalDifferences",
+        "truncated",
+        "differences",
+      ],
+      ["documentDiagnostic"],
+    ) &&
+    oneOf(v.policy, [exactPolicy, ediPolicy]) &&
+    (v.notEvaluatedReason !== "invalidDocument" ||
+      v.documentDiagnostic !== undefined) &&
+    (v.documentDiagnostic === undefined ||
+      (v.policy === ediPolicy &&
+        v.outcome === "notEvaluated" &&
+        v.notEvaluatedReason === "invalidDocument" &&
+        shape(v.documentDiagnostic, ["name", "side", "location"]) &&
+        (v.documentDiagnostic.name === null ||
+          text(v.documentDiagnostic.name, 256)) &&
+        oneOf(v.documentDiagnostic.side, ["expected", "actual"]) &&
+        documentLocation(v.documentDiagnostic.location))) &&
     oneOf(v.outcome, ["passed", "failed", "notEvaluated"]) &&
     oneOf(v.notEvaluatedReason, [
       "none",
       "unsupportedPolicy",
       "executionUnsuccessful",
       "missingBaseline",
+      "invalidDocument",
     ]) &&
     integer(v.expectedOutputs, 128) &&
     integer(v.actualOutputs, 128) &&
@@ -608,17 +679,31 @@ function comparison(
     (v.truncated || v.differences.length === v.totalDifferences) &&
     v.differences.every(
       (x) =>
-        shape(x, [
-          "name",
-          "kind",
-          "expectedBytes",
-          "actualBytes",
-          "expectedDigest",
-          "actualDigest",
-          "firstDifferentByte",
-        ]) &&
+        optionalShape(
+          x,
+          [
+            "name",
+            "kind",
+            "expectedBytes",
+            "actualBytes",
+            "expectedDigest",
+            "actualDigest",
+            "firstDifferentByte",
+          ],
+          ["location"],
+        ) &&
+        (["segmentsDiffer", "separatorsDiffer"].includes(String(x.kind))
+          ? v.policy === ediPolicy && documentLocation(x.location)
+          : x.location === undefined) &&
         (x.name === null || text(x.name, 256)) &&
-        oneOf(x.kind, ["missingOutput", "unexpectedOutput", "bytesDiffer"]) &&
+        oneOf(x.kind, [
+          "missingOutput",
+          "unexpectedOutput",
+          "bytesDiffer",
+          "mediaTypeDiffer",
+          "separatorsDiffer",
+          "segmentsDiffer",
+        ]) &&
         [x.expectedBytes, x.actualBytes, x.firstDifferentByte].every(
           (n) => n === null || integer(n, maxBytes),
         ) &&
@@ -627,6 +712,33 @@ function comparison(
             d === null || (typeof d === "string" && /^[a-f0-9]{64}$/.test(d)),
         ),
     )
+  );
+}
+function ediOptions(v: unknown): boolean {
+  return (
+    shape(v, ["compareSeparators", "ignoreControlNumbers", "ignoreDates"]) &&
+    Object.values(v).every((x) => typeof x === "boolean")
+  );
+}
+function documentLocation(v: unknown): boolean {
+  return (
+    shape(v, [
+      "interchange",
+      "segment",
+      "segmentId",
+      "element",
+      "repetition",
+      "component",
+    ]) &&
+    integer(v.interchange, 32768) &&
+    Number(v.interchange) > 0 &&
+    integer(v.segment, 32769) &&
+    Number(v.segment) > 0 &&
+    typeof v.segmentId === "string" &&
+    /^(?:[A-Z][A-Z0-9]{0,2})?$/.test(v.segmentId) &&
+    integer(v.element, 256) &&
+    integer(v.repetition, 256) &&
+    integer(v.component, 128)
   );
 }
 function failure(error: unknown): RegressionError {

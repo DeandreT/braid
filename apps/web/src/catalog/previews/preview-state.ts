@@ -82,6 +82,7 @@ export class PreviewState {
   readonly inputs = signal<PreviewInputDraft[]>([this.input("")]);
   readonly parameters = signal<PreviewParameterDraft[]>([]);
   readonly targetKind = signal<PreviewTargetKind>("all");
+  readonly documentProfile = signal(false);
   readonly targetName = signal("");
   readonly run = this.currentRun.asReadonly();
   readonly busy = this.currentBusy.asReadonly();
@@ -368,7 +369,9 @@ export class PreviewState {
       if (bytes.length === 0)
         throw new Error(
           index === 0
-            ? "Enter or choose the primary JSON document."
+            ? this.documentProfile()
+              ? "Enter or choose the primary document."
+              : "Enter or choose the primary JSON document."
             : "Every named input needs content.",
         );
       total += bytes.length;
@@ -406,6 +409,9 @@ export class PreviewState {
         kind === "named" ? { kind, name: targetName } : { kind, name: null },
       parameters,
       inputs: encoded,
+      ...(this.documentProfile()
+        ? { profile: "weft.ferrule-document-preview.v1" as const }
+        : {}),
     };
   }
 

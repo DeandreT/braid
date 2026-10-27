@@ -156,7 +156,12 @@ export class PreviewApi {
           switchMap((response: HttpResponse<ArrayBuffer>) => {
             this.current(generation);
             const bytes = new Uint8Array(response.body ?? new ArrayBuffer(0));
-            if (response.status !== 200 || bytes.length !== output.byteCount)
+            if (
+              response.status !== 200 ||
+              bytes.length !== output.byteCount ||
+              response.headers.get("Content-Type")?.split(";")[0]?.trim() !==
+                output.mediaType
+            )
               throw new PreviewError("integrity", response.status);
             return from(crypto.subtle.digest("SHA-256", bytes)).pipe(
               map((digest) => {
@@ -338,7 +343,9 @@ function outputDescriptor(value: unknown): value is PreviewOutput {
     typeof output["targetName"] === "string" &&
     (output["targetName"] as string).length <= 2048 &&
     typeof output["targetNameTruncated"] === "boolean" &&
-    output["mediaType"] === "application/json" &&
+    ["application/json", "application/edi-x12", "application/edifact"].includes(
+      output["mediaType"] as string,
+    ) &&
     decimal(output["recordsWritten"]) &&
     hexDigest(output["sha256"]) &&
     integer(output["byteCount"], 0, 8 * 1024 * 1024)

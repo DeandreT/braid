@@ -39,6 +39,12 @@ public interface IAutomationQueue
     Task<bool> FinishDeliveryAsync(NotificationDeliveryClaim claim, NotificationDeliveryOutcome outcome, CancellationToken token);
 }
 
+/// <summary>Trusted comparison authority. Callers supply no pass decision or result bytes.</summary>
+public interface IAutomationComparisonSettler
+{
+    Task<bool> SettleNextAsync(CancellationToken token);
+}
+
 public enum NotificationDeliveryOutcome { Delivered, Unavailable, Refused, TransportFailure }
 
 public interface INotificationTransport

@@ -89,6 +89,9 @@ import { UnsentWork } from "../../workbench/unsent-work";
   styleUrl: "./revision-builds.component.css",
 })
 export class RevisionBuildsComponent {
+  readonly documentEnvironment = signal<"json" | "document" | "interchanges">(
+    "json",
+  );
   readonly copy = buildLabels;
   readonly requestLabels = buildRequestLabels;
   readonly buildStatus = buildStatus;
@@ -196,7 +199,17 @@ export class RevisionBuildsComponent {
             value.environments.find(
               (item) =>
                 item.active &&
-                sameProfile(item.profile, this.capabilities()!.profile),
+                (sameProfile(item.profile, this.capabilities()!.profile) ||
+                  (!!this.capabilities()!.interchangeProfile &&
+                    sameProfile(
+                      item.profile,
+                      this.capabilities()!.interchangeProfile!,
+                    )) ||
+                  (!!this.capabilities()!.documentProfile &&
+                    sameProfile(
+                      item.profile,
+                      this.capabilities()!.documentProfile!,
+                    ))),
             ) || null,
           );
       },
@@ -209,6 +222,20 @@ export class RevisionBuildsComponent {
         (item) => environmentKey(item) === key,
       ) || null,
     );
+    const selected = this.selectedEnvironment();
+    const offered = this.environmentCapabilities()?.documentProfile;
+    this.documentEnvironment.set(
+      selected &&
+        this.environmentCapabilities()?.interchangeProfile &&
+        sameProfile(
+          selected.profile,
+          this.environmentCapabilities()!.interchangeProfile!,
+        )
+        ? "interchanges"
+        : selected && offered && sameProfile(selected.profile, offered)
+          ? "document"
+          : "json",
+    );
   }
   environmentKey(value: BuildEnvironment): string {
     return environmentKey(value);
@@ -216,17 +243,41 @@ export class RevisionBuildsComponent {
   loadEnvironmentAdministration(): void {
     this.send(
       this.api.environmentCapabilities(this.admitted(), this.mapping().scope),
-      (cap) => this.environmentCapabilities.set(cap),
+      (cap) => {
+        this.environmentCapabilities.set(cap);
+        const selected = this.selectedEnvironment();
+        this.documentEnvironment.set(
+          selected &&
+            cap.interchangeProfile &&
+            sameProfile(selected.profile, cap.interchangeProfile)
+            ? "interchanges"
+            : selected &&
+                cap.documentProfile &&
+                sameProfile(selected.profile, cap.documentProfile)
+              ? "document"
+              : "json",
+        );
+      },
     );
   }
   registerEnvironment(nextVersion = false): void {
     if (!this.environmentCapabilities()?.canCreateVersions || !this.canMutate())
       return;
     if (nextVersion && !this.selectedEnvironment()) return;
+    const offered =
+      this.documentEnvironment() === "interchanges"
+        ? this.environmentCapabilities()?.interchangeProfile
+        : this.documentEnvironment() === "document"
+          ? this.environmentCapabilities()?.documentProfile
+          : this.environmentCapabilities()?.profile;
+    if (!offered) {
+      this.error.set("Choose an available server-offered compiler profile.");
+      return;
+    }
     this.capture(() =>
       captureEnvironment(
         this.owner(),
-        this.environmentCapabilities()!.profile,
+        offered,
         nextVersion ? this.selectedEnvironment() : null,
       ),
     );
@@ -274,7 +325,17 @@ export class RevisionBuildsComponent {
       cap = this.capabilities();
     if (!cap?.approveBuilds || !environment || !evidence || !this.canMutate())
       return;
-    if (!sameProfile(environment.profile, cap.profile)) {
+    if (
+      !sameProfile(environment.profile, cap.profile) &&
+      !(
+        cap.interchangeProfile &&
+        sameProfile(environment.profile, cap.interchangeProfile)
+      ) &&
+      !(
+        cap.documentProfile &&
+        sameProfile(environment.profile, cap.documentProfile)
+      )
+    ) {
       this.error.set(
         "Select an active environment matching the offered runtime profile.",
       );

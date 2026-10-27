@@ -9,9 +9,11 @@ public sealed partial class RegressionCaseEnvelopeCodec
 {
     private static RegressionCaseVersion ReadHeader(JsonElement root, byte[] bytes, ref int offset, CancellationToken token)
     {
-        Shape(root, "schema", "caseId", "version", "owner", "name", "revision", "nativeDigest", "runtime", "target",
-            "currentDateTime", "comparisonPolicy", "limits", "parameters", "inputs", "expected");
-        if (Text(root, "schema") != Schema) throw Integrity();
+        var documents = Text(root, "schema") == DocumentSchema;
+        string[] properties = ["schema", "caseId", "version", "owner", "name", "revision", "nativeDigest", "runtime", "target",
+            "currentDateTime", "comparisonPolicy", "limits", "parameters", "inputs", "expected"];
+        Shape(root, documents ? [.. properties, "comparisonOptions"] : properties);
+        if (Text(root, "schema") is not (Schema or DocumentSchema)) throw Integrity();
         var caseId = Id(root, "caseId");
         var version = Integer(root, "version");
         var owner = new PrincipalId(Id(root, "owner"));
@@ -25,6 +27,14 @@ public sealed partial class RegressionCaseEnvelopeCodec
         Shape(runtime, "backendId", "engineRevision", "backendBuild", "adapterBuild", "profile");
         var identity = new RegressionRuntimeIdentity(Text(runtime, "backendId"), Text(runtime, "engineRevision"),
             Text(runtime, "backendBuild"), Text(runtime, "adapterBuild"), Text(runtime, "profile"));
+        if (documents != (identity.Profile == DocumentPreviewPolicy.Profile)) throw Integrity();
+        EdiComparisonOptions? comparisonOptions = null;
+        if (documents && root.GetProperty("comparisonOptions").ValueKind != JsonValueKind.Null)
+        {
+            var options = root.GetProperty("comparisonOptions");
+            Shape(options, "compareSeparators", "ignoreControlNumbers", "ignoreDates");
+            comparisonOptions = new(options.GetProperty("compareSeparators").GetBoolean(), options.GetProperty("ignoreControlNumbers").GetBoolean(), options.GetProperty("ignoreDates").GetBoolean());
+        }
         var targetElement = root.GetProperty("target");
         Shape(targetElement, "kind", "name");
         var targetName = NullableText(targetElement, "name");
@@ -75,20 +85,20 @@ public sealed partial class RegressionCaseEnvelopeCodec
         foreach (var output in outputs.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
-            var frame = ReadFrame(output, bytes, ref offset, ref remaining, token);
+            var frame = ReadFrame(output, bytes, ref offset, ref remaining, token, documents);
             outputList[index++] = RegressionOutput.Capture(frame.Name is null ? RegressionOutputKey.Primary :
-                RegressionOutputKey.Named(frame.Name), frame.Bytes, token);
+                RegressionOutputKey.Named(frame.Name), frame.Bytes, token, frame.MediaType);
         }
         var replay = new RegressionReplay(target, Text(root, "currentDateTime"), selectedLimits,
             inputList[0], inputList.Skip(1).ToArray(), parameterList, token);
         return new(caseId, version, owner, name, revision, nativeDigest, identity, replay,
-            Text(root, "comparisonPolicy"), RegressionOutputSet.Capture(outputList, token));
+            Text(root, "comparisonPolicy"), RegressionOutputSet.Capture(outputList, token), comparisonOptions);
     }
 
-    private static (string? Name, byte[] Bytes) ReadFrame(JsonElement descriptor, byte[] envelope,
-        ref int offset, ref int remaining, CancellationToken token)
+    private static (string? Name, byte[] Bytes, string MediaType) ReadFrame(JsonElement descriptor, byte[] envelope,
+        ref int offset, ref int remaining, CancellationToken token, bool documents = false)
     {
-        Shape(descriptor, "name", "byteCount", "sha256");
+        Shape(descriptor, documents ? ["name", "byteCount", "sha256", "mediaType"] : ["name", "byteCount", "sha256"]);
         var name = NullableText(descriptor, "name");
         if (name is not null) RegressionCaseValues.Name(name);
         var count = Integer(descriptor, "byteCount");
@@ -101,7 +111,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
         token.ThrowIfCancellationRequested();
         offset += length;
         remaining -= length;
-        return (name, bytes.ToArray());
+        return (name, bytes.ToArray(), documents ? Text(descriptor, "mediaType") : PreviewPolicy.MediaType);
     }
 
     private static void Shape(JsonElement value, params string[] names)

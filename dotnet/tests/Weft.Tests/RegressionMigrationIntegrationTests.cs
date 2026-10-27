@@ -49,8 +49,8 @@ public sealed class RegressionMigrationIntegrationTests(PostgresFixture fixture)
     {
         await using var test = await fixture.CreateCaseAsync();
         await RegressionSchemaTestContract.AdmitAsync(test);
-        Assert.Equal(33, MigrationRunner.EmbeddedMigrations.Count);
-        Assert.Equal(Enumerable.Range(1, 33), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
+        Assert.Equal(36, MigrationRunner.EmbeddedMigrations.Count);
+        Assert.Equal(Enumerable.Range(1, 36), await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         var source = MigrationRunner.EmbeddedMigrations;
         Assert.Equal(PreviewSchemaTestContract.MigrationChecksum, source[11].Checksum);
         Assert.Equal(PreviewSchemaTestContract.MessagesMigrationChecksum, source[12].Checksum);
@@ -74,12 +74,17 @@ public sealed class RegressionMigrationIntegrationTests(PostgresFixture fixture)
         Assert.Equal(RegressionSchemaTestContract.ReleaseOperationsChecksum, source[30].Checksum);
         Assert.Equal(ChatSchemaContract.WorkspaceMigrationChecksum, source[31].Checksum);
         Assert.Equal(PreviewSchemaTestContract.ReadsMigrationChecksum, source[32].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.DocumentPreviewsChecksum, source[33].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.X12InterchangeBuildsChecksum, source[34].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.ComparisonSettlementChecksum, source[35].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AutomationChecksum,
             await test.ScalarAsync<string>("SELECT checksum FROM weft.schema_migrations WHERE version=30"));
     }
 
-    [PostgresFact]
-    public async Task Populated_thirteen_migration_upgrade_preserves_native_and_preview_facts_and_accepts_regression_runs()
+    [RegressionPostgresTheory]
+    [InlineData(13)]
+    [InlineData(33)]
+    public async Task Populated_preview_prefix_upgrade_preserves_native_and_preview_facts_and_accepts_regression_runs(int prefixVersion)
     {
         await using var test = await fixture.CreateCaseAsync(migrate: false);
         await using (var old = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(2).ToArray()))
@@ -88,7 +93,7 @@ public sealed class RegressionMigrationIntegrationTests(PostgresFixture fixture)
         await test.ExecuteAsync("UPDATE weft.project_memberships SET role='publisher',version=version+1 WHERE principal_id=$1", seed.Alice);
         var actor = new ActorContext(new(seed.Alice));
         var receipt = await HistoricalIngestionSeed.CommitCreateAsync(test, actor, new(seed.OrganizationA, seed.ProjectA));
-        await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(13).ToArray()))
+        await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(prefixVersion).ToArray()))
             await prefix.MigrateAsync();
         var nativeBefore = await test.ScalarAsync<string>("SELECT to_jsonb(r)::text FROM weft.mapping_revisions r");
         var historyBefore = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY version)::text FROM weft.schema_migrations r");
@@ -103,7 +108,7 @@ public sealed class RegressionMigrationIntegrationTests(PostgresFixture fixture)
         await test.MigrateAsync();
         await RegressionSchemaTestContract.AdmitAsync(test);
         Assert.Equal(nativeBefore, await test.ScalarAsync<string>("SELECT to_jsonb(r)::text FROM weft.mapping_revisions r"));
-        Assert.Equal(historyBefore, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY version)::text FROM weft.schema_migrations r WHERE version<=13"));
+        Assert.Equal(historyBefore, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY version)::text FROM weft.schema_migrations r WHERE version<=$1", prefixVersion));
         Assert.Equal(before, JsonSerializer.Serialize(await previewReader.ReadAsync(actor, seed.OrganizationA, submitted.RunId.Value)));
         await using var caseWriter = new PostgresRegressionCaseStore(test.RegressionConnectionString("weft_case_writer"), RegressionCaseDatabaseProfile.Writer);
         var value = new RegressionCaseVersion(Guid.NewGuid(), 1, actor.PrincipalId, "upgrade case", receipt.Facts.FutureRevision,

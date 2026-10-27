@@ -307,6 +307,9 @@ start of the document are shared, cut on a character boundary and further
 shortened to fit the call's budget. The result states the total and shared byte
 counts and whether the text was truncated, and carries a disclosure fact that is
 recorded as a shared-data event.
+Preview outputs declared as `application/edi-x12` or `application/edifact` follow
+these same text, size and current-grant checks. Their media type does not grant
+access or allow binary/control-containing content to be disclosed.
 
 Conversation text can then quote payload-derived content, so it falls under the
 conversation's retention and is erased with it; only the no-content audit row

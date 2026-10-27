@@ -17,6 +17,58 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
     private static readonly byte[] Rates = PreviewRunTestSupport.Rates;
 
     [PostgresFact]
+    public async Task DocumentPreviewUpgradePreservesSavedJsonRunsAndOnlyAddsAdmittedOutputMedia()
+    {
+        await using var test = await fixture.CreateCaseAsync(migrate: false);
+        await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(2).ToArray()))
+            await prefix.MigrateAsync();
+        var seed = await PostgresSeedData.CreateAsync(test);
+        await test.ExecuteAsync("UPDATE weft.project_memberships SET role='publisher',version=version+1 WHERE principal_id=$1", seed.Alice);
+        var actor = new ActorContext(new(seed.Alice));
+        var receipt = await HistoricalIngestionSeed.CommitCreateAsync(test, actor, new(seed.OrganizationA, seed.ProjectA));
+        await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(24).ToArray()))
+            await prefix.MigrateAsync();
+        var revision = receipt.Facts.FutureRevision;
+        await using var writer = new PostgresPreviewDatabase(test.PreviewWriterConnectionString, PreviewDatabaseProfile.Writer);
+        await using var reader = new PostgresPreviewDatabase(test.PreviewReaderConnectionString, PreviewDatabaseProfile.Reader);
+        var store = new PostgresPreviewRunStore(writer);
+        var reads = new PostgresPreviewRunReader(reader);
+        var submission = new PreviewRunSubmission(revision, Guid.NewGuid(), PreviewTargetSelection.Primary, new(null, "{}"u8), [], []);
+        async Task<Guid> Submit(PreviewRunSubmission value)
+        {
+            var result = await store.SubmitAsync(actor, new(value, PreviewRequestDocument.Encode(value, PreviewLimits.Default),
+                "2026-10-24T12:00:00Z", 3, TimeSpan.FromHours(24)));
+            return result.RunId!.Value;
+        }
+        async Task Complete(Guid run, string profile, string media, byte[] content)
+        {
+            var claimed = await store.ClaimAsync(revision.OrganizationId, run, Guid.NewGuid(), TimeSpan.FromSeconds(90));
+            Assert.True(await store.CompleteAsync(claimed.Claim!, new(PreviewRunOutcome.Succeeded, null,
+                new(true, "engine", "image", "adapter", profile), 1, [new("primary-output", "Interchange", false, media, 1, content)])));
+        }
+        var legacyRun = await Submit(submission);
+        await Complete(legacyRun, PreviewPolicy.Profile, PreviewPolicy.MediaType, "{}"u8.ToArray());
+        var before = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id)::text FROM weft.preview_runs r");
+        var documents = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY direction,ordinal)::text FROM weft.preview_documents d");
+        await test.MigrateAsync();
+        Assert.Equal(before, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id)::text FROM weft.preview_runs r"));
+        Assert.Equal(documents, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY direction,ordinal)::text FROM weft.preview_documents d"));
+        Assert.Equal(PreviewPolicy.MediaType, (await reads.ReadOutputAsync(actor, revision.OrganizationId, legacyRun, 0))!.MediaType);
+        Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, legacyRun), await store.SubmitAsync(actor,
+            new(submission, PreviewRequestDocument.Encode(submission, PreviewLimits.Default), "2026-10-24T12:00:00Z", 3, TimeSpan.FromHours(24))));
+        foreach (var family in new[] { "x12", "edifact" })
+        {
+            var run = await Submit(submission with { RequestKey = Guid.NewGuid(), Profile = PreviewExecutionProfile.Document });
+            var media = family == "x12" ? "application/edi-x12" : "application/edifact";
+            var content = DocumentPreviewTestData.Input(family);
+            await Complete(run, DocumentPreviewPolicy.Profile, media, content);
+            var output = (await reads.ReadOutputAsync(actor, revision.OrganizationId, run, 0))!;
+            Assert.Equal(media, output.MediaType);
+            Assert.Equal(content, output.Content);
+        }
+    }
+
+    [PostgresFact]
     public async Task ReadsUseOneSnapshotForTheRunAndItsOutputsWhileWritesStayReadCommitted()
     {
         await using var test = await PreviewRunTestSupport.CreateAsync(fixture);

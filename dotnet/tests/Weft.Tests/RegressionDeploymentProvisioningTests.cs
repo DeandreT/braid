@@ -14,7 +14,7 @@ public sealed class RegressionDeploymentProvisioningTests
     [
         "MIGRATOR", "RUNTIME", "INGEST", "CATALOG", "METADATA", "CREATOR", "REPORT", "DERIVATION",
         "MAINTENANCE", "IDENTITY", "PAYLOAD_PERMISSION", "SESSION_READER", "SESSION_WRITER", "CHAT_READER", "CHAT_WRITER",
-        "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER",
+        "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "COMPARISON",
         "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA",
         "QUALIFICATION_READER", "QUALIFICATION_WRITER", "RELEASE_READER", "RELEASE_WRITER", "INVOCATION_GRANT_WRITER", "INVOCATION_WRITER",
         "API_AUDIT_WRITER", "ADMINISTRATION"
@@ -120,12 +120,12 @@ public sealed class RegressionDeploymentProvisioningTests
     public void Deployment_inputs_supply_all_regression_passwords_without_enabling_runtime_features()
     {
         var root = Repository();
-        foreach (var role in new[] { "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA" })
+        foreach (var role in new[] { "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "COMPARISON", "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA" })
         {
             foreach (var path in new[] { "deploy/local/.env.example", "deploy/local/postgres.compose.yml", "deploy/compose/compose.yml" })
                 Assert.Contains("WEFT_LOCAL_" + role + "_PASSWORD", File.ReadAllText(Path.Combine(root, path)), StringComparison.Ordinal);
             var key = role.ToLowerInvariant().Replace('_', '-');
-            var login = "weft_" + role.ToLowerInvariant() + (role == "BUILD_METADATA" ? "_reader" : "");
+            var login = "weft_" + role.ToLowerInvariant() + (role == "BUILD_METADATA" ? "_reader" : role == "COMPARISON" ? "_settler" : "");
             Assert.Contains($"key: '{key}', env: '{role}'", File.ReadAllText(Path.Combine(root, "deploy/azure/modules/application.bicep")), StringComparison.Ordinal);
             Assert.Contains($"[{key}]={login}", File.ReadAllText(Path.Combine(root, "deploy/azure/initialize-secrets.sh")), StringComparison.Ordinal);
             Assert.Contains($"[\"{login}\", \"{role}\"]",

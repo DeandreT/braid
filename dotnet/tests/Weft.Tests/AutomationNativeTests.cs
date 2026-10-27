@@ -17,6 +17,65 @@ namespace Weft.Tests;
 [SupportedOSPlatform("linux")]
 public sealed class AutomationNativeTests(PostgresFixture fixture)
 {
+    [AutomationServiceFact]
+    public async Task Native_headerless_success_is_not_a_durable_EDI_pass_and_other_cases_continue()
+    {
+        using var workerRoot = new PrivateStorageTestRoot();
+        var root = workerRoot.NewDirectory("comparison-worker");
+        await using var inspection = new ProcessWorkerRunner(new(FerruleServiceTestSupport.Executable!, DockerWorkerProfile.Inspection, root));
+        await using var runner = new ProcessWorkerRunner(new(FerruleServiceTestSupport.Executable!, DockerWorkerProfile.Preview, root));
+        await using var native = await PostgresClaimAwareStorageIntegrationSupport.CreateAsync(fixture, serviceRunner: inspection);
+        var schema = JsonNode.Parse("""{"name":"Document","kind":{"kind":"group","children":[{"name":"ISA","kind":{"kind":"group","children":[{"name":"data","kind":{"kind":"scalar","ty":"string"}}]}}]}}""")!;
+        var mapping = new JsonObject
+        {
+            ["source"] = schema.DeepClone(),
+            ["target"] = schema.DeepClone(),
+            ["source_options"] = new JsonObject { ["json_document"] = true },
+            ["target_options"] = new JsonObject { ["edi_kind"] = "x12", ["x12_interchange_version"] = "00501" },
+            ["graph"] = JsonNode.Parse("""{"nodes":{"1":{"kind":"source_field","path":["ISA","data"]}}}"""),
+            ["root"] = JsonNode.Parse("""{"target_field":"","bindings":[],"children":[{"target_field":"ISA","bindings":[{"target_field":"data","node":1}],"children":[]}]}""")
+        };
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(mapping);
+        var ingestion = new RevisionIngestionService(native.Metadata, native.Native.Metadata, new PostgresProjectReader(native.Native.ReaderDatabase),
+            new(native.Storage, Weft.Storage.FileSystem.FileSystemStorageOptions.NativeHardMaximum),
+            new IngestionBackendRegistry([FerruleIngestionAdmissionBackend.CreateRegistration(inspection)]));
+        var created = await ingestion.CreateAsync(native.Actor, native.Project, Guid.NewGuid(), RevisionIngestionTestSupport.Request(), new MemoryStream(bytes));
+        Assert.Equal(RevisionIngestionOutcome.CommittedValid, created.Outcome);
+        var receipt = await native.ReceiptAsync(created); var revision = receipt.Facts.FutureRevision;
+        var scope = new MappingScope(revision.OrganizationId, revision.ProjectId, revision.MappingId);
+        var legacy = new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, inspection.BuildIdentity, FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile);
+        var document = new RegressionRuntimeIdentity("ferrule", legacy.EngineRevision, legacy.BackendBuild, FerrulePreviewBackend.DocumentAdapterBuild, DocumentPreviewPolicy.Profile);
+        var input = new PreviewInputDocument(null, """{"ISA":{"data":"OK"}}"""u8);
+        var backend = new FerrulePreviewBackend(runner);
+        var preview = await backend.PreviewAsync(new(NativeArtifact.Admit(revision, bytes, bytes.Length), PreviewTargetSelection.All, input, [], [], "2026-10-25T12:00:00Z", PreviewLimits.Default)
+        { Profile = PreviewExecutionProfile.Document });
+        Assert.Equal(MappingPreviewStatus.Succeeded, preview.Status);
+        var output = RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, Assert.Single(preview.Artifacts).Bytes, mediaType: "application/edi-x12")]);
+        await using var writer = new PostgresRegressionCaseStore(native.Case.RegressionConnectionString("weft_case_writer"), RegressionCaseDatabaseProfile.Writer);
+        await using var reader = new PostgresRegressionCaseStore(native.Case.RegressionConnectionString("weft_case_reader"), RegressionCaseDatabaseProfile.Reader);
+        foreach (var policy in new[] { RegressionComparisonService.EdiSegmentsPolicy, RegressionComparisonService.ExactBytesPolicy })
+            await writer.SaveAsync(native.Actor, new(Guid.NewGuid(), 1, native.Actor.PrincipalId, "native comparison", revision, receipt.Facts.NativeObject.Digest,
+                document, new(PreviewTargetSelection.All, "2026-10-25T12:00:00Z", PreviewLimits.Default, input, [], []), policy, output,
+                policy == RegressionComparisonService.EdiSegmentsPolicy ? new(false, true, true) : null));
+        await using var queue = new PostgresAutomationStore(native.Case.RegressionConnectionString("weft_run_writer"), true);
+        var suite = Guid.NewGuid();
+        Assert.True(await queue.WriteAsync(native.Actor, native.Project, "recheck", suite, JsonSerializer.SerializeToElement(new { mappingId = scope.MappingId, revisionId = revision.RevisionId })));
+        var executor = new RegressionCaseExecutionService(reader, new PostgresProjectReader(native.Native.ReaderDatabase), native.ReportReader, native.Physical, backend, legacy, document);
+        await using var verifier = new PostgresAutomationComparisonSettler(native.Case.RegressionConnectionString("weft_comparison_settler"), document);
+        for (var i = 0; i < 2; i++)
+        {
+            var claim = Assert.IsType<AutomationClaim>(await queue.ClaimEvaluationAsync(default));
+            var result = await executor.EvaluateAsync(native.Actor, claim.Original, claim.Target);
+            Assert.Equal(RegressionCaseExecutionOutcome.Completed, result.Outcome);
+            Assert.True(await queue.FinishEvaluationAsync(claim, result, default));
+            Assert.True(await verifier.SettleNextAsync(default));
+        }
+        Assert.Null(await queue.ClaimEvaluationAsync(default));
+        Assert.Equal(1L, await native.Case.ScalarAsync<long>("SELECT count(*) FROM weft.automation_evaluations WHERE suite_id=$1 AND state='passed'", suite));
+        Assert.Equal(1L, await native.Case.ScalarAsync<long>("SELECT count(*) FROM weft.automation_evaluations WHERE suite_id=$1 AND comparison_outcome='notEvaluated'", suite));
+        Assert.Equal("failed", await native.Case.ScalarAsync<string>("SELECT state FROM weft.automation_suites WHERE suite_id=$1", suite));
+    }
+
     [AutomationDockerFact]
     public Task Actual_new_revision_failure_and_recovery_use_the_original_immutable_case() => QualifyAsync(false);
 

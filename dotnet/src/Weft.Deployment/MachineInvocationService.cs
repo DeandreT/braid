@@ -6,13 +6,16 @@ using Weft.Domain;
 
 namespace Weft.Deployment;
 
+public sealed record MachineInputMedia(string? Name, string MediaType);
+
 /// <summary>
 /// One machine request for the whole qualified artifact: the primary input, every declared named input and
 /// typed parameters. Its digest binds input names, lengths and SHA-256 digests and the exact parameters.
 /// </summary>
 public sealed class MachineInvocationRequest
 {
-    public MachineInvocationRequest(PreviewInputDocument primary, IReadOnlyList<PreviewInputDocument> namedInputs, IReadOnlyList<PreviewParameter> parameters)
+    public MachineInvocationRequest(PreviewInputDocument primary, IReadOnlyList<PreviewInputDocument> namedInputs, IReadOnlyList<PreviewParameter> parameters,
+        IReadOnlyList<MachineInputMedia>? inputMedia = null)
     {
         ArgumentNullException.ThrowIfNull(primary); ArgumentNullException.ThrowIfNull(namedInputs); ArgumentNullException.ThrowIfNull(parameters);
         if (primary.Name is not null || namedInputs.Any(input => input is null || input.Name is null) || parameters.Any(parameter => parameter is null))
@@ -23,11 +26,20 @@ public sealed class MachineInvocationRequest
         if (NamedInputs.Select(input => input.Name).Distinct(StringComparer.Ordinal).Count() != NamedInputs.Count ||
             Parameters.Select(parameter => parameter.Name).Distinct(StringComparer.Ordinal).Count() != Parameters.Count)
             throw new ArgumentException("Input and parameter names must be unique.");
+        if (inputMedia is not null)
+        {
+            if (inputMedia.Any(value => value is null || !DocumentPreviewPolicy.AdmitsMediaType(value.MediaType)) ||
+                inputMedia.Select(value => value.Name).Distinct(StringComparer.Ordinal).Count() != inputMedia.Count ||
+                inputMedia.Count != NamedInputs.Count + 1 ||
+                !inputMedia.Select(value => value.Name).ToHashSet(StringComparer.Ordinal).SetEquals(NamedInputs.Prepend(primary).Select(value => value.Name)))
+                throw new ArgumentException("Every document input requires its explicit supported media type.");
+            InputMedia = Array.AsReadOnly(inputMedia.OrderBy(value => value.Name, StringComparer.Ordinal).ToArray());
+        }
         using var stream = new MemoryStream();
         using (var json = new Utf8JsonWriter(stream))
         {
             json.WriteStartObject();
-            json.WriteString("schema", "weft.mapping-invocation-request.v1");
+            json.WriteString("schema", InputMedia is null ? "weft.mapping-invocation-request.v1" : "weft.document-invocation-request.v1");
             json.WriteStartArray("inputs");
             foreach (var input in NamedInputs.Prepend(primary))
             {
@@ -35,6 +47,7 @@ public sealed class MachineInvocationRequest
                 json.WriteString("name", input.Name);
                 json.WriteNumber("bytes", input.ByteCount);
                 json.WriteString("sha256", input.Digest.Value);
+                if (InputMedia is not null) json.WriteString("mediaType", InputMedia.Single(value => value.Name == input.Name).MediaType);
                 json.WriteEndObject();
             }
             json.WriteEndArray();
@@ -56,6 +69,7 @@ public sealed class MachineInvocationRequest
     public PreviewInputDocument Primary { get; }
     public IReadOnlyList<PreviewInputDocument> NamedInputs { get; }
     public IReadOnlyList<PreviewParameter> Parameters { get; }
+    public IReadOnlyList<MachineInputMedia>? InputMedia { get; }
     public Sha256Digest Digest { get; }
     public override string ToString() => nameof(MachineInvocationRequest);
 }
@@ -151,6 +165,16 @@ public sealed class MachineInvocationService
             if (release is null || release.Phase != ReleasePhase.Active || release.Intent.ReleaseId != active)
                 return await ChangedAsync(actor, target, active, MachineInvocationOutcome.Refused, null, token).ConfigureAwait(false);
             var provenance = MachineInvocationProvenance.From(release.Intent);
+            var intent = release.Intent.Qualification.Artifact.Intent;
+            var documents = BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id);
+            if (documents != (request.InputMedia is not null)) return new(MachineInvocationOutcome.InvalidInput, provenance);
+            if (request.InputMedia is { } media)
+            {
+                var boundaries = intent.Boundaries.Where(value => value.Kind is BuildBoundaryKind.PrimaryInput or BuildBoundaryKind.NamedInput).ToArray();
+                if (boundaries.Length != media.Count || media.Any(value => !boundaries.Any(boundary => boundary.Name == value.Name &&
+                    BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format) && BuildWorkerProtocol.MediaType(boundary.Format) == value.MediaType)))
+                    return new(MachineInvocationOutcome.InvalidInput, provenance);
+            }
             RegressionReplay replay;
             try { replay = new(PreviewTargetSelection.All, clock, limits, request.Primary, request.NamedInputs, request.Parameters, token); }
             catch (RegressionCaseException error)
@@ -171,7 +195,14 @@ public sealed class MachineInvocationService
                 CompiledBuildOutcome.Busy => MachineInvocationOutcome.Busy,
                 _ => MachineInvocationOutcome.Unavailable
             };
-            var response = outcome == MachineInvocationOutcome.Completed ? Encode(requestId, provenance, clock, result.Outputs!) : null;
+            if (outcome == MachineInvocationOutcome.Completed && (result.Outputs is null ||
+                result.Outputs.Outputs.Count != intent.Boundaries.Count(boundary => boundary.Kind is BuildBoundaryKind.PrimaryOutput or BuildBoundaryKind.NamedOutput) ||
+                result.Outputs.Outputs.Any(output => !intent.Boundaries.Any(boundary =>
+                    boundary.Kind == (output.Key.IsPrimary ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput) &&
+                    boundary.Name == output.Key.Name && BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format) &&
+                    BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType))))
+                outcome = MachineInvocationOutcome.IntegrityFailure;
+            var response = outcome == MachineInvocationOutcome.Completed ? Encode(requestId, provenance, clock, result.Outputs!, documents) : null;
             if (response?.Length > MachineInvocationPolicy.MaximumRetainedBytes) (outcome, response) = (MachineInvocationOutcome.ResourceLimit, null);
             return await ChangedAsync(actor, target, active, outcome, provenance, token, response).ConfigureAwait(false);
         }
@@ -203,14 +234,16 @@ public sealed class MachineInvocationService
     };
 
     /// <summary>The successful response document. Its exact bytes are retained and returned for a replay.</summary>
-    public static byte[] Encode(Guid requestId, MachineInvocationProvenance provenance, string clock, RegressionOutputSet outputs)
+    public static byte[] Encode(Guid requestId, MachineInvocationProvenance provenance, string clock, RegressionOutputSet outputs, bool documents = false)
     {
         ArgumentNullException.ThrowIfNull(provenance); ArgumentNullException.ThrowIfNull(outputs);
+        if (!documents && outputs.Outputs.Any(value => value.MediaType != PreviewPolicy.MediaType))
+            throw new ArgumentException("Legacy responses cannot relabel document output media.");
         using var stream = new MemoryStream();
         using (var json = new Utf8JsonWriter(stream))
         {
             json.WriteStartObject();
-            json.WriteString("schema", "weft.mapping-invocation-response.v1");
+            json.WriteString("schema", documents ? "weft.document-invocation-response.v1" : "weft.mapping-invocation-response.v1");
             json.WriteString("requestId", requestId.ToString("D"));
             json.WriteString("releaseId", provenance.ReleaseId.ToString("D"));
             json.WriteString("buildId", provenance.BuildId.ToString("D"));
@@ -224,6 +257,7 @@ public sealed class MachineInvocationService
                 json.WriteStartObject();
                 json.WriteString("name", output.Key.IsPrimary ? null : output.Key.Name);
                 json.WriteString("sha256", output.Digest.Value);
+                if (documents) json.WriteString("mediaType", output.MediaType);
                 json.WriteBase64String("content", bytes);
                 json.WriteEndObject();
             }

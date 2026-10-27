@@ -93,6 +93,15 @@ failures: restore the retained report or resolve its format/limit configuration.
 Generating a different report does not establish the contents of a missing old
 one.
 
+## Upgrade conservation
+
+Search-only populated-upgrade tests install the exact prefix ending at the
+search migration and repeat that same bounded migration run. They compare the
+existing rows, schema, routines and authority before any later migration that
+intentionally changes those objects. Complete-prefix and document-profile
+upgrades have separate conservation checks; increasing the search-only target
+to the latest migration would no longer test the same invariant.
+
 ## PostgreSQL strategy and measurement
 
 `tools/catalog-search-benchmark.sql` creates transaction-local synthetic relations

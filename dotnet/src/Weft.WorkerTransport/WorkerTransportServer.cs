@@ -301,6 +301,11 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                     writer.WriteStartObject("toolchain");
                     writer.WriteString("protocol", BuildWorkerProtocol.Protocol);
                     writer.WriteString("profile", BuildWorkerProtocol.Profile);
+                    writer.WriteStartArray("supportedProfiles");
+                    writer.WriteStringValue(BuildWorkerProtocol.Profile);
+                    writer.WriteStringValue(BuildWorkerProtocol.DocumentProfile);
+                    writer.WriteStringValue(BuildWorkerProtocol.X12InterchangesProfile);
+                    writer.WriteEndArray();
                     writer.WriteString("sdkVersion", BuildWorkerProtocol.SdkVersion);
                     writer.WriteString("runtimeVersion", BuildWorkerProtocol.RuntimeVersion);
                     writer.WriteString("identity", options.CompileToolchain);
@@ -311,6 +316,10 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                 {
                     writer.WriteStartObject("runtime");
                     writer.WriteString("protocol", CompiledRuntimeProtocol.Protocol);
+                    writer.WriteStartArray("supportedProtocols");
+                    writer.WriteStringValue(CompiledRuntimeProtocol.Protocol);
+                    writer.WriteStringValue(CompiledRuntimeProtocol.DocumentProtocol);
+                    writer.WriteEndArray();
                     writer.WriteString("version", BuildWorkerProtocol.RuntimeVersion);
                     writer.WriteString("identity", options.CompiledRuntimeIdentity);
                     writer.WriteNumber("managedHeapBytes", ProcessCompiledRuntimeOptions.Profile.MemoryBytes);

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Weft.Ai;
 using Weft.Api.Chat;
@@ -14,6 +15,58 @@ namespace Weft.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class PostgresWorkspacePayloadTests(PostgresFixture fixture)
 {
+    [RegressionPostgresTheory]
+    [InlineData("x12", "application/edi-x12")]
+    [InlineData("edifact", "application/edifact")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Preview_edi_outputs_need_real_current_grants_and_preserve_strict_text_checks(string family, string media)
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, DocumentPreviewTestData.Native(family));
+        var content = DocumentPreviewTestData.Input(family);
+        var submitted = await test.Service().SubmitAsync(test.Alice, new(test.Revision, Guid.NewGuid(), PreviewTargetSelection.All,
+            new(null, content), [], [])
+        { Profile = PreviewExecutionProfile.Document });
+        var run = submitted.RunId!.Value;
+        var claim = (await test.Store.ClaimAsync(test.Revision.OrganizationId, run, Guid.NewGuid(), TimeSpan.FromSeconds(90))).Claim!;
+        Assert.True(await test.Store.CompleteAsync(claim, new(PreviewRunOutcome.Succeeded, null,
+            new(true, "engine", "image", "adapter", DocumentPreviewPolicy.Profile), 1,
+            [new("primary-output", "Interchange", false, media, 1, content),
+             new("named-output:0", "binary", false, media, 1, [0xff, 0xfe]),
+             new("named-output:1", "control", false, media, 1, Encoding.UTF8.GetBytes(new string('X', WorkspaceChatGrounding.PayloadBytes + 1) + "\u0007"))])));
+        await using var payloadDatabase = new PostgresPayloadPermissionDatabase(test.Case.PayloadPermissionConnectionString);
+        var grants = new PostgresProjectPayloadPermissionReader(payloadDatabase);
+        var reports = new MappingToolFixture();
+        await using var services = new ServiceCollection()
+            .AddSingleton<ICatalogReader>(test.Catalog.Reader).AddSingleton<ICatalogResourceLocator>(test.Catalog.Reader)
+            .AddSingleton(test.Service()).AddSingleton<IRevisionReportReader>(reports).AddSingleton<IRevisionReportMetadataReader>(reports)
+            .AddSingleton<IProjectPayloadPermissionReader>(grants).AddSingleton<IProjectPayloadGrantPresence>(grants).BuildServiceProvider();
+        var service = new WorkspaceToolService(services, new ChatApiOptions(), new WorkspaceToolFeatures(true, false, false, false));
+        var conversation = ChatConversationIntent.ForWorkspace(ChatConversationKey.ForWorkspace(test.Revision.OrganizationId, test.Alice.PrincipalId, Guid.NewGuid()),
+            null, new DateTimeOffset(DateTimeOffset.UtcNow.Ticks / 10 * 10, TimeSpan.Zero).AddHours(1));
+        var context = new ChatReadOnlyToolContext(test.Alice, conversation, WorkspaceToolFixture.Turn(service, payloads: true), Guid.NewGuid(), 1, 32_768, 512);
+        async Task<WorkspaceToolFixture.ToolReply> Read(int ordinal) => new(await service.ExecuteAsync(context,
+            AiToolIntent.Create("call-1", "get_preview_output", AiJsonObject.CopyFrom(JsonSerializer.Serialize(new { runId = run.ToString("D"), ordinal }))), CancellationToken.None));
+        Assert.Equal("notPermitted", (await Read(0)).Outcome);
+        await test.Case.ExecuteAsync("INSERT INTO weft.project_payload_read_grants(organization_id,project_id,principal_id,active,version) VALUES($1,$2,$3,true,1)",
+            test.Revision.OrganizationId, test.Revision.ProjectId, test.Alice.PrincipalId.Value);
+        var shared = await Read(0);
+        Assert.Equal("available", shared.Outcome);
+        Assert.Equal(media, shared.Data.GetProperty("mediaType").GetString());
+        Assert.Equal(Encoding.UTF8.GetString(content), shared.Data.GetProperty("text").GetString());
+        Assert.Equal(content.Length, shared.Result.DataShared!.ByteCount);
+        foreach (var ordinal in new[] { 1, 2 })
+        {
+            var invalid = await Read(ordinal);
+            Assert.Equal("unsupportedContent", invalid.Outcome);
+            Assert.Null(invalid.Result.DataShared);
+        }
+        await test.Case.ExecuteAsync("UPDATE weft.project_payload_read_grants SET active=false,version=version+1 WHERE organization_id=$1 AND project_id=$2 AND principal_id=$3",
+            test.Revision.OrganizationId, test.Revision.ProjectId, test.Alice.PrincipalId.Value);
+        var denied = await Read(0);
+        Assert.Equal("notPermitted", denied.Outcome);
+        Assert.Null(denied.Result.DataShared);
+    }
+
     [PostgresFact]
     public async Task Saved_case_data_is_shared_only_while_the_restricted_reader_observes_an_active_grant()
     {

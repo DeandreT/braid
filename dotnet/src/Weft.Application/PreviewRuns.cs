@@ -40,7 +40,10 @@ public sealed record PreviewRunSubmission(
     PreviewTargetSelection Target,
     PreviewInputDocument Primary,
     IReadOnlyList<PreviewInputDocument> NamedInputs,
-    IReadOnlyList<PreviewParameter> Parameters);
+    IReadOnlyList<PreviewParameter> Parameters)
+{
+    public PreviewExecutionProfile Profile { get; init; } = PreviewExecutionProfile.LegacyJson;
+}
 
 public enum PreviewSubmitOutcome
 {
@@ -136,7 +139,10 @@ public enum PreviewCancelOutcome
     NotAuthorizedOrNotFound
 }
 
-public sealed record PreviewOutputContent(Sha256Digest Digest, byte[] Content);
+public sealed record PreviewOutputContent(Sha256Digest Digest, byte[] Content)
+{
+    public string MediaType { get; init; } = PreviewPolicy.MediaType;
+}
 
 /// <summary>Writer port. Each call is one short transaction; none spans worker or storage I/O.</summary>
 public interface IPreviewRunStore

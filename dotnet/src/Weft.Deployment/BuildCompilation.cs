@@ -42,7 +42,9 @@ public static class BuildCompilation
         {
             var name = reply.Header.Files[i].Path;
             if (name == ProjectFile) continue;
-            if (name is not ("GeneratedMapping.cs" or "GeneratedTargetBuilder.cs") && !(name.StartsWith("Runtime/", StringComparison.Ordinal) && name.EndsWith(".cs", StringComparison.Ordinal))) throw Invalid();
+            if (name is not ("GeneratedMapping.cs" or "GeneratedTargetBuilder.cs") &&
+                !(BuildWorkerProtocol.IsDocumentProfile(reply.Header.Profile) && name == "GeneratedMapping.Documents.cs") &&
+                !(name.StartsWith("Runtime/", StringComparison.Ordinal) && name.EndsWith(".cs", StringComparison.Ordinal))) throw Invalid();
             var path = Path.Combine(directory, name); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllBytesAsync(path, reply.Contents[i], token).ConfigureAwait(false); names.Add(name);
         }

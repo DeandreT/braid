@@ -12,7 +12,8 @@ public static class RegressionWorkerRegistration
     private const string Key = "regression-worker";
 
     public static IServiceCollection AddWeftRegressionWorker(this IServiceCollection services,
-        Func<string, string?> environment, Func<RegressionRuntimeIdentity> runtime, Func<string, int, string>? privateReader = null)
+        Func<string, string?> environment, Func<RegressionRuntimeIdentity> runtime, Func<RegressionRuntimeIdentity>? documentRuntime = null,
+        Func<string, int, string>? privateReader = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(environment);
@@ -30,9 +31,14 @@ public static class RegressionWorkerRegistration
         var cases = Required("WEFT_REGRESSION_CASE_READER_CONNECTION_STRING");
         var access = Required("WEFT_REGRESSION_ACCESS_CONNECTION_STRING");
         var reports = Required("WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING");
+        var comparisons = Required("WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING");
         var identity = runtime();
         if (identity is null || identity.BackendId != "ferrule" || identity.Profile != PreviewPolicy.Profile)
             throw new ArgumentException("Regression worker runtime is unavailable.");
+        var documentIdentity = documentRuntime?.Invoke();
+        if (documentIdentity is not null && (documentIdentity.Profile != DocumentPreviewPolicy.Profile || documentIdentity.BackendId != identity.BackendId ||
+            documentIdentity.EngineRevision != identity.EngineRevision || documentIdentity.BackendBuild != identity.BackendBuild))
+            throw new ArgumentException("Document regression worker runtime is unavailable.");
 
         services.AddKeyedSingleton<PostgresDatabase>(Key, (_, _) => new(access));
         services.AddKeyedSingleton<PostgresRevisionReportDatabase>(Key, (_, _) => new(reports));
@@ -43,10 +49,11 @@ public static class RegressionWorkerRegistration
             provider.GetRequiredService<IRegressionCaseReader>(),
             new PostgresProjectReader(provider.GetRequiredKeyedService<PostgresDatabase>(Key)),
             new PostgresRevisionReportMetadataReader(provider.GetRequiredKeyedService<PostgresRevisionReportDatabase>(Key)),
-            provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(), identity));
+            provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(), identity, documentIdentity));
         services.AddSingleton<IRegressionCaseExecutor>(provider => provider.GetRequiredService<RegressionCaseExecutionService>());
         services.AddSingleton<IRegressionEvaluationExecutor>(provider => provider.GetRequiredService<RegressionCaseExecutionService>());
         services.AddSingleton<IAutomationQueue>(_ => new PostgresAutomationStore(run, writer: true));
+        services.AddSingleton<IAutomationComparisonSettler>(_ => new PostgresAutomationComparisonSettler(comparisons, documentIdentity));
         var notificationConfiguration = NotificationConfigurationFile.Read(environment, privateReader);
         services.AddSingleton<INotificationTransport>(_ => new NotificationTransport(notificationConfiguration, TimeProvider.System));
         services.AddHostedService<AutomationWorker>();

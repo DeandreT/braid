@@ -61,7 +61,9 @@ public static class CatalogRegressionHostConfiguration
         var runWriter = Connection("WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING");
         var runtime = new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
             FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile);
-        services.AddWeftRegressionCases(new(true, runtime));
+        var documentRuntime = new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
+            FerrulePreviewBackend.DocumentAdapterBuild, DocumentPreviewPolicy.Profile);
+        services.AddWeftRegressionCases(new(true, runtime, documentRuntime));
         services.AddWeftRegressionRuns(new(true));
         Automation(runWriter);
         services.AddSingleton<IRegressionCaseReader>(_ => new PostgresRegressionCaseStore(caseReader, RegressionCaseDatabaseProfile.Reader));

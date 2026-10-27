@@ -87,7 +87,7 @@ public sealed class BuildQualification
             evidence.RunId != intent.RegressionEvidenceId || sourceCase.Revision != intent.Revision || sourceCase.NativeDigest != intent.NativeDigest ||
             sourceCase.Runtime.BackendId != intent.Backend.BackendId || sourceCase.Runtime.EngineRevision != intent.Backend.EngineRevision ||
             sourceCase.Runtime.BackendBuild != intent.Backend.EngineBuild || sourceCase.Runtime.AdapterBuild != intent.Backend.AdapterVersion ||
-            sourceCase.Runtime.Profile != PreviewPolicy.Profile)
+            sourceCase.Runtime.Profile != (BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id) ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile))
             throw Invalid(BuildQualificationFailure.IdentityMismatch);
         var reference = new RegressionCaseEnvelopeCodec().Encode(sourceCase, token).Reference;
         if (reference != evidence.Case) throw Invalid(BuildQualificationFailure.IdentityMismatch);
@@ -101,6 +101,10 @@ public sealed class BuildQualification
         var outputs = intent.Boundaries.Where(value => value.Kind is BuildBoundaryKind.PrimaryOutput or BuildBoundaryKind.NamedOutput)
             .Select(value => value.Name).ToHashSet(StringComparer.Ordinal);
         if (outputs.Count == 0 || !outputs.SetEquals(sourceCase.Expected.Outputs.Select(value => value.Key.Name))) throw Invalid(BuildQualificationFailure.IncompleteEvidence);
+        if (BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id) && sourceCase.Expected.Outputs.Any(output => !intent.Boundaries.Any(boundary =>
+            boundary.Kind == (output.Key.IsPrimary ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput) && boundary.Name == output.Key.Name &&
+            BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format) && BuildWorkerProtocol.MediaType(boundary.Format) == output.MediaType)))
+            throw Invalid(BuildQualificationFailure.IncompleteEvidence);
         var inputs = intent.Boundaries.Where(value => value.Kind == BuildBoundaryKind.NamedInput).Select(value => value.Name).ToHashSet(StringComparer.Ordinal);
         if (!inputs.SetEquals(sourceCase.Replay.NamedInputs.Select(value => value.Name))) throw Invalid(BuildQualificationFailure.IncompleteEvidence);
         var interpreted = new RegressionRunResultCodec().Decode(evidence.RunId, sourceCase, evidence.CopyCompletion()!, token);

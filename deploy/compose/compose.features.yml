@@ -83,6 +83,8 @@ services:
       WEFT_DELIVER_FILE_REGRESSION_ACCESS: Host=postgres;Database=weft;Username=weft_runtime;Password=${WEFT_LOCAL_RUNTIME_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING_FILE: /run/weft/secrets/regression-report
       WEFT_DELIVER_FILE_REGRESSION_REPORT: Host=postgres;Database=weft;Username=weft_report_reader;Password=${WEFT_LOCAL_REPORT_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING_FILE: /run/weft/secrets/comparison
+      WEFT_DELIVER_FILE_COMPARISON: Host=postgres;Database=weft;Username=weft_comparison_settler;Password=${WEFT_LOCAL_COMPARISON_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_BUILD_WORKER_ENABLED: "true"
       WEFT_BUILD_DISPATCHER_CONNECTION_STRING_FILE: /run/weft/secrets/build-dispatcher
       WEFT_DELIVER_FILE_BUILD_DISPATCHER: Host=postgres;Database=weft;Username=weft_build_dispatcher;Password=${WEFT_LOCAL_BUILD_DISPATCHER_PASSWORD:?};GSS Encryption Mode=Disable

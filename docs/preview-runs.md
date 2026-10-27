@@ -20,6 +20,49 @@ fingerprint. A submitter's request key is unique: resubmitting the same key with
 an identical fingerprint and revision returns the original run (`Replayed`); any
 difference returns `Conflict` and stores nothing.
 
+The optional HTTP `profile` selects admission, not a codec override. Omission,
+null or `weft.ferrule-json-preview.v1` preserves the original JSON request grammar
+and fingerprint bytes. `weft.ferrule-document-preview.v1` uses canonical schema
+`weft.document-preview-request.v1`; changing profiles with the same request key
+is a conflict. The queued request carries this selection through retries and
+worker restarts. Existing saved JSON runs are not rewritten or reinterpreted.
+
+Document previews require explicit native JSON, X12 or EDIFACT boundary options
+and bounded embedded schemas. Neither uploaded filenames nor content types
+select a format. Missing/unresolved EDI configuration and unsupported options
+produce safe worker refusals; external configuration is never reopened. In the
+workbench, choose **Explicit document boundaries** to request this policy. EDI
+outputs have a bounded segment viewer and format-specific download names.
+Local preview samples, file selections, parameters, target choices and document
+admission choices participate in the shared unsent-work warning before a
+full-page sign-in or sign-out. A server-recoverable status read alone does not.
+
+Before a document codec reads X12 or EDIFACT input, a bounded envelope pass
+verifies interchange/group/message counts and matching control references.
+X12 uses each interchange's complete fixed-width ISA service declaration,
+including component/repetition syntax changes and reuse of an earlier delimiter
+in a different role. Explicit configured input syntax must match every ISA.
+EDIFACT honors UNA and release
+characters. Missing/truncated envelopes and incorrect SE/GE/IEA or UNT/UNE/UNZ
+references/counts return `invalidInput` with a payload-free interchange, segment
+and element location, even if the mapping's codec permits lenient segments.
+This is envelope admission, not a trading-partner implementation-guide validator.
+
+Document-profile limits apply before input parsing and before any output is
+published: EDI documents are at most 2 MiB, 32,768 segments, and 16 KiB per segment;
+JSON nesting is at most 64. Boundary schemas have at most 8,192 nodes and depth
+64. These limits are additional to the shared input/output totals and sandbox
+ceilings, and do not change legacy JSON admission. EDIFACT release characters
+and self-describing UNA/ISA separators are respected while counting segments.
+
+Output metadata and the authenticated output route preserve the recorded
+`application/json`, `application/edi-x12` or `application/edifact` media type.
+The route streams the exact retained bytes with digest, attachment and nosniff
+headers. Migration `0034_document_previews.sql` extends only the admitted output
+media constraint, preserving existing rows and function contracts. This preview
+profile does not qualify EDI regression policies, compiled builds or mapping
+endpoints; those surfaces retain their own capability checks.
+
 Only an active principal with active organization and project memberships whose
 project role is runner, publisher or administrator can submit. The revision must
 belong to that project. Unauthorized submissions and missing revisions return the

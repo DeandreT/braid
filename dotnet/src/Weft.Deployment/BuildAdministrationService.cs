@@ -23,7 +23,8 @@ public interface IBuildApprovalRevocation
 
 /// <summary>Administrator version creation and own revocation never imply fresh approval or compilation.</summary>
 public sealed class BuildAdministrationService(IBuildMetadataReader metadata, IBuildEnvironmentCommands environments,
-    IBuildApprovalRevocation approvals, IProjectReader projects, BuildRuntimeProfile profile)
+    IBuildApprovalRevocation approvals, IProjectReader projects, BuildRuntimeProfile profile, BuildRuntimeProfile? documentProfile = null,
+    BuildRuntimeProfile? interchangeProfile = null)
 {
     public async Task<BuildEnvironmentRequestResult> PutEnvironmentAsync(ActorContext actor, BuildEnvironmentReference reference,
         BuildEnvironmentSelection selection, CancellationToken token = default)
@@ -39,14 +40,16 @@ public sealed class BuildAdministrationService(IBuildMetadataReader metadata, IB
             return await Allowed(actor, reference.Project, true, token).ConfigureAwait(false)
                 ? new(BuildEnvironmentRequestOutcome.Replayed, retained) : new(BuildEnvironmentRequestOutcome.Refused);
         }
-        if (!selection.Matches(profile)) return new(BuildEnvironmentRequestOutcome.PreconditionFailed);
-        var result = await environments.SaveEnvironmentAsync(actor, new(reference, profile, true), token).ConfigureAwait(false);
+        var selectedProfile = selection.Matches(profile) ? profile : documentProfile is not null && selection.Matches(documentProfile) ? documentProfile :
+            interchangeProfile is not null && selection.Matches(interchangeProfile) ? interchangeProfile : null;
+        if (selectedProfile is null) return new(BuildEnvironmentRequestOutcome.PreconditionFailed);
+        var result = await environments.SaveEnvironmentAsync(actor, new(reference, selectedProfile, true), token).ConfigureAwait(false);
         if (result == BuildControlOutcome.Refused) return new(BuildEnvironmentRequestOutcome.Refused);
         if (result == BuildControlOutcome.Conflict) return new(BuildEnvironmentRequestOutcome.Conflict);
         if (result is not (BuildControlOutcome.Created or BuildControlOutcome.Replayed)) throw Inconsistent();
         var saved = await metadata.ReadEnvironmentAsync(actor, reference, token).ConfigureAwait(false);
         if (saved is null) return new(BuildEnvironmentRequestOutcome.Unavailable);
-        if (saved.Environment.Reference != reference || saved.Environment.Profile != profile) throw Inconsistent();
+        if (saved.Environment.Reference != reference || saved.Environment.Profile != selectedProfile) throw Inconsistent();
         return await Allowed(actor, reference.Project, true, token).ConfigureAwait(false)
             ? new(result == BuildControlOutcome.Created ? BuildEnvironmentRequestOutcome.Created : BuildEnvironmentRequestOutcome.Replayed, saved)
             : new(BuildEnvironmentRequestOutcome.Refused);

@@ -49,6 +49,18 @@ public sealed class PostgresPreviewJobsTests(PostgresFixture fixture)
         Assert.NotNull(attempted);
         Assert.Equal(0L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.preview_runs WHERE run_id=$1", attempted!.Value));
         Assert.Equal(1L, await QueuedCommandsAsync(test, null));
+
+        var documentSubmission = test.Submission() with { Profile = PreviewExecutionProfile.Document };
+        var documentRun = (await service.SubmitAsync(test.Alice, documentSubmission)).RunId!.Value;
+        Assert.Equal(1L, await QueuedCommandsAsync(test, documentRun));
+        var claim = (await test.Store.ClaimAsync(test.Revision.OrganizationId, documentRun, Guid.NewGuid(), TimeSpan.FromSeconds(90))).Claim!;
+        Assert.Equal(PreviewExecutionProfile.Document, PreviewRequestDocument.Decode(claim.RequestDocument).Profile);
+        Assert.True(await test.Store.ReleaseAsync(claim, TimeSpan.Zero));
+        var reclaimed = (await test.Store.ClaimAsync(test.Revision.OrganizationId, documentRun, Guid.NewGuid(), TimeSpan.FromSeconds(90))).Claim!;
+        Assert.Equal(claim.RequestDocument, reclaimed.RequestDocument);
+        Assert.Equal(claim.CurrentDateTime, reclaimed.CurrentDateTime);
+        Assert.Equal(PreviewSubmitOutcome.Replayed, (await service.SubmitAsync(test.Alice, documentSubmission)).Outcome);
+        Assert.Equal(1L, await QueuedCommandsAsync(test, documentRun));
     }
 
     [PreviewWorkerProcessFact]

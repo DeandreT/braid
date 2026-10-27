@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install --yes --no-install-recommends ca-certifica
     && echo "${DOTNET_SDK_SHA512}  /tmp/sdk.tar.gz" | sha512sum --check --status \
     && tar -xzf /tmp/sdk.tar.gz -C /usr/share/dotnet && rm /tmp/sdk.tar.gz \
     && rm -rf /var/lib/apt/lists/*
-ENV DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ENV DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 DOTNET_PROCESSOR_COUNT=2
 WORKDIR /src
 COPY global.json ./
 COPY dotnet dotnet
@@ -114,7 +114,7 @@ ARG WEFT_NATIVE_BINARY_SHA256
 LABEL org.opencontainers.image.title="Weft Ferrule service" \
       org.opencontainers.image.source="https://github.com/DeandreT/weft" \
       org.opencontainers.image.revision="$WEFT_REVISION" \
-      io.weft.ferrule.revision="576012aa17c403d9c3fcb8659ed4d3a47ba06864" \
+      io.weft.ferrule.revision="dddc4dce6c93f4137fb2aa2a011360d089e0a51b" \
       io.weft.ferrule.worker-sha256="$WEFT_NATIVE_BINARY_SHA256" \
       io.weft.ferrule.compile-sdk="10.0.112"
 COPY --from=native / /

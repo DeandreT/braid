@@ -23,7 +23,7 @@ public static class FerruleServiceProtocol
     /// <summary>Read-only inspection, validation and projection frames (<c>weft.ferrule-host.v1</c>).</summary>
     public const string InspectionProfile = "inspection";
 
-    /// <summary>Bounded JSON sample previews (<c>weft.ferrule-preview.v1</c>).</summary>
+    /// <summary>Bounded sample preview frames; the frame selects legacy JSON or explicit document admission.</summary>
     public const string PreviewProfile = "preview";
     public const string InterchangeProfile = "interchange";
 

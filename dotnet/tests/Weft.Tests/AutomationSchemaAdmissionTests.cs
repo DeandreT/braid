@@ -72,6 +72,11 @@ public sealed class AutomationSchemaAdmissionTests(PostgresFixture fixture)
     [InlineData(29)]
     [InlineData(30)]
     [InlineData(31)]
+    [InlineData(32)]
+    [InlineData(33)]
+    [InlineData(34)]
+    [InlineData(35)]
+    [InlineData(36)]
     public async Task Unchanged_historical_and_current_sources_keep_their_exact_fingerprints(int prefix)
     {
         await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture, prefix);
@@ -80,10 +85,11 @@ public sealed class AutomationSchemaAdmissionTests(PostgresFixture fixture)
         Assert.NotNull(await data.ReadAsync(data.Actor, data.Mapping, data.CaseId, 1));
         await using var connection = await data.Case.Owner.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        Assert.Equal(prefix is 30 or 31, await AutomationSchemaAdmission.InstalledAsync(connection, transaction, default));
-        if (prefix is 30 or 31)
-            Assert.Equal(AutomationSchemaAdmission.Fingerprint, await RegressionCaseSchemaContract.CaptureAsync(
-                connection, transaction, AutomationSchemaAdmission.Tables, default, validateAutomation: false));
+        Assert.Equal(prefix >= 30, await AutomationSchemaAdmission.InstalledAsync(connection, transaction, default));
+        if (prefix >= 30)
+            Assert.Equal(prefix >= 36 ? AutomationSchemaAdmission.ComparisonFingerprint : AutomationSchemaAdmission.Fingerprint,
+                await RegressionCaseSchemaContract.CaptureAsync(
+                    connection, transaction, AutomationSchemaAdmission.Tables, default, validateAutomation: false));
     }
 
     [PostgresFact]

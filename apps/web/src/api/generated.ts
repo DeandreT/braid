@@ -1285,7 +1285,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Submit an idempotent bounded JSON sample preview of this exact revision. */
+    /** Submit an idempotent bounded sample preview of this exact revision with explicit legacy JSON or document admission. */
     post: operations["SubmitCatalogPreview"];
     delete?: never;
     options?: never;
@@ -1947,12 +1947,17 @@ export interface components {
     BuildCapabilitiesV1: {
       approveBuilds: boolean;
       backend: components["schemas"]["BuildBackendV1"];
+      documentBackend?: null | components["schemas"]["BuildBackendV1"];
+      documentProfile?: null | components["schemas"]["BuildRuntimeV1"];
+      interchangeProfile?: null | components["schemas"]["BuildRuntimeV1"];
       profile: components["schemas"]["BuildRuntimeV1"];
       readOwnMetadata: boolean;
       submitBuilds: boolean;
     };
     BuildEnvironmentCapabilitiesV1: {
       canCreateVersions: boolean;
+      documentProfile?: null | components["schemas"]["BuildRuntimeV1"];
+      interchangeProfile?: null | components["schemas"]["BuildRuntimeV1"];
       profile: components["schemas"]["BuildRuntimeV1"];
     };
     BuildEnvironmentPageV1: {
@@ -2257,6 +2262,14 @@ export interface components {
         name: string;
         value: string;
       }[];
+      /**
+       * @description Omitted or null preserves legacy JSON admission. Document admission requires explicit native boundary formats; filenames never select them.
+       * @enum {null|string}
+       */
+      profile?:
+        | "weft.ferrule-json-preview.v1"
+        | "weft.ferrule-document-preview.v1"
+        | null;
       target: {
         kind: string;
         name?: null | string;
@@ -3591,7 +3604,9 @@ export interface components {
       version: number;
     };
     RegressionCaseCapabilitiesV1: {
+      comparisonPolicies?: null | string[];
       comparisonPolicy: string;
+      documentRuntime?: null | components["schemas"]["RegressionRuntimeV1"];
       limits: components["schemas"]["RegressionLimitsV1"];
       publishCases: boolean;
       readSamples: boolean;
@@ -3615,12 +3630,14 @@ export interface components {
       nextCaseId: null | string;
     };
     RegressionCasePutV1: {
+      comparisonOptions?:
+        null | components["schemas"]["RegressionEdiComparisonOptionsV1"];
       comparisonPolicy: string;
       currentDateTime: string;
       expected: components["schemas"]["RegressionDocumentV1"][];
       limits: components["schemas"]["RegressionLimitsV1"];
       name: string;
-      namedInputs: components["schemas"]["RegressionDocumentV1"][];
+      namedInputs: components["schemas"]["RegressionInputDocumentV1"][];
       parameters: components["schemas"]["RegressionParameterV1"][];
       primaryBase64Url: string;
       revisionId: string;
@@ -3637,6 +3654,8 @@ export interface components {
       /** Format: int32 */
       actualOutputs: number;
       differences: components["schemas"]["RegressionDifferenceV1"][];
+      documentDiagnostic?:
+        null | components["schemas"]["RegressionDocumentDiagnosticV1"];
       /** Format: int32 */
       expectedOutputs: number;
       notEvaluatedReason: string;
@@ -3656,11 +3675,36 @@ export interface components {
       /** Format: int32 */
       firstDifferentByte: null | number;
       kind: string;
+      location?: null | components["schemas"]["RegressionDocumentLocationV1"];
       name: null | string;
+    };
+    RegressionDocumentDiagnosticV1: {
+      location: components["schemas"]["RegressionDocumentLocationV1"];
+      name: null | string;
+      side: string;
+    };
+    RegressionDocumentLocationV1: {
+      /** Format: int32 */
+      component: number;
+      /** Format: int32 */
+      element: number;
+      /** Format: int32 */
+      interchange: number;
+      /** Format: int32 */
+      repetition: number;
+      /** Format: int32 */
+      segment: number;
+      segmentId: string;
     };
     RegressionDocumentV1: {
       bytesBase64Url: string;
+      mediaType?: null | string;
       name: null | string;
+    };
+    RegressionEdiComparisonOptionsV1: {
+      compareSeparators: boolean;
+      ignoreControlNumbers: boolean;
+      ignoreDates: boolean;
     };
     RegressionEvaluationsV1: {
       cases: components["schemas"]["RegressionEvaluationV1"][];
@@ -3673,6 +3717,10 @@ export interface components {
       originalRevisionId: string;
       state: string;
       version: string;
+    };
+    RegressionInputDocumentV1: {
+      bytesBase64Url: string;
+      name: null | string;
     };
     RegressionLimitsV1: {
       /** Format: int32 */
@@ -7005,9 +7053,18 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control": "no-store";
+          /** @description SHA-256 of the exact retained output bytes (sha-256=:base64:). */
+          "Content-Digest": string;
+          "Content-Disposition": "attachment";
+          "X-Content-Type-Options": "nosniff";
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/edi-x12": string;
+          "application/edifact": string;
+          "application/json": string;
+        };
       };
       /** @description Bad Request */
       400: {

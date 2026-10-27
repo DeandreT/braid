@@ -61,6 +61,7 @@
              Link="AuthBrowserQualification/BrowserQualificationWire.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="../../../contracts/weft-endpoint-v1.json" Link="Contracts/weft-endpoint-v1.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../engines/ferrule-host/tests/fixtures/*.json"
           Link="FerruleFixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../contracts/browser-return-paths.json"

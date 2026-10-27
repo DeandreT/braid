@@ -114,6 +114,13 @@ public sealed class FerruleServiceOpenApiTests
             var capabilities = JsonSerializer.Deserialize<FerruleServiceCapabilitiesV1>(body, Strict(web))!;
             Assert.Equal(enabled, capabilities.Profiles.Any(profile => profile.Toolchain is not null));
             Assert.Equal(enabled, capabilities.Profiles.Any(profile => profile.Runtime is not null));
+            if (enabled)
+            {
+                Assert.Equal(new[] { Weft.Deployment.BuildWorkerProtocol.Profile, Weft.Deployment.BuildWorkerProtocol.DocumentProfile,
+                    Weft.Deployment.BuildWorkerProtocol.X12InterchangesProfile }, capabilities.Profiles.Single(profile => profile.Toolchain is not null).Toolchain!.SupportedProfiles);
+                Assert.Equal(new[] { Weft.Deployment.CompiledRuntimeProtocol.Protocol, Weft.Deployment.CompiledRuntimeProtocol.DocumentProtocol },
+                    capabilities.Profiles.Single(profile => profile.Runtime is not null).Runtime!.SupportedProtocols);
+            }
             Assert.Equal(body, JsonSerializer.SerializeToUtf8Bytes(capabilities, web));
         }
     }

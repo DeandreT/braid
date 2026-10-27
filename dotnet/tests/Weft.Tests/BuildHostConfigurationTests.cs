@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Weft.Api.Catalog;
 using Weft.Application;
 using Weft.Deployment;
+using Weft.MappingBackends;
 using Weft.Server;
 using Weft.Storage.Hosting;
 
@@ -59,6 +61,23 @@ public sealed class BuildHostConfigurationTests
         Assert.NotNull(provider.GetRequiredService<BuildApprovalRecoveryService>());
         Assert.NotNull(provider.GetRequiredService<BuildSubmissionService>());
         Assert.NotNull(provider.GetRequiredService<BuildAdministrationService>());
+        var options = provider.GetRequiredService<CatalogBuildOptions>();
+        Assert.Equal(FerruleBuildCompiler.DocumentProfile, options.DocumentProfile);
+        Assert.Equal(FerrulePreviewBackend.DocumentAdapterBuild, options.DocumentBackend!.AdapterVersion);
+        Assert.Equal(options.Backend!.EngineBuild, options.DocumentBackend.EngineBuild);
+    }
+
+    [Fact]
+    public void Document_compiler_options_require_a_complete_pair_for_the_same_installed_engine()
+    {
+        var backend = new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, "sha256:" + new string('a', 64), FerruleBuildCompiler.Adapter);
+        var document = new BuildBackendIdentity(backend.BackendId, backend.EngineRevision, backend.EngineBuild, FerrulePreviewBackend.DocumentAdapterBuild);
+        Assert.NotNull(new CatalogBuildOptions(true, backend, FerruleBuildCompiler.Profile, document, FerruleBuildCompiler.DocumentProfile));
+        Assert.Throws<ArgumentException>(() => new CatalogBuildOptions(true, backend, FerruleBuildCompiler.Profile, document));
+        Assert.Throws<ArgumentException>(() => new CatalogBuildOptions(true, backend, FerruleBuildCompiler.Profile, documentProfile: FerruleBuildCompiler.DocumentProfile));
+        Assert.Throws<ArgumentException>(() => new CatalogBuildOptions(true, backend, FerruleBuildCompiler.Profile, document, FerruleBuildCompiler.Profile));
+        var otherEngine = new BuildBackendIdentity(backend.BackendId, backend.EngineRevision, "sha256:" + new string('b', 64), document.AdapterVersion);
+        Assert.Throws<ArgumentException>(() => new CatalogBuildOptions(true, backend, FerruleBuildCompiler.Profile, otherEngine, FerruleBuildCompiler.DocumentProfile));
     }
 
     private sealed class Environment : IWebHostEnvironment

@@ -7383,7 +7383,7 @@
         "tags": [
           "Catalog"
         ],
-        "summary": "Submit an idempotent bounded JSON sample preview of this exact revision.",
+        "summary": "Submit an idempotent bounded sample preview of this exact revision with explicit legacy JSON or document admission.",
         "operationId": "SubmitCatalogPreview",
         "parameters": [
           {
@@ -7782,7 +7782,63 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "Content-Digest": {
+                "description": "SHA-256 of the exact retained output bytes (sha-256=:base64:).",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "attachment"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "nosniff"
+                  ],
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/edi-x12": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/edifact": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
@@ -24700,6 +24756,36 @@
           },
           "submitBuilds": {
             "type": "boolean"
+          },
+          "documentBackend": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildBackendV1"
+              }
+            ]
+          },
+          "documentProfile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRuntimeV1"
+              }
+            ]
+          },
+          "interchangeProfile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRuntimeV1"
+              }
+            ]
           }
         }
       },
@@ -24715,6 +24801,26 @@
           },
           "canCreateVersions": {
             "type": "boolean"
+          },
+          "documentProfile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRuntimeV1"
+              }
+            ]
+          },
+          "interchangeProfile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRuntimeV1"
+              }
+            ]
           }
         }
       },
@@ -25850,6 +25956,18 @@
               },
               "additionalProperties": false
             }
+          },
+          "profile": {
+            "enum": [
+              "weft.ferrule-json-preview.v1",
+              "weft.ferrule-document-preview.v1",
+              null
+            ],
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Omitted or null preserves legacy JSON admission. Document admission requires explicit native boundary formats; filenames never select them."
           }
         },
         "additionalProperties": false
@@ -30656,6 +30774,25 @@
           },
           "publishCases": {
             "type": "boolean"
+          },
+          "documentRuntime": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionRuntimeV1"
+              }
+            ]
+          },
+          "comparisonPolicies": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -30770,7 +30907,7 @@
           "namedInputs": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RegressionDocumentV1"
+              "$ref": "#/components/schemas/RegressionInputDocumentV1"
             }
           },
           "parameters": {
@@ -30787,6 +30924,16 @@
             "items": {
               "$ref": "#/components/schemas/RegressionDocumentV1"
             }
+          },
+          "comparisonOptions": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionEdiComparisonOptionsV1"
+              }
+            ]
           }
         }
       },
@@ -30855,6 +31002,16 @@
             "items": {
               "$ref": "#/components/schemas/RegressionDifferenceV1"
             }
+          },
+          "documentDiagnostic": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionDocumentDiagnosticV1"
+              }
+            ]
           }
         }
       },
@@ -30911,6 +31068,74 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionDocumentLocationV1"
+              }
+            ]
+          }
+        }
+      },
+      "RegressionDocumentDiagnosticV1": {
+        "required": [
+          "name",
+          "side",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "side": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/RegressionDocumentLocationV1"
+          }
+        }
+      },
+      "RegressionDocumentLocationV1": {
+        "required": [
+          "interchange",
+          "segment",
+          "segmentId",
+          "element",
+          "repetition",
+          "component"
+        ],
+        "type": "object",
+        "properties": {
+          "interchange": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "segment": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "segmentId": {
+            "type": "string"
+          },
+          "element": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "repetition": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "component": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -30929,6 +31154,31 @@
           },
           "bytesBase64Url": {
             "type": "string"
+          },
+          "mediaType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RegressionEdiComparisonOptionsV1": {
+        "required": [
+          "compareSeparators",
+          "ignoreControlNumbers",
+          "ignoreDates"
+        ],
+        "type": "object",
+        "properties": {
+          "compareSeparators": {
+            "type": "boolean"
+          },
+          "ignoreControlNumbers": {
+            "type": "boolean"
+          },
+          "ignoreDates": {
+            "type": "boolean"
           }
         }
       },
@@ -30978,6 +31228,24 @@
           "attempts": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "RegressionInputDocumentV1": {
+        "required": [
+          "name",
+          "bytesBase64Url"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "bytesBase64Url": {
+            "type": "string"
           }
         }
       },

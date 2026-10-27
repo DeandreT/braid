@@ -11,9 +11,12 @@ public static class BuildWorkerProtocol
 {
     public const string Protocol = "weft.ferrule-build.v1";
     public const string Profile = "weft.ferrule-csharp-json.v1";
+    public const string DocumentProfile = "weft.ferrule-csharp-document.v1";
+    public const string X12InterchangesProfile = "weft.ferrule-csharp-x12-interchanges.v1";
+    public static bool IsDocumentProfile(string profile) => profile is DocumentProfile or X12InterchangesProfile;
     public const string SdkVersion = "10.0.112";
     public const string RuntimeVersion = "10.0.12";
-    public const string Engine = "576012aa17c403d9c3fcb8659ed4d3a47ba06864";
+    public const string Engine = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b";
     public const int MaximumNativeBytes = 4 * 1024 * 1024;
     public const int MaximumSourceBytes = 32 * 1024 * 1024;
     public const int MaximumHeaderBytes = 128 * 1024;
@@ -55,7 +58,7 @@ public static class BuildWorkerProtocol
         var offset = 0;
         var header = ReadJson<Response>(ReadFrame(bytes, ref offset, MaximumHeaderBytes));
         if (header.ProtocolVersion != Protocol || header.RequestId != expected.RequestId || header.Revision != expected.Revision ||
-            header.NativeDigest != expected.NativeDigest || header.IntentDigest != expected.IntentDigest || header.EngineRevision != Engine || header.Profile != Profile ||
+            header.NativeDigest != expected.NativeDigest || header.IntentDigest != expected.IntentDigest || header.EngineRevision != Engine || header.Profile != expected.Profile ||
             header.Status is not ("supported" or "unsupported" or "invalidRequest" or "invalidMapping" or "sourceLimit" or "compileFailed") ||
             header.Files.Length > 128 || header.Boundaries.Length > 128) throw Invalid();
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -72,7 +75,7 @@ public static class BuildWorkerProtocol
         {
             var identities = new HashSet<(string, string?)>();
             foreach (var boundary in header.Boundaries)
-                if (boundary is null || boundary.Kind is not ("primaryInput" or "namedInput" or "primaryOutput" or "namedOutput") || boundary.Format != "json" ||
+                if (boundary is null || boundary.Kind is not ("primaryInput" or "namedInput" or "primaryOutput" or "namedOutput") || !AdmitsFormat(expected.Profile, boundary.Format) ||
                     (boundary.Kind is "namedInput" or "namedOutput") != (boundary.Name is not null) ||
                     boundary.Name is { } name && (string.IsNullOrWhiteSpace(name) || Encoding.UTF8.GetByteCount(name) > 256 || name.Any(char.IsControl)) ||
                     !identities.Add((boundary.Kind, boundary.Name))) throw Invalid();
@@ -93,7 +96,20 @@ public static class BuildWorkerProtocol
     public static bool SafePath(string value) => value.Length is > 0 and <= 256 && value.Split('/').All(part =>
         part.Length > 0 && part is not ("." or "..") && part.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-'));
     public static Request For(BuildIntent intent, string operation) => new(Protocol, Guid.NewGuid().ToString("D"), intent.Revision,
-        intent.NativeDigest.Value, intent.Fingerprint.Value, operation, Profile);
+        intent.NativeDigest.Value, intent.Fingerprint.Value, operation, intent.Profile.Id);
+    public static bool AdmitsFormat(string profile, string format) => profile switch
+    {
+        Profile => format == "json",
+        DocumentProfile or X12InterchangesProfile => format is "json" or "x12" or "edifact",
+        _ => false
+    };
+    public static string MediaType(string format) => format switch
+    {
+        "json" => "application/json",
+        "x12" => "application/edi-x12",
+        "edifact" => "application/edifact",
+        _ => throw Invalid()
+    };
     public static BuildBoundary ToBoundary(Boundary boundary) => new(boundary.Kind switch
     {
         "primaryInput" => BuildBoundaryKind.PrimaryInput,
@@ -104,7 +120,7 @@ public static class BuildWorkerProtocol
     }, boundary.Name, boundary.Format);
     private static void ValidateRequest(Request request)
     {
-        if (request.ProtocolVersion != Protocol || request.Profile != Profile || request.Operation is not ("inspect" or "compile") ||
+        if (request.ProtocolVersion != Protocol || request.Profile is not (Profile or DocumentProfile or X12InterchangesProfile) || request.Operation is not ("inspect" or "compile") ||
             !Guid.TryParseExact(request.RequestId, "D", out var id) || id == Guid.Empty || id.ToString("D") != request.RequestId ||
             Sha256Digest.Parse(request.NativeDigest).Value != request.NativeDigest || Sha256Digest.Parse(request.IntentDigest).Value != request.IntentDigest) throw Invalid();
     }

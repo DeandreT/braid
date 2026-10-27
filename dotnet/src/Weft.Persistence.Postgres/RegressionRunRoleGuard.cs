@@ -40,6 +40,13 @@ internal static partial class RegressionRunRoleGuard
                 new[] { "read_regression_run", "read_regression_run_metadata", "list_regression_run_history" }.Concat(AutomationSchemaAdmission.ReadFunctions).ToArray());
             if (await check.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
+        await ValidateContractAsync(connection, transaction, token);
+    }
+
+    // Catalog-only validation, shared with trusted callers that do not hold a
+    // run-reader/writer login. It grants no execution or source-table rights.
+    internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
         await using (var check = new NpgsqlCommand("""
             SELECT p.proname,p.prosrc,p.prosecdef,p.provolatile,l.lanname,pg_catalog.oidvectortypes(p.proargtypes),p.proargnames[1:p.pronargs],
                 p.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='weft_migrator')

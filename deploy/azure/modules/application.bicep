@@ -94,6 +94,7 @@ var roles = [
   { key: 'case-writer', env: 'CASE_WRITER' }
   { key: 'run-reader', env: 'RUN_READER' }
   { key: 'run-writer', env: 'RUN_WRITER' }
+  { key: 'comparison', env: 'COMPARISON' }
   { key: 'build-reader', env: 'BUILD_READER' }
   { key: 'build-writer', env: 'BUILD_WRITER' }
   { key: 'build-run-reader', env: 'BUILD_RUN_READER' }

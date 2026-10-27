@@ -143,7 +143,10 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
         ArgumentNullException.ThrowIfNull(actor);
         return _database.RunAsync(false, async (connection, transaction) =>
         {
-            await using var command = new NpgsqlCommand($"SELECT digest, content FROM weft.{function}($1,$2,$3,$4)", connection, transaction);
+            var sql = function == "preview_output"
+                ? "SELECT b.digest,b.content,m.media_type FROM weft.preview_output($1,$2,$3,$4) b JOIN weft.preview_outputs($1,$2,$3) m ON m.ordinal=$4"
+                : $"SELECT digest,content FROM weft.{function}($1,$2,$3,$4)";
+            await using var command = new NpgsqlCommand(sql, connection, transaction);
             command.Parameters.AddWithValue(organizationId);
             command.Parameters.AddWithValue(runId);
             command.Parameters.AddWithValue(actor.PrincipalId.Value);
@@ -153,7 +156,9 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
             var digest = Sha256Digest.Parse(reader.GetString(0));
             var content = reader.GetFieldValue<byte[]>(1);
             if (Sha256Digest.FromBytes(content) != digest) throw PostgresPreviewRunStore.Inconsistent();
-            return (PreviewOutputContent?)new PreviewOutputContent(digest, content);
+            var mediaType = function == "preview_output" ? reader.GetString(2) : PreviewPolicy.MediaType;
+            if (!DocumentPreviewPolicy.AdmitsMediaType(mediaType)) throw PostgresPreviewRunStore.Inconsistent();
+            return (PreviewOutputContent?)new PreviewOutputContent(digest, content) { MediaType = mediaType };
         }, cancellationToken);
     }
 }

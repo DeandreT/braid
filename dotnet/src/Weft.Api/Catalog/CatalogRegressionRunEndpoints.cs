@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Weft.Api.Auth;
+using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Regression;
@@ -79,7 +80,7 @@ public static partial class CatalogEndpoints
         var existing = await context.RequestServices.GetRequiredService<IRegressionRunReader>().ReadAsync(admission.Actor!, mapping.OrganizationId, id, context.RequestAborted);
         if (existing is not null && (existing.Case != reference || existing.Submitter != admission.Actor!.PrincipalId))
             return Error(CatalogErrorCodeV1.IdempotencyConflict, StatusCodes.Status409Conflict);
-        if (existing is null && value.Runtime != cases.Runtime)
+        if (existing is null && cases.SelectRuntime(value.Runtime) is null)
             return Error(CatalogErrorCodeV1.PreconditionFailed, StatusCodes.Status412PreconditionFailed);
         if (!await RunAccess(context, admission, mapping)) return NotFound();
         var result = await context.RequestServices.GetRequiredService<IRegressionRunStore>().SubmitAsync(new(admission.Actor!, id, reference), context.RequestAborted);
@@ -129,8 +130,10 @@ public static partial class CatalogEndpoints
                 comparison.ExpectedOutputCount, comparison.ActualOutputCount, comparison.TotalDifferenceCount, comparison.Truncated,
                 comparison.Differences.Select(difference => new RegressionDifferenceV1(difference.Key.Name, Name(difference.Kind),
                     difference.ExpectedByteCount, difference.ActualByteCount, difference.ExpectedDigest?.Value,
-                    difference.ActualDigest?.Value, difference.FirstDifferentByte)).ToArray()),
-            result?.Outputs?.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()))).ToArray());
+                    difference.ActualDigest?.Value, difference.FirstDifferentByte, DocumentLocation(difference.Location))).ToArray(),
+                comparison.DocumentDiagnostic is { } diagnostic ? new(diagnostic.Key.Name, diagnostic.Side, DocumentLocation(diagnostic.Location)!) : null),
+            result?.Outputs?.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()),
+                view.Runtime?.Profile == DocumentPreviewPolicy.Profile ? output.MediaType : null)).ToArray());
         var bytes = PrepareCase(response, context.RequestAborted);
         return CaseResponse(bytes);
     }
@@ -138,4 +141,6 @@ public static partial class CatalogEndpoints
     private static RegressionRunSummaryV1 RunSummary(RegressionRunSummary value) => new(value.RunId.ToString("D"), value.CaseId.ToString("D"),
         value.Version.ToString(CultureInfo.InvariantCulture), Scope(value.Revision), Name(value.State), value.Attempt, value.CreatedAt.ToString("O", CultureInfo.InvariantCulture));
     private static string Name<T>(T value) where T : Enum => JsonNamingPolicy.CamelCase.ConvertName(value.ToString());
+    private static RegressionDocumentLocationV1? DocumentLocation(RegressionDocumentLocation? location) => location is null ? null :
+        new(location.Interchange, location.Segment, location.SegmentId, location.Element, location.Repetition, location.Component);
 }

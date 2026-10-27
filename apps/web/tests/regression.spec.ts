@@ -81,7 +81,7 @@ function run(state = "completed", outcome = "passed", runId = RUN): Run {
 }
 
 class RegressionFixture {
-  capabilities = {
+  capabilities: components["schemas"]["RegressionCaseCapabilitiesV1"] = {
     runtime,
     limits,
     comparisonPolicy: policy,
@@ -216,8 +216,189 @@ class RegressionFixture {
     return route.fulfill({ json: this.response });
   }
 }
+test("document regression saves explicit media and comparison options without filename inference", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  fixture.capabilities.documentRuntime = {
+    ...runtime,
+    profile: "weft.ferrule-document-preview.v1",
+    adapterBuild: "document-adapter",
+  };
+  fixture.capabilities.comparisonPolicies = [
+    policy,
+    "weft.regression.edi-segments.v1",
+  ];
+  await fixture.install(page);
+  await enterDraft(page);
+  await panel(page)
+    .getByLabel("Execution profile", { exact: true })
+    .selectOption({
+      label: "Declared document formats (JSON / X12 / EDIFACT)",
+    });
+  await panel(page)
+    .getByLabel("Comparison policy", { exact: true })
+    .selectOption("weft.regression.edi-segments.v1");
+  await panel(page)
+    .getByLabel(
+      "Ignore supported envelope and acknowledgement control references",
+      { exact: true },
+    )
+    .check();
+  await panel(page)
+    .getByLabel("Expected media type", { exact: true })
+    .selectOption("application/edi-x12");
+  const output = panel(page).locator(".regression-document").nth(1);
+  await output
+    .getByLabel("Expected UTF-8 text")
+    .fill(
+      "ISA*00*          *00*          *ZZ*WEFTSENDER     *ZZ*WEFTRECEIVER   *261024*1200*^*00501*000000330*0*T*:~GS*PO*WEFTSENDER*WEFTRECEIVER*20261024*1200*330*X*005010~ST*850*0330~BEG*00*SA*WEFT-330~SE*3*0330~GE*1*330~IEA*1*000000330~",
+    );
+  await panel(page)
+    .getByRole("button", { name: "Save test version", exact: true })
+    .click();
+  await expect.poll(() => fixture.publications.length).toBe(1);
+  const saved = fixture.publications[0].body;
+  expect(saved.runtime).toEqual(fixture.capabilities.documentRuntime);
+  expect(saved.comparisonOptions).toEqual({
+    compareSeparators: true,
+    ignoreControlNumbers: true,
+    ignoreDates: false,
+  });
+  expect(saved.expected[0].mediaType).toBe("application/edi-x12");
+  expect(saved.namedInputs).toEqual([]);
+  await expect(
+    panel(page).getByRole("heading", { name: "Expected outputs", exact: true }),
+  ).toBeVisible();
+  await panel(page)
+    .getByRole("button", { name: "Edit as next version", exact: true })
+    .click();
+  await expect(
+    panel(page).getByLabel("Expected media type", { exact: true }),
+  ).toHaveValue("application/edi-x12");
+  await expect(
+    panel(page).getByLabel(
+      "Ignore supported envelope and acknowledgement control references",
+      { exact: true },
+    ),
+  ).toBeChecked();
+});
 const panel = (page: Page) =>
   page.getByRole("region", { name: "Regression tests", exact: true });
+
+test("document comparison choices survive same-owner draft recovery", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  fixture.capabilities.documentRuntime = {
+    ...runtime,
+    profile: "weft.ferrule-document-preview.v1",
+    adapterBuild: "document-adapter",
+  };
+  fixture.capabilities.comparisonPolicies = [
+    policy,
+    "weft.regression.edi-segments.v1",
+  ];
+  await fixture.install(page);
+  await enterDraft(page);
+  await panel(page)
+    .getByLabel("Execution profile", { exact: true })
+    .selectOption({
+      label: "Declared document formats (JSON / X12 / EDIFACT)",
+    });
+  await panel(page)
+    .getByLabel("Comparison policy", { exact: true })
+    .selectOption("weft.regression.edi-segments.v1");
+  await panel(page)
+    .getByLabel("Compare service separators", { exact: true })
+    .uncheck();
+  await panel(page)
+    .getByLabel("Ignore supported envelope and date/time elements", {
+      exact: true,
+    })
+    .check();
+  await panel(page)
+    .getByLabel("Expected media type", { exact: true })
+    .selectOption("application/edifact");
+  await panel(page)
+    .locator(".regression-document")
+    .nth(1)
+    .getByLabel("Expected UTF-8 text")
+    .fill(
+      "UNB+UNOC:3+WEFTSENDER+WEFTRECEIVER+261024:1200+330'UNH+330+ORDERS:D:96A:UN'BGM+220+WEFT-330'UNT+3+330'UNZ+1+330'",
+    );
+  await failSessionCheck(page, "unavailable");
+  await recoverAccess(page);
+  await panel(page)
+    .getByRole("button", { name: "Load regression cases", exact: true })
+    .click();
+  await expect(
+    panel(page).getByLabel("Comparison policy", { exact: true }),
+  ).toHaveValue("weft.regression.edi-segments.v1");
+  await expect(
+    panel(page).getByLabel("Compare service separators", { exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    panel(page).getByLabel("Ignore supported envelope and date/time elements", {
+      exact: true,
+    }),
+  ).toBeChecked();
+  await expect(
+    panel(page).getByLabel("Expected media type", { exact: true }),
+  ).toHaveValue("application/edifact");
+  expect(fixture.publications).toEqual([]);
+});
+
+test("document regression renders bounded segment locations and invalid-document diagnostics", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  fixture.response = run("completed", "failed");
+  fixture.response.comparison!.policy = "weft.regression.edi-segments.v1";
+  const difference = fixture.response.comparison!.differences[0];
+  difference.kind = "segmentsDiffer";
+  difference.firstDifferentByte = null;
+  difference.location = {
+    interchange: 2,
+    segment: 9,
+    segmentId: "BEG",
+    element: 3,
+    repetition: 1,
+    component: 1,
+  };
+  await fixture.install(page);
+  await panel(page)
+    .getByRole("button", { name: "Load run history", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("button", { name: `Open run ${RUN}`, exact: true })
+    .click();
+  await expect(panel(page)).toContainText(
+    "Interchange 2 · segment 9 BEG · element 3 · repetition 1 · component 1",
+  );
+  fixture.response.comparison!.outcome = "notEvaluated";
+  fixture.response.comparison!.notEvaluatedReason = "invalidDocument";
+  fixture.response.comparison!.differences = [];
+  fixture.response.comparison!.totalDifferences = 0;
+  fixture.response.comparison!.documentDiagnostic = {
+    name: null,
+    side: "actual",
+    location: {
+      interchange: 1,
+      segment: 7,
+      segmentId: "IEA",
+      element: 2,
+      repetition: 0,
+      component: 0,
+    },
+  };
+  await panel(page)
+    .getByRole("button", { name: `Open run ${RUN}`, exact: true })
+    .click();
+  await expect(panel(page)).toContainText(
+    "Invalid actual document: Primary · interchange 1 · segment 7 IEA · element 2",
+  );
+});
 /** The revision page's in-place re-read has finished. */
 const settled = (page: Page) =>
   expect(page.locator("weft-workbench-frame")).not.toHaveAttribute(
@@ -343,7 +524,11 @@ test("saved fixture keeps lexical values and executes its exact version", async 
   await panel(page)
     .getByRole("button", { name: "View actual primary", exact: true })
     .click();
-  await expect(panel(page).locator("pre")).toHaveText("{}");
+  await expect(
+    page
+      .getByRole("region", { name: "Document bytes", exact: true })
+      .locator("pre"),
+  ).toHaveText("{}");
 });
 
 test("a saved fixture refreshes the case table without a manual reload", async ({
@@ -599,7 +784,11 @@ test("output text is never interpreted as HTML", async ({ page }) => {
   await panel(page)
     .getByRole("button", { name: "View actual primary", exact: true })
     .click();
-  await expect(panel(page).locator("pre")).toContainText("<img");
+  await expect(
+    page
+      .getByRole("region", { name: "Document bytes", exact: true })
+      .locator("pre"),
+  ).toContainText("<img");
   await expect(panel(page).locator("pre img")).toHaveCount(0);
 });
 
@@ -618,7 +807,11 @@ test("same-session authority refusal clears cached samples and download controls
   await panel(page)
     .getByRole("button", { name: "View actual primary", exact: true })
     .click();
-  await expect(panel(page).locator("pre")).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Document bytes", exact: true })
+      .locator("pre"),
+  ).toBeVisible();
   await page.route(`**${root}/regression-runs/${RUN}`, (route) =>
     route.fulfill({ status: 404, json: { code: "notFound" } }),
   );
@@ -626,7 +819,9 @@ test("same-session authority refusal clears cached samples and download controls
     .getByRole("button", { name: "Refresh result", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toBeVisible();
-  await expect(panel(page).locator("pre")).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: "Document bytes", exact: true }),
+  ).toHaveCount(0);
   await expect(
     panel(page).getByRole("button", { name: /^Download/ }),
   ).toHaveCount(0);

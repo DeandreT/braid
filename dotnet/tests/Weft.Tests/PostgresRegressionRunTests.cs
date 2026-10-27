@@ -13,6 +13,28 @@ namespace Weft.Tests;
 public sealed class PostgresRegressionRunTests(PostgresFixture fixture)
 {
     [PostgresFact]
+    public async Task Document_case_and_run_retain_media_options_and_recompute_after_storage()
+    {
+        await using var test = await Context.CreateAsync(fixture);
+        var old = test.Value;
+        var output = RegressionOutput.Capture(RegressionOutputKey.Primary, Encoding.UTF8.GetBytes(DocumentPreviewTestData.X12), mediaType: "application/edi-x12");
+        var value = new RegressionCaseVersion(old.CaseId, 2, old.Owner, old.Name, old.Revision, old.NativeDigest,
+            new(old.Runtime.BackendId, old.Runtime.EngineRevision, old.Runtime.BackendBuild, "document-adapter", DocumentPreviewPolicy.Profile),
+            old.Replay, RegressionComparisonService.EdiSegmentsPolicy, RegressionOutputSet.Capture([output]), new(false, true, true));
+        await test.Cases.Writer.SaveAsync(test.Actor, value);
+        var reference = new RegressionCaseEnvelopeCodec().Encode(value).Reference;
+        Assert.Equal(RegressionRunSubmitOutcome.Created, await test.Writer.SubmitAsync(new(test.Actor, test.RunId, reference)));
+        var claim = await test.ClaimAsync();
+        var comparison = new RegressionComparisonService().Compare(value.Expected, new(OperationStatusV1.Succeeded, value.Expected),
+            value.ComparisonPolicy, ediOptions: value.EdiOptions);
+        Assert.True(await test.Writer.CompleteAsync(claim, RegressionCaseExecution.Complete(MappingPreviewStatus.Succeeded, value.Expected, comparison)));
+        var reopened = await new RegressionRunReadService(test.Reader, test.Cases.Reader).ReadAsync(test.Actor, test.Organization, test.RunId);
+        Assert.Equal(RegressionComparisonOutcome.Passed, reopened!.Result!.Comparison!.Outcome);
+        Assert.Equal("application/edi-x12", Assert.Single(reopened.Result.Outputs!.Outputs).MediaType);
+        Assert.Equal(RegressionRunSubmitOutcome.Replayed, await test.Writer.SubmitAsync(new(test.Actor, test.RunId, reference)));
+    }
+
+    [PostgresFact]
     public async Task Schema_matches_the_exact_qualified_shape()
     {
         await using var test = await Context.CreateAsync(fixture);

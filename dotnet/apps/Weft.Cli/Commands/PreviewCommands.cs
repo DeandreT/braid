@@ -10,6 +10,7 @@ namespace Weft.Cli.Commands;
 
 internal static class PreviewCommands
 {
+    internal const string DocumentProfile = "weft.ferrule-document-preview.v1";
     private const int MaximumInputBytes = 8 * 1024 * 1024;
     // PreviewPolicy caps the complete run's outputs at 8 MiB, so each stdout staging buffer is bounded too.
     private const int MaximumOutputBytes = 8 * 1024 * 1024;
@@ -38,13 +39,17 @@ internal static class PreviewCommands
         };
         var requestId = Optional("--request-id", "A UUID that identifies this preview; reuse it to retry safely (default: new)");
         var wait = new Option<bool>("--wait") { Description = "Wait until the run finishes" };
+        var document = new Option<bool>("--document")
+        {
+            Description = "Use the revision's explicit document formats (JSON, X12 or EDIFACT), instead of the legacy JSON profile"
+        };
         var timeout = Timeout("How long to wait for the run", TimeSpan.FromMinutes(10));
         var create = new Command("create", "Run a bounded sample preview of a revision")
-            .With(project, mapping, revision, input, named, parameters, target, requestId, wait, timeout);
+            .With(project, mapping, revision, input, named, parameters, target, requestId, wait, timeout, document);
         create.Handle(globals, async invocation =>
         {
             var key = invocation.OptionalId(requestId) ?? CatalogCommands.NewId();
-            var submission = await SubmissionAsync(invocation, input, named, parameters, target);
+            var submission = await SubmissionAsync(invocation, input, named, parameters, target, invocation.Value(document));
             var request = (await invocation.RequestAsync(ApiOperations.SubmitCatalogPreview)).Path("projectId", invocation.Id(project))
                 .Path("mappingId", invocation.Id(mapping)).Path("revisionId", invocation.Id(revision))
                 .Header("Idempotency-Key", key).Body(CatalogCommands.JsonBody(submission, ApiOperations.SubmitCatalogPreview));
@@ -114,7 +119,7 @@ internal static class PreviewCommands
     }
 
     private static async Task<CatalogPreviewSubmissionV1> SubmissionAsync(CliInvocation invocation, Option<string> input,
-        Option<string[]> named, Option<string[]> parameters, Option<string> target)
+        Option<string[]> named, Option<string[]> parameters, Option<string> target, bool document)
     {
         var budget = MaximumInputBytes;
         async Task<string> Read(string path, string what)
@@ -148,7 +153,7 @@ internal static class PreviewCommands
             { Length: > 0 } name => new CatalogPreviewTargetV1("named", name),
             _ => throw CliException.Usage("--target must be all, primary or a target name.")
         };
-        return new CatalogPreviewSubmissionV1(selection, values, inputs);
+        return new CatalogPreviewSubmissionV1(selection, values, inputs, document ? DocumentProfile : null);
     }
 
     internal static CatalogPreviewParameterV1 Parameter(string text)
@@ -169,6 +174,10 @@ internal static class PreviewCommands
     private static async Task<long> DownloadAsync(CliInvocation invocation, ApiResponse response, string destination,
         CatalogPreviewOutputV1 expected)
     {
+        if (expected.MediaType is not ("application/json" or "application/edi-x12" or "application/edifact") ||
+            !string.Equals(response.Message.Content.Headers.ContentType?.MediaType, expected.MediaType, StringComparison.OrdinalIgnoreCase) ||
+            response.Message.Content.Headers.ContentEncoding.Count != 0)
+            throw Mismatch();
         var advertised = ContentDigest(response);
         if (!string.Equals(Convert.ToHexStringLower(advertised), expected.Sha256, StringComparison.Ordinal))
             throw Mismatch();
@@ -270,7 +279,7 @@ internal static class PreviewCommands
     }
 
     private static CliException Mismatch() =>
-        new(CliExitCode.Transport, "The downloaded output did not match its recorded size and SHA-256 digest; nothing was kept.", "digestMismatch");
+        new(CliExitCode.Transport, "The downloaded output did not match its recorded media type, size and SHA-256 digest; nothing was kept.", "digestMismatch");
 
     internal static void WriteRun(CliOutput output, CatalogPreviewRunV1 run)
     {

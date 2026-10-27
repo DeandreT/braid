@@ -56,6 +56,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string caseWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string runReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string runWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string comparisonPassword = Guid.NewGuid().ToString("N");
     private readonly string buildReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string buildWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string buildRunReaderPassword = Guid.NewGuid().ToString("N");
@@ -428,7 +429,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private (string Name, string Password)[] RegressionRoles() =>
         [("weft_administration", administrationPassword), ("weft_case_reader", caseReaderPassword), ("weft_case_writer", caseWriterPassword),
-         ("weft_run_reader", runReaderPassword), ("weft_run_writer", runWriterPassword),
+         ("weft_run_reader", runReaderPassword), ("weft_run_writer", runWriterPassword), ("weft_comparison_settler", comparisonPassword),
          .. (provisionBuildProfiles ? new (string Name, string Password)[] { ("weft_build_reader", buildReaderPassword), ("weft_build_writer", buildWriterPassword) } : []),
          .. (provisionBuildRunProfiles ? new (string Name, string Password)[] { ("weft_build_run_reader", buildRunReaderPassword),
              ("weft_build_run_writer", buildRunWriterPassword), ("weft_build_dispatcher", buildDispatcherPassword) } : []),

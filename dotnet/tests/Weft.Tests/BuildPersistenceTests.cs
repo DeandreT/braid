@@ -398,9 +398,16 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
         internal required Weft.Domain.Sha256Digest Evidence { get; init; }
         internal ActorContext Actor => Runs.Actor;
 
-        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool pass = true, bool nullContent = false, int? migrations = null)
+        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool pass = true, bool nullContent = false, int? migrations = null, bool documents = false, bool interchanges = false)
         {
-            var runs = await RegressionRunPostgresTestSupport.CreateAsync(fixture, migrations);
+            documents |= interchanges;
+            var runs = await RegressionRunPostgresTestSupport.CreateAsync(fixture, migrations, documents ? value => new(
+                value.CaseId, value.Version, value.Owner, value.Name, value.Revision, value.NativeDigest,
+                new(value.Runtime.BackendId, value.Runtime.EngineRevision, value.Runtime.BackendBuild, value.Runtime.AdapterBuild, DocumentPreviewPolicy.Profile),
+                new(PreviewTargetSelection.All, value.Replay.CurrentDateTime, value.Replay.Limits, new(null, DocumentPreviewTestData.Input("x12")), [], []),
+                Weft.Application.Regression.RegressionComparisonService.ExactBytesPolicy,
+                Weft.Application.Regression.RegressionOutputSet.Capture([Weft.Application.Regression.RegressionOutput.Capture(
+                    Weft.Application.Regression.RegressionOutputKey.Primary, DocumentPreviewTestData.Input("x12"), mediaType: "application/edi-x12")])) : null);
             PostgresBuildStore? store = null;
             try
             {
@@ -436,11 +443,11 @@ public sealed class BuildPersistenceTests(PostgresFixture fixture)
                 store = new PostgresBuildStore(connection, true);
                 var scope = runs.Value.Revision;
                 var environment = new BuildEnvironmentReference(new(scope.OrganizationId, scope.ProjectId), Guid.NewGuid(), 1);
-                var profile = FixtureBuildCompiler.Profile;
+                var profile = interchanges ? Weft.MappingBackends.FerruleBuildCompiler.X12InterchangesProfile : documents ? Weft.MappingBackends.FerruleBuildCompiler.DocumentProfile : FixtureBuildCompiler.Profile;
                 Assert.Equal(BuildControlOutcome.Created, await store.SaveEnvironmentAsync(runs.Actor, new(environment, profile, true)));
                 var intent = new BuildIntent(Guid.NewGuid(), scope, runs.Value.NativeDigest,
                     new("ferrule", "engine", "build", "adapter"), profile,
-                    [new(BuildBoundaryKind.PrimaryInput, null, "fixture-bytes"), new(BuildBoundaryKind.PrimaryOutput, null, "fixture-bytes")], environment, Guid.NewGuid(), runs.RunId);
+                    [new(BuildBoundaryKind.PrimaryInput, null, documents ? "x12" : "fixture-bytes"), new(BuildBoundaryKind.PrimaryOutput, null, documents ? "x12" : "fixture-bytes")], environment, Guid.NewGuid(), runs.RunId);
                 var nativeId = await runs.Cases.Case.ScalarAsync<Guid>("SELECT native_object_id FROM weft.mapping_revisions LIMIT 1");
                 var count = await runs.Cases.Case.ScalarAsync<long>("SELECT native_byte_count FROM weft.mapping_revisions LIMIT 1");
                 return new()

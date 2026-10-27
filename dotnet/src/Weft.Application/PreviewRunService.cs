@@ -187,6 +187,12 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
             try
             {
                 result = await _backend.PreviewAsync(request, execution.Token).ConfigureAwait(false);
+                var expectedProfile = request.Profile == PreviewExecutionProfile.Document ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
+                if (result.Profile != expectedProfile || result.Artifacts.Any(output =>
+                    request.Profile == PreviewExecutionProfile.Document
+                        ? !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType)
+                        : output.MediaType != PreviewPolicy.MediaType))
+                    throw new PreviewRunException("The preview backend did not preserve the requested admission profile.");
             }
             finally
             {
@@ -248,7 +254,8 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
             throw new PreviewRunException("The native object does not match the run's revision.");
         return new MappingPreviewRequest(artifact, description.Target, new PreviewInputDocument(null, inputs[0].Content),
             inputs.Skip(1).Select(input => new PreviewInputDocument(input.Name, input.Content)).ToArray(),
-            description.Parameters, claim.CurrentDateTime, description.Limits);
+            description.Parameters, claim.CurrentDateTime, description.Limits)
+        { Profile = description.Profile };
     }
 
     private enum Watch { Running, CancelRequested, ClaimLost }

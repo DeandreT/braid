@@ -7,6 +7,9 @@ use sha2::{Digest, Sha256};
 
 pub mod build;
 pub mod decode;
+pub mod document_format;
+pub mod document_limits;
+pub mod edi_envelope;
 pub mod framing;
 pub mod inspect;
 pub mod interchange;
@@ -15,8 +18,9 @@ pub mod projection;
 pub mod protocol;
 pub mod sandbox;
 pub mod validation;
+mod x12_syntax;
 
-use preview::protocol::PREVIEW_PROTOCOL_VERSION;
+use preview::protocol::{DOCUMENT_PREVIEW_PROTOCOL_VERSION, PREVIEW_PROTOCOL_VERSION};
 use protocol::{
     Failure, MAX_DIAGNOSTICS, MAX_HEADER_BYTES, MAX_ITEMS, MAX_NATIVE_BYTES, MAX_TEXT_BYTES,
     NativeLocator, PROTOCOL_VERSION, RequestHeader, Response, Revision, WorkerResult, bounded_text,
@@ -49,9 +53,12 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
     {
         return build::handle(&header_bytes, reader, writer);
     }
-    if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
-        .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(PREVIEW_PROTOCOL_VERSION))
-    {
+    if serde_json::from_slice::<ProtocolProbe>(&header_bytes).is_ok_and(|probe| {
+        matches!(
+            probe.protocol_version.as_deref(),
+            Some(PREVIEW_PROTOCOL_VERSION | DOCUMENT_PREVIEW_PROTOCOL_VERSION)
+        )
+    }) {
         return preview::handle_preview(&header_bytes, reader, writer);
     }
     let header = serde_json::from_slice::<RequestHeader>(&header_bytes).ok();

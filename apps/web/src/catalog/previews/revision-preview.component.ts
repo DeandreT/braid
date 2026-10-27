@@ -6,6 +6,7 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
   untracked,
 } from "@angular/core";
@@ -17,6 +18,11 @@ import type {
   CatalogRevision,
 } from "../catalog-types";
 import { PreviewApi } from "./preview-api";
+import { DocumentViewComponent } from "../../workbench/document-view.component";
+import {
+  displayBytes,
+  type DocumentRepresentation,
+} from "../../workbench/workbench-documents";
 import { PreviewState } from "./preview-state";
 import { StatusChipComponent } from "../../workbench/status-chip.component";
 import { previewOutcomeStatus, previewRunStatus } from "./preview-presentation";
@@ -29,13 +35,12 @@ import {
   type PreviewTargetKind,
 } from "./preview-types";
 import { HelpLinkComponent } from "../../help/help-link.component";
-
-const shownBytes = 256 * 1024;
-const decoder = new TextDecoder("utf-8", { fatal: false });
+import { UnsentWork } from "../../workbench/unsent-work";
+import { hasUnsentPreview } from "./preview-unsent";
 
 @Component({
   selector: "weft-revision-preview",
-  imports: [StatusChipComponent, HelpLinkComponent],
+  imports: [StatusChipComponent, HelpLinkComponent, DocumentViewComponent],
   templateUrl: "./revision-preview.component.html",
   styleUrl: "./revision-preview.component.css",
 })
@@ -47,6 +52,9 @@ export class RevisionPreviewComponent {
   readonly context = input.required<CatalogContext>();
   readonly mapping = input.required<CatalogMapping>();
   readonly revision = input.required<CatalogRevision>();
+  readonly workbench = input(false);
+  readonly outputSelected = output<void>();
+  private outputEpoch = 0;
   readonly preview = new PreviewState(
     inject(PreviewApi),
     sessionStorageOrNull(this.document),
@@ -54,13 +62,24 @@ export class RevisionPreviewComponent {
   readonly limits = previewLimits;
   readonly allowed = computed(() => this.mapping().access.actions.preview);
   readonly shown = signal<{
-    ordinal: number;
-    text: string;
-    truncated: boolean;
+    runId: string;
+    output: PreviewOutput;
+    display: DocumentRepresentation;
   } | null>(null);
   readonly outputError = signal<PreviewErrorKind | null>(null);
 
   constructor() {
+    inject(UnsentWork).track(() =>
+      hasUnsentPreview({
+        inputs: this.preview.inputs(),
+        parameters: this.preview.parameters(),
+        targetKind: this.preview.targetKind(),
+        targetName: this.preview.targetName(),
+        documentProfile: this.preview.documentProfile(),
+        busy: this.preview.busy(),
+        pendingKey: this.preview.pendingKey(),
+      }),
+    );
     effect(() => {
       const revision = this.revision();
       const allowed = this.allowed();
@@ -79,7 +98,19 @@ export class RevisionPreviewComponent {
         });
       });
     });
+    const outputRun = computed(() => this.preview.run()?.runId ?? null);
+    effect(() => {
+      this.context();
+      this.mapping();
+      this.revision();
+      outputRun();
+      untracked(() => this.clearOutput());
+    });
+    const invalidation = this.contexts.invalidated.subscribe(() =>
+      this.clearOutput(),
+    );
     inject(DestroyRef).onDestroy(() => {
+      invalidation.unsubscribe();
       this.downloads.forEach((download) => download.unsubscribe());
       this.preview.destroy();
     });
@@ -119,18 +150,40 @@ export class RevisionPreviewComponent {
   }
 
   show(output: PreviewOutput): void {
+    this.clearOutput();
+    const epoch = this.outputEpoch;
+    const runId = this.preview.run()?.runId;
+    if (!runId) return;
     this.outputError.set(null);
     this.downloads.push(
       this.preview.output(output).subscribe({
-        next: (bytes) =>
+        next: (bytes) => {
+          if (
+            epoch !== this.outputEpoch ||
+            this.preview.run()?.runId !== runId ||
+            !this.allowed()
+          )
+            return;
           this.shown.set({
-            ordinal: output.ordinal,
-            text: decoder.decode(bytes.subarray(0, shownBytes)),
-            truncated: bytes.length > shownBytes,
-          }),
-        error: (error: unknown) => this.outputError.set(kindOf(error)),
+            runId,
+            output,
+            display: displayBytes(bytes, output.targetName, output.mediaType),
+          });
+          this.outputSelected.emit();
+        },
+        error: (error: unknown) => {
+          if (epoch === this.outputEpoch) this.outputError.set(kindOf(error));
+        },
       }),
     );
+  }
+
+  private clearOutput(): void {
+    this.outputEpoch++;
+    this.downloads.forEach((download) => download.unsubscribe());
+    this.downloads = [];
+    this.shown.set(null);
+    this.outputError.set(null);
   }
 
   download(output: PreviewOutput): void {
@@ -139,7 +192,7 @@ export class RevisionPreviewComponent {
       this.preview.output(output).subscribe({
         next: (bytes) => {
           const url = URL.createObjectURL(
-            new Blob([bytes as BlobPart], { type: "application/json" }),
+            new Blob([bytes as BlobPart], { type: output.mediaType }),
           );
           const anchor = this.document.createElement("a");
           anchor.href = url;
@@ -205,5 +258,11 @@ function outputFilename(output: PreviewOutput): string {
     (output.targetName || "primary")
       .replace(/[^A-Za-z0-9._-]+/g, "_")
       .slice(0, 80) || "output";
-  return `preview-${output.ordinal}-${base}.json`;
+  const extension =
+    output.mediaType === "application/edi-x12"
+      ? "x12"
+      : output.mediaType === "application/edifact"
+        ? "edi"
+        : "json";
+  return `preview-${output.ordinal}-${base}.${extension}`;
 }

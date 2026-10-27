@@ -27,6 +27,60 @@ async function loaded(page: Page) {
     }),
   ).toBeEnabled();
 }
+
+test("document compiler environments use the explicitly offered profile", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  state.documentProfiles = true;
+  await loaded(page);
+  await panel(page)
+    .getByRole("button", { name: "Environment administration", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("combobox", { name: "Compiler profile", exact: true })
+    .selectOption({ label: "Declared document formats" });
+  if (process.env.WEFT_EDI_SCREENSHOT_ROOT)
+    await panel(page).screenshot({
+      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/profile-single.png`,
+    });
+  await panel(page)
+    .getByRole("button", { name: "Register new environment", exact: true })
+    .click();
+  await confirmAction(page);
+  await expect.poll(() => state.writes.length).toBe(1);
+  expect(JSON.parse(state.writes[0].body!)).toEqual({
+    profileId: "weft.ferrule-csharp-document.v1",
+    profileVersion: "1",
+  });
+});
+test("X12 compiler environments bind the explicitly offered interchange profile", async ({
+  page,
+}) => {
+  const state = await buildFixture(page);
+  state.documentProfiles = true;
+  state.interchangeProfiles = true;
+  await loaded(page);
+  await panel(page)
+    .getByRole("button", { name: "Environment administration", exact: true })
+    .click();
+  await panel(page)
+    .getByRole("combobox", { name: "Compiler profile", exact: true })
+    .selectOption({ label: "X12 MapForce interchanges" });
+  if (process.env.WEFT_EDI_SCREENSHOT_ROOT)
+    await panel(page).screenshot({
+      path: `${process.env.WEFT_EDI_SCREENSHOT_ROOT}/profile-interchanges.png`,
+    });
+  await panel(page)
+    .getByRole("button", { name: "Register new environment", exact: true })
+    .click();
+  await confirmAction(page);
+  await expect.poll(() => state.writes.length).toBe(1);
+  expect(JSON.parse(state.writes[0].body!)).toEqual({
+    profileId: "weft.ferrule-csharp-x12-interchanges.v1",
+    profileVersion: "1",
+  });
+});
 async function approved(page: Page, state: BuildFixture) {
   await loaded(page);
   await panel(page)

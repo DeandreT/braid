@@ -95,6 +95,7 @@ const roles = [
   ["weft_case_writer", "CASE_WRITER"],
   ["weft_run_reader", "RUN_READER"],
   ["weft_run_writer", "RUN_WRITER"],
+  ["weft_comparison_settler", "COMPARISON"],
   ["weft_build_reader", "BUILD_READER"],
   ["weft_build_writer", "BUILD_WRITER"],
   ["weft_build_run_reader", "BUILD_RUN_READER"],

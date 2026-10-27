@@ -42,6 +42,7 @@ func vaultSecret(vaultUri string, identityId string, name string, secret string)
 var logins = [
   { key: 'preview-writer', setting: 'WEFT_PREVIEW_WRITER_CONNECTION_STRING', file: 'preview-writer' }
   { key: 'run-writer', setting: 'WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING', file: 'run-writer' }
+  { key: 'comparison', setting: 'WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING', file: 'comparison' }
   { key: 'case-reader', setting: 'WEFT_REGRESSION_CASE_READER_CONNECTION_STRING', file: 'case-reader' }
   { key: 'runtime', setting: 'WEFT_REGRESSION_ACCESS_CONNECTION_STRING', file: 'regression-access' }
   { key: 'report', setting: 'WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING', file: 'regression-report' }

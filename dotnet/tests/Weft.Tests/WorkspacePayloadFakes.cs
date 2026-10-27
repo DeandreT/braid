@@ -29,6 +29,7 @@ internal sealed class WorkspacePayloadFakes(WorkspaceToolFixture catalog) : IPro
     internal int Presences { get; private set; }
     internal PreviewRunSnapshot? SnapshotOverride { get; set; }
     internal Dictionary<Guid, PreviewRunSnapshot> AdditionalRuns { get; } = [];
+    internal Dictionary<int, (byte[] Bytes, string MediaType)> OutputOverrides { get; } = [];
 
     private bool Readable(ActorContext actor, ProjectScope project) => catalog.ReadableProject(actor, project);
 
@@ -59,7 +60,16 @@ internal sealed class WorkspacePayloadFakes(WorkspaceToolFixture catalog) : IPro
         [Descriptor(0, "totals", Output), Descriptor(1, "lines", Large), Descriptor(2, "binary", Binary), Descriptor(3, "control", Control)],
         WorkspaceToolFixture.Now, WorkspaceToolFixture.Now, WorkspaceToolFixture.Now, WorkspaceToolFixture.Now.AddDays(1));
 
-    private PreviewRunSnapshot? Run(Guid runId) => runId == RunId ? SnapshotOverride ?? Snapshot : AdditionalRuns.GetValueOrDefault(runId);
+    private PreviewRunSnapshot? Run(Guid runId)
+    {
+        var value = runId == RunId ? SnapshotOverride ?? Snapshot : AdditionalRuns.GetValueOrDefault(runId);
+        return value is null || OutputOverrides.Count == 0 ? value : value with
+        {
+            Outputs = value.Outputs.Select(output => OutputOverrides.TryGetValue(output.Ordinal, out var replacement)
+                ? output with { MediaType = replacement.MediaType, Digest = Sha256Digest.FromBytes(replacement.Bytes), ByteCount = replacement.Bytes.Length }
+                : output).ToArray()
+        };
+    }
     private bool Own(ActorContext actor, Guid organizationId, Guid runId) => Run(runId) is { } run &&
         organizationId == run.Revision.OrganizationId && Readable(actor, new(run.Revision.OrganizationId, run.Revision.ProjectId));
 
@@ -69,7 +79,9 @@ internal sealed class WorkspacePayloadFakes(WorkspaceToolFixture catalog) : IPro
     public Task<PreviewOutputContent?> ReadOutputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(Own(actor, organizationId, runId) && ordinal < Outputs.Length
-            ? new PreviewOutputContent(Sha256Digest.FromBytes(Outputs[ordinal]), Outputs[ordinal]) : null);
+            ? Content(OutputOverrides.TryGetValue(ordinal, out var replacement) ? replacement.Bytes : Outputs[ordinal]) : null);
+
+    private static PreviewOutputContent Content(byte[] bytes) => new(Sha256Digest.FromBytes(bytes), bytes);
 
     public Task<PreviewRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null,
         CancellationToken cancellationToken = default) =>

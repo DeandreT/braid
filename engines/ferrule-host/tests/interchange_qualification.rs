@@ -46,10 +46,12 @@ fn parse(output: &[u8]) -> (Response, Vec<u8>) {
 fn self_authored_native_exports_assets_and_imports_exact_package_without_io() {
     let (export, package) = run(&request("export", support::BASIC));
     assert_eq!(export.status, "succeeded");
+    assert_eq!(export.engine_revision, ENGINE_REVISION);
     let decoded = interchange::decode_package(&package).unwrap();
     assert!(decoded.entries().len() > 1);
     let (import, native) = run(&request("import", &package));
     assert_eq!(import.status, "succeeded");
+    assert_eq!(import.engine_revision, ENGINE_REVISION);
     assert!(import.summary.contains("graph nodes"));
     assert!(import.summary.contains("Source"));
     assert!(import.summary.contains("Target"));

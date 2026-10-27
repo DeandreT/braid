@@ -894,6 +894,7 @@
       "FerruleServiceRuntimeV1": {
         "required": [
           "protocol",
+          "supportedProtocols",
           "version",
           "identity",
           "managedHeapBytes",
@@ -903,6 +904,12 @@
         "properties": {
           "protocol": {
             "type": "string"
+          },
+          "supportedProtocols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "version": {
             "type": "string"
@@ -924,6 +931,7 @@
         "required": [
           "protocol",
           "profile",
+          "supportedProfiles",
           "sdkVersion",
           "runtimeVersion",
           "identity",
@@ -936,6 +944,12 @@
           },
           "profile": {
             "type": "string"
+          },
+          "supportedProfiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "sdkVersion": {
             "type": "string"

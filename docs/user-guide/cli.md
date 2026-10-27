@@ -64,6 +64,12 @@ Other command groups cover [uploads](uploads.md), [sample previews](previews.md)
 [workspace chat](chat.md). Commands that change saved data still require the
 appropriate project role.
 
+For a mapping with explicit X12 or EDIFACT formats, use `weft previews create
+--document` with the usual project, mapping, revision and input options. The
+mapping selects the formats, not the input filename. Without `--document`, the
+command keeps the JSON preview behavior. `weft regression capabilities` and the
+build capability commands show the separate document profiles when available.
+
 ## Output and waiting
 
 For read-only questions across your workspace, run `weft chat workspace availability`
@@ -86,7 +92,7 @@ reading a saved answer without sending another question.
 - Waiting commands accept `--timeout`, such as `--timeout 90s`. A timeout does not
   mean the server canceled the work. Read the saved run or upload receipt before
   submitting anything again.
-- `weft previews download` checks the output's size and fingerprint before replacing
+- `weft previews download` checks the output's media type, size and fingerprint before replacing
   a destination file or writing verified output to standard output.
 
 ## Recover an unconfirmed change

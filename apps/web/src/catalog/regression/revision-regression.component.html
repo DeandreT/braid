@@ -38,7 +38,7 @@
   }
   @if (capabilities(); as capability) {
     <p class="regression-policy">
-      Comparison: exact bytes · Fixed runtime:
+      Default comparison: exact bytes · Fixed runtime:
       <code>{{ capability.runtime.backendId }}</code>
     </p>
     <div class="regression-actions">
@@ -250,10 +250,13 @@
             <li>
               {{ output.name || "Primary output" }} ·
               {{ byteCount(output) }} bytes
+              @if (output.mediaType) {
+                · {{ output.mediaType }}
+              }
               <button
                 class="catalog-button"
                 type="button"
-                (click)="show(output)"
+                (click)="show(output, true)"
               >
                 View expected {{ output.name || "primary" }}
               </button>
@@ -327,6 +330,54 @@
                 [(ngModel)]="targetName"
             /></label>
           }
+          @if (capability.documentRuntime) {
+            <label
+              >Execution profile<select
+                aria-label="Execution profile"
+                [(ngModel)]="documentMode"
+                (ngModelChange)="comparisonPolicy = exactPolicy"
+              >
+                <option [ngValue]="false">Legacy JSON</option>
+                <option [ngValue]="true">
+                  Declared document formats (JSON / X12 / EDIFACT)
+                </option>
+              </select></label
+            >
+          }
+          @if (documentMode) {
+            <label
+              >Comparison policy<select
+                aria-label="Comparison policy"
+                [(ngModel)]="comparisonPolicy"
+              >
+                <option [value]="exactPolicy">
+                  Exact bytes and media type
+                </option>
+                <option [value]="ediPolicy">
+                  Ordered EDI segments (JSON stays exact bytes)
+                </option>
+              </select></label
+            >
+            @if (comparisonPolicy === ediPolicy) {
+              <label
+                ><input type="checkbox" [(ngModel)]="compareSeparators" />
+                Compare service separators</label
+              >
+              <label
+                ><input type="checkbox" [(ngModel)]="ignoreControlNumbers" />
+                Ignore supported envelope and acknowledgement control
+                references</label
+              >
+              <label
+                ><input type="checkbox" [(ngModel)]="ignoreDates" /> Ignore
+                supported envelope and date/time elements</label
+              >
+              <p>
+                Envelope counts and references are validated before masking.
+                Segment, repetition and component order remains significant.
+              </p>
+            }
+          }
           @for (isOutput of [false, true]; track isOutput) {
             <h4>
               {{ isOutput ? "Expected output documents" : "Input documents" }}
@@ -344,6 +395,27 @@
               let first = $first
             ) {
               <div class="regression-document">
+                @if (isOutput && documentMode) {
+                  <label
+                    >Expected media type<select
+                      aria-label="Expected media type"
+                      [ngModel]="item.mediaType || 'application/json'"
+                      (ngModelChange)="
+                        updateDocument(true, item.id, { mediaType: $event })
+                      "
+                    >
+                      <option value="application/json">
+                        JSON (application/json)
+                      </option>
+                      <option value="application/edi-x12">
+                        X12 (application/edi-x12)
+                      </option>
+                      <option value="application/edifact">
+                        EDIFACT (application/edifact)
+                      </option>
+                    </select></label
+                  >
+                }
                 @if (isOutput || !first) {
                   <label
                     >Document name<input
@@ -678,6 +750,16 @@
           @if (comparison.outcome === "notEvaluated") {
             <p>{{ label(comparison.notEvaluatedReason) }}</p>
           }
+          @if (comparison.documentDiagnostic; as diagnostic) {
+            <p>
+              Invalid {{ diagnostic.side }} document:
+              {{ diagnostic.name || "Primary" }} · interchange
+              {{ diagnostic.location.interchange }} · segment
+              {{ diagnostic.location.segment }}
+              {{ diagnostic.location.segmentId }} · element
+              {{ diagnostic.location.element }}
+            </p>
+          }
           <p>
             {{ comparison.expectedOutputs }} expected outputs ·
             {{ comparison.actualOutputs }} actual outputs ·
@@ -695,6 +777,7 @@
                   <th>Expected bytes</th>
                   <th>Actual bytes</th>
                   <th>First different byte</th>
+                  <th>EDI location</th>
                 </tr>
               </thead>
               <tbody>
@@ -705,6 +788,17 @@
                     <td>{{ difference.expectedBytes ?? "—" }}</td>
                     <td>{{ difference.actualBytes ?? "—" }}</td>
                     <td>{{ difference.firstDifferentByte ?? "—" }}</td>
+                    <td>
+                      @if (difference.location; as location) {
+                        Interchange {{ location.interchange }} · segment
+                        {{ location.segment }} {{ location.segmentId }} ·
+                        element {{ location.element }} · repetition
+                        {{ location.repetition }} · component
+                        {{ location.component }}
+                      } @else {
+                        —
+                      }
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -717,6 +811,9 @@
           <p>
             {{ output.name || "Primary output" }} ·
             {{ byteCount(output) }} bytes
+            @if (output.mediaType) {
+              · {{ output.mediaType }}
+            }
             <button class="catalog-button" type="button" (click)="show(output)">
               View actual {{ output.name || "primary" }}
             </button>
@@ -731,7 +828,7 @@
         }
       </section>
     }
-    @if (shown(); as output) {
+    @if (!workbench() && shown(); as output) {
       <section class="regression-detail" aria-label="Output text preview">
         <h3>{{ output.name }}</h3>
         <p>UTF-8 text preview only. Download preserves the exact bytes.</p>

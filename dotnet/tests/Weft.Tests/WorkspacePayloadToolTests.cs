@@ -170,6 +170,65 @@ public sealed class WorkspacePayloadToolTests
         Assert.Equal("notFound", (await fixture.CallAsync(service, "get_preview_input", Args(WorkspaceToolFixture.Id(Guid.NewGuid()), 0), context)).Outcome);
     }
 
+    [Theory]
+    [InlineData("application/edi-x12")]
+    [InlineData("application/edifact")]
+    public async Task Declared_edi_outputs_share_only_the_bounded_exact_utf8_excerpt(string media)
+    {
+        var fixture = new WorkspaceToolFixture(payloads: true);
+        var service = fixture.Service(previews: true);
+        var payloads = fixture.Payloads!;
+        payloads.Grants.Add(WorkspaceToolFixture.Project);
+        var bytes = DocumentPreviewTestData.Input(media == "application/edi-x12" ? "x12" : "edifact");
+        payloads.OutputOverrides[0] = (bytes, media);
+        var result = await fixture.CallAsync(service, "get_preview_output", Args(RunId, 0), fixture.Context(service, payloads: true));
+        Assert.Equal("available", result.Outcome);
+        Assert.Equal(media, result.Data.GetProperty("mediaType").GetString());
+        Assert.Equal(Encoding.UTF8.GetString(bytes), result.Data.GetProperty("text").GetString());
+        Assert.Equal(bytes.Length, result.Result.DataShared!.ByteCount);
+        Assert.Equal(2, payloads.Observations);
+
+        var large = Encoding.UTF8.GetBytes(new string('é', WorkspaceChatGrounding.PayloadBytes));
+        payloads.OutputOverrides[0] = (large, media);
+        var bounded = await fixture.CallAsync(service, "get_preview_output", Args(RunId, 0), fixture.Context(service, remainingBytes: 2_048, payloads: true));
+        Assert.Equal("available", bounded.Outcome);
+        Assert.True(bounded.Data.GetProperty("truncated").GetBoolean());
+        var shared = bounded.Data.GetProperty("sharedBytes").GetInt32();
+        Assert.InRange(shared, 1, 2_048);
+        Assert.Equal(large.Length, bounded.Data.GetProperty("totalBytes").GetInt32());
+        Assert.Equal(large.Take(shared), Encoding.UTF8.GetBytes(bounded.Data.GetProperty("text").GetString()!));
+        Assert.Equal(shared, bounded.Result.DataShared!.ByteCount);
+    }
+
+    [Theory]
+    [InlineData("application/edi-x12", "noGrant")]
+    [InlineData("application/edifact", "noGrant")]
+    [InlineData("application/edi-x12", "revoked")]
+    [InlineData("application/edifact", "revoked")]
+    [InlineData("application/edi-x12", "profile")]
+    [InlineData("application/edifact", "profile")]
+    [InlineData("application/edi-x12", "utf8")]
+    [InlineData("application/edifact", "utf8")]
+    [InlineData("application/edi-x12", "control")]
+    [InlineData("application/edifact", "control")]
+    [InlineData("application/edi-x12-unknown", "media")]
+    [InlineData("application/edifact-binary", "media")]
+    public async Task Edi_media_does_not_bypass_profile_current_grants_or_strict_text(string media, string refusal)
+    {
+        var fixture = new WorkspaceToolFixture(payloads: true);
+        var service = fixture.Service(previews: true);
+        var payloads = fixture.Payloads!;
+        if (refusal != "noGrant") payloads.Grants.Add(WorkspaceToolFixture.Project);
+        if (refusal == "revoked") payloads.OnObserved = payloads.Grants.Clear;
+        byte[] bytes = refusal == "utf8" ? WorkspacePayloadFakes.Binary :
+            Encoding.UTF8.GetBytes(new string('X', WorkspaceChatGrounding.PayloadBytes + 1) + (refusal == "control" ? "\u0007" : ""));
+        payloads.OutputOverrides[0] = (bytes, media);
+        var result = await fixture.CallAsync(service, "get_preview_output", Args(RunId, 0), fixture.Context(service, payloads: refusal != "profile"));
+        Assert.Equal(refusal == "profile" ? "invalidCall" : refusal is "noGrant" or "revoked" ? "notPermitted" : "unsupportedContent", result.Outcome);
+        Assert.Null(result.Result.DataShared);
+        Assert.DoesNotContain("\"text\"", result.Json, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Run_tools_list_and_read_the_users_own_previews_without_sharing_payload_data()
     {

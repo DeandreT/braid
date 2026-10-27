@@ -9,8 +9,8 @@ public sealed class ReleaseOperationsConfigurationTests
     public void Operations_follow_the_exact_preceding_migration_prefix()
     {
         var migrations = MigrationRunner.EmbeddedMigrations;
-        Assert.Equal(33, migrations.Count);
-        Assert.Equal(Enumerable.Range(1, 33), migrations.Select(migration => migration.Version));
+        Assert.Equal(36, migrations.Count);
+        Assert.Equal(Enumerable.Range(1, 36), migrations.Select(migration => migration.Version));
         Assert.Equal(RegressionSchemaTestContract.AccountDisplayChecksum, migrations[25].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, migrations[26].Checksum);
         Assert.Equal(InterchangeSchemaTestContract.MigrationChecksum, migrations[27].Checksum);
@@ -19,12 +19,17 @@ public sealed class ReleaseOperationsConfigurationTests
         Assert.Equal(RegressionSchemaTestContract.ReleaseOperationsChecksum, migrations[30].Checksum);
         Assert.Equal(ChatSchemaContract.WorkspaceMigrationChecksum, migrations[31].Checksum);
         Assert.Equal(PreviewSchemaTestContract.ReadsMigrationChecksum, migrations[32].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.DocumentPreviewsChecksum, migrations[33].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.X12InterchangeBuildsChecksum, migrations[34].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.ComparisonSettlementChecksum, migrations[35].Checksum);
         Assert.Contains("CREATE TABLE weft.account_display_metadata", migrations[25].Sql, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE weft.release_target_operations", migrations[30].Sql, StringComparison.Ordinal);
         Assert.Equal(ReleaseOperationsRoleGuard.Names.Order(StringComparer.Ordinal),
             BuildRoleGuard.LoadFunctions("0031_release_operations.sql", ReleaseOperationsRoleGuard.Names.Length).Keys.Order(StringComparer.Ordinal));
+        var original = BuildRoleGuard.LoadFunctions("0030_regression_automation.sql", 22);
+        var settlement = BuildRoleGuard.LoadFunctions("0036_automation_comparison_settlement.sql", 7);
         Assert.Equal(AutomationSchemaAdmission.Functions.Order(StringComparer.Ordinal),
-            BuildRoleGuard.LoadFunctions("0030_regression_automation.sql", AutomationSchemaAdmission.Functions.Length).Keys.Order(StringComparer.Ordinal));
+            original.Keys.Union(settlement.Keys).Order(StringComparer.Ordinal));
     }
 
     [Theory]

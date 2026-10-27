@@ -8,7 +8,7 @@ namespace Weft.Jobs;
 
 /// <summary>One independent lease per case/delivery; a bad item never prevents the next item's admission.</summary>
 public sealed class AutomationWorker(IAutomationQueue queue, IRegressionEvaluationExecutor execution,
-    INotificationTransport notifications, ILogger<AutomationWorker> logger) : BackgroundService
+    INotificationTransport notifications, IAutomationComparisonSettler comparisons, ILogger<AutomationWorker> logger) : BackgroundService
 {
     public async Task DrainOnceAsync(CancellationToken token)
     {
@@ -30,6 +30,7 @@ public sealed class AutomationWorker(IAutomationQueue queue, IRegressionEvaluati
                 await queue.FinishEvaluationAsync(claim, result, token).ConfigureAwait(false);
             }
         }
+        await comparisons.SettleNextAsync(token).ConfigureAwait(false);
         var delivery = await queue.ClaimDeliveryAsync(token).ConfigureAwait(false);
         if (delivery is null) return;
         var outcome = NotificationDeliveryOutcome.TransportFailure;

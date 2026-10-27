@@ -45,6 +45,31 @@ fn input_field<'a>(projection: &'a Value, name: &str) -> &'a Value {
 }
 
 #[test]
+fn new_pin_decimal_literals_keep_exact_decimal_identity_in_json_and_xml_metadata() {
+    for options in [json!({"json_document":true}), json!({"xml_document":true})] {
+        let mut native = base();
+        native["source_options"] = options.clone();
+        native["target_options"] = options;
+        native["graph"]["nodes"]["1"] =
+            json!({"kind":"const","value":{"$decimal96":"79228162514264337593543950335"}});
+        let projected = project(&native).to_string();
+        assert!(projected.contains("\"flavor\":\"decimal\""));
+        assert!(projected.contains("79228162514264337593543950335"));
+    }
+}
+
+#[test]
+fn new_pin_invocation_counter_is_a_located_gap_not_inferred_execution() {
+    let mut native = base();
+    native["graph"]["nodes"]["2"] = json!({"kind":"const","value":1});
+    native["graph"]["nodes"]["1"] =
+        json!({"kind":"invocation_counter","key":"fixture-counter","start":2,"step":2});
+    let projected = project(&native);
+    assert_eq!(projected["coverage"]["status"], "partial");
+    assert!(projected.to_string().contains("Invocation counter"));
+}
+
+#[test]
 fn owned_iteration_explanation_keeps_weft_execution_unqualified_without_claiming_native_refusal() {
     let bytes = serde_json::to_vec(&base()).unwrap();
     let mut decoded = weft_ferrule_host::decode::decode_native(&bytes).unwrap();

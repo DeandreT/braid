@@ -17,12 +17,9 @@ fn every_retained_native_fixture_round_trips_through_the_pinned_codec() {
         })
         .map(|path| std::fs::read(path).unwrap())
         .collect::<Vec<_>>();
-    // The packaged native example that is not a worker fixture.
+    // The invalid-cycle fixture is retained outside application packaging.
     fixtures.push(
-        include_bytes!(
-            "../../../dotnet/src/Weft.Api/NativeExamples/Artifacts/validation-cycle.json"
-        )
-        .to_vec(),
+        include_bytes!("../../../dotnet/tests/Weft.Tests/Fixtures/validation-cycle.json").to_vec(),
     );
     assert!(fixtures.len() >= 15);
     let mut legacy = 0;

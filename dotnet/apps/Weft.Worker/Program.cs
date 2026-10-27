@@ -41,7 +41,10 @@ if (settings.PreviewEnabled)
 }
 builder.Services.AddWeftRegressionWorker(read, () =>
     new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, previewRunner.ProfileIdentity(settings),
-        FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile), (path, maximum) => ProtectedHostFiles.ReadText(path, maximum));
+        FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile), () =>
+    new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, previewRunner.ProfileIdentity(settings),
+        FerrulePreviewBackend.DocumentAdapterBuild, DocumentPreviewPolicy.Profile),
+    (path, maximum) => ProtectedHostFiles.ReadText(path, maximum));
 builder.Services.AddWeftNotificationWorker(read, (path, maximum) => ProtectedHostFiles.ReadText(path, maximum));
 builder.Services.AddWeftBuildWorkerWithRunner(read, () => previewRunner.CreateBuildRunner(settings));
 if (inspection is { } hosted)

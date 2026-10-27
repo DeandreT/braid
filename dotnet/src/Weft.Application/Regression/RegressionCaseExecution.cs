@@ -55,12 +55,13 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
     private readonly IPrivateObjectStore objects;
     private readonly IMappingPreviewBackend backend;
     private readonly RegressionRuntimeIdentity runtime;
+    private readonly RegressionRuntimeIdentity? documentRuntime;
 
     public bool CanExecute => backend is not IExecutionAdmission { CanExecute: false };
 
     public RegressionCaseExecutionService(IRegressionCaseReader cases, IProjectReader projects,
         IRevisionReportMetadataReader sources, IPrivateObjectStore objects, IMappingPreviewBackend backend,
-        RegressionRuntimeIdentity runtime)
+        RegressionRuntimeIdentity runtime, RegressionRuntimeIdentity? documentRuntime = null)
     {
         this.cases = cases ?? throw new ArgumentNullException(nameof(cases));
         this.projects = projects ?? throw new ArgumentNullException(nameof(projects));
@@ -70,11 +71,18 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
         this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         if (runtime.BackendId != "ferrule" || runtime.Profile != PreviewPolicy.Profile)
             throw new ArgumentException("Case execution requires the supported preview output identity profile.", nameof(runtime));
+        if (documentRuntime is not null && (documentRuntime.Profile != DocumentPreviewPolicy.Profile || documentRuntime.BackendId != runtime.BackendId ||
+            documentRuntime.EngineRevision != runtime.EngineRevision || documentRuntime.BackendBuild != runtime.BackendBuild))
+            throw new ArgumentException("Document execution requires its exact runtime identity.", nameof(documentRuntime));
+        this.documentRuntime = documentRuntime;
     }
 
     public async Task<RegressionCaseExecution> ExecuteAsync(ActorContext actor, RegressionCaseReference expected,
         CancellationToken cancellationToken = default)
-        => await EvaluateAsync(actor, expected, new(expected.Revision, expected.NativeDigest), cancellationToken).ConfigureAwait(false);
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        return await EvaluateAsync(actor, expected, new(expected.Revision, expected.NativeDigest), cancellationToken).ConfigureAwait(false);
+    }
 
     public async Task<RegressionCaseExecution> EvaluateAsync(ActorContext actor, RegressionCaseReference expected,
         RegressionEvaluationTarget target, CancellationToken cancellationToken = default)
@@ -93,7 +101,8 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
             if (value is null) return Refused(RegressionCaseExecutionOutcome.NotAuthorizedOrNotFound);
             if (new RegressionCaseEnvelopeCodec().Encode(value, cancellationToken).Reference != expected)
                 return Refused(RegressionCaseExecutionOutcome.CaseChanged);
-            if (value.Runtime != runtime) return Refused(RegressionCaseExecutionOutcome.RuntimeMismatch);
+            var selectedRuntime = value.Runtime == runtime ? runtime : value.Runtime == documentRuntime ? documentRuntime : null;
+            if (selectedRuntime is null) return Refused(RegressionCaseExecutionOutcome.RuntimeMismatch);
 
             var source = await AdmitAsync(actor, target, cancellationToken).ConfigureAwait(false);
             var bytes = await objects.ReadVerifiedAsync(target.Revision, source.NativeObject, cancellationToken).ConfigureAwait(false);
@@ -103,7 +112,8 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
             // Do not clone/rewrite the case: its envelope, original revision and baseline remain unchanged.
             // Only the native artifact dispatched through the existing preview boundary changes.
             var request = new MappingPreviewRequest(native, value.Replay.Target, value.Replay.Primary,
-                value.Replay.NamedInputs, value.Replay.Parameters, value.Replay.CurrentDateTime, value.Replay.Limits);
+                value.Replay.NamedInputs, value.Replay.Parameters, value.Replay.CurrentDateTime, value.Replay.Limits)
+            { Profile = selectedRuntime.Profile == DocumentPreviewPolicy.Profile ? PreviewExecutionProfile.Document : PreviewExecutionProfile.LegacyJson };
 
             // Storage can be slow. Never reuse the admission from before private-object I/O for dispatch.
             if (await AdmitAsync(actor, target, cancellationToken).ConfigureAwait(false) != source)
@@ -121,7 +131,7 @@ public sealed class RegressionCaseExecutionService : IRegressionCaseExecutor, IR
             var status = result.Status == MappingPreviewStatus.Succeeded
                 ? Weft.Contracts.Operations.OperationStatusV1.Succeeded : Weft.Contracts.Operations.OperationStatusV1.BackendFailure;
             var comparison = new RegressionComparisonService().Compare(value.Expected, new(status, outputs),
-                value.ComparisonPolicy, cancellationToken: cancellationToken);
+                value.ComparisonPolicy, cancellationToken: cancellationToken, ediOptions: value.EdiOptions);
 
             // Neither output bytes nor comparison facts escape after authority/source has changed.
             if (await AdmitAsync(actor, target, cancellationToken).ConfigureAwait(false) != source)

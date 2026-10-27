@@ -6,19 +6,22 @@ namespace Weft.Application.Regression;
 public sealed class RegressionComparisonService
 {
     public const string ExactBytesPolicy = "weft.regression.exact-bytes.v1";
+    public const string EdiSegmentsPolicy = "weft.regression.edi-segments.v1";
     private const int ChunkBytes = 64 * 1024;
 
     public RegressionComparisonResult Compare(RegressionOutputSet expected, RegressionExecutionObservation actual,
         string policy = ExactBytesPolicy, RegressionComparisonLimits? limits = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, EdiComparisonOptions? ediOptions = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(expected);
         ArgumentNullException.ThrowIfNull(actual);
         if (policy is null || policy.Length is 0 or > 128 || policy.Any(char.IsControl))
             throw new RegressionComparisonException(RegressionComparisonFailure.InvalidInput);
-        if (!StringComparer.Ordinal.Equals(policy, ExactBytesPolicy))
+        if (policy is not (ExactBytesPolicy or EdiSegmentsPolicy))
             return NotEvaluated(RegressionNotEvaluatedReason.UnsupportedPolicy);
+        if ((policy == EdiSegmentsPolicy) != (ediOptions is not null))
+            throw new RegressionComparisonException(RegressionComparisonFailure.InvalidInput);
         if (actual.Status != OperationStatusV1.Succeeded)
             return NotEvaluated(RegressionNotEvaluatedReason.ExecutionUnsuccessful);
         if (expected.Outputs.Count == 0)
@@ -48,10 +51,28 @@ public sealed class RegressionComparisonService
             }
             else
             {
-                var offset = FirstDifference(left!, right!, ref remainingBytes, cancellationToken);
-                if (offset is not null)
-                    Add(new(left!.Key, RegressionDifferenceKind.BytesDiffer, left.ByteCount, right!.ByteCount,
-                        left.Digest, right.Digest, offset));
+                if (left!.MediaType != right!.MediaType)
+                    Add(new(left.Key, RegressionDifferenceKind.MediaTypeDiffer, left.ByteCount, right.ByteCount, left.Digest, right.Digest, null));
+                else if (policy == EdiSegmentsPolicy && left.MediaType is "application/edi-x12" or "application/edifact")
+                {
+                    var cost = left.ByteCount + right.ByteCount;
+                    if (cost > remainingBytes) throw new RegressionComparisonException(RegressionComparisonFailure.ResourceLimit);
+                    remainingBytes -= cost;
+                    var difference = EdiSegmentComparison.Compare(left, right, ediOptions!, cancellationToken, out var diagnostic);
+                    if (diagnostic is not null)
+                        return new(policy, RegressionComparisonOutcome.NotEvaluated, RegressionNotEvaluatedReason.InvalidDocument,
+                            actual.Status, expected.Outputs.Count, actual.Outputs.Outputs.Count, 0, [])
+                        { DocumentDiagnostic = diagnostic };
+                    if (difference is not null)
+                        Add(new(left.Key, difference.Kind, left.ByteCount, right.ByteCount, left.Digest, right.Digest, null) { Location = difference.Location });
+                }
+                else
+                {
+                    var offset = FirstDifference(left!, right!, ref remainingBytes, cancellationToken);
+                    if (offset is not null)
+                        Add(new(left!.Key, RegressionDifferenceKind.BytesDiffer, left.ByteCount, right!.ByteCount,
+                            left.Digest, right.Digest, offset));
+                }
                 expectedIndex++;
                 actualIndex++;
             }

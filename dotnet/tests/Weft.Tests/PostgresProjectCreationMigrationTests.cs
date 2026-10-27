@@ -206,7 +206,9 @@ public sealed class PostgresProjectCreationMigrationTests(PostgresFixture fixtur
             .Append(InterchangeSchemaTestContract.MigrationChecksum).Append(CatalogSearchSchemaAdmission.MigrationChecksum)
             .Append(RegressionSchemaTestContract.AutomationChecksum).Append(RegressionSchemaTestContract.ReleaseOperationsChecksum)
             .Append(ChatSchemaContract.WorkspaceMigrationChecksum).Append(PreviewSchemaTestContract.ReadsMigrationChecksum),
-            await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations"));
+            await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=33"));
+        Assert.Equal(new[] { RegressionSchemaTestContract.DocumentPreviewsChecksum, RegressionSchemaTestContract.X12InterchangeBuildsChecksum, RegressionSchemaTestContract.ComparisonSettlementChecksum },
+            await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version>=34"));
     }
 
     private static Task<string> JournalAsync(PostgresCase test, int maximumVersion = 7) => test.ScalarAsync<string>(

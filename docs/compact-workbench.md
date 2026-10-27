@@ -60,7 +60,20 @@ revision rather than showing private content beneath the current revision. A
 mismatched recovery response does not discard the original pending request.
 The diff compares original decoded bytes and labels expected versus actual;
 reviewing it never replaces the baseline. Preview retains its independently
-verified run and output download controls.
+verified run and output download controls. In Try sample, Show opens that preview's
+verified output in the same Result dock, labeled with its own run identity. Tests
+can select expected bytes from the saved case or observed bytes from the selected
+run; neither selection accepts a new baseline.
+
+The document view shows declared media and at most 64 KiB. Valid declared X12 and
+EDIFACT outputs offer ordered segments and raw text. Headerless or malformed X12
+stays raw; invalid UTF-8 displays hexadecimal bytes. Filenames do not choose a
+format. These are display modes only: downloads keep the complete original bytes,
+and Diff remains a byte-level view distinct from the saved comparison policy.
+EDIFACT advice is read only at an envelope boundary, including after a complete
+standalone message. A later UNA selects that envelope's separators; without one,
+the default syntax resumes. Advice-looking field text and released separators
+do not create boundaries. Malformed or oversized display input stays raw.
 
 For JSON documents, the diff can link a concrete changed location to a field only
 when one output boundary and one matching projected field identify it. Duplicate
@@ -87,7 +100,10 @@ no simulated activation or rollback action.
 
 ## Checks
 
-`playwright.workbench-model.config.ts` covers the pure selection and JSON rules.
+`playwright.workbench-model.config.ts` covers the pure selection, JSON and document-display rules.
+`playwright.edi-hosted.config.ts` runs declared X12/EDIFACT previews, saved comparisons
+and exact downloads on the isolated packaged Session stack provided by
+`deploy/compose/acceptance-test.sh`, with the fixture model provider.
 `playwright.unified-workbench.config.ts` covers the shared shell and preserved
 route, form, chat and workbench workflows on a synthetic API boundary at port
 5186. `WEFT_UI_CAPTURE_DIR` optionally retains its responsive screenshots.

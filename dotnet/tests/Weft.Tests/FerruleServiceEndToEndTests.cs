@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.WorkerTransport;
@@ -17,6 +18,48 @@ namespace Weft.Tests;
 [Collection(FerruleServiceProcessCollection.Name)]
 public sealed class FerruleServiceEndToEndTests
 {
+    [ServiceWorkerFact]
+    public async Task ExplicitDocumentFramesHaveDirectAndServiceEquivalenceForAuthoredEnvelopes()
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            await using var service = await ServiceHost.StartAsync(root);
+            await using var direct = new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview));
+            using var http = service.Client();
+            foreach (var family in new[] { "x12", "edifact" })
+            {
+                var request = DocumentPreviewTestData.Request(Scope, family);
+                var result = await new FerrulePreviewBackend(direct).PreviewAsync(request);
+                Assert.True(result.Status == Weft.Application.MappingPreviewStatus.Succeeded, result.Failure?.Message);
+                Assert.Equal(Weft.Application.DocumentPreviewPolicy.Profile, result.Profile);
+                var capture = new CapturingRunner();
+                await new FerrulePreviewBackend(capture).PreviewAsync(request);
+                var expected = await direct.RunAsync(capture.Frame!, CancellationToken.None);
+                Assert.Equal(WorkerProcessFailure.None, expected.Failure);
+                using var answer = await http.SendAsync(Operation(FerruleServiceProtocol.PreviewProfile, capture.Frame!, direct.BuildIdentity));
+                Assert.Equal("none", Assert.Single(answer.Headers.GetValues(InspectionTransport.ResultHeader)));
+                Assert.Equal(expected.Output, await answer.Content.ReadAsByteArrayAsync());
+                foreach (var dependency in new JsonNode[] { JsonValue.Create("../private/parser.sef")!, new JsonObject { ["kind"] = "missing_configuration" } })
+                {
+                    var native = JsonNode.Parse(request.Artifact.CopyBytes())!;
+                    native["source_options"]!["edi_config_reference"] = dependency;
+                    var refused = await new FerrulePreviewBackend(direct).PreviewAsync(request with
+                    {
+                        Artifact = Weft.Domain.NativeArtifact.Admit(Scope, System.Text.Encoding.UTF8.GetBytes(native.ToJsonString()), Weft.Application.PreviewPolicy.MaximumNativeBytes),
+                        Primary = new(null, "not a document"u8)
+                    });
+                    Assert.Equal(Weft.Application.MappingPreviewStatus.UnsupportedCapability, refused.Status);
+                    Assert.True(refused.Provenance.Confirmed);
+                    Assert.Empty(refused.Artifacts);
+                }
+            }
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+            Assert.Empty(WorkerChildren());
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [ServiceWorkerFact]
     public async Task DroppedChannelWithARealChildRecoversOnAFreshReplicaWithoutRestartingTheRunner()
     {
