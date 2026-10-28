@@ -161,7 +161,7 @@ public static partial class ChatEndpoints
         WithChat(context, async chat =>
         {
             ChatRequestParser.RequireQuery(context.Request);
-            ChatRequestParser.RequireNoBody(context.Request);
+            await ChatRequestParser.RequireNoBodyAsync(context.Request, context.RequestAborted);
             var key = WorkspaceKey(chat, organizationId, conversationId);
             var turnKey = ChatRequestParser.Id(turnId);
             if (key is null) return NotFound();

@@ -86,7 +86,7 @@ public static partial class ChatEndpoints
         WithChat(context, async chat =>
         {
             ChatRequestParser.RequireQuery(context.Request);
-            ChatRequestParser.RequireNoBody(context.Request);
+            await ChatRequestParser.RequireNoBodyAsync(context.Request, context.RequestAborted);
             var id = ChatRequestParser.Id(conversationId);
             var turnKey = ChatRequestParser.Id(turnId);
             var scope = await RevisionAsync(context, chat, organizationId, projectId, mappingId, revisionId);

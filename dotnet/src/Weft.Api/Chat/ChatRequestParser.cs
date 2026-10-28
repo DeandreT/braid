@@ -15,7 +15,7 @@ internal sealed record ChatTurnRequest(Guid TurnId, string Text, string ProfileI
     public override string ToString() => nameof(ChatTurnRequest);
 }
 
-internal static class ChatRequestParser
+internal static partial class ChatRequestParser
 {
     internal const int ConversationBodyBytes = 1024;
     internal const int TurnBodyBytes = 262_144;
@@ -49,13 +49,6 @@ internal static class ChatRequestParser
     /// <summary>A canonical identity query value, or null when absent.</summary>
     internal static Guid? OptionalId(HttpRequest request, string name) =>
         request.Query.TryGetValue(name, out var values) ? Id(values[0] ?? throw ChatRequestException.Invalid()) : null;
-
-    internal static void RequireNoBody(HttpRequest request)
-    {
-        if (request.ContentLength is > 0 || request.Headers.ContentType.Count != 0 ||
-            request.ContentLength is null && request.Headers.TransferEncoding.Count != 0)
-            throw ChatRequestException.Invalid();
-    }
 
     internal static async Task<Guid> ReadConversationAsync(HttpRequest request, CancellationToken ct)
     {
