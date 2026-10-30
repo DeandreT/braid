@@ -108,6 +108,49 @@ class ResultTests(unittest.TestCase):
 
 
 class SourceTests(unittest.TestCase):
+    def test_new_checkout_preserves_original_text_line_endings(self):
+        with tempfile.TemporaryDirectory() as root:
+            original, checkout = Path(root) / "original", Path(root) / "checkout"
+            original.mkdir()
+            checkout.mkdir()
+            content = b'{\r\n  "version": 1\r\n}\r\n'
+            (original / "packages.lock.json").write_bytes(content)
+            (checkout / "packages.lock.json").write_bytes(content.replace(b"\r\n", b"\n"))
+            expected = {"packages.lock.json": hashlib.sha256(content).hexdigest()}
+            self.assertEqual(launcher.align_checkout_bytes(original, checkout, expected), ["packages.lock.json"])
+            self.assertEqual((original / "packages.lock.json").read_bytes(), content)
+            self.assertEqual((checkout / "packages.lock.json").read_bytes(), content)
+
+    def test_semantic_or_binary_difference_prevents_all_snapshot_changes(self):
+        for replacement in (b"different\n", b"same\0\n", b"\xff\n"):
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as root:
+                original, checkout = Path(root) / "original", Path(root) / "checkout"
+                original.mkdir()
+                checkout.mkdir()
+                (original / "first.txt").write_bytes(b"first\r\n")
+                (checkout / "first.txt").write_bytes(b"first\n")
+                (original / "second.txt").write_bytes(b"same\r\n")
+                (checkout / "second.txt").write_bytes(replacement)
+                expected = {name: launcher.digest(original / name) for name in ("first.txt", "second.txt")}
+                with self.assertRaises(launcher.QualificationError):
+                    launcher.align_checkout_bytes(original, checkout, expected)
+                self.assertEqual((checkout / "first.txt").read_bytes(), b"first\n")
+                self.assertEqual((checkout / "second.txt").read_bytes(), replacement)
+
+    def test_changed_original_or_missing_snapshot_file_is_not_repaired(self):
+        with tempfile.TemporaryDirectory() as root:
+            original, checkout = Path(root) / "original", Path(root) / "checkout"
+            original.mkdir()
+            checkout.mkdir()
+            (original / "file.txt").write_bytes(b"changed\r\n")
+            (checkout / "file.txt").write_bytes(b"before\n")
+            with self.assertRaises(launcher.QualificationError):
+                launcher.align_checkout_bytes(original, checkout, {"file.txt": hashlib.sha256(b"before\r\n").hexdigest()})
+            (checkout / "file.txt").unlink()
+            with self.assertRaises(launcher.QualificationError):
+                launcher.align_checkout_bytes(original, checkout, {"file.txt": launcher.digest(original / "file.txt")})
+            self.assertFalse((checkout / "file.txt").exists())
+
     def test_manifest_reads_only_tracked_files_and_detects_changes(self):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)

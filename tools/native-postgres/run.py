@@ -123,6 +123,42 @@ def unchanged(source: Path, expected: dict[str, str]) -> bool:
     return all((source / name).is_file() and digest(source / name) == value for name, value in expected.items())
 
 
+def align_checkout_bytes(original: Path, checkout: Path, expected: dict[str, str]) -> list[str]:
+    """Preserve captured Windows text bytes without changing the original checkout."""
+    ordinary(original, directory=True)
+    ordinary(checkout, directory=True)
+    copies = {}
+    for name, wanted in expected.items():
+        source, target = original / name, checkout / name
+        ordinary(source, directory=False)
+        ordinary(target, directory=False)
+        if digest(target) == wanted:
+            continue
+        before, current = source.read_bytes(), target.read_bytes()
+        if hashlib.sha256(before).hexdigest() != wanted:
+            raise QualificationError("The original source changed after capture.")
+        try:
+            before.decode("utf-8", "strict")
+            current.decode("utf-8", "strict")
+        except UnicodeDecodeError as error:
+            raise QualificationError("The detached checkout differs from the captured source.") from error
+        if b"\0" in before or b"\0" in current or before.replace(b"\r\n", b"\n") != current.replace(b"\r\n", b"\n"):
+            raise QualificationError("The detached checkout differs beyond text line endings.")
+        copies[name] = before
+    # Admit every difference before changing any file in the new owned snapshot.
+    for name, content in copies.items():
+        target = checkout / name
+        temporary = target.with_name(target.name + "." + uuid.uuid4().hex + ".tmp")
+        with temporary.open("xb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    if not unchanged(checkout, expected):
+        raise QualificationError("The detached checkout does not preserve the captured bytes.")
+    return sorted(copies)
+
+
 def test_result(path: Path, expected_tests: int | None = None) -> dict:
     if not path.is_file() or path.stat().st_size > 64 * 1024 * 1024:
         raise QualificationError("A complete bounded TRX result is required.")
@@ -224,6 +260,7 @@ def qualify(options: Options) -> tuple[int, Path]:
         if shutil.disk_usage(options.work_root).free < 25 * 2**30:
             raise QualificationError("The work drive is below the 25 GiB free-space floor.")
         git(options.repo, "worktree", "add", "--detach", str(source), head)
+        record["checkoutByteCopies"] = align_checkout_bytes(options.repo, source, source_files)
         if not unchanged(source, source_files):
             raise QualificationError("The detached checkout differs from the captured source.")
         nuget = work / "NuGet.Config"

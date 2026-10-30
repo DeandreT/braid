@@ -24,7 +24,10 @@ py -3.12 tools/native-postgres/run.py `
 ```
 
 The source checkout must be clean. The launcher creates a detached worktree at
-the current commit, verifies every tracked source file and tool binary, performs a locked restore
+the current commit and preserves the captured working copy's exact text bytes
+when Git chooses different LF/CRLF line endings. It admits all differences first,
+rejects binary or content changes, and records the copied paths. The original
+checkout is never rewritten. It verifies every tracked source file and tool binary, performs a locked restore
 from NuGet.org, builds isolated Release outputs beneath that source, then runs the
 selection with `--no-build`. Only approved Windows environment fields flow to the
 child; application credentials, `PG*`, cloud credentials, runtime hooks and Docker
