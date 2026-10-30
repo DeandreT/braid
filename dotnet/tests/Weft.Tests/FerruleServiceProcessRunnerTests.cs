@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Text;
 using Weft.Application;
@@ -21,11 +22,13 @@ public sealed class FerruleServiceProcessRunnerTests
     public async Task AuthoredEnvelopesHaveExactDockerAndServiceChildEquivalence()
     {
         var root = TemporaryRoot();
+        var workers = new List<IAsyncDisposable>();
+        Exception? primary = null;
         try
         {
-            await using var docker = new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
-                Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview));
-            await using var child = new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview));
+            var docker = Own(workers, new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
+                Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview)));
+            var child = Own(workers, new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview)));
             var comparing = new ComparingRunner(docker, child);
             var backend = new FerrulePreviewBackend(comparing);
             foreach (var family in new[] { "x12", "edifact" })
@@ -39,21 +42,24 @@ public sealed class FerruleServiceProcessRunnerTests
             Assert.Empty(Directory.EnumerateFileSystemEntries(root));
             Assert.Empty(WorkerChildren());
         }
-        finally { Directory.Delete(root, recursive: true); }
+        catch (Exception error) { primary = error; }
+        finally { await CompleteCleanupAsync(workers, root, primary); }
     }
 
     [ServiceEquivalenceFact]
     public async Task ChildOutputsEqualTheDockerRunnerByteForByte()
     {
         var root = TemporaryRoot();
+        var workers = new List<IAsyncDisposable>();
+        Exception? primary = null;
         try
         {
-            await using var docker = new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
-                Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!));
-            await using var dockerPreview = new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
-                Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview));
-            await using var child = new ProcessWorkerRunner(Options(root));
-            await using var childPreview = new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview));
+            var docker = Own(workers, new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
+                Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!)));
+            var dockerPreview = Own(workers, new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
+                Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview)));
+            var child = Own(workers, new ProcessWorkerRunner(Options(root)));
+            var childPreview = Own(workers, new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview)));
             var inspection = new ComparingRunner(docker, child);
             var preview = new ComparingRunner(dockerPreview, childPreview);
             var backend = new FerruleInspectionBackend(inspection);
@@ -88,10 +94,30 @@ public sealed class FerruleServiceProcessRunnerTests
             Assert.Equal(9, preview.Compared);
             Assert.Empty(Directory.EnumerateFileSystemEntries(root));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        catch (Exception error) { primary = error; }
+        finally { await CompleteCleanupAsync(workers, root, primary); }
+    }
+
+    private static T Own<T>(ICollection<IAsyncDisposable> workers, T worker) where T : IAsyncDisposable
+    {
+        workers.Add(worker);
+        return worker;
+    }
+
+    internal static async Task CompleteCleanupAsync(IReadOnlyList<IAsyncDisposable> workers, string root, Exception? primary)
+    {
+        var failures = new List<Exception>();
+        if (primary is not null) failures.Add(primary);
+        var settled = true;
+        foreach (var worker in workers.Reverse())
+            try { await worker.DisposeAsync(); }
+            catch (Exception error) { settled = false; failures.Add(error); }
+        // An uncertain child retains its private directory instead of losing its evidence.
+        if (settled)
+            try { Directory.Delete(root, recursive: true); }
+            catch (Exception error) { failures.Add(error); }
+        if (failures.Count == 1) ExceptionDispatchInfo.Capture(failures[0]).Throw();
+        if (failures.Count > 1) throw new AggregateException("Worker equivalence and cleanup failures.", failures);
     }
 
     [ServiceWorkerFact]
