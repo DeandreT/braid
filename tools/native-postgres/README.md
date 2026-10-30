@@ -27,7 +27,11 @@ The source checkout must be clean. The launcher creates a detached worktree at
 the current commit and preserves the captured working copy's exact text bytes
 when Git chooses different LF/CRLF line endings. It admits all differences first,
 rejects binary or content changes, and records the copied paths. The original
-checkout is never rewritten. It verifies every tracked source file and tool binary, performs a locked restore
+checkout is never rewritten. Before building, it refreshes only those copied
+paths in the detached worktree's private Git index, requiring the index tree and
+captured bytes to remain identical. This prevents line-ending stat differences
+from appearing as source edits. No index refresh happens after tests.
+It verifies every tracked source file and tool binary, performs a locked restore
 from NuGet.org, builds isolated Release outputs beneath that source, then runs the
 selection with `--no-build`. Only approved Windows environment fields flow to the
 child; application credentials, `PG*`, cloud credentials, runtime hooks and Docker

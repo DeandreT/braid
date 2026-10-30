@@ -170,6 +170,106 @@ class SourceTests(unittest.TestCase):
                 launcher.manifest(Path("C:/repo"), "head")
 
 
+class CheckoutIndexTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.original = Path(self.temporary.name) / "original"
+        self.checkout = Path(self.temporary.name) / "detached"
+        self.original.mkdir()
+        self.git(self.original, "init", "--quiet")
+        self.git(self.original, "config", "core.autocrlf", "true")
+        repository = Path(__file__).resolve().parents[2]
+        for key in ("user.name", "user.email"):
+            self.git(self.original, "config", key, self.git(repository, "config", key))
+        self.names = ["plain.txt", "space name.txt", "bracket[name].txt", "-leading.txt", "unicode-\u00e9.txt"]
+        for name in self.names:
+            (self.original / name).write_bytes(b"first\r\nsecond\r\n")
+        self.git(self.original, "add", "--all")
+        self.git(self.original, "commit", "--quiet", "-m", "test(qualification): create newline fixtures")
+        self.head = self.git(self.original, "rev-parse", "HEAD")
+        self.tree = self.git(self.original, "write-tree")
+        self.expected = launcher.manifest(self.original, self.head)
+        self.git(self.original, "-c", "core.autocrlf=false", "worktree", "add", "--detach", str(self.checkout), self.head)
+        self.copied = launcher.align_checkout_bytes(self.original, self.checkout, self.expected)
+
+    @staticmethod
+    def git(repo, *args):
+        return subprocess.check_output(["git", "-C", str(repo), *args], stderr=subprocess.PIPE).decode("utf-8").strip()
+
+    def reconcile(self):
+        launcher.reconcile_checkout_index(self.checkout, self.head, self.expected, self.copied)
+
+    def test_literal_paths_preserve_both_trees_and_allow_normal_removal(self):
+        index = (self.original / ".git/index").read_bytes()
+        config = (self.original / ".git/config").read_bytes()
+        self.assertEqual(set(self.copied), set(self.names))
+        self.reconcile()
+        self.assertEqual(self.git(self.checkout, "write-tree"), self.tree)
+        self.assertEqual(self.git(self.checkout, "status", "--porcelain"), "")
+        self.assertTrue(launcher.unchanged(self.checkout, self.expected))
+        self.assertTrue(launcher.unchanged(self.original, self.expected))
+        self.assertEqual((self.original / ".git/index").read_bytes(), index)
+        self.assertEqual((self.original / ".git/config").read_bytes(), config)
+        self.git(self.original, "worktree", "remove", str(self.checkout))
+        self.assertFalse(self.checkout.exists())
+
+    def test_no_copied_paths_does_not_stage_anything(self):
+        self.reconcile()
+        with patch.object(launcher.subprocess, "run", wraps=subprocess.run) as run:
+            launcher.reconcile_checkout_index(self.checkout, self.head, self.expected, [])
+            self.assertTrue(run.call_args_list)
+            self.assertFalse(any("--pathspec-from-file=-" in call.args[0] for call in run.call_args_list))
+
+    def test_staged_content_is_refused_even_when_working_bytes_match(self):
+        path = self.checkout / "plain.txt"
+        path.write_bytes(b"changed\n")
+        self.git(self.checkout, "add", "plain.txt")
+        path.write_bytes((self.original / "plain.txt").read_bytes())
+        with self.assertRaises(launcher.QualificationError):
+            self.reconcile()
+        self.assertNotEqual(self.git(self.checkout, "write-tree"), self.tree)
+
+    def test_staged_mode_change_is_refused(self):
+        self.git(self.checkout, "update-index", "--chmod=+x", "plain.txt")
+        with self.assertRaises(launcher.QualificationError):
+            self.reconcile()
+
+    def test_wrong_head_is_refused(self):
+        self.git(self.checkout, "commit", "--allow-empty", "--quiet", "-m", "test(qualification): change fixture head")
+        with self.assertRaises(launcher.QualificationError):
+            self.reconcile()
+
+    def test_normalization_cannot_change_the_index_tree(self):
+        run = subprocess.run
+
+        def changed_tree(*args, **kwargs):
+            result = run(*args, **kwargs)
+            if "--pathspec-from-file=-" in args[0]:
+                run(["git", "-C", str(self.checkout), "update-index", "--chmod=+x", "plain.txt"],
+                    check=True, capture_output=True)
+            return result
+
+        with patch.object(launcher.subprocess, "run", side_effect=changed_tree):
+            with self.assertRaises(launcher.QualificationError):
+                self.reconcile()
+
+    def test_post_alignment_newline_edit_still_fails_exact_bytes(self):
+        self.reconcile()
+        path = self.checkout / "plain.txt"
+        path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n"))
+        self.assertFalse(launcher.unchanged(self.checkout, self.expected))
+
+    def test_deletions_and_untracked_files_remain_visible(self):
+        self.reconcile()
+        (self.checkout / "plain.txt").unlink()
+        (self.checkout / "unexpected.txt").write_bytes(b"new")
+        self.assertFalse(launcher.unchanged(self.checkout, self.expected))
+        status = self.git(self.checkout, "status", "--porcelain")
+        self.assertIn("plain.txt", status)
+        self.assertIn("?? unexpected.txt", status)
+
+
 class ProcessTests(unittest.TestCase):
     def phase(self, waits, free=100 * 2**30):
         process = Mock(pid=123)
@@ -217,7 +317,7 @@ class LifecycleTests(unittest.TestCase):
 
             def git(_repo, *args):
                 calls.append(args)
-                if args[0] == "rev-parse":
+                if args[0] in ("rev-parse", "write-tree"):
                     return "head"
                 if args[:2] == ("worktree", "add"):
                     source = Path(args[3])

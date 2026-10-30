@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -148,15 +149,32 @@ def align_checkout_bytes(original: Path, checkout: Path, expected: dict[str, str
     # Admit every difference before changing any file in the new owned snapshot.
     for name, content in copies.items():
         target = checkout / name
+        mode = stat.S_IMODE(target.stat().st_mode)
         temporary = target.with_name(target.name + "." + uuid.uuid4().hex + ".tmp")
         with temporary.open("xb") as stream:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
+        temporary.chmod(mode)
         os.replace(temporary, target)
     if not unchanged(checkout, expected):
         raise QualificationError("The detached checkout does not preserve the captured bytes.")
     return sorted(copies)
+
+
+def reconcile_checkout_index(checkout: Path, head: str, expected: dict[str, str], copied: list[str]) -> None:
+    """Refresh only copied paths in the owned index without changing its tree."""
+    tree = git(checkout, "rev-parse", head + "^{tree}")
+    if git(checkout, "rev-parse", "HEAD") != head or git(checkout, "write-tree") != tree:
+        raise QualificationError("The detached checkout HEAD or index changed before alignment.")
+    if copied:
+        subprocess.run(["git", "--literal-pathspecs", "-C", str(checkout), "add",
+                        "--pathspec-from-file=-", "--pathspec-file-nul"],
+                       input=b"".join(name.encode("utf-8") + b"\0" for name in copied),
+                       check=True, capture_output=True, timeout=60)
+    if (git(checkout, "rev-parse", "HEAD") != head or git(checkout, "write-tree") != tree
+            or not unchanged(checkout, expected) or git(checkout, "status", "--porcelain")):
+        raise QualificationError("The detached checkout alignment changed its tree or captured bytes.")
 
 
 def test_result(path: Path, expected_tests: int | None = None) -> dict:
@@ -261,6 +279,7 @@ def qualify(options: Options) -> tuple[int, Path]:
             raise QualificationError("The work drive is below the 25 GiB free-space floor.")
         git(options.repo, "worktree", "add", "--detach", str(source), head)
         record["checkoutByteCopies"] = align_checkout_bytes(options.repo, source, source_files)
+        reconcile_checkout_index(source, head, source_files, record["checkoutByteCopies"])
         if not unchanged(source, source_files):
             raise QualificationError("The detached checkout differs from the captured source.")
         nuget = work / "NuGet.Config"
