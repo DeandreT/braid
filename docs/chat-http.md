@@ -144,6 +144,22 @@ conversation or turn is `404 notFound`.
 | `GET /conversations/{conversationId}/turns/{turnId}/events?after=N` | Authenticated SSE stream of the turn's events after sequence `N` (default 0). |
 | `POST /conversations/{conversationId}/turns/{turnId}/cancel` | Bodyless. Cancels an active turn and returns its current state; a terminal turn is returned unchanged. |
 
+Both cancellation routes verify an empty decoded request body before reading or
+changing a turn. An empty chunked request from a reverse proxy is supported; the
+HTTP server must finish decoding it, including the final chunk and trailer
+section. Nonempty, malformed, truncated, trailer-bearing or stalled requests are
+refused. Conflicting length/transfer framing (including Kestrel's preserved
+`X-Content-Length` marker), Content-Type and nonidentity content encodings are
+unsupported. The empty-body check reads at most one byte and has a fixed
+15-second deadline.
+Rejected HTTP/1 bodies close that connection rather than admitting an appended
+request. HTTP/2 and HTTP/3 keep their independent stream boundaries.
+
+Authentication, the configured Origin and the antiforgery token are checked
+before this read. Proxies must preserve HTTP framing and must not turn an unread
+or rejected body into an apparent zero-length request. Framing workarounds that
+strip Transfer-Encoding or discard bytes cannot establish safe cancellation.
+
 `POST` routes are unsafe requests: they require the exact configured `Origin` and
 the catalog context's `X-XSRF-TOKEN` (session mode additionally binds it to the
 session epoch). A request admitted with an [Entra bearer
