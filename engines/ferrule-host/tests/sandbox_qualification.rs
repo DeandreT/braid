@@ -2,6 +2,8 @@
 //! sandbox runs in a fresh single-threaded copy of this executable, so filters, limits and descriptor checks
 //! never affect the parent or other scenarios.
 
+mod support;
+
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::os::unix::process::ExitStatusExt;
@@ -26,6 +28,7 @@ const LIMITS: Limits = Limits {
 };
 
 fn main() {
+    support::close_inherited_descriptors_on_exec();
     if let Ok(scenario) = std::env::var(HELPER) {
         helper(&scenario);
         return;

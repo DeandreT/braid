@@ -140,6 +140,7 @@ fn maximum_aggregate_package_is_admitted_and_overflow_is_refused() {
 #[test]
 fn real_service_sandbox_converts_package_without_filesystem_or_network() {
     let (_, package) = run(&request("export", support::BASIC));
+    support::close_inherited_descriptors_on_exec();
     let mut child = Command::new(env!("CARGO_BIN_EXE_weft-ferrule-host"))
         .args([
             "--service-sandbox",
