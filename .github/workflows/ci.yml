@@ -107,7 +107,10 @@ jobs:
       - run: npm run test:auth-https-source
       - name: Prepare owned HTTPS browser admission
         run: node tools/auth-browser-https/admit.mjs --approved
-      - run: ulimit -c 0 && dotnet test dotnet/Weft.slnx --configuration Release --no-build --no-restore
+      - name: Verify the CI test launcher
+        run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
+      - name: Verify the .NET solution
+        run: ulimit -c 0 && python3 tools/ci/run_tests.py
         env:
           WEFT_OPENAPI_INCREMENTAL_TESTS: '1'
       - name: Browser verification on a virtual display

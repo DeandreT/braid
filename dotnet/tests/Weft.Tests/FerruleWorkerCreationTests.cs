@@ -79,7 +79,8 @@ public sealed class FerruleWorkerCreationTests
             Assert.True(launcher.InputByteCount > 0);
             foreach (var ownedName in launcher.CreatedNames)
                 await AssertAbsentAsync(proxy.DirectoryPath, ownedName);
-            Assert.False(proxy.Failure.Task.IsCompleted);
+            Assert.False(proxy.Failure.Task.IsCompleted,
+                proxy.Failure.Task.IsCompletedSuccessfully ? proxy.Failure.Task.Result.ToString() : null);
         }
         catch (Exception error) { failures.Add(error); }
         finally
@@ -153,7 +154,9 @@ public sealed class FerruleWorkerCreationTests
             var removal = await DockerAsync(directory, "rm", "--force", "--volumes", id);
             Assert.Equal(0, removal.ExitCode);
             Assert.Equal("", removal.Output);
-            Assert.Equal("", removal.Error);
+            // Docker versions differ: an already absent exact ID can return success
+            // with either no diagnostic or the daemon's exact missing-ID diagnostic.
+            Assert.True(removal.Error.Length == 0 || IsMissing(removal.Error, id), "Repeated removal returned an unexpected diagnostic.");
             await AssertAbsentAsync(directory, id);
         }
         finally
