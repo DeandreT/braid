@@ -308,7 +308,13 @@ public sealed class ReleaseOperationsPersistenceTests(PostgresFixture fixture)
             JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='weft' AND c.relkind IN ('r','p') AND c.relname<>'schema_migrations'
             """);
-        var before = await SnapshotRows(data.Case, tables);
+        var columns = new Dictionary<string, string>();
+        foreach (var table in tables)
+            columns.Add(table, await data.Case.ScalarAsync<string>("""
+                SELECT string_agg(quote_ident(column_name),',' ORDER BY ordinal_position)
+                FROM information_schema.columns WHERE table_schema='weft' AND table_name=$1
+                """, table));
+        var before = await SnapshotRows(data.Case, columns);
         var history = await data.Case.ScalarAsync<string>(
             "SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m");
         await data.Case.MigrateAsync();
@@ -316,7 +322,7 @@ public sealed class ReleaseOperationsPersistenceTests(PostgresFixture fixture)
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(history, await data.Case.ScalarAsync<string>(
             "SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m WHERE version<=$1", prefixVersion));
-        Assert.Equal(before, await SnapshotRows(data.Case, tables));
+        Assert.Equal(before, await SnapshotRows(data.Case, columns));
         var target = data.Target.Reference;
         var initial = (await data.Store.ReadAsync(data.Actor, target.Mapping, target.TargetId, new("history")))!.Value;
         Assert.Single(initial.EnumerateArray());
@@ -390,14 +396,15 @@ public sealed class ReleaseOperationsPersistenceTests(PostgresFixture fixture)
             Assert.True(await data.Case.ScalarAsync<long>($"SELECT count(*) FROM ONLY weft.{table}") > 0);
     }
 
-    private static async Task<string> SnapshotRows(PostgresCase test, IEnumerable<string> tables)
+    private static async Task<string> SnapshotRows(PostgresCase test, IReadOnlyDictionary<string, string> columns)
     {
         var rows = new System.Text.StringBuilder();
-        foreach (var table in tables)
+        foreach (var (table, projection) in columns)
         {
             var quoted = '"' + table.Replace("\"", "\"\"", StringComparison.Ordinal) + '"';
+            // Compare every pre-upgrade field. Additive migration columns are not old facts.
             rows.Append(table).Append('=').Append(await test.ScalarAsync<string>(
-                $"SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb)::text FROM ONLY weft.{quoted} r")).Append('\n');
+                $"SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb)::text FROM (SELECT {projection} FROM ONLY weft.{quoted}) r")).Append('\n');
         }
         return rows.ToString();
     }

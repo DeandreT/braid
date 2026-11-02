@@ -51,8 +51,9 @@ The database administrator first provisions `pg_trgm` in the private
 `weft_search_extensions` schema. PostgreSQL makes trusted extension routines
 bootstrap-owned; the ordinary migrator cannot remove their default public
 execution privileges. The migration refuses an unprepared extension rather than
-weakening any existing runtime role guard. Fresh local databases provision this
-through `deploy/local/postgres-init.sh`; for an existing database, its administrator
+weakening any existing runtime role guard. Fresh local and Azure databases
+provision this through `deploy/local/postgres-init.sh` and
+`deploy/azure/provision-database.sh`; for an existing database, its administrator
 runs the following in that database before applying the search migration:
 
 ```sql

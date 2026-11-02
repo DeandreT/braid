@@ -145,6 +145,65 @@ test("review header arguments: closed missing duplicate value route method and n
       requestHeaders(new URL(origin + path), method, entries, false),
     );
 });
+test("review return header: only a single canonical login target is admitted", () => {
+  const login: Array<[string, string]> = [
+    ["X-Weft-Login", "1"],
+    ["X-Weft-Auth-Token", "inert-action"],
+  ];
+  for (const target of [
+    "/catalog",
+    "/catalog/organizations/11111111-1111-4111-8111-111111111111/projects",
+  ])
+    requireOwned(
+      requestHeaders(
+        new URL(origin + "/api/auth/login"),
+        "POST",
+        [...login, ["X-Weft-Return-To", target]],
+        false,
+      )["x-weft-return-to"] === target,
+    );
+  for (const target of [
+    "",
+    "/",
+    "https://example.invalid/catalog",
+    "//example.invalid/catalog",
+    "/catalog?other=1",
+    "/catalog#other",
+    "/catalog/../help",
+  ])
+    refused(() =>
+      requestHeaders(
+        new URL(origin + "/api/auth/login"),
+        "POST",
+        [...login, ["X-Weft-Return-To", target]],
+        false,
+      ),
+    );
+  refused(() =>
+    requestHeaders(
+      new URL(origin + "/api/auth/login"),
+      "POST",
+      [
+        ...login,
+        ["X-Weft-Return-To", "/catalog"],
+        ["x-weft-return-to", "/catalog"],
+      ],
+      false,
+    ),
+  );
+  refused(() =>
+    requestHeaders(
+      new URL(origin + "/api/auth/logout"),
+      "POST",
+      [
+        ["X-Weft-Logout", "1"],
+        ["X-Weft-Auth-Token", "inert-action"],
+        ["X-Weft-Return-To", "/catalog"],
+      ],
+      false,
+    ),
+  );
+});
 test("review backstop totals: no hidden baseline or widened vector allowance", () => {
   zeroBaseline(snapshot(), 1);
   refused(() => zeroBaseline(snapshot(1), 1));

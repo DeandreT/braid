@@ -23,6 +23,7 @@ const FILE_BYTES: u64 = 1 << 20;
 const ABIS: [Option<i64>; 4] = [None, Some(5), Some(4), Some(MINIMUM_LANDLOCK_ABI)];
 
 fn main() {
+    close_inherited_descriptors_on_exec();
     if let Ok(scenario) = std::env::var(HELPER) {
         helper(&scenario);
         return;
@@ -437,6 +438,23 @@ fn answer_version_query(listener: &OwnedFd, abi: i64) {
         },
         0
     );
+}
+
+/// Gives launches only the descriptors each scenario passes, as the service does. A harness such as a CI runner can
+/// leave descriptors open in this process without close-on-exec; the launcher correctly refuses to start with one.
+fn close_inherited_descriptors_on_exec() {
+    let descriptors: Vec<RawFd> = std::fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse().ok())
+        .filter(|&descriptor| descriptor > 2)
+        .collect();
+    for descriptor in descriptors {
+        // Only descriptor flags change; one already closed (such as the listing's own) fails with EBADF.
+        let flags = unsafe { libc::fcntl(descriptor, libc::F_GETFD) };
+        if flags >= 0 {
+            unsafe { libc::fcntl(descriptor, libc::F_SETFD, flags | libc::FD_CLOEXEC) };
+        }
+    }
 }
 
 fn read_marker(child: &mut Child) -> [u8; 4] {

@@ -41,6 +41,7 @@ type Plan = {
   network: string;
   callback: boolean;
   vector: boolean;
+  returnTarget?: string;
 };
 export type AppRequest = Readonly<{
   url: URL;
@@ -72,6 +73,7 @@ export class BrowserRootFetch {
   private readonly plans = new Map<string, Plan>();
   private callbackEdge: { url: string; predecessor: string } | null = null;
   private returnEdge: { url: string; predecessor: string } | null = null;
+  private callbackReturn = "/";
   private lastCallback: string | null = null;
   private generation = 0;
   private firstBaseline: Reply | null = null;
@@ -514,6 +516,18 @@ export class BrowserRootFetch {
       }
       const forwarded = continuationHeaders(mutation.headers),
         proof = randomBytes(32).toString("hex");
+      const returnTarget =
+        key === "POST /api/auth/login"
+          ? (mutation.headers["x-weft-return-to"] ?? "/")
+          : undefined;
+      requireOwned(
+        returnTarget === undefined ||
+          [
+            "/",
+            "/catalog",
+            `/catalog/organizations/${this.cfg.organization}/projects`,
+          ].includes(returnTarget),
+      );
       const registration = {
         proof,
         generation: this.generation,
@@ -561,6 +575,7 @@ export class BrowserRootFetch {
         network: event.networkId ?? "",
         callback,
         vector,
+        returnTarget,
       });
       if (vector)
         await this.resolve(lease, "Fetch.continueRequest", {
@@ -642,11 +657,11 @@ export class BrowserRootFetch {
           plan.callback &&
           event.responseStatusCode === 303 &&
           locations.length === 1 &&
-          locations[0]?.value === "/" &&
+          locations[0]?.value === this.callbackReturn &&
           !this.returnEdge,
       );
       this.returnEdge = {
-        url: this.cfg.origin + "/",
+        url: this.cfg.origin + this.callbackReturn,
         predecessor: event.requestId,
       };
     } else requireOwned(locations.length === 0);
@@ -656,6 +671,15 @@ export class BrowserRootFetch {
       new URL(plan.url).pathname === "/api/auth/login" &&
       event.responseStatusCode === 200
     ) {
+      requireOwned(
+        plan.returnTarget !== undefined &&
+          [
+            "/",
+            "/catalog",
+            `/catalog/organizations/${this.cfg.organization}/projects`,
+          ].includes(plan.returnTarget),
+      );
+      this.callbackReturn = plan.returnTarget;
       // The page navigates as soon as it reads this body, which can leave a page
       // response-body read unsettled. Observe the same bytes here; the response
       // itself continues unmodified.
@@ -792,6 +816,17 @@ export class BrowserRootFetch {
     requireOwned(counts.processGeneration === this.generation + 1);
     zeroBaseline(counts, counts.processGeneration);
     this.generation = counts.processGeneration;
+  }
+  async settleRequests(): Promise<void> {
+    const deadline = Date.now() + 10000;
+    do {
+      await this.joinHandlers();
+      if (this.plans.size === 0 && this.pauses.active === 0) break;
+      requireOwned(Date.now() < deadline);
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    } while (true);
+    requireOwned(this.failures === 0 && this.refused === 0);
+    await this.control.call("barrier");
   }
   seal(): Promise<void> {
     if (this.sealOriginal) return this.sealOriginal;

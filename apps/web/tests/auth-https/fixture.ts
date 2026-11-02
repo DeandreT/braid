@@ -16,7 +16,7 @@ import {
   type Reply,
 } from "./wire";
 import { BrowserRootFetch, type AppRequest } from "./root-fetch";
-import { blinkRestriction } from "./conditional-policy";
+import { blinkRestriction, browserRestriction } from "./conditional-policy";
 import { sessionSummaryMatches } from "./summary";
 
 const unresolved = [
@@ -86,6 +86,7 @@ export class HttpsFixture {
     resolve: (url: string | null) => void;
   }> = [];
   private nativeAdmitted = false;
+  private callbackReturn = "/";
   private rejectedCallbackResponse: Response | null = null;
   private mutation: Mutation = null;
   private staleEpoch = "";
@@ -124,6 +125,7 @@ export class HttpsFixture {
         "--host-resolver-rules=" +
           unresolved.map((host) => `MAP ${host} ~NOTFOUND`).join(", "),
         blinkRestriction,
+        browserRestriction,
       ],
     });
     requireOwned(this.browser.version() === "157.0.8090.0");
@@ -187,7 +189,9 @@ export class HttpsFixture {
     }
     if (url.pathname === "/api/auth/callback/entra") {
       if (response.status() === 303) {
-        requireOwned((await response.headerValue("location")) === "/");
+        requireOwned(
+          (await response.headerValue("location")) === this.callbackReturn,
+        );
         ++this.callbackSuccess;
       } else {
         requireOwned(response.status() === 401 || response.status() === 503);
@@ -294,6 +298,17 @@ export class HttpsFixture {
       );
     if (key !== "POST /api/auth/login" && key !== "POST /api/auth/logout")
       return { headers, negative: null };
+    if (key === "POST /api/auth/login") {
+      const target = headers["x-weft-return-to"] ?? "/";
+      requireOwned(
+        [
+          "/",
+          "/catalog",
+          `/catalog/organizations/${this.cfg.organization}/projects`,
+        ].includes(target),
+      );
+      this.callbackReturn = target;
+    }
     await this.responseTail;
     const status = this.status;
     requireOwned(
@@ -450,6 +465,7 @@ export class HttpsFixture {
       ),
     );
     ++this.sessionCookies;
+    await this.settleCatalogEntry();
   }
   private async rejectedCallbackDocument(): Promise<void> {
     const original = (async () => {
@@ -536,6 +552,7 @@ export class HttpsFixture {
         `/catalog/organizations/${this.cfg.organization}/projects`,
     );
     await until(() => this.catalogAdmissions >= 1 && this.projectLists >= 1);
+    await this.settleCatalogEntry();
   }
   async tokenNegatives(): Promise<void> {
     requireOwned(this.status?.requestToken);
@@ -590,6 +607,7 @@ export class HttpsFixture {
         (cookie) => cookie.name === "__Host-Weft.Session",
       )?.value === carrier,
     );
+    await this.boundary.settleRequests();
     const before = await this.counts();
     // No synthetic reload substitutes for callback: it already completed above.
     const restarted = await this.control.call("restart");
@@ -645,6 +663,25 @@ export class HttpsFixture {
   }
   close(): Promise<void> {
     return (this.closeOriginal ??= this.closeCore());
+  }
+  private async settleCatalogEntry(): Promise<void> {
+    const expected = `/catalog/organizations/${this.cfg.organization}/projects`;
+    const path = new URL(this.page!.url()).pathname;
+    if (!["/", "/catalog", expected].includes(path)) return;
+    await until(() => new URL(this.page!.url()).pathname === expected);
+    await until(
+      async () =>
+        (await this.page!.getByRole("list", {
+          name: "Projects",
+          exact: true,
+        }).isVisible()) ||
+        (await this.page!.getByRole("heading", {
+          name: "No projects",
+          exact: true,
+        }).isVisible()),
+    );
+    await this.boundary.settleRequests();
+    await this.responseTail;
   }
   private async closeCore(): Promise<void> {
     this.closing = true;

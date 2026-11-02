@@ -135,6 +135,27 @@ pub fn process(header: &RequestHeader, native: &[u8]) -> Value {
     serde_json::to_value(weft_ferrule_host::process_request(header, native)).unwrap()
 }
 
+/// Gives sandboxed children only the three standard streams, as the service does. A harness such as a CI
+/// runner can leave descriptors open in the test process without close-on-exec; the sandbox correctly
+/// refuses to start when a child inherits one.
+pub fn close_inherited_descriptors_on_exec() {
+    use rustix::io::{FdFlags, fcntl_getfd, fcntl_setfd};
+    use std::os::fd::BorrowedFd;
+    let descriptors: Vec<i32> = std::fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse().ok())
+        .filter(|&descriptor| descriptor > 2)
+        .collect();
+    for descriptor in descriptors {
+        // SAFETY: the descriptor is only borrowed for these flag calls, which neither close it nor
+        // transfer ownership. One closed meanwhile (such as the listing's own) fails with EBADF.
+        let borrowed = unsafe { BorrowedFd::borrow_raw(descriptor) };
+        if let Ok(flags) = fcntl_getfd(borrowed) {
+            let _ = fcntl_setfd(borrowed, flags | FdFlags::CLOEXEC);
+        }
+    }
+}
+
 pub fn framed_bytes(header: &[u8], native: &[u8]) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&(header.len() as u32).to_be_bytes());

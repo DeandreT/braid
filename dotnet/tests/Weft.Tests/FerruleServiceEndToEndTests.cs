@@ -120,34 +120,44 @@ public sealed class FerruleServiceEndToEndTests
             var connector = new SwitchingConnector(new PinnedServiceConnector(new(new Uri("https://127.0.0.1:" + first.Port), TransportCase.Pin(certificate), client)));
             var clock = new MaintenanceServiceTestTimeProvider();
             var options = new FerruleServiceRunnerOptions(connector, "compile", PackagedFerruleService.Identity, toolchain) { Clock = clock };
-            await using var runner = new FerruleServiceRunner(options);
-            var frame = BuildFrame("valid-basic", "compile");
-            var pending = runner.RunAsync(frame, default);
-            using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+            var runner = new FerruleServiceRunner(options);
+            var primary = await Record.ExceptionAsync(async () =>
             {
-                // A replica is a process tree/cgroup, not just its listening process. Remove the whole owned tree.
-                while (!Directory.EnumerateDirectories($"/proc/{first.Process.Id}/task").Any(task =>
+                var frame = BuildFrame("valid-basic", "compile");
+                var pending = runner.RunAsync(frame, default);
+                using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
                 {
-                    try { return File.ReadAllText(Path.Combine(task, "children")).Trim().Length > 0; }
-                    catch (IOException) { return false; }
-                }))
-                {
-                    Assert.False(pending.IsCompleted, "The compile must still be running when the replica is killed.");
-                    await Task.Delay(1, deadline.Token);
+                    // A replica is a process tree/cgroup, not just its listening process. Remove the whole owned tree.
+                    while (!Directory.EnumerateDirectories($"/proc/{first.Process.Id}/task").Any(task =>
+                    {
+                        try { return File.ReadAllText(Path.Combine(task, "children")).Trim().Length > 0; }
+                        catch (IOException) { return false; }
+                    }))
+                    {
+                        Assert.False(pending.IsCompleted, "The compile must still be running when the replica is killed.");
+                        await Task.Delay(1, deadline.Token);
+                    }
                 }
-            }
-            Assert.False(pending.IsCompleted);
-            first.Process.Kill(entireProcessTree: true);
-            await first.Process.WaitForExitAsync();
-            Assert.Equal(WorkerProcessFailure.CleanupFailed, (await pending.WaitAsync(TimeSpan.FromSeconds(20))).Failure);
-            Assert.False(runner.Available);
-            connector.Current = new PinnedServiceConnector(new(new Uri("https://127.0.0.1:" + replacement.Port), TransportCase.Pin(certificate), client));
-            clock.Advance(options.QuarantineBound);
-            await FerruleServiceRecoveryTests.Reopened(runner);
-            var recovered = await runner.RunAsync(frame, default);
-            Assert.Equal(WorkerProcessFailure.None, recovered.Failure);
-            Assert.NotEmpty(recovered.Output);
-            await runner.StopAsync();
+                Assert.False(pending.IsCompleted);
+                first.Process.Kill(entireProcessTree: true);
+                await first.Process.WaitForExitAsync();
+                Assert.Equal(WorkerProcessFailure.CleanupFailed, (await pending.WaitAsync(TimeSpan.FromSeconds(20))).Failure);
+                Assert.False(runner.Available);
+                connector.Current = new PinnedServiceConnector(new(new Uri("https://127.0.0.1:" + replacement.Port), TransportCase.Pin(certificate), client));
+                // Advance only after recovery has registered its wait. Otherwise a timer
+                // created after the advance waits for a second, unadvanced quarantine.
+                await clock.TimerScheduled.WaitAsync(TimeSpan.FromSeconds(10));
+                clock.Advance(options.QuarantineBound);
+                await FerruleServiceRecoveryTests.Reopened(runner);
+                var recovered = await runner.RunAsync(frame, default);
+                Assert.Equal(WorkerProcessFailure.None, recovered.Failure);
+                Assert.NotEmpty(recovered.Output);
+                await runner.StopAsync();
+            });
+            var cleanup = await Record.ExceptionAsync(async () => await runner.DisposeAsync());
+            if (primary is not null && cleanup is not null) throw new AggregateException(primary, cleanup);
+            if (primary is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
+            if (cleanup is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cleanup).Throw();
         }
         finally { Directory.Delete(root, recursive: true); }
     }

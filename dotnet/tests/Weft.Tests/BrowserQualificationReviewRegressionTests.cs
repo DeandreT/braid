@@ -6,6 +6,16 @@ namespace Weft.Tests;
 public sealed partial class AuthBrowserHttpsQualificationTests
 {
     [Fact]
+    public void ReturnTargetIsBoundToTheOwnedCatalog()
+    {
+        var organization = Guid.NewGuid();
+        Assert.True(BrowserQualificationAdmission.IsReturnTarget("/catalog", organization));
+        Assert.True(BrowserQualificationAdmission.IsReturnTarget($"/catalog/organizations/{organization:D}/projects", organization));
+        foreach (var value in new[] { "https://example.invalid/catalog", "//example.invalid/catalog", "/catalog?other=1", "/catalog#other",
+            $"/catalog/organizations/{Guid.NewGuid():D}/projects", "/sign-in", "/", "/catalog/../help" })
+            Assert.False(BrowserQualificationAdmission.IsReturnTarget(value, organization));
+    }
+    [Fact]
     public async Task SealRaceAcknowledgesWithoutGrantOrWeakeningWireChecks()
     {
         var owner = new BrowserQualificationAdmission(InertAdmissionInput()); var grant = InertAdmission();
