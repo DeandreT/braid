@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'feat/**']
+    branches: [main, "feat/**"]
   pull_request:
 
 permissions:
@@ -13,14 +13,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  qualification:
+    name: verify (${{ matrix.partition }})
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [0, 1, 2, 3, browser]
     env:
       CARGO_BUILD_JOBS: 2
       CARGO_INCREMENTAL: 0
       CARGO_TARGET_DIR: target/ferrule-host
-      DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: 'false'
+      DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: "false"
       WEFT_POSTGRES_IMAGE: docker.io/library/postgres@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
       WEFT_AZURITE_IMAGE: mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
     steps:
@@ -109,9 +114,23 @@ jobs:
         run: node tools/auth-browser-https/admit.mjs --approved
       - name: Verify the CI test launcher
         run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
-      - name: Verify the .NET solution
-        run: ulimit -c 0 && python3 tools/ci/run_tests.py
+      - name: Verify the .NET solution shard
+        if: matrix.partition != 'browser'
+        run: ulimit -c 0 && python3 tools/ci/run_tests.py --shard-index ${{ matrix.partition }} --shard-count 4
         env:
-          WEFT_OPENAPI_INCREMENTAL_TESTS: '1'
+          WEFT_OPENAPI_INCREMENTAL_TESTS: "1"
       - name: Browser verification on a virtual display
+        if: matrix.partition == 'browser'
         run: npm run test:browser
+
+  # Keep the existing required check name and reject a failed or cancelled shard.
+  verify:
+    if: always()
+    needs: qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every qualification partition
+        env:
+          QUALIFICATION_RESULT: ${{ needs.qualification.result }}
+        run: test "$QUALIFICATION_RESULT" = success

@@ -117,14 +117,17 @@ public sealed partial class FerruleDockerRunnerTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ProviderDisposalCannotReleaseTheRunnerBeforeItsOriginalCreateEnds(bool interchange)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ProviderDisposalCannotReleaseTheRunnerBeforeItsOriginalCreateEnds(bool interchange, bool deferDisposal)
     {
         var creation = FakeProcess.GatedCreation();
         var launcher = new FakeLauncher { Create = creation };
         var services = new ServiceCollection();
         InspectionWorkerHostConfiguration.Configure(services, new("/usr/bin/docker", ImageId), launcher);
+        services.AddSingleton(_ => new ProviderDisposalGate());
         var provider = services.BuildServiceProvider();
         var inspection = provider.GetRequiredService<DockerInspectionWorkerRunner>();
         Assert.Same(inspection, provider.GetRequiredService<IInspectionWorkerRunner>());
@@ -134,16 +137,34 @@ public sealed partial class FerruleDockerRunnerTests
         var runner = interchange ? conversion : inspection;
         var work = runner.RunAsync(ReadOnlyMemory<byte>.Empty, CancellationToken.None);
         await creation.ExitWaitStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        // A later singleton can defer the provider before it reaches either runner.
+        var gate = deferDisposal ? provider.GetRequiredService<ProviderDisposalGate>() : null;
         var disposal = provider.DisposeAsync().AsTask();
         try
         {
+            if (gate is not null)
+            {
+                await gate.Entered.WaitAsync(TimeSpan.FromSeconds(1));
+                Assert.True(((DockerInspectionWorkerRunner)runner).Available);
+                gate.Release();
+            }
+            // DisposeAsync walks singletons asynchronously in reverse creation order.
+            // Do not release create until disposal has actually stopped this runner.
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            while (((DockerInspectionWorkerRunner)runner).Available) await Task.Delay(1, deadline.Token);
             Assert.False(disposal.IsCompleted);
             Assert.False(creation.Disposed);
             Assert.False(creation.FirstExitWaitToken.IsCancellationRequested);
         }
-        finally { creation.Settle(); }
+        finally
+        {
+            gate?.Release();
+            creation.Settle();
+        }
         await disposal.WaitAsync(TimeSpan.FromSeconds(1));
         Assert.Equal(WorkerProcessFailure.Canceled, (await work).Failure);
+        Assert.Empty(launcher.Worker.Input.ToArray());
+        Assert.DoesNotContain(launcher.Commands, command => Operation(command) is "inspect" or "start");
         Assert.Equal("rm", Operation(launcher.Commands.Last()));
     }
 
