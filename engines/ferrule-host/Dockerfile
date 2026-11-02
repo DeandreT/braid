@@ -30,9 +30,11 @@ printf '%s  %s\n' dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb
     | sha256sum --check -
 chmod 0755 /tmp/rustup-init
 /tmp/rustup-init --yes --no-modify-path --profile minimal \
-    --default-host x86_64-unknown-linux-gnu --default-toolchain "$RUSTUP_TOOLCHAIN"
+    --default-host x86_64-unknown-linux-gnu --default-toolchain "$RUSTUP_TOOLCHAIN" --component clippy
 rustup set auto-self-update disable
 test "$(rustc --version)" = 'rustc 1.98.1 (48a229cea 2026-09-01)'
+rustup component list --toolchain "$RUSTUP_TOOLCHAIN" --installed | grep -Fx 'clippy-x86_64-unknown-linux-gnu'
+cargo clippy --version
 rm -f /tmp/rustup-init /tmp/weft-build-ca.pem
 EOF
 
