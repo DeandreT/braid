@@ -1,5 +1,5 @@
-using Weft.Contracts.Projections;
 using Weft.Contracts.Operations;
+using Weft.Contracts.Projections;
 using Weft.Contracts.Validation;
 using Weft.Domain;
 

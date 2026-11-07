@@ -1,5 +1,5 @@
 import type { components } from "../api/generated";
-import type { ProjectionDocument } from "../mappings/projection-view";
+import type { ProjectionDocument } from "../workbench/projection-view";
 import { editAssets } from "./edit-assets.generated";
 
 export type EditScript = components["schemas"]["EditScriptV1"];

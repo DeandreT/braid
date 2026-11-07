@@ -26,7 +26,7 @@ import {
   ProjectionView,
   type NodeReference,
   pathText,
-} from "../mappings/projection-view";
+} from "../workbench/projection-view";
 import {
   WorkbenchFrameComponent,
   type WorkbenchCommand,
