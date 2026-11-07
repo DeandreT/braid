@@ -45,7 +45,10 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
 
     /// <summary>Proves the launcher's controls and that the installed runtime host starts and runs under them.</summary>
     public async Task<bool> ProbeAsync(CancellationToken token) =>
-        (await ExecuteAsync(ReadOnlyMemory<byte>.Empty, probe: true, token).ConfigureAwait(false)).Failure == WorkerProcessFailure.None;
+        (await ProbeResultAsync(token).ConfigureAwait(false)).Failure == WorkerProcessFailure.None;
+
+    internal Task<WorkerProcessResult> ProbeResultAsync(CancellationToken token) =>
+        ExecuteAsync(ReadOnlyMemory<byte>.Empty, probe: true, token);
 
     public Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken token)
     {
@@ -91,6 +94,8 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
         var created = false;
         using var io = CancellationTokenSource.CreateLinkedTokenSource(token);
         var operations = new List<Task>();
+        var markerMissing = false;
+        var startupFailure = ChildAdmissionFailure.MarkerMissing;
         try
         {
             token.ThrowIfCancellationRequested();
@@ -114,8 +119,10 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
             operations.Add(error);
             var marker = new byte[ProcessCompileOptions.ReadyMarker.Length];
             await child.StandardOutput.BaseStream.ReadExactlyAsync(marker, token).ConfigureAwait(false);
-            if (!marker.AsSpan().SequenceEqual(ProcessCompileOptions.ReadyMarker) || !Verified(child.Id))
-                return Failed(WorkerProcessFailure.SandboxUnavailable);
+            if (!marker.AsSpan().SequenceEqual(ProcessCompileOptions.ReadyMarker))
+                return ChildAdmissionDiagnostics.Refused(ChildAdmissionFailure.MarkerMismatch);
+            var admission = Verify(child.Id);
+            if (admission != ChildAdmissionFailure.None) return ChildAdmissionDiagnostics.Refused(admission);
             var output = DrainAsync(child.StandardOutput.BaseStream, ProcessCompiledRuntimeOptions.Profile.MaximumOutputBytes, io.Token);
             operations.Add(output);
             operations.Add(WriteAsync(child, frame, io.Token));
@@ -130,12 +137,16 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
             if (probe)
                 return child.ExitCode == 1 && (await output.ConfigureAwait(false)).Length == 0 &&
                     (await error.ConfigureAwait(false)).AsSpan().SequenceEqual(ProbeRefusal)
-                    ? new([], WorkerProcessFailure.None) : Failed(WorkerProcessFailure.SandboxUnavailable);
+                    ? new([], WorkerProcessFailure.None) : ChildAdmissionDiagnostics.Refused(ChildAdmissionFailure.RuntimeProbeRefusal);
             return child.ExitCode == 0 ? new(await output.ConfigureAwait(false), WorkerProcessFailure.None) : Failed(WorkerProcessFailure.WorkerFailed);
         }
         catch (OperationCanceledException) { return Failed(WorkerProcessFailure.Canceled); }
         catch (OutputLimitException) { return Failed(WorkerProcessFailure.OutputLimitExceeded); }
-        catch (EndOfStreamException) { return Failed(WorkerProcessFailure.SandboxUnavailable); }
+        catch (EndOfStreamException)
+        {
+            // The exit category is read only after the existing cleanup has reaped this child.
+            markerMissing = true;
+        }
         catch (Exception error) when (error is IOException or Win32Exception or InvalidOperationException or UnauthorizedAccessException)
         { return Failed(WorkerProcessFailure.WorkerFailed); }
         finally
@@ -147,6 +158,7 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
                 {
                     if (!child.HasExited) child.Kill();
                     await child.WaitForExitAsync().WaitAsync(ProcessWorkerOptions.KillTimeout).ConfigureAwait(false);
+                    if (markerMissing) startupFailure = ChildAdmissionDiagnostics.StartupExit(child.ExitCode);
                     var all = Task.WhenAll(operations);
                     try { await all.WaitAsync(ProcessWorkerOptions.KillTimeout).ConfigureAwait(false); }
                     catch (Exception error) when (all.IsCompleted && error is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
@@ -160,9 +172,10 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
                 try { Directory.Delete(directory, recursive: true); }
                 catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Interlocked.Exchange(ref unavailable, 1); }
         }
+        return ChildAdmissionDiagnostics.Refused(startupFailure);
     }
 
-    private bool Verified(int pid) => ChildSandboxVerification.Verified(pid, inheritedFilters + ProcessCompileOptions.LauncherFilters,
+    private ChildAdmissionFailure Verify(int pid) => ChildSandboxVerification.Verify(pid, inheritedFilters + ProcessCompileOptions.LauncherFilters,
     [
         ("Max cpu time", ProcessCompiledRuntimeOptions.Profile.CpuSeconds),
         ("Max file size", ProcessCompiledRuntimeOptions.FileBytes), ("Max core file size", 0),

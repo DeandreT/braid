@@ -261,6 +261,7 @@ public sealed class FerruleServiceProcessRunnerTests
             await using var runner = new ProcessWorkerRunner(new ProcessWorkerOptions(script, DockerWorkerProfile.Preview, root));
             var result = await runner.RunAsync(new byte[] { 1, 2, 3 }, CancellationToken.None);
             Assert.Equal(WorkerProcessFailure.SandboxUnavailable, result.Failure);
+            Assert.StartsWith("procfs/", ChildAdmissionDiagnostics.Category(result.AdmissionFailure), StringComparison.Ordinal);
             Assert.Empty(result.Output);
             Assert.DoesNotContain("WEFT_SERVICE_TEST_SECRET", await File.ReadAllTextAsync(Path.Combine(evidence, "environment")), StringComparison.Ordinal);
             var directory = (await File.ReadAllTextAsync(Path.Combine(evidence, "directory"))).TrimEnd('\n');
@@ -291,11 +292,16 @@ public sealed class FerruleServiceProcessRunnerTests
         var script = Path.Combine(evidence, "worker");
         try
         {
-            await File.WriteAllTextAsync(script, "#!/bin/sh\nexit 3\n");
+            // Even private native stderr is never incorporated into a categorical refusal.
+            await File.WriteAllTextAsync(script, "#!/bin/sh\nprintf 'private-command-path-and-payload' >&2\nexit 83\n");
             File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserExecute);
             await using var runner = new ProcessWorkerRunner(new ProcessWorkerOptions(script, DockerWorkerProfile.Inspection, root));
             // A child that exits before its marker never received input and proved no sandbox.
-            Assert.Equal(WorkerProcessFailure.SandboxUnavailable, (await runner.RunAsync(new byte[] { 1 }, CancellationToken.None)).Failure);
+            var refused = await runner.RunAsync(new byte[] { 1 }, CancellationToken.None);
+            Assert.Equal(WorkerProcessFailure.SandboxUnavailable, refused.Failure);
+            Assert.Equal(ChildAdmissionFailure.InheritedDescriptors, refused.AdmissionFailure);
+            Assert.Empty(refused.Output);
+            Assert.Equal("marker-missing/inherited-descriptors", ChildAdmissionDiagnostics.Category(refused.AdmissionFailure));
             File.Delete(script);
             Assert.Equal(WorkerProcessFailure.StartFailed, (await runner.RunAsync(new byte[] { 1 }, CancellationToken.None)).Failure);
             Assert.True(runner.Available);
@@ -358,6 +364,8 @@ public sealed class FerruleServiceProcessRunnerTests
             var reference = await expected.RunAsync(requestFrame, cancellationToken);
             var candidate = await actual.RunAsync(requestFrame, cancellationToken);
             Assert.Equal(WorkerProcessFailure.None, reference.Failure);
+            Assert.True(reference.Failure == candidate.Failure,
+                "Direct worker admission: " + ChildAdmissionDiagnostics.Category(candidate.AdmissionFailure));
             Assert.Equal(reference.Failure, candidate.Failure);
             Assert.Equal(reference.Output, candidate.Output);
             Compared++;

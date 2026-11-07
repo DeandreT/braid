@@ -13,16 +13,18 @@ fn main() -> ExitCode {
         Ok(None) => {}
         // A Ferrule service child: every control is in force before the marker and before any input.
         Ok(Some(limits)) => {
-            if sandbox::enter(&limits).is_err()
-                || output
-                    .write_all(&sandbox::READY_MARKER)
-                    .and_then(|()| output.flush())
-                    .is_err()
+            if let Err(error) = sandbox::enter(&limits) {
+                return ExitCode::from(error.exit_code());
+            }
+            if output
+                .write_all(&sandbox::READY_MARKER)
+                .and_then(|()| output.flush())
+                .is_err()
             {
-                return ExitCode::FAILURE;
+                return ExitCode::from(sandbox::SandboxError::ReadyMarker.exit_code());
             }
         }
-        Err(_) => return ExitCode::FAILURE,
+        Err(error) => return ExitCode::from(error.exit_code()),
     }
     match weft_ferrule_host::handle_stream(&mut input.lock(), &mut output) {
         Ok(()) => ExitCode::SUCCESS,

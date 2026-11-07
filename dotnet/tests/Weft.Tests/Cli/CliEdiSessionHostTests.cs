@@ -76,6 +76,7 @@ public sealed class CliEdiSessionHostTests(PostgresFixture postgres)
                 using var native = new MemoryStream(nativeBytes, writable: false);
                 var created = await ingestion.CreateAsync(test.Data.Actor, test.Data.Project, Guid.NewGuid(),
                     new(new("CLI " + family, "Self-authored EDI round trip"), "ferrule", "mapping.native.json"), native);
+                AuthHttpFixture.Check(created.Outcome == RevisionIngestionOutcome.CommittedValid, "EDI CLI native ingestion did not commit a valid revision.");
                 Assert.Equal(RevisionIngestionOutcome.CommittedValid, created.Outcome);
                 var revision = created.Receipt!.FutureRevision;
                 var key = Guid.NewGuid().ToString("D");
@@ -89,8 +90,11 @@ public sealed class CliEdiSessionHostTests(PostgresFixture postgres)
                 Assert.Equal(submitted.Run.RunId, Read<CatalogPreviewSubmitResultV1>(
                     await cli.RunWithInputAsync(inputBytes, command)).Run.RunId);
                 Assert.Equal(before + 1, await test.Data.Case.ScalarAsync<long>("SELECT count(*) FROM weft.preview_runs"));
-                Assert.Equal(PreviewExecutionOutcome.Completed, await executor.ExecuteAsync(revision.OrganizationId, runId, Guid.NewGuid()));
+                var executed = await executor.ExecuteAsync(revision.OrganizationId, runId, Guid.NewGuid());
+                AuthHttpFixture.Check(executed == PreviewExecutionOutcome.Completed, "EDI CLI preview execution did not complete.");
+                Assert.Equal(PreviewExecutionOutcome.Completed, executed);
                 var completed = Read<CatalogPreviewRunV1>(await cli.RunAsync("previews", "get", submitted.Run.RunId, "--json"));
+                AuthHttpFixture.Check(completed.Outcome == "succeeded", "EDI CLI preview did not reach its succeeded outcome.");
                 Assert.Equal("succeeded", completed.Outcome);
                 Assert.True(completed.Provenance!.Confirmed);
                 Assert.Equal(DocumentPreviewPolicy.Profile, completed.Provenance.Profile);

@@ -51,12 +51,68 @@ pub struct Launch {
     pub command: Vec<CString>,
 }
 
-#[derive(Debug)]
-pub struct SandboxError(&'static str);
+/// Closed startup categories. Exit codes carry no native error text or process operands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SandboxError {
+    Arguments,
+    Platform,
+    Procfs,
+    Descriptors,
+    Limits,
+    NonDumpable,
+    NoNewPrivileges,
+    FilterInvalid,
+    FilterInstall,
+    ReadyMarker,
+    LandlockUnavailable,
+    PathGrant,
+    LandlockRestrict,
+    Confinement,
+    Execute,
+}
+
+impl SandboxError {
+    /// Shared with the service's internal admission diagnostics, not a worker response.
+    pub const fn exit_code(self) -> u8 {
+        match self {
+            Self::Arguments => 80,
+            Self::Platform => 81,
+            Self::Procfs => 82,
+            Self::Descriptors => 83,
+            Self::Limits => 84,
+            Self::NonDumpable => 85,
+            Self::NoNewPrivileges => 86,
+            Self::FilterInvalid => 87,
+            Self::FilterInstall => 88,
+            Self::ReadyMarker => 89,
+            Self::LandlockUnavailable => 90,
+            Self::PathGrant => 91,
+            Self::LandlockRestrict => 92,
+            Self::Confinement => 93,
+            Self::Execute => 1,
+        }
+    }
+}
 
 impl fmt::Display for SandboxError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.0)
+        formatter.write_str(match self {
+            Self::Arguments => "The launcher arguments are not admitted.",
+            Self::Platform => "The compile sandbox requires Linux on x86_64.",
+            Self::Procfs => "Procfs is unavailable.",
+            Self::Descriptors => "The launcher inherited an unexpected file descriptor.",
+            Self::Limits => "The launcher could not apply its resource limits.",
+            Self::NonDumpable => "The launcher could not become non-dumpable.",
+            Self::NoNewPrivileges => "The launcher could not set no-new-privileges.",
+            Self::FilterInvalid => "The launcher syscall filter is invalid.",
+            Self::FilterInstall => "The launcher could not install its syscall filter.",
+            Self::ReadyMarker => "The launcher could not write its readiness marker.",
+            Self::LandlockUnavailable => "Landlock is unavailable.",
+            Self::PathGrant => "The launcher could not grant a path.",
+            Self::LandlockRestrict => "The launcher could not enforce Landlock.",
+            Self::Confinement => "The launcher could not confirm its filesystem confinement.",
+            Self::Execute => "The launcher could not start the program.",
+        })
     }
 }
 
@@ -65,11 +121,11 @@ impl std::error::Error for SandboxError {}
 /// Reads the exact argument shape:
 /// `--cpu-seconds=N --memory-bytes=N --open-files=N --file-bytes=N [--output=NAME] [--read=PATH]... [--execute=FILE]... -- PROGRAM [ARGUMENT]...`
 pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
-    let invalid = SandboxError("The launcher arguments are not admitted.");
+    let invalid = SandboxError::Arguments;
     let separator = arguments
         .iter()
         .position(|argument| argument == "--")
-        .ok_or(SandboxError("The launcher arguments are not admitted."))?;
+        .ok_or(SandboxError::Arguments)?;
     let (options, command) = arguments.split_at(separator);
     let command = &command[1..];
     let [cpu, memory, files, file_bytes, rest @ ..] = options else {
@@ -110,7 +166,7 @@ pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
                         .and_then(|text| text.strip_prefix("--output="))
                         .filter(|name| file_name(name))
                         .and_then(|name| CString::new(name).ok())
-                        .ok_or(SandboxError("The launcher arguments are not admitted."))?,
+                        .ok_or(SandboxError::Arguments)?,
                 ),
                 rest,
             )
@@ -120,20 +176,14 @@ pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
     let mut read = Vec::new();
     let mut execute = Vec::new();
     for option in rest {
-        let text = option
-            .to_str()
-            .ok_or(SandboxError("The launcher arguments are not admitted."))?;
+        let text = option.to_str().ok_or(SandboxError::Arguments)?;
         // Every read grant precedes every execute grant.
         if let Some(path) = text.strip_prefix("--read=")
             && execute.is_empty()
         {
-            read.push(
-                absolute(path).ok_or(SandboxError("The launcher arguments are not admitted."))?,
-            );
+            read.push(absolute(path).ok_or(SandboxError::Arguments)?);
         } else if let Some(path) = text.strip_prefix("--execute=") {
-            execute.push(
-                absolute(path).ok_or(SandboxError("The launcher arguments are not admitted."))?,
-            );
+            execute.push(absolute(path).ok_or(SandboxError::Arguments)?);
         } else {
             return Err(invalid);
         }
@@ -148,13 +198,10 @@ pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
     let program = command[0]
         .to_str()
         .and_then(absolute)
-        .ok_or(SandboxError("The launcher arguments are not admitted."))?;
+        .ok_or(SandboxError::Arguments)?;
     let mut owned = vec![program];
     for argument in &command[1..] {
-        owned.push(
-            CString::new(argument.as_bytes())
-                .map_err(|_| SandboxError("The launcher arguments are not admitted."))?,
-        );
+        owned.push(CString::new(argument.as_bytes()).map_err(|_| SandboxError::Arguments)?);
     }
     Ok(Launch {
         cpu_seconds,
@@ -187,9 +234,7 @@ fn file_name(name: &str) -> bool {
 
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 pub fn enter(_launch: &Launch) -> Result<(), SandboxError> {
-    Err(SandboxError(
-        "The compile sandbox requires Linux on x86_64.",
-    ))
+    Err(SandboxError::Platform)
 }
 
 /// Applies every control to the calling single-threaded process. Any failure leaves the caller to exit without
@@ -201,14 +246,12 @@ pub fn enter(launch: &Launch) -> Result<(), SandboxError> {
     let ruleset = landlock::Ruleset::new(launch)?;
     apply_limits(launch)?;
     rustix::process::set_dumpable_behavior(rustix::process::DumpableBehavior::NotDumpable)
-        .map_err(|_| SandboxError("The launcher could not become non-dumpable."))?;
-    rustix::thread::set_no_new_privs(true)
-        .map_err(|_| SandboxError("The launcher could not set no-new-privileges."))?;
+        .map_err(|_| SandboxError::NonDumpable)?;
+    rustix::thread::set_no_new_privs(true).map_err(|_| SandboxError::NoNewPrivileges)?;
     ruleset.restrict_self()?;
     confirm_confinement()?;
     for program in filters()? {
-        seccompiler::apply_filter(&program)
-            .map_err(|_| SandboxError("The launcher could not install its syscall filter."))?;
+        seccompiler::apply_filter(&program).map_err(|_| SandboxError::FilterInstall)?;
     }
     Ok(())
 }
@@ -228,24 +271,22 @@ pub fn execute(launch: &Launch) -> SandboxError {
     unsafe {
         libc::execve(launch.command[0].as_ptr(), arguments.as_ptr(), environ);
     }
-    SandboxError("The launcher could not start the program.")
+    SandboxError::Execute
 }
 
 /// The parent must not leak any descriptor beyond the three standard streams.
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn require_standard_descriptors_only() -> Result<(), SandboxError> {
-    let failure = SandboxError("The launcher inherited an unexpected file descriptor.");
+    let failure = SandboxError::Descriptors;
     let own_listing = std::path::PathBuf::from(format!("/proc/{}/fd", std::process::id()));
     let mut listing_descriptors = 0;
-    for entry in
-        std::fs::read_dir("/proc/self/fd").map_err(|_| SandboxError("Procfs is unavailable."))?
-    {
-        let entry = entry.map_err(|_| SandboxError("Procfs is unavailable."))?;
+    for entry in std::fs::read_dir("/proc/self/fd").map_err(|_| SandboxError::Procfs)? {
+        let entry = entry.map_err(|_| SandboxError::Procfs)?;
         let descriptor = entry
             .file_name()
             .to_str()
             .and_then(|name| name.parse::<u32>().ok())
-            .ok_or(SandboxError("Procfs is unavailable."))?;
+            .ok_or(SandboxError::Procfs)?;
         if descriptor <= 2 {
             continue;
         }
@@ -287,8 +328,7 @@ fn apply_limits(launch: &Launch) -> Result<(), SandboxError> {
         (Resource::Locks, 0),
         (Resource::Rtprio, 0),
     ] {
-        setrlimit(resource, fixed(value))
-            .map_err(|_| SandboxError("The launcher could not apply its resource limits."))?;
+        setrlimit(resource, fixed(value)).map_err(|_| SandboxError::Limits)?;
     }
     Ok(())
 }
@@ -298,9 +338,7 @@ fn apply_limits(launch: &Launch) -> Result<(), SandboxError> {
 fn confirm_confinement() -> Result<(), SandboxError> {
     match std::fs::File::open("..") {
         Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => Ok(()),
-        _ => Err(SandboxError(
-            "The launcher could not confirm its filesystem confinement.",
-        )),
+        _ => Err(SandboxError::Confinement),
     }
 }
 
@@ -349,7 +387,7 @@ mod landlock {
     impl Ruleset {
         /// Handles every access right the kernel knows, so anything not granted below is denied.
         pub(super) fn new(launch: &Launch) -> Result<Self, SandboxError> {
-            let unavailable = SandboxError("Landlock is unavailable.");
+            let unavailable = SandboxError::LandlockUnavailable;
             let abi = unsafe {
                 libc::syscall(
                     libc::SYS_landlock_create_ruleset,
@@ -407,7 +445,7 @@ mod landlock {
         }
 
         fn add(&self, path: &CStr, access: u64) -> Result<(), SandboxError> {
-            let failure = SandboxError("The launcher could not grant a path.");
+            let failure = SandboxError::PathGrant;
             let raw = unsafe { libc::open(path.as_ptr(), libc::O_PATH | libc::O_CLOEXEC) };
             if raw < 0 {
                 return Err(failure);
@@ -453,7 +491,7 @@ mod landlock {
                 )
             };
             if restricted != 0 {
-                return Err(SandboxError("The launcher could not enforce Landlock."));
+                return Err(SandboxError::LandlockRestrict);
             }
             Ok(())
         }
@@ -471,7 +509,7 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
         SeccompRule, TargetArch, sock_filter,
     };
 
-    let invalid = || SandboxError("The launcher syscall filter is invalid.");
+    let invalid = || SandboxError::FilterInvalid;
     let compile =
         |rules: BTreeMap<i64, Vec<SeccompRule>>, errno: i32| -> Result<BpfProgram, SandboxError> {
             let filter = SeccompFilter::new(
@@ -756,6 +794,31 @@ const DENIED: &[i64] = &[
 
 #[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
 mod tests {
+    #[test]
+    fn startup_exit_categories_are_fixed() {
+        use super::SandboxError;
+
+        for (error, code) in [
+            (SandboxError::Arguments, 80),
+            (SandboxError::Platform, 81),
+            (SandboxError::Procfs, 82),
+            (SandboxError::Descriptors, 83),
+            (SandboxError::Limits, 84),
+            (SandboxError::NonDumpable, 85),
+            (SandboxError::NoNewPrivileges, 86),
+            (SandboxError::FilterInvalid, 87),
+            (SandboxError::FilterInstall, 88),
+            (SandboxError::ReadyMarker, 89),
+            (SandboxError::LandlockUnavailable, 90),
+            (SandboxError::PathGrant, 91),
+            (SandboxError::LandlockRestrict, 92),
+            (SandboxError::Confinement, 93),
+            (SandboxError::Execute, 1),
+        ] {
+            assert_eq!(error.exit_code(), code);
+        }
+    }
+
     #[test]
     fn metadata_mutations_are_denied_for_paths_and_file_descriptors() {
         for syscall in [
