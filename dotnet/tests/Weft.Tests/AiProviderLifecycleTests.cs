@@ -11,9 +11,14 @@ public sealed partial class AiProviderTests
     private const string Token = "PRIVATE-fixture-bearer";
     private const string Model = "PRIVATE-fixture-model";
     private static readonly AiProfileKey Key = AiProfileKey.Create("fixture", 1);
-    private static string Path(AiDialect dialect) => dialect == AiDialect.ChatCompletionsSseV1 ? "/v1/chat/completions" : "/api/chat";
-    private static string Media(AiDialect dialect) => dialect == AiDialect.ChatCompletionsSseV1 ? "text/event-stream" : "application/x-ndjson";
-    private static byte[] StopWire(AiDialect dialect) => AiHttpFixture.Utf8(dialect == AiDialect.ChatCompletionsSseV1
+    private static string Path(AiDialect dialect) => dialect switch
+    {
+        AiDialect.ChatCompletionsSseV1 => "/v1/chat/completions",
+        AiDialect.DatabricksChatCompletionsSseV1 => "/serving-endpoints/chat/completions",
+        _ => "/api/chat"
+    };
+    private static string Media(AiDialect dialect) => dialect == AiDialect.OllamaChatNdjsonV1 ? "application/x-ndjson" : "text/event-stream";
+    private static byte[] StopWire(AiDialect dialect) => AiHttpFixture.Utf8(dialect != AiDialect.OllamaChatNdjsonV1
         ? "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\n\ndata: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
         : "{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"done\":false}\n{\"message\":{\"role\":\"assistant\",\"content\":\"\"},\"done\":true,\"done_reason\":\"stop\"}\n");
     private static AiProfileSpec Profile(AiHttpFixture server, AiDialect dialect, AiCapability capabilities = AiCapability.Text | AiCapability.FunctionTools,
@@ -166,6 +171,7 @@ public sealed partial class AiProviderTests
     [Theory]
     [InlineData(AiDialect.ChatCompletionsSseV1)]
     [InlineData(AiDialect.OllamaChatNdjsonV1)]
+    [InlineData(AiDialect.DatabricksChatCompletionsSseV1)]
     public async Task CompletePostThenPeerCloseHasOneEstablishmentAndOneUncertainDispatch(AiDialect dialect)
     {
         await using var server = new AiHttpFixture((exchange, _) => { exchange.CloseWithoutResponse(); return Task.CompletedTask; });
@@ -198,6 +204,28 @@ public sealed partial class AiProviderTests
         Assert.Equal(expected, rejected.Failure.Code); Assert.Equal(AiDispatchState.Attempted, rejected.Failure.Dispatch);
         Assert.False(rejected.Failure.ToString().Contains("PRIVATE", StringComparison.Ordinal), "HTTP failure leaked provider content.");
         Assert.Equal(1, server.RequestCount); Assert.Equal(0, sink.ConnectionCount); Assert.Equal(0, sink.RequestCount);
+    }
+
+    [Theory]
+    [InlineData(301)]
+    [InlineData(307)]
+    public async Task DatabricksRedirectsNeverForwardBearerOrRepeatTheQuestion(int status)
+    {
+        await using var sink = new AiHttpFixture((exchange, ct) => exchange.RespondAsync("text/event-stream", StopWire(AiDialect.DatabricksChatCompletionsSseV1), ct));
+        await using var server = new AiHttpFixture((exchange, ct) => exchange.RespondAsync("application/json", AiHttpFixture.Utf8("{\"error\":\"PRIVATE redirect\"}"), ct,
+            status: status, extra: "Location: " + sink.Endpoint("/private-target").AbsoluteUri + "\r\n"));
+        var resolver = new Resolver();
+        await using var client = Client(Profile(server, AiDialect.DatabricksChatCompletionsSseV1, bearer: true), resolver);
+        await using var turn = Turn(client);
+        var rejected = Require<RoundRejected>(await client.OpenRoundAsync(turn, Request(), CancellationToken.None));
+        Assert.Equal(AiFailureCode.ProviderRejected, rejected.Failure.Code);
+        Assert.Equal(AiDispatchState.Attempted, rejected.Failure.Dispatch);
+        Assert.DoesNotContain("PRIVATE", rejected.Failure.ToString(), StringComparison.Ordinal);
+        Assert.Equal(1, resolver.Calls);
+        Assert.Equal(1, server.ConnectionCount);
+        Assert.Equal(1, server.RequestCount);
+        Assert.Equal(0, sink.ConnectionCount);
+        Assert.Equal(0, sink.RequestCount);
     }
 
     [Fact]

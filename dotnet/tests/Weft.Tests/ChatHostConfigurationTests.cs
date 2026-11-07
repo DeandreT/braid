@@ -135,9 +135,9 @@ public sealed class ChatHostConfigurationTests : IDisposable
     {
         const string clientId = "11111111-2222-3333-4444-55555555abcd";
         var user = ChatHostConfiguration.Parse(ManagedProfiles("{\"reference\":\"hosted-key\",\"managedIdentity\":{\"clientId\":\"" + clientId + "\"}}"));
-        Assert.Equal(Guid.Parse(clientId), user.ManagedIdentities["hosted-key"]);
+        Assert.Equal(new ChatManagedIdentity(Guid.Parse(clientId), ChatTokenResource.AzureAi), user.ManagedIdentities["hosted-key"]);
         Assert.Empty(user.Credentials);
-        Assert.Null(ChatHostConfiguration.Parse(ManagedProfiles("{\"reference\":\"hosted-key\",\"managedIdentity\":{}}")).ManagedIdentities["hosted-key"]);
+        Assert.Null(ChatHostConfiguration.Parse(ManagedProfiles("{\"reference\":\"hosted-key\",\"managedIdentity\":{}}")).ManagedIdentities["hosted-key"].ClientId);
         var file = "{\"reference\":\"hosted-key\",\"file\":\"" + Secret("token") + "\"}";
         foreach (var credentials in new[]
         {

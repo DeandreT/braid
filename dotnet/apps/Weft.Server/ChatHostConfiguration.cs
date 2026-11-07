@@ -47,10 +47,13 @@ internal static class ChatHostConfiguration
             var writer = new PostgresChatStore(databases.Writer);
             return new ChatPersistencePorts(reader, reader, writer, writer);
         });
-        // Keyless profiles read the platform's managed-identity endpoint; it is admitted only when one is configured.
-        var tokenEndpoint = configuration.ManagedIdentities.Count == 0 ? null : ManagedIdentityCredentialResolver.ReadEndpoint(read);
-        services.AddSingleton<IAiCredentialResolver>(_ => new ChatHostCredentialResolver(configuration.Credentials, tokenEndpoint is null ? null
-            : new ManagedIdentityCredentialResolver(configuration.ManagedIdentities, tokenEndpoint, read, TimeProvider.System)));
+        // Keyless profiles read the Container Apps managed-identity endpoint, admitted only when a credential uses it, or
+        // the fixed Instance Metadata Service address.
+        var tokenEndpoint = configuration.ManagedIdentities.Values.Any(identity => identity.Source == ChatIdentitySource.ContainerApps)
+            ? ManagedIdentityCredentialResolver.ReadEndpoint(read) : null;
+        services.AddSingleton<IAiCredentialResolver>(_ => new ChatHostCredentialResolver(configuration.Credentials,
+            configuration.ManagedIdentities.Count == 0 ? null
+                : new ManagedIdentityCredentialResolver(configuration.ManagedIdentities, tokenEndpoint, read, TimeProvider.System)));
         // One shared read-only tool service bounds its own concurrent report reads and citation checks for the whole host.
         services.AddSingleton(provider =>
         {
@@ -106,7 +109,7 @@ internal static class ChatHostConfiguration
             var tokens = root.TryGetValue("maxOutputTokens", out var output) ? Int(output) : 1024;
             if (retention is < 1 or > 3650) throw ServerHostOptions.Failure();
             var credentials = new Dictionary<string, string>(StringComparer.Ordinal);
-            var identities = new Dictionary<string, Guid?>(StringComparer.Ordinal);
+            var identities = new Dictionary<string, ChatManagedIdentity>(StringComparer.Ordinal);
             foreach (var item in Array(root["credentials"], 16))
             {
                 // A credential is either a private bearer file or a managed-identity token, never both.
@@ -117,8 +120,21 @@ internal static class ChatHostConfiguration
                     throw ServerHostOptions.Failure();
                 if (credential.TryGetValue("managedIdentity", out var managed))
                 {
-                    var identity = Object(managed, ["clientId"], []);
-                    identities.Add(reference, identity.TryGetValue("clientId", out var clientId) ? ClientId(String(clientId)) : null);
+                    var identity = Object(managed, ["clientId", "resource", "source"], []);
+                    // The issuing endpoint is always explicit configuration; there is no detection or fallback between them.
+                    var source = !identity.TryGetValue("source", out var origin) ? ChatIdentitySource.ContainerApps : String(origin) switch
+                    {
+                        "containerApps" => ChatIdentitySource.ContainerApps,
+                        "instanceMetadata" => ChatIdentitySource.InstanceMetadata,
+                        _ => throw ServerHostOptions.Failure()
+                    };
+                    var resource = !identity.TryGetValue("resource", out var named) ? ChatTokenResource.AzureAi : String(named) switch
+                    {
+                        "azureAi" => ChatTokenResource.AzureAi,
+                        "azureDatabricks" => ChatTokenResource.AzureDatabricks,
+                        _ => throw ServerHostOptions.Failure()
+                    };
+                    identities.Add(reference, new(identity.TryGetValue("clientId", out var clientId) ? ClientId(String(clientId)) : null, resource, source));
                     continue;
                 }
                 var file = String(credential["file"]);
@@ -129,6 +145,18 @@ internal static class ChatHostConfiguration
             var used = profiles.Select(profile => profile.Spec.CredentialReference).OfType<string>().ToHashSet(StringComparer.Ordinal);
             // Every bearer reference resolves, and no unused secret file or identity is admitted.
             if (!used.SetEquals(credentials.Keys.Concat(identities.Keys))) throw ServerHostOptions.Failure();
+            // A Databricks credential goes only to Databricks profiles and another credential never does: a file is never
+            // shared across that line, and a managed-identity token serves only the service it was issued for.
+            var databricks = new Dictionary<string, bool>(StringComparer.Ordinal);
+            foreach (var profile in profiles)
+            {
+                if (profile.Spec.CredentialReference is not { } reference) continue;
+                var target = profile.Spec.Dialect == AiDialect.DatabricksChatCompletionsSseV1;
+                if ((databricks.TryGetValue(reference, out var seen) && seen != target) ||
+                    (identities.TryGetValue(reference, out var identity) && (identity.Resource == ChatTokenResource.AzureDatabricks) != target))
+                    throw ServerHostOptions.Failure();
+                databricks[reference] = target;
+            }
             return new(new ChatApiOptions(profiles, TimeSpan.FromDays(retention), TimeSpan.FromSeconds(seconds), tokens), credentials,
                 identities);
         }
@@ -144,6 +172,7 @@ internal static class ChatHostConfiguration
         {
             "chatCompletionsSse" => AiDialect.ChatCompletionsSseV1,
             "ollamaChatNdjson" => AiDialect.OllamaChatNdjsonV1,
+            "databricksChatCompletionsSse" => AiDialect.DatabricksChatCompletionsSseV1,
             _ => throw ServerHostOptions.Failure()
         };
         var capabilities = (AiCapability)0;
@@ -201,9 +230,9 @@ internal static class ChatHostConfiguration
             ? value : throw ServerHostOptions.Failure();
 }
 
-/// <summary>The admitted profiles; each bearer reference names a private file or a managed identity (null: system-assigned).</summary>
+/// <summary>The admitted profiles; each bearer reference names a private file or a managed identity and its token resource.</summary>
 internal sealed record ChatHostProfiles(ChatApiOptions Options, IReadOnlyDictionary<string, string> Credentials,
-    IReadOnlyDictionary<string, Guid?> ManagedIdentities)
+    IReadOnlyDictionary<string, ChatManagedIdentity> ManagedIdentities)
 {
     public override string ToString() => nameof(ChatHostProfiles);
 }

@@ -328,6 +328,12 @@ To use an API key instead, store the key in `weft-model-provider-credential` and
 the profile; the v1 endpoint accepts the key as the Bearer value, as the OpenAI client libraries
 send it.
 
+An [Azure Databricks profile](ai-chat.md#azure-databricks-profiles) uses the same identity with
+`{"reference": "databricks", "managedIdentity": {"clientId": "<identityClientId>", "resource": "azureDatabricks"}}`.
+Add the identity to the workspace as a service principal (by its client ID) and grant it **Can Query**
+on the serving endpoint; the workspace must be reachable from the virtual network, publicly or through a
+private endpoint whose DNS zone is linked to it, and its IP access lists must admit that traffic.
+
 ## Mapping endpoints
 
 Each entry of `mappingEndpoints` deploys the [mapping endpoint](mapping-endpoint.md) for one
