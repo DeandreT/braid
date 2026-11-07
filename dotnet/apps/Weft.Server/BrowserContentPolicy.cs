@@ -17,14 +17,24 @@ internal static class BrowserContentPolicy
     internal static void Use(IApplicationBuilder app, string publicOrigin)
     {
         var editor = Editor(publicOrigin);
+        var files = app.ApplicationServices.GetRequiredService<IWebHostEnvironment>().WebRootFileProvider;
         app.Use(async (context, next) =>
         {
             // API and authentication endpoints have their own response policies.
             if (!context.Request.Path.StartsWithSegments("/api"))
             {
-                context.Response.Headers.ContentSecurityPolicy = context.Request.Path.StartsWithSegments("/edit") ? editor : Shell;
+                var path = context.Request.Path;
+                var editPath = path.StartsWithSegments("/edit");
+                // Only shipped worker assets get the wasm policy; the shell fallback must never serve HTML under it.
+                var asset = editPath && files.GetFileInfo(path.Value!) is { Exists: true, IsDirectory: false };
+                context.Response.Headers.ContentSecurityPolicy = asset ? editor : Shell;
                 context.Response.Headers.XContentTypeOptions = "nosniff";
                 context.Response.Headers["Referrer-Policy"] = "no-referrer";
+                if (editPath && !asset)
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    return;
+                }
             }
             await next(context);
         });

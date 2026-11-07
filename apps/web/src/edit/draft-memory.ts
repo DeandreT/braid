@@ -4,9 +4,15 @@ import {
   type CatalogContext,
   type CatalogMappingScope,
 } from "../catalog/catalog-types";
+import type { components } from "../api/generated";
 import type { Draft } from "./draft-api";
 import type { EditScript, EditOperation } from "./edit-core";
 
+/** A submitted preview whose outcome was never confirmed; it is replayed exactly. */
+export interface RetainedPreviewRequest {
+  key: string;
+  body: components["schemas"]["CatalogPreviewSubmissionV1"];
+}
 export interface RetainedDraft {
   draft: Draft;
   operations: EditScript;
@@ -14,6 +20,7 @@ export interface RetainedDraft {
   saveKey: string | null;
   saving: boolean;
   dirty: boolean;
+  previewRequest: RetainedPreviewRequest | null;
 }
 /** Tab memory only. A different admitted owner cannot see or resume the previous owner's work. */
 @Injectable({ providedIn: "root" })

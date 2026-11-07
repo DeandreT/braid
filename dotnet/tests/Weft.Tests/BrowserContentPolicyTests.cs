@@ -1,9 +1,57 @@
+using System.Net;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Logging;
 using Weft.Server;
 
 namespace Weft.Tests;
 
 public sealed class BrowserContentPolicyTests
 {
+    [Fact]
+    public async Task OnlyExistingEditorAssetsReceiveTheWorkerPolicyAndUnknownEditorPathsAreClosed()
+    {
+        var root = Directory.CreateTempSubdirectory("weft-csp-");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root.FullName, "edit"));
+            await File.WriteAllTextAsync(Path.Combine(root.FullName, "edit", "worker.js"), "export {};");
+            await File.WriteAllTextAsync(Path.Combine(root.FullName, "index.html"), "<!doctype html><title>shell</title>");
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development", WebRootPath = root.FullName });
+            builder.WebHost.UseTestServer();
+            builder.Logging.ClearProviders();
+            await using var app = builder.Build();
+            BrowserContentPolicy.Use(app, "https://weft.example");
+            app.UseDefaultFiles();
+            app.UseStaticFiles();
+            app.MapFallbackToFile("index.html");
+            await app.StartAsync();
+            using var client = app.GetTestClient();
+            var editor = BrowserContentPolicy.Editor("https://weft.example");
+
+            using var asset = await client.GetAsync("/edit/worker.js");
+            Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
+            Assert.Equal(editor, asset.Headers.GetValues("Content-Security-Policy").Single());
+
+            foreach (var path in new[] { "/edit/missing", "/edit", "/edit/", "/edit/nested/index.html" })
+            {
+                using var response = await client.GetAsync(path);
+                Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+                Assert.Equal(BrowserContentPolicy.Shell, response.Headers.GetValues("Content-Security-Policy").Single());
+                Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+            }
+
+            using var shell = await client.GetAsync("/projects/deep-link");
+            Assert.Equal(HttpStatusCode.OK, shell.StatusCode);
+            Assert.Equal(BrowserContentPolicy.Shell, shell.Headers.GetValues("Content-Security-Policy").Single());
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
     [Fact]
     public void ShellDoesNotPermitWasmOrInlineScriptsAndWorkerIsPathConfined()
     {

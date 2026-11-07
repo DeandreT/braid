@@ -384,8 +384,17 @@
             [disabled]="busy() || conflict() || !view()"
             (click)="trySample()"
           >
-            Try sample
+            {{
+              previewRequest() ? "Recover earlier sample request" : "Try sample"
+            }}
           </button>
+          @if (previewRequest()) {
+            <p>
+              The earlier sample request was not confirmed. Recovering it
+              resubmits the same request and returns its original run before you
+              can submit different inputs.
+            </p>
+          }
           @if (preview(); as preview) {
             <p>
               Preview {{ preview.runId }} · {{ preview.state }} ·

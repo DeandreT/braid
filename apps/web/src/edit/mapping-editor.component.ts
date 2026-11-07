@@ -12,6 +12,7 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { firstValueFrom } from "rxjs";
@@ -51,7 +52,7 @@ import {
   type EditScript,
   type EditView,
 } from "./edit-core";
-import { DraftMemory } from "./draft-memory";
+import { DraftMemory, type RetainedPreviewRequest } from "./draft-memory";
 import {
   operationKinds,
   operationNames,
@@ -82,6 +83,7 @@ export class MappingEditorComponent {
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   readonly workbench = inject(WorkbenchState);
+  private readonly frame = viewChild(WorkbenchFrameComponent);
   readonly admitted = computed(
     () =>
       this.sessions.presents(this.context()) &&
@@ -120,6 +122,7 @@ export class MappingEditorComponent {
   readonly comparison = signal<DraftComparison | null>(null);
   readonly validation = signal<DraftValidation | null>(null);
   readonly preview = signal<DraftPreview | null>(null);
+  readonly previewRequest = signal<RetainedPreviewRequest | null>(null);
   readonly sampleText = signal("{}");
   readonly sampleNamed = signal<{ name: string; content: string }[]>([]);
   readonly sampleParameters = signal<
@@ -240,11 +243,14 @@ export class MappingEditorComponent {
           dirty: this.dirty(),
           saveKey: this.saveKey,
           saving: this.savePending(),
+          previewRequest: this.previewRequest(),
         },
         this.context(),
       );
   }
   async open(reload = false): Promise<void> {
+    const unconfirmed = this.previewRequest(),
+      unconfirmedDraft = this.draft()?.id;
     if (!reload) this.retain();
     else if (this.draft())
       this.memory.forget(this.draft()!.id, this.mapping().scope);
@@ -330,6 +336,10 @@ export class MappingEditorComponent {
       this.view.set(view);
       this.dirty.set(retained?.dirty ?? false);
       this.saveKey = retained?.saveKey ?? draft.savingRequestId ?? null;
+      this.previewRequest.set(
+        retained?.previewRequest ??
+          (unconfirmedDraft === draft.id ? unconfirmed : null),
+      );
       this.savePending.set(
         draft.state === "saving" || (retained?.saving ?? false),
       );
@@ -350,6 +360,8 @@ export class MappingEditorComponent {
   inspect(reference: NodeReference | null): void {
     this.selected.set(reference);
     this.template(this.selectedKind());
+    // The workbench starts with its inspector collapsed; the edit controls live there.
+    if (reference) this.frame()?.openInspector();
     this.focusAfterRender("#edit-expression");
   }
   template(kind: (typeof operationKinds)[number]): void {
@@ -636,12 +648,20 @@ export class MappingEditorComponent {
         throw new Error(
           "Resolve the pending save and autosave or reload before rebasing.",
         );
+      // Rebase only onto the head the user reviewed; a newer head needs another review.
+      const reviewed = this.latestHead()?.scope.revisionId;
       await this.refreshHead();
+      if (!reviewed || this.latestHead()!.scope.revisionId !== reviewed) {
+        this.message.set(
+          "Another version was saved after the one you reviewed. Review the latest saved version, then rebase again.",
+        );
+        return;
+      }
       const updated = await this.api.rebase(
         this.context(),
         this.mapping().scope,
         draft,
-        this.latestHead()!.scope.revisionId,
+        reviewed,
       );
       this.draft.set(updated);
       this.memory.forget(draft.id, this.mapping().scope);
@@ -671,26 +691,12 @@ export class MappingEditorComponent {
   }
   async trySample(): Promise<void> {
     await this.action(async () => {
-      let total = 0;
-      const names = new Set<string>();
-      const encode = (text: string) => {
-        const bytes = new TextEncoder().encode(text);
-        total += bytes.length;
-        if (!bytes.length || total > 8 * 1024 * 1024)
-          throw new Error("Samples must be nonempty and total at most 8 MiB.");
-        let binary = "";
-        for (const byte of bytes) binary += String.fromCharCode(byte);
-        return btoa(binary);
+      // An unconfirmed submission is replayed exactly; the server returns its original run.
+      const retained = this.previewRequest();
+      const request = retained ?? {
+        key: crypto.randomUUID(),
+        body: this.sampleSubmission(),
       };
-      const inputs: { name: string | null; content: string }[] = [
-        { name: null, content: encode(this.sampleText()) },
-      ];
-      for (const input of this.sampleNamed()) {
-        if (!input.name || names.has(input.name))
-          throw new Error("Named inputs need distinct source names.");
-        names.add(input.name);
-        inputs.push({ name: input.name, content: encode(input.content) });
-      }
       await this.flush();
       let draft = this.draft();
       if (!draft || this.conflict()) return;
@@ -702,27 +708,68 @@ export class MappingEditorComponent {
         );
         this.draft.set(draft);
       }
-      const result = await this.api.preview(
-        this.context(),
-        this.mapping().scope,
-        draft,
-        crypto.randomUUID(),
-        {
-          target: {
-            kind: this.sampleTarget(),
-            ...(this.sampleTarget() === "named"
-              ? { name: this.sampleTargetName() }
-              : {}),
-          },
-          parameters: this.sampleParameters(),
-          inputs,
-        },
-      );
+      this.previewRequest.set(request);
+      this.retain();
+      let result: Awaited<ReturnType<DraftApi["preview"]>>;
+      try {
+        result = await this.api.preview(
+          this.context(),
+          this.mapping().scope,
+          draft,
+          request.key,
+          request.body,
+        );
+      } catch (error) {
+        if (
+          error instanceof DraftError &&
+          [400, 404, 409, 412, 413, 415, 422].includes(error.status)
+        ) {
+          this.previewRequest.set(null);
+          this.retain();
+        }
+        throw error;
+      }
+      this.previewRequest.set(null);
+      this.retain();
       this.preview.set(result.run);
       this.message.set(
-        "Sample preview queued. Its checkpoint is retained independently of further edits.",
+        retained
+          ? "Recovered the earlier sample preview request."
+          : "Sample preview queued. Its checkpoint is retained independently of further edits.",
       );
     });
+  }
+  private sampleSubmission(): RetainedPreviewRequest["body"] {
+    let total = 0;
+    const names = new Set<string>();
+    const encode = (text: string) => {
+      const bytes = new TextEncoder().encode(text);
+      total += bytes.length;
+      if (!bytes.length || total > 8 * 1024 * 1024)
+        throw new Error("Samples must be nonempty and total at most 8 MiB.");
+      let binary = "";
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      return btoa(binary);
+    };
+    const inputs: { name: string | null; content: string }[] = [
+      { name: null, content: encode(this.sampleText()) },
+    ];
+    for (const input of this.sampleNamed()) {
+      if (!input.name || names.has(input.name))
+        throw new Error("Named inputs need distinct source names.");
+      names.add(input.name);
+      inputs.push({ name: input.name, content: encode(input.content) });
+    }
+    return {
+      target: {
+        kind: this.sampleTarget(),
+        ...(this.sampleTarget() === "named"
+          ? { name: this.sampleTargetName() }
+          : {}),
+      },
+      parameters: this.sampleParameters(),
+      inputs,
+    };
   }
   async refreshPreview(): Promise<void> {
     await this.action(async () => {
@@ -809,6 +856,7 @@ export class MappingEditorComponent {
     this.draft.set(null);
     this.redoOperations = [];
     this.saveKey = null;
+    this.previewRequest.set(null);
     this.savePending.set(false);
     this.dirty.set(false);
     this.busy.set(false);
