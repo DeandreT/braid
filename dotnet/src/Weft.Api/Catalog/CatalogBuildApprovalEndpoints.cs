@@ -48,11 +48,8 @@ public static partial class CatalogEndpoints
             var mapping = BuildMapping(organizationId, projectId, mappingId, admission);
             var id = CatalogBuildRequest.Id(approvalId);
             if (mapping is null || !await BuildMappingAccess(context, admission, mapping)) return NotFound();
-            var value = await context.RequestServices.GetRequiredService<IBuildMetadataReader>().ReadApprovalAsync(admission.Actor!, mapping, id, context.RequestAborted);
-            if (value is null) return NotFound();
-            CheckBuildApproval(value, admission.Actor!.PrincipalId, mapping, id);
-            var bytes = PrepareBuild(CatalogBuildMapping.Approval(value), context.RequestAborted);
-            return await BuildMappingAccess(context, admission, mapping) ? CaseResponse(bytes) : NotFound();
+            var value = await BuildApprovalAsync(context.RequestServices, admission.Actor!, mapping, id, context.RequestAborted);
+            return value is null ? NotFound() : CaseResponse(PrepareBuild(CatalogBuildMapping.Approval(value), context.RequestAborted));
         });
     private static Task<IResult> GetBuildApprovals(string organizationId, string projectId, string mappingId, HttpContext context, CatalogBuildOptions options) =>
         WithBuildAdmission(context, options, async admission =>
@@ -62,12 +59,9 @@ public static partial class CatalogEndpoints
             if (mapping is null || !await BuildMappingAccess(context, admission, mapping)) return NotFound();
             var maximum = BuildPageLimit(context);
             var after = context.Request.Query.TryGetValue("afterApprovalId", out var cursor) ? CatalogBuildRequest.Id(cursor[0]!) : (Guid?)null;
-            var page = await context.RequestServices.GetRequiredService<IBuildMetadataReader>().ListApprovalsAsync(admission.Actor!, mapping, maximum, after, context.RequestAborted);
+            var page = await BuildApprovalPageAsync(context.RequestServices, admission.Actor!, mapping, maximum, after, context.RequestAborted);
             if (page is null) return NotFound();
-            if (page.Approvals.Count > maximum) throw new InvalidOperationException("Build approval page bound refused.");
-            foreach (var value in page.Approvals) CheckBuildApproval(value, admission.Actor!.PrincipalId, mapping, value.Intent.ApprovalId);
-            var bytes = PrepareBuild(new BuildApprovalPageV1(page.Approvals.Select(CatalogBuildMapping.Approval).ToArray(), page.NextApprovalId?.ToString("D")), context.RequestAborted);
-            return await BuildMappingAccess(context, admission, mapping) ? CaseResponse(bytes) : NotFound();
+            return CaseResponse(PrepareBuild(new BuildApprovalPageV1(page.Approvals.Select(CatalogBuildMapping.Approval).ToArray(), page.NextApprovalId?.ToString("D")), context.RequestAborted));
         });
     private static void CheckBuildApproval(RetainedBuildApproval value, PrincipalId actor, MappingScope mapping, Guid id)
     {

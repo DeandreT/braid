@@ -373,6 +373,13 @@ only: environment overrides replace each job's list.
 
 ## Open questions and limits
 
+- **Private search extension.** Provisioning requires `pg_trgm` to be allowed by
+  the server's extension policy. The role transaction installs it in
+  `weft_search_extensions` and removes PUBLIC schema and function privileges.
+  The DBA must be able to revoke privileges on its bootstrap-owned routines;
+  failure rolls back the role transaction rather than admitting a public
+  extension. Local PostgreSQL qualification does not establish that a managed
+  server grants these administrative privileges.
 - **Parameter grant on Flexible Server.** Migration 0011 requires
   `GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator`.
   Its server administrator belongs to `azure_pg_admin` but is not a superuser, and

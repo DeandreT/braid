@@ -33,6 +33,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
     private readonly WorkerTransportServerOptions options;
     private readonly IReadOnlyDictionary<string, IInspectionWorkerRunner> runners;
     private readonly string identity;
+    private readonly string replica = Guid.NewGuid().ToString("N");
     private readonly object gate = new();
     private readonly Dictionary<string, CancellationTokenSource> active = new(StringComparer.Ordinal);
     private readonly HashSet<string> seen = new(StringComparer.Ordinal);
@@ -218,7 +219,13 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
     }
 
     private static Delegate Handler(Func<WorkerTransportServer, HttpContext, Task> handle) =>
-        (HttpContext context) => handle(context.RequestServices.GetRequiredService<WorkerTransportServer>(), context);
+        (HttpContext context) =>
+        {
+            var server = context.RequestServices.GetRequiredService<WorkerTransportServer>();
+            if (server.options.ServiceRoutes)
+                context.Response.Headers[FerruleServiceProtocol.ReplicaHeader] = server.replica;
+            return handle(server, context);
+        };
 
     private static bool IsHealthPath(PathString path) =>
         path == FerruleServiceProtocol.LivenessPath || path == FerruleServiceProtocol.ReadinessPath;
@@ -234,7 +241,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
         // Over pinned TLS, reaching any route proves the handshake admitted an admitted client certificate.
         bool accepting;
         lock (gate) accepting = !stopping;
-        if (service && !accepting)
+        if (service && (!accepting || options.Healthy?.Invoke() == false))
         {
             context.Response.Headers[FerruleServiceProtocol.ProtocolHeader] = FerruleServiceProtocol.Version;
             Busy(context);
@@ -294,6 +301,11 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                     writer.WriteStartObject("toolchain");
                     writer.WriteString("protocol", BuildWorkerProtocol.Protocol);
                     writer.WriteString("profile", BuildWorkerProtocol.Profile);
+                    writer.WriteStartArray("supportedProfiles");
+                    writer.WriteStringValue(BuildWorkerProtocol.Profile);
+                    writer.WriteStringValue(BuildWorkerProtocol.DocumentProfile);
+                    writer.WriteStringValue(BuildWorkerProtocol.X12InterchangesProfile);
+                    writer.WriteEndArray();
                     writer.WriteString("sdkVersion", BuildWorkerProtocol.SdkVersion);
                     writer.WriteString("runtimeVersion", BuildWorkerProtocol.RuntimeVersion);
                     writer.WriteString("identity", options.CompileToolchain);
@@ -304,6 +316,10 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
                 {
                     writer.WriteStartObject("runtime");
                     writer.WriteString("protocol", CompiledRuntimeProtocol.Protocol);
+                    writer.WriteStartArray("supportedProtocols");
+                    writer.WriteStringValue(CompiledRuntimeProtocol.Protocol);
+                    writer.WriteStringValue(CompiledRuntimeProtocol.DocumentProtocol);
+                    writer.WriteEndArray();
                     writer.WriteString("version", BuildWorkerProtocol.RuntimeVersion);
                     writer.WriteString("identity", options.CompiledRuntimeIdentity);
                     writer.WriteNumber("managedHeapBytes", ProcessCompiledRuntimeOptions.Profile.MemoryBytes);
@@ -515,7 +531,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
     {
         lock (gate)
         {
-            if (stopping) return Admission.Unavailable;
+            if (stopping || options.Healthy?.Invoke() == false) return Admission.Unavailable;
             if (seen.Contains(operation)) return Admission.Duplicate;
             Remember(seen, seenOrder, operation);
             if (canceledBeforeArrival.Remove(operation)) return Admission.CanceledBeforeArrival;

@@ -15,6 +15,8 @@ internal static class MappingEndpointContract
 {
     internal const string MediaType = "application/json";
     internal const string ResponseSchema = "weft.mapping-invocation-response.v1";
+    internal const string DocumentRequestSchema = "weft.document-invocation-request.v1";
+    internal const string DocumentResponseSchema = "weft.document-invocation-response.v1";
 
     /// <summary>The JSON settings of the endpoint's own bodies and of its OpenAPI document.</summary>
     internal static readonly JsonSerializerOptions Json = Configure(new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -52,6 +54,22 @@ internal sealed record MappingInvocationInputV1(
     public string? Name { get; init; }
 }
 
+/// <summary>Explicit document mode; media is required for every declared input.</summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+internal sealed record MappingDocumentInvocationRequestV1(
+    string Schema,
+    [property: MinLength(1), MaxLength(PreviewPolicy.MaximumInputDocuments)] IReadOnlyList<MappingDocumentInvocationInputV1> Inputs)
+{
+    [MaxLength(PreviewPolicy.MaximumParameters)]
+    public IReadOnlyList<MappingInvocationParameterV1> Parameters { get; init; } = [];
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+internal sealed record MappingDocumentInvocationInputV1(byte[] Content, string MediaType)
+{
+    public string? Name { get; init; }
+}
+
 /// <summary>One typed parameter; numbers and booleans keep their exact lexical form.</summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 internal sealed record MappingInvocationParameterV1(string Name, MappingInvocationParameterKindV1 Kind, string Value);
@@ -80,6 +98,15 @@ internal sealed record MappingInvocationOutputV1(
     [property: Description("Null for the primary output; otherwise the target's name.")] string? Name,
     [property: RegularExpression("^[0-9a-f]{64}$"), Description("SHA-256 of the output's bytes.")] string Sha256,
     [property: Description("The output's exact bytes, base64-encoded.")] byte[] Content);
+
+/// <summary>Document responses retain qualified media without extending legacy response bytes.</summary>
+internal sealed record MappingDocumentInvocationResponseV1(
+    string Schema, Guid RequestId, Guid ReleaseId, Guid BuildId, Guid RevisionId,
+    [property: RegularExpression("^[0-9a-f]{64}$")] string ArtifactDigest,
+    string CurrentDateTime, IReadOnlyList<MappingDocumentInvocationOutputV1> Outputs);
+
+internal sealed record MappingDocumentInvocationOutputV1(string? Name,
+    [property: RegularExpression("^[0-9a-f]{64}$")] string Sha256, string MediaType, byte[] Content);
 
 /// <summary>Every answer other than a completed call. The request ID is present once the endpoint admitted it.</summary>
 internal sealed record MappingInvocationErrorV1(

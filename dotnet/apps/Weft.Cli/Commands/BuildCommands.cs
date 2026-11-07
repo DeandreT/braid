@@ -20,9 +20,17 @@ internal static class BuildCommands
         {
             var value = await invocation.Api.ReadAsync<BuildCapabilitiesV1>(
                 await MappingRequestAsync(invocation, ApiOperations.GetBuildCapabilities, project, mapping), invocation.Cancellation);
-            invocation.Output.Write(value, output => output.Fields(("Backend", value.Backend.BackendId), ("Engine", value.Backend.EngineRevision),
-                ("Runtime", $"{value.Profile.Runtime} {value.Profile.RuntimeVersion}"), ("Profile", $"{value.Profile.Id} v{value.Profile.Version}"),
-                ("Read own metadata", value.ReadOwnMetadata), ("Approve builds", value.ApproveBuilds), ("Submit builds", value.SubmitBuilds)));
+            invocation.Output.Write(value, output =>
+            {
+                output.Fields(("Backend", value.Backend.BackendId), ("Engine", value.Backend.EngineRevision),
+                    ("Runtime", $"{value.Profile.Runtime} {value.Profile.RuntimeVersion}"), ("Profile", $"{value.Profile.Id} v{value.Profile.Version}"),
+                    ("Read own metadata", value.ReadOwnMetadata), ("Approve builds", value.ApproveBuilds), ("Submit builds", value.SubmitBuilds));
+                if (value.DocumentBackend is { } backend && value.DocumentProfile is { } profile)
+                    output.Fields(("Document backend", backend.BackendId), ("Document engine", backend.EngineRevision),
+                        ("Document profile", $"{profile.Id} v{profile.Version}"), ("Document runtime", $"{profile.Runtime} {profile.RuntimeVersion}"));
+                if (value.InterchangeProfile is { } interchanges)
+                    output.Fields(("X12 interchange profile", $"{interchanges.Id} v{interchanges.Version}"));
+            });
         });
 
         var environmentCapabilities = new Command("environment-capabilities", "Show the build environment profile and whether you may add versions")
@@ -31,8 +39,15 @@ internal static class BuildCommands
         {
             var request = (await invocation.RequestAsync(ApiOperations.GetBuildEnvironmentCapabilities)).Path("projectId", invocation.Id(project));
             var value = await invocation.Api.ReadAsync<BuildEnvironmentCapabilitiesV1>(request, invocation.Cancellation);
-            invocation.Output.Write(value, output => output.Fields(("Profile", $"{value.Profile.Id} v{value.Profile.Version}"),
-                ("Runtime", $"{value.Profile.Runtime} {value.Profile.RuntimeVersion}"), ("Create versions", value.CanCreateVersions)));
+            invocation.Output.Write(value, output =>
+            {
+                output.Fields(("Profile", $"{value.Profile.Id} v{value.Profile.Version}"),
+                    ("Runtime", $"{value.Profile.Runtime} {value.Profile.RuntimeVersion}"), ("Create versions", value.CanCreateVersions));
+                if (value.DocumentProfile is { } profile)
+                    output.Fields(("Document profile", $"{profile.Id} v{profile.Version}"), ("Document runtime", $"{profile.Runtime} {profile.RuntimeVersion}"));
+                if (value.InterchangeProfile is { } interchanges)
+                    output.Fields(("X12 interchange profile", $"{interchanges.Id} v{interchanges.Version}"));
+            });
         });
 
         return new Command("builds", "Compiled builds, their environments and approvals").With(capabilities, environmentCapabilities,

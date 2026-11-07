@@ -100,6 +100,8 @@ public static class MachineInvocationPolicy
 public interface IMachineInvocationLedger
 {
     Task<MachineInvocationClaim> ClaimAsync(MachineInvocationKey key, Guid applicationId, Sha256Digest requestDigest, CancellationToken token = default);
+    Task<MachineInvocationClaim> ClaimWithMetadataAsync(MachineInvocationKey key, Guid applicationId, Sha256Digest requestDigest,
+        int inputBytes, CancellationToken token = default) => ClaimAsync(key, applicationId, requestDigest, token);
     Task<MachineInvocationFinishStatus> FinishAsync(MachineInvocationKey key, Guid claimId, Guid applicationId, MachineInvocationOutcome outcome,
         MachineInvocationProvenance? provenance, string? clock, byte[]? response, CancellationToken token = default);
     /// <summary>Removes up to <paramref name="maximum"/> expired retained responses for the target.</summary>

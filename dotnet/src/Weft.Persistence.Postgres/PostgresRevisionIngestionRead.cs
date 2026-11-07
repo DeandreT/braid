@@ -10,6 +10,9 @@ public sealed partial class PostgresRevisionIngestionStore
 {
     private const string ReceiptColumns = """
         SELECT ingestion.*,
+          CASE WHEN row_number() OVER (
+            PARTITION BY ingestion.organization_id, ingestion.project_id, ingestion.operation_id
+            ORDER BY attempt.generation) = 1 THEN import.provenance END AS import_provenance,
           attempt.generation AS a_generation, attempt.started_at AS a_started_at,
           attempt.verified_stage_at AS a_verified_stage_at, attempt.finished_at AS a_finished_at,
           attempt.completion_kind AS a_completion_kind, attempt.backend_status AS a_backend_status,
@@ -42,6 +45,9 @@ public sealed partial class PostgresRevisionIngestionStore
           revision.initial_admission AS r_initial_admission
         FROM weft.revision_ingestions ingestion
         JOIN authorized USING (organization_id, project_id)
+        LEFT JOIN weft.revision_import_provenance import
+          ON import.organization_id = ingestion.organization_id AND import.project_id = ingestion.project_id
+         AND import.operation_id = ingestion.operation_id
         LEFT JOIN weft.revision_ingestion_attempts attempt
           ON attempt.organization_id = ingestion.organization_id AND attempt.project_id = ingestion.project_id
          AND attempt.operation_id = ingestion.operation_id
@@ -86,8 +92,7 @@ public sealed partial class PostgresRevisionIngestionStore
         CancellationToken cancellationToken)
     {
         await transaction.RequireOrganizationAsync(project.OrganizationId, cancellationToken);
-        await using var command = transaction.CreateCommand(AuthorizedSql + ReceiptColumns + "\n" + predicate +
-            " ORDER BY attempt.generation");
+        await using var command = transaction.CreateCommand(ReceiptQuery(predicate));
         AddScope(command, actor, project);
         parameters(command);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -126,6 +131,11 @@ public sealed partial class PostgresRevisionIngestionStore
         }
     }
 
+    // Keep facts and attempts in one statement snapshot. Only the first (possibly
+    // attempt-less) row carries the bounded but large original package.
+    internal static string ReceiptQuery(string predicate) =>
+        AuthorizedSql + ReceiptColumns + "\n" + predicate + " ORDER BY attempt.generation";
+
     private static ReservedIngestionFacts ReadFacts(NpgsqlDataReader reader)
     {
         var project = new ProjectScope(Value<Guid>(reader, "organization_id"), Value<Guid>(reader, "project_id"));
@@ -142,14 +152,16 @@ public sealed partial class PostgresRevisionIngestionStore
         };
         var backendId = Value<string>(reader, "backend_id");
         var filename = Value<string>(reader, "display_filename");
+        var provenance = reader.IsDBNull(reader.GetOrdinal("import_provenance")) ? null :
+            InterchangeImportProvenance.Decode(Value<byte[]>(reader, "import_provenance"));
         IngestionIntent intent = Value<string>(reader, "operation_kind") switch
         {
             "create" when Optional<Guid>(reader, "target_mapping_id") is null && head is AnyHead =>
                 IngestionIntent.ForCreate(new IngestionCreateMetadata(Value<string>(reader, "create_name"),
-                    Value<string>(reader, "create_description")), backendId, filename, digest, byteCount),
+                    Value<string>(reader, "create_description")), backendId, filename, digest, byteCount, provenance),
             "append" when Text(reader, "create_name") is null && Text(reader, "create_description") is null =>
                 IngestionIntent.ForAppend(new MappingScope(project.OrganizationId, project.ProjectId,
-                    Value<Guid>(reader, "target_mapping_id")), backendId, filename, head, digest, byteCount),
+                    Value<Guid>(reader, "target_mapping_id")), backendId, filename, head, digest, byteCount, provenance),
             _ => throw InvalidMetadata()
         };
         if (Value<string>(reader, "native_class") != "native" ||

@@ -1,11 +1,8 @@
 # Project ownership foundation
 
-P3a adds PostgreSQL ownership and scoped application reads. It does not expose
-catalog HTTP routes or supply a browser identity. The existing Development
-mapping examples continue through their separate fixed-example routes.
-P3a is qualified and merged in
-[PR #21](https://github.com/DeandreT/weft/pull/21), with local and independent
-clean-container evidence for 23 actual PostgreSQL cases and the full C# suite.
+PostgreSQL ownership and scoped application reads provide the authorization
+foundation for catalog routes and the workbench. Browser identity is supplied by
+the separate Development or verified Session boundary.
 
 ## Ownership and application reads
 
@@ -16,9 +13,8 @@ references use restrictive deletion. Organization admission grants no automatic
 project access. A role in one project grants no access to another.
 
 `ActorContext` carries an internal principal ID supplied by a trusted server
-identity boundary. It carries no cached role grant. P4 will connect verified
-Entra sessions to this boundary; P3a adds no default HTTP actor or trusted client
-identity header.
+identity boundary. It carries no cached role grant. Verified Entra sessions resolve
+to this boundary; a client-supplied identity header cannot select an actor.
 
 `IProjectReader` lists visible projects, retrieves one project, and observes its
 role/actions. Each operation checks active principal, organization admission,

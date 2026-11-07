@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.WorkerTransport;
@@ -17,6 +18,150 @@ namespace Weft.Tests;
 [Collection(FerruleServiceProcessCollection.Name)]
 public sealed class FerruleServiceEndToEndTests
 {
+    [ServiceWorkerFact]
+    public async Task ExplicitDocumentFramesHaveDirectAndServiceEquivalenceForAuthoredEnvelopes()
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            await using var service = await ServiceHost.StartAsync(root);
+            await using var direct = new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview));
+            using var http = service.Client();
+            foreach (var family in new[] { "x12", "edifact" })
+            {
+                var request = DocumentPreviewTestData.Request(Scope, family);
+                var result = await new FerrulePreviewBackend(direct).PreviewAsync(request);
+                Assert.True(result.Status == Weft.Application.MappingPreviewStatus.Succeeded, result.Failure?.Message);
+                Assert.Equal(Weft.Application.DocumentPreviewPolicy.Profile, result.Profile);
+                var capture = new CapturingRunner();
+                await new FerrulePreviewBackend(capture).PreviewAsync(request);
+                var expected = await direct.RunAsync(capture.Frame!, CancellationToken.None);
+                Assert.Equal(WorkerProcessFailure.None, expected.Failure);
+                using var answer = await http.SendAsync(Operation(FerruleServiceProtocol.PreviewProfile, capture.Frame!, direct.BuildIdentity));
+                Assert.Equal("none", Assert.Single(answer.Headers.GetValues(InspectionTransport.ResultHeader)));
+                Assert.Equal(expected.Output, await answer.Content.ReadAsByteArrayAsync());
+                foreach (var dependency in new JsonNode[] { JsonValue.Create("../private/parser.sef")!, new JsonObject { ["kind"] = "missing_configuration" } })
+                {
+                    var native = JsonNode.Parse(request.Artifact.CopyBytes())!;
+                    native["source_options"]!["edi_config_reference"] = dependency;
+                    var refused = await new FerrulePreviewBackend(direct).PreviewAsync(request with
+                    {
+                        Artifact = Weft.Domain.NativeArtifact.Admit(Scope, System.Text.Encoding.UTF8.GetBytes(native.ToJsonString()), Weft.Application.PreviewPolicy.MaximumNativeBytes),
+                        Primary = new(null, "not a document"u8)
+                    });
+                    Assert.Equal(Weft.Application.MappingPreviewStatus.UnsupportedCapability, refused.Status);
+                    Assert.True(refused.Provenance.Confirmed);
+                    Assert.Empty(refused.Artifacts);
+                }
+            }
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+            Assert.Empty(WorkerChildren());
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [ServiceWorkerFact]
+    public async Task DroppedChannelWithARealChildRecoversOnAFreshReplicaWithoutRestartingTheRunner()
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            await using var first = await ServiceHost.StartAsync(root, holdInspection: true);
+            await using var replacement = await ServiceHost.StartAsync(root);
+            await using var balancer = FerruleServiceRunnerTests.RoundRobinBalancer.Start(first.Server.Port);
+            var connector = new SwitchingConnector(new PinnedServiceConnector(new(
+                new Uri("https://127.0.0.1:" + balancer.Port), first.ServerPin, first.ClientCertificate)));
+            await using var runner = new FerruleServiceRunner(new(connector, "inspection", first.Identity));
+            var frame = await FerruleServiceProcessRunnerTests.InspectionFrameAsync();
+            var pending = runner.RunAsync(frame, default);
+            await WaitForWorkerChildren(1, sandboxReady: true);
+            balancer.Sever();
+            Assert.Equal(WorkerProcessFailure.CleanupFailed, (await pending.WaitAsync(TimeSpan.FromSeconds(15))).Failure);
+            Assert.False(runner.Available);
+            connector.Current = new PinnedServiceConnector(new(replacement.Endpoint, replacement.ServerPin, replacement.ClientCertificate));
+            Assert.Equal(WorkerProcessFailure.SandboxUnavailable, (await runner.RunAsync(frame, default)).Failure);
+            var quarantined = Stopwatch.StartNew();
+            using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(65)))
+                while (!runner.Available) await Task.Delay(25, deadline.Token);
+            Assert.True(quarantined.Elapsed >= TimeSpan.FromSeconds(46));
+            Assert.Empty(WorkerChildren());
+            var recovered = await new FerruleInspectionBackend(runner).ValidateAsync(Artifact("valid-basic"));
+            Assert.True(recovered.Provenance.Confirmed);
+            Assert.Equal(MappingOperationStatus.Succeeded, recovered.Status);
+            Assert.Empty(WorkerChildren());
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+            await runner.StopAsync();
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private sealed class SwitchingConnector(IFerruleServiceConnector current) : IFerruleServiceConnector
+    {
+        internal IFerruleServiceConnector Current = current;
+        public IFerruleServiceChannel Open() => Current.Open();
+    }
+
+    [ServiceCompileFact]
+    public async Task KillingAPackagedReplicaDuringCompilationRecoversTheSameHostRunnerOnAnotherReplica()
+    {
+        var root = TemporaryRoot();
+        using var certificate = TransportCase.Certificate("CN=Recovery replicas");
+        using var client = TransportCase.Certificate("CN=Recovery caller");
+        try
+        {
+            await using var first = await PackagedFerruleService.StartAsync(PackagedFerruleService.Bundle(certificate),
+                [TransportCase.Pin(client)], root, extra: PackagedFerruleService.Compilation);
+            await using var replacement = await PackagedFerruleService.StartAsync(PackagedFerruleService.Bundle(certificate),
+                [TransportCase.Pin(client)], root, extra: PackagedFerruleService.Compilation);
+            using var http = ServiceHost.PinnedClient(new Uri("https://127.0.0.1:" + replacement.Port), TransportCase.Pin(certificate), client);
+            using var capabilities = JsonDocument.Parse(await http.GetByteArrayAsync(FerruleServiceProtocol.CapabilitiesPath));
+            var toolchain = capabilities.RootElement.GetProperty("profiles").EnumerateArray()
+                .Single(profile => profile.GetProperty("name").GetString() == "compile").GetProperty("toolchain").GetProperty("identity").GetString()!;
+            var connector = new SwitchingConnector(new PinnedServiceConnector(new(new Uri("https://127.0.0.1:" + first.Port), TransportCase.Pin(certificate), client)));
+            var clock = new MaintenanceServiceTestTimeProvider();
+            var options = new FerruleServiceRunnerOptions(connector, "compile", PackagedFerruleService.Identity, toolchain) { Clock = clock };
+            var runner = new FerruleServiceRunner(options);
+            var primary = await Record.ExceptionAsync(async () =>
+            {
+                var frame = BuildFrame("valid-basic", "compile");
+                var pending = runner.RunAsync(frame, default);
+                using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+                {
+                    // A replica is a process tree/cgroup, not just its listening process. Remove the whole owned tree.
+                    while (!Directory.EnumerateDirectories($"/proc/{first.Process.Id}/task").Any(task =>
+                    {
+                        try { return File.ReadAllText(Path.Combine(task, "children")).Trim().Length > 0; }
+                        catch (IOException) { return false; }
+                    }))
+                    {
+                        Assert.False(pending.IsCompleted, "The compile must still be running when the replica is killed.");
+                        await Task.Delay(1, deadline.Token);
+                    }
+                }
+                Assert.False(pending.IsCompleted);
+                first.Process.Kill(entireProcessTree: true);
+                await first.Process.WaitForExitAsync();
+                Assert.Equal(WorkerProcessFailure.CleanupFailed, (await pending.WaitAsync(TimeSpan.FromSeconds(20))).Failure);
+                Assert.False(runner.Available);
+                connector.Current = new PinnedServiceConnector(new(new Uri("https://127.0.0.1:" + replacement.Port), TransportCase.Pin(certificate), client));
+                // Advance only after recovery has registered its wait. Otherwise a timer
+                // created after the advance waits for a second, unadvanced quarantine.
+                await clock.TimerScheduled.WaitAsync(TimeSpan.FromSeconds(10));
+                clock.Advance(options.QuarantineBound);
+                await FerruleServiceRecoveryTests.Reopened(runner);
+                var recovered = await runner.RunAsync(frame, default);
+                Assert.Equal(WorkerProcessFailure.None, recovered.Failure);
+                Assert.NotEmpty(recovered.Output);
+                await runner.StopAsync();
+            });
+            var cleanup = await Record.ExceptionAsync(async () => await runner.DisposeAsync());
+            if (primary is not null && cleanup is not null) throw new AggregateException(primary, cleanup);
+            if (primary is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
+            if (cleanup is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cleanup).Throw();
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [ServiceWorkerFact]
     public async Task ServiceAnswersEqualDirectChildOutputsOnEveryRoute()
     {
@@ -254,7 +399,7 @@ public sealed class FerruleServiceEndToEndTests
     }
 
     /// <summary>The service composition (child runners behind one pinned listener) on an ephemeral port.</summary>
-    private sealed class ServiceHost : IAsyncDisposable
+    internal sealed class ServiceHost : IAsyncDisposable
     {
         private readonly ProcessWorkerRunner inspection;
         private readonly ProcessWorkerRunner preview;

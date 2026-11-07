@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using Weft.Application;
+using Weft.Application.Regression;
 using Weft.Deployment;
 using Weft.Domain;
 using Weft.MappingBackends;
@@ -18,6 +20,175 @@ namespace Weft.Tests;
 [Collection(FerruleServiceProcessCollection.Name)]
 public sealed class FerruleServiceCompileTests
 {
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Document_x12_compiler_and_restricted_runtime_match_the_interpreted_complete_envelope_bytes()
+        => await DocumentCompilerParity(false, false);
+
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Document_x12_output_matches_interpreted_complete_envelope_bytes()
+        => await DocumentCompilerParity(true, false);
+
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Document_named_x12_output_matches_interpreted_all_primary_and_named_selection()
+        => await DocumentCompilerParity(false, true);
+
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Document_edifact_compiler_and_restricted_runtime_match_the_interpreted_complete_envelope_bytes()
+        => await DocumentCompilerParity(false, false, "edifact");
+
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Document_edifact_output_matches_interpreted_complete_envelope_bytes()
+        => await DocumentCompilerParity(true, false, "edifact");
+
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Document_named_edifact_output_matches_interpreted_all_primary_and_named_selection()
+        => await DocumentCompilerParity(false, true, "edifact");
+
+    [ServiceCompileTheory]
+    [InlineData("x12", true)]
+    [InlineData("x12", false)]
+    [InlineData("edifact", true)]
+    [InlineData("edifact", false)]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Document_oversized_segments_refuse_all_affected_targets_without_partial_success(string family, bool primaryEdi)
+        => await DocumentCompilerParity(primaryEdi, true, family, oversized: true);
+
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    private static async Task DocumentCompilerParity(bool ediOutput, bool namedOutput, string family = "x12", bool oversized = false)
+    {
+        var root = TemporaryRoot();
+        try
+        {
+            var native = JsonNode.Parse(DocumentPreviewTestData.Native(family))!;
+            if (oversized) native["source_options"] = new JsonObject { ["json_document"] = true };
+            if (!ediOutput) native["target_options"] = new JsonObject { ["json_document"] = true };
+            foreach (var side in new[] { "source", "target" })
+            {
+                var segments = native[side]!["kind"]!["children"]!.AsArray();
+                if (family == "x12")
+                {
+                    segments.Single(value => (string?)value!["name"] == "ISA")!["kind"]!["children"]![11]!["fixed"] = "00501";
+                    segments.Single(value => (string?)value!["name"] == "GS")!["kind"]!["children"]![7]!["fixed"] = "005010";
+                }
+                else
+                {
+                    var syntax = segments.Single(value => (string?)value!["name"] == "UNB")!["kind"]!["children"]![0]!["kind"]!["children"]!;
+                    syntax[0]!["fixed"] = "UNOC";
+                    syntax[1]!["fixed"] = "3";
+                    var message = segments.Single(value => (string?)value!["name"] == "UNH")!["kind"]!["children"]![1]!["kind"]!["children"]!;
+                    foreach (var (index, value) in new[] { "ORDERS", "D", "96A", "UN" }.Index()) message[index]!["fixed"] = value;
+                }
+            }
+            if (namedOutput) native["extra_targets"] = new JsonArray(new JsonObject
+            {
+                ["name"] = "edi-copy",
+                ["path"] = "/private/design/not-a-codec.json",
+                ["schema"] = native["target"]!.DeepClone(),
+                ["root"] = native["root"]!.DeepClone(),
+                ["options"] = new JsonObject { ["edi_kind"] = family }
+            });
+            var bytes = Encoding.UTF8.GetBytes(native.ToJsonString());
+            await using var compileRunner = new ProcessCompileRunner(CompileOptions(root));
+            var actor = new ActorContext(new(Guid.NewGuid()));
+            var reference = new PrivateObjectReference(PrivateObjectId.Create(Scope, PrivateObjectClass.NativeArtifact), Sha256Digest.FromBytes(bytes), bytes.Length);
+            var source = new NativeSource(actor, reference, bytes);
+            var compiler = new FerruleBuildCompiler(compileRunner, new(actor, source, source));
+            var boundaries = new List<BuildBoundary> { new(BuildBoundaryKind.PrimaryInput, null, oversized ? "json" : family), new(BuildBoundaryKind.PrimaryOutput, null, ediOutput ? family : "json") };
+            if (namedOutput) boundaries.Add(new(BuildBoundaryKind.NamedOutput, "edi-copy", family));
+            var intent = new BuildIntent(Guid.NewGuid(), Scope, reference.Digest, compiler.DocumentBackend, FerruleBuildCompiler.DocumentProfile,
+                boundaries,
+                new(new(Scope.OrganizationId, Scope.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), Guid.NewGuid());
+            var capability = await compiler.InspectAsync(intent);
+            Assert.Equal(BuildPreflightOutcome.Supported, new BuildPreflightService().Evaluate(intent, capability).Outcome);
+            var artifact = await compiler.BuildAsync(intent, new(bytes, bytes.Length));
+            var artifactReference = BuildArtifactReference.Create(intent, capability, artifact.Digest, artifact.Length);
+            await using var previewRunner = new ProcessWorkerRunner(new(Executable!, DockerWorkerProfile.Preview, root));
+            await using var runtimeRunner = new ProcessCompiledRuntimeRunner(FerruleCompiledServiceTests.Options(root));
+            var runtime = new FerruleCompiledBuildRuntime(runtimeRunner, compiler.Backend);
+            var targets = new List<PreviewTargetSelection> { PreviewTargetSelection.All, PreviewTargetSelection.Primary };
+            if (namedOutput) targets.Add(PreviewTargetSelection.Named("edi-copy"));
+            foreach (var target in targets)
+            {
+                var replay = new RegressionReplay(target, "2026-10-24T12:00:00Z", PreviewLimits.Default,
+                    new(null, oversized ? JsonInput(family, 20_000) : DocumentPreviewTestData.Input(family)), [], []);
+                var interpreted = await new FerrulePreviewBackend(previewRunner).PreviewAsync(new(
+                    NativeArtifact.Admit(Scope, bytes, PreviewPolicy.MaximumNativeBytes), target, replay.Primary, [], [], replay.CurrentDateTime, replay.Limits)
+                { Profile = PreviewExecutionProfile.Document });
+                var result = await runtime.ExecuteAsync(artifactReference, artifact, replay);
+                if (oversized && (ediOutput || target.Kind != PreviewTargetKind.Primary))
+                {
+                    Assert.Equal(MappingPreviewStatus.ResourceLimit, interpreted.Status);
+                    Assert.Empty(interpreted.Artifacts);
+                    Assert.Equal(CompiledBuildOutcome.ResourceLimit, result.Outcome);
+                    Assert.Null(result.Outputs);
+                    continue;
+                }
+                Assert.Equal(MappingPreviewStatus.Succeeded, interpreted.Status);
+                Assert.Equal(CompiledBuildOutcome.Completed, result.Outcome);
+                Assert.Equal(interpreted.Artifacts.Count, result.Outputs!.Outputs.Count);
+                for (var index = 0; index < interpreted.Artifacts.Count; index++)
+                {
+                    Assert.Equal(interpreted.Artifacts[index].Bytes, result.Outputs.Outputs[index].CopyBytes());
+                    Assert.Equal(interpreted.Artifacts[index].MediaType, result.Outputs.Outputs[index].MediaType);
+                }
+            }
+            if (oversized)
+            {
+                Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+                return;
+            }
+            var trailer = family == "x12" ? "SE*3*0330" : "UNT+3+330";
+            foreach (var broken in family == "x12" ? new[] { "SE*9*0330", "SE*3*9999" } : ["UNT+9+330", "UNT+3+9999"])
+            {
+                var replay = new RegressionReplay(PreviewTargetSelection.All, "2026-10-24T12:00:00Z", PreviewLimits.Default,
+                    new(null, Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(DocumentPreviewTestData.Input(family)).Replace(trailer, broken, StringComparison.Ordinal))), [], []);
+                var result = await runtime.ExecuteAsync(artifactReference, artifact, replay);
+                Assert.Equal(CompiledBuildOutcome.InvalidInput, result.Outcome);
+                Assert.Null(result.Outputs);
+            }
+            if (family == "x12")
+            {
+                var mixed = DocumentPreviewTestData.X12 + DocumentPreviewTestData.X12.Replace('*', '|').Replace('~', '!');
+                var replay = new RegressionReplay(PreviewTargetSelection.All, "2026-10-24T12:00:00Z", PreviewLimits.Default,
+                    new(null, Encoding.UTF8.GetBytes(mixed)), [], []);
+                var result = await runtime.ExecuteAsync(artifactReference, artifact, replay);
+                Assert.Equal(CompiledBuildOutcome.ExecutionFailed, result.Outcome);
+                Assert.Null(result.Outputs);
+            }
+            Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private static byte[] JsonInput(string family, int businessLength)
+    {
+        var input = new JsonObject();
+        foreach (var segment in (family == "x12" ? DocumentPreviewTestData.X12 : DocumentPreviewTestData.Edifact)
+            .Split(family == "x12" ? '~' : '\'', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var elements = segment.Split(family == "x12" ? '*' : '+');
+            var fields = new JsonObject();
+            for (var i = 1; i < elements.Length; i++)
+            {
+                if (family == "edifact" && elements[i].Contains(':'))
+                {
+                    var components = new JsonObject();
+                    foreach (var (index, part) in elements[i].Split(':').Index()) components["c" + (index + 1)] = part;
+                    fields["e" + i] = components;
+                }
+                else fields["e" + i] = elements[i] == "WEFT-330" ? new string('X', businessLength) : elements[i];
+            }
+            input[elements[0]] = fields;
+        }
+        return Encoding.UTF8.GetBytes(input.ToJsonString());
+    }
+
     [ServiceCompileFact]
     public async Task CompileEmitsAVerifiedAssemblyUnderTheServiceIdentityAndLeavesNothing()
     {
@@ -312,7 +483,7 @@ public sealed class FerruleServiceCompileTests
         return (compiler, intent, native);
     }
 
-    private sealed class NativeSource(ActorContext actor, PrivateObjectReference reference, byte[] bytes) : IBuildAdmissionReader, IPrivateObjectStore
+    internal sealed class NativeSource(ActorContext actor, PrivateObjectReference reference, byte[] bytes) : IBuildAdmissionReader, IPrivateObjectStore
     {
         public Task<BuildAdmission?> ReadAsync(ActorContext expected, BuildIntent intent, CancellationToken token = default) =>
             Task.FromResult<BuildAdmission?>(new(actor.PrincipalId, intent.Fingerprint, reference));

@@ -178,7 +178,7 @@ test("invalid input and an unsupported mapping are refused by the actual worker"
   const invalid = await submit(page);
   expect(invalid.status).toBe(201);
   await expect(status(page)).toHaveText(
-    /Completed\s*·\s*An input is not valid JSON for this mapping/,
+    /Completed\s*·\s*An input is not valid for this mapping/,
     { timeout: 180_000 },
   );
   const failure = panel(page).locator(".preview-failure");

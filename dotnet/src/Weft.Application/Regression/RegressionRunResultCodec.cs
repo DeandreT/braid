@@ -28,7 +28,7 @@ public sealed class RegressionRunResultCodec
         var reference = new RegressionCaseEnvelopeCodec().Encode(value, token).Reference;
         var comparison = new RegressionComparisonService().Compare(value.Expected,
             new(status == MappingPreviewStatus.Succeeded ? OperationStatusV1.Succeeded : OperationStatusV1.BackendFailure, outputs),
-            value.ComparisonPolicy, cancellationToken: token);
+            value.ComparisonPolicy, cancellationToken: token, ediOptions: value.EdiOptions);
         var bytes = Encode(runId, reference, RegressionCaseExecution.Complete(status, outputs, comparison), token);
         _ = Decode(runId, value, bytes, token);
         return bytes;
@@ -42,7 +42,8 @@ public sealed class RegressionRunResultCodec
         if (runId == Guid.Empty) throw Invalid();
         var document = new Document("weft.regression-run-result.v1", runId.ToString("D"), reference.ContentDigest.Value,
             execution.Outcome, execution.PreviewStatus, execution.Outputs?.Outputs.Select(output => new Output(output.Key.Name,
-                Convert.ToBase64String(output.CopyBytes()).TrimEnd('=').Replace('+', '-').Replace('/', '_'))).ToArray());
+                Convert.ToBase64String(output.CopyBytes()).TrimEnd('=').Replace('+', '-').Replace('/', '_'),
+                output.MediaType == PreviewPolicy.MediaType ? null : output.MediaType)).ToArray());
         var bytes = JsonSerializer.SerializeToUtf8Bytes(document, Json);
         if (bytes.Length > MaximumBytes) throw Invalid();
         token.ThrowIfCancellationRequested();
@@ -79,13 +80,14 @@ public sealed class RegressionRunResultCodec
                     token.ThrowIfCancellationRequested();
                     if (output is null || output.Content.Length > (remaining + 2L) / 3 * 4 ||
                         output.Content.Any(c => c is not (>= 'a' and <= 'z') and not (>= 'A' and <= 'Z') and not (>= '0' and <= '9') and not '-' and not '_')) throw Invalid();
+                    if (value.Runtime.Profile == PreviewPolicy.Profile && output.MediaType is not (null or PreviewPolicy.MediaType)) throw Invalid();
                     var text = output.Content.Replace('-', '+').Replace('_', '/');
                     var raw = Convert.FromBase64String(text.PadRight((text.Length + 3) / 4 * 4, '='));
                     if (raw.Length > remaining) throw Invalid();
                     remaining -= raw.Length;
                     var key = output.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(output.Name);
                     if (output.Name is not null) RegressionCaseValues.Name(output.Name);
-                    outputs.Add(RegressionOutput.Capture(key, raw, token));
+                    outputs.Add(RegressionOutput.Capture(key, raw, token, output.MediaType ?? PreviewPolicy.MediaType));
                 }
                 var set = RegressionOutputSet.Capture(outputs, token);
                 if (status != MappingPreviewStatus.Succeeded && set.Outputs.Count != 0 || status == MappingPreviewStatus.Succeeded && set.Outputs.Count == 0)
@@ -96,7 +98,7 @@ public sealed class RegressionRunResultCodec
                     value.Replay.Target.Kind == PreviewTargetKind.All && !set.Outputs.Any(output => output.Key.IsPrimary))) throw Invalid();
                 var comparison = new RegressionComparisonService().Compare(value.Expected,
                     new(status == MappingPreviewStatus.Succeeded ? OperationStatusV1.Succeeded : OperationStatusV1.BackendFailure, set),
-                    value.ComparisonPolicy, cancellationToken: token);
+                    value.ComparisonPolicy, cancellationToken: token, ediOptions: value.EdiOptions);
                 result = RegressionCaseExecution.Complete(status, set, comparison);
             }
             if (!Encode(runId, reference, result, token).AsSpan().SequenceEqual(bytes)) throw Invalid();
@@ -110,7 +112,8 @@ public sealed class RegressionRunResultCodec
         }
     }
 
-    private sealed record Output(string? Name, string Content);
+    private sealed record Output(string? Name, string Content,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null);
     private sealed record Document(string Schema, string RunId, string CaseDigest, RegressionCaseExecutionOutcome Outcome,
         MappingPreviewStatus? PreviewStatus, Output[]? Outputs);
     private static InvalidOperationException Invalid() => new("Regression run completion is invalid.");

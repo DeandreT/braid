@@ -1,0 +1,74 @@
+:host {
+  display: block;
+}
+
+.sign-in {
+  max-width: 440px;
+  margin: 72px auto 48px;
+  padding: 36px 32px;
+  border: 1px solid #e0e7de;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.sign-in-brand {
+  margin: 0 0 28px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 1.5rem;
+}
+
+.sign-in-state {
+  margin: 0;
+  color: #45614c;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.sign-in-state[data-tone="attention"],
+.sign-in-state[data-tone="uncertain"] {
+  color: var(--wb-attention-text);
+}
+.sign-in-state[data-tone="unavailable"] {
+  color: var(--wb-unavailable-text);
+}
+
+.sign-in-notice {
+  margin: 10px 0 0;
+  color: #69786f;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.sign-in-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.primary-button {
+  border: 1px solid #345d45;
+  border-radius: 9px;
+  background: #345d45;
+  color: #fff;
+  padding: 11px 18px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primary-button:hover {
+  background: #284c3c;
+}
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (max-width: 600px) {
+  .sign-in {
+    margin: 32px 0;
+    padding: 28px 20px;
+  }
+}

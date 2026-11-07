@@ -171,7 +171,8 @@ public sealed class FerruleWorkerIntegrationTests
                     }
                     var id = DockerWorkerOwnershipTestSupport.VerifiedId(state.Output, worker.Name, worker.Owner);
                     Assert.Equal(0, (await ContainerCommand("rm", "--force", "--volumes", id)).ExitCode);
-                    var absent = await ContainerCommand("inspect", id);
+                    var absent = await ContainerCommand("inspect", "--format", DockerWorkerOwnershipTestSupport.InspectFormat, id);
+                    Assert.NotEqual(0, absent.ExitCode);
                     Assert.Equal("", absent.Output.Trim());
                     Assert.True(DockerWorkerOwnershipTestSupport.IsMissing(absent.Error, id));
                 }

@@ -43,12 +43,12 @@ internal sealed class PreviewRunTestSupport : IAsyncDisposable
     internal PostgresPreviewDatabase WriterDatabase => writer;
     internal static byte[] NativeBytes => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "preview-orders.json"));
 
-    internal static async Task<PreviewRunTestSupport> CreateAsync(PostgresFixture fixture)
+    internal static async Task<PreviewRunTestSupport> CreateAsync(PostgresFixture fixture, byte[]? nativeBytes = null)
     {
         var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture);
         try
         {
-            var native = NativeBytes;
+            var native = nativeBytes ?? NativeBytes;
             var receipt = await catalog.CommitCreateAsync("Preview mapping", "JSON preview source", body: native);
             var support = new PreviewRunTestSupport(catalog, receipt);
             using var input = new MemoryStream(native);

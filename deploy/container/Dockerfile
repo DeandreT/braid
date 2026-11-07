@@ -32,7 +32,7 @@ COPY tools/edit-core tools/edit-core
 RUN python3 tools/edit-core/build.py --install --destination /package/edit --manifest /package/edit-assets.generated.ts
 
 FROM ${NODE_IMAGE} AS web
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false NG_BUILD_MAX_WORKERS=2
 RUN npm install --global npm@12.1.0
 WORKDIR /src
 COPY package.json package-lock.json .npmrc ./
@@ -56,7 +56,7 @@ RUN apt-get update \
     && echo "${DOTNET_SDK_SHA512}  /tmp/dotnet-sdk.tar.gz" | sha512sum --check --status \
     && tar --extract --gzip --file /tmp/dotnet-sdk.tar.gz --directory /usr/share/dotnet \
     && rm /tmp/dotnet-sdk.tar.gz
-ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false DOTNET_PROCESSOR_COUNT=2
 WORKDIR /src
 COPY global.json ./
 COPY migrations migrations
@@ -88,10 +88,6 @@ ENTRYPOINT ["/app/bin/weft-entrypoint"]
 CMD ["server"]
 
 FROM ${DOCKER_CLI_IMAGE} AS docker-cli
-
-# Local examples only: the Development worker runner drives the host Docker daemon.
-FROM weft AS weft-local-docker
-COPY --from=docker-cli /usr/local/bin/docker /usr/bin/docker
 
 # Hosted inspection worker: Weft.Worker with the Docker CLI. It runs the Ferrule image through a
 # Docker daemon for the Session server, which reaches it only over the pinned inspection transport.

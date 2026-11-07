@@ -26,10 +26,17 @@ internal static class RegressionCommands
         {
             var value = await invocation.Api.ReadAsync<RegressionCaseCapabilitiesV1>(
                 await scope.RequestAsync(invocation, ApiOperations.GetRegressionCaseCapabilities), invocation.Cancellation);
-            invocation.Output.Write(value, output => output.Fields(("Backend", value.Runtime.BackendId), ("Engine", value.Runtime.EngineRevision),
-                ("Profile", value.Runtime.Profile), ("Comparison", value.ComparisonPolicy), ("Read samples", value.ReadSamples),
-                ("Publish cases", value.PublishCases), ("Input bytes", value.Limits.MaximumInputBytes),
-                ("Output bytes", value.Limits.MaximumOutputBytes)));
+            invocation.Output.Write(value, output =>
+            {
+                output.Fields(("Backend", value.Runtime.BackendId), ("Engine", value.Runtime.EngineRevision),
+                    ("Profile", value.Runtime.Profile), ("Comparison", value.ComparisonPolicy), ("Read samples", value.ReadSamples),
+                    ("Publish cases", value.PublishCases), ("Input bytes", value.Limits.MaximumInputBytes),
+                    ("Output bytes", value.Limits.MaximumOutputBytes));
+                if (value.DocumentRuntime is { } runtime)
+                    output.Fields(("Document backend", runtime.BackendId), ("Document engine", runtime.EngineRevision), ("Document profile", runtime.Profile));
+                if (value.ComparisonPolicies is { } policies)
+                    output.Fields(("Comparison policies", string.Join(", ", policies)));
+            });
         });
         return new Command("regression", "Saved regression cases and their runs").With(capabilities, Cases(globals, scope), Runs(globals, scope));
     }
@@ -197,15 +204,22 @@ internal static class RegressionCommands
     {
         output.Fields(("Run", run.Run.RunId), ("Case", $"{run.Run.CaseId} v{run.Run.Version}"), ("Revision", run.Run.Revision.RevisionId),
             ("State", run.Run.State), ("Attempt", run.Run.Attempt), ("Execution", run.ExecutionOutcome), ("Preview status", run.PreviewStatus),
-            ("Comparison", run.Comparison?.Outcome), ("Not evaluated", run.Comparison is { NotEvaluatedReason: not "none" } comparison
-                ? comparison.NotEvaluatedReason : null), ("Differences", run.Comparison?.TotalDifferences));
+             ("Comparison", run.Comparison?.Outcome), ("Not evaluated", run.Comparison is { NotEvaluatedReason: not "none" } comparison
+                 ? comparison.NotEvaluatedReason : null), ("Differences", run.Comparison?.TotalDifferences));
+        if (run.Comparison?.DocumentDiagnostic is { } diagnostic)
+            output.Fields(("Invalid document", diagnostic.Side), ("Output", diagnostic.Name ?? "(primary)"), ("Location", Location(diagnostic.Location)));
         if (run.Comparison is not { Differences.Count: > 0 } compared)
             return;
         output.Line();
         output.Table(["OUTPUT", "DIFFERENCE", "EXPECTED BYTES", "ACTUAL BYTES", "FIRST DIFFERENT BYTE"], compared.Differences.Select(difference =>
             (IReadOnlyList<object?>)[difference.Name ?? "(primary)", difference.Kind, difference.ExpectedBytes, difference.ActualBytes,
                 difference.FirstDifferentByte]));
+        foreach (var difference in compared.Differences.Where(value => value.Location is not null))
+            output.Fields(("Output", difference.Name ?? "(primary)"), ("Location", Location(difference.Location!)));
     }
+
+    private static string Location(RegressionDocumentLocationV1 value) => string.Create(CultureInfo.InvariantCulture,
+        $"interchange {value.Interchange}, segment {value.Segment} ({value.SegmentId}), element {value.Element}, repetition {value.Repetition}, component {value.Component}");
 
     internal static Option<int?> Limit() => new("--limit") { Description = "Items per page, 1-100 (default 50)" };
 

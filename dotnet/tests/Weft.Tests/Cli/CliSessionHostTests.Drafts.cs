@@ -35,7 +35,7 @@ public sealed partial class CliSessionHostTests
         var hidden = await cli.RunAsync(["drafts", "show", draft.Id.ToString("D"), .. args]);
         Assert.Equal(CliExitCode.NotFound, hidden.Code);
         Assert.All(records, record => Assert.False(record.Unexpected));
-    }, bearerBurst: 100, configureExtra: (test, services) =>
+    }, bearerBurst: 100, configureCatalogServices: (test, services) =>
     {
         services.AddSingleton(new CatalogMappingEditOptions(true));
         services.AddKeyedSingleton("draft-reader-test", (_, _) => new PostgresMappingDraftDatabase(test.Data.Case.RegressionConnectionString("weft_draft_reader"), MappingDraftDatabaseProfile.Reader));

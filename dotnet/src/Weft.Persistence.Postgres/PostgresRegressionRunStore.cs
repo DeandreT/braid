@@ -8,7 +8,7 @@ using Weft.Domain;
 namespace Weft.Persistence.Postgres;
 
 /// <summary>Dedicated resetting pool for per-case durable runs. It never grants sample or production-data access.</summary>
-public sealed class PostgresRegressionRunStore : IRegressionRunStore, IAsyncDisposable
+public sealed class PostgresRegressionRunStore : IRegressionRunStore, IRegressionRunMetadataReader, IAsyncDisposable
 {
     private readonly NpgsqlDataSource source;
     private readonly bool writer;
@@ -96,6 +96,39 @@ public sealed class PostgresRegressionRunStore : IRegressionRunStore, IAsyncDisp
         if (result is not bool value) throw Integrity();
         await tx.CommitAsync(token);
         return value;
+    }
+
+    public async Task<RegressionRunSummary?> ReadMetadataAsync(ActorContext actor, Guid organizationId, Guid runId,
+        CancellationToken token = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        await using var tx = await BeginAsync(organizationId, actor, write: false, token);
+        // Project only metadata at the database boundary: result_body/result_digest/result_bytes
+        // must never be returned to the chat process by an ungated metadata or citation read.
+        await using var command = tx.CreateCommand("""
+            SELECT project_id,mapping_id,submitter_id,case_id,version,revision_id,state,attempt,created_at
+            FROM weft.read_regression_run_metadata(@org,@id)
+            """);
+        Scope(command, organizationId, runId);
+        RegressionRunSummary? result = null;
+        await using (var row = await command.ExecuteReaderAsync(token))
+        {
+            if (await row.ReadAsync(token))
+            {
+                if (row.GetGuid(2) != actor.PrincipalId.Value) throw Integrity();
+                result = new(runId, row.GetGuid(3), row.GetInt64(4),
+                    new(organizationId, row.GetGuid(0), row.GetGuid(1), row.GetGuid(5)), State(row.GetString(6)),
+                    row.GetInt32(7), new(row.GetDateTime(8)));
+                if (await row.ReadAsync(token)) throw Integrity();
+            }
+        }
+        if (result is not null)
+        {
+            command.CommandText = "SELECT EXISTS(SELECT 1 FROM weft.read_regression_run_metadata(@org,@id))";
+            if (await command.ExecuteScalarAsync(token) is not true) result = null;
+        }
+        await tx.CommitAsync(token);
+        return result;
     }
 
     public async Task<RegressionRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken token = default)

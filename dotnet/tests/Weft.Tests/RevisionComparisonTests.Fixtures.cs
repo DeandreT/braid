@@ -2,7 +2,6 @@ using System.Globalization;
 using Weft.Application;
 using Weft.Application.Comparisons;
 using Weft.Contracts.Comparisons;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Projections;
 using Weft.Contracts.Validation;

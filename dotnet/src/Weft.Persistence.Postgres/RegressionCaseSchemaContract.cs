@@ -16,8 +16,19 @@ internal static class RegressionCaseSchemaContract
     internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
         => await CaptureAsync(connection, transaction, ["regression_cases", "regression_case_versions"], token);
 
-    internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string[] tables, CancellationToken token)
+    internal static async Task<string> CaptureAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string[] tables, CancellationToken token,
+        bool validateAutomation = true)
     {
+        // This admits complete Automation or rejects any partial installation
+        // before projecting its triggers away. The nonrecursive leaf capture is
+        // used by that admission itself and must keep the same projection.
+        if (validateAutomation) await AutomationSchemaAdmission.ValidateTriggersAsync(connection, transaction, token);
+        // Physical search indexes do not alter the logical source contracts. Omit
+        // only this exact additive set, after its complete definitions and private
+        // extension boundary have been admitted; every other index stays pinned.
+        var searchIndexes = tables.Any(table => table is "projects" or "mappings" or "mapping_revisions" or "revision_ingestions") &&
+            await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, token)
+            ? CatalogSearchSchemaAdmission.IndexNames : [];
         await using (var foreignKeys = new NpgsqlCommand("""
             SELECT NOT EXISTS (
                 SELECT 1 FROM pg_catalog.pg_constraint c
@@ -39,6 +50,8 @@ internal static class RegressionCaseSchemaContract
         }
         await using var command = new NpgsqlCommand(CaptureSql, connection, transaction);
         command.Parameters.AddWithValue("tables", tables);
+        command.Parameters.AddWithValue("automationTriggers", AutomationSchemaAdmission.AllTriggerNames);
+        command.Parameters.AddWithValue("searchIndexes", searchIndexes);
         return await command.ExecuteScalarAsync(token) as string ?? throw new InvalidOperationException("Regression case schema is unavailable.");
     }
 
@@ -73,10 +86,11 @@ internal static class RegressionCaseSchemaContract
                     ORDER BY k.conname) FROM pg_catalog.pg_constraint k WHERE k.conrelid=c.oid),
                 'indexes', (SELECT jsonb_agg(jsonb_build_array(pg_catalog.pg_get_indexdef(i.indexrelid),
                     i.indisvalid,i.indisready,i.indislive) ORDER BY pg_catalog.pg_get_indexdef(i.indexrelid))
-                    FROM pg_catalog.pg_index i WHERE i.indrelid=c.oid),
+                    FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class index_relation ON index_relation.oid=i.indexrelid
+                    WHERE i.indrelid=c.oid AND NOT (index_relation.relnamespace=c.relnamespace AND index_relation.relname=ANY(@searchIndexes))),
                 'triggers', (SELECT jsonb_agg(jsonb_build_array(t.tgname,t.tgenabled::text,
                     pg_catalog.pg_get_triggerdef(t.oid,false)) ORDER BY t.tgname)
-                    FROM pg_catalog.pg_trigger t WHERE t.tgrelid=c.oid AND NOT t.tgisinternal),
+                    FROM pg_catalog.pg_trigger t WHERE t.tgrelid=c.oid AND NOT t.tgisinternal AND NOT t.tgname=ANY(@automationTriggers)),
                 'internalTriggersEnabled', (SELECT coalesce(bool_and(t.tgenabled='O'),true)
                     FROM pg_catalog.pg_trigger t WHERE t.tgrelid=c.oid AND t.tgisinternal),
                 'policies', (SELECT jsonb_agg(jsonb_build_array(p.polname,p.polcmd::text,p.polpermissive,p.polroles,

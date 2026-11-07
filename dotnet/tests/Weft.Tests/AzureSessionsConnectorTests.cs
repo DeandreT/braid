@@ -139,6 +139,30 @@ public sealed class AzureSessionsConnectorTests
     }
 
     [Fact]
+    public async Task GatewayUncertaintyRecoversThroughANewProbeSessionAndANewOperationSession()
+    {
+        await using var pool = await SessionsPoolStub.StartAsync();
+        pool.FailAfterForwarding = "/v1/operations/";
+        using var connector = Connector(pool, new FakeCredential());
+        var clock = new MaintenanceServiceTestTimeProvider();
+        var options = new FerruleServiceRunnerOptions(connector, "inspection", Identity) { Clock = clock };
+        await using var runner = new FerruleServiceRunner(options);
+        Assert.Equal(WorkerProcessFailure.CleanupFailed, (await runner.RunAsync(new byte[] { 1 }, default)).Failure);
+        Assert.False(runner.Available);
+        Assert.Single(pool.Sessions);
+        pool.FailAfterForwarding = null;
+        clock.Advance(options.QuarantineBound);
+        await FerruleServiceRecoveryTests.Reopened(runner);
+        Assert.Equal(2, pool.Sessions.Count);
+        Assert.Empty(pool.Sessions[1].Inspection.Frames);
+        Assert.Equal(new byte[] { 2 }, (await runner.RunAsync(new byte[] { 2 }, default)).Output);
+        Assert.Equal(3, pool.Sessions.Count);
+        Assert.Equal(3, pool.Sessions.Select(session => session.Identifier).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(pool.Sessions, session => Assert.True(session.Stopped));
+        Assert.Empty(pool.Violations);
+    }
+
+    [Fact]
     public async Task ASessionReportingAnotherBuildReceivesNoFrame()
     {
         await using var pool = await SessionsPoolStub.StartAsync();

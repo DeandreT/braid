@@ -13,11 +13,12 @@ internal static class ChatCommands
 {
     private const int MaximumReconnects = 5;
 
-    private sealed record Scope(Option<string> Project, Option<string> Mapping, Option<string> Revision)
+    internal sealed record Scope(Option<string> Project, Option<string> Mapping, Option<string> Revision, bool Workspace = false)
     {
         public Symbol[] Symbols => [Project, Mapping, Revision];
 
         public async Task<ApiRequest> RequestAsync(CliInvocation invocation, ApiOperation operation) =>
+            Workspace ? await invocation.RequestAsync(ApiOperations.WorkspaceOperation(operation)) :
             (await invocation.RequestAsync(operation)).Path("projectId", invocation.Id(Project)).Path("mappingId", invocation.Id(Mapping))
                 .Path("revisionId", invocation.Id(Revision));
     }
@@ -102,7 +103,8 @@ internal static class ChatCommands
             invocation.Output.Write(turn, output => output.Line($"Turn {turn.TurnId} is {Name(turn.Phase)}."));
         });
 
-        return new Command("chat", "Grounded chat about a revision").With(availability, Conversations(globals, scope), ask, follow, cancel);
+        return new Command("chat", "Grounded read-only chat").With(availability, Conversations(globals, scope), ask, follow, cancel,
+            WorkspaceChatCommands.Workspace(globals));
     }
 
     private static Command Conversations(CliGlobals globals, Scope scope)
@@ -170,7 +172,8 @@ internal static class ChatCommands
     /// Streams the turn's events from <paramref name="after"/>, reconnecting from the last sequence when the stream ends
     /// before a terminal event. Canceling the command stops the turn on the server.
     /// </summary>
-    private static async Task<ChatAnswer> FollowAsync(CliInvocation invocation, Scope scope, string conversationId, string turnId, int after)
+    internal static async Task<ChatAnswer> FollowAsync(CliInvocation invocation, Scope scope, string conversationId, string turnId, int after,
+        Action<ChatTurnEventV1>? observe = null)
     {
         var text = new StringBuilder();
         var citations = new List<ChatCitationEventV1>();
@@ -197,6 +200,7 @@ internal static class ChatCommands
                         if (item.Sequence <= sequence)
                             continue;
                         sequence = item.Sequence;
+                        observe?.Invoke(item);
                         switch (item)
                         {
                             case ChatTextDeltaEventV1 delta:
@@ -237,11 +241,11 @@ internal static class ChatCommands
             throw;
         }
         throw new CliException(CliExitCode.Transport,
-            $"The answer stream ended before the turn finished. Resume it with: weft chat follow --conversation {conversationId} " +
+            $"The answer stream ended before the turn finished. Resume it with: weft chat {(scope.Workspace ? "workspace " : "")}follow --conversation {conversationId} " +
             $"--after {sequence} {turnId}", "streamInterrupted");
     }
 
-    private static async Task<ChatTurnV1> CancelAsync(CliInvocation invocation, Scope scope, string conversationId, string turnId,
+    internal static async Task<ChatTurnV1> CancelAsync(CliInvocation invocation, Scope scope, string conversationId, string turnId,
         CancellationToken cancellationToken)
     {
         var request = (await scope.RequestAsync(invocation, ApiOperations.CancelChatTurn)).Path("conversationId", conversationId)
@@ -249,7 +253,7 @@ internal static class ChatCommands
         return await invocation.Api.ReadAsync<ChatTurnV1>(request, cancellationToken);
     }
 
-    private static int Finish(CliInvocation invocation, ChatAnswer answer)
+    internal static int Finish(CliInvocation invocation, ChatAnswer answer)
     {
         if (invocation.Output.Json)
             invocation.Output.WriteJson(answer);
@@ -289,7 +293,7 @@ internal static class ChatCommands
         }
     }
 
-    private static ChatProfileV1 Profile(ChatAvailabilityV1 available, string? requested)
+    internal static ChatProfileV1 Profile(ChatAvailabilityV1 available, string? requested)
     {
         if (requested is null)
             return available.Profiles[0];

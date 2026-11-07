@@ -40,6 +40,17 @@ public sealed class PreviewRequestDocumentTests
     }
 
     [Fact]
+    public void DocumentProfileHasASeparateFingerprintAndRoundTripsWhileLegacyBytesStayV1()
+    {
+        var legacy = PreviewRequestDocument.Encode(Submission(), PreviewLimits.Default);
+        var document = PreviewRequestDocument.Encode(Submission() with { Profile = PreviewExecutionProfile.Document }, PreviewLimits.Default);
+        Assert.NotEqual(PreviewRequestDocument.Fingerprint(legacy), PreviewRequestDocument.Fingerprint(document));
+        Assert.Equal(PreviewExecutionProfile.Document, PreviewRequestDocument.Decode(document).Profile);
+        Assert.Equal(PreviewExecutionProfile.LegacyJson, PreviewRequestDocument.Decode(legacy).Profile);
+        Assert.Equal(legacy.Replace(PreviewRequestDocument.Schema, PreviewRequestDocument.DocumentSchema, StringComparison.Ordinal), document);
+    }
+
+    [Fact]
     public void EveryDeclaredValueChangesTheFingerprint()
     {
         var original = PreviewRequestDocument.Fingerprint(PreviewRequestDocument.Encode(Submission(), PreviewLimits.Default));

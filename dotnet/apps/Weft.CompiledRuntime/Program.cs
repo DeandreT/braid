@@ -44,9 +44,26 @@ internal static class CompiledInvocation
 
     internal static Result Run(CompiledRuntimeProtocol.Invocation request)
     {
-        if (request.Intent.Profile.Id != BuildWorkerProtocol.Profile || request.Intent.Profile.Runtime != "dotnet" ||
+        // The pinned emitter retains its ordinary JSON API for all-JSON plans;
+        // the document protocol still binds their explicit media types.
+        var documents = BuildWorkerProtocol.IsDocumentProfile(request.Intent.Profile.Id) && request.Intent.Boundaries.Any(value => value.Format != "json");
+        if (request.Intent.Profile.Id is not (BuildWorkerProtocol.Profile or BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile) || request.Intent.Profile.Runtime != "dotnet" ||
             request.Intent.Profile.RuntimeVersion != BuildWorkerProtocol.RuntimeVersion || request.Intent.Backend.EngineRevision != BuildWorkerProtocol.Engine ||
-            request.Intent.Boundaries.Any(value => value.Format != "json")) return new("unsupported");
+            request.Intent.Boundaries.Any(value => !BuildWorkerProtocol.AdmitsFormat(request.Intent.Profile.Id, value.Format))) return new("unsupported");
+        if (request.Intent.Profile.Id == BuildWorkerProtocol.X12InterchangesProfile && !request.Intent.Boundaries.Any(value => value.Format == "x12")) return new("unsupported");
+        if (documents)
+        {
+            foreach (var document in request.Replay.NamedInputs.Prepend(request.Replay.Primary))
+            {
+                var boundary = request.Intent.Boundaries.Single(value => value.Name == document.Name &&
+                    value.Kind == (document.Name is null ? BuildBoundaryKind.PrimaryInput : BuildBoundaryKind.NamedInput));
+                if (boundary.Format is "x12" or "edifact")
+                {
+                    var validation = EdiEnvelopeValidation.ValidateExecution(document.Bytes, BuildWorkerProtocol.MediaType(boundary.Format));
+                    if (validation == EdiExecutionValidation.Invalid) return new("invalidInput");
+                }
+            }
+        }
         var context = new AssemblyLoadContext("weft-compiled", isCollectible: true);
         var stage = "artifact";
         try
@@ -56,7 +73,7 @@ internal static class CompiledInvocation
             if (assembly.GetName().Name != "Ferrule.Generated") return new("invalidArtifact");
             Type Type(string name) => assembly.GetType(name, throwOnError: true)!;
             var mapping = Type("Ferrule.Generated.GeneratedMapping");
-            var namedType = Type("Ferrule.Generated.NamedJsonBytesInput");
+            var namedType = Type(documents ? "Ferrule.Generated.NamedDocumentBytesInput" : "Ferrule.Generated.NamedJsonBytesInput");
             var namedConstructor = namedType.GetConstructor([typeof(string), typeof(byte[])]) ?? throw new MissingMethodException();
             var valueType = Type("Ferrule.Runtime.FerruleValue");
             var pairType = typeof(KeyValuePair<,>).MakeGenericType(typeof(string), valueType);
@@ -73,13 +90,14 @@ internal static class CompiledInvocation
                 ["FromDouble"] = valueType.GetMethod("FromDouble", BindingFlags.Public | BindingFlags.Static, [typeof(double)]) ?? throw new MissingMethodException(),
             };
             var sourceListType = typeof(IReadOnlyList<>).MakeGenericType(namedType);
-            var allMethod = mapping.GetMethod("ExecuteJsonBytesOutputsWithSources", BindingFlags.Public | BindingFlags.Static,
+            var allMethod = mapping.GetMethod(documents ? "ExecuteDocumentBytesOutputsWithHost" : "ExecuteJsonBytesOutputsWithSources", BindingFlags.Public | BindingFlags.Static,
                 [typeof(byte[]), sourceListType, executionType]) ?? throw new MissingMethodException();
             var targetType = Type("Ferrule.Runtime.FerruleTargetSelection");
             var targetPrimary = targetType.GetMethod("Primary", BindingFlags.Public | BindingFlags.Static, System.Type.EmptyTypes) ?? throw new MissingMethodException();
             var targetNamed = targetType.GetMethod("Named", BindingFlags.Public | BindingFlags.Static, [typeof(string)]) ?? throw new MissingMethodException();
-            var selectedMethod = mapping.GetMethod("ExecuteJsonBytesSelectedTargetWithHost", BindingFlags.Public | BindingFlags.Static,
-                [typeof(byte[]), targetType, sourceListType, executionType, Type("Ferrule.Runtime.IFerruleDynamicJsonSourceLoader")]) ?? throw new MissingMethodException();
+            var selectedMethod = mapping.GetMethod(documents ? "ExecuteDocumentBytesSelectedTargetWithHost" : "ExecuteJsonBytesSelectedTargetWithHost", BindingFlags.Public | BindingFlags.Static,
+                documents ? [typeof(byte[]), targetType, sourceListType, executionType] :
+                    [typeof(byte[]), targetType, sourceListType, executionType, Type("Ferrule.Runtime.IFerruleDynamicJsonSourceLoader")]) ?? throw new MissingMethodException();
             var named = Array.CreateInstance(namedType, request.Replay.NamedInputs.Count);
             for (var i = 0; i < request.Replay.NamedInputs.Count; i++)
             {
@@ -101,36 +119,63 @@ internal static class CompiledInvocation
             if (request.Replay.Target.Kind == PreviewTargetKind.All)
             {
                 var result = allMethod.Invoke(null, [request.Replay.Primary.CopyBytes(), named, execution])!;
-                Add(null, Property(result, "Primary"));
-                foreach (var extra in (IEnumerable)Property(result, "Extras")) Add((string)Property(extra, "Name"), Property(extra, "Document"));
+                Add(null, Property(result, "Primary"), documents ? Property(result, "PrimaryFormat") : null);
+                foreach (var extra in (IEnumerable)Property(result, "Extras"))
+                    Add((string)Property(extra, "Name"), Property(extra, "Document"), documents ? Property(extra, "Format") : null);
             }
             else
             {
                 var target = request.Replay.Target.Kind == PreviewTargetKind.Primary
                     ? targetPrimary.Invoke(null, null)!
                     : targetNamed.Invoke(null, [request.Replay.Target.Name])!;
-                var result = selectedMethod.Invoke(null, [request.Replay.Primary.CopyBytes(), target, named, execution, null])!;
-                if (request.Replay.Target.Kind == PreviewTargetKind.Primary) Add(null, Property(result, "Document"));
+                var result = selectedMethod.Invoke(null, documents ? [request.Replay.Primary.CopyBytes(), target, named, execution] :
+                    [request.Replay.Primary.CopyBytes(), target, named, execution, null])!;
+                if (request.Replay.Target.Kind == PreviewTargetKind.Primary)
+                    Add(null, Property(result, "Document"), documents ? Property(result, "Format") : null);
                 else
                 {
                     var output = Property(result, "Output");
-                    Add((string)Property(output, "Name"), Property(output, "Document"));
+                    Add((string)Property(output, "Name"), Property(output, "Document"), documents ? Property(output, "Format") : null);
                 }
             }
             return new("succeeded", RegressionOutputSet.Capture(outputs));
 
-            void Add(string? name, object value)
+            void Add(string? name, object value, object? format)
             {
                 var body = (byte[])value;
                 if (outputs.Count >= request.Replay.Limits.MaximumArtifacts || body.Length < 1 ||
                     body.Length > request.Replay.Limits.MaximumOutputBytes - outputs.Sum(item => item.ByteCount)) throw new OutputLimitException();
-                outputs.Add(RegressionOutput.Capture(name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(name), body));
+                var media = documents ? format?.ToString() switch
+                {
+                    "Json" => "application/json",
+                    "X12" => "application/edi-x12",
+                    "Edifact" => "application/edifact",
+                    _ => throw new InvalidOperationException()
+                } : PreviewPolicy.MediaType;
+                var boundary = request.Intent.Boundaries.SingleOrDefault(value => value.Name == name &&
+                    value.Kind == (name is null ? BuildBoundaryKind.PrimaryOutput : BuildBoundaryKind.NamedOutput));
+                if (boundary is null || media != BuildWorkerProtocol.MediaType(boundary.Format)) throw new InvalidOperationException();
+                if (BuildWorkerProtocol.IsDocumentProfile(request.Intent.Profile.Id))
+                {
+                    // Syntax is bound into the approved generated assembly, never inferred from a filename.
+                    char? segment = null;
+                    if (media == "application/edi-x12")
+                    {
+                        var syntax = assembly.GetType("Weft.Generated.DocumentSyntax")?.GetMethod("OutputSegment");
+                        if (syntax is not null) segment = (char)(int)syntax.Invoke(null, [name])!;
+                        else if (DocumentFormatLimits.TryReadX12Segment(body, out var declared)) segment = declared;
+                        else throw new UnsupportedOutputSyntaxException();
+                    }
+                    if (!DocumentFormatLimits.WithinLimits(body, media, segment)) throw new OutputLimitException();
+                }
+                outputs.Add(RegressionOutput.Capture(name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(name), body, mediaType: media));
             }
         }
         catch (Exception error) when (error is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
             var cause = error is TargetInvocationException { InnerException: { } inner } ? inner : error;
             if (cause is OutputLimitException) return new("resourceLimit");
+            if (cause is UnsupportedOutputSyntaxException) return new("unsupported");
             if (stage == "artifact") return new("invalidArtifact");
             if (stage == "parameter") return new("invalidParameter");
             // The generated JSON wrapper can report both input and output boundary failures.
@@ -158,4 +203,5 @@ internal static class CompiledInvocation
         return value;
     }
     private sealed class OutputLimitException : Exception { }
+    private sealed class UnsupportedOutputSyntaxException : Exception { }
 }

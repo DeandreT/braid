@@ -155,10 +155,13 @@ additive schema/reader/FK metadata and journal entry.
 ## Scope and qualification
 
 This foundation adds grant facts, fresh observation and explicit owner operations.
-It adds no server registration or configuration key for a permission reader,
-HTTP grant/payload route, sign-in, session, claims synchronization, Angular control,
-download token, run/sample storage, payload bytes, preview or Wolverine execution.
-Future consumers retain their own activation and qualification scope.
+Workspace chat is its consumer: when `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING`
+is configured, the chat composition registers the restricted reader, offers the
+payload tools only to creators with a grant and observes the grant on every payload
+read (see [Workspace chat](workspace-chat.md#payload-data)). The reader's
+`AnyAsync` answers whether a principal holds any active grant on a project it can
+read in one organization, with the same authority joins. No HTTP route manages
+grants, and no browser control or download token uses them.
 
 Implementation and qualification remain in progress. Planned pure, actual
 PostgreSQL, genuine-prefix upgrade and compiled-tool checks are acceptance work,

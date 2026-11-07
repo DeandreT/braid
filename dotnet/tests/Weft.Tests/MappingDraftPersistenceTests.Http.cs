@@ -29,7 +29,7 @@ public sealed partial class MappingDraftPersistenceTests
             services.AddSingleton(new CatalogMappingEditOptions(true));
             services.AddSingleton(new MappingDraftService(store, new DraftTestObjects(), new DraftTestBackend(), new DraftTestIngestion()));
         }
-        await using var api = await CatalogHttpTestSupport.StartAsync(test.Case, test.Actor.PrincipalId.Value, scope.OrganizationId, configure: Configure);
+        await using var api = await CatalogHttpTestSupport.StartAsync(test.Case, test.Actor.PrincipalId.Value, scope.OrganizationId, configureServices: Configure);
         var path = CatalogHttpTestSupport.MappingPath(scope) + "/drafts/" + draft.Id.ToString("D");
         var context = await api.Client.GetFromJsonAsync<JsonElement>("/api/v1/catalog/context");
         var token = context.GetProperty("requestToken").GetString()!;
@@ -61,7 +61,7 @@ public sealed partial class MappingDraftPersistenceTests
         using var stale = await Put(MappingEditScriptTests.Bind, tag);
         Assert.Equal(HttpStatusCode.PreconditionFailed, stale.StatusCode);
         Assert.True(stale.Headers.CacheControl!.NoStore);
-        await using var other = await CatalogHttpTestSupport.StartAsync(test.Case, test.Seed.Admitted, scope.OrganizationId, configure: Configure);
+        await using var other = await CatalogHttpTestSupport.StartAsync(test.Case, test.Seed.Admitted, scope.OrganizationId, configureServices: Configure);
         using var hidden = await other.Client.GetAsync(path);
         Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
         Assert.True(hidden.Headers.CacheControl!.NoStore);

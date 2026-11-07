@@ -99,7 +99,7 @@ public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunn
                 }
                 else if (image.ExitCode == 0 && DockerSandboxMetadata.IsSafeImage(image.Output, options.ImageId))
                 {
-                    deadline.Token.ThrowIfCancellationRequested();
+                    ObserveCreateCancellation(deadline.Token, shutdown.Token);
                     // The daemon may create the named container even when the CLI loses its response.
                     // Settle this side effect within the original wall budget even if the caller leaves.
                     cleanupRequired = true;
@@ -108,7 +108,7 @@ public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunn
                     result = Failed(create.Failure == WorkerProcessFailure.None ? WorkerProcessFailure.WorkerFailed : create.Failure);
                     createdContainerId = create.Failure == WorkerProcessFailure.None && create.ExitCode == 0
                         ? ReadContainerId(create.Output) : null;
-                    deadline.Token.ThrowIfCancellationRequested();
+                    ObserveCreateCancellation(deadline.Token, shutdown.Token);
                     if (createdContainerId is not null)
                     {
                         var inspect = await CommandAsync(configDirectory, ["container", "inspect", "--format", "{{json .}}", createdContainerId], ReadOnlyMemory<byte>.Empty, ControlOutputLimit, deadline.Token).ConfigureAwait(false);
@@ -167,10 +167,23 @@ public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunn
             return Failed(WorkerProcessFailure.CleanupFailed);
         }
 
-        return result.Failure == WorkerProcessFailure.Canceled && !cancellationToken.IsCancellationRequested
-            ? Failed(WorkerProcessFailure.TimedOut)
+        return result.Failure == WorkerProcessFailure.Canceled
+            ? Failed(CancellationFailure(cancellationToken, shutdown.Token))
             : result;
     }
+
+    internal static void ObserveCreateCancellation(CancellationToken deadline, CancellationToken shutdown)
+    {
+        // CancelAsync marks shutdown immediately, but can defer its linked-token
+        // callbacks. Settled create must not launch a worker while those callbacks wait.
+        shutdown.ThrowIfCancellationRequested();
+        deadline.ThrowIfCancellationRequested();
+    }
+
+    internal static WorkerProcessFailure CancellationFailure(CancellationToken caller, CancellationToken shutdown) =>
+        caller.IsCancellationRequested || shutdown.IsCancellationRequested
+            ? WorkerProcessFailure.Canceled
+            : WorkerProcessFailure.TimedOut;
 
     private string Memory => options.Profile.MemoryBytes.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private string CpuLimit => FormattableString.Invariant($"cpu={options.Profile.CpuSeconds}:{options.Profile.CpuSeconds}");

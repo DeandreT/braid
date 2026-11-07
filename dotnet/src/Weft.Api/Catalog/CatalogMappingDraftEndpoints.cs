@@ -10,7 +10,7 @@ using Weft.Application;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Comparisons;
 using Weft.Contracts.Editing;
-using Weft.Contracts.Examples;
+using Weft.Contracts.Projections;
 using Weft.Contracts.Validation;
 using Weft.Domain;
 

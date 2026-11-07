@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Weft.Api;
 using Weft.Api.Catalog;
 using Weft.Application;
+using Weft.Application.Automation;
 using Weft.Application.Regression;
 using Weft.Contracts.Regression;
 using Weft.Domain;
@@ -380,7 +381,8 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
             BasePath = $"/api/v1/organizations/{mapping.OrganizationId:D}/projects/{mapping.ProjectId:D}/mappings/{mapping.MappingId:D}/regression-cases";
         }
 
-        internal static async Task<CaseHttp> StartAsync(RegressionCasePostgresTestSupport? data)
+        internal static async Task<CaseHttp> StartAsync(RegressionCasePostgresTestSupport? data,
+            RegressionRuntimeIdentity? documentRuntime = null)
         {
             var reservation = new TcpListener(IPAddress.Loopback, 0);
             reservation.Start();
@@ -397,11 +399,14 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
                 var options = data is null ? new CatalogApiOptions() : new CatalogApiOptions(true, true, data.Actor.PrincipalId.Value,
                     data.Mapping.OrganizationId, origin.GetLeftPart(UriPartial.Authority));
                 builder.Services.AddWeftCatalog(options, builder.Environment);
-                builder.Services.AddWeftRegressionCases(data is null ? new() : new(true, data.Runtime));
+                builder.Services.AddWeftRegressionCases(data is null ? new() : new(true, data.Runtime, documentRuntime));
                 builder.Services.AddWeftRegressionRuns(new(data is not null));
                 CaseHttp? support = null;
                 if (data is not null)
                 {
+                    builder.Services.AddSingleton(new CatalogAutomationOptions(true));
+                    builder.Services.AddSingleton(NotificationConfiguration.Disabled);
+                    builder.Services.AddSingleton<IAutomationStore>(_ => new PostgresAutomationStore(data.Case.RegressionConnectionString("weft_run_writer"), true));
                     catalog = new(data.Case.CatalogConnectionString);
                     builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(catalog));
                     builder.Services.AddSingleton<IRegressionCaseReader>(_ => new CasePort(support!));
@@ -422,6 +427,7 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
                 app.MapWeftCatalog();
                 app.MapWeftRegressionCases();
                 app.MapWeftRegressionRuns();
+                app.MapWeftAutomation();
                 reservation.Stop();
                 await app.StartAsync();
                 return support;

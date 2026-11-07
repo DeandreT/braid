@@ -65,17 +65,11 @@ public static partial class CatalogEndpoints
         var value = new MappingScope(CatalogBuildRequest.Id(organization), CatalogBuildRequest.Id(project), CatalogBuildRequest.Id(mapping));
         return value.OrganizationId == admission.AllowedOrganizationId ? value : null;
     }
-    private static async Task<bool> BuildMappingAccess(HttpContext context, CatalogRequestAdmission admission, MappingScope mapping) =>
-        await CaseCatalogMapping(context, admission.Actor!, mapping) is { } current && current.Access.Can(ProjectAction.UploadRevision);
-    private static async Task<bool> BuildProjectAccess(HttpContext context, CatalogRequestAdmission admission, ProjectScope project, bool administrator = false)
-    {
-        if (project.OrganizationId != admission.AllowedOrganizationId) return false;
-        var current = await context.RequestServices.GetRequiredService<ICatalogReader>().GetProjectAsync(admission.Actor!, project, context.RequestAborted);
-        if (current is null) return false;
-        RequireScope(current.Summary.Scope == project);
-        RequireAccess(current.Access, admission.Actor!, project);
-        return administrator ? current.Access.Role == ProjectRole.Administrator : current.Access.Can(ProjectAction.UploadRevision);
-    }
+    private static Task<bool> BuildMappingAccess(HttpContext context, CatalogRequestAdmission admission, MappingScope mapping) =>
+        BuildMappingAccessAsync(context.RequestServices, admission.Actor!, mapping, context.RequestAborted);
+    private static async Task<bool> BuildProjectAccess(HttpContext context, CatalogRequestAdmission admission, ProjectScope project, bool administrator = false) =>
+        project.OrganizationId == admission.AllowedOrganizationId &&
+        await BuildProjectAccessAsync(context.RequestServices, admission.Actor!, project, context.RequestAborted, administrator);
     private static byte[] PrepareBuild<T>(T value, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -96,12 +90,8 @@ public static partial class CatalogEndpoints
             RequireQuery(context);
             var mapping = BuildMapping(organizationId, projectId, mappingId, admission);
             if (mapping is null) return NotFound();
-            var current = await CaseCatalogMapping(context, admission.Actor!, mapping);
-            if (current is null || !current.Access.Can(ProjectAction.UploadRevision)) return NotFound();
-            var supported = current.Summary.BackendId == options.Backend!.BackendId;
-            var response = new BuildCapabilitiesV1(CatalogBuildMapping.Backend(options.Backend), CatalogBuildMapping.Profile(options.Profile!), true, supported, supported);
-            var bytes = PrepareBuild(response, context.RequestAborted);
-            return await BuildMappingAccess(context, admission, mapping) ? CaseResponse(bytes) : NotFound();
+            var response = await BuildCapabilitiesAsync(context.RequestServices, admission.Actor!, mapping, options, context.RequestAborted);
+            return response is null ? NotFound() : CaseResponse(PrepareBuild(response, context.RequestAborted));
         });
     private static Task<IResult> GetBuildEnvironment(string organizationId, string projectId, string environmentId, string version, HttpContext context, CatalogBuildOptions options) =>
         WithBuildAdmission(context, options, async admission =>
@@ -110,11 +100,8 @@ public static partial class CatalogEndpoints
             var project = new ProjectScope(CatalogBuildRequest.Id(organizationId), CatalogBuildRequest.Id(projectId));
             var reference = new BuildEnvironmentReference(project, CatalogBuildRequest.Id(environmentId), CatalogBuildRequest.Version(version));
             if (!await BuildProjectAccess(context, admission, project)) return NotFound();
-            var value = await context.RequestServices.GetRequiredService<IBuildMetadataReader>().ReadEnvironmentAsync(admission.Actor!, reference, context.RequestAborted);
-            if (value is null) return NotFound();
-            if (value.Environment.Reference != reference) throw new InvalidOperationException("Build environment scope mismatch.");
-            var bytes = PrepareBuild(CatalogBuildMapping.Environment(value), context.RequestAborted);
-            return await BuildProjectAccess(context, admission, project) ? CaseResponse(bytes) : NotFound();
+            var value = await BuildEnvironmentAsync(context.RequestServices, admission.Actor!, reference, context.RequestAborted);
+            return value is null ? NotFound() : CaseResponse(PrepareBuild(CatalogBuildMapping.Environment(value), context.RequestAborted));
         });
     private static Task<IResult> GetBuildEnvironments(string organizationId, string projectId, HttpContext context, CatalogBuildOptions options) =>
         WithBuildAdmission(context, options, async admission =>
@@ -127,12 +114,10 @@ public static partial class CatalogEndpoints
             var hasVersion = context.Request.Query.TryGetValue("afterVersion", out var rawVersion);
             if (hasId != hasVersion) throw new CatalogInvalidRequestException();
             var cursor = hasId ? new BuildEnvironmentCursor(CatalogBuildRequest.Id(rawId[0]!), CatalogBuildRequest.Version(rawVersion[0]!)) : null;
-            var page = await context.RequestServices.GetRequiredService<IBuildMetadataReader>().ListEnvironmentsAsync(admission.Actor!, project, maximum, cursor, context.RequestAborted);
+            var page = await BuildEnvironmentPageAsync(context.RequestServices, admission.Actor!, project, maximum, cursor, context.RequestAborted);
             if (page is null) return NotFound();
-            if (page.Environments.Count > maximum || page.Environments.Any(value => value.Environment.Reference.Project != project)) throw new InvalidOperationException("Build environment page scope mismatch.");
             var response = new BuildEnvironmentPageV1(page.Environments.Select(CatalogBuildMapping.Environment).ToArray(),
                 page.Next?.EnvironmentId.ToString("D"), page.Next is null ? null : CatalogBuildMapping.Number(page.Next.Version));
-            var bytes = PrepareBuild(response, context.RequestAborted);
-            return await BuildProjectAccess(context, admission, project) ? CaseResponse(bytes) : NotFound();
+            return CaseResponse(PrepareBuild(response, context.RequestAborted));
         });
 }

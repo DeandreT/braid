@@ -1,18 +1,18 @@
 # Catalog browser
 
-This read-only increment connects Angular to the existing catalog API. Its scope
-is [#75](https://github.com/DeandreT/weft/issues/75), the first part of
-[#19](https://github.com/DeandreT/weft/issues/19). It merged through
-[PR #76](https://github.com/DeandreT/weft/pull/76) after all 20 catalog and 22
-existing example/shell browser cases passed. [Saved mapping reports](saved-reports.md)
-follow in increment B. Uploads, metadata editing, sign-in and chat retain their
-separate increments.
+The Angular catalog opens the user's admitted organization and visible projects.
+Saved revisions open in the workbench, with [saved mapping reports](saved-reports.md),
+uploads, metadata editing and chat governed by their own feature and access checks.
 
 ## Navigation
 
-Examples remain at `/examples`; `/` redirects there. Catalog opens the current
-Development workspace's admitted organization and visible projects. Project
+The application root opens `/catalog`. Session deployments first show sign-in
+when needed and return to the requested application path. Development opens the
+configured workspace directly. Project
 pages list mappings; mapping pages show current metadata and revision history.
+Opening `/sign-in` while already signed in opens the catalog, regardless of a
+return-path query. The header account menu reads the admitted organization on a
+direct Help visit too; a failed organization read does not hide the user guide.
 Each revision has a concrete URL retaining its organization, project, mapping
 and revision IDs. Opening a saved revision never follows later head changes.
 `View current head` reads the mapping afresh and opens its returned concrete
@@ -31,7 +31,8 @@ report reading is enabled, the revision page reads saved reports separately.
 
 ## Access and refresh
 
-The server supplies the Development identity and checks access on every read.
+The server supplies the Development identity or verifies the signed-in session,
+and checks access on every read.
 The browser offers no actor or role selector. Route changes, explicit refresh
 and returning to a focused/visible document obtain fresh context and data.
 These routine access checks keep the workspace on screen. A new selection starts
@@ -54,7 +55,7 @@ its existing Host behavior; catalog security settings are not relaxed for it.
 
 ## Verification
 
-The existing example/shell browser configuration retains its 22 cases. The
+The shell browser configuration covers entry and account navigation. The
 separate `npm run test:catalog-browser` command uses the packaged API origin and
 a disposable actual PostgreSQL/native-ingestion fixture. Both commands allocate
 an alternate virtual display. Catalog traces are disabled so framework request

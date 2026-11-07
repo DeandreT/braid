@@ -331,6 +331,38 @@ public sealed class FerruleServiceRunnerTests
     }
 
     [Fact]
+    public async Task StalledSettlementStaysUncertainEvenWhenTheServiceEventuallyAnswersAndTheRunnerReopens()
+    {
+        await using var service = await ServiceCase.StartAsync();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.Inspection.Behavior = async (_, _) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return new WorkerProcessResult([99], WorkerProcessFailure.None);
+        };
+        await using var runner = new FerruleServiceRunner(new(Connector(service), "inspection", Identity)
+        {
+            CancellationSettlement = TimeSpan.FromMilliseconds(100),
+            QuarantineBound = TimeSpan.FromMilliseconds(500)
+        });
+        using var cancellation = new CancellationTokenSource();
+        var pending = runner.RunAsync(new byte[] { 1 }, cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await cancellation.CancelAsync();
+        var uncertain = await pending;
+        Assert.Equal(WorkerProcessFailure.CleanupFailed, uncertain.Failure);
+        Assert.Empty(uncertain.Output);
+        release.TrySetResult();
+        service.Inspection.Behavior = (frame, _) => Task.FromResult(new WorkerProcessResult(frame.ToArray(), WorkerProcessFailure.None));
+        await FerruleServiceRecoveryTests.Reopened(runner);
+        Assert.Same(uncertain, await pending);
+        Assert.Equal(new byte[] { 2 }, (await runner.RunAsync(new byte[] { 2 }, default)).Output);
+        Assert.Equal(2, service.Inspection.Frames.Count);
+    }
+
+    [Fact]
     public void SelectionAndEndpointSettingsAreExplicitAndCanonical()
     {
         Dictionary<string, string?> values = new(StringComparer.Ordinal)
@@ -526,7 +558,7 @@ public sealed class FerruleServiceRunnerTests
         { RetryDelay = retryDelay ?? TimeSpan.FromMilliseconds(50) });
 
     /// <summary>A loopback layer-4 balancer that assigns each new connection to the next backend.</summary>
-    private sealed class RoundRobinBalancer : IAsyncDisposable
+    internal sealed class RoundRobinBalancer : IAsyncDisposable
     {
         private readonly TcpListener listener = new(IPAddress.Loopback, 0);
         private readonly int[] backends;

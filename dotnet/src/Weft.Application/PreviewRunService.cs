@@ -60,6 +60,15 @@ public sealed class PreviewRunService
     public Task<PreviewOutputContent?> ReadOutputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
         CancellationToken cancellationToken = default) => _reader.ReadOutputAsync(actor, organizationId, runId, ordinal, cancellationToken);
 
+    public Task<PreviewRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null,
+        CancellationToken cancellationToken = default) => _reader.ListAsync(actor, mapping, limit, afterRunId, cancellationToken);
+
+    public Task<IReadOnlyList<PreviewInputDescriptor>?> ReadInputDescriptorsAsync(ActorContext actor, Guid organizationId, Guid runId,
+        CancellationToken cancellationToken = default) => _reader.ReadInputDescriptorsAsync(actor, organizationId, runId, cancellationToken);
+
+    public Task<PreviewOutputContent?> ReadInputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
+        CancellationToken cancellationToken = default) => _reader.ReadInputAsync(actor, organizationId, runId, ordinal, cancellationToken);
+
     public Task<PreviewCancelOutcome> CancelAsync(ActorContext actor, Guid organizationId, Guid runId,
         CancellationToken cancellationToken = default) => _store.CancelAsync(actor, organizationId, runId, cancellationToken);
 
@@ -121,13 +130,15 @@ public sealed class PreviewRunService
 /// Executes leased attempts of stored preview runs through the preview backend, with native
 /// bytes read from private storage. It never submits or reads on a caller's behalf.
 /// </summary>
-public sealed class PreviewRunExecutor
+public sealed class PreviewRunExecutor : IExecutionAdmission
 {
     private readonly IPreviewRunStore _store;
     private readonly IPrivateObjectStore _objects;
     private readonly IMappingPreviewBackend _backend;
     private readonly TimeProvider _time;
     private readonly PreviewRunOptions _options;
+
+    public bool CanExecute => _backend is not IExecutionAdmission { CanExecute: false };
 
     public PreviewRunExecutor(IPreviewRunStore store, IPrivateObjectStore objects, IMappingPreviewBackend backend,
         TimeProvider time, PreviewRunOptions? options = null)
@@ -156,6 +167,8 @@ public sealed class PreviewRunExecutor
     public async Task<PreviewExecutionOutcome> ExecuteAsync(Guid organizationId, Guid runId, Guid workerInstance,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!CanExecute) return PreviewExecutionOutcome.Busy;
         var claimed = await _store.ClaimAsync(organizationId, runId, workerInstance, _options.Lease, cancellationToken).ConfigureAwait(false);
         switch (claimed.Outcome)
         {
@@ -177,6 +190,12 @@ public sealed class PreviewRunExecutor
             try
             {
                 result = await _backend.PreviewAsync(request, execution.Token).ConfigureAwait(false);
+                var expectedProfile = request.Profile == PreviewExecutionProfile.Document ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
+                if (result.Profile != expectedProfile || result.Artifacts.Any(output =>
+                    request.Profile == PreviewExecutionProfile.Document
+                        ? !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType)
+                        : output.MediaType != PreviewPolicy.MediaType))
+                    throw new PreviewRunException("The preview backend did not preserve the requested admission profile.");
             }
             finally
             {
@@ -244,7 +263,8 @@ public sealed class PreviewRunExecutor
         else throw new PreviewRunException("The native source does not match the run's subject kind.");
         return new MappingPreviewRequest(artifact, description.Target, new PreviewInputDocument(null, inputs[0].Content),
             inputs.Skip(1).Select(input => new PreviewInputDocument(input.Name, input.Content)).ToArray(),
-            description.Parameters, claim.CurrentDateTime, description.Limits);
+            description.Parameters, claim.CurrentDateTime, description.Limits)
+        { Profile = description.Profile };
     }
 
     private enum Watch { Running, CancelRequested, ClaimLost }

@@ -110,8 +110,8 @@ another terminal and open http://127.0.0.1:5173; Angular forwards `/api` request
 to the local service. `WEFT_DEV_LISTEN_ADDR` changes the API's loopback address.
 The unauthenticated shell rejects public interfaces.
 
-Examples are at `/examples`, and `/` redirects there. Use `/catalog` at the
-packaged API origin for configured catalog reads. Its strict Development Host
+The application root opens `/catalog`. Use the packaged API origin for
+configured catalog reads. Its strict Development Host
 boundary is preserved; the separate Angular development proxy is not the
 catalog qualification origin.
 
@@ -129,25 +129,16 @@ metadata writes independently of native ingestion and report generation. Run
 `npm run test:mapping-metadata-browser` with the explicit private fixture bindings;
 its qualification remains separate from project creation and read-only viewing.
 
-To browse real Ferrule examples, build the restricted worker image as described
-in [Ferrule worker](ferrule-worker.md). Set `WEFT_FERRULE_WORKER_IMAGE` to its
-immutable `sha256:...` image ID and start the server with
-`DOTNET_ENVIRONMENT=Development`. The same singleton worker runner serves
-projection and validation requests; its local Linux/Docker requirements apply.
-With `WEFT_FERRULE_RUNNER=service` and the
-[service runner settings](ferrule-service.md#weft-service-runner), the Development host
-uses a running Ferrule service instead of Docker.
-The example list remains available without a configured worker and reports that
-the explanation and validation are unavailable. The browser does not substitute
-synthetic data for a failed native operation.
-
-Development routes are `GET /api/v1/examples/mappings` and
-`GET /api/v1/examples/mappings/{exampleId}`. The fixed manifest includes `basic`,
-`exact`, `conditions`, `controls`, `functions`, `partial`, `invalid`, `generated`,
-and `ambiguous`. Each response keeps the immutable example identity, separate
-operation reports, nullable validation result, and native evidence. Unknown IDs
-and non-development requests return empty 404s. See
-[Mapping viewer](mapping-viewer.md) for navigation and explanation coverage.
+To inspect mappings, upload them into a configured catalog and open a saved
+revision in the workbench. Build the restricted worker image as described in
+[Ferrule worker](ferrule-worker.md) and set `WEFT_FERRULE_WORKER_IMAGE` to its
+immutable `sha256:...` image ID. The singleton worker runner serves projection
+and validation requests under the documented Linux/Docker restrictions.
+Alternatively, `WEFT_FERRULE_RUNNER=service` and the
+[service runner settings](ferrule-service.md#weft-service-runner) select a running
+Ferrule service. Saved reports remain readable without a worker; deriving new
+reports requires the configured backend. Failed native operations never become
+synthetic mapping data. See [Saved mapping reports](saved-reports.md).
 
 To inspect the self-authored fixture contract, start with
 `DOTNET_ENVIRONMENT=Development` and request

@@ -2,7 +2,6 @@ using Weft.Contracts.Builds;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
 using Weft.Contracts.Comparisons;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Projections;
 using Weft.Contracts.Regression;

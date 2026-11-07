@@ -21,7 +21,8 @@ internal static class HistoricalIngestionSeed
     private const string IngestionChecksum = "d61a8bc2d56b6a39607414cf0f14c58db511594369ac124fd270a08f77455ae5";
     private const long MigrationLock = 6287392987644524871;
     private const int MaximumTableRows = 64;
-    private const int MaximumJournalRows = 32;
+    // Bound by this build's exact manifest, not by database-supplied history.
+    private static int MaximumJournalRows => MigrationRunner.EmbeddedMigrations.Count;
     private const int MaximumSchemaRows = 1024;
     private const int MaximumSnapshotBytes = 2 * 1024 * 1024;
     private static readonly (string Name, string Order)[] Tables =

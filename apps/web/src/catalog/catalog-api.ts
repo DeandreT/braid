@@ -32,6 +32,7 @@ import {
 } from "./catalog-types";
 import { trimCatalogName } from "./catalog-text";
 import { BrowserSessionState } from "../auth/browser-session-state";
+import type { CatalogSearchPage } from "./search/catalog-search";
 import {
   isIdentityContext,
   isSessionRequestToken,
@@ -163,6 +164,7 @@ export class CatalogApi {
     url: string,
     guard: (value: unknown) => value is T,
     params?: HttpParams,
+    timeoutMs = 8000,
   ): Observable<T> {
     // A read that meets another action's routine check waits for it; without a presented
     // identity it is refused unsent.
@@ -172,7 +174,7 @@ export class CatalogApi {
         const generation = this.sessions.generation();
         const sessionMode = this.sessions.state().kind === "authenticated";
         return this.http.get<unknown>(url, { params }).pipe(
-          timeout(8000),
+          timeout(timeoutMs),
           map((value) => {
             if (generation !== this.sessions.generation() || !guard(value))
               throw new CatalogReadError("unavailable");
@@ -188,6 +190,29 @@ export class CatalogApi {
               this.sessions.rejectProtectedRequest(generation);
             return throwError(() => catalogFailure(error));
           }),
+        );
+      }),
+    );
+  }
+
+  search(
+    organizationId: string,
+    query: string,
+    cursor: string | null = null,
+  ): Observable<CatalogSearchPage> {
+    return defer(() => import("./search/catalog-search")).pipe(
+      switchMap(({ isSearchPage, isSearchCursor }) => {
+        requireId(organizationId);
+        if (cursor !== null && !isSearchCursor(cursor))
+          throw new CatalogReadError("invalidLink");
+        let params = new HttpParams().set("q", query).set("limit", "25");
+        if (cursor !== null) params = params.set("cursor", cursor);
+        return this.get(
+          `/api/v1/organizations/${organizationId}/search`,
+          (value): value is CatalogSearchPage =>
+            isSearchPage(value, organizationId, query),
+          params,
+          32000,
         );
       }),
     );

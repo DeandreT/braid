@@ -92,6 +92,14 @@ public sealed class FerruleServiceOpenApiTests
         Assert.True(document["paths"]![FerruleServiceProtocol.ReadyPath]!["get"]!["responses"]!["503"]!["headers"]!["Retry-After"]!["required"]!.GetValue<bool>());
         // Probes are also served on the plain probe listener.
         Assert.Equal(2, document["paths"]![FerruleServiceProtocol.ReadinessPath]!["get"]!["security"]!.AsArray().Count);
+        foreach (var path in document["paths"]!.AsObject())
+            foreach (var operation in path.Value!.AsObject())
+                foreach (var response in operation.Value!["responses"]!.AsObject())
+                {
+                    var replica = response.Value!["headers"]![FerruleServiceProtocol.ReplicaHeader]!;
+                    Assert.True(replica["required"]!.GetValue<bool>());
+                    Assert.Equal("^[0-9a-f]{32}$", replica["schema"]!["pattern"]!.GetValue<string>());
+                }
     }
 
     [Fact]
@@ -106,6 +114,13 @@ public sealed class FerruleServiceOpenApiTests
             var capabilities = JsonSerializer.Deserialize<FerruleServiceCapabilitiesV1>(body, Strict(web))!;
             Assert.Equal(enabled, capabilities.Profiles.Any(profile => profile.Toolchain is not null));
             Assert.Equal(enabled, capabilities.Profiles.Any(profile => profile.Runtime is not null));
+            if (enabled)
+            {
+                Assert.Equal(new[] { Weft.Deployment.BuildWorkerProtocol.Profile, Weft.Deployment.BuildWorkerProtocol.DocumentProfile,
+                    Weft.Deployment.BuildWorkerProtocol.X12InterchangesProfile }, capabilities.Profiles.Single(profile => profile.Toolchain is not null).Toolchain!.SupportedProfiles);
+                Assert.Equal(new[] { Weft.Deployment.CompiledRuntimeProtocol.Protocol, Weft.Deployment.CompiledRuntimeProtocol.DocumentProtocol },
+                    capabilities.Profiles.Single(profile => profile.Runtime is not null).Runtime!.SupportedProtocols);
+            }
             Assert.Equal(body, JsonSerializer.SerializeToUtf8Bytes(capabilities, web));
         }
     }

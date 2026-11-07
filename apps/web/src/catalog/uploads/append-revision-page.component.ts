@@ -9,14 +9,18 @@ import {
   inject,
   signal,
   untracked,
+  viewChild,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
-import { combineLatest, type Observable } from "rxjs";
+import { combineLatest, of, type Observable } from "rxjs";
 import { catalogRoutes, isCatalogId } from "../catalog-types";
 import { CatalogContextStore } from "../catalog-context";
-import { RevisionAppendDraftRecovery } from "./unsent-upload-recovery";
+import {
+  RevisionAppendDraftRecovery,
+  MfdImportDraftRecovery,
+} from "./unsent-upload-recovery";
 import type { NativeIngestionSourceErrorKind } from "./native-ingestion-leaves";
 import { NativeRevisionAppendState } from "./native-revision-append-state";
 import type {
@@ -26,17 +30,25 @@ import type {
   NativeRevisionAppendRejection,
 } from "./native-revision-append-types";
 import { HelpLinkComponent } from "../../help/help-link.component";
+import { MfdImportComponent } from "./mfd-import.component";
 
 @Component({
   selector: "weft-append-revision-page",
-  imports: [ReactiveFormsModule, RouterLink, HelpLinkComponent],
-  providers: [RevisionAppendDraftRecovery],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    HelpLinkComponent,
+    MfdImportComponent,
+  ],
+  providers: [RevisionAppendDraftRecovery, MfdImportDraftRecovery],
   templateUrl: "./append-revision-page.component.html",
   styleUrl: "./append-revision-page.component.css",
 })
 export class AppendRevisionPageComponent {
+  readonly mfdImport = viewChild(MfdImportComponent);
   readonly state = inject(NativeRevisionAppendState);
   private readonly draftRecovery = inject(RevisionAppendDraftRecovery);
+  readonly mfdDraftRecovery = inject(MfdImportDraftRecovery);
   readonly routes = catalogRoutes;
   readonly abandonDecision = signal(false);
   readonly abandonAcknowledged = signal(false);
@@ -75,15 +87,15 @@ export class AppendRevisionPageComponent {
         const organizationId = params.get("organizationId"),
           projectId = params.get("projectId"),
           mappingId = params.get("mappingId");
-        this.state.select(
+        const selected =
           query.keys.length === 0 &&
-            isCatalogId(organizationId) &&
-            isCatalogId(projectId) &&
-            isCatalogId(mappingId)
+          isCatalogId(organizationId) &&
+          isCatalogId(projectId) &&
+          isCatalogId(mappingId)
             ? { organizationId, projectId, mappingId }
-            : null,
-          this.draftRecovery,
-        );
+            : null;
+        this.mfdDraftRecovery.routeScope(selected);
+        this.state.select(selected, this.draftRecovery);
       });
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       this.state.setFilename(this.form.getRawValue().originalFilename);
@@ -156,6 +168,8 @@ export class AppendRevisionPageComponent {
   }
 
   requestLeave(): Observable<boolean> {
+    if (this.mfdDraftRecovery.hasWork()) return of(false);
+    if (this.mfdImport()?.requestLeave() === false) return of(false);
     const focused = this.document.activeElement?.id;
     this.returnFocusId =
       focused && ["append-file", "append-filename"].includes(focused)
@@ -185,6 +199,7 @@ export class AppendRevisionPageComponent {
   }
 
   submit(): void {
+    if (this.mfdImport()?.busy()) return;
     if (this.uiBlocked()) return;
     this.state.setFilename(this.form.getRawValue().originalFilename);
     this.state.append();

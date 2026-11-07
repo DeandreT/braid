@@ -199,7 +199,9 @@ First-version read tools:
 
 Every tool is scoped to the already authorized conversation/revision. Cross-
 project search, raw filesystem/network access, shell/SQL execution, and payload
-retrieval are absent from this initial tool registry. Revision comparison becomes
+retrieval are absent from this tool registry. Organization-wide questions use a
+separate workspace conversation with its own closed read-only manifest; see
+[Workspace chat](workspace-chat.md). Revision comparison becomes
 a tool only after the comparison API is independently qualified. The registry,
 read port and citation check are described in
 [Mapping explanation tools](mapping-ai-tools.md).
@@ -220,7 +222,8 @@ another revision; deployment remains a separate approved workflow.
 
 Production input/output bytes are not model context by default. Reading them
 requires the separate payload permission and a model profile that permits their
-destination. Persisted chat text can itself include sensitive user-provided
+destination. Workspace chat applies this to sample data; see
+[Workspace chat](workspace-chat.md#payload-data). Persisted chat text can itself include sensitive user-provided
 content, so conversations have explicit ownership, retention, deletion, and
 sharing policy. V1 conversations are private to their creator within a project;
 administration privileges do not silently expose their message content.

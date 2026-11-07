@@ -158,6 +158,16 @@ public interface IProjectPayloadPermissionReader
 }
 
 /// <summary>
+/// Whether the principal currently holds at least one active explicit grant on a project it can read in one
+/// organization, under the same single-statement authority as <see cref="IProjectPayloadPermissionReader"/>.
+/// It decides only whether payload tools are offered; every payload read still observes its own project.
+/// </summary>
+public interface IProjectPayloadGrantPresence
+{
+    Task<bool> AnyAsync(ActorContext actor, Guid organizationId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Explicit separate migration-owner operation, never registered in the web application or called
 /// by identity resolution/login, claims, Development provisioning or project-role changes. Require
 /// the exact current migration/schema contract and lock current authority/grant facts in established

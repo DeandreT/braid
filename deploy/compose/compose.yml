@@ -1,6 +1,6 @@
 # Local stack in the hosted shape: PostgreSQL, a separate migration step with the migrator
 # credential, private storage and session key-ring volumes, and the Session-profile server
-# behind its same-replica edge. compose.examples.yml adds the local-only examples server.
+# behind its same-replica edge.
 # Values come from the caller's private environment; see docs/runtime-packaging.md.
 name: weft-hosted-shape
 
@@ -54,6 +54,7 @@ services:
       WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD: ${WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD:?}
       WEFT_LOCAL_INVOCATION_WRITER_PASSWORD: ${WEFT_LOCAL_INVOCATION_WRITER_PASSWORD:?}
       WEFT_LOCAL_RUN_WRITER_PASSWORD: ${WEFT_LOCAL_RUN_WRITER_PASSWORD:?}
+      WEFT_LOCAL_COMPARISON_PASSWORD: ${WEFT_LOCAL_COMPARISON_PASSWORD:?}
       WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD: ${WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD:?}
       WEFT_LOCAL_DRAFT_READER_PASSWORD: ${WEFT_LOCAL_DRAFT_READER_PASSWORD:?}
       WEFT_LOCAL_DRAFT_WRITER_PASSWORD: ${WEFT_LOCAL_DRAFT_WRITER_PASSWORD:?}
@@ -158,7 +159,7 @@ services:
       WEFT_EDGE_TRUSTED_PROXIES: ${WEFT_EDGE_TRUSTED_PROXIES:-}
     depends_on: [server]
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/api/v1/health"]
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/api/v1/health/ready"]
       interval: 2s
       timeout: 2s
       retries: 30

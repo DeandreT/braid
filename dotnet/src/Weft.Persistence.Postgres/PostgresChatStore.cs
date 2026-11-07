@@ -11,6 +11,8 @@ public sealed partial class PostgresChatStore : IChatConversationStore, IChatTur
     private readonly PostgresChatDatabase _database;
     private const string Scope = "organization_id=@org AND creator_id=@creator AND conversation_id=@conversation";
     private const string TurnScope = Scope + " AND turn_id=@turn";
+    // The conversation's complete identity: a revision conversation's exact scope, or a workspace conversation's none.
+    private const string ExactScope = "conversation_kind=@conversationKind AND project_id IS NOT DISTINCT FROM @project AND mapping_id IS NOT DISTINCT FROM @mapping AND revision_id IS NOT DISTINCT FROM @revision";
     public PostgresChatStore(PostgresChatDatabase database) => _database = database ?? throw new ArgumentNullException(nameof(database));
 
     public Task<ChatStoreOutcome> CreateAsync(ActorContext actor, ChatConversationIntent intent, CancellationToken ct = default)
@@ -37,13 +39,17 @@ public sealed partial class PostgresChatStore : IChatConversationStore, IChatTur
             }
             await using (var insert = Command(tx, """
                 INSERT INTO weft.chat_conversations(organization_id,creator_id,conversation_id,project_id,mapping_id,revision_id,
-                    projection_entry_id,projection_id,projection_key,projection_digest,validation_entry_id,validation_id,validation_key,validation_digest,retain_until)
-                VALUES(@org,@creator,@conversation,@project,@mapping,@revision,@pe,@pi,@pk,@pd,@ve,@vi,@vk,@vd,@retain)
+                    projection_entry_id,projection_id,projection_key,projection_digest,validation_entry_id,validation_id,validation_key,validation_digest,retain_until,
+                    conversation_kind,focus_project_id,focus_mapping_id,focus_revision_id)
+                VALUES(@org,@creator,@conversation,@project,@mapping,@revision,@pe,@pi,@pk,@pd,@ve,@vi,@vk,@vd,@retain,@conversationKind,@focusProject,@focusMapping,@focusRevision)
                 ON CONFLICT(organization_id,creator_id,conversation_id) DO NOTHING
                 """, intent.Key))
             {
                 Pin(insert, "p", intent.Projection); Pin(insert, "v", intent.Validation);
                 Add(insert, "retain", NpgsqlDbType.TimestampTz, intent.RetainUntilUtc);
+                Add(insert, "focusProject", NpgsqlDbType.Uuid, intent.Focus?.Mapping.ProjectId);
+                Add(insert, "focusMapping", NpgsqlDbType.Uuid, intent.Focus?.Mapping.MappingId);
+                Add(insert, "focusRevision", NpgsqlDbType.Uuid, intent.Focus?.RevisionId);
                 var changed = await insert.ExecuteNonQueryAsync(ct);
                 if (changed is < 0 or > 1) throw Invalid();
                 // Unique-index waits are followed by a lock and a NEW statement authority read.
@@ -157,7 +163,7 @@ public sealed partial class PostgresChatStore : IChatConversationStore, IChatTur
                 var next = reader.GetInt32(0);
                 if (next != sequence + 1 || !Enum.IsDefined((ChatEventKind)reader.GetInt32(2))) throw Invalid();
                 var item = new ChatStoredEvent(next, reader.GetGuid(1), (ChatEventKind)reader.GetInt32(2), reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetGuid(4), reader.IsDBNull(5) ? null : reader.GetString(5));
-                _ = item.Usage; _ = item.ProviderFailure; _ = item.Citation; _ = item.TerminalMetadata;
+                _ = item.Usage; _ = item.ProviderFailure; _ = item.Citation; _ = item.WorkspaceCitation; _ = item.DataShared; _ = item.TerminalMetadata;
                 result.Add(item);
                 sequence = next;
             }
@@ -199,7 +205,7 @@ public sealed partial class PostgresChatStore : IChatConversationStore, IChatTur
     }
     private static async Task<bool> VisibleAsync(PostgresTransaction tx, ChatConversationKey key, CancellationToken ct)
     {
-        await using var command = Command(tx, $"SELECT EXISTS(SELECT 1 FROM weft.chat_conversations WHERE {Scope} AND project_id=@project AND mapping_id=@mapping AND revision_id=@revision AND retain_until>statement_timestamp() AND weft.chat_authorized(organization_id,project_id,creator_id))", key);
+        await using var command = Command(tx, $"SELECT EXISTS(SELECT 1 FROM weft.chat_conversations WHERE {Scope} AND {ExactScope} AND retain_until>statement_timestamp() AND weft.chat_authorized(organization_id,project_id,creator_id))", key);
         return await command.ExecuteScalarAsync(ct) is true;
     }
     private static async Task<DateTimeOffset> NowAsync(PostgresTransaction tx, CancellationToken ct)
@@ -212,18 +218,19 @@ public sealed partial class PostgresChatStore : IChatConversationStore, IChatTur
     private static NpgsqlCommand Command(PostgresTransaction tx, string sql, ChatConversationKey key, Guid? turn = null)
     {
         var command = tx.CreateCommand(sql);
-        Add(command, "org", NpgsqlDbType.Uuid, key.Revision.OrganizationId); Add(command, "creator", NpgsqlDbType.Uuid, key.Creator.Value);
-        Add(command, "conversation", NpgsqlDbType.Uuid, key.ConversationId); Add(command, "project", NpgsqlDbType.Uuid, key.Revision.ProjectId);
-        Add(command, "mapping", NpgsqlDbType.Uuid, key.Revision.MappingId); Add(command, "revision", NpgsqlDbType.Uuid, key.Revision.RevisionId);
+        Add(command, "org", NpgsqlDbType.Uuid, key.OrganizationId); Add(command, "creator", NpgsqlDbType.Uuid, key.Creator.Value);
+        Add(command, "conversation", NpgsqlDbType.Uuid, key.ConversationId); Add(command, "project", NpgsqlDbType.Uuid, key.Revision?.ProjectId);
+        Add(command, "mapping", NpgsqlDbType.Uuid, key.Revision?.MappingId); Add(command, "revision", NpgsqlDbType.Uuid, key.Revision?.RevisionId);
+        Add(command, "conversationKind", NpgsqlDbType.Integer, (int)key.Kind);
         if (turn is { } id) Add(command, "turn", NpgsqlDbType.Uuid, id);
         return command;
     }
     private static void Add(NpgsqlCommand command, string name, NpgsqlDbType type, object? value) =>
         command.Parameters.Add(new NpgsqlParameter(name, type) { Value = value ?? DBNull.Value });
-    private static void Pin(NpgsqlCommand command, string prefix, ChatReportPin pin)
+    private static void Pin(NpgsqlCommand command, string prefix, ChatReportPin? pin)
     {
-        Add(command, prefix + "e", NpgsqlDbType.Uuid, pin.CacheEntryId); Add(command, prefix + "i", NpgsqlDbType.Uuid, pin.DerivationId);
-        Add(command, prefix + "k", NpgsqlDbType.Text, pin.KeyFingerprint.Value); Add(command, prefix + "d", NpgsqlDbType.Text, pin.ObjectDigest.Value);
+        Add(command, prefix + "e", NpgsqlDbType.Uuid, pin?.CacheEntryId); Add(command, prefix + "i", NpgsqlDbType.Uuid, pin?.DerivationId);
+        Add(command, prefix + "k", NpgsqlDbType.Text, pin?.KeyFingerprint.Value); Add(command, prefix + "d", NpgsqlDbType.Text, pin?.ObjectDigest.Value);
     }
     private static ChatTurnWriteResult Denied() => new(ChatStoreOutcome.NotAuthorizedOrNotFound);
     private static InvalidOperationException Invalid() => new("Private chat stored facts are invalid.");

@@ -51,7 +51,7 @@ export class TransportVector {
       requireOwned(asset);
       return this.cfg.origin + "/" + asset;
     }
-    return this.cfg.origin + "/examples";
+    return this.cfg.origin + "/sign-in";
   }
   admits(url: string): boolean {
     return (

@@ -1,17 +1,21 @@
 :host {
   display: block;
-  padding: 24px 0 44px;
+  padding: 16px;
+  container-type: inline-size;
 }
 .help-layout {
   display: grid;
   grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-  gap: 32px;
+  gap: 16px;
   align-items: start;
 }
 .help-contents {
   position: sticky;
   top: 16px;
   font-size: 13px;
+}
+.help-contents .catalog-eyebrow {
+  display: block;
 }
 .help-contents .catalog-eyebrow a {
   text-decoration: none;
@@ -61,9 +65,9 @@
 .help-outline {
   background: #fff;
   border: 1px solid #dfe7da;
-  border-radius: 12px;
+  border-radius: 4px;
   padding: 12px 16px;
-  margin: 0 0 24px;
+  margin: 0 0 16px;
   font-size: 13px;
 }
 .help-outline p {
@@ -99,8 +103,8 @@
 .help-index li {
   background: #fff;
   border: 1px solid #dfe7da;
-  border-radius: 14px;
-  padding: 16px 18px;
+  border-radius: 4px;
+  padding: 12px 16px;
 }
 .help-index a {
   font:
@@ -164,5 +168,14 @@
     border-radius: 12px;
     background: #fff;
     padding: 12px;
+  }
+}
+@container (max-width: 600px) {
+  .help-layout {
+    grid-template-columns: 1fr;
+  }
+  .help-contents {
+    position: static;
+    order: 2;
   }
 }

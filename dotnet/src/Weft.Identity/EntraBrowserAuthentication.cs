@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Weft.Application;
+using Weft.Contracts.Auth;
 using Weft.Domain;
 
 namespace Weft.Identity;
@@ -10,8 +11,10 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
 {
     private readonly BrowserAuthenticationOptions options;
     private readonly IExternalIdentityReader identities;
+    private readonly IAccountDisplayMetadata? displayMetadata;
     private readonly ServerSessionBrowser browser;
     private readonly EntraBrowserClient entra;
+    private readonly IOrganizationInvitationRedeemer? invitations;
     private readonly BrowserAuthActionAntiforgery antiforgery;
     private readonly EntraOwnedWork methods = new();
     private readonly CancellationTokenSource lifetime = new();
@@ -19,15 +22,18 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
     private Task? disposal;
 
     internal EntraBrowserAuthentication(BrowserAuthenticationOptions options, DurableSessionKeyProfile profile,
-        IExternalIdentityReader identities, ServerSessionBrowser browser, EntraBrowserClient entra)
+        IExternalIdentityReader identities, ServerSessionBrowser browser, EntraBrowserClient entra,
+        IAccountDisplayMetadata? displayMetadata = null, IOrganizationInvitationRedeemer? invitations = null)
     {
         if (!browser.UsesAuthenticationProfile(profile, options.OrganizationId, options.ExpectedOrigin) ||
             !entra.UsesAuthenticationProfile(profile, options.OrganizationId, options.ExpectedOrigin))
             throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.Unavailable);
         this.options = options;
         this.identities = identities;
+        this.displayMetadata = displayMetadata;
         this.browser = browser;
         this.entra = entra;
+        this.invitations = invitations;
         antiforgery = new(options.OrganizationId, profile, browser);
     }
 
@@ -35,7 +41,7 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
         Observe(RunAsync(context, "bootstrap", ct, async token =>
         {
             var observed = await ObserveSessionAsync(context, token);
-            string? requestToken = null, identityContext = null;
+            string? requestToken = null, identityContext = null, displayName = null;
             var state = observed.Kind switch
             {
                 ServerSessionRequestKind.Anonymous => BrowserAuthenticationState.Anonymous,
@@ -47,9 +53,15 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
             {
                 requestToken = await browser.IssueRequestTokenAsync(context, token);
                 identityContext = ServerSessionIdentityContext.Derive(identity);
+                if (displayMetadata is not null)
+                {
+                    var binding = await browser.ReadDisplayBindingAsync(context, identity, token);
+                    displayName = AccountDisplayName.Optional(await displayMetadata.ReadAsync(
+                        identity.OrganizationId, binding, token));
+                }
             }
             var authActionToken = antiforgery.Issue(context, token);
-            return new BrowserAuthenticationSession(state, authActionToken, requestToken, identityContext);
+            return new BrowserAuthenticationSession(state, authActionToken, requestToken, identityContext, displayName);
         }));
 
     public Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, CancellationToken ct) =>
@@ -57,16 +69,24 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
         {
             _ = await antiforgery.ValidateAsync(context, "login", token);
             await AdmitPositiveSessionAsync(context, token);
-            return await entra.BeginLoginAsync(context, token);
+            var headers = context.Request.Headers["X-Weft-Invitation"];
+            if (headers.Count > 1 || headers.Count == 1 && (invitations is null || !OrganizationInvitationSecret.IsValid(headers[0])))
+                throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.InvalidRequest);
+            return await entra.BeginLoginAsync(context, BrowserAuthenticationRequest.ReturnPath(context),
+                headers.Count == 1 ? headers[0] : null, token);
         }));
 
-    public Task CompleteLoginAsync(HttpContext context, CancellationToken ct) =>
+    /// <summary>Completes sign-in and returns the validated application path it returns to.</summary>
+    public Task<string> CompleteLoginAsync(HttpContext context, CancellationToken ct) =>
         Observe(RunAsync(context, "callback", ct, async token =>
         {
             var verified = await entra.VerifyCallbackAsync(context, token);
             token.ThrowIfCancellationRequested();
             if (verified.OrganizationId != options.OrganizationId)
                 throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.Unavailable);
+            if (verified.InvitationSecret is { } invitation && (invitations is null ||
+                !await invitations.RedeemAsync(options.OrganizationId, invitation, verified.ExternalIdentity, token)))
+                throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.AuthenticationRequired);
             var resolution = await identities.ResolveAsync(verified.ExternalIdentity, token);
             token.ThrowIfCancellationRequested();
             if (resolution.Outcome != ExternalIdentityResolutionOutcome.Resolved)
@@ -75,9 +95,12 @@ public sealed class EntraBrowserAuthentication : IAsyncDisposable
             if (binding is null || !binding.Enabled || binding.Key != verified.ExternalIdentity ||
                 binding.BindingId == Guid.Empty || binding.Version < 1 || binding.PrincipalId.Value == Guid.Empty)
                 throw BrowserAuthenticationRequest.Error(BrowserAuthenticationFailureKind.Unavailable);
+            if (displayMetadata is not null)
+                await displayMetadata.ObserveAsync(options.OrganizationId, binding.BindingId,
+                    verified.DisplayName, verified.ObservedAtUtc, token);
             await browser.IssueFreshAsync(context, binding.BindingId, binding.Version,
                 new PrincipalId(binding.PrincipalId.Value), verified.VerifiedDeadlineUtc, token);
-            return true;
+            return verified.ReturnPath;
         }));
 
     public Task LogoutAsync(HttpContext context, CancellationToken ct) =>

@@ -73,6 +73,100 @@ public sealed record ChatCitationFact(RevisionScope Revision, ChatReportPin Repo
     public override string ToString() => nameof(ChatCitationFact);
 }
 
+public enum ChatWorkspaceCitationKind
+{
+    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection
+}
+
+/// <summary>
+/// A workspace citation's exact identity: a catalog resource, a resource of one exact retained report, a run or
+/// control record, or a user-guide section. Persistable facts, not proof: only a fresh verification admits one.
+/// </summary>
+public sealed record ChatWorkspaceCitationFact
+{
+    private ChatWorkspaceCitationFact(ChatWorkspaceCitationKind kind, Guid organizationId, Guid? projectId = null, Guid? mappingId = null,
+        Guid? revisionId = null, ChatReportPin? report = null, ChatCitationTarget? target = null, Guid? subjectId = null,
+        long? version = null, string? sectionId = null)
+    {
+        ChatBounds.Id(organizationId);
+        foreach (var id in new[] { projectId, mappingId, revisionId, subjectId }) if (id is { } value) ChatBounds.Id(value);
+        if (version is < 1 || sectionId is not null && !SectionPattern(sectionId)) throw ChatBounds.Invalid();
+        Kind = kind; OrganizationId = organizationId; ProjectId = projectId; MappingId = mappingId; RevisionId = revisionId;
+        Report = report; Target = target; SubjectId = subjectId; Version = version; SectionId = sectionId;
+    }
+    public static ChatWorkspaceCitationFact Project(ProjectScope project) =>
+        new(ChatWorkspaceCitationKind.Project, project.OrganizationId, project.ProjectId);
+    public static ChatWorkspaceCitationFact Mapping(MappingScope mapping) =>
+        new(ChatWorkspaceCitationKind.Mapping, mapping.OrganizationId, mapping.ProjectId, mapping.MappingId);
+    public static ChatWorkspaceCitationFact Revision(RevisionScope revision) =>
+        new(ChatWorkspaceCitationKind.Revision, revision.OrganizationId, revision.ProjectId, revision.MappingId, revision.RevisionId);
+    /// <summary>A projection/validation resource, whole report or emitted diagnostic of one exact retained report.</summary>
+    public static ChatWorkspaceCitationFact ReportResource(RevisionScope revision, ChatReportPin report, ChatCitationTarget target) =>
+        new(ChatWorkspaceCitationKind.Report, revision.OrganizationId, revision.ProjectId, revision.MappingId, revision.RevisionId,
+            report ?? throw ChatBounds.Invalid(), target ?? throw ChatBounds.Invalid());
+    public static ChatWorkspaceCitationFact PreviewRun(RevisionScope revision, Guid runId) =>
+        new(ChatWorkspaceCitationKind.PreviewRun, revision.OrganizationId, revision.ProjectId, revision.MappingId, revision.RevisionId, subjectId: Required(runId));
+    public static ChatWorkspaceCitationFact RegressionCase(MappingScope mapping, Guid caseId, long version) =>
+        new(ChatWorkspaceCitationKind.RegressionCase, mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, subjectId: Required(caseId),
+            version: version >= 1 ? version : throw ChatBounds.Invalid());
+    public static ChatWorkspaceCitationFact RegressionRun(MappingScope mapping, Guid runId) =>
+        new(ChatWorkspaceCitationKind.RegressionRun, mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, subjectId: Required(runId));
+    public static ChatWorkspaceCitationFact BuildRun(MappingScope mapping, Guid buildId) =>
+        new(ChatWorkspaceCitationKind.BuildRun, mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, subjectId: Required(buildId));
+    public static ChatWorkspaceCitationFact BuildApproval(MappingScope mapping, Guid approvalId) =>
+        new(ChatWorkspaceCitationKind.BuildApproval, mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, subjectId: Required(approvalId));
+    public static ChatWorkspaceCitationFact BuildEnvironment(ProjectScope project, Guid environmentId, long version) =>
+        new(ChatWorkspaceCitationKind.BuildEnvironment, project.OrganizationId, project.ProjectId, subjectId: Required(environmentId),
+            version: version >= 1 ? version : throw ChatBounds.Invalid());
+    /// <summary>A section of the user guide shipped with this server; it carries the organization it was cited in.</summary>
+    public static ChatWorkspaceCitationFact GuideSection(Guid organizationId, string sectionId) =>
+        new(ChatWorkspaceCitationKind.GuideSection, organizationId, sectionId: sectionId ?? throw ChatBounds.Invalid());
+
+    public ChatWorkspaceCitationKind Kind { get; }
+    public Guid OrganizationId { get; }
+    public Guid? ProjectId { get; }
+    public Guid? MappingId { get; }
+    public Guid? RevisionId { get; }
+    public ChatReportPin? Report { get; }
+    public ChatCitationTarget? Target { get; }
+    public Guid? SubjectId { get; }
+    public long? Version { get; }
+    public string? SectionId { get; }
+    public ProjectScope? ProjectScope => ProjectId is { } project ? new(OrganizationId, project) : null;
+    public MappingScope? MappingScope => ProjectId is { } project && MappingId is { } mapping ? new(OrganizationId, project, mapping) : null;
+    public RevisionScope? RevisionScope => ProjectId is { } project && MappingId is { } mapping && RevisionId is { } revision
+        ? new(OrganizationId, project, mapping, revision) : null;
+    /// <summary>Lower-case letters, digits and hyphens, 1–64 characters, starting with a letter or digit.</summary>
+    public static bool SectionPattern(string value) =>
+        value is { Length: >= 1 and <= 64 } && (char.IsAsciiLetterLower(value[0]) || char.IsAsciiDigit(value[0])) &&
+        value.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-');
+    private static Guid Required(Guid id) { ChatBounds.Id(id); return id; }
+    public override string ToString() => nameof(ChatWorkspaceCitationFact);
+}
+
+public enum ChatPayloadSource { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput }
+
+/// <summary>Payload bytes one tool call returned to the model: identities and the byte count, never content.</summary>
+public sealed record ChatPayloadDisclosureFact
+{
+    public const int MaximumBytes = 1_048_576;
+    public ChatPayloadDisclosureFact(Guid projectId, ChatPayloadSource source, Guid subjectId, long? version, int byteCount)
+    {
+        ChatBounds.Id(projectId); ChatBounds.Id(subjectId);
+        if (!Enum.IsDefined(source) || byteCount is < 1 or > MaximumBytes ||
+            (source == ChatPayloadSource.RegressionCase) != (version is not null) || version is < 1) throw ChatBounds.Invalid();
+        ProjectId = projectId; Source = source; SubjectId = subjectId; Version = version; ByteCount = byteCount;
+    }
+    public Guid ProjectId { get; }
+    public ChatPayloadSource Source { get; }
+    /// <summary>The preview run, regression case or regression run.</summary>
+    public Guid SubjectId { get; }
+    /// <summary>The regression case version; null for runs.</summary>
+    public long? Version { get; }
+    public int ByteCount { get; }
+    public override string ToString() => nameof(ChatPayloadDisclosureFact);
+}
+
 public sealed record ChatTerminalMetadata
 {
     public ChatTerminalMetadata(ChatUsageFact? usage = null, ChatProviderFailureFact? failure = null, ChatProviderFinishReason? finishReason = null)
@@ -134,6 +228,51 @@ public static class ChatMetadataCodec
         if (value.Target.DiagnosticOrdinal is { } n) w.WriteNumber("ordinal", n); else w.WriteNull("ordinal");
         w.WriteEndObject();
     });
+    public static string WorkspaceCitation(ChatWorkspaceCitationFact value) => Json(w =>
+    {
+        w.WriteStartObject(); w.WriteNumber("v", 1); w.WriteNumber("kind", (int)value.Kind);
+        w.WriteString("organization", value.OrganizationId); WriteId(w, "project", value.ProjectId);
+        WriteId(w, "mapping", value.MappingId); WriteId(w, "revision", value.RevisionId);
+        WriteId(w, "entry", value.Report?.CacheEntryId); WriteId(w, "attempt", value.Report?.DerivationId);
+        w.WriteString("key", value.Report?.KeyFingerprint.Value); w.WriteString("digest", value.Report?.ObjectDigest.Value);
+        WriteNumber(w, "targetKind", value.Target is { } target ? (int)target.Kind : null);
+        w.WriteString("resource", value.Target?.ResourceId); WriteNumber(w, "ordinal", value.Target?.DiagnosticOrdinal);
+        WriteId(w, "subject", value.SubjectId); WriteNumber(w, "version", value.Version); w.WriteString("section", value.SectionId);
+        w.WriteEndObject();
+    });
+    public static string Disclosure(ChatPayloadDisclosureFact value) => Json(w =>
+    {
+        w.WriteStartObject(); w.WriteNumber("v", 1); w.WriteString("project", value.ProjectId); w.WriteNumber("source", (int)value.Source);
+        w.WriteString("subject", value.SubjectId); WriteNumber(w, "version", value.Version); w.WriteNumber("bytes", value.ByteCount);
+        w.WriteEndObject();
+    });
+    public static ChatWorkspaceCitationFact ReadWorkspaceCitation(string json) => Parse(json, e =>
+    {
+        var organization = e.GetProperty("organization").GetGuid();
+        Guid Id(string name) => e.GetProperty(name).GetGuid();
+        var kind = (ChatWorkspaceCitationKind)e.GetProperty("kind").GetInt32();
+        return kind switch
+        {
+            ChatWorkspaceCitationKind.Project => ChatWorkspaceCitationFact.Project(new(organization, Id("project"))),
+            ChatWorkspaceCitationKind.Mapping => ChatWorkspaceCitationFact.Mapping(new(organization, Id("project"), Id("mapping"))),
+            ChatWorkspaceCitationKind.Revision => ChatWorkspaceCitationFact.Revision(new(organization, Id("project"), Id("mapping"), Id("revision"))),
+            ChatWorkspaceCitationKind.Report => ChatWorkspaceCitationFact.ReportResource(new(organization, Id("project"), Id("mapping"), Id("revision")),
+                new(Id("entry"), Id("attempt"), Sha256Digest.Parse(e.GetProperty("key").GetString()!), Sha256Digest.Parse(e.GetProperty("digest").GetString()!)),
+                new((ChatCitationKind)e.GetProperty("targetKind").GetInt32(), e.GetProperty("resource").GetString(),
+                    Number(e, "ordinal") is { } n ? checked((int)n) : null)),
+            ChatWorkspaceCitationKind.PreviewRun => ChatWorkspaceCitationFact.PreviewRun(new(organization, Id("project"), Id("mapping"), Id("revision")), Id("subject")),
+            ChatWorkspaceCitationKind.RegressionCase => ChatWorkspaceCitationFact.RegressionCase(new(organization, Id("project"), Id("mapping")), Id("subject"), e.GetProperty("version").GetInt64()),
+            ChatWorkspaceCitationKind.RegressionRun => ChatWorkspaceCitationFact.RegressionRun(new(organization, Id("project"), Id("mapping")), Id("subject")),
+            ChatWorkspaceCitationKind.BuildRun => ChatWorkspaceCitationFact.BuildRun(new(organization, Id("project"), Id("mapping")), Id("subject")),
+            ChatWorkspaceCitationKind.BuildApproval => ChatWorkspaceCitationFact.BuildApproval(new(organization, Id("project"), Id("mapping")), Id("subject")),
+            ChatWorkspaceCitationKind.BuildEnvironment => ChatWorkspaceCitationFact.BuildEnvironment(new(organization, Id("project")), Id("subject"), e.GetProperty("version").GetInt64()),
+            ChatWorkspaceCitationKind.GuideSection => ChatWorkspaceCitationFact.GuideSection(organization, e.GetProperty("section").GetString()!),
+            _ => throw ChatBounds.Invalid()
+        };
+    }, WorkspaceCitation);
+    public static ChatPayloadDisclosureFact ReadDisclosure(string json) => Parse<ChatPayloadDisclosureFact>(json, e => new(
+        e.GetProperty("project").GetGuid(), (ChatPayloadSource)e.GetProperty("source").GetInt32(), e.GetProperty("subject").GetGuid(),
+        Number(e, "version"), e.GetProperty("bytes").GetInt32()), Disclosure);
     public static string Terminal(ChatTerminalMetadata value) => Json(w =>
     {
         w.WriteStartObject(); w.WriteNumber("v", 1); w.WritePropertyName("usage");
@@ -168,6 +307,7 @@ public static class ChatMetadataCodec
         w.WriteNumber("code", (int)value.Code); w.WriteNumber("dispatch", (int)value.Dispatch); w.WriteEndObject();
     }
     private static void WriteNumber(Utf8JsonWriter w, string name, long? n) { if (n is { } value) w.WriteNumber(name, value); else w.WriteNull(name); }
+    private static void WriteId(Utf8JsonWriter w, string name, Guid? id) { if (id is { } value) w.WriteString(name, value); else w.WriteNull(name); }
     private static long? Number(JsonElement e, string name) => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).GetInt64();
     private static ChatUsageFact ReadUsage(JsonElement e) => new(e.GetProperty("round").GetGuid(), (ChatUsageOrigin)e.GetProperty("origin").GetInt32(), Number(e, "input"), Number(e, "output"), Number(e, "total"));
     private static ChatProviderFailureFact ReadFailure(JsonElement e) => new(e.GetProperty("round").GetGuid(), (ChatProviderFailureCode)e.GetProperty("code").GetInt32(), (ChatDispatchObservation)e.GetProperty("dispatch").GetInt32());

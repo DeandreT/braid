@@ -848,6 +848,10 @@ impl Builder<'_> {
                 flavor: "binaryFloat".into(),
                 value: format!("{:016x}", value.to_bits()),
             },
+            Value::Decimal(value) => Literal::ExactNumber {
+                flavor: "decimal".into(),
+                value: value.to_string(),
+            },
             Value::Bool(value) => Literal::Boolean { value: *value },
             Value::Null => Literal::Null {
                 null_kind: "absent".into(),
@@ -1378,6 +1382,7 @@ fn unsupported_kind(node: &Node) -> &'static str {
         Node::SequenceItemAt { .. } => "Generated sequence item selection",
         Node::SequenceAggregate { .. } => "Generated sequence aggregate",
         Node::JoinAggregate { .. } => "Join aggregate",
+        Node::InvocationCounter { .. } => "Invocation counter",
         Node::OwnedSourceField(_)
         | Node::OwnedJoinField(_)
         | Node::OwnedJoinSourcePosition(_)

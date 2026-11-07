@@ -18,6 +18,7 @@ internal sealed partial class BrowserQualificationAdmission
     private bool closed;
     private string? callback, replay;
     private bool returnArmed;
+    private string callbackReturn = "/";
     private int deliveries, refusals;
     internal BrowserQualificationAdmission(QualificationHostInput input) { this.input = input; QualificationWire.Require(input.Generation > 0); }
     internal void ArmCallback(string value)
@@ -42,12 +43,12 @@ internal sealed partial class BrowserQualificationAdmission
     {
         string path = item.RawTarget;
         if (item.Destination == "document") return item.Method == "GET" && item.Mode == "navigate" && item.Origin is null && item.Negative is null
-            && (path == callback || path == "/" && returnArmed || new[] { "/auth-qualification", "/examples", "/", $"/catalog/organizations/{input.Organization:D}/projects" }.Contains(path));
+            && (path == callback || path == callbackReturn && returnArmed || new[] { "/auth-qualification", "/sign-in", "/", "/catalog", $"/catalog/organizations/{input.Organization:D}/projects" }.Contains(path));
         if (path.StartsWith("/api/", StringComparison.Ordinal))
         {
             if (item.Destination != "empty" || item.Mode is not ("cors" or "same-origin") || item.Site != "same-origin") return false;
             if (item.Method == "POST") return item.Origin == input.Origin && path is "/api/auth/login" or "/api/auth/logout" && (item.Negative is null || path == "/api/auth/login");
-            return item.Method == "GET" && item.Origin is null && item.Negative is null && new[] { "/api/auth/session", "/api/v1/catalog/context", "/api/v1/health", "/api/v1/examples/mappings", $"/api/v1/organizations/{input.Organization:D}/projects?limit=10" }.Contains(path);
+            return item.Method == "GET" && item.Origin is null && item.Negative is null && new[] { "/api/auth/session", "/api/v1/catalog/context", "/api/v1/health", $"/api/v1/organizations/{input.Organization:D}/projects?limit=10" }.Contains(path);
         }
         // Module scripts and fonts are CORS-mode loads; Chromium sends the page Origin even same-origin.
         bool cors = item.Destination is "script" or "font";
@@ -75,11 +76,18 @@ internal sealed partial class BrowserQualificationAdmission
             && context.Request.Headers["Sec-Fetch-Site"] == item.Site
             && (item.Origin is null ? !context.Request.Headers.ContainsKey("Origin") : context.Request.Headers.Origin.Count == 1 && context.Request.Headers.Origin == item.Origin)
             && !context.Request.Headers.Keys.Any(name => name.StartsWith("X-Forwarded", StringComparison.OrdinalIgnoreCase) || name.StartsWith("X-Original", StringComparison.OrdinalIgnoreCase));
+        string? requestedReturn = null;
+        if (context.Request.Headers.TryGetValue("X-Weft-Return-To", out var returnHeader))
+        {
+            requestedReturn = returnHeader.Count == 1 ? returnHeader[0] : null;
+            valid &= item is { Method: "POST", RawTarget: "/api/auth/login" } && requestedReturn is not null
+                && IsReturnTarget(requestedReturn, input.Organization);
+        }
         lock (sync)
         {
             valid &= !closed && item is not null && Allowed(item);
             if (valid && item!.RawTarget == callback) callback = null;
-            if (valid && item!.RawTarget == "/" && returnArmed) returnArmed = false;
+            if (valid && item!.RawTarget == callbackReturn && returnArmed) returnArmed = false;
             if (valid) deliveries++; else refusals++;
         }
         if (!valid) { context.Response.StatusCode = 403; return; }
@@ -90,10 +98,12 @@ internal sealed partial class BrowserQualificationAdmission
             var headers = context.Response.Headers;
             bool redirect = context.Response.StatusCode is >= 300 and <= 399;
             bool ok = !headers.ContainsKey(Header) && !headers.ContainsKey("Refresh") && !headers.ContainsKey("Upgrade") && context.Response.StatusCode != 101;
+            if (admitted.Method == "POST" && admitted.RawTarget == "/api/auth/login" && context.Response.StatusCode == 200)
+                lock (sync) callbackReturn = requestedReturn ?? "/";
             if (redirect)
             {
                 ok &= admitted.RawTarget.StartsWith("/api/auth/callback/entra?", StringComparison.Ordinal) && admitted.Destination == "document"
-                    && context.Response.StatusCode == 303 && headers.Location.Count == 1 && headers.Location[0] == "/";
+                    && context.Response.StatusCode == 303 && headers.Location.Count == 1 && headers.Location[0] == callbackReturn;
                 if (ok) lock (sync) { ok = !closed && !returnArmed; if (ok) returnArmed = true; }
             }
             else ok &= !headers.ContainsKey("Location");
@@ -107,6 +117,8 @@ internal sealed partial class BrowserQualificationAdmission
         NetworkResponse(context, admitted);
         await next(context);
     }
+    internal static bool IsReturnTarget(string value, Guid organization) =>
+        value == "/catalog" || value == $"/catalog/organizations/{organization:D}/projects";
     internal void Close() { lock (sync) { closed = true; pending.Clear(); callback = null; returnArmed = false; } }
     internal QualificationReply Counts(QualificationReply reply)
     { lock (sync) return NetworkCounts(reply with { ProductDeliveries = deliveries, AdmissionRefusals = refusals, ProofStripped = true }); }

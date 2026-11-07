@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Weft.Ai;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
+using Weft.Api.Chat.Workspace;
 using Weft.Application;
 using Weft.Persistence.Postgres;
 using Weft.Server;
@@ -151,6 +152,28 @@ public sealed class SessionFeatureHostConfigurationTests
         Assert.Equal("The server host profile is invalid.", error.Message);
         Assert.DoesNotContain(Secret, error.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(ChatHostDatabases) || item.ServiceType == typeof(ChatApiOptions));
+    }
+
+    [Fact]
+    public async Task Session_chat_payload_profile_and_private_grant_reader_produce_the_payload_manifest()
+    {
+        using var files = new ServerHostFiles();
+        var configuration = ChatDeliveries(files);
+        configuration["WEFT_CHAT_PROFILES_FILE"] = files.Text("payload-profiles.json",
+            File.ReadAllText(configuration["WEFT_CHAT_PROFILES_FILE"]).Replace(
+                "\"mappingMetadataAllowed\":true", "\"mappingMetadataAllowed\":true,\"payloadsAllowed\":true", StringComparison.Ordinal));
+        configuration["WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE"] = files.Text("chat-payload-permission",
+            Connection("weft_payload_permission_reader"));
+        var catalog = new WorkspaceToolFixture();
+        var services = new ServiceCollection();
+        services.AddSingleton<IRevisionReportReader>(catalog);
+        services.AddSingleton<IRevisionReportMetadataReader>(catalog);
+        services.AddSingleton(new CatalogPreviewOptions(true));
+        ChatHostConfiguration.Configure(services, configuration.GetValueOrDefault, true, true, new CatalogRevisionReportOptions(true), session: true);
+        await using var provider = services.BuildServiceProvider();
+        Assert.True(Assert.Single(provider.GetRequiredService<ChatApiOptions>().Profiles).Spec.PayloadsAllowed);
+        Assert.NotNull(provider.GetRequiredService<IProjectPayloadGrantPresence>());
+        Assert.Contains(provider.GetRequiredService<WorkspaceToolService>().PayloadManifest!.Value, tool => tool.Name == "get_preview_input");
     }
 
     private static void Fault(ServerHostFiles files, Dictionary<string, string> configuration, string kind,

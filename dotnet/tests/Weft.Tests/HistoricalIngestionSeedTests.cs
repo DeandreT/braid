@@ -165,6 +165,20 @@ public sealed class HistoricalIngestionSeedTests(PostgresFixture fixture)
         Assert.Equal(64, await test.ScalarAsync<long>("SELECT count(*) FROM weft.projects"));
     }
 
+    [PostgresFact]
+    public async Task CurrentJournalFitsTheSnapshotButAnUnknownExtraRowStillRefusesWithoutTruncation()
+    {
+        await using var test = await fixture.CreateCaseAsync();
+        var count = MigrationRunner.EmbeddedMigrations.Count;
+        var snapshot = await HistoricalIngestionSeed.CaptureSnapshotAsync(test);
+        using (var schema = JsonDocument.Parse(snapshot.SchemaStateJson))
+            Assert.Equal(count, schema.RootElement.GetProperty("journal").GetArrayLength());
+        await test.ExecuteAsync("INSERT INTO weft.schema_migrations(version,checksum) VALUES($1,repeat('0',64))", count + 1);
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => HistoricalIngestionSeed.CaptureSnapshotAsync(test));
+        Assert.Contains("no truncated snapshot", refused.Message, StringComparison.Ordinal);
+        Assert.Equal((long)count + 1, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+    }
+
     private async Task<PostgresCase> CreateOriginalCaseAsync()
     {
         var test = await fixture.CreateCaseAsync(migrate: false);

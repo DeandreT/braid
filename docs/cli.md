@@ -1,5 +1,35 @@
 # Weft CLI
 
+## Administration
+
+`weft administration show` reads organization members, invitation states and recent
+changes. Add `--project ID` for project members, payload-read permission and machine
+invocation grants. Normal output includes the strong ETag; every edit requires its
+complete quoted value in `--if-match`. JSON output retains the exact response body.
+
+```sh
+weft administration show
+weft administration member --principal ID --role member --active true --if-match '"admin-ORG-7"'
+weft administration member --project ID --principal ID --role runner --active true --if-match '"admin-ORG-8"'
+weft administration payload --project ID --principal ID --active true --if-match '"admin-ORG-9"'
+weft administration disable-principal ID --if-match '"admin-ORG-10"'
+weft administration disable-binding ID --if-match '"admin-ORG-10"'
+weft administration invitations create --file invitation.json --if-match '"admin-ORG-10"'
+weft administration invitations revoke ID --if-match '"admin-ORG-11"'
+weft administration invocation-grants grant GRANT_ID --project ID --target ID --tenant ID --object ID --if-match '"admin-ORG-12"'
+weft administration invocation-grants revoke GRANT_ID --project ID --if-match '"admin-ORG-13"'
+```
+
+Replace the example ETags with freshly observed values and use canonical UUIDs.
+The invitation JSON has `invitationId`, `tenantId`, `expectedObjectId` (or null),
+`projectRoles` (an array of `{ "projectId": "…", "role": "viewer" }`) and an ISO
+`expiresAt` no more than seven days away. Its private redemption link is deliberate
+output, shown once; never put it in a diagnostic log. `--file -` accepts stdin.
+
+Administrative edits are not retried after uncertain transport results. Read the
+current state before sending another edit. Role boundaries, last-administrator
+protection and soft deactivation are described in [Administration](administration.md).
+
 `weft` works with the Weft API as the signed-in user. It signs in to Microsoft Entra ID as a
 public client application and sends the user's delegated access token, so every command has
 exactly the user's own project roles and the server's feature settings, as in the browser.
@@ -109,10 +139,13 @@ shaped like a token.
 | Command | Operations |
 | --- | --- |
 | `weft context`, `weft whoami` | Catalog context and admitted identity |
+| `weft search "order number"` | Authorized catalog metadata and retained report field/rule names and paths, with exact revision/resource references |
+| `weft health [--ready]` | Public liveness, or readiness to accept work; does not sign in or read tokens |
 | `weft guide list/get` | The authenticated server's user guide, as readable text or exact structured JSON |
 | `weft projects list/get/create` | Projects; creation makes you the project's administrator |
 | `weft mappings list/get/create` | Mappings; `create` uploads the first native revision |
 | `weft mappings metadata get/edit` | Name and description, edited with `If-Match` |
+| `weft mfd capabilities/import/review/confirm/export/download` | Closed MFD packages, complete warning review, explicit same-review confirmation and verified downloads |
 | `weft drafts create/list/show/discard`, `drafts ops get/put` | Private exact-base drafts and bounded typed operation logs |
 | `weft drafts checkpoint/compare/preview/save/rebase` | Authoritative replay, semantic comparison, sample runs and conditional save |
 | `weft revisions list/get/append` | Immutable revisions; `append --expected-head` appends only on that head |
@@ -122,11 +155,14 @@ shaped like a token.
 | `weft previews create/get/cancel/download` | Sample previews and verified output downloads |
 | `weft regression capabilities`, `cases list/get/create`, `runs list/create/get/cancel` | Saved cases and their runs |
 | `weft builds capabilities`, `environment-capabilities`, `environments list/get/create`, `approvals list/get/create/revoke`, `runs list/create/get/cancel` | Build environments, approvals and runs |
+| `weft operations targets/releases/history/actions/invocations/summary/callers`, `activate/rollback/disable/enable` | [Release operations](release-operations.md), monitoring and version-conditional target changes |
 | `weft chat availability`, `conversations list/get/create`, `ask`, `follow`, `cancel` | Grounded chat about a revision |
+| `weft chat workspace availability`, `conversations list/get/create`, `ask`, `follow`, `cancel` | Organization-wide read-only chat, with optional mapping or exact revision focus |
 
 `weft <command> --help` lists every option.
 
 - Identifiers are UUIDs. They are canonicalized to lowercase before they are sent.
+- Search text is literal, not a query language. Search cursors bind the exact trimmed query and organization; incomplete retained-report indexing fails explicitly and can be retried.
 - Lists take `--limit`. Catalog lists also take `--cursor`. `--all` reads every page; with `--json` it writes the
   list's usual document with every item and no next cursor.
   A repeated cursor or more than 1,000 pages fails rather than returning an incomplete list as complete;
@@ -143,6 +179,13 @@ shaped like a token.
 
 ## Output
 
+MFD import and export are two-step operations: `mfd import` or `mfd export`
+prints the complete review, and `mfd confirm` or `mfd download` requires its exact
+review ID/digest. Warnings are acknowledged only with `--acknowledge-warnings`;
+confirmation can wait with `--wait` without changing its idempotency key. See
+[MFD interchange](mfd-interchange.md#command-line-workflow) for asset selection,
+append heads and recovery examples.
+
 Human-readable tables and fields are the default. `--json` writes the exact response document
 of the API contract instead, for scripts; browser-session request tokens are always withheld.
 Text that comes from the server or a model, such as names, findings and chat answers, is shown
@@ -151,8 +194,9 @@ terminal. Progress, retries and sign-in prompts go to standard error.
 
 ## Requests and recovery
 
-- **Transport:** every request carries only `Authorization: Bearer`. There is no cookie handler,
-  redirects are not followed, and no browser antiforgery header is sent.
+- **Transport:** business requests carry only `Authorization: Bearer`; public health checks
+  omit credentials. There is no cookie handler, redirects are not followed, and no browser
+  antiforgery header is sent.
 - **Retries:** a `429` or a busy `503` is retried after the server's `Retry-After`, capped at 60
   seconds (2 seconds when absent), up to five attempts. Connection failures are retried with
   backoff. A `401` triggers one forced token refresh and one retry.
@@ -178,14 +222,41 @@ terminal. Progress, retries and sign-in prompts go to standard error.
     before it exits.
   - `weft chat follow` replays and follows an existing turn.
   - Conversation reads explicitly say when earlier turns are omitted from the returned window.
+  - `weft chat workspace ask "How does this project work?"` uses organization-wide read-only tools.
+    Add `--focus-project <ID> --focus-mapping <ID>` to resolve that mapping's head at each turn,
+    or also `--focus-revision <ID>` to pin an exact revision. Focus never restricts access to other authorized tools.
+    Existing conversations keep their original focus; omit focus options with `--conversation <ID>`.
+  - Workspace availability shows the profile's payload policy. A current project payload-read grant is also
+    required before sample tools can be offered. Answers that actually share samples show **Data shared**;
+    JSON output includes verified workspace citations and disclosure events without payload bytes.
+    Earlier payload-capable turns remain in the saved conversation but are not automatically resent to the
+    model; ask it to read the current data again under current permissions.
+  - `weft chat workspace conversations list --after <ID>` continues the newest-first list. It includes legacy
+    revision conversations; those continue through the original `weft chat` commands with their original scope.
+    Workspace creation accepts `--conversation-id <ID>` for deliberate recovery using the same focus.
 - **Preview downloads** stream to a temporary file beside the destination. The file is kept
-  only when its size and SHA-256 match the run's output record and the `Content-Digest` header.
+  only when its media type, size and SHA-256 match the run's output record and the `Content-Digest` header.
   Standard-output downloads are staged within the server's 8 MiB output bound and fully verified
   before any bytes are written to standard output.
 
 Requests retain their 120-second deadline through response-body reads. Successful chat SSE bodies
 remain long-lived; their connection and headers still have a deadline. Waiting commands' `--timeout`
 also cancels in-flight polling requests and their body reads, rather than only stopping between polls.
+
+### Document previews and regression cases
+
+`weft previews create --document` selects the separately admitted document profile.
+The revision's explicit boundary settings determine JSON, X12 or EDIFACT input and
+output formats; filenames never select them. Without `--document`, the legacy
+JSON profile is unchanged. Output downloads accept only those admitted media types
+and preserve the exact bytes.
+
+Regression case definition files carry the document runtime, expected-output media
+types and explicit EDI comparison options. `weft regression capabilities` lists
+the offered runtimes and comparison policies. Run results show EDI locations for
+differences or invalid documents without printing payload fragments. Build and
+environment capabilities similarly show the separate document profile when it is
+available; use that profile's ID and version when creating its build environment.
 
 ## Exit codes
 

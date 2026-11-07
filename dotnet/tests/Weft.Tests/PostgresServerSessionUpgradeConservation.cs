@@ -83,6 +83,11 @@ internal sealed class PostgresServerSessionUpgradeConservation
         await using var database = new PostgresChatDatabase(test.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
         await using var admitted = await database.BeginAsync(new(principal), key, false, ct);
         await RegressionSchemaTestContract.AdmitAsync(test, ct);
+        await using var ingestion = new PostgresIngestionDatabase(test.IngestionConnectionString);
+        await using var admittedInterchange = await ingestion.BeginTransactionAsync(Guid.NewGuid(), ct);
+        await using var display = new PostgresAccountDisplayMetadata(test.AccountDisplayConnectionString);
+        Assert.Null(await display.ReadAsync(Guid.NewGuid(), Guid.NewGuid(), ct));
+        Assert.True(await CatalogSearchUpgradeTestSupport.AdmitAsync(test));
     }
 
     // Rejected-install boundaries deliberately retain the actual partial or unsafe
@@ -122,9 +127,9 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }
                 .SelectMany(p => ChatSchemaContract.ColumnGrants(p).Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
             command.Parameters.AddWithValue(ChatSchemaContract.MigrationChecksum);
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.Tables.Concat(RegressionSchemaTestContract.Tables).ToArray());
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).ToArray());
-            command.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).ToArray());
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.Tables.Concat(RegressionSchemaTestContract.Tables).Concat(InterchangeSchemaTestContract.Tables).Concat(CatalogSearchSchemaAdmission.ReadObjects).Append("account_display_metadata").ToArray());
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).Append("index_catalog_report").ToArray());
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.Roles.Concat(RegressionSchemaTestContract.Roles).Append("weft_account_display").ToArray());
             command.Parameters.AddWithValue(PreviewSchemaTestContract.ParentForeignKeys.Concat(MappingDraftSchemaTestContract.PreviewParentForeignKeys).ToArray());
             command.Parameters.AddWithValue(PreviewSchemaTestContract.MigrationChecksum);
             command.Parameters.AddWithValue(PreviewSchemaTestContract.MessagesMigrationChecksum);
@@ -138,9 +143,22 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(RegressionSchemaTestContract.QualificationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.LocalReleaseChecksum);
             command.Parameters.AddWithValue(MaintenanceSchemaContract.StoreKindMigrationChecksum);
-            command.Parameters.AddWithValue(RegressionSchemaTestContract.Tables);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.Tables.Concat(InterchangeSchemaTestContract.Tables).Append("catalog_search_report_index").Append("account_display_metadata").ToArray());
             command.Parameters.AddWithValue(RegressionSchemaTestContract.MachineInvocationChecksum);
             command.Parameters.AddWithValue(RegressionSchemaTestContract.ApiRequestAuditChecksum);
+            command.Parameters.AddWithValue(CatalogSearchSchemaAdmission.MigrationChecksum);
+            command.Parameters.AddWithValue(CatalogSearchSchemaAdmission.IndexNames);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.AccountDisplayChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.AdministrationChecksum);
+            command.Parameters.AddWithValue(InterchangeSchemaTestContract.MigrationChecksum);
+            command.Parameters.AddWithValue(ChatSchemaContract.WorkspaceMigrationChecksum);
+            command.Parameters.AddWithValue(PreviewSchemaTestContract.ReadsMigrationChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.AutomationChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.ReleaseOperationsChecksum);
+            command.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.DocumentPreviewsChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.X12InterchangeBuildsChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.ComparisonSettlementChecksum);
             command.Parameters.AddWithValue(MappingDraftSchemaTestContract.DraftChecksum);
             command.Parameters.AddWithValue(MappingDraftSchemaTestContract.PreviewChecksum);
             var value = await command.ExecuteScalarAsync(cancellationToken);
@@ -344,7 +362,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 18 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 29 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=9+1)=$6::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=11)=$12::text)
@@ -362,8 +380,19 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=23)=$28::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=24)=$30::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=25)=$31::text)
-                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=26)=$32::text)
-                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=27)=$33::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=26)=$34::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=27)=$35::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=28)=$36::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=29)=$32::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=30)=$39::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=31)=$40::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=32)=$37::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=33)=$38::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=34)=$42::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=35)=$43::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=36)=$44::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=37)=$45::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=38)=$46::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -400,15 +429,18 @@ internal sealed class PostgresServerSessionUpgradeConservation
             'indexes',(SELECT jsonb_agg(jsonb_build_array(r.relname,index_namespace.nspname,x.relname,to_jsonb(i),x.relowner,x.relam,x.reloptions)
                 ORDER BY r.relname,index_namespace.nspname,x.relname) FROM old_relations r JOIN pg_catalog.pg_index i ON i.indrelid=r.oid
                 JOIN pg_catalog.pg_class x ON x.oid=i.indexrelid
-                JOIN pg_catalog.pg_namespace index_namespace ON index_namespace.oid=x.relnamespace),
+                 JOIN pg_catalog.pg_namespace index_namespace ON index_namespace.oid=x.relnamespace
+                 WHERE NOT ($1 AND x.relname=ANY($33::text[]))),
             'policies',(SELECT jsonb_agg(jsonb_build_array(r.relname,to_jsonb(p)) ORDER BY r.relname,p.polname)
                 FROM old_relations r JOIN pg_catalog.pg_policy p ON p.polrelid=r.oid),
             'triggers',(SELECT jsonb_agg(jsonb_build_array(r.relname,to_jsonb(t)) ORDER BY r.relname,t.tgname)
                 FROM old_relations r JOIN pg_catalog.pg_trigger t ON t.tgrelid=r.oid
-                WHERE NOT ($1 AND (t.oid IN (SELECT oid FROM intended_parent_triggers) OR EXISTS(
+                WHERE NOT ($1 AND NOT t.tgisinternal AND t.tgname=ANY($41::text[]))
+                AND NOT ($1 AND (t.oid IN (SELECT oid FROM intended_parent_triggers) OR EXISTS(
                     SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND c.conrelid=to_regclass('weft.chat_conversations')
-                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey'))
-                OR EXISTS(SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND t.tgisinternal AND c.contype='f'
+                    AND c.conname IN ('chat_conversations_creator_fkey','chat_conversations_revision_fkey','chat_conversations_projection_fkey','chat_conversations_validation_fkey',
+                        'chat_conversations_focus_mapping_fkey','chat_conversations_focus_revision_fkey'))
+                 OR EXISTS(SELECT 1 FROM pg_constraint c WHERE c.oid=t.tgconstraint AND t.tgisinternal AND c.contype='f'
                     AND (c.conrelid=to_regclass('weft.preview_runs') AND c.conname=ANY($16::text[])
                         OR c.conrelid IN (SELECT to_regclass('weft.' || suffix) FROM unnest($29::text[]) suffix)))))),
             'functions',(SELECT jsonb_agg(to_jsonb(f) ORDER BY f.oid) FROM old_functions f),

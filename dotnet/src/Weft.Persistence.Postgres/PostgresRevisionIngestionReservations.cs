@@ -40,12 +40,12 @@ public sealed partial class PostgresRevisionIngestionStore
                      native_digest, native_byte_count, logical_entry_document, dependency_manifest_id,
                      backend_id, engine_revision, backend_build, adapter_build, admission_policy_id,
                      effective_native_byte_limit, display_filename, create_name, create_description,
-                     head_condition, expected_head_revision_id, created_at, phase, lease_generation, claim_count)
+                      head_condition, expected_head_revision_id, created_at, phase, lease_generation, claim_count)
                     SELECT organization_id, project_id, @operationId, @actorId, @kind, @key, 1, @fingerprint,
                            @target, @mappingId, @revisionId, @objectId, 'native', @digest, @byteCount,
                            @document, @dependencies, @backend, @engine, @build, @adapter, @policy,
                            @limit, @filename, @name, @description, @headCondition, @expectedHead,
-                           clock_timestamp(), 'reserved', 0, 0
+                            clock_timestamp(), 'reserved', 0, 0
                     FROM authorized
                     WHERE @kind = 'create' OR EXISTS (
                         SELECT 1 FROM weft.mappings mapping WHERE mapping.organization_id = authorized.organization_id
@@ -82,6 +82,19 @@ public sealed partial class PostgresRevisionIngestionStore
             var inserted = await command.ExecuteScalarAsync(cancellationToken) is Guid;
             if (inserted)
             {
+                if (intent.ImportProvenance is { } provenance)
+                {
+                    await using var original = transaction.CreateCommand("""
+                        INSERT INTO weft.revision_import_provenance
+                            (organization_id, project_id, operation_id, provenance)
+                        VALUES (@organizationId, @projectId, @operationId, @provenance)
+                        """);
+                    Add(original, "organizationId", NpgsqlDbType.Uuid, project.OrganizationId);
+                    Add(original, "projectId", NpgsqlDbType.Uuid, project.ProjectId);
+                    Add(original, "operationId", NpgsqlDbType.Uuid, operationId);
+                    Add(original, "provenance", NpgsqlDbType.Bytea, provenance.Encode());
+                    await original.ExecuteNonQueryAsync(cancellationToken);
+                }
                 var receipt = await ReadReceiptAsync(transaction, actor, project, operationId, cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return receipt is null ? IngestionStoreResult.WithoutReceipt(IngestionStoreOutcome.NotAuthorizedOrNotFound)

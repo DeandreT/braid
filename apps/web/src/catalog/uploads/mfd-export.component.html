@@ -1,0 +1,51 @@
+@if (enabled()) {
+  <section
+    class="mfd-card"
+    aria-labelledby="mfd-export-title"
+    [attr.aria-busy]="busy()"
+  >
+    <h2 id="mfd-export-title">Download as MapForce</h2>
+    <p>
+      Review the exporter's complete warnings before downloading. Referenced
+      assets are included in a ZIP when required.
+    </p>
+    <button type="button" (click)="prepare()" [disabled]="busy()">
+      Review .mfd export
+    </button>
+    @if (review(); as value) {
+      <p>{{ value.summary }}</p>
+      <p>
+        Engine: {{ value.engine.backendId }} · {{ value.engine.engineRevision }}
+      </p>
+      <ul>
+        @for (warning of value.warnings; track $index) {
+          <li>
+            <strong>{{ warning.code }}</strong
+            >: {{ warning.message }}
+          </li>
+        }
+      </ul>
+      @if (value.warnings.length) {
+        <label
+          ><input
+            type="checkbox"
+            [checked]="acknowledged()"
+            (change)="acknowledged.set($any($event.target).checked)"
+            [disabled]="busy()"
+          />
+          I have reviewed all export warnings.</label
+        >
+      }
+      <button
+        type="button"
+        (click)="download()"
+        [disabled]="busy() || (value.warnings.length > 0 && !acknowledged())"
+      >
+        Download reviewed export
+      </button>
+    }
+    @if (message()) {
+      <p role="status">{{ message() }}</p>
+    }
+  </section>
+}

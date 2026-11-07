@@ -8,6 +8,8 @@ public sealed class RegressionRunExecutor(IRegressionRunStore runs, IRegressionC
     public async Task<RegressionRunDispatchOutcome> ExecuteAsync(Guid organizationId, Guid runId, Guid worker,
         CancellationToken token = default)
     {
+        token.ThrowIfCancellationRequested();
+        if (execution is IExecutionAdmission { CanExecute: false }) return RegressionRunDispatchOutcome.Deferred;
         var admission = await runs.ClaimAsync(organizationId, runId, worker, token).ConfigureAwait(false);
         if (admission.Outcome != RegressionRunClaimOutcome.Claimed)
             return admission.Outcome switch

@@ -9,6 +9,20 @@ import {
 
 const migrations = new URL("../../migrations/postgres/", import.meta.url);
 
+test("production entry assets do not depend on an admitted base element", () => {
+  const configuration = JSON.parse(
+    readFileSync(
+      new URL("../../apps/web/angular.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.equal(
+    configuration.projects.weft.architect.build.configurations.production
+      .deployUrl,
+    "/",
+  );
+});
+
 test("the browser fixture admits exactly the current ordered migration inventory", () => {
   assert.deepEqual(
     browserFixtureMigrations,

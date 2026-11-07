@@ -79,8 +79,10 @@ public static class BuildWorkerRegistration
     }
 
     private sealed class Execution(string writer, IBuildRunStore runs, IPrivateObjectStore native, IProjectReader projects,
-        IRevisionReportMetadataReader reports, RegressionRunReadService evidence, IInspectionWorkerRunner runner) : IBuildRunExecution
+        IRevisionReportMetadataReader reports, RegressionRunReadService evidence, IInspectionWorkerRunner runner) : IBuildRunExecution, IExecutionAdmission
     {
+        public bool CanExecute => runner is not IExecutionAdmission { CanExecute: false };
+
         public async Task<BuildExecutionResult> ExecuteAsync(BuildRunClaim claim, CancellationToken token = default)
         {
             var actor = new ActorContext(claim.Actor);

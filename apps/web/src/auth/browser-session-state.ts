@@ -26,6 +26,7 @@ import {
 } from "rxjs";
 import type { CatalogContext } from "../catalog/catalog-types";
 import { BrowserSessionApi } from "./browser-session-api";
+import { isReturnPath } from "./return-path";
 import { BrowserAuthNavigation } from "./browser-auth-navigation";
 import {
   BrowserSessionError,
@@ -76,6 +77,14 @@ export class BrowserSessionState {
   readonly routineSettled = this.settles.asObservable();
   readonly action = this.actionView.asReadonly();
   readonly busy = this.actionPending.asReadonly();
+  readonly displayName = computed(() => {
+    const status = this.status();
+    return this.view().kind === "authenticated" &&
+      status?.mode === "session" &&
+      status.state === "authenticated"
+      ? status.displayName
+      : null;
+  });
   /** A confirmed identity is presented, including while its routine check is pending. */
   readonly visible = computed(() => {
     const kind = this.view().kind;
@@ -201,8 +210,16 @@ export class BrowserSessionState {
     );
   }
 
-  signIn(): Observable<void> {
-    return this.perform("login");
+  /** Sign-in returns to `returnTo` when it is a valid return path, otherwise to the catalog. */
+  signIn(
+    returnTo: string | null = null,
+    invitation?: string,
+  ): Observable<void> {
+    return this.perform(
+      "login",
+      isReturnPath(returnTo) ? returnTo : null,
+      invitation,
+    );
   }
 
   logout(): Observable<void> {
@@ -214,7 +231,11 @@ export class BrowserSessionState {
     return this.perform("forgetLocal");
   }
 
-  private perform(action: BrowserAuthAction): Observable<void> {
+  private perform(
+    action: BrowserAuthAction,
+    returnTo: string | null = null,
+    invitation?: string,
+  ): Observable<void> {
     return defer(() => {
       const selected = this.status();
       if (!this.canPresent(action) || !allows(action, selected))
@@ -254,7 +275,7 @@ export class BrowserSessionState {
             throw new BrowserSessionError();
           dispatched = true;
           this.actionView.set({ kind: "pending", action });
-          return this.dispatch(action, status).pipe(
+          return this.dispatch(action, status, returnTo, invitation).pipe(
             map((result) => {
               if (
                 this.destroyed ||
@@ -314,10 +335,12 @@ export class BrowserSessionState {
   private dispatch(
     action: BrowserAuthAction,
     status: SessionAuthStatus,
+    returnTo: string | null,
+    invitation?: string,
   ): Observable<AuthActionResult> {
     switch (action) {
       case "login":
-        return this.api.login(status).pipe(
+        return this.api.login(status, returnTo, invitation).pipe(
           map((result) => ({
             kind: "login" as const,
             authorizationUrl: result.authorizationUrl,

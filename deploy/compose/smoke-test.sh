@@ -4,8 +4,7 @@
 # With WEFT_FERRULE_SERVICE_IMAGE set (a built engines/ferrule-service image), it instead runs the
 # Session server with the Ferrule service override: replicas, health, mutual pinning and one exact
 # native validation frame on every replica. Otherwise, with WEFT_FERRULE_WORKER_IMAGE set, it also
-# checks native examples through the Docker worker and the hosted inspection worker: mutual pinning
-# and one exact native validation frame.
+# checks the hosted inspection worker: mutual pinning and one exact native validation frame.
 # Generated passwords and certificates stay in a private temporary directory and are never printed.
 set -euo pipefail
 
@@ -16,11 +15,11 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/weft-smoke.XXXXXXXX")
 chmod 0700 "$work"
 ferrule_service=false
 [[ -n ${WEFT_FERRULE_SERVICE_IMAGE:-} ]] && ferrule_service=true
-examples=false
-[[ $ferrule_service == false && -n ${WEFT_FERRULE_WORKER_IMAGE:-} ]] && examples=true
+worker=false
+[[ $ferrule_service == false && -n ${WEFT_FERRULE_WORKER_IMAGE:-} ]] && worker=true
 built_images=()
 files=(--file "$compose_directory/compose.yml")
-[[ $examples == true ]] && files+=(--file "$compose_directory/compose.examples.yml" --file "$compose_directory/compose.worker.yml")
+[[ $worker == true ]] && files+=(--file "$compose_directory/compose.worker.yml")
 [[ $ferrule_service == true ]] && files+=(--file "$compose_directory/compose.ferrule-service.yml")
 
 # shellcheck source=test-subnets.sh
@@ -62,14 +61,13 @@ fail() {
 }
 
 if [[ -z ${WEFT_IMAGE:-} ]]; then
-  for target in weft edge $([[ $examples == true ]] && echo weft-local-docker weft-worker); do
+  for target in weft edge $([[ $worker == true ]] && echo weft-worker); do
     echo "Building $target"
     docker build --quiet --file "$repository/deploy/container/Dockerfile" --target "$target" \
       --tag "$target:$project" "$repository" >/dev/null
     built_images+=("$target:$project")
   done
-  export WEFT_IMAGE=weft:$project WEFT_EDGE_IMAGE=edge:$project WEFT_LOCAL_DOCKER_IMAGE=weft-local-docker:$project \
-    WEFT_WORKER_IMAGE=weft-worker:$project
+  export WEFT_IMAGE=weft:$project WEFT_EDGE_IMAGE=edge:$project WEFT_WORKER_IMAGE=weft-worker:$project
 fi
 
 for role in POSTGRES_ADMIN MIGRATOR RUNTIME INGEST CATALOG METADATA CREATOR REPORT DERIVATION MAINTENANCE \
@@ -91,7 +89,7 @@ WEFT_ENTRA_TENANT_ID=$(cat /proc/sys/kernel/random/uuid)
 WEFT_ENTRA_CLIENT_ID=$(cat /proc/sys/kernel/random/uuid)
 export WEFT_SESSION_ORGANIZATION_ID WEFT_ENTRA_TENANT_ID WEFT_ENTRA_CLIENT_ID
 export WEFT_PUBLIC_HOST=weft.example.test WEFT_EDGE_TRUSTED_PROXIES=
-export WEFT_COMPOSE_PORT=0 WEFT_COMPOSE_EXAMPLES_PORT=0
+export WEFT_COMPOSE_PORT=0
 # Each side of a pinned transport pins the other's certificate (SHA-256 of its DER encoding).
 pin() { openssl x509 -in "$work/$1.crt" -outform DER | openssl dgst -sha256 -r | cut -d' ' -f1; }
 if [[ $ferrule_service == true ]]; then
@@ -107,7 +105,7 @@ if [[ $ferrule_service == true ]]; then
     WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256 WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256
   export WEFT_FERRULE_SERVICE_REPLICAS=${WEFT_FERRULE_SERVICE_REPLICAS:-2}
 fi
-if [[ $examples == true ]]; then
+if [[ $worker == true ]]; then
   WEFT_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
   export WEFT_DOCKER_GID
   WEFT_INSPECTION_WORKER_PEM=$(new_pem weft-inspection-worker)
@@ -120,13 +118,13 @@ fi
 
 env -u WEFT_FERRULE_WORKER_IMAGE -u WEFT_DOCKER_GID -u WEFT_FERRULE_SERVICE_IMAGE docker compose --project-name "$project" \
   --file "$compose_directory/compose.yml" --profile operator config --quiet ||
-  fail 'base stack configuration without the examples settings'
-echo 'ok - base stack renders without the examples settings'
+  fail 'base stack configuration without the worker settings'
+echo 'ok - base stack renders without the worker settings'
 
 networks=$(compose config --networks) || fail 'stack networks'
 files+=(--file "$work/subnets.yml")
 runtime_services=(server edge)
-[[ $examples == true ]] && runtime_services+=(worker)
+[[ $worker == true ]] && runtime_services+=(worker)
 [[ $ferrule_service == true ]] && runtime_services+=(ferrule)
 echo "Starting $project from new volumes"
 start_on_test_subnets "$work/subnets.yml" "$work/up.log" "$networks" --detach --wait --wait-timeout 180 "${runtime_services[@]}" ||
@@ -151,7 +149,7 @@ check_session_profile() {
   expect 200 'health through the edge' "$base/api/v1/health"
   body_has '"status":"ok"' 'health body'
   grep -qi '^strict-transport-security: max-age=31536000' "$work/headers" || fail 'HSTS header'
-  expect 200 'examples page from the same origin' "$base/examples"
+  expect 200 'sign-in page from the same origin' "$base/sign-in"
   body_has '<weft-root>' 'Angular shell'
   script=$(grep -o 'src="main-[A-Za-z0-9_-]*\.js"' "$work/body" | head -n 1 | cut -d'"' -f2)
   [[ -n $script ]] || fail 'Angular entry script reference'
@@ -160,7 +158,7 @@ check_session_profile() {
   body_has '"mode":"session"' 'session mode'
   body_has '"state":"anonymous"' 'anonymous session state'
   expect 401 'catalog refuses anonymous access' "$base/api/v1/catalog/context"
-  expect 404 'Development examples API is not mapped' "$base/api/v1/examples/mappings"
+  expect 404 'unknown API routes are not the Angular shell' "$base/api/v1/missing"
   expect 200 'client forwarding fields are replaced by the edge' --header 'Forwarded: for=192.0.2.1' \
     --header 'X-Forwarded-For: 192.0.2.1' --header 'X-Forwarded-Host: attacker.example' \
     --header 'X-Forwarded-Port: 80' --header 'X-Original-URL: /admin' "$base/api/v1/health"
@@ -253,7 +251,7 @@ check_ferrule_service() {
 }
 
 check_session_profile
-[[ $examples == true ]] && check_inspection_worker frame
+[[ $worker == true ]] && check_inspection_worker frame
 [[ $ferrule_service == true ]] && check_ferrule_service
 for service in migrate storage-init session-keys; do
   [[ $(docker inspect --format '{{.State.ExitCode}}' "$(compose ps --all --quiet "$service")") == 0 ]] ||
@@ -278,29 +276,11 @@ compose up --detach --wait --wait-timeout 180 server edge >/dev/null 2>"$work/up
 base=http://$(compose port server 8080)
 check_session_profile
 echo 'ok - restart reopened the persistent key ring and storage configuration'
-if [[ $examples == true ]]; then
+if [[ $worker == true ]]; then
   # The restarted server admitted its native settings again; the worker keeps its pinned admission.
   check_inspection_worker admission
 fi
 if [[ $ferrule_service == true ]]; then
   # The restarted server admitted its service settings again; every replica keeps serving.
   check_ferrule_service
-fi
-
-if [[ $examples == true ]]; then
-  compose up --detach --wait --wait-timeout 120 examples examples-edge >/dev/null 2>"$work/up.log" ||
-    { tail -n 20 "$work/up.log" >&2; compose logs --no-color examples 2>&1 | tail -n 40 >&2; fail 'examples start'; }
-  examples_base=http://$(compose port examples 8080)
-  expect 200 'examples health' "$examples_base/api/v1/health"
-  expect 200 'examples page' "$examples_base/examples"
-  body_has '<weft-root>' 'examples Angular shell'
-  expect 200 'Disabled status' --header 'X-Weft-Session: 1' "$examples_base/api/auth/session"
-  body_has '"mode":"disabled"' 'disabled mode'
-  expect 200 'example list' "$examples_base/api/v1/examples/mappings"
-  body_has '"basic"' 'basic example listed'
-  # Projection and validation each run one worker within its own ten-second wall deadline.
-  request_seconds=60 expect 200 'native basic example through the Docker worker' "$examples_base/api/v1/examples/mappings/basic"
-  outcomes=$(grep -o '"\(projection\|validation\)":{"status":"[A-Za-z]*"\(,"failure":"[A-Za-z]*"\)\?' "$work/body" | tr '\n' ' ')
-  body_has '"projection":{"status":"succeeded"' "native projection by the worker: $outcomes"
-  body_has '"validation":{"status":"succeeded"' "native validation by the worker: $outcomes"
 fi

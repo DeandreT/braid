@@ -5,7 +5,9 @@ internal sealed class MaintenanceServiceTestTimeProvider : TimeProvider
 {
     private readonly object _gate = new();
     private readonly List<TestTimer> _timers = [];
+    private readonly TaskCompletionSource timerScheduled = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private long _ticks;
+    internal Task TimerScheduled => timerScheduled.Task;
     public override long TimestampFrequency => TimeSpan.TicksPerSecond;
     public override long GetTimestamp() { lock (_gate) return _ticks; }
 
@@ -14,6 +16,7 @@ internal sealed class MaintenanceServiceTestTimeProvider : TimeProvider
         var timer = new TestTimer(this, callback, state);
         lock (_gate) _timers.Add(timer);
         timer.Change(dueTime, period);
+        timerScheduled.TrySetResult();
         return timer;
     }
 

@@ -13,8 +13,8 @@ internal static partial class RegressionCaseRoleGuard
     {
         var role = profile == RegressionCaseDatabaseProfile.Reader ? "weft_case_reader" : "weft_case_writer";
         var permitted = profile == RegressionCaseDatabaseProfile.Reader
-            ? new[] { "read_regression_case", "list_regression_cases" }
-            : new[] { "read_regression_case", "list_regression_cases", "save_regression_case" };
+            ? new[] { "read_regression_case", "read_regression_case_metadata", "list_regression_cases" }
+            : new[] { "read_regression_case", "read_regression_case_metadata", "list_regression_cases", "save_regression_case" };
         await using (var inspect = new NpgsqlCommand("""
             SELECT current_user=session_user AND current_user=@role AND NOT r.rolsuper AND NOT r.rolbypassrls
                 AND NOT r.rolinherit AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication
@@ -59,8 +59,8 @@ internal static partial class RegressionCaseRoleGuard
         while (await reader.ReadAsync(token))
         {
             var name = reader.GetString(0);
-            var privileged = name is "save_regression_case" or "read_regression_case" or "list_regression_cases";
-            var sql = name is "case_authorized" or "read_regression_case" or "list_regression_cases";
+            var privileged = name is "save_regression_case" or "read_regression_case" or "read_regression_case_metadata" or "list_regression_cases";
+            var sql = name is "case_authorized" or "read_regression_case" or "read_regression_case_metadata" or "list_regression_cases";
             var signature = Signatures[name];
             if (!seen.Add(name) || reader.GetString(1) != Bodies.Value[name] || reader.GetBoolean(2) != privileged ||
                 reader.GetChar(3) != (sql ? 's' : 'v') || reader.GetString(4) != (sql ? "sql" : "plpgsql") || !reader.GetBoolean(5) ||
@@ -83,6 +83,8 @@ internal static partial class RegressionCaseRoleGuard
                 ["org", "project", "mapping", "id", "requested_version", "creator", "revision", "native_sha", "case_name", "content_sha", "content_bytes", "body"], "integer"),
             ["read_regression_case"] = ("uuid, uuid, uuid, uuid, bigint", ["org", "project", "mapping", "id", "requested_version"],
                 "TABLE(creator_id uuid, revision_id uuid, native_digest text, content_digest text, byte_count integer, envelope bytea)"),
+            ["read_regression_case_metadata"] = ("uuid, uuid, uuid, uuid, bigint", ["org", "project", "mapping", "id", "requested_version"],
+                "TABLE(case_id uuid, version bigint, creator_id uuid, revision_id uuid, name text, saved_by uuid, created_at timestamp with time zone)"),
             ["list_regression_cases"] = ("uuid, uuid, uuid, uuid, integer", ["org", "project", "mapping", "after_id", "page_size"],
                 "TABLE(case_id uuid, version bigint, creator_id uuid, revision_id uuid, name text, saved_by uuid, created_at timestamp with time zone)")
         };
@@ -94,7 +96,15 @@ internal static partial class RegressionCaseRoleGuard
         using var reader = new StreamReader(resource);
         var text = reader.ReadToEnd();
         var result = FunctionPattern().Matches(text).ToDictionary(match => match.Groups[1].Value, match => match.Groups[2].Value, StringComparer.Ordinal);
-        if (result.Count != 6) throw Refused();
+        using var supplemental = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations.0033_preview_reads.sql") ?? throw Refused();
+        using var supplementalReader = new StreamReader(supplemental);
+        var source = supplementalReader.ReadToEnd();
+        var start = source.IndexOf("CREATE FUNCTION weft.read_regression_case_metadata(", StringComparison.Ordinal);
+        if (start < 0) throw Refused();
+        var metadata = FunctionPattern().Match(source, start);
+        if (!metadata.Success || metadata.Index != start || metadata.Groups[1].Value != "read_regression_case_metadata") throw Refused();
+        result.Add("read_regression_case_metadata", metadata.Groups[2].Value);
+        if (result.Count != 7) throw Refused();
         return result;
     }
 

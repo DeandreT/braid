@@ -59,7 +59,7 @@ statuses and the mutual-TLS security scheme.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /v1/ready` | `204` with `Weft-Worker-Image` (native identity) and `Weft-Service-Protocol`; a compiling service also returns `Weft-Compile-Toolchain`. Over pinned TLS, the answer proves that the service admitted the client certificate. |
+| `GET /v1/ready` | `204` with `Weft-Worker-Image` (native identity) and `Weft-Service-Protocol`; a compiling service also returns `Weft-Compile-Toolchain`. Over pinned TLS, the answer proves that the service admitted the client certificate. Unhealthy or stopping replicas return `503`. |
 | `GET /v1/capabilities` | JSON: protocol, build identity, engine revision, per-replica concurrency, capacity and admission wait, the served profiles with their limits (the compile profile also with its toolchain), and reserved profiles. |
 | `POST /v1/operations/{profile}/{operation}` | One exact frame (`application/octet-stream`, known length, `Weft-Worker-Image` equal to the native identity) under a fresh 128-bit operation identity (32 lowercase hexadecimal characters). Compile calls also require the exact `Weft-Compile-Toolchain` pin. |
 | `POST /v1/operations/{profile}/{operation}/cancel` | Cancels that operation, or refuses it when it arrives later. |
@@ -110,6 +110,13 @@ instance. Over pinned TLS, the client sends ready, operation and cancellation as
 streams of one HTTP/2 connection; a layer-4 load balancer keeps a connection on
 one replica. A platform sandbox routes an operation's requests to one session by
 its identifier.
+
+Every mapped response carries `Weft-Service-Replica`, a random 32-character lowercase
+hexadecimal identity created when that service process starts. It is diagnostic only:
+it is neither an affinity token nor proof that an operation settled. The service does
+not retain operation results or expose an operation-status lookup; recovery uses the
+bounded-lifetime path below, so another replica's lack of knowledge is never treated
+as evidence that nothing ran.
 
 ## Request isolation
 
@@ -234,9 +241,39 @@ sees `canceled` only after the child has settled. The runner sends a call again,
 with a fresh identity on a fresh channel and at most three attempts, only when the
 service proves that nothing ran: a `503` from the service, or a failure before any
 frame byte was written. Any answer after frame bytes that does not come from the
-service, a lost connection, or a missing settled answer is a cleanup failure. As
-with the hosted inspection transport, it closes the runner's admission and faults
-host shutdown.
+service, a lost connection, or a missing settled answer is a cleanup failure. It
+closes the runner's admission immediately. That call is never retried or relabeled
+as success, canceled, or a proven not-run refusal.
+
+The runner quarantines later calls for the selected profile's entire remaining
+remote lifetime, conservatively measured from the observation of uncertainty:
+**two wall deadlines + 20 seconds admission + 2 seconds kill/reap + 5 seconds
+margin**. The two walls cover a request still being buffered and its eventual child;
+disconnection alone proves neither when buffering finished nor when the child
+started. This is 47 seconds for inspection, 87 for preview, and 267 for compilation.
+It does not change any worker deadline or isolation control.
+
+After that interval, one fresh channel must answer ready with the exact protocol,
+native build and configured toolchain/runtime identities. The recovery channel is
+then discarded; the next call still opens and checks its own fresh channel. A
+failed or mismatched probe keeps admission closed, with at most one probe every
+30 seconds. Three uncertain outcomes within ten minutes extend quarantine to ten
+minutes from the latest uncertainty. Concurrent uncertainties restart the bound;
+an in-flight probe cannot override a newer quarantine. Reopening also waits for
+all previously admitted host calls to return, so no old call can send late work
+after recovery. The history holds at most
+three timestamps and the runner has at most one recovery loop.
+
+Session/development host readiness (`/api/v1/health/ready`) and mapping-endpoint readiness
+return `503` during quarantine and recover with the same singleton runner. Shutdown
+cancels and joins recovery; stopping cannot reopen admission. Shutdown before remote
+settlement is established still faults. An unexpected local runner exception stays
+fail-closed rather than using the remote-lifetime argument.
+
+The API's existing `/api/v1/health` remains liveness: quarantine does not make a
+healthy host process dead. Deployment readiness uses the separate ready route;
+liveness and startup probes continue to use the original route, so a long flapping
+quarantine does not trigger a host restart.
 
 ```mermaid
 flowchart TD
@@ -249,13 +286,60 @@ flowchart TD
     outcome -->|"deadline or caller cancellation"| cancel["Send the cancellation and wait for the settled answer"]
     cancel -->|"settled"| done["Caller sees canceled or timed out"]
     cancel -->|"no settled answer"| closed
-    outcome -->|"lost connection or foreign answer"| closed["Cleanup failure: the runner closes admission and host shutdown faults"]
+    outcome -->|"lost connection or foreign answer"| closed["Caller gets cleanup failure; quarantine later calls"]
+    closed --> lifetime["Wait full bounded lifetime; repeated uncertainty extends quarantine"]
+    lifetime --> probe["Fresh channel checks readiness, protocol and pinned identities"]
+    probe -->|"failed or mismatched"| backoff["Stay closed; bounded probe rate"]
+    backoff --> probe
+    probe -->|"ready and no newer uncertainty"| reopen["Reopen for later calls, never replay the uncertain call"]
+    reopen --> ready
 ```
 
 Inside a replica the same rule applies to children: the service kills a child at its
 deadline or on cancellation and waits until it is reaped. A child it cannot confirm
 reaped, or a private directory it cannot remove, makes the replica stop admitting work
 and fail readiness, so the platform replaces it.
+
+Durable recovery remains owned by the callers, not by the transport: previews,
+regression runs and builds retain their lease fencing and attempt budgets;
+ingestion resumes its admitted upload; report derivation uses `ensure` and its
+existing attempt/backoff policy. Reopening only lets a subsequent authorized
+attempt reach Ferrule. The endpoint ledger must never record an uncertain
+invocation as completed; reopening does not turn its unknown outcome into a replay.
+
+Preview, regression and build dispatchers check the backend's optional local
+`IExecutionAdmission` signal before claiming a durable attempt. While quarantine
+is closed, dispatch is deferred without consuming an attempt or acquiring a lease.
+This matters because quarantine can exceed several normal retry intervals. A true
+signal does not authorize work or promise remote availability: the ordinary claim,
+scope checks, lease fencing, deadlines and attempt limits still apply, including
+when admission closes concurrently with an already admitted dispatch. The actual
+uncertain attempt still counts; only later locally refused dispatches are held back.
+The preview worker pauses its Wolverine listener and requeues the same envelope
+while admission is closed, rather than creating replacement scheduled deliveries
+or consuming a finite message-failure budget. When it resumes, the usual store
+claim still resolves terminal, missing and expired runs.
+Upload resume likewise holds back a staged operation that needs fresh validation,
+without blocking publication of a newly supplied source or reuse of eligible
+evidence. Report `ensure` still reads retained results and honors backoff; once
+work is due, closed local admission creates no new derivation attempt.
+Both report registrations share a passive view of the host's already-created
+runner. A quarantine caused by ingestion or the other report operation therefore
+holds the first derivation too, without initializing an unused report backend or
+resolving an unused runner just to check admission.
+
+The same policy applies to dynamic sessions: their service runs the same bounded
+children and isolation, session identifiers are never reused, and closing each
+channel still attempts to stop its session. Recovery probes create and stop a fresh
+session and cannot certify the old session's result. No live Azure access is needed
+for the connector's local protocol tests.
+
+Local Docker runners and the hosted inspection transport remain fail-closed until
+restart. Docker cleanup uncertainty may leave a real container with an independent
+lifetime, so the service-child lifetime proof does not apply. The inspection
+transport can itself wrap that Docker runner and does not advertise a bounded-child
+service profile; merely receiving its legacy ready response is not such a proof.
+Use the explicit service connector to obtain bounded recovery.
 
 The pinned connector (`PinnedServiceConnector`) opens one HTTP/2 connection per
 channel and can never open a second, so retries inside the HTTP stack cannot

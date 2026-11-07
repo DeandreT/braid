@@ -7,6 +7,8 @@ namespace Weft.Application;
 /// <summary>Pure bridge over frozen #111 public facts. It never opens a turn/round or resolves credentials.</summary>
 public static class ChatAiBridge
 {
+    /// <summary>The most tool definitions one turn's manifest may pin, matching the provider adapter's ceiling.</summary>
+    public const int MaxTools = 24;
     public static ChatGroundingPolicyPin PinGroundingPolicy(string id, int version, string trustedInstructions,
         IEnumerable<AiToolDefinition> approvedTools, int maxRetrievedNodes, int maxToolResultBytes, int maxToolIterations)
     {
@@ -18,7 +20,7 @@ public static class ChatAiBridge
     {
         ArgumentNullException.ThrowIfNull(definitions);
         var tools = new List<AiToolDefinition>();
-        foreach (var tool in definitions) { if (tool is null || tools.Count == 16) throw ChatBounds.Invalid(); tools.Add(tool); }
+        foreach (var tool in definitions) { if (tool is null || tools.Count == MaxTools) throw ChatBounds.Invalid(); tools.Add(tool); }
         var canonical = ChatCanonicalJson.Write(w =>
         {
             w.WriteStartObject(); w.WriteString("schema", "weft.chat.tools.v1"); w.WriteStartArray("tools");
@@ -39,7 +41,10 @@ public static class ChatAiBridge
             w.WriteString("authentication", profile.Authentication.ToString()); w.WriteString("credentialReference", profile.CredentialReference);
             w.WriteNumber("capabilities", (int)profile.Capabilities); w.WriteString("metadataPolicy", profile.MetadataPolicyId);
             w.WriteNumber("metadataPolicyVersion", profile.MetadataPolicyVersion); w.WriteBoolean("mappingMetadataAllowed", profile.MappingMetadataAllowed);
-            w.WriteBoolean("requestThinkFalse", profile.RequestThinkFalse); w.WriteEndObject();
+            w.WriteBoolean("requestThinkFalse", profile.RequestThinkFalse);
+            // Written only when set, so every profile pinned before the payload policy keeps its exact fingerprint.
+            if (profile.PayloadsAllowed) w.WriteBoolean("payloadsAllowed", true);
+            w.WriteEndObject();
         }, 16384);
         return new(profile.Key.Id, profile.Key.Version, providerId, profile.Model, profile.MetadataPolicyId, profile.MetadataPolicyVersion,
             Sha256Digest.FromBytes(Encoding.UTF8.GetBytes(canonical)));

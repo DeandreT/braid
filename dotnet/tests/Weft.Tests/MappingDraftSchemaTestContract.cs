@@ -4,7 +4,7 @@ namespace Weft.Tests;
 internal static class MappingDraftSchemaTestContract
 {
     internal const string DraftChecksum = "4a708309aff9a60f433be23d9c01bed63eedb1178ccc482850fb5ceff1533fd7";
-    internal const string PreviewChecksum = "7340f7304d72c7e2b177bca1057c2dc747471f3fa58b4c6150fbbe12f3c631ec";
+    internal const string PreviewChecksum = "d335a3fbf612b9e082fa973b1c2d0e47aa3fb3af6e4c46f9f59dc06378e0eecc";
     internal static readonly string[] Tables = ["mapping_drafts", "mapping_draft_checkpoints", "revision_edit_provenance"];
     internal static readonly string[] Roles = ["weft_draft_reader", "weft_draft_writer"];
     internal static readonly string[] PreviewParentForeignKeys = ["preview_runs_draft_base_fkey"];

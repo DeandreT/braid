@@ -1,9 +1,12 @@
+using Weft.Contracts;
+using Weft.Contracts.Automation;
 using Weft.Contracts.Builds;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
 using Weft.Contracts.Comparisons;
 using Weft.Contracts.Editing;
 using Weft.Contracts.Help;
+using Weft.Contracts.Operations;
 using Weft.Contracts.Regression;
 
 namespace Weft.Cli.Http;
@@ -11,8 +14,8 @@ namespace Weft.Cli.Http;
 /// <summary>
 /// One documented Weft API operation exactly as the CLI sends it: the only query parameters and headers it may set,
 /// its request media and body contract, and the success statuses it accepts with their response contracts.
-/// The contract drift test compares every entry with <c>contracts/weft-v1.json</c>. Every request is safe to repeat:
-/// it is a read, or it carries its own idempotency identity (a key header, a client-chosen ID in the path or body).
+/// The contract drift test compares every entry with <c>contracts/weft-v1.json</c>. Reads and idempotent operations
+/// may be repeated; conditional administration edits explicitly disable retries after uncertain failures.
 /// </summary>
 internal sealed record ApiOperation(
     string OperationId,
@@ -24,10 +27,34 @@ internal sealed record ApiOperation(
     Type? RequestBody,
     IReadOnlyDictionary<int, Type?> Success,
     Type ErrorBody,
-    string ResponseMediaType = "application/json");
+    string ResponseMediaType = "application/json",
+    IReadOnlyList<string>? AlternateResponseMediaTypes = null,
+    bool RequiresAuthentication = true,
+    bool RetryOnFailure = true);
 
-internal static class ApiOperations
+internal static partial class ApiOperations
 {
+    private static readonly string[] None = [];
+    private static readonly string[] Page = ["limit", "cursor"];
+    private static readonly string[] Key = ["Idempotency-Key"];
+    public static readonly ApiOperation GetAutomationPolicy = Get("GetAutomationPolicy", Project + "/automation", typeof(AutomationPolicyV1));
+    public static readonly ApiOperation PutAutomationPolicy = Send("PutAutomationPolicy", "PUT", Project + "/automation", "application/json", typeof(AutomationPolicyV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetMappingAutomation = Get("GetMappingAutomation", Project + "/mappings/{resourceId}/automation", typeof(MappingAutomationV1));
+    public static readonly ApiOperation PutMappingAutomation = Send("PutMappingAutomation", "PUT", Project + "/mappings/{resourceId}/automation", "application/json", typeof(MappingAutomationV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetRegressionSuites = Get("GetRegressionSuites", Project + "/mappings/{resourceId}/regression-suites", typeof(RegressionSuitesV1), ["limit", "afterId"]);
+    public static readonly ApiOperation GetRegressionSuite = Get("GetRegressionSuite", Project + "/regression-suites/{resourceId}", typeof(RegressionSuiteV1));
+    public static readonly ApiOperation PutRegressionRecheck = Send("PutRegressionRecheck", "PUT", Project + "/regression-suites/{resourceId}", "application/json", typeof(RegressionRecheckV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetRegressionEvaluations = Get("GetRegressionEvaluations", Project + "/regression-suites/{resourceId}/cases", typeof(RegressionEvaluationsV1), ["limit", "afterId"]);
+    public static readonly ApiOperation GetNotificationSubscription = Get("GetNotificationSubscription", Project + "/notification-subscription", typeof(NotificationSubscriptionV1));
+    public static readonly ApiOperation PutNotificationSubscription = Send("PutNotificationSubscription", "PUT", Project + "/notification-subscription", "application/json", typeof(NotificationSubscriptionV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetNotifications = Get("GetNotifications", Project + "/notifications", typeof(NotificationsV1), ["limit", "afterId"]);
+    public static readonly ApiOperation GetNotificationInbox = Get("GetNotificationInbox", Organization + "/notifications", typeof(NotificationsV1), ["limit", "afterId"]);
+    public static readonly ApiOperation ReadInboxNotification = Send("ReadInboxNotification", "PUT", Organization + "/notifications/{notificationId}/read", "application/json", typeof(NotificationReadV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation ReadNotification = Send("ReadNotification", "PUT", Project + "/notifications/{resourceId}/read", "application/json", typeof(NotificationReadV1), Ok(typeof(AutomationSavedV1)));
+    public static readonly ApiOperation GetNotificationOptions = Get("GetNotificationOptions", Project + "/notification-options", typeof(NotificationOptionsV1));
+    public static readonly ApiOperation GetNotificationDeliveries = Get("GetNotificationDeliveries", Project + "/notification-deliveries", typeof(NotificationDeliveriesV1), ["limit", "afterId"]);
+    public static readonly ApiOperation GetNotificationDestinations = Get("GetNotificationDestinations", Project + "/notification-destinations", typeof(NotificationDestinationsV1));
+    public static readonly ApiOperation EnableNotificationDestination = Send("EnableNotificationDestination", "PUT", Project + "/notification-destinations/enable", "application/json", typeof(NotificationDestinationEnableV1), Ok(typeof(AutomationSavedV1)));
     private const string Organization = "/api/v1/organizations/{organizationId}";
     private const string Project = Organization + "/projects/{projectId}";
     private const string Mapping = Project + "/mappings/{mappingId}";
@@ -36,11 +63,20 @@ internal static class ApiOperations
     private const string Drafts = Mapping + "/drafts";
     private const string Draft = Drafts + "/{draftId}";
 
-    private static readonly string[] None = [];
-    private static readonly string[] Page = ["limit", "cursor"];
-    private static readonly string[] Key = ["Idempotency-Key"];
+    private static readonly string[] OperationsQuery = ["offset", "limit", "since", "until", "caller", "outcome"];
+    public static readonly ApiOperation GetReleaseTargets = Get("GetReleaseTargets", Mapping + "/operations", typeof(ReleaseOperationsPageV1), OperationsQuery);
+    public static readonly ApiOperation GetReleaseOperations = Get("GetReleaseOperations", Mapping + "/operations/{targetId}/{section}", typeof(ReleaseOperationsPageV1), OperationsQuery);
+    public static readonly ApiOperation GetReleaseSummary = Get("GetReleaseSummary", Mapping + "/operations/{targetId}/summary", typeof(ReleaseOperationsSummaryV1), OperationsQuery);
+    public static readonly ApiOperation ApplyReleaseOperation = Send("ApplyReleaseOperation", "POST", Mapping + "/operations/{targetId}/actions/{operationId}",
+        "application/json", typeof(ReleaseOperationV1), Ok(typeof(ReleaseOperationReceiptV1)), headers: ["If-Match"]);
+
+    public static readonly ApiOperation GetHealth = new("GetHealth", "GET", "/api/v1/health", None, None,
+        null, null, Ok(typeof(HealthResponseV1)), typeof(HealthResponseV1), RequiresAuthentication: false);
+    public static readonly ApiOperation GetReadiness = new("GetReadiness", "GET", "/api/v1/health/ready", None, None,
+        null, null, Ok(typeof(HealthResponseV1)), typeof(HealthResponseV1), RequiresAuthentication: false);
 
     public static readonly ApiOperation GetCatalogContext = Get("GetCatalogContext", "/api/v1/catalog/context", typeof(CatalogContextV1));
+    public static readonly ApiOperation SearchCatalog = Get("SearchCatalog", Organization + "/search", typeof(CatalogSearchPageV1), ["q", "limit", "cursor"]);
     public static readonly ApiOperation GetHelpSections = Get("GetHelpSections", "/api/v1/help/sections", typeof(HelpSectionListV1));
     public static readonly ApiOperation GetHelpSection = Get("GetHelpSection", "/api/v1/help/sections/{sectionId}", typeof(HelpSectionV1));
     public static readonly ApiOperation GetCatalogProjects = Get("GetCatalogProjects", Organization + "/projects", typeof(CatalogProjectPageV1), Page);
@@ -78,6 +114,20 @@ internal static class ApiOperations
     public static readonly ApiOperation ResumeCatalogRevisionIngestion = Send("ResumeCatalogRevisionIngestion", "POST",
         Project + "/revision-ingestions/{operationId}/resume", null, null, Accepted(typeof(CatalogRevisionIngestionResultV1)));
 
+    public static readonly ApiOperation GetCatalogInterchangeCapabilities = Get("GetCatalogInterchangeCapabilities", "/api/v1/catalog/interchange", typeof(CatalogInterchangeCapabilitiesV1));
+    public static readonly ApiOperation ReviewMfdCreate = Send("ReviewMfdCreate", "POST", Project + "/mfd-imports/review",
+        "application/vnd.weft.mfd-package.v1", null, Ok(typeof(CatalogInterchangeReviewV1)), query: ["name", "description", "backendId"]);
+    public static readonly ApiOperation ReviewMfdAppend = Send("ReviewMfdAppend", "POST", Mapping + "/mfd-imports/review",
+        "application/vnd.weft.mfd-package.v1", null, Ok(typeof(CatalogInterchangeReviewV1)), query: ["expectedHeadRevisionId"]);
+    public static readonly ApiOperation GetMfdImportReview = Get("GetMfdImportReview", Project + "/mfd-imports/{reviewId}", typeof(CatalogInterchangeReviewV1));
+    public static readonly ApiOperation ConfirmMfdImport = Send("ConfirmMfdImport", "POST", Project + "/mfd-imports/{reviewId}/confirm",
+        "application/json", typeof(CatalogInterchangeConfirmationV1), Accepted(typeof(CatalogRevisionIngestionResultV1)), headers: Key);
+    public static readonly ApiOperation ReviewMfdExport = Send("ReviewMfdExport", "POST", Revision + "/mfd-exports/review",
+        null, null, Ok(typeof(CatalogInterchangeReviewV1)));
+    public static readonly ApiOperation DownloadMfdExport = new("DownloadMfdExport", "POST", Revision + "/mfd-exports/{reviewId}/download",
+        None, None, "application/json", typeof(CatalogInterchangeConfirmationV1), Ok(null), typeof(CatalogErrorV1),
+        "application/xml", ["application/zip"]);
+
     public static readonly ApiOperation GetCatalogProjectionReport = Get("GetCatalogProjectionReport", Revision + "/reports/projection",
         typeof(CatalogProjectionReportV1));
     public static readonly ApiOperation GetCatalogValidationReport = Get("GetCatalogValidationReport", Revision + "/reports/validation",
@@ -97,7 +147,8 @@ internal static class ApiOperations
         "application/json", typeof(CatalogPreviewSubmissionV1), Created(typeof(CatalogPreviewSubmitResultV1)), headers: Key);
     public static readonly ApiOperation GetCatalogPreview = Get("GetCatalogPreview", Organization + "/previews/{runId}", typeof(CatalogPreviewRunV1));
     public static readonly ApiOperation GetCatalogPreviewOutput = new("GetCatalogPreviewOutput", "GET",
-        Organization + "/previews/{runId}/outputs/{ordinal}", None, None, null, null, Ok(null), typeof(CatalogErrorV1));
+        Organization + "/previews/{runId}/outputs/{ordinal}", None, None, null, null, Ok(null), typeof(CatalogErrorV1),
+        AlternateResponseMediaTypes: ["application/edi-x12", "application/edifact"]);
     public static readonly ApiOperation CancelCatalogPreview = Send("CancelCatalogPreview", "POST", Organization + "/previews/{runId}/cancel",
         null, null, Ok(typeof(CatalogPreviewCancelResultV1)));
 
@@ -157,13 +208,17 @@ internal static class ApiOperations
         Chat + "/conversations/{conversationId}/turns/{turnId}/events", ["after"], None, null, null, Ok(typeof(ChatTurnEventV1)),
         typeof(ChatErrorV1), "text/event-stream");
 
-    public static IReadOnlyList<ApiOperation> All { get; } =
+    public static IReadOnlyList<ApiOperation> All =>
     [
-        GetCatalogContext, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
+        GetAutomationPolicy, PutAutomationPolicy, GetMappingAutomation, PutMappingAutomation, GetRegressionSuites, GetRegressionSuite, GetRegressionEvaluations, PutRegressionRecheck,
+        GetNotificationSubscription, PutNotificationSubscription, GetNotifications, GetNotificationInbox, ReadInboxNotification, ReadNotification, GetNotificationOptions,
+        GetNotificationDeliveries, GetNotificationDestinations, EnableNotificationDestination,
+        GetHealth, GetReadiness, GetCatalogContext, SearchCatalog, GetHelpSections, GetHelpSection, GetCatalogProjects, CreateCatalogProject, GetCatalogProject, GetCatalogMappings, CreateCatalogMapping,
         GetCatalogMapping, GetCatalogMappingMetadata, EditCatalogMappingMetadata, GetCatalogRevisions, AppendCatalogRevision,
         GetCatalogRevision, GetCatalogRevisionIngestionReceipt, ResumeCatalogRevisionIngestion, GetCatalogProjectionReport,
         CreateMappingDraft, ListMappingDrafts, GetMappingDraft, GetMappingDraftOperations, PutMappingDraftOperations,
         CheckpointMappingDraft, CompareMappingDraft, PreviewMappingDraft, SaveMappingDraft, RebaseMappingDraft, DiscardMappingDraft,
+        GetCatalogInterchangeCapabilities, ReviewMfdCreate, ReviewMfdAppend, GetMfdImportReview, ConfirmMfdImport, ReviewMfdExport, DownloadMfdExport,
         GetCatalogValidationReport, GetRetainedCatalogProjectionReport, GetRetainedCatalogValidationReport,
         EnsureCatalogProjectionReport, EnsureCatalogValidationReport, GetCatalogRevisionComparison, SubmitCatalogPreview,
         GetCatalogPreview, GetCatalogPreviewOutput, CancelCatalogPreview, GetRegressionCaseCapabilities, GetRegressionCases,
@@ -171,7 +226,11 @@ internal static class ApiOperations
         CancelRegressionRun, GetBuildCapabilities, GetBuildEnvironments, GetBuildEnvironment, PutBuildEnvironment,
         GetBuildEnvironmentCapabilities, GetBuildApprovals, GetBuildApproval, PutBuildApproval, RevokeBuildApproval,
         GetBuildRuns, GetBuildRun, PutBuildRun, CancelBuildRun, GetChatAvailability, GetChatConversations,
-        CreateChatConversation, GetChatConversation, CreateChatTurn, CancelChatTurn, StreamChatTurnEvents
+        CreateChatConversation, GetChatConversation, CreateChatTurn, CancelChatTurn, StreamChatTurnEvents,
+        GetWorkspaceChatAvailability, GetWorkspaceChatConversations, CreateWorkspaceChatConversation, GetWorkspaceChatConversation,
+        CreateWorkspaceChatTurn, CancelWorkspaceChatTurn, StreamWorkspaceChatTurnEvents,
+        GetReleaseTargets, GetReleaseOperations, GetReleaseSummary, ApplyReleaseOperation,
+        .. AdministrationApiOperations.All
     ];
 
     /// <summary>
@@ -180,10 +239,7 @@ internal static class ApiOperations
     /// </summary>
     public static IReadOnlyDictionary<string, string> NotUsed { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["GetHealth"] = "an unauthenticated readiness probe, not a user operation",
         ["GetProjectionFixture"] = "a Development-only fixture route that the Session host does not map",
-        ["GetNativeExamples"] = "a Development-only example route that the Session host does not map",
-        ["GetNativeExample"] = "a Development-only example route that the Session host does not map",
         ["GetMappingDraftBase"] = "the browser edit module consumes opaque native base bytes; the CLI submits typed operation files and has no local core",
         ["GetMappingDraftValidation"] = "the browser issues view consumes the detailed checkpoint report; the CLI checkpoint command reports its validity and issue count",
         ["GetMappingDraftProjection"] = "the browser workbench consumes the detailed checkpoint projection; the CLI submits typed intent rather than rendering mappings",

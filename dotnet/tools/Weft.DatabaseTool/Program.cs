@@ -14,9 +14,10 @@ if (InvocationGrantCommands.IsCommand(args))
 
 var existingCommand = args.Length == 1 && args[0] is "migrate" or "provision-development-identity";
 var capabilityCommand = args.Length == 4 && args[0] == "set-project-creation-capability" && args[3] is "true" or "false";
-if (!existingCommand && !capabilityCommand)
+var bootstrapCommand = args.Length == 4 && args[0] == "bootstrap-organization-administrator";
+if (!existingCommand && !capabilityCommand && !bootstrapCommand)
 {
-    Console.Error.WriteLine("Usage: Weft.DatabaseTool migrate | provision-development-identity | set-project-creation-capability ORG PRINCIPAL true|false");
+    Console.Error.WriteLine("Usage: Weft.DatabaseTool migrate | provision-development-identity | set-project-creation-capability ORG PRINCIPAL true|false | bootstrap-organization-administrator ORG PRINCIPAL TENANT");
     return 2;
 }
 
@@ -34,6 +35,11 @@ try
         await using var migrations = new MigrationRunner(connectionString);
         await migrations.MigrateAsync();
         Console.WriteLine("The Weft database migrations are current.");
+    }
+    else if (bootstrapCommand)
+    {
+        await OrganizationAdministratorBootstrap.BootstrapAsync(connectionString, RequiredArgumentId(args[1]), RequiredArgumentId(args[2]), RequiredArgumentId(args[3]));
+        Console.WriteLine("The initial organization administrator and fixed invitation tenant are configured.");
     }
     else if (capabilityCommand)
     {

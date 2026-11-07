@@ -7,6 +7,12 @@ use std::io::{self, Read, Write};
 
 pub const PROTOCOL: &str = "weft.ferrule-build.v1";
 pub const PROFILE: &str = "weft.ferrule-csharp-json.v1";
+pub const DOCUMENT_PROFILE: &str = "weft.ferrule-csharp-document.v1";
+pub const X12_INTERCHANGES_PROFILE: &str = "weft.ferrule-csharp-x12-interchanges.v1";
+
+fn document_profile(profile: &str) -> bool {
+    matches!(profile, DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE)
+}
 pub const MAX_SOURCE_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Deserialize)]
@@ -68,7 +74,19 @@ pub fn handle(header: &[u8], reader: &mut impl Read, writer: &mut impl Write) ->
         native_digest: request.as_ref().map(|r| r.native_digest.as_str()),
         intent_digest: request.as_ref().map(|r| r.intent_digest.as_str()),
         engine_revision: ENGINE_REVISION,
-        profile: PROFILE,
+        profile: if request
+            .as_ref()
+            .is_some_and(|r| r.profile == X12_INTERCHANGES_PROFILE)
+        {
+            X12_INTERCHANGES_PROFILE
+        } else if request
+            .as_ref()
+            .is_some_and(|r| r.profile == DOCUMENT_PROFILE)
+        {
+            DOCUMENT_PROFILE
+        } else {
+            PROFILE
+        },
         status,
         boundaries,
         files: files
@@ -98,7 +116,10 @@ pub fn generate(
     native: &[u8],
 ) -> Result<(Vec<Boundary>, Vec<ferrule_codegen::GeneratedFile>), &'static str> {
     if request.protocol_version != PROTOCOL
-        || request.profile != PROFILE
+        || !matches!(
+            request.profile.as_str(),
+            PROFILE | DOCUMENT_PROFILE | X12_INTERCHANGES_PROFILE
+        )
         || !matches!(request.operation.as_str(), "inspect" | "compile")
         || !valid_context_parts(
             &request.request_id,
@@ -120,9 +141,18 @@ pub fn generate(
     let decoded = decode::decode_native(native).map_err(|_| "invalidMapping")?;
     let project = &decoded.project;
     use crate::preview::admission::plain_json;
+    let format = |options: &ferrule_mapping::FormatOptions, path: Option<&str>| {
+        if document_profile(&request.profile) {
+            crate::document_format::DocumentFormat::from_options(options)
+                .map(|value| value.id())
+                .map_err(|_| "unsupported")
+        } else if plain_json(options, path) {
+            Ok("json")
+        } else {
+            Err("unsupported")
+        }
+    };
     if project.root.output_path().is_some()
-        || !plain_json(&project.source_options, project.source_path.as_deref())
-        || !plain_json(&project.target_options, project.target_path.as_deref())
         || project.extra_sources.len() > 15
         || project.extra_targets.len() > 63
     {
@@ -131,50 +161,135 @@ pub fn generate(
     let mut boundaries = vec![Boundary {
         kind: "primaryInput",
         name: None,
-        format: "json",
+        format: format(&project.source_options, project.source_path.as_deref())?,
     }];
     let mut names = std::collections::BTreeSet::new();
     for source in &project.extra_sources {
-        if source.dynamic_path.is_some()
-            || !plain_json(&source.options, Some(&source.path))
-            || !name(&source.name)
-            || !names.insert(&source.name)
-        {
+        if source.dynamic_path.is_some() || !name(&source.name) || !names.insert(&source.name) {
             return Err("unsupported");
         }
         boundaries.push(Boundary {
             kind: "namedInput",
             name: Some(source.name.clone()),
-            format: "json",
+            format: format(&source.options, Some(&source.path))?,
         });
     }
     boundaries.push(Boundary {
         kind: "primaryOutput",
         name: None,
-        format: "json",
+        format: format(&project.target_options, project.target_path.as_deref())?,
     });
     names.clear();
     for target in &project.extra_targets {
-        if target.root.output_path().is_some()
-            || !plain_json(&target.options, target.path.as_deref())
-            || !name(&target.name)
-            || !names.insert(&target.name)
+        if target.root.output_path().is_some() || !name(&target.name) || !names.insert(&target.name)
         {
             return Err("unsupported");
         }
         boundaries.push(Boundary {
             kind: "namedOutput",
             name: Some(target.name.clone()),
-            format: "json",
+            format: format(&target.options, target.path.as_deref())?,
         });
     }
     let program = ferrule_codegen::lower(project).map_err(|_| "unsupported")?;
-    let artifacts = ferrule_codegen_csharp::emit(&program).map_err(|_| "unsupported")?;
-    if artifacts.is_empty() || artifacts.len() > 128 {
+    if request.profile == X12_INTERCHANGES_PROFILE
+        && !boundaries.iter().any(|boundary| boundary.format == "x12")
+    {
+        return Err("unsupported");
+    }
+    let artifacts = if document_profile(&request.profile)
+        && boundaries.iter().any(|boundary| boundary.format != "json")
+    {
+        let options = |options: &ferrule_mapping::FormatOptions| {
+            use crate::document_format::DocumentFormat;
+            use ferrule_codegen::{
+                DocumentBoundaryOptions, EdifactBoundaryOptions, X12BoundaryOptions,
+            };
+            match DocumentFormat::from_options(options).map_err(|_| "unsupported")? {
+                DocumentFormat::Json => Ok(DocumentBoundaryOptions::Json),
+                DocumentFormat::X12 => {
+                    let mut boundary = X12BoundaryOptions::from_format_options(options)
+                        .map_err(|_| "unsupported")?;
+                    if request.profile == X12_INTERCHANGES_PROFILE {
+                        boundary.envelope_profile =
+                            ferrule_codegen::X12EnvelopeProfile::MapForceInterchanges;
+                    }
+                    Ok(DocumentBoundaryOptions::X12(boundary))
+                }
+                DocumentFormat::Edifact => EdifactBoundaryOptions::from_format_options(options)
+                    .map(DocumentBoundaryOptions::Edifact)
+                    .map_err(|_| "unsupported"),
+            }
+        };
+        let policy = ferrule_codegen::StaticDocumentBoundaryPolicy {
+            source: options(&project.source_options)?,
+            target: options(&project.target_options)?,
+            extra_sources: project
+                .extra_sources
+                .iter()
+                .map(|source| {
+                    Ok(ferrule_codegen::NamedDocumentBoundaryOptions {
+                        name: source.name.clone(),
+                        options: options(&source.options)?,
+                    })
+                })
+                .collect::<Result<Vec<_>, &'static str>>()?,
+            extra_targets: project
+                .extra_targets
+                .iter()
+                .map(|target| {
+                    Ok(ferrule_codegen::NamedDocumentBoundaryOptions {
+                        name: target.name.clone(),
+                        options: options(&target.options)?,
+                    })
+                })
+                .collect::<Result<Vec<_>, &'static str>>()?,
+        };
+        ferrule_codegen_csharp::emit_with_static_document_adapters(&program, &policy)
+            .map_err(|_| "unsupported")?
+    } else {
+        ferrule_codegen_csharp::emit(&program).map_err(|_| "unsupported")?
+    };
+    let mut files = artifacts.into_files();
+    if document_profile(&request.profile) {
+        // This host-owned metadata carries only admitted syntax, not mapping logic.
+        // It also covers headerless output from an optional-envelope X12 schema.
+        let segment = |options: &ferrule_mapping::FormatOptions| {
+            u32::from(options.x12_separators.map_or('~', |value| value.segment))
+        };
+        let mut syntax = String::from(
+            "#nullable enable\nnamespace Weft.Generated { public static class DocumentSyntax { public static int OutputSegment(string? name) {\n",
+        );
+        syntax.push_str(&format!(
+            "if (name == null) return {};\n",
+            segment(&project.target_options)
+        ));
+        for target in &project.extra_targets {
+            let name = format!(
+                "\"{}\"",
+                target
+                    .name
+                    .encode_utf16()
+                    .map(|unit| format!("\\u{unit:04x}"))
+                    .collect::<String>()
+            );
+            syntax.push_str(&format!(
+                "if (name == {name}) return {};\n",
+                segment(&target.options)
+            ));
+        }
+        syntax.push_str("throw new System.InvalidOperationException(); } } }\n");
+        files.push(ferrule_codegen::GeneratedFile::new(
+            ferrule_codegen::ArtifactPath::new("Runtime/WeftDocumentSyntax.cs")
+                .map_err(|_| "unsupported")?,
+            syntax.into_bytes(),
+        ));
+    }
+    if files.is_empty() || files.len() > 128 {
         return Err("sourceLimit");
     }
     let mut total = 0usize;
-    for file in artifacts.files() {
+    for file in &files {
         total = total
             .checked_add(file.contents.len())
             .ok_or("sourceLimit")?;
@@ -182,7 +297,7 @@ pub fn generate(
             return Err("sourceLimit");
         }
     }
-    Ok((boundaries, artifacts.into_files()))
+    Ok((boundaries, files))
 }
 fn name(name: &str) -> bool {
     !name.is_empty() && name.len() <= 256 && !name.chars().any(char::is_control)

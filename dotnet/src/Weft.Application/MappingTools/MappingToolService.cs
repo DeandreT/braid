@@ -33,7 +33,8 @@ public sealed partial class MappingToolService : IChatReadOnlyToolPort, IChatCit
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(intent);
         ct.ThrowIfCancellationRequested();
-        if (context.Actor.PrincipalId != context.Conversation.Key.Creator) return Task.FromResult(false);
+        if (context.Actor.PrincipalId != context.Conversation.Key.Creator || context.Conversation.Key.Kind != ChatConversationKind.Revision)
+            return Task.FromResult(false);
         try
         {
             _ = MappingToolRegistry.Parse(intent.Name, intent.Arguments.Json, limits);
@@ -56,34 +57,51 @@ public sealed partial class MappingToolService : IChatReadOnlyToolPort, IChatCit
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(intent);
         cancellationToken.ThrowIfCancellationRequested();
-        var actor = context.Actor;
         var conversation = context.Conversation;
-        var budget = new ResultBudget(Math.Min(limits.OutputBytes, context.RemainingResultBytes),
-            Math.Min(MaximumRetrievedNodes, context.RemainingRetrievedNodes));
+        // Conversations are creator-private; another principal never borrows their pins.
+        if (context.Actor.PrincipalId != conversation.Key.Creator || conversation.Key.Kind != ChatConversationKind.Revision)
+            return Failure(MappingToolOutcome.NotAuthorizedOrNotFound);
+        return await InvokeAsync(context.Actor, MappingReportContext.Of(conversation), intent.Name, intent.Arguments.Json,
+            context.RemainingResultBytes, context.RemainingRetrievedNodes, cancellationToken);
+    }
+
+    /// <summary>
+    /// One of the five tools over an explicit exact report context: a revision conversation's pins, or the
+    /// retained reports a workspace tool observed for one revision. The same authority and identity checks apply.
+    /// </summary>
+    public async Task<MappingToolReply> InvokeAsync(ActorContext actor, MappingReportContext reports, string name, string argumentsJson,
+        int remainingResultBytes, int remainingRetrievedNodes, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(reports);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (remainingResultBytes < 1 || remainingRetrievedNodes < 0) return Failure(MappingToolOutcome.ResourceLimit);
+        var budget = new ResultBudget(Math.Min(limits.OutputBytes, remainingResultBytes),
+            Math.Min(MaximumRetrievedNodes, remainingRetrievedNodes));
         var admitted = false;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(limits.Duration);
         var token = deadline.Token;
         try
         {
-            var source = await AuthorizeAsync(actor, conversation, null, token);
+            var source = await AuthorizeAsync(actor, reports.Revision, null, token);
             if (!capacity.Wait(0)) return Failure(MappingToolOutcome.Busy);
             admitted = true;
-            var call = MappingToolRegistry.Parse(intent.Name, intent.Arguments.Json, limits);
+            var call = MappingToolRegistry.Parse(name, argumentsJson, limits);
             var work = new MappingToolWork(limits.WorkUnits, token);
             MappingToolReply result;
             if (call.Name == "get_validation_issues")
             {
-                var validation = await ReadValidationAsync(actor, conversation, source, token);
+                var validation = await ReadValidationAsync(actor, reports, source, token);
                 result = Validation(validation, call, work, budget, token);
             }
             else
             {
-                var projection = await ReadProjectionAsync(actor, conversation, source, token);
+                var projection = await ReadProjectionAsync(actor, reports, source, token);
                 result = Projection(projection, call, work, budget, token);
             }
             // Preparation is not authority. Recheck immediately before releasing even Unknown/empty results.
-            await AuthorizeAsync(actor, conversation, source, token);
+            await AuthorizeAsync(actor, reports.Revision, source, token);
             token.ThrowIfCancellationRequested();
             return result;
         }
@@ -102,42 +120,40 @@ public sealed partial class MappingToolService : IChatReadOnlyToolPort, IChatCit
         finally { if (admitted) capacity.Release(); }
     }
 
-    private async Task<RevisionReportSource> AuthorizeAsync(ActorContext actor, ChatConversationIntent conversation,
+    private async Task<RevisionReportSource> AuthorizeAsync(ActorContext actor, RevisionScope revision,
         RevisionReportSource? expected, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        // Conversations are creator-private; another principal never borrows their pins.
-        if (actor.PrincipalId != conversation.Key.Creator) throw new MappingToolRefusal(MappingToolOutcome.NotAuthorizedOrNotFound);
-        var observation = await authority.GetSourceAsync(actor, conversation.Key.Revision, token);
+        var observation = await authority.GetSourceAsync(actor, revision, token);
         token.ThrowIfCancellationRequested();
-        if (observation is null || observation.Actor != actor.PrincipalId || observation.Source.Scope != conversation.Key.Revision ||
+        if (observation is null || observation.Actor != actor.PrincipalId || observation.Source.Scope != revision ||
             expected is not null && observation.Source != expected)
             throw new MappingToolRefusal(MappingToolOutcome.NotAuthorizedOrNotFound);
         return observation.Source;
     }
 
-    private async Task<VerifiedProjectionReport> ReadProjectionAsync(ActorContext actor, ChatConversationIntent conversation,
+    private async Task<VerifiedProjectionReport> ReadProjectionAsync(ActorContext actor, MappingReportContext context,
         RevisionReportSource source, CancellationToken token)
     {
-        var pin = conversation.Projection;
-        var read = await reports.GetRetainedAsync(actor, conversation.Key.Revision,
+        var pin = context.Projection;
+        var read = await reports.GetRetainedAsync(actor, context.Revision,
             RevisionReportOperation.Projection, pin.DerivationId, cancellationToken: token);
         return CheckRead(actor, source, RevisionReportOperation.Projection, pin, read, token) as VerifiedProjectionReport ??
             throw new MappingToolRefusal(MappingToolOutcome.ReportUnavailable);
     }
 
-    private async Task<VerifiedValidationReport> ReadValidationAsync(ActorContext actor, ChatConversationIntent conversation,
+    private async Task<VerifiedValidationReport> ReadValidationAsync(ActorContext actor, MappingReportContext context,
         RevisionReportSource source, CancellationToken token)
     {
-        var pin = conversation.Validation;
-        var projectionId = conversation.Projection.DerivationId;
-        var read = await reports.GetRetainedAsync(actor, conversation.Key.Revision,
+        var pin = context.Validation ?? throw new MappingToolRefusal(MappingToolOutcome.ReportUnavailable);
+        var projectionId = context.Projection.DerivationId;
+        var read = await reports.GetRetainedAsync(actor, context.Revision,
             RevisionReportOperation.Validation, pin.DerivationId, projectionId, token);
         if (CheckRead(actor, source, RevisionReportOperation.Validation, pin, read, token) is not VerifiedValidationReport validation ||
             validation.ProjectionDerivationId != projectionId)
             throw new MappingToolRefusal(MappingToolOutcome.ReportUnavailable);
-        // The reader links by derivation UUID; the conversation additionally pins that projection's complete identity.
-        _ = await ReadProjectionAsync(actor, conversation, source, token);
+        // The reader links by derivation UUID; the context additionally pins that projection's complete identity.
+        _ = await ReadProjectionAsync(actor, context, source, token);
         return validation;
     }
 
@@ -159,7 +175,7 @@ public sealed partial class MappingToolService : IChatReadOnlyToolPort, IChatCit
     }
 
     /// <summary>The same exact-attempt identity that conversation creation and citation admission use.</summary>
-    internal static ChatReportPin Pin(RevisionReportResult metadata) =>
+    public static ChatReportPin Pin(RevisionReportResult metadata) =>
         new(metadata.CacheEntryId, metadata.DerivationId, metadata.Key.Fingerprint, metadata.DerivedObject.Digest);
 
     private MappingToolReply Prepare(MappingToolOutcome outcome, ProjectionCoverage? coverage, MappingToolData? data,

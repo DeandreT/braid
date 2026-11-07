@@ -28,8 +28,8 @@ public sealed record FerruleServiceProfileV1(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] FerruleServiceRuntimeV1? Runtime);
 
 /// <summary>The compile profile's toolchain.</summary>
-public sealed record FerruleServiceToolchainV1(string Protocol, string Profile, string SdkVersion, string RuntimeVersion, string Identity,
+public sealed record FerruleServiceToolchainV1(string Protocol, string Profile, IReadOnlyList<string> SupportedProfiles, string SdkVersion, string RuntimeVersion, string Identity,
     string BuildIdentity);
 
 /// <summary>The execute profile's compiled runtime.</summary>
-public sealed record FerruleServiceRuntimeV1(string Protocol, string Version, string Identity, long ManagedHeapBytes, long MaximumAddressSpaceBytes);
+public sealed record FerruleServiceRuntimeV1(string Protocol, IReadOnlyList<string> SupportedProtocols, string Version, string Identity, long ManagedHeapBytes, long MaximumAddressSpaceBytes);

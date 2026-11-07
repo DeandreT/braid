@@ -8,17 +8,19 @@ public sealed class AuthSessionV1
 {
     [JsonConstructor]
     public AuthSessionV1(int version, string mode, string state, string authActionRequestToken,
-        string? requestToken, string? identityContext)
+        string? requestToken, string? identityContext, string? displayName = null)
     {
         if (version != 1 || mode != "session" || state is not ("anonymous" or "authenticationRequired" or "authenticated") ||
             !AuthValueV1.IsToken(authActionRequestToken, 4096) ||
             (state == "authenticated" ? !AuthValueV1.IsToken(requestToken, 4096) ||
-                !AuthValueV1.IsIdentityContext(identityContext) : requestToken is not null || identityContext is not null))
+                !AuthValueV1.IsIdentityContext(identityContext) : requestToken is not null || identityContext is not null || displayName is not null) ||
+            displayName is not null && !AccountDisplayName.IsValid(displayName))
             throw new ArgumentException("The authentication status is invalid.");
         State = state;
         AuthActionRequestToken = authActionRequestToken;
         RequestToken = requestToken;
         IdentityContext = identityContext;
+        DisplayName = displayName;
     }
     public int Version => 1;
     public string Mode => "session";
@@ -26,6 +28,7 @@ public sealed class AuthSessionV1
     public string AuthActionRequestToken { get; }
     public string? RequestToken { get; }
     public string? IdentityContext { get; }
+    public string? DisplayName { get; }
     public override string ToString() => nameof(AuthSessionV1);
 }
 

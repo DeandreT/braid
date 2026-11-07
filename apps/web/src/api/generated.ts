@@ -12,7 +12,7 @@ export interface paths {
     };
     /**
      * Complete the fixed Entra code flow.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. Success only303Location'/' after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; protected state at most 12288 characters within the unchanged 16384-byte callback query bound. No duplicates, token fields or code+error. Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text.
      */
     get: operations["CompleteEntraLogin"];
     put?: never;
@@ -34,7 +34,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["ForgetDeniedLocalSession"];
     delete?: never;
@@ -54,7 +54,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["BeginBrowserLogin"];
     delete?: never;
@@ -74,7 +74,7 @@ export interface paths {
     put?: never;
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     post: operations["LogoutBrowserSession"];
     delete?: never;
@@ -92,7 +92,7 @@ export interface paths {
     };
     /**
      * Explicit browser authentication protocol.
-     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
+     * @description Supported contract; presence does not activate a runtime route or authentication mode. Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only.
      */
     get: operations["ReadBrowserAuthentication"];
     put?: never;
@@ -120,32 +120,15 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/v1/examples/mappings": {
+  "/api/v1/catalog/interchange": {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    /** List immutable self-authored native examples (development only). */
-    get: operations["GetNativeExamples"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/examples/mappings/{exampleId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Read separate native projection and validation reports (development only). */
-    get: operations["GetNativeExample"];
+    /** Read bounded interchange availability; no backend is enabled by default. */
+    get: operations["GetCatalogInterchangeCapabilities"];
     put?: never;
     post?: never;
     delete?: never;
@@ -187,6 +170,22 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/health/ready": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["GetReadiness"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/help/sections": {
     parameters: {
       query?: never;
@@ -214,6 +213,245 @@ export interface paths {
     /** Read one user guide section as structured text. */
     get: operations["GetHelpSection"];
     put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/administration": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** GetOrganizationAdministration */
+    get: operations["GetOrganizationAdministration"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/administration/bindings/{bindingId}/disable": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** DisableAdministrationBinding */
+    post: operations["DisableAdministrationBinding"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/administration/invitations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** CreateOrganizationInvitation */
+    post: operations["CreateOrganizationInvitation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/administration/invitations/{invitationId}/revoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** RevokeOrganizationInvitation */
+    post: operations["RevokeOrganizationInvitation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/administration/members/{principalId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** PutOrganizationMember */
+    put: operations["PutOrganizationMember"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/administration/principals/{principalId}/disable": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** DisableAdministrationPrincipal */
+    post: operations["DisableAdministrationPrincipal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the model profiles that can answer organization-wide questions, their data policy and the limits. */
+    get: operations["GetWorkspaceChatAvailability"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the caller's conversations of both kinds in the organization, newest first, optionally about one revision. */
+    get: operations["GetOrganizationChatConversations"];
+    put?: never;
+    /** Create or replay a private workspace conversation, optionally focused on a mapping or revision. */
+    post: operations["CreateWorkspaceChatConversation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one private workspace conversation and its most recent turns. */
+    get: operations["GetWorkspaceChatConversation"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Start or replay a workspace turn identified by its client-generated turn ID. */
+    post: operations["CreateWorkspaceChatTurn"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Cancel an active workspace turn; a terminal turn is returned unchanged. */
+    post: operations["CancelWorkspaceChatTurn"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Stream the workspace turn's durable events after a sequence number using SSE framing. */
+    get: operations["StreamWorkspaceChatTurnEvents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/notifications": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read visible project activity and recipient-only organization invitations. */
+    get: operations["GetNotificationInbox"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/notifications/{notificationId}/read": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Mark one currently visible own notification read without changing its provenance. */
+    put: operations["ReadInboxNotification"];
     post?: never;
     delete?: never;
     options?: never;
@@ -303,6 +541,109 @@ export interface paths {
     /** Read project metadata and current supported actions. */
     get: operations["GetCatalogProject"];
     put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/administration": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** GetProjectAdministration */
+    get: operations["GetProjectAdministration"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/administration/invocation-grants/{grantId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** PutAdministrationInvocationGrant */
+    put: operations["PutAdministrationInvocationGrant"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/administration/invocation-grants/{grantId}/revoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** RevokeAdministrationInvocationGrant */
+    post: operations["RevokeAdministrationInvocationGrant"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/administration/members/{principalId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** PutProjectMember */
+    put: operations["PutProjectMember"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/administration/members/{principalId}/payload-read": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** PutProjectPayloadRead */
+    put: operations["PutProjectPayloadRead"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/automation": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetAutomationPolicy"];
+    /** Update scoped automation controls; no payload or secret is accepted. */
+    put: operations["PutAutomationPolicy"];
     post?: never;
     delete?: never;
     options?: never;
@@ -752,6 +1093,94 @@ export interface paths {
     patch: operations["EditCatalogMappingMetadata"];
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/mfd-imports/review": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Convert an immutable MFD package for review without publishing a revision.
+     * @description Consumes canonical application/vnd.weft.mfd-package.v1 framing. At most 128 files, 4194304 bytes each, 16777216 aggregate content bytes, 256 UTF-8 bytes per path. This route alone permits the bounded package body; native upload and global limits are unchanged. Fresh upload authority precedes body consumption. No Idempotency-Key or conditional headers. Nothing is published before explicit confirmation.
+     */
+    post: operations["ReviewMfdAppend"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List endpoint targets and active release identities. */
+    get: operations["GetReleaseTargets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/{section}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read paged release, history, actions, callers or invocation metadata. No payload bytes. */
+    get: operations["GetReleaseOperations"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/actions/{operationId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Apply a version-conditional idempotent release operation. */
+    post: operations["ApplyReleaseOperation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/operations/{targetId}/summary": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read failure and latency summaries over a selected window. */
+    get: operations["GetReleaseSummary"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-cases": {
     parameters: {
       query?: never;
@@ -997,6 +1426,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/mfd-exports/{reviewId}/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Download the exact reviewed export after explicit warning acknowledgement.
+     * @description Strict JSON object with exactly reviewDigest (canonical lowercase SHA-256) and acknowledgeWarnings (boolean), at most 1024 bytes, application/json with no media parameters or compression. Unknown, duplicate or incorrectly typed fields are refused. No query or conditional headers. The original actor's current authority is checked again. No Idempotency-Key. Warnings must be acknowledged before bytes are returned; repeated downloads return the same reviewed package. Multiple-file packages download as a deterministic ZIP; a single design downloads as .mfd. No conversion is run on this route.
+     */
+    post: operations["DownloadMfdExport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/mfd-exports/review": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Review a revision's MFD export and all conversion warnings before download.
+     * @description Empty body and no query, Idempotency-Key or conditional headers. Fresh scoped read authority is checked before and after private native storage and export. The returned review is original-actor scoped, immutable and expires after one hour.
+     */
+    post: operations["ReviewMfdExport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/previews": {
     parameters: {
       query?: never;
@@ -1006,7 +1475,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Submit an idempotent bounded JSON sample preview of this exact revision. */
+    /** Submit an idempotent bounded sample preview of this exact revision with explicit legacy JSON or document admission. */
     post: operations["SubmitCatalogPreview"];
     delete?: never;
     options?: never;
@@ -1134,6 +1603,253 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{resourceId}/automation": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetMappingAutomation"];
+    /** Update scoped automation controls; no payload or secret is accepted. */
+    put: operations["PutMappingAutomation"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{resourceId}/regression-suites": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetRegressionSuites"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mfd-imports/{reviewId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Restore an original-actor import review after fresh project and target authorization. */
+    get: operations["GetMfdImportReview"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mfd-imports/{reviewId}/confirm": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Publish only server-owned native bytes from the exact reviewed import.
+     * @description Strict JSON object with exactly reviewDigest (canonical lowercase SHA-256) and acknowledgeWarnings (boolean), at most 1024 bytes, application/json with no media parameters or compression. Unknown, duplicate or incorrectly typed fields are refused. No query or conditional headers. The original actor's current authority is checked again. Idempotency-Key must equal reviewId. Reviewed package, native bytes, complete warnings, engine identity and append head are immutable. Confirmation never accepts replacement native bytes or reruns conversion.
+     */
+    post: operations["ConfirmMfdImport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mfd-imports/review": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Convert an immutable MFD package for review without publishing a revision.
+     * @description Consumes canonical application/vnd.weft.mfd-package.v1 framing. At most 128 files, 4194304 bytes each, 16777216 aggregate content bytes, 256 UTF-8 bytes per path. This route alone permits the bounded package body; native upload and global limits are unchanged. Fresh upload authority precedes body consumption. No Idempotency-Key or conditional headers. Nothing is published before explicit confirmation.
+     */
+    post: operations["ReviewMfdCreate"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/notification-deliveries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetNotificationDeliveries"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/notification-destinations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetNotificationDestinations"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/notification-destinations/enable": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Update scoped automation controls; no payload or secret is accepted. */
+    put: operations["EnableNotificationDestination"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/notification-options": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read configured channel IDs; never addresses, URLs or secrets. */
+    get: operations["GetNotificationOptions"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/notification-subscription": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetNotificationSubscription"];
+    /** Update scoped automation controls; no payload or secret is accepted. */
+    put: operations["PutNotificationSubscription"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/notifications": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetNotifications"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/notifications/{resourceId}/read": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Update scoped automation controls; no payload or secret is accepted. */
+    put: operations["ReadNotification"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/regression-suites/{resourceId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetRegressionSuite"];
+    /** Update scoped automation controls; no payload or secret is accepted. */
+    put: operations["PutRegressionRecheck"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/regression-suites/{resourceId}/cases": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read scoped automation metadata under fresh project authority. */
+    get: operations["GetRegressionEvaluations"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/revision-ingestions/{operationId}": {
     parameters: {
       query?: never;
@@ -1174,10 +1890,108 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Search freshly authorized catalog metadata and retained report field/rule names and paths.
+     * @description Literal substring search: ASCII case-insensitive, other Unicode exact. No query language, native derivation or sample payload reads. Fresh principal, organization and project authority is checked for each page. Results retain exact revision/report/resource identities and plain text UTF-16 highlight spans. Continuations bind the trimmed query and organization, not a permission grant or snapshot. A 503 response refuses incomplete report indexing; retry continues bounded backfill.
+     */
+    get: operations["SearchCatalog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    AdministrationAuditV1: {
+      /** Format: uuid */
+      actorId: string;
+      after: null | components["schemas"]["JsonElement"];
+      before: null | components["schemas"]["JsonElement"];
+      operation: string;
+      /** Format: uuid */
+      projectId: null | string;
+      /** Format: date-time */
+      recordedAt: string;
+      /** Format: int64 */
+      sequence: number;
+      /** Format: uuid */
+      targetId: string;
+    };
+    AdministrationBindingV1: {
+      authority: string;
+      /** Format: uuid */
+      bindingId: string;
+      enabled: boolean;
+      provider: string;
+      subject: string;
+      /** Format: int64 */
+      version: number;
+    };
+    AdministrationErrorV1: {
+      code: string;
+    };
+    AdministrationInvitationCreatedV1: {
+      /** Format: uuid */
+      invitationId: string;
+      redemptionPath: string;
+    };
+    AdministrationInvitationPostV1: {
+      /** Format: uuid */
+      expectedObjectId: null | string;
+      /** Format: date-time */
+      expiresAt: string;
+      /** Format: uuid */
+      invitationId: string;
+      projectRoles: components["schemas"]["InvitationProjectRoleV1"][];
+      /** Format: uuid */
+      tenantId: string;
+    };
+    AdministrationInvocationGrantPutV1: {
+      /** Format: uuid */
+      objectId: string;
+      /** Format: uuid */
+      targetId: string;
+      /** Format: uuid */
+      tenantId: string;
+    };
+    AdministrationInvocationGrantV1: {
+      /** Format: date-time */
+      grantedAt: string;
+      /** Format: uuid */
+      grantId: string;
+      /** Format: uuid */
+      mappingId: string;
+      /** Format: uuid */
+      objectId: string;
+      /** Format: date-time */
+      revokedAt: null | string;
+      /** Format: uuid */
+      targetId: string;
+      /** Format: uuid */
+      tenantId: string;
+    };
+    AdministrationMemberPutV1: {
+      active: boolean;
+      role: string;
+    };
+    AdministrationPayloadPutV1: {
+      active: boolean;
+    };
+    AdministrationReceiptV1: {
+      outcome: string;
+    };
     ArtifactDigest: {
       algorithm: string;
       value: string;
@@ -1214,6 +2028,8 @@ export interface components {
     AuthSessionV1:
       | {
           authActionRequestToken: string;
+          /** @description Optional provider-supplied display text, never an identity or authority. At most 200 Unicode scalars; blank text is invalid. */
+          displayName: null | string;
           identityContext: string;
           /** @enum {string} */
           mode: "session";
@@ -1225,6 +2041,7 @@ export interface components {
         }
       | {
           authActionRequestToken: string;
+          displayName: null;
           identityContext: null;
           /** @enum {string} */
           mode: "session";
@@ -1236,6 +2053,7 @@ export interface components {
         }
       | {
           authActionRequestToken: string;
+          displayName: null;
           identityContext: null;
           /** @enum {string} */
           mode: "session";
@@ -1248,6 +2066,18 @@ export interface components {
     AuthStatusV1:
       | components["schemas"]["AuthSessionV1"]
       | components["schemas"]["AuthModeStatusV1"];
+    AutomationPolicyV1: {
+      /** Format: int32 */
+      errorRatePercent: number;
+      /** Format: int32 */
+      minimumRequests: number;
+      requirePassingRegression: boolean;
+      /** Format: int32 */
+      windowSeconds: number;
+    };
+    AutomationSavedV1: {
+      saved: boolean;
+    };
     BackendIdentity: {
       buildId: string;
       id: string;
@@ -1307,12 +2137,17 @@ export interface components {
     BuildCapabilitiesV1: {
       approveBuilds: boolean;
       backend: components["schemas"]["BuildBackendV1"];
+      documentBackend?: null | components["schemas"]["BuildBackendV1"];
+      documentProfile?: null | components["schemas"]["BuildRuntimeV1"];
+      interchangeProfile?: null | components["schemas"]["BuildRuntimeV1"];
       profile: components["schemas"]["BuildRuntimeV1"];
       readOwnMetadata: boolean;
       submitBuilds: boolean;
     };
     BuildEnvironmentCapabilitiesV1: {
       canCreateVersions: boolean;
+      documentProfile?: null | components["schemas"]["BuildRuntimeV1"];
+      interchangeProfile?: null | components["schemas"]["BuildRuntimeV1"];
       profile: components["schemas"]["BuildRuntimeV1"];
     };
     BuildEnvironmentPageV1: {
@@ -1484,6 +2319,41 @@ export interface components {
       scope: components["schemas"]["CatalogRevisionScopeV1"];
       sequence: string;
     };
+    CatalogInterchangeCapabilitiesV1: {
+      enabled: boolean;
+      /** Format: int32 */
+      maximumFileBytes: number;
+      /** Format: int32 */
+      maximumFiles: number;
+      /** Format: int32 */
+      maximumPathBytes: number;
+      /** Format: int32 */
+      maximumTotalBytes: number;
+    };
+    CatalogInterchangeEngineV1: {
+      adapterBuild: string;
+      backendBuild: string;
+      backendId: string;
+      engineRevision: string;
+    };
+    CatalogInterchangeReviewV1: {
+      engine: components["schemas"]["CatalogInterchangeEngineV1"];
+      expectedHeadRevisionId: null | string;
+      /** Format: date-time */
+      expiresAt: string;
+      mappingName: null | string;
+      nativeDigest: string;
+      packageDigest: string;
+      reviewDigest: string;
+      reviewId: string;
+      summary: string;
+      targetMappingId: null | string;
+      warnings: components["schemas"]["CatalogInterchangeWarningV1"][];
+    };
+    CatalogInterchangeWarningV1: {
+      code: string;
+      message: string;
+    };
     CatalogMappingMetadataEditV1: {
       description: string;
       name: string;
@@ -1597,6 +2467,14 @@ export interface components {
         name: string;
         value: string;
       }[];
+      /**
+       * @description Omitted or null preserves legacy JSON admission. Document admission requires explicit native boundary formats; filenames never select them.
+       * @enum {null|string}
+       */
+      profile?:
+        | "weft.ferrule-json-preview.v1"
+        | "weft.ferrule-document-preview.v1"
+        | null;
       target: {
         kind: string;
         name?: null | string;
@@ -1814,6 +2692,39 @@ export interface components {
     };
     /** @enum {unknown} */
     CatalogRoleV1: "viewer" | "runner" | "publisher" | "administrator";
+    CatalogSearchHighlightV1: {
+      /** Format: int32 */
+      length: number;
+      /** Format: int32 */
+      start: number;
+    };
+    CatalogSearchHitV1: {
+      description: components["schemas"]["CatalogSearchTextV1"];
+      kind: components["schemas"]["CatalogSearchKindV1"];
+      /** Format: uuid */
+      mappingId: null | string;
+      /** Format: uuid */
+      organizationId: string;
+      /** Format: uuid */
+      projectId: string;
+      /** Format: uuid */
+      projectionDerivationId: null | string;
+      resourceId: null | string;
+      /** Format: uuid */
+      revisionId: null | string;
+      title: components["schemas"]["CatalogSearchTextV1"];
+    };
+    /** @enum {unknown} */
+    CatalogSearchKindV1: "project" | "mapping" | "revision" | "field" | "rule";
+    CatalogSearchPageV1: {
+      hits: components["schemas"]["CatalogSearchHitV1"][];
+      nextCursor: null | string;
+      query: string;
+    };
+    CatalogSearchTextV1: {
+      highlights: components["schemas"]["CatalogSearchHighlightV1"][];
+      text: string;
+    };
     CatalogValidationReportV1: {
       currentAttempt:
         null | components["schemas"]["CatalogRevisionReportAttemptV1"];
@@ -1849,6 +2760,8 @@ export interface components {
       hasEarlierTurns: boolean;
       turns: components["schemas"]["ChatTurnV1"][];
     };
+    /** @enum {unknown} */
+    ChatConversationKindV1: "revision" | "workspace";
     ChatConversationPageV1: {
       conversations: components["schemas"]["ChatConversationV1"][];
       hasMore: boolean;
@@ -1887,6 +2800,11 @@ export interface components {
     ChatErrorV1: {
       code: components["schemas"]["ChatErrorCodeV1"];
     };
+    ChatFocusV1: {
+      mappingId: string;
+      projectId: string;
+      revisionId: null | string;
+    };
     ChatLimitsV1: {
       /** Format: int32 */
       maxSelectors: number;
@@ -1895,6 +2813,31 @@ export interface components {
       /** Format: int32 */
       turnSeconds: number;
     };
+    ChatOrganizationConversationPageV1: {
+      conversations: components["schemas"]["ChatOrganizationConversationV1"][];
+      hasMore: boolean;
+    };
+    ChatOrganizationConversationV1: {
+      conversationId: string;
+      /** Format: date-time */
+      createdAtUtc: string;
+      focus: null | components["schemas"]["ChatFocusV1"];
+      kind: components["schemas"]["ChatConversationKindV1"];
+      /** Format: date-time */
+      lastTurnAtUtc: null | string;
+      /** Format: date-time */
+      retainUntilUtc: string;
+      revision: null | components["schemas"]["CatalogRevisionScopeV1"];
+      title: null | string;
+      /** Format: int32 */
+      turnCount: number;
+    };
+    /** @enum {unknown} */
+    ChatPayloadSourceV1:
+      | "previewInput"
+      | "previewOutput"
+      | "regressionCase"
+      | "regressionRunOutput";
     ChatProfileV1: {
       displayName: string;
       modelId: string;
@@ -1970,6 +2913,8 @@ export interface components {
       | components["schemas"]["ChatTurnEventV1ChatToolCompletedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatUsageEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatCitationEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatWorkspaceCitationEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatDataSharedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnCompletedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnFailedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnCancelledEventV1"];
@@ -1981,6 +2926,19 @@ export interface components {
       target: components["schemas"]["ChatSelectorV1"];
       /** @enum {string} */
       type: "citation";
+    };
+    ChatTurnEventV1ChatDataSharedEventV1: {
+      /** Format: int32 */
+      bytes: number;
+      projectId: string;
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      source: components["schemas"]["ChatPayloadSourceV1"];
+      subjectId: string;
+      /** @enum {string} */
+      type: "data.shared";
+      version: null | string;
     };
     ChatTurnEventV1ChatTextDeltaEventV1: {
       roundId: string;
@@ -2054,6 +3012,14 @@ export interface components {
       /** @enum {string} */
       type: "usage";
     };
+    ChatTurnEventV1ChatWorkspaceCitationEventV1: {
+      citation: components["schemas"]["ChatWorkspaceCitationV1"];
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "workspace.citation";
+    };
     /** @enum {unknown} */
     ChatTurnFailureV1:
       | "provider"
@@ -2062,6 +3028,12 @@ export interface components {
       | "contentFiltered"
       | "interrupted"
       | "stopped";
+    /** @enum {unknown} */
+    ChatTurnFocusStateV1: "none" | "resolved" | "unavailable";
+    ChatTurnFocusV1: {
+      revision: null | components["schemas"]["CatalogRevisionScopeV1"];
+      state: components["schemas"]["ChatTurnFocusStateV1"];
+    };
     /** @enum {unknown} */
     ChatTurnPhaseV1:
       "active" | "completed" | "failed" | "cancelled" | "interrupted";
@@ -2080,6 +3052,7 @@ export interface components {
       deadlineUtc: string;
       /** Format: date-time */
       finishedAtUtc: null | string;
+      focus?: null | components["schemas"]["ChatTurnFocusV1"];
       /** Format: int32 */
       lastSequence: number;
       phase: components["schemas"]["ChatTurnPhaseV1"];
@@ -2090,6 +3063,55 @@ export interface components {
     };
     /** @enum {unknown} */
     ChatUsageOriginV1: "observation" | "roundTerminal" | "openRejection";
+    ChatWorkspaceAvailabilityV1: {
+      limits: components["schemas"]["ChatLimitsV1"];
+      organizationId: string;
+      profiles: components["schemas"]["ChatWorkspaceProfileV1"][];
+      /** @enum {string} */
+      readonly schemaVersion: "weft.chat.v1";
+    };
+    /** @enum {unknown} */
+    ChatWorkspaceCitationKindV1:
+      | "project"
+      | "mapping"
+      | "revision"
+      | "report"
+      | "previewRun"
+      | "regressionCase"
+      | "regressionRun"
+      | "buildRun"
+      | "buildApproval"
+      | "buildEnvironment"
+      | "guideSection";
+    ChatWorkspaceCitationV1: {
+      kind: components["schemas"]["ChatWorkspaceCitationKindV1"];
+      mappingId: null | string;
+      organizationId: string;
+      projectId: null | string;
+      reportDerivationId: null | string;
+      revisionId: null | string;
+      sectionId: null | string;
+      subjectId: null | string;
+      target: null | components["schemas"]["ChatSelectorV1"];
+      version: null | string;
+    };
+    ChatWorkspaceConversationCreateV1: {
+      conversationId: string;
+      focus?: null | {
+        mappingId: string;
+        projectId: string;
+        revisionId?: null | string;
+      };
+    };
+    ChatWorkspaceConversationDetailV1: {
+      conversation: components["schemas"]["ChatOrganizationConversationV1"];
+      hasEarlierTurns: boolean;
+      turns: components["schemas"]["ChatTurnV1"][];
+    };
+    ChatWorkspaceProfileV1: {
+      payloadsAllowed: boolean;
+      profile: components["schemas"]["ChatProfileV1"];
+    };
     /** @enum {unknown} */
     ComparisonAspectV1:
       | "shape"
@@ -2780,6 +3802,12 @@ export interface components {
     HelpTableRowV1: {
       cells: components["schemas"]["HelpTableCellV1"][];
     };
+    InvitationProjectRoleV1: {
+      /** Format: uuid */
+      projectId: string;
+      role: string;
+    };
+    JsonElement: unknown;
     LiteralValue:
       | components["schemas"]["LiteralValueStringLiteralValue"]
       | components["schemas"]["LiteralValueBooleanLiteralValue"]
@@ -2805,6 +3833,9 @@ export interface components {
       /** @enum {string} */
       kind: "string";
       value: string;
+    };
+    MappingAutomationV1: {
+      enabled: boolean;
     };
     MappingDraftBaseV1: {
       /** Format: int32 */
@@ -2939,20 +3970,6 @@ export interface components {
       /** @enum {string} */
       kind: "target";
     };
-    NativeExampleDescriptorV1: {
-      /** Format: int32 */
-      byteCount: number;
-      digest: components["schemas"]["ArtifactDigest"];
-      id: string;
-      revision: components["schemas"]["ScopedRevisionId"];
-      source: string;
-      title: string;
-    };
-    NativeExampleResultV1: {
-      example: components["schemas"]["NativeExampleDescriptorV1"];
-      projection: components["schemas"]["ProjectionReportV1"];
-      validation: components["schemas"]["ValidationReportV1"];
-    };
     NativeLocator:
       | components["schemas"]["NativeLocatorDocumentNativeLocator"]
       | components["schemas"]["NativeLocatorJsonPointerNativeLocator"]
@@ -2992,6 +4009,65 @@ export interface components {
       startOffset: string;
       unit?: components["schemas"]["TextSpanUnit"];
     };
+    NotificationDeliveriesV1: {
+      deliveries: components["schemas"]["NotificationDeliveryV1"][];
+      nextId: null | string;
+    };
+    NotificationDeliveryAttemptV1: {
+      /** Format: int32 */
+      attempt: number;
+      outcome: string;
+      recordedAtUtc: string;
+    };
+    NotificationDeliveryV1: {
+      /** Format: int32 */
+      attempts: number;
+      destinationId: string;
+      event: string;
+      history: components["schemas"]["NotificationDeliveryAttemptV1"][];
+      id: string;
+      nextAttemptAtUtc: null | string;
+      resourceId: string;
+      state: string;
+    };
+    NotificationDestinationEnableV1: {
+      destinationId: string;
+    };
+    NotificationDestinationsV1: {
+      destinations: components["schemas"]["NotificationDestinationV1"][];
+    };
+    NotificationDestinationV1: {
+      channel: string;
+      enabled: boolean;
+      id: string;
+    };
+    NotificationOptionsV1: {
+      emailAvailable: boolean;
+      events: string[];
+      webhooks: string[];
+    };
+    NotificationReadV1: Record<string, never>;
+    NotificationSubscriptionV1: {
+      email: boolean;
+      events: string[];
+      inApp: boolean;
+      webhooks: string[];
+    };
+    NotificationsV1: {
+      nextId: null | string;
+      notifications: components["schemas"]["NotificationV1"][];
+    };
+    NotificationV1: {
+      createdAtUtc: string;
+      event: string;
+      id: string;
+      link: string;
+      mappingId: null | string;
+      projectId: null | string;
+      read: boolean;
+      resourceId: string;
+      revisionId: null | string;
+    };
     /** @enum {unknown} */
     NullLiteralKind: "absent" | "explicitNull" | "xmlNil";
     OperationCapability: {
@@ -3027,6 +4103,38 @@ export interface components {
       | "timedOut"
       | "canceled"
       | "isolationFailure";
+    OrganizationAdministrationV1: {
+      audit: components["schemas"]["AdministrationAuditV1"][];
+      invitations: components["schemas"]["OrganizationInvitationV1"][];
+      members: components["schemas"]["OrganizationMemberV1"][];
+      /** Format: int64 */
+      version: number;
+    };
+    OrganizationInvitationV1: {
+      /** Format: uuid */
+      expectedObjectId: null | string;
+      /** Format: date-time */
+      expiresAt: string;
+      /** Format: uuid */
+      invitationId: string;
+      projectRoles: components["schemas"]["InvitationProjectRoleV1"][];
+      /** Format: date-time */
+      redeemedAt: null | string;
+      /** Format: date-time */
+      revokedAt: null | string;
+      /** Format: uuid */
+      tenantId: string;
+    };
+    OrganizationMemberV1: {
+      active: boolean;
+      bindings: components["schemas"]["AdministrationBindingV1"][];
+      principalActive: boolean;
+      /** Format: uuid */
+      principalId: string;
+      role: string;
+      /** Format: int64 */
+      version: number;
+    };
     PathSegment:
       | components["schemas"]["PathSegmentFieldPathSegment"]
       | components["schemas"]["PathSegmentAttributePathSegment"]
@@ -3052,6 +4160,12 @@ export interface components {
       index: string;
       /** @enum {string} */
       kind: "index";
+    };
+    ProjectAdministrationV1: {
+      grants: components["schemas"]["AdministrationInvocationGrantV1"][];
+      members: components["schemas"]["ProjectMemberV1"][];
+      /** Format: int64 */
+      version: number;
     };
     ProjectionBoundary: {
       format: string;
@@ -3174,8 +4288,21 @@ export interface components {
       outputFieldId: string;
       summary: string;
     };
+    ProjectMemberV1: {
+      active: boolean;
+      payloadRead: boolean;
+      /** Format: int64 */
+      payloadVersion: number;
+      /** Format: uuid */
+      principalId: string;
+      role: string;
+      /** Format: int64 */
+      version: number;
+    };
     RegressionCaseCapabilitiesV1: {
+      comparisonPolicies?: null | string[];
       comparisonPolicy: string;
+      documentRuntime?: null | components["schemas"]["RegressionRuntimeV1"];
       limits: components["schemas"]["RegressionLimitsV1"];
       publishCases: boolean;
       readSamples: boolean;
@@ -3199,12 +4326,14 @@ export interface components {
       nextCaseId: null | string;
     };
     RegressionCasePutV1: {
+      comparisonOptions?:
+        null | components["schemas"]["RegressionEdiComparisonOptionsV1"];
       comparisonPolicy: string;
       currentDateTime: string;
       expected: components["schemas"]["RegressionDocumentV1"][];
       limits: components["schemas"]["RegressionLimitsV1"];
       name: string;
-      namedInputs: components["schemas"]["RegressionDocumentV1"][];
+      namedInputs: components["schemas"]["RegressionInputDocumentV1"][];
       parameters: components["schemas"]["RegressionParameterV1"][];
       primaryBase64Url: string;
       revisionId: string;
@@ -3221,6 +4350,8 @@ export interface components {
       /** Format: int32 */
       actualOutputs: number;
       differences: components["schemas"]["RegressionDifferenceV1"][];
+      documentDiagnostic?:
+        null | components["schemas"]["RegressionDocumentDiagnosticV1"];
       /** Format: int32 */
       expectedOutputs: number;
       notEvaluatedReason: string;
@@ -3240,9 +4371,50 @@ export interface components {
       /** Format: int32 */
       firstDifferentByte: null | number;
       kind: string;
+      location?: null | components["schemas"]["RegressionDocumentLocationV1"];
       name: null | string;
     };
+    RegressionDocumentDiagnosticV1: {
+      location: components["schemas"]["RegressionDocumentLocationV1"];
+      name: null | string;
+      side: string;
+    };
+    RegressionDocumentLocationV1: {
+      /** Format: int32 */
+      component: number;
+      /** Format: int32 */
+      element: number;
+      /** Format: int32 */
+      interchange: number;
+      /** Format: int32 */
+      repetition: number;
+      /** Format: int32 */
+      segment: number;
+      segmentId: string;
+    };
     RegressionDocumentV1: {
+      bytesBase64Url: string;
+      mediaType?: null | string;
+      name: null | string;
+    };
+    RegressionEdiComparisonOptionsV1: {
+      compareSeparators: boolean;
+      ignoreControlNumbers: boolean;
+      ignoreDates: boolean;
+    };
+    RegressionEvaluationsV1: {
+      cases: components["schemas"]["RegressionEvaluationV1"][];
+      nextCaseId: null | string;
+    };
+    RegressionEvaluationV1: {
+      /** Format: int32 */
+      attempts: number;
+      caseId: string;
+      originalRevisionId: string;
+      state: string;
+      version: string;
+    };
+    RegressionInputDocumentV1: {
       bytesBase64Url: string;
       name: null | string;
     };
@@ -3260,6 +4432,10 @@ export interface components {
       kind: string;
       name: string;
       value: string;
+    };
+    RegressionRecheckV1: {
+      mappingId: string;
+      revisionId: string;
     };
     RegressionRunPageV1: {
       nextRunId: null | string;
@@ -3297,6 +4473,24 @@ export interface components {
       previewStatus: null | string;
       run: components["schemas"]["RegressionRunSummaryV1"];
     };
+    RegressionSuitesV1: {
+      nextSuiteId: null | string;
+      suites: components["schemas"]["RegressionSuiteV1"][];
+    };
+    RegressionSuiteV1: {
+      createdAtUtc: string;
+      /** Format: int32 */
+      failedCases: number;
+      /** Format: int32 */
+      passedCases: number;
+      /** Format: int32 */
+      pendingCases: number;
+      revisionId: string;
+      state: string;
+      suiteId: string;
+      /** Format: int32 */
+      totalCases: number;
+    };
     RegressionTargetV1: {
       kind: string;
       name: null | string;
@@ -3309,6 +4503,203 @@ export interface components {
       | "dependsOn"
       | "produces"
       | "boundaryMember";
+    ReleaseActiveMetadataV1: {
+      /** Format: uuid */
+      actorId: string;
+      approval: components["schemas"]["ReleaseApprovalMetadataV1"];
+      /** Format: uuid */
+      approvalId: string;
+      artifactDigest: string;
+      /** Format: uuid */
+      buildId: string;
+      /** Format: uuid */
+      qualificationId: string;
+      /** Format: uuid */
+      releaseId: string;
+    };
+    ReleaseApprovalMetadataV1: {
+      /** Format: uuid */
+      approvalId: string;
+      /** Format: date-time */
+      createdAt: string;
+      revoked: boolean;
+    };
+    ReleaseOperationReceiptV1: {
+      operationId: string;
+      outcome: string;
+    };
+    ReleaseOperationsItemV1:
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseTargetMetadataV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseMetadataV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseTargetEventV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseActionAuditV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseCallerGrantV1"]
+      | components["schemas"]["ReleaseOperationsItemV1ReleaseInvocationMetadataV1"];
+    ReleaseOperationsItemV1ReleaseActionAuditV1: {
+      action: string;
+      /** Format: uuid */
+      actor_id: string;
+      expected_version: string;
+      /** @enum {string} */
+      kind: "action";
+      /** Format: uuid */
+      operation_id: string;
+      /** Format: int32 */
+      outcome: number;
+      /** Format: uuid */
+      qualification_id: null | string;
+      /** Format: date-time */
+      recorded_at: string;
+      /** Format: uuid */
+      source_release_id: null | string;
+    };
+    ReleaseOperationsItemV1ReleaseCallerGrantV1: {
+      /** Format: uuid */
+      grant_id: string;
+      /** Format: date-time */
+      granted_at: string;
+      /** Format: uuid */
+      granted_by: string;
+      /** @enum {string} */
+      kind: "caller";
+      /** Format: uuid */
+      object_id: string;
+      provider: string;
+      /** Format: date-time */
+      revoked_at: null | string;
+      /** Format: uuid */
+      revoked_by: null | string;
+      /** Format: uuid */
+      tenant_id: string;
+    };
+    ReleaseOperationsItemV1ReleaseInvocationMetadataV1: {
+      /** Format: int32 */
+      attempt: number;
+      /** Format: uuid */
+      caller_client_id: string;
+      /** Format: date-time */
+      finished_at: null | string;
+      /** Format: int32 */
+      input_bytes: null | number;
+      /** @enum {string} */
+      kind: "invocation";
+      /** Format: double */
+      latency_ms: null | number;
+      /** Format: uuid */
+      object_id: string;
+      outcome: null | string;
+      /** Format: int32 */
+      output_bytes: null | number;
+      provider: string;
+      /** Format: uuid */
+      release_id: null | string;
+      /** Format: int64 */
+      replay_count: null | number;
+      replayed: null | boolean;
+      /** Format: uuid */
+      request_id: string;
+      /** Format: date-time */
+      started_at: string;
+      state: string;
+      /** Format: uuid */
+      tenant_id: string;
+    };
+    ReleaseOperationsItemV1ReleaseMetadataV1: {
+      /** Format: uuid */
+      actor_id: string;
+      /** Format: date-time */
+      approval_created_at: string;
+      /** Format: uuid */
+      approval_id: string;
+      approval_revoked: boolean;
+      artifact_digest: string;
+      /** Format: uuid */
+      build_id: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      finished_at: null | string;
+      /** @enum {string} */
+      kind: "release";
+      phase: string;
+      /** Format: uuid */
+      qualification_id: string;
+      rejection: string;
+      /** Format: uuid */
+      release_id: string;
+      /** Format: uuid */
+      rollback_of_id: null | string;
+      runtime_image: string;
+    };
+    ReleaseOperationsItemV1ReleaseTargetEventV1: {
+      action: string;
+      /** Format: uuid */
+      active_release_id: null | string;
+      /** Format: uuid */
+      actor_id: null | string;
+      enabled: boolean;
+      /** @enum {string} */
+      kind: "history";
+      origin: string;
+      /** Format: date-time */
+      recorded_at: string;
+      version: string;
+    };
+    ReleaseOperationsItemV1ReleaseTargetMetadataV1: {
+      active: null | components["schemas"]["ReleaseActiveMetadataV1"];
+      /** Format: uuid */
+      active_release_id: null | string;
+      enabled: boolean;
+      /** Format: uuid */
+      environment_id: string;
+      environment_version: string;
+      /** @enum {string} */
+      kind: "target";
+      profile: components["schemas"]["ReleaseRuntimeProfileV1"];
+      runtime_image: string;
+      /** Format: uuid */
+      target_id: string;
+      version: string;
+    };
+    ReleaseOperationsPageV1: {
+      items: components["schemas"]["ReleaseOperationsItemV1"][];
+      /** Format: int32 */
+      nextOffset: null | number;
+    };
+    ReleaseOperationsSummaryV1: {
+      /** Format: int64 */
+      count: number;
+      /** Format: int64 */
+      failed: number;
+      failuresByCategory: {
+        [key: string]: number;
+      };
+      /** Format: double */
+      meanLatencyMs: null | number;
+      /** Format: double */
+      p95LatencyMs: null | number;
+      /** Format: int64 */
+      retryable: number;
+      /** Format: int64 */
+      running: number;
+    };
+    ReleaseOperationV1: {
+      action: string;
+      environmentId: string;
+      environmentVersion: string;
+      qualificationId: null | string;
+      sourceReleaseId: null | string;
+    };
+    ReleaseRuntimeProfileV1: {
+      artifactFormat: string;
+      id: string;
+      /** Format: int64 */
+      maximumArtifactBytes: number;
+      runtime: string;
+      runtimeVersion: string;
+      /** Format: int64 */
+      version: number;
+    };
     RevisionComparisonV1: {
       /** Format: int32 */
       emittedItemCount: number;
@@ -3463,7 +4854,7 @@ export interface operations {
       303: {
         headers: {
           "Cache-Control"?: "no-store";
-          Location?: "/";
+          Location?: string;
           "Referrer-Policy"?: "no-referrer";
           [name: string]: unknown;
         };
@@ -3602,7 +4993,9 @@ export interface operations {
       header: {
         Origin: string;
         "X-Weft-Auth-Token": string;
+        "X-Weft-Invitation"?: string;
         "X-Weft-Login": "1";
+        "X-Weft-Return-To"?: string;
         "X-XSRF-TOKEN"?: string;
       };
       path?: never;
@@ -3959,7 +5352,7 @@ export interface operations {
       };
     };
   };
-  GetNativeExamples: {
+  GetCatalogInterchangeCapabilities: {
     parameters: {
       query?: never;
       header?: never;
@@ -3971,47 +5364,94 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["NativeExampleDescriptorV1"][];
+          "application/json": components["schemas"]["CatalogInterchangeCapabilitiesV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
       /** @description Not Found */
       404: {
         headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  GetNativeExample: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        exampleId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["NativeExampleResultV1"];
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
-      /** @description Not Found */
-      404: {
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
         headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
       };
     };
   };
@@ -4055,6 +5495,35 @@ export interface operations {
     responses: {
       /** @description OK */
       200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HealthResponseV1"];
+        };
+      };
+    };
+  };
+  GetReadiness: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HealthResponseV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };
@@ -4171,6 +5640,1843 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HelpSectionV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetOrganizationAdministration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OrganizationAdministrationV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  DisableAdministrationBinding: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        bindingId: string;
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  CreateOrganizationInvitation: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdministrationInvitationPostV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationInvitationCreatedV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  RevokeOrganizationInvitation: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        invitationId: string;
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  PutOrganizationMember: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        organizationId: string;
+        principalId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdministrationMemberPutV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  DisableAdministrationPrincipal: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        organizationId: string;
+        principalId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  GetWorkspaceChatAvailability: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatWorkspaceAvailabilityV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetOrganizationChatConversations: {
+    parameters: {
+      query?: {
+        /** @description Continue after the last conversation identity from the previous page. */
+        after?: string;
+        /** @description Maximum conversations, newest first; canonical decimal. */
+        limit?: number;
+        /** @description Only conversations about this freshly readable exact revision. */
+        revisionId?: string;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatOrganizationConversationPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CreateWorkspaceChatConversation: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatWorkspaceConversationCreateV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatOrganizationConversationV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatOrganizationConversationV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetWorkspaceChatConversation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversationId: string;
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatWorkspaceConversationDetailV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CreateWorkspaceChatTurn: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        conversationId: string;
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatTurnCreateV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Created */
+      201: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  CancelWorkspaceChatTurn: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        conversationId: string;
+        organizationId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatTurnV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  StreamWorkspaceChatTurnEvents: {
+    parameters: {
+      query?: {
+        /** @description Resume strictly after this durable event sequence; canonical decimal. */
+        after?: number;
+      };
+      header?: never;
+      path: {
+        conversationId: string;
+        organizationId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          "X-Accel-Buffering"?: "no";
+          [name: string]: unknown;
+        };
+        content: {
+          "text/event-stream": components["schemas"]["ChatTurnEventV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetNotificationInbox: {
+    parameters: {
+      query?: {
+        /** @description Continue after the previous page's notification ID. */
+        afterId?: string;
+        /** @description Page size: a canonical decimal from 1 to 100, 50 when absent. */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationsV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ReadInboxNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        notificationId: string;
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NotificationReadV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutomationSavedV1"];
         };
       };
       /** @description Bad Request */
@@ -4444,9 +7750,18 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control": "no-store";
+          /** @description SHA-256 of the exact retained output bytes (sha-256=:base64:). */
+          "Content-Digest": string;
+          "Content-Disposition": "attachment";
+          "X-Content-Type-Options": "nosniff";
           [name: string]: unknown;
         };
-        content?: never;
+        content: {
+          "application/edi-x12": string;
+          "application/edifact": string;
+          "application/json": string;
+        };
       };
       /** @description Bad Request */
       400: {
@@ -4833,6 +8148,791 @@ export interface operations {
       };
       /** @description Not Found */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetProjectAdministration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          ETag?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProjectAdministrationV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  PutAdministrationInvocationGrant: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        grantId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdministrationInvocationGrantPutV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  RevokeAdministrationInvocationGrant: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        grantId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  PutProjectMember: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        organizationId: string;
+        principalId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdministrationMemberPutV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  PutProjectPayloadRead: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Strong administration ETag from the latest authorized organization or project administration read. */
+        "If-Match": string;
+      };
+      path: {
+        organizationId: string;
+        principalId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AdministrationPayloadPutV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: no session or a refused bearer token. */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Identity refused: a CSRF refusal, or a valid bearer token without an enabled binding. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationErrorV1"];
+        };
+      };
+    };
+  };
+  GetAutomationPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutomationPolicyV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  PutAutomationPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AutomationPolicyV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutomationSavedV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
         headers: {
           [name: string]: unknown;
         };
@@ -8934,6 +13034,637 @@ export interface operations {
       };
     };
   };
+  ReviewMfdAppend: {
+    parameters: {
+      query: {
+        /** @description Exact canonical committed head the reviewed append must still match at publication. */
+        expectedHeadRevisionId: string;
+      };
+      header?: {
+        /** @description Absent or exactly identity; compression is not accepted. */
+        "Content-Encoding"?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/vnd.weft.mfd-package.v1": string;
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogInterchangeReviewV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetReleaseTargets: {
+    parameters: {
+      query?: {
+        /** @description Operations page or window filter. */
+        caller?: string;
+        /** @description Operations page or window filter. */
+        limit?: string;
+        /** @description Operations page or window filter. */
+        offset?: string;
+        /** @description Operations page or window filter. */
+        outcome?: string;
+        /** @description Operations page or window filter. */
+        since?: string;
+        /** @description Operations page or window filter. */
+        until?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReleaseOperationsPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetReleaseOperations: {
+    parameters: {
+      query?: {
+        /** @description Operations page or window filter. */
+        caller?: string;
+        /** @description Operations page or window filter. */
+        limit?: string;
+        /** @description Operations page or window filter. */
+        offset?: string;
+        /** @description Operations page or window filter. */
+        outcome?: string;
+        /** @description Operations page or window filter. */
+        since?: string;
+        /** @description Operations page or window filter. */
+        until?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        section: string;
+        targetId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReleaseOperationsPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ApplyReleaseOperation: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Quoted target version. */
+        "If-Match": string;
+      };
+      path: {
+        mappingId: string;
+        operationId: string;
+        organizationId: string;
+        projectId: string;
+        targetId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReleaseOperationV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReleaseOperationReceiptV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetReleaseSummary: {
+    parameters: {
+      query?: {
+        /** @description Operations page or window filter. */
+        caller?: string;
+        /** @description Operations page or window filter. */
+        limit?: string;
+        /** @description Operations page or window filter. */
+        offset?: string;
+        /** @description Operations page or window filter. */
+        outcome?: string;
+        /** @description Operations page or window filter. */
+        since?: string;
+        /** @description Operations page or window filter. */
+        until?: string;
+      };
+      header?: never;
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        targetId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReleaseOperationsSummaryV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
   GetRegressionCases: {
     parameters: {
       query?: {
@@ -10190,6 +14921,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10199,6 +14931,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10210,6 +14943,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10221,6 +14955,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10230,6 +14965,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10239,6 +14975,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10248,6 +14985,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10257,15 +14995,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -10277,6 +15017,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10286,6 +15027,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10314,6 +15056,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10323,6 +15066,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10334,6 +15078,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10345,6 +15090,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10354,6 +15100,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10363,6 +15110,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10372,6 +15120,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10381,15 +15130,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -10401,6 +15152,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10410,6 +15162,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10421,7 +15174,12 @@ export interface operations {
   CreateChatConversation: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
       path: {
         mappingId: string;
         organizationId: string;
@@ -10439,6 +15197,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10448,6 +15207,7 @@ export interface operations {
       /** @description Created */
       201: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10457,6 +15217,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10468,6 +15229,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10479,6 +15241,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10488,6 +15251,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10497,6 +15261,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10506,6 +15271,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10515,15 +15281,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -10535,6 +15303,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10544,6 +15313,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10570,6 +15340,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10579,6 +15350,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10590,6 +15362,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10601,6 +15374,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10610,6 +15384,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10619,6 +15394,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10628,6 +15404,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10637,15 +15414,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -10657,6 +15436,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10666,6 +15446,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10677,7 +15458,12 @@ export interface operations {
   CreateChatTurn: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
       path: {
         conversationId: string;
         mappingId: string;
@@ -10696,6 +15482,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10705,6 +15492,7 @@ export interface operations {
       /** @description Created */
       201: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10714,6 +15502,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10725,6 +15514,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10736,6 +15526,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10745,6 +15536,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10754,6 +15546,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10763,6 +15556,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10772,15 +15566,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -10792,6 +15588,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10801,6 +15598,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10812,7 +15610,12 @@ export interface operations {
   CancelChatTurn: {
     parameters: {
       query?: never;
-      header?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
       path: {
         conversationId: string;
         mappingId: string;
@@ -10828,6 +15631,7 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10837,6 +15641,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10848,6 +15653,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10859,6 +15665,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10868,6 +15675,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10877,6 +15685,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10886,6 +15695,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10895,15 +15705,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -10915,6 +15727,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10924,6 +15737,7 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10954,6 +15768,8 @@ export interface operations {
       /** @description OK */
       200: {
         headers: {
+          "Cache-Control"?: "no-store";
+          "X-Accel-Buffering"?: "no";
           [name: string]: unknown;
         };
         content: {
@@ -10963,6 +15779,7 @@ export interface operations {
       /** @description Bad Request */
       400: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10974,6 +15791,7 @@ export interface operations {
       /** @description Unauthorized */
       401: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
           "WWW-Authenticate"?: string;
           [name: string]: unknown;
@@ -10985,6 +15803,7 @@ export interface operations {
       /** @description Forbidden */
       403: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -10994,6 +15813,7 @@ export interface operations {
       /** @description Not Found */
       404: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11003,6 +15823,7 @@ export interface operations {
       /** @description Conflict */
       409: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11012,6 +15833,7 @@ export interface operations {
       /** @description Payload Too Large */
       413: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11021,15 +15843,17 @@ export interface operations {
       /** @description Unsupported Media Type */
       415: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
         };
       };
-      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      /** @description Too Many Requests */
       429: {
         headers: {
+          "Cache-Control"?: "no-store";
           /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
           "Retry-After"?: number;
           [name: string]: unknown;
@@ -11041,6 +15865,7 @@ export interface operations {
       /** @description Internal Server Error */
       500: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
@@ -11050,10 +15875,316 @@ export interface operations {
       /** @description Service Unavailable */
       503: {
         headers: {
+          "Cache-Control"?: "no-store";
           [name: string]: unknown;
         };
         content: {
           "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  DownloadMfdExport: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        reviewId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          acknowledgeWarnings: boolean;
+          reviewDigest: string;
+        };
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Attachment named mapping.mfd or mapping.zip. */
+          "Content-Disposition"?: string;
+          /** @description SHA-256 of the exact download bytes. */
+          "X-Content-Sha256"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/xml": string;
+          "application/zip": string;
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ReviewMfdExport: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogInterchangeReviewV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
     };
@@ -12013,6 +17144,1901 @@ export interface operations {
       };
     };
   };
+  GetMappingAutomation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        /** @description Canonical mapping, revision or notification identifier for this operation. */
+        resourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingAutomationV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  PutMappingAutomation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        /** @description Canonical mapping, revision or notification identifier for this operation. */
+        resourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingAutomationV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutomationSavedV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetRegressionSuites: {
+    parameters: {
+      query?: {
+        /** @description Continue after the previous page's ID. */
+        afterId?: string;
+        /** @description Page size: a canonical decimal from 1 to 100, 50 when absent. */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        /** @description Canonical mapping, revision or notification identifier for this operation. */
+        resourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegressionSuitesV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetMfdImportReview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        reviewId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogInterchangeReviewV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ConfirmMfdImport: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Canonical reviewId UUID; one value. */
+        "Idempotency-Key": string;
+        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        organizationId: string;
+        projectId: string;
+        reviewId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          acknowledgeWarnings: boolean;
+          reviewDigest: string;
+        };
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Accepted */
+      202: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Canonical full-scoped own receipt URL for the actual InProgress operation. */
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogRevisionIngestionResultV1"]
+            | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogRevisionIngestionResultV1"]
+            | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogRevisionIngestionResultV1"]
+            | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogRevisionIngestionResultV1"]
+            | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogRevisionIngestionResultV1"]
+            | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ReviewMfdCreate: {
+    parameters: {
+      query: {
+        /** @description Exact registered backend ID; at most 128 UTF-8 bytes. */
+        backendId: string;
+        /** @description Description, at most 4000 Unicode scalars; default empty. */
+        description?: string;
+        /** @description Mapping name, at most 200 Unicode scalars. */
+        name: string;
+      };
+      header?: {
+        /** @description Absent or exactly identity; compression is not accepted. */
+        "Content-Encoding"?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Exact configured browser origin. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. Current cookie-bound request token obtained from catalog context; no state change is admitted without it. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/vnd.weft.mfd-package.v1": string;
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogInterchangeReviewV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Always no-store; receipts and operation results are not cacheable. */
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetNotificationDeliveries: {
+    parameters: {
+      query?: {
+        /** @description Continue after the previous page's ID. */
+        afterId?: string;
+        /** @description Page size: a canonical decimal from 1 to 100, 50 when absent. */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationDeliveriesV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetNotificationDestinations: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationDestinationsV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  EnableNotificationDestination: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NotificationDestinationEnableV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutomationSavedV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetNotificationOptions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationOptionsV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetNotificationSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationSubscriptionV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  PutNotificationSubscription: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NotificationSubscriptionV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutomationSavedV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetNotifications: {
+    parameters: {
+      query?: {
+        /** @description Continue after the previous page's ID. */
+        afterId?: string;
+        /** @description Page size: a canonical decimal from 1 to 100, 50 when absent. */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationsV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ReadNotification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        /** @description Canonical mapping, revision or notification identifier for this operation. */
+        resourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NotificationReadV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutomationSavedV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetRegressionSuite: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        /** @description Canonical mapping, revision or notification identifier for this operation. */
+        resourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegressionSuiteV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  PutRegressionRecheck: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        /** @description Canonical mapping, revision or notification identifier for this operation. */
+        resourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RegressionRecheckV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AutomationSavedV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetRegressionEvaluations: {
+    parameters: {
+      query?: {
+        /** @description Continue after the previous page's ID. */
+        afterId?: string;
+        /** @description Page size: a canonical decimal from 1 to 100, 50 when absent. */
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        /** @description Canonical mapping, revision or notification identifier for this operation. */
+        resourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegressionEvaluationsV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
   GetCatalogRevisionIngestionReceipt: {
     parameters: {
       query?: never;
@@ -12290,6 +19316,105 @@ export interface operations {
           "application/json":
             | components["schemas"]["CatalogRevisionIngestionResultV1"]
             | components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  SearchCatalog: {
+    parameters: {
+      query: {
+        cursor?: string;
+        /** @description Canonical decimal page size, 1–100; default 25. */
+        limit?: string;
+        /** @description Trimmed literal text containing 1–256 UTF-8 bytes without controls. Unicode is preserved; %, _, quotes and backslashes are literal. */
+        q: string;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogSearchPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          /** @description Two seconds when retained report indexing is incomplete or busy. */
+          "Retry-After"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
         };
       };
     };

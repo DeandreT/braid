@@ -28,11 +28,18 @@
           }
         ],
         "requestBody": {
-          "description": "At most 2097152 bytes as `application/json` (optionally `; charset=utf-8`) without a content encoding. Inputs total at most 1 MiB, outputs at most 1 MiB, and the preview bounds on counts, names and parameters apply.",
+          "description": "At most 2097152 bytes as `application/json` (optionally `; charset=utf-8`) without a content encoding. Inputs total at most 1 MiB, outputs at most 1 MiB, and the preview bounds on counts, names and parameters apply. Legacy bodies omit schema and media. Document bodies require weft.document-invocation-request.v1 and a mediaType per input matching the qualified boundary; no filename inference.",
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MappingInvocationRequestV1"
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/MappingInvocationRequestV1"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MappingDocumentInvocationRequestV1"
+                  }
+                ]
               }
             }
           },
@@ -84,7 +91,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MappingInvocationResponseV1"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/MappingInvocationResponseV1"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MappingDocumentInvocationResponseV1"
+                    }
+                  ]
                 }
               }
             }
@@ -745,6 +759,225 @@
   },
   "components": {
     "schemas": {
+      "MappingDocumentInvocationInputV1": {
+        "required": [
+          "content",
+          "mediaType"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "format": "byte"
+          },
+          "mediaType": {
+            "enum": [
+              "application/json",
+              "application/edi-x12",
+              "application/edifact"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDocumentInvocationOutputV1": {
+        "required": [
+          "name",
+          "sha256",
+          "mediaType",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "mediaType": {
+            "enum": [
+              "application/json",
+              "application/edi-x12",
+              "application/edifact"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "type": "string",
+            "format": "byte"
+          }
+        }
+      },
+      "MappingDocumentInvocationRequestV1": {
+        "required": [
+          "schema",
+          "inputs"
+        ],
+        "type": "object",
+        "properties": {
+          "schema": {
+            "enum": [
+              "weft.document-invocation-request.v1"
+            ],
+            "type": "string"
+          },
+          "inputs": {
+            "maxItems": 16,
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "required": [
+                "content",
+                "mediaType"
+              ],
+              "type": "object",
+              "properties": {
+                "content": {
+                  "type": "string",
+                  "format": "byte"
+                },
+                "mediaType": {
+                  "enum": [
+                    "application/json",
+                    "application/edi-x12",
+                    "application/edifact"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "parameters": {
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "required": [
+                "name",
+                "kind",
+                "value"
+              ],
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "string",
+                    "integer",
+                    "float",
+                    "boolean"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "MappingDocumentInvocationResponseV1": {
+        "required": [
+          "schema",
+          "requestId",
+          "releaseId",
+          "buildId",
+          "revisionId",
+          "artifactDigest",
+          "currentDateTime",
+          "outputs"
+        ],
+        "type": "object",
+        "properties": {
+          "schema": {
+            "enum": [
+              "weft.document-invocation-response.v1"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "buildId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "artifactDigest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "currentDateTime": {
+            "type": "string"
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "required": [
+                "name",
+                "sha256",
+                "mediaType",
+                "content"
+              ],
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "sha256": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "mediaType": {
+                  "enum": [
+                    "application/json",
+                    "application/edi-x12",
+                    "application/edifact"
+                  ],
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string",
+                  "format": "byte"
+                }
+              }
+            }
+          }
+        }
+      },
       "MappingInvocationErrorV1": {
         "required": [
           "outcome"

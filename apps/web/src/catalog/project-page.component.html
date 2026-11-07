@@ -88,6 +88,17 @@
       </details>
     </section>
     <div class="catalog-section-heading">
+      <a
+        class="catalog-button"
+        [routerLink]="[
+          '/catalog/organizations',
+          view.project.scope.organizationId,
+          'projects',
+          view.project.scope.projectId,
+          'automation',
+        ]"
+        >Automation and notifications</a
+      >
       <h2 class="catalog-section-title">Mappings</h2>
       @if (context(); as context) {
         @if (
@@ -132,6 +143,13 @@
               <span>Head revision {{ mapping.head.sequence }}</span>
               <span>Version {{ mapping.version }}</span>
             </div>
+            @if (context(); as admission) {
+              <weft-regression-status
+                [scope]="mapping.scope"
+                [context]="admission"
+                [revisionId]="mapping.head.scope.revisionId"
+              />
+            }
           </li>
         }
       </ul>

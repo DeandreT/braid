@@ -195,7 +195,7 @@ public sealed record ChatTurnV1
 {
     public ChatTurnV1(string turnId, string conversationId, ChatTurnPhaseV1 phase, string text,
         IReadOnlyList<ChatSelectorV1> selectors, ChatTurnProfileV1 profile, DateTimeOffset createdAtUtc,
-        DateTimeOffset deadlineUtc, DateTimeOffset? finishedAtUtc, int lastSequence)
+        DateTimeOffset deadlineUtc, DateTimeOffset? finishedAtUtc, int lastSequence, ChatTurnFocusV1? focus = null)
     {
         ArgumentNullException.ThrowIfNull(selectors);
         ArgumentNullException.ThrowIfNull(profile);
@@ -211,6 +211,7 @@ public sealed record ChatTurnV1
         DeadlineUtc = deadlineUtc.ToUniversalTime();
         FinishedAtUtc = finishedAtUtc?.ToUniversalTime();
         LastSequence = lastSequence;
+        Focus = focus;
     }
 
     public string TurnId { get; }
@@ -223,6 +224,8 @@ public sealed record ChatTurnV1
     public DateTimeOffset DeadlineUtc { get; }
     public DateTimeOffset? FinishedAtUtc { get; }
     public int LastSequence { get; }
+    /// <summary>A workspace turn's resolved focus; null for a revision turn.</summary>
+    public ChatTurnFocusV1? Focus { get; }
     public override string ToString() => $"ChatTurnV1 {{ TurnId = {TurnId}, Phase = {Phase} }}";
 }
 

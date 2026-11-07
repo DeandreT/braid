@@ -10,6 +10,15 @@ internal static partial class BuildRoleGuard
     internal static readonly string[] Tables = ["build_environments", "build_approvals", "build_publications"];
     internal static readonly string[] Names = ["build_json_text", "build_intent_canonical", "build_authorized", "build_evidence_passes", "build_approval_active", "guard_build_record", "read_build_record", "write_build_record"];
     private static readonly Lazy<Dictionary<string, Match>> Definitions = new(Load);
+    private static readonly Lazy<Dictionary<string, Match>> DocumentDefinitions = new(() => LoadFunctions("0034_document_previews.sql", 2));
+    private static readonly Lazy<Dictionary<string, Match>> InterchangeDefinitions = new(() => LoadFunctions("0035_x12_interchange_builds.sql", 1));
+
+    internal static Match InterchangeQualificationDefinition => InterchangeDefinitions.Value["qualification_valid"];
+    internal static async Task<bool> HasInterchangeBuildsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("SELECT prosrc FROM pg_catalog.pg_proc WHERE oid='weft.qualification_valid(uuid,uuid,uuid,uuid,uuid,bytea,bytea)'::regprocedure", connection, transaction);
+        return await command.ExecuteScalarAsync(token) is string source && source == InterchangeQualificationDefinition.Groups[7].Value;
+    }
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool writer, CancellationToken token)
     {
@@ -47,7 +56,12 @@ internal static partial class BuildRoleGuard
 
     internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
-        await ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
+        var definitions = Definitions.Value;
+        if (await HasDocumentBuildsAsync(connection, transaction, token))
+        {
+            definitions = new(definitions, StringComparer.Ordinal) { ["build_evidence_passes"] = DocumentDefinitions.Value["build_evidence_passes"] };
+        }
+        await ValidateFunctionsAsync(connection, transaction, Names, definitions, token);
         var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token);
         if (await BuildRunRoleGuard.IsInstalledAsync(connection, transaction, token))
         {
@@ -93,6 +107,14 @@ internal static partial class BuildRoleGuard
     private static Dictionary<string, Match> Load()
         => LoadFunctions("0018_build_publication.sql", Names.Length);
 
+    internal static async Task<bool> HasDocumentBuildsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("SELECT prosrc FROM pg_catalog.pg_proc WHERE oid='weft.build_evidence_passes(uuid,uuid,uuid,text,text,text,text,text)'::regprocedure", connection, transaction);
+        return await command.ExecuteScalarAsync(token) is string source && source == DocumentDefinitions.Value["build_evidence_passes"].Groups[7].Value;
+    }
+
+    internal static Match DocumentQualificationDefinition => DocumentDefinitions.Value["qualification_valid"];
+
     internal static Dictionary<string, Match> LoadFunctions(string file, int count)
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations." + file) ?? throw Invalid();
@@ -101,7 +123,7 @@ internal static partial class BuildRoleGuard
         if (result.Count != count) throw Invalid();
         return result;
     }
-    [GeneratedRegex(@"CREATE FUNCTION weft\.([a-z_]+)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,weft,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"CREATE (?:OR REPLACE )?FUNCTION weft\.([a-z_]+)\((.*?)\)\s+RETURNS\s+(.*?)\s+LANGUAGE (\w+) (STABLE|VOLATILE) SECURITY (DEFINER|INVOKER) SET search_path=pg_catalog,weft,pg_temp\s+AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex Function();
     private static InvalidOperationException Invalid() => new("Build database contract unavailable.");
 }

@@ -14,6 +14,112 @@ namespace Weft.Tests;
 public sealed class BuildQualificationPersistenceTests(PostgresFixture fixture)
 {
     [PostgresFact]
+    public Task Document_migration_preserves_legacy_qualification_and_result_bytes() => DocumentUpgradeAsync(24);
+
+    [PostgresFact]
+    public Task Document_migration_preserves_audited_legacy_qualification_and_result_bytes() => DocumentUpgradeAsync(25);
+
+    [PostgresFact]
+    public async Task Interchange_environment_selection_replays_exact_identity_and_refuses_unknown_or_mismatched_profiles()
+    {
+        await using var test = await Context.CreateAsync(fixture, documents: true);
+        await using var metadata = new PostgresBuildMetadataReader(test.Case.RegressionConnectionString("weft_build_metadata_reader"));
+        await using var database = new PostgresDatabase(test.Case.RuntimeConnectionString);
+        var service = new BuildAdministrationService(metadata, test.Control.Store, test.Control.Store, new PostgresProjectReader(database),
+            FixtureBuildCompiler.Profile, Weft.MappingBackends.FerruleBuildCompiler.DocumentProfile, Weft.MappingBackends.FerruleBuildCompiler.X12InterchangesProfile);
+        var reference = new BuildEnvironmentReference(test.Control.Intent.Environment.Project, Guid.NewGuid(), 1);
+        var profile = Weft.MappingBackends.FerruleBuildCompiler.X12InterchangesProfile;
+        var selected = new BuildEnvironmentSelection(profile.Id, profile.Version);
+        Assert.Equal(BuildEnvironmentRequestOutcome.Created, (await service.PutEnvironmentAsync(test.Actor, reference, selected)).Outcome);
+        Assert.Equal(profile, (await metadata.ReadEnvironmentAsync(test.Actor, reference))!.Environment.Profile);
+        Assert.Equal(BuildEnvironmentRequestOutcome.Replayed, (await service.PutEnvironmentAsync(test.Actor, reference, selected)).Outcome);
+        Assert.Equal(BuildEnvironmentRequestOutcome.Conflict, (await service.PutEnvironmentAsync(test.Actor, reference, new(profile.Id, 2))).Outcome);
+        Assert.Equal(BuildEnvironmentRequestOutcome.PreconditionFailed, (await service.PutEnvironmentAsync(test.Actor, new(reference.Project, reference.EnvironmentId, 2), new("unsupported", 1))).Outcome);
+    }
+
+    [PostgresFact]
+    public async Task Interchange_profile_upgrade_preserves_populated_state_and_enables_only_the_explicit_profile()
+    {
+        await using var test = await Context.CreateAsync(fixture, documents: true, migrations: 34, interchanges: true);
+        Assert.Equal(BuildQualificationWriteOutcome.Refused, await test.Store.SaveAsync(test.Actor, test.Qualification));
+        var before = await test.Case.ScalarAsync<string>("""
+            SELECT jsonb_build_object('environments',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM weft.build_environments t),
+                'approvals',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM weft.build_approvals t),
+                'runs',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM weft.build_runs t),
+                'publications',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM weft.build_publications t),
+                'history',(SELECT jsonb_agg(to_jsonb(t) ORDER BY version) FROM weft.schema_migrations t WHERE version<=34))::text
+            """);
+        await test.Store.DisposeAsync();
+        await test.Case.MigrateAsync();
+        Assert.Equal(before, await test.Case.ScalarAsync<string>("""
+            SELECT jsonb_build_object('environments',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM weft.build_environments t),
+                'approvals',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM weft.build_approvals t),
+                'runs',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM weft.build_runs t),
+                'publications',(SELECT jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text) FROM weft.build_publications t),
+                'history',(SELECT jsonb_agg(to_jsonb(t) ORDER BY version) FROM weft.schema_migrations t WHERE version<=34))::text
+            """));
+        Assert.Equal(RegressionSchemaTestContract.X12InterchangeBuildsChecksum, await test.Case.ScalarAsync<string>("SELECT checksum FROM weft.schema_migrations WHERE version=35"));
+        await using var reopened = new PostgresBuildQualificationStore(test.Connection, true);
+        Assert.Equal(BuildQualificationWriteOutcome.Created, await reopened.SaveAsync(test.Actor, test.Qualification));
+        Assert.Equal(test.Qualification.CopyCanonicalBytes(), (await reopened.ReadAsync(test.Actor, test.Mapping, test.Qualification.Id))!.CopyCanonicalBytes());
+    }
+
+    private async Task DocumentUpgradeAsync(int prefix)
+    {
+        await using var test = await Context.CreateAsync(fixture, migrations: prefix);
+        Assert.Equal(BuildQualificationWriteOutcome.Created, await test.Store.SaveAsync(test.Actor, test.Qualification));
+        var proof = test.Qualification.CopyCanonicalBytes();
+        var result = test.Qualification.CopyResultBytes();
+        var journal = await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY version)::text FROM weft.schema_migrations r");
+        var native = await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text)::text FROM weft.mapping_revisions r");
+        await test.Store.DisposeAsync();
+        await test.Case.MigrateAsync();
+        Assert.Equal(journal, await test.Case.ScalarAsync<string>(
+            "SELECT jsonb_agg(to_jsonb(r) ORDER BY version)::text FROM weft.schema_migrations r WHERE version<=$1", prefix));
+        Assert.Equal(native, await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text)::text FROM weft.mapping_revisions r"));
+        Assert.Equal(RegressionSchemaTestContract.DocumentPreviewsChecksum,
+            await test.Case.ScalarAsync<string>("SELECT checksum FROM weft.schema_migrations WHERE version=34"));
+        await using var reopened = new PostgresBuildQualificationStore(test.Connection, true);
+        var saved = (await reopened.ReadAsync(test.Actor, test.Mapping, test.Qualification.Id))!;
+        Assert.Equal(proof, saved.CopyCanonicalBytes());
+        Assert.Equal(result, saved.CopyResultBytes());
+        Assert.Equal(BuildQualificationWriteOutcome.Replayed, await reopened.SaveAsync(test.Actor, saved));
+    }
+
+    [PostgresFact]
+    public async Task Document_qualification_reopens_exact_bytes_and_media_and_refuses_media_substitution()
+    {
+        await using var test = await Context.CreateAsync(fixture, documents: true);
+        Assert.Equal(BuildQualificationWriteOutcome.Created, await test.Store.SaveAsync(test.Actor, test.Qualification));
+        var saved = (await test.Store.ReadAsync(test.Actor, test.Mapping, test.Qualification.Id))!;
+        Assert.Equal(test.Qualification.CopyResultBytes(), saved.CopyResultBytes());
+        Assert.Equal("application/edi-x12", Assert.Single(new RegressionRunResultCodec().Decode(saved.Id,
+            test.Control.Runs.Value, saved.CopyResultBytes()).Outputs!.Outputs).MediaType);
+        static (byte[] Proof, byte[] Result) SubstituteMedia(BuildQualification qualification)
+        {
+            var result = JsonNode.Parse(qualification.CopyResultBytes())!;
+            result["outputs"]![0]!["mediaType"] = "application/edifact";
+            var bytes = Encoding.UTF8.GetBytes(result.ToJsonString());
+            var proof = JsonNode.Parse(qualification.CopyCanonicalBytes())!;
+            proof["resultDigest"] = Sha256Digest.FromBytes(bytes).Value;
+            proof["resultBytes"] = bytes.Length;
+            return (Encoding.UTF8.GetBytes(proof.ToJsonString()), bytes);
+        }
+        // An existing key must preserve its original proof before any new-proof
+        // validation. A fresh key exercises media validation rather than replay conflict.
+        var changed = SubstituteMedia(test.Qualification);
+        Assert.Equal(2, await test.Raw(changed.Proof, changed.Result));
+        var candidate = test.Make(Guid.NewGuid());
+        var forged = SubstituteMedia(candidate);
+        Assert.Equal(3, await test.Raw(forged.Proof, forged.Result, candidate.Id));
+        Assert.Null(await test.Store.ReadAsync(test.Actor, test.Mapping, candidate.Id));
+        Assert.Equal(1L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.build_qualifications"));
+        Assert.Equal(BuildQualificationWriteOutcome.Created, await test.Store.SaveAsync(test.Actor, candidate));
+        Assert.Equal(BuildQualificationWriteOutcome.Replayed, await test.Store.SaveAsync(test.Actor, test.Qualification));
+        Assert.Equal(saved.CopyResultBytes(), (await test.Store.ReadAsync(test.Actor, test.Mapping, saved.Id))!.CopyResultBytes());
+    }
+
+    [PostgresFact]
     public async Task Proof_and_bytes_are_immutable_and_reopen_after_database_restart_and_approval_revocation()
     {
         await using var test = await Context.CreateAsync(fixture);
@@ -183,7 +289,7 @@ public sealed class BuildQualificationPersistenceTests(PostgresFixture fixture)
         Assert.Equal(1L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.build_qualifications"));
     }
 
-    private sealed class Context : IAsyncDisposable
+    internal sealed class Context : IAsyncDisposable
     {
         internal required BuildPersistenceTests.Context Control { get; init; }
         internal required BuildRunSnapshot Build { get; init; }
@@ -196,9 +302,9 @@ public sealed class BuildQualificationPersistenceTests(PostgresFixture fixture)
         internal BuildQualification Make(Guid id) => BuildQualification.Create(id, Actor.PrincipalId, Build, evidence!, Control.Runs.Value,
             "sha256:" + new string('f', 64), new(CompiledBuildOutcome.Completed, Control.Runs.Value.Expected));
         private RegressionRunSnapshot? evidence;
-        internal static async Task<Context> CreateAsync(PostgresFixture fixture)
+        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool documents = false, int? migrations = null, bool interchanges = false)
         {
-            var control = await BuildPersistenceTests.Context.CreateAsync(fixture);
+            var control = await BuildPersistenceTests.Context.CreateAsync(fixture, migrations: migrations, documents: documents, interchanges: interchanges);
             PostgresBuildQualificationStore? store = null;
             try
             {
@@ -228,13 +334,13 @@ public sealed class BuildQualificationPersistenceTests(PostgresFixture fixture)
                     Connection = connection,
                     Build = (await reader.ReadAsync(control.Actor, control.Intent.Revision.OrganizationId, control.Intent.BuildId))!
                 };
-                context.evidence = (await control.Runs.Reader.ReadAsync(control.Actor, control.Runs.Organization, control.Runs.RunId))!;
+                context.evidence = (await control.Runs.ReadAsync(control.Actor, control.Runs.Organization, control.Runs.RunId))!;
                 context.Qualification = context.Make(Guid.NewGuid());
                 return context;
             }
             catch { if (store is not null) await store.DisposeAsync(); await control.DisposeAsync(); throw; }
         }
-        internal async Task<int> Raw(byte[] proof, byte[] result)
+        internal async Task<int> Raw(byte[] proof, byte[] result, Guid? id = null)
         {
             await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(Connection) { Pooling = false }.ConnectionString);
             await connection.OpenAsync();
@@ -247,7 +353,7 @@ public sealed class BuildQualificationPersistenceTests(PostgresFixture fixture)
             }
             await using var command = new NpgsqlCommand("SELECT weft.write_qualification(@org,@project,@mapping,@id,@proof,@result)", connection, tx);
             command.Parameters.AddWithValue("org", Mapping.OrganizationId); command.Parameters.AddWithValue("project", Mapping.ProjectId);
-            command.Parameters.AddWithValue("mapping", Mapping.MappingId); command.Parameters.AddWithValue("id", Qualification.Id);
+            command.Parameters.AddWithValue("mapping", Mapping.MappingId); command.Parameters.AddWithValue("id", id ?? Qualification.Id);
             command.Parameters.AddWithValue("proof", proof); command.Parameters.AddWithValue("result", result);
             var outcome = (int)(await command.ExecuteScalarAsync())!;
             await tx.CommitAsync();

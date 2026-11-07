@@ -168,7 +168,7 @@ internal sealed class CliApiStub : IAsyncDisposable
         else if (body.Length == 0)
             Violation("sent an empty body");
         var recorded = new CliStubRequest(operation.Id, path, request.Query.ToDictionary(pair => pair.Key, pair => pair.Value.ToString()),
-            request.Headers.Where(pair => !TransportHeaders.Contains(pair.Key) || pair.Key == "Content-Type")
+            request.Headers.Where(pair => !TransportHeaders.Contains(pair.Key) || pair.Key is "Content-Type" or "Accept")
                 .ToDictionary(pair => pair.Key, pair => pair.Value.ToString(), StringComparer.OrdinalIgnoreCase), body);
         Requests.Enqueue(recorded);
         var reply = queued.TryGetValue(operation.Id, out var queue) && queue.TryDequeue(out var next) ? next

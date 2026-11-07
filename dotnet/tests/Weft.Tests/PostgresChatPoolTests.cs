@@ -86,7 +86,7 @@ public sealed class PostgresChatPoolTests(PostgresFixture fixture)
                 // revoke now, and a NEW statement must observe that committed change.
                 await f.Case.ExecuteAsync("UPDATE weft.project_memberships SET active=false,version=version+1 WHERE principal_id=$1", f.Actor.PrincipalId.Value);
                 await using var authority = admitted.CreateCommand("SELECT weft.chat_authorized($1,$2,$3)");
-                authority.Parameters.AddWithValue(f.Key.Revision.OrganizationId); authority.Parameters.AddWithValue(f.Key.Revision.ProjectId);
+                authority.Parameters.AddWithValue(f.Key.PinnedRevision.OrganizationId); authority.Parameters.AddWithValue(f.Key.PinnedRevision.ProjectId);
                 authority.Parameters.AddWithValue(f.Actor.PrincipalId.Value);
                 Assert.False(Assert.IsType<bool>(await authority.ExecuteScalarAsync()));
             }

@@ -94,8 +94,9 @@ public sealed class PostgresRevisionDerivationSecurityTests(PostgresFixture fixt
                     await GrantedColumnsAsync(test.Case, login, table, "UPDATE"));
             }
             Assert.True(await test.Case.ScalarAsync<bool>("""
-                SELECT NOT EXISTS (SELECT 1 FROM pg_proc routine JOIN pg_namespace namespace ON namespace.oid=routine.pronamespace
-                         WHERE namespace.nspname='weft' AND has_function_privilege($1,routine.oid,'EXECUTE'))
+                SELECT ARRAY(SELECT routine.proname::text FROM pg_proc routine JOIN pg_namespace namespace ON namespace.oid=routine.pronamespace
+                         WHERE namespace.nspname='weft' AND has_function_privilege($1,routine.oid,'EXECUTE') ORDER BY routine.proname)
+                    = CASE WHEN $1='weft_deriver' THEN ARRAY['index_catalog_report']::text[] ELSE ARRAY[]::text[] END
                   AND NOT EXISTS (SELECT 1 FROM pg_class relation JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
                          WHERE namespace.nspname='weft' AND CASE WHEN relation.relkind='S'
                          THEN has_sequence_privilege($1,relation.oid,'USAGE,SELECT,UPDATE') ELSE false END)

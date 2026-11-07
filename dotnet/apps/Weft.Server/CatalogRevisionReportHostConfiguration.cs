@@ -46,7 +46,8 @@ internal static class CatalogRevisionReportHostConfiguration
         services.AddSingleton<IRevisionReportProfileRegistry>(provider => CreateRegistry(
             readEnvironment("WEFT_FERRULE_WORKER_IMAGE"),
             provider.GetRequiredService<RevisionReportStorageRegistration>().ApplyTo(options.ActiveReadCaps),
-            () => SharedRunner(provider), readEnvironment(FerruleRunnerSelection.CompileToolchainSetting)));
+            () => SharedRunner(provider), readEnvironment(FerruleRunnerSelection.CompileToolchainSetting),
+            provider.GetService<InspectionWorkerAdmission>()));
 
         if (options.DerivationEnabled)
         {
@@ -82,7 +83,7 @@ internal static class CatalogRevisionReportHostConfiguration
     }
 
     internal static IRevisionReportProfileRegistry CreateRegistry(string? workerImage, RevisionReportPolicy policy,
-        Func<IInspectionWorkerRunner> sharedRunnerFactory, string? compileToolchainIdentity = null)
+        Func<IInspectionWorkerRunner> sharedRunnerFactory, string? compileToolchainIdentity = null, IExecutionAdmission? knownAdmission = null)
     {
         ArgumentNullException.ThrowIfNull(policy);
         ArgumentNullException.ThrowIfNull(sharedRunnerFactory);
@@ -92,7 +93,7 @@ internal static class CatalogRevisionReportHostConfiguration
             {
                 var profile = FerruleRevisionReportBackendFactory.CreateProfile(compileToolchainIdentity is { } toolchain
                     ? CompileWorkerIdentity.Combine(workerImage, toolchain) : workerImage);
-                return FerruleRevisionReportBackendFactory.CreateRegistry(profile, policy, sharedRunnerFactory);
+                return FerruleRevisionReportBackendFactory.CreateRegistry(profile, policy, sharedRunnerFactory, knownAdmission);
             }
             catch (ArgumentException) { }
         }

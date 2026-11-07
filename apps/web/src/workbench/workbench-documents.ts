@@ -2,16 +2,21 @@ import {
   decodeBytes,
   type RegressionDocument,
 } from "../catalog/regression/regression-api";
-import type { ProjectionView } from "../mappings/projection-view";
+import type { ProjectionView } from "./projection-view";
 import { ObservedJson } from "./observed-json";
+import { ediSegments } from "../catalog/previews/edi-segments";
 
-export interface DocumentDisplay {
+export interface DocumentRepresentation {
   name: string | null;
-  document: RegressionDocument;
   byteCount: number;
   text: string;
   truncated: boolean;
   format: "utf8" | "hex";
+  mediaType: string | null;
+  segments: readonly string[] | null;
+}
+export interface DocumentDisplay extends DocumentRepresentation {
+  document: RegressionDocument;
 }
 export interface DocumentDifference {
   key: string;
@@ -28,7 +33,22 @@ export function documentKey(name: string | null): string {
 
 /** Only display representation is bounded. Download continues to use the original exact bytes. */
 export function displayDocument(document: RegressionDocument): DocumentDisplay {
-  const bytes = decodeBytes(document.bytesBase64Url);
+  return {
+    ...displayBytes(
+      decodeBytes(document.bytesBase64Url),
+      document.name,
+      document.mediaType,
+    ),
+    document,
+  };
+}
+
+/** A display-only bounded representation; it never becomes download or comparison input. */
+export function displayBytes(
+  bytes: Uint8Array,
+  name: string | null,
+  mediaType?: string | null,
+): DocumentRepresentation {
   const bounded = bytes.subarray(0, 65536);
   let text: string,
     format: "utf8" | "hex" = "utf8";
@@ -42,12 +62,14 @@ export function displayDocument(document: RegressionDocument): DocumentDisplay {
       .join(" ");
   }
   return {
-    name: document.name,
-    document,
+    name,
     byteCount: bytes.length,
     text,
     truncated: bytes.length > (format === "hex" ? 1024 : 65536),
     format,
+    mediaType: mediaType ?? null,
+    segments:
+      format === "utf8" && mediaType ? ediSegments(text, mediaType) : null,
   };
 }
 

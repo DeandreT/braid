@@ -24,8 +24,8 @@ public sealed partial class PostgresChatStore : IChatConversationReader
         {
             await using var command = tx.CreateCommand($"""
                 SELECT c.*, {ConversationFacts} FROM ONLY weft.chat_conversations c
-                WHERE c.organization_id=@org AND c.creator_id=@creator AND c.project_id=@project AND c.mapping_id=@mapping AND c.revision_id=@revision
-                    AND c.retain_until>statement_timestamp() AND weft.chat_authorized(c.organization_id,c.project_id,c.creator_id)
+                WHERE c.organization_id=@org AND c.creator_id=@creator AND c.conversation_kind=1 AND c.project_id=@project AND c.mapping_id=@mapping
+                    AND c.revision_id=@revision AND c.retain_until>statement_timestamp() AND weft.chat_authorized(c.organization_id,c.project_id,c.creator_id)
                 ORDER BY c.created_at DESC,c.conversation_id DESC LIMIT @limit
                 """);
             Add(command, "org", NpgsqlDbType.Uuid, revision.OrganizationId); Add(command, "creator", NpgsqlDbType.Uuid, actor.PrincipalId.Value);
@@ -50,8 +50,9 @@ public sealed partial class PostgresChatStore : IChatConversationReader
         {
             await using var command = Command(tx, $"""
                 SELECT c.*, {ConversationFacts} FROM ONLY weft.chat_conversations c
-                WHERE c.organization_id=@org AND c.creator_id=@creator AND c.conversation_id=@conversation AND c.project_id=@project
-                    AND c.mapping_id=@mapping AND c.revision_id=@revision AND c.retain_until>statement_timestamp()
+                WHERE c.organization_id=@org AND c.creator_id=@creator AND c.conversation_id=@conversation AND c.conversation_kind=@conversationKind
+                    AND c.project_id IS NOT DISTINCT FROM @project AND c.mapping_id IS NOT DISTINCT FROM @mapping
+                    AND c.revision_id IS NOT DISTINCT FROM @revision AND c.retain_until>statement_timestamp()
                     AND weft.chat_authorized(c.organization_id,c.project_id,c.creator_id)
                 """, key);
             await using var reader = await command.ExecuteReaderAsync(ct);
@@ -83,15 +84,65 @@ public sealed partial class PostgresChatStore : IChatConversationReader
         }, null, ct);
     }
 
+    public Task<ChatConversationPage> ListOrganizationConversationsAsync(ActorContext actor, Guid organizationId, RevisionScope? revision,
+        int limit, Guid? afterConversationId, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor); ChatBounds.Id(organizationId);
+        if (limit is < 1 or > 100 || revision is not null && revision.OrganizationId != organizationId) throw ChatBounds.Invalid();
+        if (afterConversationId is { } after) ChatBounds.Id(after);
+        return ListAsync(actor, organizationId, async tx =>
+        {
+            // A cursor names a conversation of this same listing; an unknown or foreign cursor yields an empty page.
+            await using var command = tx.CreateCommand($"""
+                WITH visible AS (SELECT c.* FROM ONLY weft.chat_conversations c
+                    WHERE c.organization_id=@org AND c.creator_id=@creator AND c.retain_until>statement_timestamp()
+                        AND weft.chat_authorized(c.organization_id,c.project_id,c.creator_id)
+                        AND (@revision::uuid IS NULL OR (c.conversation_kind=1 AND c.project_id=@project AND c.mapping_id=@mapping AND c.revision_id=@revision)
+                            OR (c.conversation_kind=2 AND c.focus_project_id=@project AND c.focus_mapping_id=@mapping AND c.focus_revision_id=@revision)))
+                SELECT c.*, {ConversationFacts} FROM visible c
+                WHERE @after::uuid IS NULL OR (c.created_at,c.conversation_id)<(SELECT x.created_at,x.conversation_id FROM visible x WHERE x.conversation_id=@after)
+                ORDER BY c.created_at DESC,c.conversation_id DESC LIMIT @limit
+                """);
+            Add(command, "org", NpgsqlDbType.Uuid, organizationId); Add(command, "creator", NpgsqlDbType.Uuid, actor.PrincipalId.Value);
+            Add(command, "project", NpgsqlDbType.Uuid, revision?.ProjectId); Add(command, "mapping", NpgsqlDbType.Uuid, revision?.MappingId);
+            Add(command, "revision", NpgsqlDbType.Uuid, revision?.RevisionId); Add(command, "after", NpgsqlDbType.Uuid, afterConversationId);
+            Add(command, "limit", NpgsqlDbType.Integer, limit + 1);
+            var result = new List<ChatConversationSummary>();
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                if (Id(reader, "creator_id") != actor.PrincipalId.Value) throw Invalid();
+                result.Add(Summary(reader, Key(reader, actor.PrincipalId)));
+            }
+            var more = result.Count > limit;
+            if (more) result.RemoveAt(limit);
+            return new ChatConversationPage(result.AsReadOnly(), more);
+        }, ct);
+    }
+
+    public Task<ChatConversationSummary?> FindConversationAsync(ActorContext actor, Guid organizationId, Guid conversationId, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor); ChatBounds.Id(organizationId); ChatBounds.Id(conversationId);
+        return ListAsync<ChatConversationSummary?>(actor, organizationId, async tx =>
+        {
+            await using var command = tx.CreateCommand($"""
+                SELECT c.*, {ConversationFacts} FROM ONLY weft.chat_conversations c
+                WHERE c.organization_id=@org AND c.creator_id=@creator AND c.conversation_id=@conversation AND c.retain_until>statement_timestamp()
+                    AND weft.chat_authorized(c.organization_id,c.project_id,c.creator_id)
+                """);
+            Add(command, "org", NpgsqlDbType.Uuid, organizationId); Add(command, "creator", NpgsqlDbType.Uuid, actor.PrincipalId.Value);
+            Add(command, "conversation", NpgsqlDbType.Uuid, conversationId);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return null;
+            var summary = Summary(reader, Key(reader, actor.PrincipalId));
+            if (await reader.ReadAsync(ct)) throw Invalid();
+            return summary;
+        }, ct);
+    }
+
     private static ChatConversationSummary Summary(NpgsqlDataReader reader, ChatConversationKey key)
     {
-        if (Id(reader, "organization_id") != key.Revision.OrganizationId || Id(reader, "project_id") != key.Revision.ProjectId ||
-            Id(reader, "mapping_id") != key.Revision.MappingId || Id(reader, "revision_id") != key.Revision.RevisionId ||
-            Id(reader, "conversation_id") != key.ConversationId) throw Invalid();
-        var conversation = new ChatConversationIntent(key,
-            new(Id(reader, "projection_entry_id"), Id(reader, "projection_id"), Digest(reader, "projection_key"), Digest(reader, "projection_digest")),
-            new(Id(reader, "validation_entry_id"), Id(reader, "validation_id"), Digest(reader, "validation_key"), Digest(reader, "validation_digest")),
-            Instant(reader, "retain_until"));
+        var conversation = Conversation(reader, key);
         var title = reader.IsDBNull(reader.GetOrdinal("title")) ? null : Text(reader, "title");
         var last = reader.IsDBNull(reader.GetOrdinal("last_turn_at")) ? (DateTimeOffset?)null : Instant(reader, "last_turn_at");
         return new(conversation, Instant(reader, "created_at"), title, Int(reader, "turn_count"), last);

@@ -126,3 +126,24 @@ public sealed class MappingCitationCheck
     public IReadOnlyList<ChatValidatedCitation> Citations { get; }
     public override string ToString() => $"{nameof(MappingCitationCheck)}:{Outcome}";
 }
+
+/// <summary>
+/// One revision and the exact retained reports the five tools read: a revision conversation's pins, or the
+/// current retained reports a workspace tool observed. A null validation pin makes only the validation tool unavailable.
+/// </summary>
+public sealed record MappingReportContext
+{
+    public MappingReportContext(RevisionScope revision, ChatReportPin projection, ChatReportPin? validation)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        ArgumentNullException.ThrowIfNull(projection);
+        if (validation is not null && validation.DerivationId == projection.DerivationId) throw ChatBounds.Invalid();
+        Revision = revision; Projection = projection; Validation = validation;
+    }
+    public RevisionScope Revision { get; }
+    public ChatReportPin Projection { get; }
+    public ChatReportPin? Validation { get; }
+    public static MappingReportContext Of(ChatConversationIntent conversation) =>
+        new(conversation.Key.PinnedRevision, conversation.PinnedProjection, conversation.PinnedValidation);
+    public override string ToString() => nameof(MappingReportContext);
+}

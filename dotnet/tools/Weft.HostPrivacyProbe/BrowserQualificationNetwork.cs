@@ -49,7 +49,7 @@ internal sealed partial class BrowserQualificationAdmission
     {
         lock (sync)
         {
-            if (!networkArmed || networkUsed || !QualificationNetwork.ResponseCases.Contains(input.NetworkCase ?? "") || admitted.RawTarget != "/examples" || admitted.Method != "GET" || admitted.Destination != "document") return;
+            if (!networkArmed || networkUsed || !QualificationNetwork.ResponseCases.Contains(input.NetworkCase ?? "") || admitted.RawTarget != "/sign-in" || admitted.Method != "GET" || admitted.Destination != "document") return;
             networkUsed = true;
         }
         // Registered AFTER the outer gate but BEFORE next: mutate only this actual
@@ -67,8 +67,8 @@ internal sealed partial class BrowserQualificationAdmission
                 case "location-http": headers.Location = "http://192.0.2.1/"; break;
                 case "location-file": headers.Location = "file:///weft-inert"; break;
                 case "location-document": headers.Location = "/api/auth/session"; break;
-                case "location-duplicate": headers.Location = new StringValues(["/", "/examples"]); break;
-                case "refresh": headers["Refresh"] = "0;url=/examples"; break;
+                case "location-duplicate": headers.Location = new StringValues(["/", "/sign-in"]); break;
+                case "refresh": headers["Refresh"] = "0;url=/sign-in"; break;
                 default: throw new QualificationFailure();
             }
             return Task.CompletedTask;

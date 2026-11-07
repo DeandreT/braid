@@ -4,6 +4,8 @@ use crate::protocol::{ENGINE_REVISION, Revision};
 
 pub const PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-preview.v1";
 pub const PREVIEW_PROFILE: &str = "weft.ferrule-json-preview.v1";
+pub const DOCUMENT_PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-document-preview.v1";
+pub const DOCUMENT_PREVIEW_PROFILE: &str = "weft.ferrule-document-preview.v1";
 pub const MAX_PREVIEW_INPUTS: usize = 16;
 pub const MAX_PREVIEW_INPUT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_PREVIEW_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
@@ -29,6 +31,12 @@ pub struct PreviewRequestHeader {
     pub parameters: Vec<PreviewParameter>,
     pub inputs: Vec<PreviewInput>,
     pub limits: PreviewLimits,
+}
+
+impl PreviewRequestHeader {
+    pub fn is_document_preview(&self) -> bool {
+        self.protocol_version == DOCUMENT_PREVIEW_PROTOCOL_VERSION
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,13 +170,21 @@ impl PreviewResponse {
 
     fn context(header: Option<&PreviewRequestHeader>) -> Self {
         Self {
-            protocol_version: PREVIEW_PROTOCOL_VERSION.into(),
+            protocol_version: header
+                .filter(|header| header.is_document_preview())
+                .map_or(PREVIEW_PROTOCOL_VERSION, |_| {
+                    DOCUMENT_PREVIEW_PROTOCOL_VERSION
+                })
+                .into(),
             request_id: header.map(|header| header.request_id.clone()),
             revision: header.map(|header| header.revision.clone()),
             native_digest: header.map(|header| header.native_digest.clone()),
             document_id: header.map(|header| header.document_id.clone()),
             engine_revision: ENGINE_REVISION.into(),
-            profile: PREVIEW_PROFILE.into(),
+            profile: header
+                .filter(|header| header.is_document_preview())
+                .map_or(PREVIEW_PROFILE, |_| DOCUMENT_PREVIEW_PROFILE)
+                .into(),
             result: None,
             failure: None,
         }

@@ -55,7 +55,7 @@ summary:focus-visible {
 }
 .wb-table-scroll {
   flex: 1;
-  min-height: 160px;
+  min-height: calc(160px + var(--wb-table-scrollbar-height, 0px));
   overflow: auto;
 }
 table {

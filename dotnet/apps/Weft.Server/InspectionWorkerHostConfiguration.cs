@@ -30,6 +30,15 @@ public static class InspectionWorkerHostConfiguration
         services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(() =>
             provider.GetService<CatalogMappingEditOptions>()?.Enabled == true
                 ? provider.GetRequiredKeyedService<DockerInspectionWorkerRunner>(FerruleServiceProtocol.EditProfile).StopAsync() : Task.CompletedTask));
+        services.AddKeyedSingleton<IInspectionWorkerRunner>("interchange", (_, _) =>
+            launcher is null
+                ? new DockerInspectionWorkerRunner(new(options.DockerExecutable, options.ImageId,
+                    dockerSocketPath: options.DockerSocketPath, profile: DockerWorkerProfile.Interchange))
+                : new DockerInspectionWorkerRunner(new(options.DockerExecutable, options.ImageId,
+                    dockerSocketPath: options.DockerSocketPath, profile: DockerWorkerProfile.Interchange), launcher));
+        services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(
+            ((DockerInspectionWorkerRunner)provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange")).StopAsync));
+        AddInterchange(services);
         AddBackends(services);
     }
 
@@ -64,10 +73,16 @@ public static class InspectionWorkerHostConfiguration
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(connector);
+        services.AddSingleton(_ => new InspectionWorkerAdmission());
         services.AddKeyedSingleton(nameof(IFerruleServiceConnector), (provider, _) => connector(provider));
-        services.AddSingleton(provider => new FerruleServiceRunner(new(
-            provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)), FerruleServiceProtocol.InspectionProfile,
-            buildIdentity, compileToolchainIdentity)));
+        services.AddSingleton(provider =>
+        {
+            var runner = new FerruleServiceRunner(new(
+                provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)), FerruleServiceProtocol.InspectionProfile,
+                buildIdentity, compileToolchainIdentity));
+            provider.GetRequiredService<InspectionWorkerAdmission>().Bind(runner);
+            return runner;
+        });
         services.AddSingleton<IInspectionWorkerRunner>(provider => provider.GetRequiredService<FerruleServiceRunner>());
         services.AddSingleton<IHostedService>(provider =>
             new InspectionWorkerHostLifetime(provider.GetRequiredService<FerruleServiceRunner>().StopAsync));
@@ -79,7 +94,20 @@ public static class InspectionWorkerHostConfiguration
         services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(() =>
             provider.GetService<CatalogMappingEditOptions>()?.Enabled == true
                 ? provider.GetRequiredKeyedService<FerruleServiceRunner>(FerruleServiceProtocol.EditProfile).StopAsync() : Task.CompletedTask));
+        services.AddKeyedSingleton<IInspectionWorkerRunner>("interchange", (provider, _) => new FerruleServiceRunner(new(
+            provider.GetRequiredKeyedService<IFerruleServiceConnector>(nameof(IFerruleServiceConnector)),
+            FerruleServiceProtocol.InterchangeProfile, buildIdentity, compileToolchainIdentity)));
+        services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(
+            ((FerruleServiceRunner)provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange")).StopAsync));
+        AddInterchange(services);
         AddBackends(services);
+    }
+
+    private static void AddInterchange(IServiceCollection services)
+    {
+        services.AddSingleton(provider => new FerruleInterchangeBackend(
+            provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange")));
+        services.AddSingleton<IInterchangeBackendRegistry>(provider => provider.GetRequiredService<FerruleInterchangeBackend>());
     }
 
     private static void AddBackends(IServiceCollection services)

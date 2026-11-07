@@ -144,7 +144,7 @@ public sealed class OpenApiIncrementalBuildTests(ITestOutputHelper output)
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 
     private async Task<string> BuildAsync(string root, string host, bool restore = false) => await RunAsync(root, Dotnet,
-        ["build", Project(host), "-c", "Release", restore ? "-p:RestoreLockedMode=true" : "--no-restore", "-m:2", "-nr:false", "-v:m"]);
+        ["build", Project(host), "-c", "Release", restore ? "-p:RestoreLockedMode=true" : "--no-restore", "-p:UseSharedCompilation=false", "-m:2", "-nr:false", "-v:m"]);
 
     private static async Task<string> DocumentAsync(string root, string name, string marker)
     {

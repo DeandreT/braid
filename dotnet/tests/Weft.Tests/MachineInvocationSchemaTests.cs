@@ -26,17 +26,18 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
         await using var owned = test;
         await using var connection = await test.Owner.OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, MachineInvocationRoleGuard.Names,
-            BuildRoleGuard.LoadFunctions("0024_machine_invocation.sql", MachineInvocationRoleGuard.Names.Length), default);
+        var definitions = BuildRoleGuard.LoadFunctions("0024_machine_invocation.sql", MachineInvocationRoleGuard.Names.Length);
+        definitions["guard_machine_invocation"] = BuildRoleGuard.LoadFunctions("0027_administration.sql", AdministrationRoleGuard.Names.Length)["guard_machine_invocation"];
+        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, MachineInvocationRoleGuard.Names, definitions, default);
         var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, MachineInvocationRoleGuard.Tables, default);
         output.WriteLine("MachineInvocationFingerprint=" + fingerprint);
         Assert.Equal(MachineInvocationRoleGuard.Fingerprint, fingerprint);
         // The release contract the 0024 functions read is unchanged by the new foreign keys.
-        Assert.Equal(LocalReleaseRoleGuard.Fingerprint, await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, LocalReleaseRoleGuard.Tables, default));
+        Assert.Equal(ReleaseOperationsRoleGuard.ReleaseFingerprint, await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, LocalReleaseRoleGuard.Tables, default));
         Assert.Equal(RegressionSchemaTestContract.MachineInvocationChecksum, MigrationRunner.EmbeddedMigrations[PrefixVersion].Checksum);
         // Each login executes only its own functions, and neither has any table privilege.
         foreach (var (role, functions) in new[] { ("weft_invocation_grant_writer", MachineInvocationRoleGuard.GrantFunctions),
-            ("weft_invocation_writer", MachineInvocationRoleGuard.InvocationFunctions) })
+            ("weft_invocation_writer", MachineInvocationRoleGuard.InvocationFunctions.Append("record_invocation_metadata").ToArray()) })
         {
             await using var command = new NpgsqlCommand("""
                 SELECT array_agg(p.proname::text ORDER BY p.proname) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -70,9 +71,12 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
         Assert.Equal(ReleaseTransitionOutcome.Activated, await releases.Apply(first));
         var before = await SnapshotAsync(test);
 
-        await test.MigrateAsync();
+        // This conservation proof covers the 0024 delta, not later independent schema additions.
+        await using (var upgrade = new MigrationRunner(test.MigrationConnectionString,
+            MigrationRunner.EmbeddedMigrations.Take(PrefixVersion + 1).ToArray()))
+            await upgrade.MigrateAsync();
 
-        Assert.Equal(Enumerable.Range(1, MigrationRunner.EmbeddedMigrations.Count), await test.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, PrefixVersion + 1), await test.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(RegressionSchemaTestContract.MachineInvocationChecksum, await test.ScalarAsync<string>(
             "SELECT checksum FROM weft.schema_migrations WHERE version=24"));
@@ -99,11 +103,29 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
 
     private sealed record Snapshot(string Schema, string Rows);
 
-    // Every pre-0024 relation, function, grant and row, excluding only the 0024 delta: its own objects, the
-    // parent-side internal triggers of its foreign keys onto the release target, its schema USAGE grants and
-    // its schema_migrations row.
+    // Preserve the pre-0024 objects while independently admitting and excluding
+    // the exact invocation, audit and search additions installed by the full upgrade.
     private static async Task<Snapshot> SnapshotAsync(PostgresCase test)
     {
+        var searchInstalled = await CatalogSearchUpgradeTestSupport.AdmitAsync(test);
+        var auditInstalled = await test.ScalarAsync<bool>("SELECT to_regclass('weft.api_request_audit') IS NOT NULL");
+        if (auditInstalled)
+        {
+            await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(
+                test.RegressionConnectionString(ApiRequestAuditRoleGuard.Role))
+            { Pooling = false }.ConnectionString);
+            await connection.OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+            await ApiRequestAuditRoleGuard.ValidateAsync(connection, transaction, default);
+        }
+        var searchIndexes = searchInstalled ? CatalogSearchSchemaAdmission.IndexNames : [];
+        var excludedRelations = MachineInvocationRoleGuard.Tables
+            .Concat(auditInstalled ? ApiRequestAuditRoleGuard.Tables : [])
+            .Concat(searchInstalled ? CatalogSearchSchemaAdmission.ReadObjects : []).Concat(searchIndexes).ToArray();
+        var excludedFunctions = MachineInvocationRoleGuard.Names.Concat(auditInstalled ? ApiRequestAuditRoleGuard.Names : [])
+            .Concat(searchInstalled ? new[] { "index_catalog_report" } : []).ToArray();
+        var newRoles = new[] { "weft_invocation_grant_writer", "weft_invocation_writer" }
+            .Concat(auditInstalled ? new[] { ApiRequestAuditRoleGuard.Role } : []).ToArray();
         var schema = await test.ScalarAsync<string>("""
             WITH rels AS (SELECT c.oid,c.relname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
                 WHERE n.nspname='weft' AND c.relkind IN ('r','p','v','m','S','i') AND NOT c.relname=ANY($1::text[])
@@ -117,7 +139,8 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
                     LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum),
                 'constraints',(SELECT jsonb_agg(jsonb_build_array(r.relname,k.conname,k.condeferrable,k.condeferred,pg_catalog.pg_get_constraintdef(k.oid)) ORDER BY r.relname,k.conname)
                     FROM rels r JOIN pg_catalog.pg_constraint k ON k.conrelid=r.oid),
-                'indexes',(SELECT jsonb_agg(pg_catalog.pg_get_indexdef(i.indexrelid) ORDER BY 1) FROM rels r JOIN pg_catalog.pg_index i ON i.indrelid=r.oid),
+                'indexes',(SELECT jsonb_agg(pg_catalog.pg_get_indexdef(i.indexrelid) ORDER BY 1) FROM rels r JOIN pg_catalog.pg_index i ON i.indrelid=r.oid
+                    JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE NOT c.relname=ANY($4::text[])),
                 'triggers',(SELECT jsonb_agg(jsonb_build_array(r.relname,t.tgname,t.tgenabled,pg_catalog.pg_get_triggerdef(t.oid)) ORDER BY r.relname,t.tgname)
                     FROM rels r JOIN pg_catalog.pg_trigger t ON t.tgrelid=r.oid WHERE NOT t.tgisinternal),
                 'internalTriggers',(SELECT jsonb_agg(jsonb_build_array(r.relname,t.tgname,t.tgenabled) ORDER BY r.relname,t.tgname)
@@ -134,11 +157,11 @@ public sealed class MachineInvocationSchemaTests(PostgresFixture fixture, ITestO
                     CROSS JOIN LATERAL pg_catalog.aclexplode(n.nspacl) a WHERE n.nspname='weft' AND a.grantee NOT IN (SELECT oid FROM new_roles)),
                 'databaseAcl',(SELECT datacl FROM pg_catalog.pg_database WHERE datname=current_database()),
                 'history',(SELECT jsonb_agg(jsonb_build_array(version,checksum) ORDER BY version) FROM weft.schema_migrations WHERE version<=23))::text
-            """, MachineInvocationRoleGuard.Tables, MachineInvocationRoleGuard.Names, new[] { "weft_invocation_grant_writer", "weft_invocation_writer" });
+            """, excludedRelations, excludedFunctions, newRoles, searchIndexes);
         var tables = await test.ScalarAsync<string[]>("""
             SELECT array_agg(c.relname::text ORDER BY c.relname) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='weft' AND c.relkind IN ('r','p') AND NOT c.relname=ANY($1::text[]) AND c.relname<>'schema_migrations'
-            """, new object[] { MachineInvocationRoleGuard.Tables });
+            """, new object[] { excludedRelations });
         var rows = new StringBuilder();
         foreach (var table in tables)
             rows.Append(table).Append('=').Append(await test.ScalarAsync<string>(

@@ -69,7 +69,7 @@ fail() {
 
 echo 'Publishing the linux-x64 single-file CLI'
 dotnet publish "$repository/dotnet/apps/Weft.Cli/Weft.Cli.csproj" --configuration Release -p:WeftCliRuntime=linux-x64 \
-  -p:RestoreLockedMode=true --output "$work/cli" >"$work/publish.log" 2>&1 ||
+  -p:RestoreLockedMode=true -p:UseSharedCompilation=false -nr:false --output "$work/cli" >"$work/publish.log" 2>&1 ||
   { tail -n 20 "$work/publish.log" >&2; fail 'CLI publish'; }
 [[ -x $work/cli/weft ]] || fail 'the published CLI is missing'
 

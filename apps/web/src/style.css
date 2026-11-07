@@ -1,4 +1,4 @@
-@import "./mappings/mapping.css";
+@import "./workbench/mapping.css";
 @import "./catalog/catalog.css";
 @import "./workbench/workbench.css";
 @import "./workbench/semantic-tokens.css";
@@ -146,6 +146,8 @@ a[aria-busy="true"]::after {
   .workspace-nav {
     order: 3;
     width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
   }
 }
 .welcome {

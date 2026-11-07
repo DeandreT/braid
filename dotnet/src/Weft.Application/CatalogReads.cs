@@ -336,6 +336,19 @@ public interface ICatalogReader
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Resolves a mapping or revision identity to its complete scope within one organization, under the same fresh
+/// active-principal, organization admission and project membership authority as the catalog reads. Absent,
+/// foreign and unreadable resources are indistinguishable; the result grants nothing beyond the following read.
+/// </summary>
+public interface ICatalogResourceLocator
+{
+    Task<MappingScope?> LocateMappingAsync(ActorContext actor, Guid organizationId, Guid mappingId,
+        CancellationToken cancellationToken = default);
+    Task<RevisionScope?> LocateRevisionAsync(ActorContext actor, Guid organizationId, Guid revisionId,
+        CancellationToken cancellationToken = default);
+}
+
 internal static class CatalogReadGuard
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);

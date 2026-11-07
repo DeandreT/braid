@@ -392,6 +392,7 @@ export class ControlledSession {
       requestToken: this.session === "authenticated" ? this.#statusToken : null,
       identityContext:
         this.session === "authenticated" ? this.fingerprint : null,
+      displayName: null,
     };
   }
   contextReply(): Reply {
@@ -813,12 +814,28 @@ export class ControlledSession {
         ++this.routeFailures;
     });
     await this.page.route("**/*", (route) => {
-      const url = new URL(route.request().url());
+      const request = route.request();
+      const url = new URL(request.url());
       if (url.origin !== this.origin) {
         ++this.unexpected;
         return route.abort("blockedbyclient");
       }
       if (!url.pathname.startsWith("/api/")) return route.continue();
+      // The shell's public connection notice reads service health on every load; it carries
+      // no owner, session or private data and never takes part in the protected wire order.
+      if (
+        request.method() === "GET" &&
+        url.pathname === "/api/v1/health" &&
+        !url.search
+      )
+        return route.fulfill({
+          json: {
+            status: "ok",
+            service: "weft-api",
+            version: "0.1.0",
+            apiVersion: "v1",
+          },
+        });
       const work = this.#handle(route);
       this.#work.add(work);
       work.finally(() => this.#work.delete(work)).catch(() => {});

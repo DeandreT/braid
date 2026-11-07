@@ -16,11 +16,9 @@ import {
   type Reply,
 } from "./wire";
 import { BrowserRootFetch, type AppRequest } from "./root-fetch";
-import { blinkRestriction } from "./conditional-policy";
+import { blinkRestriction, browserRestriction } from "./conditional-policy";
 import { sessionSummaryMatches } from "./summary";
 
-const warning =
-  "Signing in opens Microsoft and reloads this page. Unsaved drafts and in-tab recovery details may be lost. Previously sent changes may already have committed.";
 const unresolved = [
   "login.microsoftonline.com",
   "accounts.google.com",
@@ -88,6 +86,7 @@ export class HttpsFixture {
     resolve: (url: string | null) => void;
   }> = [];
   private nativeAdmitted = false;
+  private callbackReturn = "/";
   private rejectedCallbackResponse: Response | null = null;
   private mutation: Mutation = null;
   private staleEpoch = "";
@@ -126,6 +125,7 @@ export class HttpsFixture {
         "--host-resolver-rules=" +
           unresolved.map((host) => `MAP ${host} ~NOTFOUND`).join(", "),
         blinkRestriction,
+        browserRestriction,
       ],
     });
     requireOwned(this.browser.version() === "157.0.8090.0");
@@ -189,7 +189,9 @@ export class HttpsFixture {
     }
     if (url.pathname === "/api/auth/callback/entra") {
       if (response.status() === 303) {
-        requireOwned((await response.headerValue("location")) === "/");
+        requireOwned(
+          (await response.headerValue("location")) === this.callbackReturn,
+        );
         ++this.callbackSuccess;
       } else {
         requireOwned(response.status() === 401 || response.status() === 503);
@@ -289,7 +291,6 @@ export class HttpsFixture {
             "POST /api/auth/logout",
             "GET /api/v1/catalog/context",
             "GET /api/v1/health",
-            "GET /api/v1/examples/mappings",
           ].includes(key)) ||
           (request.method === "GET" &&
             url.pathname + url.search ===
@@ -297,6 +298,17 @@ export class HttpsFixture {
       );
     if (key !== "POST /api/auth/login" && key !== "POST /api/auth/logout")
       return { headers, negative: null };
+    if (key === "POST /api/auth/login") {
+      const target = headers["x-weft-return-to"] ?? "/";
+      requireOwned(
+        [
+          "/",
+          "/catalog",
+          `/catalog/organizations/${this.cfg.organization}/projects`,
+        ].includes(target),
+      );
+      this.callbackReturn = target;
+    }
     await this.responseTail;
     const status = this.status;
     requireOwned(
@@ -345,7 +357,18 @@ export class HttpsFixture {
       exact: true,
     });
   }
+  /** The session controls live in the header account menu; open it by keyboard. */
+  private async openMenu(): Promise<void> {
+    const trigger = this.page!.locator("#account-trigger");
+    await until(async () => (await trigger.count()) === 1);
+    if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+      await trigger.focus();
+      await this.page!.keyboard.press("Enter");
+    }
+    await until(async () => (await this.panel().count()) === 1);
+  }
   async summary(text: string): Promise<void> {
+    await this.openMenu();
     await until(async () =>
       sessionSummaryMatches(
         await this.page!.locator(".session-summary").textContent(),
@@ -355,7 +378,8 @@ export class HttpsFixture {
   }
   // Keyboard activation avoids pointer actionability, which waits on compositor
   // frames that a loaded virtual display may not produce promptly.
-  private async activate(target: Locator): Promise<void> {
+  private async activate(target: Locator, inMenu = true): Promise<void> {
+    if (inMenu) await this.openMenu();
     await until(
       async () => (await target.count()) === 1 && (await target.isEnabled()),
     );
@@ -370,10 +394,10 @@ export class HttpsFixture {
     await this.responseTail;
   }
   async login(authenticated: boolean): Promise<void> {
-    const notice = this.page!.locator("#sign-in-navigation-warning");
+    // The qualification page holds no unsent work, so signing in warns about none.
+    await this.openMenu();
     requireOwned(
-      (await notice.isVisible()) &&
-        (await notice.textContent())?.replace(/\s+/g, " ").trim() === warning,
+      (await this.page!.locator("#sign-in-navigation-warning").count()) === 0,
     );
     this.nativeAdmitted = false;
     let resolve!: (url: string | null) => void;
@@ -441,6 +465,7 @@ export class HttpsFixture {
       ),
     );
     ++this.sessionCookies;
+    await this.settleCatalogEntry();
   }
   private async rejectedCallbackDocument(): Promise<void> {
     const original = (async () => {
@@ -519,6 +544,7 @@ export class HttpsFixture {
         name: "Workspace",
         exact: true,
       }).getByRole("link", { name: "Catalog", exact: true }),
+      false,
     );
     await until(
       async () =>
@@ -526,6 +552,7 @@ export class HttpsFixture {
         `/catalog/organizations/${this.cfg.organization}/projects`,
     );
     await until(() => this.catalogAdmissions >= 1 && this.projectLists >= 1);
+    await this.settleCatalogEntry();
   }
   async tokenNegatives(): Promise<void> {
     requireOwned(this.status?.requestToken);
@@ -580,6 +607,7 @@ export class HttpsFixture {
         (cookie) => cookie.name === "__Host-Weft.Session",
       )?.value === carrier,
     );
+    await this.boundary.settleRequests();
     const before = await this.counts();
     // No synthetic reload substitutes for callback: it already completed above.
     const restarted = await this.control.call("restart");
@@ -635,6 +663,25 @@ export class HttpsFixture {
   }
   close(): Promise<void> {
     return (this.closeOriginal ??= this.closeCore());
+  }
+  private async settleCatalogEntry(): Promise<void> {
+    const expected = `/catalog/organizations/${this.cfg.organization}/projects`;
+    const path = new URL(this.page!.url()).pathname;
+    if (!["/", "/catalog", expected].includes(path)) return;
+    await until(() => new URL(this.page!.url()).pathname === expected);
+    await until(
+      async () =>
+        (await this.page!.getByRole("list", {
+          name: "Projects",
+          exact: true,
+        }).isVisible()) ||
+        (await this.page!.getByRole("heading", {
+          name: "No projects",
+          exact: true,
+        }).isVisible()),
+    );
+    await this.boundary.settleRequests();
+    await this.responseTail;
   }
   private async closeCore(): Promise<void> {
     this.closing = true;

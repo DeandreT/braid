@@ -30,9 +30,11 @@ printf '%s  %s\n' dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb
     | sha256sum --check -
 chmod 0755 /tmp/rustup-init
 /tmp/rustup-init --yes --no-modify-path --profile minimal \
-    --default-host x86_64-unknown-linux-gnu --default-toolchain "$RUSTUP_TOOLCHAIN"
+    --default-host x86_64-unknown-linux-gnu --default-toolchain "$RUSTUP_TOOLCHAIN" --component clippy
 rustup set auto-self-update disable
 test "$(rustc --version)" = 'rustc 1.98.1 (48a229cea 2026-09-01)'
+rustup component list --toolchain "$RUSTUP_TOOLCHAIN" --installed | grep -Fx 'clippy-x86_64-unknown-linux-gnu'
+cargo clippy --version
 rm -f /tmp/rustup-init /tmp/weft-build-ca.pem
 EOF
 
@@ -103,14 +105,14 @@ cp -R /work/third-party /runtime/usr/share/weft-ferrule-host/third-party
 EOF
 
 FROM build AS qualification
-RUN cargo test --release --locked --package weft-ferrule-host --test build_qualification --test protocol_qualification --test preview_qualification --test edit_qualification --test sandbox_qualification
+RUN cargo test --release --locked --package weft-ferrule-host --test build_qualification --test protocol_qualification --test preview_qualification --test edit_qualification --test sandbox_qualification --test interchange_qualification
 
 FROM scratch
 ARG WEFT_REVISION=""
 LABEL org.opencontainers.image.title="Weft Ferrule worker" \
       org.opencontainers.image.source="https://github.com/DeandreT/weft" \
       org.opencontainers.image.revision="$WEFT_REVISION" \
-      io.weft.ferrule.revision="576012aa17c403d9c3fcb8659ed4d3a47ba06864" \
+      io.weft.ferrule.revision="dddc4dce6c93f4137fb2aa2a011360d089e0a51b" \
       io.weft.rust.toolchain="1.98.1"
 COPY --from=build /runtime/ /
 USER 65532:65532

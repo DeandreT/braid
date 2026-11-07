@@ -15,6 +15,8 @@ public static class ApiConfiguration
         services.AddWeftRegressionCases();
         services.AddWeftRegressionRuns();
         services.AddWeftBuildApi();
+        services.AddSingleton(new ReleaseOperationsOptions());
+        services.AddSingleton(new CatalogAutomationOptions(false));
         services.ConfigureHttpJsonOptions(options => ProjectionJson.Configure(options.SerializerOptions));
         services.AddOpenApi(options => options.AddDocumentTransformer((document, context, _) =>
         {
@@ -49,6 +51,7 @@ public static class ApiConfiguration
             }
             CatalogEndpoints.TransformRevisionIngestionSchemas(document);
             CatalogEndpoints.TransformRevisionReportSchemas(document);
+            CatalogEndpoints.TransformPreviewSchemas(document);
             ChatEndpoints.TransformSchemas(document);
             CatalogEndpoints.TransformEditSchemas(document);
             AuthenticationOpenApi.Transform(document);

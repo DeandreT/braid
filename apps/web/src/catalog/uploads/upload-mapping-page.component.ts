@@ -4,18 +4,27 @@ import {
   DestroyRef,
   Injector,
   afterNextRender,
+  computed,
   effect,
   inject,
   signal,
   untracked,
+  viewChild,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormControl, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { Observable, combineLatest, of, type Subscriber } from "rxjs";
-import { catalogRoutes, isCatalogId } from "../catalog-types";
+import {
+  catalogRoutes,
+  isCatalogId,
+  type CatalogProjectScope,
+} from "../catalog-types";
 import { CatalogContextStore } from "../catalog-context";
-import { MappingUploadDraftRecovery } from "./unsent-upload-recovery";
+import {
+  MappingUploadDraftRecovery,
+  MfdImportDraftRecovery,
+} from "./unsent-upload-recovery";
 import {
   NativeMappingUploadState,
   type NativeMappingUploadLeaveRisk,
@@ -26,17 +35,32 @@ import type {
   NativeMappingUploadRejection,
 } from "./native-mapping-upload-types";
 import { HelpLinkComponent } from "../../help/help-link.component";
+import { MfdImportComponent } from "./mfd-import.component";
 
 @Component({
   selector: "weft-upload-mapping-page",
-  imports: [ReactiveFormsModule, RouterLink, HelpLinkComponent],
-  providers: [MappingUploadDraftRecovery],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    HelpLinkComponent,
+    MfdImportComponent,
+  ],
+  providers: [MappingUploadDraftRecovery, MfdImportDraftRecovery],
   templateUrl: "./upload-mapping-page.component.html",
   styleUrl: "./upload-mapping-page.component.css",
 })
 export class UploadMappingPageComponent {
+  readonly mfdImport = viewChild(MfdImportComponent);
   readonly state = inject(NativeMappingUploadState);
+  // A routine check temporarily removes the native admission DTO, not this route's MFD draft.
+  private readonly mfdSelection = signal<CatalogProjectScope | null>(null);
+  readonly mfdProject = computed(() =>
+    this.state.formVisible() || this.state.admission() === "loading"
+      ? this.mfdSelection()
+      : null,
+  );
   private readonly draftRecovery = inject(MappingUploadDraftRecovery);
+  readonly mfdDraftRecovery = inject(MfdImportDraftRecovery);
   readonly routes = catalogRoutes;
   readonly leaveDecision = signal<NativeMappingUploadLeaveRisk>(null);
   readonly abandonDecision = signal(false);
@@ -75,14 +99,15 @@ export class UploadMappingPageComponent {
         this.abandonAcknowledged.set(false);
         const organizationId = params.get("organizationId"),
           projectId = params.get("projectId");
-        this.state.select(
+        const selected =
           query.keys.length === 0 &&
-            isCatalogId(organizationId) &&
-            isCatalogId(projectId)
+          isCatalogId(organizationId) &&
+          isCatalogId(projectId)
             ? { organizationId, projectId }
-            : null,
-          this.draftRecovery,
-        );
+            : null;
+        this.mfdSelection.set(selected);
+        this.mfdDraftRecovery.routeScope(selected);
+        this.state.select(selected, this.draftRecovery);
       });
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       const value = this.form.getRawValue();
@@ -195,6 +220,8 @@ export class UploadMappingPageComponent {
   }
 
   requestLeave(): Observable<boolean> {
+    if (this.mfdDraftRecovery.hasWork()) return of(false);
+    if (this.mfdImport()?.requestLeave() === false) return of(false);
     const risk = this.state.leaveRisk();
     if (!risk) return of(true);
     return new Observable<boolean>((subscriber) => {
@@ -259,6 +286,7 @@ export class UploadMappingPageComponent {
   }
 
   submit(): void {
+    if (this.mfdImport()?.busy()) return;
     if (this.leaveDecision()) return;
     this.lastFocus = "";
     const value = this.form.getRawValue();

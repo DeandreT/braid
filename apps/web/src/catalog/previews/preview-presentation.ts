@@ -22,11 +22,7 @@ const outcomes: Readonly<
     "—",
   ],
   missingInput: ["A required input is missing", "attention", "!"],
-  invalidInput: [
-    "An input is not valid JSON for this mapping",
-    "attention",
-    "!",
-  ],
+  invalidInput: ["An input is not valid for this mapping", "attention", "!"],
   invalidParameter: ["A parameter is missing or invalid", "attention", "!"],
   executionFailed: ["The mapping failed while running", "failure", "×"],
   resourceLimit: ["A preview limit was exceeded", "failure", "×"],

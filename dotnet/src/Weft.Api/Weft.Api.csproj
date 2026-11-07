@@ -10,12 +10,6 @@
     <ProjectReference Include="../Weft.MappingBackends/Weft.MappingBackends.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="../../../engines/ferrule-host/tests/fixtures/*.json"
-                      LogicalName="Weft.Api.NativeExamples.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="NativeExamples/Artifacts/*.json"
-                      LogicalName="Weft.Api.NativeExamples.%(Filename)%(Extension)" />
-  </ItemGroup>
-  <ItemGroup>
     <!-- The user guide ships inside the server build; nothing is read from disk at run time. -->
     <UserGuideSource Include="../../../docs/user-guide/*.md" />
     <EmbeddedResource Include="@(UserGuideSource)"

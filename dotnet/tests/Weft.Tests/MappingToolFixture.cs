@@ -1,7 +1,6 @@
 using Weft.Ai;
 using Weft.Application;
 using Weft.Application.MappingTools;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Projections;
 using Weft.Contracts.Validation;
@@ -26,7 +25,7 @@ internal sealed class MappingToolFixture : IRevisionReportReader, IRevisionRepor
     internal const string PrivateText = "private-neutral-literal";
     internal RevisionReportSource Source { get; } = new(Scope,
         new(PrivateObjectId.Restore(Scope, Guid.Parse("66666666-6666-4666-8666-666666666666"), PrivateObjectClass.NativeArtifact),
-            Sha256Digest.FromBytes([1, 2, 3]), 3), "neutral.mapping", "neutral-dependencies", Profile.BackendId);
+            Sha256Digest.FromBytes([1, 2, 3]), 3), IngestionIntent.EntryDocument, "neutral-dependencies", Profile.BackendId);
     internal VerifiedProjectionReport Projection { get; }
     internal VerifiedValidationReport Validation { get; }
     internal ChatConversationIntent Conversation { get; }

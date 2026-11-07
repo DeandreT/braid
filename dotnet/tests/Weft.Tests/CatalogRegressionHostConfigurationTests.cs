@@ -12,7 +12,7 @@ public sealed class CatalogRegressionHostConfigurationTests
     public void Disabled_configuration_reads_no_runtime_or_credential_inputs()
     {
         var services = new ServiceCollection();
-        CatalogRegressionHostConfiguration.Configure(services, name => name == "WEFT_REGRESSIONS_ENABLED" ? null : throw new InvalidOperationException(), false);
+        CatalogRegressionHostConfiguration.Configure(services, name => name is "WEFT_REGRESSIONS_ENABLED" or "WEFT_NOTIFICATIONS_ENABLED" ? null : throw new InvalidOperationException(), false);
         Assert.Empty(services);
     }
 
@@ -42,6 +42,7 @@ public sealed class CatalogRegressionHostConfigurationTests
             "WEFT_REGRESSIONS_ENABLED" => "true",
             "WEFT_FERRULE_WORKER_IMAGE" => "sha256:" + new string('a', 64),
             "WEFT_CATALOG_AUTH_MODE" => "development",
+            "WEFT_NOTIFICATIONS_ENABLED" or "WEFT_NOTIFICATION_CONFIG_FILE" => null,
             "WEFT_FERRULE_RUNNER" or "WEFT_FERRULE_COMPILE_TOOLCHAIN" => null,
             _ => "private-synthetic"
         }, true);

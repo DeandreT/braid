@@ -8,8 +8,9 @@ credential or run an external deployment command.
 
 An administrator registers one immutable `LocalReleaseTarget`: a mapping,
 environment ID/version, runtime image and artifact profile. Registration checks
-the active environment. Disabling a target is one-way; replaying its original
-registration returns the original disabled target rather than enabling it.
+the active environment. Replaying its original registration returns the original
+disabled target rather than enabling it. The separately authorized
+[operations API](release-operations.md) supports conditional enabling and disabling.
 
 A publisher submits an immutable `ReleaseIntent` against a stored qualification.
 The qualification must retain that publisher, mapping, exact environment version,

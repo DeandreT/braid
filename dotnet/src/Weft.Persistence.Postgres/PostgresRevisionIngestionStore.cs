@@ -5,7 +5,7 @@ using Weft.Domain;
 
 namespace Weft.Persistence.Postgres;
 
-/// <summary>Scoped trusted ingestion metadata operations; no native bytes or external I/O.</summary>
+/// <summary>Scoped ingestion operations and private, bounded import snapshots; no external I/O.</summary>
 public sealed partial class PostgresRevisionIngestionStore : IIngestionMetadataStore
 {
     private readonly PostgresIngestionDatabase _database;

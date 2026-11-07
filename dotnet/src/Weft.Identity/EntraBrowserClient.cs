@@ -90,9 +90,19 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
 
     internal IOptionsMonitor<OpenIdConnectOptions> FixedMonitor { get; }
 
-    public async Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, CancellationToken cancellationToken)
+    public Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, CancellationToken cancellationToken) =>
+        BeginLoginAsync(context, BrowserReturnPath.Root, cancellationToken);
+
+    public Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, string returnPath,
+        CancellationToken cancellationToken) => BeginLoginAsync(context, returnPath, null, cancellationToken);
+
+    internal async Task<EntraLoginChallenge> BeginLoginAsync(HttpContext context, string returnPath, string? invitation,
+        CancellationToken cancellationToken)
     {
-        var operation = await RunAsync(context, callback: false, cancellationToken);
+        // The return path travels in the protected state and is checked again on the callback.
+        if (returnPath != BrowserReturnPath.Root && !BrowserReturnPath.IsValid(returnPath))
+            throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
+        var operation = await RunAsync(context, callback: false, cancellationToken, returnPath, invitation);
         return operation.Challenge ?? throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
     }
 
@@ -104,7 +114,8 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
         return result;
     }
 
-    private async Task<Operation> RunAsync(HttpContext context, bool callback, CancellationToken caller)
+    private async Task<Operation> RunAsync(HttpContext context, bool callback, CancellationToken caller,
+        string returnPath = BrowserReturnPath.Root, string? invitation = null)
     {
         if (context is null) throw EntraErrors.Create(ServerSessionIdentityFailureKind.UntrustedIssuance);
         var originalAbort = context.RequestAborted;
@@ -159,12 +170,20 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
                 var now = WholeSecondNow();
                 var properties = new AuthenticationProperties
                 {
-                    RedirectUri = "/",
+                    RedirectUri = returnPath,
                     IsPersistent = false,
                     IssuedUtc = now,
                     ExpiresUtc = now.Add(FlowLifetime)
                 };
                 properties.Items[".weft.flow"] = "1";
+                if (invitation is not null)
+                {
+                    if (!Weft.Application.OrganizationInvitationSecret.IsValid(invitation))
+                        throw EntraErrors.Create(ServerSessionIdentityFailureKind.Denied);
+                    // Standard protected state binds this credential to the exact correlation,
+                    // nonce, tenant and client. A separate mutable cookie cannot substitute it.
+                    properties.Items[".weft.invitation"] = invitation;
+                }
                 await actual.ChallengeAsync(properties);
                 operation.CheckActive();
                 var location = context.Response.Headers.Location.ToString();
@@ -172,6 +191,10 @@ public sealed partial class EntraBrowserClient : IAsyncDisposable
                     Encoding.UTF8.GetByteCount(location) > EntraEndpointPolicy.MaximumProtocolBytes ||
                     !Uri.TryCreate(location, UriKind.Absolute, out var destination) ||
                     destination.GetLeftPart(UriPartial.Path) != policy.Authorize || destination.Fragment.Length != 0)
+                    throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
+                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(destination.Query);
+                if (!query.TryGetValue("state", out var state) || state.Count != 1 ||
+                    state[0] is not { Length: > 0 and <= BrowserReturnPath.MaximumProtectedStateLength })
                     throw EntraErrors.Create(ServerSessionIdentityFailureKind.Unavailable);
                 context.Response.Headers.Remove("Location");
                 context.Response.StatusCode = StatusCodes.Status200OK;

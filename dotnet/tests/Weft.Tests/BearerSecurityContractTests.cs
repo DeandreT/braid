@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -17,6 +18,7 @@ using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
 using Weft.Application;
+using Weft.Application.Automation;
 using Weft.Application.Regression;
 using Weft.Deployment;
 using Weft.Identity;
@@ -80,7 +82,7 @@ public sealed partial class BearerSecurityContractTests
             Assert.True(expected == schemes, $"{operation.Item2} {operation.Item1} admits {schemes} but declares {expected}.");
         }
         // The Session host maps every declared operation except the Development-only examples and fixtures.
-        Assert.Equal(["/api/v1/examples/mappings", "/api/v1/examples/mappings/{exampleId}", "/api/v1/fixtures/projections/{fixtureId}"],
+        Assert.Equal(["/api/v1/fixtures/projections/{fixtureId}"],
             declared.Keys.Where(key => !observed.ContainsKey(key)).Select(key => key.Item1).Order(StringComparer.Ordinal));
     }
 
@@ -91,11 +93,12 @@ public sealed partial class BearerSecurityContractTests
             requirement.EnumerateObject().Any() ? string.Join('+', requirement.EnumerateObject().Select(scheme => scheme.Name)) : "anonymous"));
     }
 
-    private static string RepositoryRoot()
+    private static string RepositoryRoot([CallerFilePath] string sourceFile = "")
     {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-            if (File.Exists(Path.Combine(directory.FullName, "global.json")) && File.Exists(Path.Combine(directory.FullName, "contracts", "weft-v1.json")))
-                return directory.FullName;
+        foreach (var root in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory(), Path.GetDirectoryName(sourceFile)! })
+            for (var directory = new DirectoryInfo(root); directory is not null; directory = directory.Parent)
+                if (File.Exists(Path.Combine(directory.FullName, "global.json")) && File.Exists(Path.Combine(directory.FullName, "contracts", "weft-v1.json")))
+                    return directory.FullName;
         throw new InvalidOperationException("The repository contract is required for the security parity check.");
     }
 
@@ -146,6 +149,7 @@ public sealed partial class BearerSecurityContractTests
             builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, port, listen =>
             { listen.Protocols = HttpProtocols.Http1; listen.UseHttps(crypto.ApplicationTls); }));
             builder.Services.AddWeftApi();
+            builder.Services.AddSingleton(new ReleaseOperationsOptions(true));
             builder.Services.AddSingleton<IExternalIdentityReader>(identities);
             builder.Services.AddWeftBrowserSessions(new(origin), profile, new PostgresServerSessionReader(sessionReader),
                 new PostgresServerSessionWriter(sessionWriter), TimeProvider.System);
@@ -155,11 +159,17 @@ public sealed partial class BearerSecurityContractTests
             builder.Services.AddWeftSessionCatalog(new(organization), new CatalogMetadataEditOptions(true), new CatalogRevisionIngestionOptions(true),
                 new CatalogProjectCreationOptions(true), new CatalogRevisionReportOptions(true, true));
             builder.Services.AddWeftBearerAccess(new(organization), validator, identities, audit);
+            builder.Services.AddSingleton(new CatalogInterchangeOptions(true));
+            builder.Services.AddSingleton<IInterchangeBackendRegistry>(_ => throw new InvalidOperationException("Refused credentials must not resolve interchange workers."));
+            builder.Services.AddSingleton<InterchangeImportService>(_ => throw new InvalidOperationException("Refused credentials must not resolve import storage."));
+            builder.Services.AddSingleton<InterchangeExportService>(_ => throw new InvalidOperationException("Refused credentials must not resolve export storage."));
             // Every business feature is on, so each route reaches its admission.
             var image = "sha256:" + new string('a', 64);
             builder.Services.AddWeftRegressionCases(new(true, new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
                 FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile)));
             builder.Services.AddWeftRegressionRuns(new(true));
+            builder.Services.AddSingleton(new CatalogAutomationOptions(true));
+            builder.Services.AddSingleton<IAutomationStore>(_ => throw new InvalidOperationException("Refused credentials must not resolve automation stores."));
             builder.Services.AddWeftBuildApi(new(true, new BuildBackendIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
                 FerrulePreviewBackend.AdapterBuild), FerruleBuildCompiler.Profile));
             builder.Services.AddWeftPreviews(new CatalogPreviewOptions(true));
@@ -174,7 +184,9 @@ public sealed partial class BearerSecurityContractTests
             app.MapWeftHelp();
             app.MapWeftRegressionCases();
             app.MapWeftRegressionRuns();
+            app.MapWeftAutomation();
             app.MapWeftBuilds();
+            app.MapWeftReleaseOperations();
             app.MapWeftChat();
             using var start = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await app.StartAsync(start.Token);

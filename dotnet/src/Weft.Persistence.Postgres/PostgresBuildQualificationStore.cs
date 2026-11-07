@@ -21,7 +21,11 @@ public sealed class PostgresBuildQualificationStore(string connectionString, boo
         Scope(command, new(revision.OrganizationId, revision.ProjectId, revision.MappingId), qualification.Id);
         command.Parameters.AddWithValue("proof", qualification.CopyCanonicalBytes());
         command.Parameters.AddWithValue("completion", qualification.CopyResultBytes());
-        if (await command.ExecuteScalarAsync(token) is not int outcome || outcome is < 0 or > 3) throw Invalid();
+        object? value;
+        try { value = await command.ExecuteScalarAsync(token); }
+        catch (PostgresException error) when (error.SqlState == "23514" && error.ConstraintName == "automation_regression_gate")
+        { return BuildQualificationWriteOutcome.RegressionRequired; }
+        if (value is not int outcome || outcome is < 0 or > 3) throw Invalid();
         await tx.CommitAsync(token);
         return (BuildQualificationWriteOutcome)outcome;
     }

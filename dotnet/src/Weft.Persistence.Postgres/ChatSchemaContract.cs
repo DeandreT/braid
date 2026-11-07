@@ -11,7 +11,12 @@ internal static partial class ChatSchemaContract
 {
     internal const string MigrationName = "0011_private_chat";
     internal const string MigrationChecksum = "a563ed67fcc29f46aa1b3121ba826767631631a6ff74859d7664057047dbf7dc";
-    internal static readonly string[] ChatTables = ["chat_conversations", "chat_turns", "chat_rounds", "chat_events", "chat_identities"];
+    // The workspace migration adds the organization-scoped kind, its events and the payload audit, and
+    // replaces exactly the routines it names; every other routine body remains 0011's.
+    internal const string WorkspaceMigrationName = "0032_workspace_chat";
+    internal const string WorkspaceMigrationChecksum = "a4e8e24cf0a8fd38a23cc604d0077ad7c1345692686a51a952d90c767ff85d80";
+    internal static int WorkspaceMigrationVersion => int.Parse(WorkspaceMigrationName[..4], System.Globalization.CultureInfo.InvariantCulture);
+    internal static readonly string[] ChatTables = ["chat_conversations", "chat_turns", "chat_rounds", "chat_events", "chat_identities", "chat_payload_audit"];
     private static readonly string[] Dependencies =
         ["principals", "organization_memberships", "project_memberships", "mapping_revisions", "revision_derivations", "revision_derivation_attempts"];
     private const string SearchPath = "search_path=pg_catalog, weft, pg_temp";
@@ -32,13 +37,23 @@ internal static partial class ChatSchemaContract
     private static string TextCheck(string name, int limit) =>
         "(((octet_length(" + name + ") >= 1) AND (octet_length(" + name + ") <= " + limit + ")) AND (btrim(" + name + ") <> ''::text))";
 
+    private static Column[] OptionalUuids(params string[] names) => names.Select(name => new Column(name, "uuid", NotNull: false)).ToArray();
+    private const string PinColumns = "project_id, mapping_id, revision_id, projection_entry_id, projection_id, projection_key, projection_digest, validation_entry_id, validation_id, validation_key, validation_digest";
+
+    // The workspace migration relaxes the revision pin columns, appends kind/focus and constrains each kind's shape.
     private static readonly Table Conversations = new("chat_conversations",
-        [.. Uuids("organization_id", "creator_id", "conversation_id", "project_id", "mapping_id", "revision_id", "projection_entry_id", "projection_id"),
-         new("projection_key", "text"), new("projection_digest", "text"), .. Uuids("validation_entry_id", "validation_id"),
-         new("validation_key", "text"), new("validation_digest", "text"),
-         new("created_at", "timestamp with time zone", Default: "statement_timestamp()"), new("retain_until", "timestamp with time zone")],
+        [.. Uuids("organization_id", "creator_id", "conversation_id"),
+         .. OptionalUuids("project_id", "mapping_id", "revision_id", "projection_entry_id", "projection_id"),
+         new("projection_key", "text", NotNull: false), new("projection_digest", "text", NotNull: false),
+         .. OptionalUuids("validation_entry_id", "validation_id"),
+         new("validation_key", "text", NotNull: false), new("validation_digest", "text", NotNull: false),
+         new("created_at", "timestamp with time zone", Default: "statement_timestamp()"), new("retain_until", "timestamp with time zone"),
+         new("conversation_kind", "integer"), .. OptionalUuids("focus_project_id", "focus_mapping_id", "focus_revision_id")],
         [Key("chat_conversations_pkey", "organization_id", "creator_id", "conversation_id"),
          Foreign("chat_conversations_creator_fkey", ["creator_id"], "principals", ["id"]),
+         Foreign("chat_conversations_focus_mapping_fkey", ["organization_id", "focus_project_id", "focus_mapping_id"], "mappings", ["organization_id", "project_id", "id"]),
+         Foreign("chat_conversations_focus_revision_fkey", ["organization_id", "focus_project_id", "focus_mapping_id", "focus_revision_id"], "mapping_revisions", ["organization_id", "project_id", "mapping_id", "id"]),
+         Check("chat_conversations_kind_check", "(((conversation_kind = 1) AND (num_nulls(" + PinColumns + ") = 0) AND (num_nonnulls(focus_project_id, focus_mapping_id, focus_revision_id) = 0)) OR ((conversation_kind = 2) AND (num_nonnulls(" + PinColumns + ") = 0) AND ((focus_project_id IS NULL) = (focus_mapping_id IS NULL)) AND ((focus_revision_id IS NULL) OR (focus_mapping_id IS NOT NULL))))"),
          Foreign("chat_conversations_revision_fkey", ["organization_id", "project_id", "mapping_id", "revision_id"], "mapping_revisions", ["organization_id", "project_id", "mapping_id", "id"]),
          Foreign("chat_conversations_projection_fkey", ["organization_id", "project_id", "mapping_id", "revision_id", "projection_id"], "revision_derivation_attempts", ["organization_id", "project_id", "mapping_id", "revision_id", "derivation_id"]),
          Foreign("chat_conversations_validation_fkey", ["organization_id", "project_id", "mapping_id", "revision_id", "validation_id"], "revision_derivation_attempts", ["organization_id", "project_id", "mapping_id", "revision_id", "derivation_id"]),
@@ -101,11 +116,21 @@ internal static partial class ChatSchemaContract
          Foreign("chat_events_turn_fkey", ["organization_id", "creator_id", "conversation_id", "turn_id"], "chat_turns", ["organization_id", "creator_id", "conversation_id", "turn_id"], "c"),
          Foreign("chat_events_round_fkey", ["organization_id", "creator_id", "conversation_id", "turn_id", "round_id"], "chat_rounds", ["organization_id", "creator_id", "conversation_id", "turn_id", "round_id"], "c"),
          Check("chat_events_sequence_check", "((sequence >= 1) AND (sequence <= 4096))"), Check("chat_events_event_id_check", IdCheck("event_id")),
-          Check("chat_events_kind_check", "((kind >= 1) AND (kind <= 12))"),
+          Check("chat_events_kind_check", "((kind >= 1) AND (kind <= 14))"),
           Check("chat_events_metadata_json_check", "((metadata_json IS NULL) OR ((octet_length(metadata_json) >= 1) AND (octet_length(metadata_json) <= 8192)))"),
-          Check("chat_events_check", "(((kind = ANY (ARRAY[2, 3, 4])) AND (round_id IS NOT NULL) AND (dispatch_fence IS NOT NULL) AND (metadata_json IS NULL) AND ((octet_length(private_text) >= 1) AND (octet_length(private_text) <= 8192)) AND (btrim(private_text) <> ''::text)) OR ((kind = ANY (ARRAY[9, 10, 11, 12])) AND (round_id IS NOT NULL) AND (dispatch_fence IS NOT NULL) AND (metadata_json IS NOT NULL) AND (private_text = ''::text)) OR ((kind = 1) AND (round_id IS NULL) AND (dispatch_fence IS NULL) AND (private_text = ''::text) AND (metadata_json IS NULL)) OR ((kind = ANY (ARRAY[5, 6, 7, 8])) AND (round_id IS NULL) AND (dispatch_fence IS NULL) AND (private_text = ''::text) AND ((metadata_json IS NULL) OR (octet_length(metadata_json) <= 2048))))")]);
+          Check("chat_events_check", "(((kind = ANY (ARRAY[2, 3, 4])) AND (round_id IS NOT NULL) AND (dispatch_fence IS NOT NULL) AND (metadata_json IS NULL) AND ((octet_length(private_text) >= 1) AND (octet_length(private_text) <= 8192)) AND (btrim(private_text) <> ''::text)) OR ((kind = ANY (ARRAY[9, 10, 11, 12, 13, 14])) AND (round_id IS NOT NULL) AND (dispatch_fence IS NOT NULL) AND (metadata_json IS NOT NULL) AND (private_text = ''::text)) OR ((kind = 1) AND (round_id IS NULL) AND (dispatch_fence IS NULL) AND (private_text = ''::text) AND (metadata_json IS NULL)) OR ((kind = ANY (ARRAY[5, 6, 7, 8])) AND (round_id IS NULL) AND (dispatch_fence IS NULL) AND (private_text = ''::text) AND ((metadata_json IS NULL) OR (octet_length(metadata_json) <= 2048))))")]);
 
-    private static readonly Table[] NewTables = [Conversations, Turns, Rounds, Events, Identities];
+    private static readonly Table PayloadAudit = new("chat_payload_audit",
+        [.. Uuids("organization_id", "creator_id", "event_id", "conversation_id", "turn_id", "round_id", "project_id"),
+         new("source_kind", "integer"), new("subject_id", "uuid"), new("subject_version", "bigint", NotNull: false), new("byte_count", "integer"),
+         new("profile_id", "text"), new("profile_version", "integer"), new("provider_id", "text"), new("model_id", "text"),
+         new("metadata_policy_id", "text"), new("metadata_policy_version", "integer"), new("recorded_at", "timestamp with time zone")],
+        [Key("chat_payload_audit_pkey", "organization_id", "creator_id", "event_id"),
+         Check("chat_payload_audit_source_kind_check", "((source_kind >= 1) AND (source_kind <= 4))"),
+         Check("chat_payload_audit_byte_count_check", "((byte_count >= 1) AND (byte_count <= 1048576))"),
+         Check("chat_payload_audit_subject_check", "(((source_kind = 3) = (subject_version IS NOT NULL)) AND ((subject_version IS NULL) OR (subject_version > 0)))")]);
+
+    private static readonly Table[] NewTables = [Conversations, Turns, Rounds, Events, Identities, PayloadAudit];
     private static readonly Table History = new("schema_migrations",
         [new("version", "integer"), new("checksum", "text"), new("applied_at", "timestamp with time zone", Default: "CURRENT_TIMESTAMP")],
         [Key("schema_migrations_pkey", "version"), Check("schema_migrations_version_check", "(version > 0)"),
@@ -123,31 +148,34 @@ internal static partial class ChatSchemaContract
         "de0a8f45d704c667c95a8b029fb78785c1be4638b93093bde3c25f082938ea36",
         "73b4713aa5e2bafd886abc616c6e03dbf3bb6544cb24d55ea26b8134209f0e24"
     ];
-    private static readonly Lazy<string> Source = new(LoadSource);
-    private static string LoadSource()
+    private static readonly Lazy<string> Source = new(() => LoadSource(MigrationName, MigrationChecksum));
+    private static readonly Lazy<string> WorkspaceSource = new(() => LoadSource(WorkspaceMigrationName, WorkspaceMigrationChecksum));
+    private static string LoadSource(string name, string checksum)
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(
-            "Weft.Persistence.Postgres.Migrations." + MigrationName + ".sql") ?? throw Refusal();
+            "Weft.Persistence.Postgres.Migrations." + name + ".sql") ?? throw Refusal();
         using var buffer = new MemoryStream(); stream.CopyTo(buffer);
         var bytes = buffer.ToArray();
-        if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != MigrationChecksum) throw Refusal();
+        if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != checksum) throw Refusal();
         return new UTF8Encoding(false, true).GetString(bytes);
     }
-    private static string Body(string name)
+    // A routine the workspace migration replaces or adds has exactly that body; any other keeps 0011's.
+    private static string Body(string name) => Body(WorkspaceSource.Value, name) ?? Body(Source.Value, name) ?? throw Refusal();
+    private static string? Body(string source, string name)
     {
         var marker = "$" + name + "$";
-        var opening = Source.Value.IndexOf("AS " + marker, StringComparison.Ordinal);
-        if (opening < 0) throw Refusal();
+        var opening = source.IndexOf("AS " + marker, StringComparison.Ordinal);
+        if (opening < 0) return null;
         var start = opening + 3 + marker.Length;
-        var end = Source.Value.IndexOf(marker + ";", start, StringComparison.Ordinal);
-        if (end < start || Source.Value.IndexOf("AS " + marker, start, StringComparison.Ordinal) >= 0) throw Refusal();
-        return Source.Value[start..end];
+        var end = source.IndexOf(marker + ";", start, StringComparison.Ordinal);
+        if (end < start || source.IndexOf("AS " + marker, start, StringComparison.Ordinal) >= 0) throw Refusal();
+        return source[start..end];
     }
     internal static string[] ColumnGrants(ChatDatabaseProfile profile)
     {
         var role = ChatRoleGuard.RoleName(profile);
         var result = new List<string>();
-        foreach (Match grant in Regex.Matches(Source.Value,
+        foreach (Match grant in Regex.Matches(Source.Value + "\n" + WorkspaceSource.Value,
             @"GRANT (?<right>SELECT|INSERT|UPDATE)\((?<columns>[a-z_,\s]+)\)\s+ON weft\.(?<table>[a-z_]+) TO (?<roles>[a-z_,\s]+);",
             RegexOptions.CultureInvariant))
         {

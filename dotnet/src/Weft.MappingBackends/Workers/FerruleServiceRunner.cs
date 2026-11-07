@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Authentication;
+using Weft.Application;
 
 namespace Weft.MappingBackends.Workers;
 
@@ -12,7 +13,7 @@ public sealed class FerruleServiceRunnerOptions
     {
         ArgumentNullException.ThrowIfNull(connector);
         Profile = FerruleServiceProtocol.Profile(profile) ??
-            throw new ArgumentException("The Ferrule service profile must be inspection, edit, preview, compile or execute.", nameof(profile));
+            throw new ArgumentException("The Ferrule service profile must be inspection, edit, preview, interchange, compile or execute.", nameof(profile));
         Connector = connector;
         ProfileName = profile;
         BuildIdentity = InspectionTransport.RequireImage(buildIdentity);
@@ -32,6 +33,7 @@ public sealed class FerruleServiceRunnerOptions
         }
         else if (compiledRuntimeIdentity is not null) throw new ArgumentException("Only execution accepts a compiled runtime pin.");
         ResponseBound = MaximumServiceAdmissionWait + Profile.MaximumWallTimeout * 2 + ProcessWorkerOptions.KillTimeout + TimeSpan.FromSeconds(5);
+        QuarantineBound = ResponseBound;
         SettlementBound = Profile.MaximumWallTimeout + ProcessWorkerOptions.KillTimeout + TimeSpan.FromSeconds(3);
         cancellationSettlement = CancelRequestBound + SettlementBound;
     }
@@ -75,6 +77,13 @@ public sealed class FerruleServiceRunnerOptions
     internal int Attempts { get; init; } = 3;
 
     internal TimeSpan RetryDelay { get; init; } = TimeSpan.FromMilliseconds(200);
+
+    // Include a still-buffering or queued request as well as its child: a broken channel does not prove when
+    // the replica noticed the disconnect. These are recovery delays, not relaxed execution deadlines.
+    internal TimeSpan QuarantineBound { get; init; }
+    internal TimeSpan RecoveryProbeDelay { get; init; } = TimeSpan.FromSeconds(30);
+    internal TimeSpan UncertaintyWindow { get; init; } = TimeSpan.FromMinutes(10);
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
 }
 
 /// <summary>
@@ -82,9 +91,9 @@ public sealed class FerruleServiceRunnerOptions
 /// channel. A refusal that proves nothing ran (busy, stopping, unreachable before any frame byte) is retried with a new
 /// operation, so another or a newly added replica can take it. Cancellation travels on the operation's own channel and
 /// waits for the settled answer. An answer that cannot be confirmed after frame bytes may have been delivered is a
-/// cleanup failure and closes further admission.
+/// cleanup failure and quarantines further admission until bounded remote lifetime and fresh readiness are proven.
 /// </summary>
-public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilationIdentitySource, IAsyncDisposable
+public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilationIdentitySource, IExecutionAdmission, IAsyncDisposable
 {
     private readonly FerruleServiceRunnerOptions options;
     private readonly object lifetimeGate = new();
@@ -95,6 +104,12 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
     private int unavailable;
     private int lifetimeDisposed;
     private bool stopping;
+    private bool permanentlyUnavailable;
+    private Task? recovery;
+    private long quarantineVersion;
+    private long quarantineStarted;
+    private TimeSpan quarantineDuration;
+    private readonly Queue<long> uncertainties = new();
 
     public FerruleServiceRunner(FerruleServiceRunnerOptions options)
     {
@@ -109,8 +124,9 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
     /// <summary>The service profile every operation of this runner is sent to.</summary>
     public string ProfileName => options.ProfileName;
 
-    /// <summary>False once admission closed: stopping, or an unconfirmed settlement, which keeps the runner closed until restart.</summary>
+    /// <summary>False while stopping, quarantined, or awaiting a fresh identity-checked recovery probe.</summary>
     public bool Available { get { lock (lifetimeGate) return !stopping && Volatile.Read(ref unavailable) == 0; } }
+    public bool CanExecute => Available;
 
     public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken cancellationToken)
     {
@@ -119,7 +135,7 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
 
         lock (lifetimeGate)
         {
-            if (stopping) return Failed(WorkerProcessFailure.SandboxUnavailable);
+            if (stopping || Volatile.Read(ref unavailable) != 0) return Failed(WorkerProcessFailure.SandboxUnavailable);
             outstandingOperations++;
         }
         try
@@ -128,12 +144,16 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
             if (cancellationToken.IsCancellationRequested) return Failed(WorkerProcessFailure.Canceled);
             using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, shutdown.Token);
             var result = await RunAttemptsAsync(requestFrame, lifetime.Token).ConfigureAwait(false);
-            if (result.Failure == WorkerProcessFailure.CleanupFailed) Interlocked.Exchange(ref unavailable, 1);
+            if (result.Failure == WorkerProcessFailure.CleanupFailed) Quarantine();
             return result;
         }
         catch
         {
-            Interlocked.Exchange(ref unavailable, 1);
+            lock (lifetimeGate)
+            {
+                permanentlyUnavailable = true;
+                Interlocked.Exchange(ref unavailable, 1);
+            }
             throw;
         }
         finally
@@ -146,10 +166,85 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
         }
     }
 
+    private void Quarantine()
+    {
+        lock (lifetimeGate)
+        {
+            Interlocked.Exchange(ref unavailable, 1);
+            quarantineVersion++;
+            quarantineStarted = options.Clock.GetTimestamp();
+            while (uncertainties.TryPeek(out var first) && options.Clock.GetElapsedTime(first, quarantineStarted) >= options.UncertaintyWindow)
+                uncertainties.Dequeue();
+            // A fixed-size history and one recovery loop per runner bound both memory and probe traffic.
+            if (uncertainties.Count == 3) uncertainties.Dequeue();
+            uncertainties.Enqueue(quarantineStarted);
+            quarantineDuration = uncertainties.Count >= 3 && options.UncertaintyWindow > options.QuarantineBound
+                ? options.UncertaintyWindow : options.QuarantineBound;
+            if (!stopping && !permanentlyUnavailable && recovery is null)
+            {
+                // Recovery belongs to the host, not the failed request's identity or execution context.
+                if (ExecutionContext.IsFlowSuppressed()) recovery = Task.Run(RecoverAsync);
+                else using (ExecutionContext.SuppressFlow()) recovery = Task.Run(RecoverAsync);
+            }
+        }
+    }
+
+    private async Task RecoverAsync()
+    {
+        try
+        {
+            while (true)
+            {
+                long version;
+                TimeSpan remaining;
+                lock (lifetimeGate)
+                {
+                    if (stopping || permanentlyUnavailable) return;
+                    version = quarantineVersion;
+                    remaining = quarantineDuration - options.Clock.GetElapsedTime(quarantineStarted);
+                }
+                if (remaining > TimeSpan.Zero)
+                {
+                    await Task.Delay(remaining, options.Clock, shutdown.Token).ConfigureAwait(false);
+                    // Recheck the monotonic deadline and generation, including a newer quarantine during the wait.
+                    continue;
+                }
+
+                var ready = false;
+                try
+                {
+                    await using var channel = options.Connector.Open();
+                    using var bound = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
+                    bound.CancelAfter(options.CancelRequestBound);
+                    ready = (await ReadyAsync(channel, bound.Token).ConfigureAwait(false)).Ready;
+                }
+                catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException
+                    or AuthenticationException or InvalidOperationException or InvalidDataException)
+                {
+                    // Failed recovery proves nothing. Stay closed and probe at a bounded rate, never send a frame.
+                }
+                lock (lifetimeGate)
+                {
+                    if (stopping || permanentlyUnavailable) return;
+                    if (version != quarantineVersion) continue;
+                    if (ready && outstandingOperations == 0)
+                    {
+                        Interlocked.Exchange(ref unavailable, 0);
+                        recovery = null;
+                        return;
+                    }
+                }
+                await Task.Delay(options.RecoveryProbeDelay, options.Clock, shutdown.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
+    }
+
     private async Task<WorkerProcessResult> RunAttemptsAsync(ReadOnlyMemory<byte> frame, CancellationToken token)
     {
         for (var attempt = 1; ; attempt++)
         {
+            if (Volatile.Read(ref unavailable) != 0) return Failed(WorkerProcessFailure.SandboxUnavailable);
             var (result, retryable) = await ExchangeAsync(frame, token).ConfigureAwait(false);
             if (!retryable || attempt >= options.Attempts || token.IsCancellationRequested) return result;
             try
@@ -238,22 +333,36 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
     private async Task<(WorkerProcessResult Result, bool Retryable)> SendAsync(IFerruleServiceChannel channel, string operation,
         TransportFrameContent content, CancellationToken abort)
     {
+        var readiness = await ReadyAsync(channel, abort).ConfigureAwait(false);
+        if (!readiness.Ready) return (Failed(WorkerProcessFailure.SandboxUnavailable), readiness.Retryable);
+
+        return await SendFrameAsync(channel, operation, content, abort).ConfigureAwait(false);
+    }
+
+    private async Task<(bool Ready, bool Retryable)> ReadyAsync(IFerruleServiceChannel channel, CancellationToken abort)
+    {
         using (var ready = new HttpRequestMessage(HttpMethod.Get, new Uri(FerruleServiceProtocol.ReadyPath, UriKind.Relative)))
         using (var admitted = await channel.SendAsync(ready, abort).ConfigureAwait(false))
         {
             if (admitted.StatusCode == HttpStatusCode.ServiceUnavailable)
-                return (Failed(WorkerProcessFailure.SandboxUnavailable), true);
+                return (false, true);
             if (admitted.StatusCode != HttpStatusCode.NoContent || !Single(admitted.Headers, InspectionTransport.ImageHeader, out var identity) ||
                 !string.Equals(identity, options.BuildIdentity, StringComparison.Ordinal) || !FromService(admitted.Headers))
-                return (Failed(WorkerProcessFailure.SandboxUnavailable), false);
+                return (false, false);
             if (options.CompileToolchainIdentity is { } expected &&
                 (!Single(admitted.Headers, FerruleServiceProtocol.CompileToolchainHeader, out var toolchain) || toolchain != expected))
-                return (Failed(WorkerProcessFailure.SandboxUnavailable), false);
+                return (false, false);
             if (options.CompiledRuntimeIdentity is { } runtime &&
                 (!Single(admitted.Headers, FerruleServiceProtocol.CompiledRuntimeHeader, out var receivedRuntime) || receivedRuntime != runtime))
-                return (Failed(WorkerProcessFailure.SandboxUnavailable), false);
+                return (false, false);
         }
+        return (true, false);
+    }
 
+    private async Task<(WorkerProcessResult Result, bool Retryable)> SendFrameAsync(IFerruleServiceChannel channel, string operation,
+        TransportFrameContent content, CancellationToken abort)
+    {
+        if (Volatile.Read(ref unavailable) != 0) return (Failed(WorkerProcessFailure.SandboxUnavailable), false);
         // The frame travels on the same channel, which reaches the instance that just answered.
         var path = new Uri(FerruleServiceProtocol.OperationPath(options.ProfileName, operation), UriKind.Relative);
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = content };
@@ -353,6 +462,7 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
     {
         try { await shutdown.CancelAsync().ConfigureAwait(false); }
         finally { await drained.Task.ConfigureAwait(false); }
+        if (recovery is { } recovering) await recovering.ConfigureAwait(false);
         if (Volatile.Read(ref unavailable) != 0)
             throw new InvalidOperationException("Ferrule service shutdown could not confirm remote settlement.");
     }

@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use crate::document_format::DocumentFormat;
 use ferrule_engine::TargetSelection;
 use ferrule_mapping::{FormatOptions, Graph, Node, Project};
 
@@ -10,11 +11,14 @@ use super::protocol::{PreviewInput, PreviewRequestHeader, PreviewTarget};
 pub struct AdmittedTarget {
     pub boundary_id: String,
     pub name: String,
+    pub format: DocumentFormat,
+    pub segment: Option<char>,
 }
 
 pub struct Admission<'a> {
     pub selection: Option<TargetSelection<'a>>,
     pub targets: Vec<AdmittedTarget>,
+    pub input_formats: Vec<DocumentFormat>,
 }
 
 pub struct Refusal {
@@ -31,7 +35,7 @@ fn refuse(code: &'static str, message: &'static str, subject: Option<&str>) -> R
     }
 }
 
-/// Admits only static plain-JSON boundaries reachable by the selected target(s),
+/// Admits only static boundaries under the requested profile for the selected target(s),
 /// before any input document is parsed or any graph node is evaluated.
 pub fn admit<'a>(
     project: &Project,
@@ -62,20 +66,35 @@ pub fn admit<'a>(
         if project.root.output_path().is_some() {
             return Err(refuse(
                 "unsupportedCapability",
-                "Dynamically named output documents are outside the JSON preview profile.",
+                if header.is_document_preview() {
+                    "Dynamically named output documents are outside the document preview profile."
+                } else {
+                    "Dynamically named output documents are outside the JSON preview profile."
+                },
                 Some("primary-output"),
             ));
         }
-        if !plain_json(&project.target_options, project.target_path.as_deref()) {
+        let format = boundary_format(
+            header,
+            &project.target_options,
+            project.target_path.as_deref(),
+            &project.target,
+        );
+        if format.is_none() {
             return Err(refuse(
                 "unsupportedCapability",
-                "The primary output is not a plain JSON document.",
+                format_message(header, "The primary output is not a plain JSON document."),
                 Some("primary-output"),
             ));
         }
         targets.push(AdmittedTarget {
             boundary_id: "primary-output".into(),
             name: project.target.name.clone(),
+            format: format.unwrap_or(DocumentFormat::Json),
+            segment: project
+                .target_options
+                .x12_separators
+                .map(|settings| settings.segment),
         });
     }
     for (index, target) in project.extra_targets.iter().enumerate() {
@@ -91,7 +110,11 @@ pub fn admit<'a>(
         if target.root.output_path().is_some() {
             return Err(refuse(
                 "unsupportedCapability",
-                "Dynamically named output documents are outside the JSON preview profile.",
+                if header.is_document_preview() {
+                    "Dynamically named output documents are outside the document preview profile."
+                } else {
+                    "Dynamically named output documents are outside the JSON preview profile."
+                },
                 Some(&boundary_id),
             ));
         }
@@ -101,23 +124,38 @@ pub fn admit<'a>(
             .path
             .as_deref()
             .filter(|path| !path.trim().is_empty());
-        if (!explicit && stored.is_none()) || !plain_json(&target.options, stored) {
+        let format = boundary_format(header, &target.options, stored, &target.schema);
+        if (!header.is_document_preview() && !explicit && stored.is_none()) || format.is_none() {
             return Err(refuse(
                 "unsupportedCapability",
-                "A selected named output is not a plain JSON document.",
+                format_message(
+                    header,
+                    "A selected named output is not a plain JSON document.",
+                ),
                 Some(&boundary_id),
             ));
         }
         targets.push(AdmittedTarget {
             boundary_id,
             name: target.name.clone(),
+            format: format.unwrap_or(DocumentFormat::Json),
+            segment: target
+                .options
+                .x12_separators
+                .map(|settings| settings.segment),
         });
     }
 
-    if !plain_json(&project.source_options, project.source_path.as_deref()) {
+    let primary_format = boundary_format(
+        header,
+        &project.source_options,
+        project.source_path.as_deref(),
+        &project.source,
+    );
+    if primary_format.is_none() {
         return Err(refuse(
             "unsupportedCapability",
-            "The primary input is not a plain JSON document.",
+            format_message(header, "The primary input is not a plain JSON document."),
             Some("primary"),
         ));
     }
@@ -150,11 +188,16 @@ pub fn admit<'a>(
         }
     };
     let mut required_names = BTreeSet::new();
+    let mut named_formats = std::collections::BTreeMap::new();
     for (name, dynamic) in required {
         if dynamic {
             return Err(refuse(
                 "unsupportedCapability",
-                "Dynamically loaded named inputs are outside the JSON preview profile.",
+                if header.is_document_preview() {
+                    "Dynamically loaded named inputs are outside the document preview profile."
+                } else {
+                    "Dynamically loaded named inputs are outside the JSON preview profile."
+                },
                 Some(name),
             ));
         }
@@ -169,14 +212,19 @@ pub fn admit<'a>(
                 Some(name),
             ));
         };
-        if !plain_json(&source.options, Some(&source.path)) {
+        let format = boundary_format(header, &source.options, Some(&source.path), &source.schema);
+        if format.is_none() {
             return Err(refuse(
                 "unsupportedCapability",
-                "A required named input is not a plain JSON document.",
+                format_message(
+                    header,
+                    "A required named input is not a plain JSON document.",
+                ),
                 Some(name),
             ));
         }
         required_names.insert(name);
+        named_formats.insert(name, format.unwrap_or(DocumentFormat::Json));
     }
 
     let supplied = header
@@ -212,7 +260,42 @@ pub fn admit<'a>(
             ));
         }
     }
-    Ok(Admission { selection, targets })
+    let input_formats = header
+        .inputs
+        .iter()
+        .map(|input| match input {
+            PreviewInput::Primary { .. } => primary_format.unwrap_or(DocumentFormat::Json),
+            PreviewInput::Named { name, .. } => named_formats[name.as_str()],
+        })
+        .collect();
+    Ok(Admission {
+        selection,
+        targets,
+        input_formats,
+    })
+}
+
+fn boundary_format(
+    header: &PreviewRequestHeader,
+    options: &FormatOptions,
+    stored_path: Option<&str>,
+    schema: &ferrule_ir::SchemaNode,
+) -> Option<DocumentFormat> {
+    if header.is_document_preview() {
+        DocumentFormat::from_options(options)
+            .ok()
+            .filter(|format| crate::document_limits::admitted_schema(*format, schema))
+    } else {
+        plain_json(options, stored_path).then_some(DocumentFormat::Json)
+    }
+}
+
+fn format_message(header: &PreviewRequestHeader, legacy: &'static str) -> &'static str {
+    if header.is_document_preview() {
+        "The boundary requires an explicit JSON, X12 or EDIFACT family, a bounded embedded schema, admitted options and no unresolved EDI configuration."
+    } else {
+        legacy
+    }
 }
 
 /// A boundary is plain JSON when every non-JSON option is absent and any stored

@@ -116,6 +116,7 @@ internal sealed class ServerHostOptions
         if (chat && !reports.Enabled) throw Failure();
         var previews = new CatalogPreviewOptions(Flag(read, "WEFT_PREVIEWS_ENABLED"));
         var builds = CatalogBuildHostConfiguration.ReadRuntime(read, catalogEnabled: true);
+        _ = ReleaseOperationsHostConfiguration.ReadEnabled(read, catalogEnabled: true);
         // Native admission and derivation run only through a separately hosted, pinned runner; this host never runs
         // Docker. The hosted Weft.Worker stays the default; the Ferrule service is an explicit selection.
         SessionInspectionWorker? inspection = null;

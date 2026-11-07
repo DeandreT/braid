@@ -13,7 +13,10 @@ public sealed record PreviewRequestDescription(
     PreviewTargetSelection Target,
     IReadOnlyList<PreviewParameter> Parameters,
     IReadOnlyList<PreviewDeclaredInput> Inputs,
-    PreviewLimits Limits);
+    PreviewLimits Limits)
+{
+    public PreviewExecutionProfile Profile { get; init; } = PreviewExecutionProfile.LegacyJson;
+}
 
 /// <summary>
 /// Canonical UTF-8 JSON for a preview request. Its SHA-256 is the request fingerprint, so a
@@ -24,6 +27,8 @@ public static class PreviewRequestDocument
 {
     public const string Schema = "weft.preview-request.v1";
     public const string DraftSchema = "weft.draft-preview-request.v1";
+    public const string DocumentSchema = "weft.document-preview-request.v1";
+    public const string DraftDocumentSchema = "weft.draft-document-preview-request.v1";
     public const int MaximumBytes = 64 * 1024;
 
     public static string Encode(PreviewRunSubmission submission, PreviewLimits limits)
@@ -35,7 +40,11 @@ public static class PreviewRequestDocument
         {
             var revision = submission.Subject.ExecutionScope;
             json.WriteStartObject();
-            json.WriteString("schema", submission.Subject is DraftPreviewSubject ? DraftSchema : Schema);
+            if (!Enum.IsDefined(submission.Profile)) throw new PreviewRunException("Unknown preview profile.");
+            var document = submission.Profile == PreviewExecutionProfile.Document;
+            json.WriteString("schema", submission.Subject is DraftPreviewSubject
+                ? document ? DraftDocumentSchema : DraftSchema
+                : document ? DocumentSchema : Schema);
             json.WriteString("organizationId", revision.OrganizationId.ToString("D"));
             json.WriteString("projectId", revision.ProjectId.ToString("D"));
             json.WriteString("mappingId", revision.MappingId.ToString("D"));
@@ -105,10 +114,11 @@ public static class PreviewRequestDocument
             using var parsed = JsonDocument.Parse(document, new JsonDocumentOptions { MaxDepth = 8 });
             var root = parsed.RootElement;
             var schema = Text(root, "schema");
-            Require(schema is Schema or DraftSchema);
+            Require(schema is Schema or DraftSchema or DocumentSchema or DraftDocumentSchema);
+            var isDraft = schema is DraftSchema or DraftDocumentSchema;
             var revision = new RevisionScope(Guid.ParseExact(Text(root, "organizationId"), "D"), Guid.ParseExact(Text(root, "projectId"), "D"),
-                Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, schema == Schema ? "revisionId" : "baseRevisionId"), "D"));
-            PreviewSubject subject = schema == Schema ? new RevisionPreviewSubject(revision) : new DraftPreviewSubject(revision,
+                Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, isDraft ? "baseRevisionId" : "revisionId"), "D"));
+            PreviewSubject subject = !isDraft ? new RevisionPreviewSubject(revision) : new DraftPreviewSubject(revision,
                 Guid.ParseExact(Text(root, "draftId"), "D"), long.Parse(Text(root, "draftVersion"), NumberStyles.None, CultureInfo.InvariantCulture),
                 Sha256Digest.Parse(Text(root, "nativeDigest")), root.GetProperty("nativeByteCount").GetInt32());
             var target = root.GetProperty("target");
@@ -134,7 +144,8 @@ public static class PreviewRequestDocument
             var limits = root.GetProperty("limits");
             var description = new PreviewRequestDescription(subject, selection, parameters, inputs, new PreviewLimits(
                 limits.GetProperty("maximumInputBytes").GetInt32(), limits.GetProperty("maximumOutputBytes").GetInt32(),
-                limits.GetProperty("maximumArtifacts").GetInt32(), limits.GetProperty("maximumTextBytes").GetInt32()));
+                limits.GetProperty("maximumArtifacts").GetInt32(), limits.GetProperty("maximumTextBytes").GetInt32()))
+            { Profile = schema is DocumentSchema or DraftDocumentSchema ? PreviewExecutionProfile.Document : PreviewExecutionProfile.LegacyJson };
             Require(inputs.Length > 0 && inputs[0].Name is null && inputs.Skip(1).All(input => input.Name is not null));
             return description;
         }

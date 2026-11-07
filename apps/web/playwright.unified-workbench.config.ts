@@ -1,0 +1,48 @@
+import { defineConfig } from "@playwright/test";
+
+export default defineConfig({
+  testDir: "./tests",
+  testMatch: [
+    "unified-workbench.spec.ts",
+    "workbench.spec.ts",
+    "workbench-model.spec.ts",
+    "revision-chat.spec.ts",
+    "workspace-chat.spec.ts",
+    "workspace-chat-resources.spec.ts",
+    "browser-auth-controls.spec.ts",
+    "sign-in-entry.spec.ts",
+    "return-path.spec.ts",
+    "catalog-search.spec.ts",
+    "search-return-path.spec.ts",
+    "administration.spec.ts",
+    "automation.spec.ts",
+    "operations.spec.ts",
+    "help.spec.ts",
+    "revision-preview.spec.ts",
+    "revision-comparison.spec.ts",
+    "regression.spec.ts",
+    "builds.spec.ts",
+    "hosted-mutation.spec.ts",
+    "hosted-read.spec.ts",
+    "upload-presentation.spec.ts",
+    "upload-retention.spec.ts",
+    "mfd-interchange.spec.ts",
+  ],
+  workers: 1,
+  retries: 0,
+  forbidOnly: Boolean(process.env.CI),
+  use: {
+    baseURL: "http://127.0.0.1:5186",
+    headless: true,
+    launchOptions: { executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE },
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
+  webServer: {
+    command:
+      "npm run dev -- --port 5186 --proxy-config proxy.synthetic.conf.json --no-hmr",
+    url: "http://127.0.0.1:5186",
+    reuseExistingServer: false,
+    timeout: 120000,
+  },
+});

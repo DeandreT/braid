@@ -6,6 +6,14 @@ exact revision, runtime selection, inputs, parameters and expected outputs.
 The envelope format and replay boundary are described in
 [Regression cases](regression-cases.md).
 
+Document-runtime cases use `weft.document-regression-case.v1`, retaining explicit
+expected-output media and comparison choices in the immutable case identity.
+Legacy `weft.regression-case.v1` envelopes omit those fields and retain their
+original canonical bytes. Both use the existing opaque PostgreSQL envelope
+storage. Run completions retain non-JSON output media; reopening recomputes
+comparison from the pinned case policy/options and retained bytes rather than
+trusting a stored verdict. Legacy JSON completions omit the media extension.
+
 ## Publication and access
 
 Current publishers and administrators can create a case or append a version.

@@ -8,6 +8,7 @@ using Microsoft.OpenApi;
 using Weft.Ai;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
+using Weft.Api.Chat.Workspace;
 using Weft.Application;
 using Weft.Contracts.Catalog;
 using Weft.Contracts.Chat;
@@ -39,10 +40,14 @@ public static partial class ChatEndpoints
         services.AddSingleton(options);
         if (options.Enabled)
             // Resolved lazily on first admitted chat use, after the host has supplied its ports.
-            services.AddSingleton(provider => new ChatTurnHost(options, provider.GetRequiredService<ChatPersistencePorts>(),
-                provider.GetRequiredService<IAiCredentialResolver>(), provider.GetService<ChatToolRegistry>() ?? ChatToolRegistry.Empty,
-                new ChatProfilePolicy(options, provider.GetRequiredService<ICatalogReader>()),
-                provider.GetService<TimeProvider>() ?? TimeProvider.System));
+            services.AddSingleton(provider =>
+            {
+                var workspace = provider.GetService<WorkspaceToolService>();
+                return new ChatTurnHost(options, provider.GetRequiredService<ChatPersistencePorts>(),
+                    provider.GetRequiredService<IAiCredentialResolver>(), provider.GetService<ChatToolRegistry>() ?? ChatToolRegistry.Empty,
+                    new ChatProfilePolicy(options, provider.GetRequiredService<ICatalogReader>(), workspace is null ? null : workspace.AllowsAsync),
+                    provider.GetService<TimeProvider>() ?? TimeProvider.System, workspace);
+            });
         return services;
     }
 
@@ -70,6 +75,7 @@ public static partial class ChatEndpoints
         Describe<ChatTurnEventV1>(routes.MapGet(turn + "/events", StreamTurn), "StreamChatTurnEvents",
             "Stream the turn's durable events after a sequence number using SSE framing.", contentType: "text/event-stream")
             .DescribeNumber("after", 0, ChatGrounding.MaxEvents, 0, "Stream only events with a greater sequence number.");
+        MapWorkspaceChat(routes);
         return endpoints;
     }
 
@@ -100,9 +106,9 @@ public static partial class ChatEndpoints
     {
         route.WithName(name).WithTags("Chat").WithSummary(summary).Produces<T>(StatusCodes.Status200OK, contentType);
         if (success != StatusCodes.Status200OK) route.Produces<T>(success, contentType);
-        foreach (var status in new[] { 400, 401, 403, 404, 409, 413, 415, 500, 503 })
+        foreach (var status in new[] { 400, 401, 403, 404, 409, 413, 415, 429, 500, 503 })
             route.Produces<ChatErrorV1>(status);
-        return route;
+        return route.DescribeChatResponseHeaders(contentType == "text/event-stream");
     }
 
     private static Task<IResult> GetAvailability(string organizationId, string projectId, string mappingId, string revisionId,

@@ -122,9 +122,12 @@ public sealed class ApiRequestAuditPersistenceTests(PostgresFixture fixture, ITe
             binding, key.Provider, key.Authority, key.Subject, seed.Alice);
         var before = await SnapshotAsync(test);
 
-        await test.MigrateAsync();
+        // Isolate the 0025 audit delta from later independent schema additions.
+        await using (var upgrade = new MigrationRunner(test.MigrationConnectionString,
+            MigrationRunner.EmbeddedMigrations.Take(PrefixVersion + 1).ToArray()))
+            await upgrade.MigrateAsync();
 
-        Assert.Equal(Enumerable.Range(1, MigrationRunner.EmbeddedMigrations.Count), await test.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, PrefixVersion + 1), await test.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(RegressionSchemaTestContract.ApiRequestAuditChecksum, await test.ScalarAsync<string>(
             "SELECT checksum FROM weft.schema_migrations WHERE version=25"));
@@ -140,10 +143,15 @@ public sealed class ApiRequestAuditPersistenceTests(PostgresFixture fixture, ITe
 
     private sealed record Snapshot(string Schema, string Rows);
 
-    // Every pre-0025 relation, function, grant and row, excluding only the 0025 delta: its own objects, the
-    // parent-side internal triggers of its foreign keys, its schema USAGE grant and its schema_migrations row.
+    // Preserve the pre-0025 objects while excluding the audit delta and the
+    // independently admitted search objects, indexes and parent-side FK triggers.
     private static async Task<Snapshot> SnapshotAsync(PostgresCase test)
     {
+        var searchInstalled = await CatalogSearchUpgradeTestSupport.AdmitAsync(test);
+        var searchIndexes = searchInstalled ? CatalogSearchSchemaAdmission.IndexNames : [];
+        var excludedRelations = ApiRequestAuditRoleGuard.Tables
+            .Concat(searchInstalled ? CatalogSearchSchemaAdmission.ReadObjects : []).Concat(searchIndexes).ToArray();
+        var excludedFunctions = ApiRequestAuditRoleGuard.Names.Concat(searchInstalled ? new[] { "index_catalog_report" } : []).ToArray();
         var schema = await test.ScalarAsync<string>("""
             WITH rels AS (SELECT c.oid,c.relname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
                 WHERE n.nspname='weft' AND c.relkind IN ('r','p','v','m','S','i') AND NOT c.relname=ANY($1::text[])
@@ -157,7 +165,8 @@ public sealed class ApiRequestAuditPersistenceTests(PostgresFixture fixture, ITe
                     LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum),
                 'constraints',(SELECT jsonb_agg(jsonb_build_array(r.relname,k.conname,k.condeferrable,k.condeferred,pg_catalog.pg_get_constraintdef(k.oid)) ORDER BY r.relname,k.conname)
                     FROM rels r JOIN pg_catalog.pg_constraint k ON k.conrelid=r.oid),
-                'indexes',(SELECT jsonb_agg(pg_catalog.pg_get_indexdef(i.indexrelid) ORDER BY 1) FROM rels r JOIN pg_catalog.pg_index i ON i.indrelid=r.oid),
+                'indexes',(SELECT jsonb_agg(pg_catalog.pg_get_indexdef(i.indexrelid) ORDER BY 1) FROM rels r JOIN pg_catalog.pg_index i ON i.indrelid=r.oid
+                    JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid WHERE NOT c.relname=ANY($4::text[])),
                 'triggers',(SELECT jsonb_agg(jsonb_build_array(r.relname,t.tgname,t.tgenabled,pg_catalog.pg_get_triggerdef(t.oid)) ORDER BY r.relname,t.tgname)
                     FROM rels r JOIN pg_catalog.pg_trigger t ON t.tgrelid=r.oid WHERE NOT t.tgisinternal),
                 'internalTriggers',(SELECT jsonb_agg(jsonb_build_array(r.relname,t.tgname,t.tgenabled) ORDER BY r.relname,t.tgname)
@@ -174,11 +183,11 @@ public sealed class ApiRequestAuditPersistenceTests(PostgresFixture fixture, ITe
                     CROSS JOIN LATERAL pg_catalog.aclexplode(n.nspacl) a WHERE n.nspname='weft' AND a.grantee NOT IN (SELECT oid FROM new_roles)),
                 'databaseAcl',(SELECT datacl FROM pg_catalog.pg_database WHERE datname=current_database()),
                 'history',(SELECT jsonb_agg(jsonb_build_array(version,checksum) ORDER BY version) FROM weft.schema_migrations WHERE version<=24))::text
-            """, ApiRequestAuditRoleGuard.Tables, ApiRequestAuditRoleGuard.Names, new[] { Login });
+            """, excludedRelations, excludedFunctions, new[] { Login }, searchIndexes);
         var tables = await test.ScalarAsync<string[]>("""
             SELECT array_agg(c.relname::text ORDER BY c.relname) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='weft' AND c.relkind IN ('r','p') AND NOT c.relname=ANY($1::text[]) AND c.relname<>'schema_migrations'
-            """, new object[] { ApiRequestAuditRoleGuard.Tables });
+            """, new object[] { excludedRelations });
         var rows = new StringBuilder();
         foreach (var table in tables)
             rows.Append(table).Append('=').Append(await test.ScalarAsync<string>(

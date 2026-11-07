@@ -2,6 +2,9 @@ using System.Text;
 
 namespace Weft.Domain;
 
+/// <summary>A revision conversation pins one immutable revision; a workspace conversation belongs to its organization.</summary>
+public enum ChatConversationKind { Revision = 1, Workspace = 2 }
+
 /// <summary>Stable ownership, independent of login epochs and administrator roles.</summary>
 public sealed record ChatConversationKey
 {
@@ -10,14 +13,69 @@ public sealed record ChatConversationKey
         ArgumentNullException.ThrowIfNull(revision);
         ArgumentNullException.ThrowIfNull(creator);
         ChatBounds.Id(conversationId);
+        Kind = ChatConversationKind.Revision;
+        OrganizationId = revision.OrganizationId;
         Revision = revision;
         Creator = creator;
         ConversationId = conversationId;
     }
-    public RevisionScope Revision { get; }
+
+    private ChatConversationKey(Guid organizationId, PrincipalId creator, Guid conversationId)
+    {
+        ChatBounds.Id(organizationId);
+        ArgumentNullException.ThrowIfNull(creator);
+        ChatBounds.Id(conversationId);
+        Kind = ChatConversationKind.Workspace;
+        OrganizationId = organizationId;
+        Creator = creator;
+        ConversationId = conversationId;
+    }
+
+    /// <summary>An organization-scoped conversation; it pins no revision and its focus grants nothing.</summary>
+    public static ChatConversationKey ForWorkspace(Guid organizationId, PrincipalId creator, Guid conversationId) =>
+        new(organizationId, creator, conversationId);
+
+    public ChatConversationKind Kind { get; }
+    public Guid OrganizationId { get; }
+    /// <summary>The pinned revision of a revision conversation; null for a workspace conversation.</summary>
+    public RevisionScope? Revision { get; }
     public PrincipalId Creator { get; }
     public Guid ConversationId { get; }
+    /// <summary>The pinned revision; refuses a workspace conversation.</summary>
+    public RevisionScope PinnedRevision => Revision ?? throw ChatBounds.Invalid();
     public override string ToString() => nameof(ChatConversationKey);
+}
+
+/// <summary>What a workspace conversation is about: a mapping, or one exact revision of it. Guides context; never narrows or grants tools.</summary>
+public sealed record ChatConversationFocus
+{
+    public ChatConversationFocus(MappingScope mapping, Guid? revisionId = null)
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        if (revisionId is { } id) ChatBounds.Id(id);
+        Mapping = mapping;
+        RevisionId = revisionId;
+    }
+    public MappingScope Mapping { get; }
+    public Guid? RevisionId { get; }
+    public RevisionScope? Revision => RevisionId is { } id ? new(Mapping.OrganizationId, Mapping.ProjectId, Mapping.MappingId, id) : null;
+    public override string ToString() => nameof(ChatConversationFocus);
+}
+
+/// <summary>The focus a workspace turn was answered about, resolved when the turn started and never followed afterwards.</summary>
+public enum ChatTurnFocusState { None = 1, Resolved, Unavailable }
+
+public sealed record ChatTurnFocus
+{
+    private ChatTurnFocus(ChatTurnFocusState state, RevisionScope? revision) { State = state; Revision = revision; }
+    public static ChatTurnFocus None { get; } = new(ChatTurnFocusState.None, null);
+    /// <summary>The conversation has a focus that the creator could not read, or a mapping without a readable head.</summary>
+    public static ChatTurnFocus Unavailable { get; } = new(ChatTurnFocusState.Unavailable, null);
+    public static ChatTurnFocus Resolved(RevisionScope revision) =>
+        new(ChatTurnFocusState.Resolved, revision ?? throw ChatBounds.Invalid());
+    public ChatTurnFocusState State { get; }
+    public RevisionScope? Revision { get; }
+    public override string ToString() => nameof(ChatTurnFocus);
 }
 
 /// <summary>Exact retained successful attempt, not the mutable selected-report pointer.</summary>
@@ -51,16 +109,38 @@ public sealed record ChatConversationIntent
         ArgumentNullException.ThrowIfNull(projection);
         ArgumentNullException.ThrowIfNull(validation);
         ChatBounds.Instant(retainUntilUtc);
-        if (projection.DerivationId == validation.DerivationId) throw ChatBounds.Invalid();
+        if (key.Kind != ChatConversationKind.Revision || projection.DerivationId == validation.DerivationId) throw ChatBounds.Invalid();
         Key = key;
         Projection = projection;
         Validation = validation;
         RetainUntilUtc = retainUntilUtc;
     }
+
+    private ChatConversationIntent(ChatConversationKey key, ChatConversationFocus? focus, DateTimeOffset retainUntilUtc)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ChatBounds.Instant(retainUntilUtc);
+        if (key.Kind != ChatConversationKind.Workspace || focus is not null && focus.Mapping.OrganizationId != key.OrganizationId)
+            throw ChatBounds.Invalid();
+        Key = key;
+        Focus = focus;
+        RetainUntilUtc = retainUntilUtc;
+    }
+
+    /// <param name="retainUntilUtc">Absolute deadline supplied by trusted retention policy, never a browser default.</param>
+    public static ChatConversationIntent ForWorkspace(ChatConversationKey key, ChatConversationFocus? focus, DateTimeOffset retainUntilUtc) =>
+        new(key, focus, retainUntilUtc);
+
     public ChatConversationKey Key { get; }
-    public ChatReportPin Projection { get; }
-    public ChatReportPin Validation { get; }
+    /// <summary>The pinned projection of a revision conversation; null for a workspace conversation.</summary>
+    public ChatReportPin? Projection { get; }
+    /// <summary>The pinned validation of a revision conversation; null for a workspace conversation.</summary>
+    public ChatReportPin? Validation { get; }
+    /// <summary>The optional focus of a workspace conversation.</summary>
+    public ChatConversationFocus? Focus { get; }
     public DateTimeOffset RetainUntilUtc { get; }
+    public ChatReportPin PinnedProjection => Projection ?? throw ChatBounds.Invalid();
+    public ChatReportPin PinnedValidation => Validation ?? throw ChatBounds.Invalid();
     public override string ToString() => nameof(ChatConversationIntent);
 }
 
@@ -138,7 +218,14 @@ public sealed record ChatTurnIntent
 
 public enum ChatTurnPhase { Active = 1, Completed, Failed, Cancelled, Interrupted }
 public enum ChatRoundOutcome { Uncertain = 1, ToolCalls, Stopped, Failed }
-public enum ChatEventKind { Started = 1, TextDelta, ToolStarted, ToolCompleted, Completed, Failed, Cancelled, Interrupted, Usage, ProviderFailure, Citation, RoundCompleted }
+public enum ChatEventKind
+{
+    Started = 1, TextDelta, ToolStarted, ToolCompleted, Completed, Failed, Cancelled, Interrupted, Usage, ProviderFailure, Citation, RoundCompleted,
+    /// <summary>A verified citation in a workspace conversation, of any resource kind.</summary>
+    WorkspaceCitation,
+    /// <summary>Payload bytes a tool returned to the model in a workspace conversation: identities and byte counts only.</summary>
+    DataShared
+}
 
 /// <summary>One irreversible dispatch reservation. Uncertain includes reserved-but-unsent.</summary>
 public sealed record ChatRoundIntent
@@ -177,6 +264,8 @@ public sealed record ChatEventData
     }
     public static ChatEventData ForUsage(Guid eventId, ChatUsageFact usage) => new(eventId, ChatEventKind.Usage, "", ChatMetadataCodec.Usage(usage));
     public static ChatEventData ForFailure(Guid eventId, ChatProviderFailureFact failure) => new(eventId, ChatEventKind.ProviderFailure, "", ChatMetadataCodec.Failure(failure));
+    public static ChatEventData ForDataShared(Guid eventId, ChatPayloadDisclosureFact disclosure) =>
+        new(eventId, ChatEventKind.DataShared, "", ChatMetadataCodec.Disclosure(disclosure));
     public Guid EventId { get; }
     public ChatEventKind Kind { get; }
     public string Text { get; }

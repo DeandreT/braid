@@ -3,14 +3,16 @@ using System.Text.Json.Serialization;
 namespace Weft.Contracts.Catalog;
 
 /// <summary>
-/// A bounded JSON sample preview of one exact revision. Input documents are base64 bytes so the
+/// A bounded sample preview of one exact revision. Input documents are base64 bytes so the
 /// server stores exactly what the caller supplied; the first input is the unnamed primary.
+/// Profile is optional: null preserves legacy JSON; document admission requires explicit native boundary formats.
 /// </summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CatalogPreviewSubmissionV1(
     CatalogPreviewTargetV1 Target,
     IReadOnlyList<CatalogPreviewParameterV1> Parameters,
-    IReadOnlyList<CatalogPreviewInputV1> Inputs);
+    IReadOnlyList<CatalogPreviewInputV1> Inputs,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Profile = null);
 
 /// <summary>Kind is <c>all</c>, <c>primary</c> or <c>named</c>; only <c>named</c> carries a name.</summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

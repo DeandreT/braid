@@ -1,5 +1,12 @@
 import { test } from "@playwright/test";
-import { continuationHeaders, expectedTuple } from "./conditional-policy";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import {
+  browserRestriction,
+  continuationHeaders,
+  expectedTuple,
+} from "./conditional-policy";
 import { requireOwned, type Input } from "./wire";
 
 const cfg = {
@@ -7,6 +14,33 @@ const cfg = {
   organization: "11111111-1111-1111-1111-111111111111",
   assets: ["inert.js"],
 } as Input;
+test("browser restriction preserves every pinned Playwright feature restriction", () => {
+  const require = createRequire(import.meta.url);
+  const bundle = readFileSync(
+    join(
+      dirname(require.resolve("playwright-core/package.json")),
+      "lib/coreBundle.js",
+    ),
+    "utf8",
+  );
+  const block = bundle.match(
+    /disabledFeatures = \[([\s\S]*?)\]\.filter\(Boolean\);/,
+  );
+  requireOwned(block);
+  const defaults = [...block[1]!.matchAll(/^\s*"([A-Za-z0-9]+)",?\s*$/gm)].map(
+    (match) => match[1]!,
+  );
+  const actual = browserRestriction
+    .slice("--disable-features=".length)
+    .split(",");
+  requireOwned(
+    defaults.length > 10 &&
+      new Set(actual).size === actual.length &&
+      defaults.every((name) => actual.includes(name)) &&
+      actual.filter((name) => !defaults.includes(name)).join(",") ===
+        "AutofillServerCommunication",
+  );
+});
 test("conditional source arguments omit cookie and every sec-fetch spelling", () => {
   const args = continuationHeaders({
     COOKIE: "inert",

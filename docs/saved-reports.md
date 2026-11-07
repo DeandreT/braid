@@ -72,5 +72,5 @@ native worker. Its fixture instructions live in
 [the report browser tools](../tools/reports-browser/README.md). Actual mappings
 are uploaded through product HTTP before the browser reads or generates reports.
 Controlled browser cases supplement the real persistence scenario and identify
-their scope separately. The existing 20 catalog and 22 example/shell cases remain
-separate regression suites. All headed checks use an alternate virtual display.
+their scope separately. Catalog and shell navigation remain separate regression
+suites. All headed checks use an alternate virtual display.

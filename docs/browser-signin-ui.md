@@ -2,11 +2,12 @@
 
 The Angular shell uses the explicit authentication mode from
 `GET /api/auth/session`; errors, 404s and missing configuration never imply
-Development or anonymous access. The examples remain independent of catalog
-authentication. Disabled hosts have no sign-in action, and Development displays
+Development or anonymous access. Disabled hosts have no sign-in action, and Development displays
 its existing local identity without pretending to be an Entra session. Neither mode
-shows the session panel; the header names the Development workspace. Unavailable
-status keeps the panel, because it cannot tell which mode applies.
+offers Microsoft sign-in; the header names the Development workspace. Session
+deployments send signed-out application navigation to `/sign-in`, preserving a
+validated return path. Signed-in controls live in the header's account menu.
+Unavailable status shows a recovery message rather than assuming a mode.
 
 ## Using the controls
 
@@ -14,11 +15,30 @@ status keeps the panel, because it cannot tell which mode applies.
   action, then navigates top-level to the bounded authorization URL returned by
   that admitted response. Navigation accepts only the fixed HTTPS Microsoft
   organizational-tenant `/oauth2/v2.0/authorize` endpoint. The server selects its
-  configured tenant and OIDC query; Angular has no provider picker, return target
-  or OIDC library. **Sign in again** makes the same deliberate choice from an
+   configured tenant and OIDC query; Angular has no provider picker or OIDC library.
+   It supplies only a return path accepted by the shared same-origin application
+   path rule. **Sign in again** makes the same deliberate choice from an
   authenticated session and additionally requires its fresh epoch token. Returning
   from the provider is not proof of sign-in: the reloaded application observes
-  fresh status, and catalog access performs its own admission.
+   fresh status, and catalog access performs its own admission.
+
+Return paths keep the original ASCII URI wire representation through protected
+OIDC state and the final redirect. The path portion retains its 1024-character bound
+and reject hidden separators, dot segments, controls and other origins. Query
+data is decoded once as strict UTF-8, not interpreted as path syntax: search
+allows only singular `q` and `cursor` values, with 256 UTF-8 bytes of trimmed text
+and a 4096-character base64url cursor. Retained revision links accept only their
+report selectors and `field:`/`rule:` fragments containing a nonempty resource ID
+of at most 2048 UTF-8 bytes; a projection selector is required for those anchors.
+Unknown or duplicate query keys, malformed escapes and decoded controls fail
+closed. Help anchors keep their separate bounded identifier grammar.
+
+The complete return URI is bounded to 7168 ASCII characters, accommodating
+percent-encoded resource IDs without increasing the path-segment allowance.
+Protected state is capped at 12288 characters after encryption and encoding;
+the existing 16384-byte authorization URL and callback-query limits, cookie
+bounds and request-header limits remain enforced. The host's 65536-byte request
+line allowance also accommodates the sign-in page's nested `returnTo` encoding.
 - **Sign out** requests local Weft revocation. Only an exact 204 acknowledgement
   is presented as acknowledged local sign-out. This does not sign out the provider
   account. An error, timeout, canceled request, malformed response or superseded
@@ -39,16 +59,17 @@ status keeps the panel, because it cannot tell which mode applies.
   later anonymous observation is not an acknowledgement of an earlier uncertain
   revocation.
 
-Whenever **Sign in** or **Sign in again** is shown, a fixed public warning appears
-immediately before the panel's action buttons:
+When the current page holds unsent work, a public warning appears immediately
+before the account menu's action buttons:
 
-> Signing in opens Microsoft and reloads this page. Unsaved drafts and in-tab
-> recovery details may be lost. Previously sent changes may already have committed.
+> This page holds unsent work. Signing in again reloads this page; signing out ends
+> this session. Unsaved drafts and in-tab recovery details may be lost. Previously
+> sent changes may already have committed.
 
-Both login buttons reference this warning as their accessible description. It is
-shown in anonymous, authenticationRequired and authenticated states, matching the
-presence of a login button. The warning does not inspect drafts, expose private
-recovery details or ask for a separate confirmation.
+The relevant sign-in and sign-out buttons reference the warning as their accessible
+description. Feature panels register only the presence of unsent work, never its
+contents. Empty pages do not warn. The warning exposes no private recovery details
+and asks for no separate confirmation. Sign-out does not reload the document.
 
 Sign-in navigation leaves the whole document. Angular's existing catalog route
 leave guards, including its native fixed privacy confirmation for hidden workspace

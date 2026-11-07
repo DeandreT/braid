@@ -33,6 +33,7 @@ label {
   font-weight: 600;
 }
 select,
+input,
 textarea {
   box-sizing: border-box;
   width: 100%;
@@ -105,4 +106,107 @@ small {
 }
 details {
   margin: 0.75rem 0;
+}
+.chat-data-shared,
+.chat-policy {
+  padding: 0.75rem;
+  border-radius: 6px;
+  background: #f0f6f2;
+  font-size: 0.85rem;
+}
+.chat-data-shared {
+  border-left: 3px solid #287a60;
+}
+.chat-focus {
+  padding: 0.75rem;
+  background: #f7faf8;
+  border-radius: 6px;
+}
+.chat-focus summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.chat-citations a {
+  color: var(--accent);
+}
+:host-context(weft-workspace-chat-panel) {
+  display: block;
+  height: 100%;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.8125rem;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel > header {
+  padding: 8px 12px;
+  border-bottom: 1px solid #d7e2d1;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel > header h2,
+:host-context(weft-workspace-chat-panel) .chat-eyebrow {
+  display: none;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel > header p {
+  margin: 0;
+  font-size: 0.75rem;
+}
+:host-context(weft-workspace-chat-panel) .chat-scroll {
+  flex: 1;
+  min-height: 80px;
+  overflow: auto;
+  padding: 12px;
+}
+:host-context(weft-workspace-chat-panel) .chat-composer {
+  flex-shrink: 0;
+  max-height: 55%;
+  overflow: auto;
+  padding: 8px 12px;
+  border-top: 1px solid #d7e2d1;
+  background: #f7faf2;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel :is(p, label) {
+  margin: 6px 0;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel :is(select, textarea) {
+  padding: 6px 8px;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel textarea {
+  min-height: 64px;
+  max-height: 140px;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel .chat-policy {
+  padding: 6px;
+  font-size: 0.75rem;
+}
+:host-context(weft-workspace-chat-panel) .chat-panel button {
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+  border-radius: 4px;
+}
+:host-context(weft-workspace-chat-panel) .chat-history {
+  max-height: none;
+}
+:host-context(weft-workspace-chat-panel) #chat-question-limit {
+  font-size: 0.6875rem;
+}
+/* Short or enlarged-text panels use one scroll surface so fixed headers and
+   composer minima cannot clip controls outside the reachable scroll area. */
+@container workspace-conversation (max-height: 28rem) {
+  :host-context(weft-workspace-chat-panel) .chat-panel {
+    height: auto;
+  }
+  :host-context(weft-workspace-chat-panel) .chat-scroll {
+    flex: none;
+    min-height: 0;
+    overflow: visible;
+  }
+  :host-context(weft-workspace-chat-panel) .chat-composer {
+    max-height: none;
+    overflow: visible;
+  }
 }

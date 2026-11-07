@@ -46,6 +46,7 @@ import {
   type NativeRevisionAppendRejection,
   type NativeRevisionAppendResponse,
 } from "./native-revision-append-types";
+import { UnsentWork } from "../../workbench/unsent-work";
 
 export type NativeRevisionAppendLeaveRisk = "draft" | "recovery" | null;
 export type NativeRevisionAppendWork =
@@ -212,6 +213,7 @@ export class NativeRevisionAppendState {
   readonly focusRequest = this.focus.asReadonly();
 
   constructor() {
+    inject(UnsentWork).track(() => !!this.leaveRisk());
     const invalidation = this.contexts.invalidated.subscribe(() => {
       this.suspendDraft();
       this.observedIdentityVersion = this.contexts.identityVersion();

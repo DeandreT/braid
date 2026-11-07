@@ -195,3 +195,6 @@ and the zoneless application renders that state after the triggering event. Brow
 tests therefore observe completion on the wire (the answered context or resource
 read) before asserting control state or changing fixture authority, rather than
 inferring it from a button that is enabled or disabled at that moment.
+For local-only controls such as the account menu, wait for the rendered state
+(`aria-expanded` and the visible region) before the next dependent action. A
+completed click does not establish that Angular has rendered its result.

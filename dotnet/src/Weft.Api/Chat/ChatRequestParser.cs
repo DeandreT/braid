@@ -15,7 +15,7 @@ internal sealed record ChatTurnRequest(Guid TurnId, string Text, string ProfileI
     public override string ToString() => nameof(ChatTurnRequest);
 }
 
-internal static class ChatRequestParser
+internal static partial class ChatRequestParser
 {
     internal const int ConversationBodyBytes = 1024;
     internal const int TurnBodyBytes = 262_144;
@@ -46,12 +46,9 @@ internal static class ChatRequestParser
         return value;
     }
 
-    internal static void RequireNoBody(HttpRequest request)
-    {
-        if (request.ContentLength is > 0 || request.Headers.ContentType.Count != 0 ||
-            request.ContentLength is null && request.Headers.TransferEncoding.Count != 0)
-            throw ChatRequestException.Invalid();
-    }
+    /// <summary>A canonical identity query value, or null when absent.</summary>
+    internal static Guid? OptionalId(HttpRequest request, string name) =>
+        request.Query.TryGetValue(name, out var values) ? Id(values[0] ?? throw ChatRequestException.Invalid()) : null;
 
     internal static async Task<Guid> ReadConversationAsync(HttpRequest request, CancellationToken ct)
     {
@@ -68,6 +65,47 @@ internal static class ChatRequestParser
         }
         catch (InvalidOperationException) { throw ChatRequestException.Invalid(); }
         return id ?? throw ChatRequestException.Invalid();
+    }
+
+    /// <summary>A workspace conversation's identity and optional focus: a mapping, or one exact revision of it.</summary>
+    internal static async Task<(Guid ConversationId, (Guid Project, Guid Mapping, Guid? Revision)? Focus)> ReadWorkspaceConversationAsync(
+        HttpRequest request, CancellationToken ct)
+    {
+        using var document = await ReadJsonAsync(request, ConversationBodyBytes, ct);
+        Guid? id = null;
+        (Guid, Guid, Guid?)? focus = null;
+        var focusSeen = false;
+        try
+        {
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.Name == "conversationId" && id is null && property.Value.ValueKind == JsonValueKind.String)
+                    id = Id(property.Value.GetString()!);
+                else if (property.Name == "focus" && !focusSeen)
+                {
+                    focusSeen = true;
+                    if (property.Value.ValueKind == JsonValueKind.Null) continue;
+                    if (property.Value.ValueKind != JsonValueKind.Object) throw ChatRequestException.Invalid();
+                    Guid? project = null, mapping = null, revision = null;
+                    var revisionSeen = false;
+                    foreach (var item in property.Value.EnumerateObject())
+                    {
+                        if (item.Name == "projectId" && project is null && item.Value.ValueKind == JsonValueKind.String) project = Id(item.Value.GetString()!);
+                        else if (item.Name == "mappingId" && mapping is null && item.Value.ValueKind == JsonValueKind.String) mapping = Id(item.Value.GetString()!);
+                        else if (item.Name == "revisionId" && !revisionSeen && item.Value.ValueKind is JsonValueKind.String or JsonValueKind.Null)
+                        {
+                            revisionSeen = true;
+                            revision = item.Value.ValueKind == JsonValueKind.Null ? null : Id(item.Value.GetString()!);
+                        }
+                        else throw ChatRequestException.Invalid();
+                    }
+                    focus = (project ?? throw ChatRequestException.Invalid(), mapping ?? throw ChatRequestException.Invalid(), revision);
+                }
+                else throw ChatRequestException.Invalid();
+            }
+        }
+        catch (InvalidOperationException) { throw ChatRequestException.Invalid(); }
+        return (id ?? throw ChatRequestException.Invalid(), focus);
     }
 
     internal static async Task<ChatTurnRequest> ReadTurnAsync(HttpRequest request, CancellationToken ct)

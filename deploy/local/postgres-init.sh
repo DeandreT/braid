@@ -17,7 +17,7 @@ set -euo pipefail
 }
 
 regression_passwords=()
-for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER; do
+for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER; do
   variable=WEFT_LOCAL_${role}_PASSWORD
   [[ -n ${!variable:-} ]] || { echo "Set $variable." >&2; exit 1; }
   for previous in "${regression_passwords[@]}"; do
@@ -26,6 +26,9 @@ for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER BUILD_READER BUILD_WRI
   regression_passwords+=("${!variable}")
 done
 unset regression_passwords previous
+export WEFT_LOCAL_ADMINISTRATION_PASSWORD=${WEFT_LOCAL_ADMINISTRATION_PASSWORD:-}
+# An absent opt-in credential creates an unusable password login. Existing stacks
+# can migrate without enabling administration or delivering another credential.
 
 # This runs once inside this compose project's new, dedicated database.
 psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'SQL'
@@ -51,6 +54,7 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv case_writer_password WEFT_LOCAL_CASE_WRITER_PASSWORD
 \getenv run_reader_password WEFT_LOCAL_RUN_READER_PASSWORD
 \getenv run_writer_password WEFT_LOCAL_RUN_WRITER_PASSWORD
+\getenv comparison_password WEFT_LOCAL_COMPARISON_PASSWORD
 \getenv build_reader_password WEFT_LOCAL_BUILD_READER_PASSWORD
 \getenv build_writer_password WEFT_LOCAL_BUILD_WRITER_PASSWORD
 \getenv build_run_reader_password WEFT_LOCAL_BUILD_RUN_READER_PASSWORD
@@ -64,6 +68,7 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv invocation_grant_writer_password WEFT_LOCAL_INVOCATION_GRANT_WRITER_PASSWORD
 \getenv invocation_writer_password WEFT_LOCAL_INVOCATION_WRITER_PASSWORD
 \getenv api_audit_writer_password WEFT_LOCAL_API_AUDIT_WRITER_PASSWORD
+\getenv administration_password WEFT_LOCAL_ADMINISTRATION_PASSWORD
 \getenv draft_reader_password WEFT_LOCAL_DRAFT_READER_PASSWORD
 \getenv draft_writer_password WEFT_LOCAL_DRAFT_WRITER_PASSWORD
 CREATE ROLE weft_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
@@ -110,6 +115,8 @@ CREATE ROLE weft_run_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT 
   PASSWORD :'run_reader_password';
 CREATE ROLE weft_run_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'run_writer_password';
+CREATE ROLE weft_comparison_settler LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'comparison_password';
 CREATE ROLE weft_build_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'build_reader_password';
 CREATE ROLE weft_build_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
@@ -136,17 +143,24 @@ CREATE ROLE weft_invocation_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOI
   PASSWORD :'invocation_writer_password';
 CREATE ROLE weft_api_audit_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'api_audit_writer_password';
+CREATE ROLE weft_administration LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'administration_password';
 CREATE ROLE weft_draft_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'draft_reader_password';
 CREATE ROLE weft_draft_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'draft_writer_password';
 ALTER DATABASE weft OWNER TO weft_migrator;
+CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
+CREATE EXTENSION pg_trgm WITH SCHEMA weft_search_extensions;
+REVOKE ALL ON SCHEMA weft_search_extensions FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA weft_search_extensions FROM PUBLIC;
 -- Chat routines pin these scope settings in function SET clauses.
 GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator;
 REVOKE ALL ON DATABASE weft FROM PUBLIC;
 GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer, weft_case_reader, weft_case_writer, weft_run_reader, weft_run_writer, weft_build_reader, weft_build_writer, weft_build_run_reader, weft_build_run_writer, weft_build_dispatcher, weft_build_metadata_reader;
-GRANT CONNECT ON DATABASE weft TO weft_qualification_reader,weft_qualification_writer;
+GRANT CONNECT ON DATABASE weft TO weft_qualification_reader,weft_qualification_writer,weft_comparison_settler;
 GRANT CONNECT ON DATABASE weft TO weft_release_reader,weft_release_writer;
 GRANT CONNECT ON DATABASE weft TO weft_invocation_grant_writer,weft_invocation_writer;
 GRANT CONNECT ON DATABASE weft TO weft_api_audit_writer;
+GRANT CONNECT ON DATABASE weft TO weft_administration;
 GRANT CONNECT ON DATABASE weft TO weft_draft_reader,weft_draft_writer;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SQL

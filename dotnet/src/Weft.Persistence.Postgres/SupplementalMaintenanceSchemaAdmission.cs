@@ -8,7 +8,7 @@ namespace Weft.Persistence.Postgres;
 internal static class SupplementalMaintenanceSchemaAdmission
 {
     internal static string[] TriggerNames(string table) => MaintenanceSchemaContract.Triggers
-        .Where(trigger => trigger.Table == table).Select(trigger => trigger.Name).ToArray();
+        .Where(trigger => trigger.Table == table).Select(trigger => trigger.Name).Concat(AutomationSchemaAdmission.TriggerNames(table)).ToArray();
 
     internal static string[] IndexNames(IEnumerable<string> tables) => MaintenanceSchemaContract.Indexes
         .Where(index => tables.Contains(index.Table, StringComparer.Ordinal)).Select(index => index.Name).ToArray();
@@ -26,6 +26,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         CancellationToken cancellationToken)
     {
+        await AutomationSchemaAdmission.ValidateTriggersAsync(connection, transaction, cancellationToken);
         // Loading these descriptors verifies the embedded source digest and all
         // required pristine PostgreSQL captures before inspecting a live schema.
         var tables = RevisionDerivationSchemaContract.Tables.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
@@ -172,8 +173,10 @@ internal static class SupplementalMaintenanceSchemaAdmission
             JOIN pg_catalog.pg_roles owner ON owner.oid = function.proowner
             JOIN pg_catalog.pg_language language ON language.oid = function.prolang
             WHERE namespace.nspname = 'weft' AND relation.relname = ANY($1::text[]) AND NOT trigger_row.tgisinternal
+                AND NOT trigger_row.tgname=ANY($2::text[])
             """, connection, transaction);
         command.Parameters.AddWithValue(tables.Keys.ToArray());
+        command.Parameters.AddWithValue(AutomationSchemaAdmission.AllTriggerNames);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {

@@ -56,6 +56,13 @@ public interface IRegressionRunReader
     Task<RegressionRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null, CancellationToken token = default);
 }
 
+/// <summary>Fresh submitter-only run metadata, without reading or materializing private completion bytes.</summary>
+public interface IRegressionRunMetadataReader
+{
+    Task<RegressionRunSummary?> ReadMetadataAsync(ActorContext actor, Guid organizationId, Guid runId,
+        CancellationToken token = default);
+}
+
 public interface IRegressionRunStore : IRegressionRunReader
 {
     Task<RegressionRunSubmitOutcome> SubmitAsync(RegressionRunSubmission submission, CancellationToken token = default);

@@ -1,4 +1,4 @@
-using Weft.Contracts.Examples;
+using Weft.Contracts.Projections;
 using Weft.Contracts.Validation;
 using Weft.Domain;
 
@@ -44,12 +44,13 @@ public sealed record RevisionReportFormat
 }
 
 /// <summary>Trusted immutable selection and policy; constructing it resolves no backend.</summary>
-public sealed class RevisionReportRegistration
+public sealed class RevisionReportRegistration : IExecutionAdmission
 {
     private readonly Lazy<IRevisionReportBackend> _backend;
+    private readonly IExecutionAdmission? _admission;
 
     public RevisionReportRegistration(RevisionReportBackendProfile profile, RevisionReportFormat format,
-        RevisionReportPolicy policy, Func<IRevisionReportBackend> backendFactory)
+        RevisionReportPolicy policy, Func<IRevisionReportBackend> backendFactory, IExecutionAdmission? admission = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(format);
@@ -60,12 +61,16 @@ public sealed class RevisionReportRegistration
         Profile = profile;
         Format = format;
         Policy = policy;
+        _admission = admission;
         _backend = new(() => backendFactory() ?? throw new RevisionReportServiceException(RevisionReportFailureCategory.ProfileUnavailable));
     }
 
     public RevisionReportBackendProfile Profile { get; }
     public RevisionReportFormat Format { get; }
     public RevisionReportPolicy Policy { get; }
+    // Asking about known local admission must not resolve a backend before authorized native verification.
+    public bool CanExecute => _admission is not { CanExecute: false } &&
+        (!_backend.IsValueCreated || _backend.Value is not IExecutionAdmission { CanExecute: false });
     public IRevisionReportBackend GetBackend() => _backend.Value;
 }
 

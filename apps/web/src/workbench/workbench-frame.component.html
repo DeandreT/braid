@@ -1,23 +1,10 @@
 <section
   class="wb-frame"
-  [class.wb-inspector-collapsed]="state.layout().inspectorCollapsed"
-  [class.wb-mobile-inspector-open]="mobileInspector()"
   [style.--wb-row-height]="rowHeight() + 'px'"
-  [style.--wb-inspector-width]="state.layout().inspectorWidth + 'px'"
-  [style.--wb-dock-height]="state.layout().dockHeight + 'px'"
+  [class.wb-focused-tray]="focusedTray() && !state.layout().dockCollapsed"
 >
   <header class="wb-context">
-    <ng-content select="[workbench-context]" /><span class="wb-spacer"></span
-    ><button type="button" (click)="openPalette()" aria-haspopup="dialog">
-      Go to… <kbd>Ctrl K</kbd></button
-    ><button
-      type="button"
-      class="wb-mobile-inspector-toggle"
-      (click)="mobileInspector.set(!mobileInspector())"
-      [attr.aria-expanded]="mobileInspector()"
-    >
-      Inspector
-    </button>
+    <ng-content select="[workbench-context]" />
   </header>
   <div class="wb-workflow-bar">
     <nav role="tablist" aria-label="Version workflows">
@@ -38,17 +25,18 @@
       }
     </nav>
     <button
+      class="wb-inspector-toggle"
       type="button"
-      class="wb-desktop-inspector-toggle"
-      (click)="
-        state.updateLayout({
-          inspectorCollapsed: !state.layout().inspectorCollapsed,
-        })
-      "
-      [attr.aria-expanded]="!state.layout().inspectorCollapsed"
+      [attr.aria-expanded]="!state.layout().dockCollapsed"
+      aria-controls="wb-dock-panel"
+      (click)="state.layout().dockCollapsed ? openInspector() : closeTray()"
     >
       {{
-        state.layout().inspectorCollapsed ? "Show inspector" : "Hide inspector"
+        state.layout().dockCollapsed
+          ? "Show inspector"
+          : focusedTray()
+            ? "Back to work"
+            : "Hide inspector"
       }}
     </button>
   </div>
@@ -61,115 +49,118 @@
     >
       <ng-content select="[workbench-content]" />
     </div>
-    <aside class="wb-inspector" aria-label="Context inspector">
-      <div
-        class="wb-inspector-tabs"
-        role="tablist"
-        aria-label="Inspector views"
-      >
-        @for (label of state.inspectorLabels(); track $index) {
-          <button
-            type="button"
-            role="tab"
-            [id]="'wb-inspector-' + $index"
-            [attr.data-inspector]="$index"
-            aria-controls="wb-inspector-panel"
-            [tabIndex]="state.selection().inspectorTab === $index ? 0 : -1"
-            [attr.aria-selected]="state.selection().inspectorTab === $index"
-            (click)="selectInspector($index)"
-            (keydown)="tabKey($event, 'inspector')"
-          >
-            {{ label }}
-          </button>
-        }
-      </div>
-      <div
-        class="wb-inspector-body"
-        id="wb-inspector-panel"
-        role="tabpanel"
-        [attr.aria-labelledby]="
-          'wb-inspector-' + state.selection().inspectorTab
-        "
-      >
-        <ng-container [ngTemplateOutlet]="inspector()" />
-      </div>
-      <weft-resize-handle
-        label="Resize inspector"
-        orientation="vertical"
-        [value]="state.layout().inspectorWidth"
-        [direction]="-1"
-        [minimum]="210"
-        [maximum]="420"
-        (resized)="state.updateLayout({ inspectorWidth: $event })"
-      />
-    </aside>
-  </div>
-  <section
-    class="wb-investigation"
-    [class.wb-dock-collapsed]="state.layout().dockCollapsed"
-    aria-label="Investigation dock"
-  >
-    <weft-resize-handle
-      label="Resize investigation dock"
-      orientation="horizontal"
-      [value]="state.layout().dockHeight"
-      [direction]="-1"
-      [minimum]="90"
-      [maximum]="320"
-      (resized)="state.updateLayout({ dockHeight: $event })"
-    />
-    <div class="wb-dock-tabs">
-      <nav role="tablist" aria-label="Investigation views">
-        @for (item of docks; track item.id) {
-          <button
-            type="button"
-            role="tab"
-            [id]="'wb-dock-' + item.id"
-            [attr.data-dock]="item.id"
-            [attr.data-role]="
-              item.id === 'input'
-                ? 'source'
-                : item.id === 'output'
-                  ? 'output'
-                  : 'evidence'
-            "
-            aria-controls="wb-dock-panel"
-            [tabIndex]="state.selection().dock === item.id ? 0 : -1"
-            [attr.aria-selected]="state.selection().dock === item.id"
-            (click)="selectDock(item.id)"
-            (keydown)="tabKey($event, 'dock')"
-          >
-            {{ item.label }}
-          </button>
-        }
-      </nav>
-      <span class="wb-spacer"></span
-      ><span class="wb-dock-context">{{ dockContext() }}</span
-      ><button
-        type="button"
-        (click)="
-          state.updateLayout({ dockCollapsed: !state.layout().dockCollapsed })
-        "
-        [attr.aria-label]="
-          state.layout().dockCollapsed
-            ? 'Expand investigation dock'
-            : 'Collapse investigation dock'
-        "
-      >
-        {{ state.layout().dockCollapsed ? "▴" : "▾" }}
-      </button>
-    </div>
-    <div
-      class="wb-dock-body"
-      id="wb-dock-panel"
-      role="tabpanel"
-      [attr.aria-labelledby]="'wb-dock-' + state.selection().dock"
-      tabindex="0"
-      [hidden]="state.layout().dockCollapsed"
+    <section
+      class="wb-investigation"
+      [class.wb-dock-collapsed]="state.layout().dockCollapsed"
+      [style.height.px]="
+        state.layout().dockCollapsed
+          ? null
+          : focusedTray()
+            ? null
+            : trayHeight()
+      "
+      aria-label="Investigation dock"
     >
-      <ng-container [ngTemplateOutlet]="dock()" />
-    </div>
-  </section>
+      @if (!state.layout().dockCollapsed && !focusedTray()) {
+        <div class="wb-tray-splitter">
+          <weft-resize-handle
+            label="Resize investigation dock"
+            controls="wb-dock-panel"
+            orientation="horizontal"
+            [value]="trayHeight()"
+            [direction]="-1"
+            [minimum]="140"
+            [maximum]="trayMaximum()"
+            (resized)="state.updateLayout({ dockHeight: $event })"
+          />
+        </div>
+      }
+      <div class="wb-dock-tabs">
+        <nav role="tablist" aria-label="Investigation views">
+          @for (item of docks; track item.id) {
+            <button
+              type="button"
+              role="tab"
+              [id]="'wb-dock-' + item.id"
+              [attr.data-dock]="item.id"
+              aria-controls="wb-dock-panel"
+              [attr.aria-selected]="state.selection().dock === item.id"
+              [tabIndex]="state.selection().dock === item.id ? 0 : -1"
+              (click)="selectDock(item.id)"
+              (keydown)="tabKey($event, 'dock')"
+            >
+              {{ item.label }}
+            </button>
+          }
+        </nav>
+        <span class="wb-spacer"></span
+        ><button
+          type="button"
+          [attr.aria-label]="
+            state.layout().dockCollapsed
+              ? 'Expand investigation dock'
+              : 'Collapse investigation dock'
+          "
+          (click)="
+            state.layout().dockCollapsed
+              ? selectDock(state.selection().dock)
+              : closeTray()
+          "
+        >
+          {{ state.layout().dockCollapsed ? "▴" : "▾" }}
+        </button>
+      </div>
+      <div
+        class="wb-dock-body"
+        id="wb-dock-panel"
+        role="tabpanel"
+        [attr.aria-labelledby]="'wb-dock-' + state.selection().dock"
+        tabindex="0"
+        [hidden]="state.layout().dockCollapsed"
+      >
+        <aside
+          class="wb-inspector"
+          aria-label="Context inspector"
+          [hidden]="state.selection().dock !== 'inspector'"
+        >
+          <nav
+            class="wb-inspector-tabs"
+            role="tablist"
+            aria-label="Inspector views"
+          >
+            @for (label of state.inspectorLabels(); track $index) {
+              <button
+                type="button"
+                role="tab"
+                [id]="'wb-inspector-' + $index"
+                [attr.data-inspector]="$index"
+                aria-controls="wb-inspector-panel"
+                [tabIndex]="state.selection().inspectorTab === $index ? 0 : -1"
+                [attr.aria-selected]="state.selection().inspectorTab === $index"
+                (click)="selectInspector($index)"
+                (keydown)="tabKey($event, 'inspector')"
+              >
+                {{ label }}
+              </button>
+            }
+          </nav>
+          <div
+            class="wb-inspector-body"
+            id="wb-inspector-panel"
+            role="tabpanel"
+            [attr.aria-labelledby]="
+              'wb-inspector-' + state.selection().inspectorTab
+            "
+          >
+            <ng-container [ngTemplateOutlet]="inspector()" />
+          </div>
+        </aside>
+        <div [hidden]="state.selection().dock === 'inspector'">
+          <ng-container [ngTemplateOutlet]="dock()" />
+        </div>
+      </div>
+    </section>
+  </div>
   <footer class="wb-status">
     <ng-content select="[workbench-status]" /><span class="wb-spacer"></span
     ><button type="button" (click)="state.resetLayout()">Reset layout</button
@@ -178,52 +169,3 @@
     </button>
   </footer>
 </section>
-<dialog
-  #palette
-  class="wb-palette"
-  (cancel)="closePalette()"
-  aria-labelledby="wb-palette-title"
->
-  <header>
-    <h2 id="wb-palette-title">Go to…</h2>
-    <button
-      type="button"
-      (click)="closePalette()"
-      aria-label="Close command palette"
-    >
-      ×
-    </button>
-  </header>
-  <input
-    #paletteInput
-    aria-label="Search commands and current context"
-    [value]="query()"
-    (input)="query.set($any($event.target).value); activeCommand.set(0)"
-    (keydown)="paletteKey($event)"
-    placeholder="Search views, mappings or recent work…"
-    aria-controls="wb-palette-options"
-    [attr.aria-activedescendant]="
-      paletteItems().length ? 'wb-command-' + activeCommand() : null
-    "
-    role="combobox"
-    aria-expanded="true"
-    aria-autocomplete="list"
-  />
-  <div id="wb-palette-options" role="listbox">
-    @for (item of paletteItems(); track item.id) {
-      <button
-        [id]="'wb-command-' + $index"
-        type="button"
-        role="option"
-        [attr.aria-selected]="activeCommand() === $index"
-        [class.wb-active]="activeCommand() === $index"
-        (click)="choose(item)"
-      >
-        <strong>{{ item.label }}</strong
-        ><span>{{ item.detail }}</span>
-      </button>
-    } @empty {
-      <p>No matching commands in this context.</p>
-    }
-  </div>
-</dialog>

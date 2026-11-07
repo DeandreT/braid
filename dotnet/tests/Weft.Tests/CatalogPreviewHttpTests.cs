@@ -14,7 +14,10 @@ using Microsoft.Extensions.Logging;
 using Weft.Api;
 using Weft.Api.Catalog;
 using Weft.Application;
+using Weft.Contracts.Catalog;
 using Weft.Domain;
+using Weft.MappingBackends;
+using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 
 namespace Weft.Tests;
@@ -25,6 +28,48 @@ namespace Weft.Tests;
 public sealed class CatalogPreviewHttpTests(PostgresFixture fixture)
 {
     private static readonly byte[] Output = "{\"orders\":[{\"id\":\"SO-1\",\"qty\":9007199254740993}]}"u8.ToArray();
+
+    [DocumentPreviewFact]
+    public async Task DocumentPreviewsPersistExplicitAdmissionExecuteRealEnvelopesAndStreamTheirMedia()
+    {
+        foreach (var family in new[] { "x12", "edifact" })
+        {
+            await using var test = await PreviewRunTestSupport.CreateAsync(fixture, DocumentPreviewTestData.Native(family));
+            await using var host = await PreviewHost.StartAsync(test);
+            var token = await host.TokenAsync();
+            var key = Guid.NewGuid();
+            var body = new CatalogPreviewSubmissionV1(new("all"), [],
+                [new(Convert.ToBase64String(DocumentPreviewTestData.Input(family)))], DocumentPreviewPolicy.Profile);
+            using var created = await host.SubmitAsync(token, key, JsonSerializer.SerializeToUtf8Bytes(body, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            var value = await CatalogHttpTestSupport.JsonAsync(created, HttpStatusCode.Created);
+            var run = Guid.Parse(value.GetProperty("run").GetProperty("runId").GetString()!);
+            using var conflicting = await host.SubmitAsync(token, key, JsonSerializer.SerializeToUtf8Bytes(body with { Profile = null }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            await ErrorAsync(conflicting, HttpStatusCode.Conflict, "idempotencyConflict");
+            var root = FerruleServiceTestSupport.TemporaryRoot();
+            try
+            {
+                await using var child = new ProcessWorkerRunner(FerruleServiceTestSupport.Options(root, DockerWorkerProfile.Preview));
+                Assert.Equal(PreviewExecutionOutcome.Completed, await test.Executor(new FerrulePreviewBackend(child))
+                    .ExecuteAsync(test.Revision.OrganizationId, run, Guid.NewGuid()));
+                var saved = (await test.Service().ReadAsync(test.Alice, test.Revision.OrganizationId, run))!;
+                Assert.True(saved.Outcome == PreviewRunOutcome.Succeeded, saved.Failure?.Message);
+                Assert.Equal(DocumentPreviewPolicy.Profile, saved.Provenance!.Profile);
+                var media = family == "x12" ? "application/edi-x12" : "application/edifact";
+                Assert.Equal(media, Assert.Single(saved.Outputs).MediaType);
+                using var response = await host.Client.GetAsync(host.RunPath(run) + "/outputs/0");
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                Assert.Equal(media, response.Content.Headers.ContentType?.MediaType);
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                Assert.Equal(saved.Outputs[0].Digest, Sha256Digest.FromBytes(bytes));
+                Assert.Equal(Encoding.UTF8.GetString(DocumentPreviewTestData.Input(family)),
+                    Encoding.UTF8.GetString(bytes).Replace("\r", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal));
+                Assert.Equal(PreviewExecutionOutcome.Finished, await test.Executor(new FerrulePreviewBackend(child))
+                    .ExecuteAsync(test.Revision.OrganizationId, run, Guid.NewGuid()));
+                Assert.Empty(Directory.EnumerateFileSystemEntries(root));
+            }
+            finally { Directory.Delete(root, recursive: true); }
+        }
+    }
 
     [PostgresFact]
     public async Task SubmissionReplaysOneKeyReadsTheRunAndServesExactOutputBytes()
@@ -143,6 +188,7 @@ public sealed class CatalogPreviewHttpTests(PostgresFixture fixture)
         await ErrorAsync(noKey, HttpStatusCode.BadRequest, "invalidRequest");
         foreach (var invalid in new[]
         {
+            "{\"target\":{\"kind\":\"all\"},\"parameters\":[],\"inputs\":[{\"content\":\"e30=\"}],\"profile\":\"guess-from-filename\"}",
             "{\"target\":{\"kind\":\"all\"},\"parameters\":[],\"inputs\":[{\"content\":\"e30=\"}],\"extra\":1}",
             "{\"target\":{\"kind\":\"all\"},\"parameters\":[],\"inputs\":[{\"content\":\"e30=\"}],\"inputs\":[]}",
             "{\"target\":{\"kind\":\"all\"},\"parameters\":[],\"inputs\":[]}",

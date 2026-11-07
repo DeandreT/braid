@@ -137,7 +137,7 @@ public sealed class AuthHttpIntegrationTests(PostgresFixture postgres)
         string[] rejected = [
             flow.Callback + "&state=duplicate", flow.Callback + "&%73tate=duplicate", flow.Callback + "&State=alias", flow.Callback + "&id_token=forged", flow.Callback + "&error=access_denied",
             flow.Callback + "&trace_id=unsupported", flow.Callback + "&client_info=" + new string('A', 513), flow.Callback + "&client_info=%C3%28", flow.Callback + "&client_info=%00",
-            flow.Callback + "&" + string.Join("&", Enumerable.Range(0, 17).Select(index => "unknown" + index + "=x")), AuthHttpFixture.CallbackPath + "?state=" + new string('A', 8193) + "&code=x", AuthHttpFixture.CallbackPath + "?code=" + new string('A', 8192) + "&state=" + new string('B', 8192)
+            flow.Callback + "&" + string.Join("&", Enumerable.Range(0, 17).Select(index => "unknown" + index + "=x")), AuthHttpFixture.CallbackPath + "?state=" + new string('A', Weft.Identity.BrowserReturnPath.MaximumProtectedStateLength + 1) + "&code=x", AuthHttpFixture.CallbackPath + "?code=" + new string('A', 8192) + "&state=" + new string('B', 8192)
         ];
         foreach (var callback in rejected)
         {

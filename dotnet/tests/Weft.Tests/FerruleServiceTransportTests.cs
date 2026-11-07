@@ -17,6 +17,33 @@ public sealed class FerruleServiceTransportTests
     private const string Identity = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
 
     [Fact]
+    public async Task ReplicaIdentityIsStablePerProcessDifferentAcrossReplicasAndPresentOnRefusals()
+    {
+        await using var first = await ServiceCase.StartAsync();
+        await using var second = await ServiceCase.StartAsync();
+        using var http = first.Client();
+        using var other = second.Client();
+        using var ready = await http.GetAsync(FerruleServiceProtocol.ReadyPath);
+        var identity = Assert.Single(ready.Headers.GetValues(FerruleServiceProtocol.ReplicaHeader));
+        Assert.Matches("^[0-9a-f]{32}$", identity);
+        using var otherReady = await other.GetAsync(FerruleServiceProtocol.ReadyPath);
+        Assert.NotEqual(identity, Assert.Single(otherReady.Headers.GetValues(FerruleServiceProtocol.ReplicaHeader)));
+        foreach (var request in new[]
+        {
+            new HttpRequestMessage(HttpMethod.Get, FerruleServiceProtocol.CapabilitiesPath),
+            new HttpRequestMessage(HttpMethod.Get, FerruleServiceProtocol.ReadinessPath),
+            Operation("unknown", [1]), Operation(FerruleServiceProtocol.CompileProfile, [1]),
+            Operation(FerruleServiceProtocol.InspectionProfile, [1]),
+            new HttpRequestMessage(HttpMethod.Post, FerruleServiceProtocol.CancelPath("inspection", "invalid"))
+        })
+        {
+            using (request)
+            using (var response = await http.SendAsync(request))
+                Assert.Equal(identity, Assert.Single(response.Headers.GetValues(FerruleServiceProtocol.ReplicaHeader)));
+        }
+    }
+
+    [Fact]
     public async Task ProfilesRouteExactFramesToTheirOwnRunners()
     {
         await using var test = await ServiceCase.StartAsync();
@@ -72,7 +99,7 @@ public sealed class FerruleServiceTransportTests
         var root = document.RootElement;
         Assert.Equal(FerruleServiceProtocol.Version, root.GetProperty("protocol").GetString());
         Assert.Equal(Identity, root.GetProperty("buildIdentity").GetString());
-        Assert.Equal("576012aa17c403d9c3fcb8659ed4d3a47ba06864", root.GetProperty("engineRevision").GetString());
+        Assert.Equal("dddc4dce6c93f4137fb2aa2a011360d089e0a51b", root.GetProperty("engineRevision").GetString());
         Assert.Equal(3, root.GetProperty("concurrency").GetInt32());
         Assert.Equal(5, root.GetProperty("capacity").GetInt32());
         var profiles = root.GetProperty("profiles").EnumerateArray().ToArray();
@@ -348,6 +375,15 @@ public sealed class FerruleServiceTransportTests
         Volatile.Write(ref healthy, false);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await plain.GetAsync(FerruleServiceProtocol.ReadinessPath)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await plain.GetAsync(FerruleServiceProtocol.LivenessPath)).StatusCode);
+        using (var pinned = test.Client())
+        {
+            using var ready = await pinned.GetAsync(FerruleServiceProtocol.ReadyPath);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
+            Assert.NotNull(ready.Headers.RetryAfter);
+            using var refused = await pinned.SendAsync(Operation("inspection", [1]));
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+            Assert.NotNull(refused.Headers.RetryAfter);
+        }
         Volatile.Write(ref healthy, true);
         await test.Server.StopAsync(CancellationToken.None);
         Assert.Empty(test.Inspection.Frames);
@@ -542,7 +578,7 @@ public sealed class FerruleServiceTransportTests
                 AdmissionWait = admissionWait ?? TimeSpan.FromSeconds(5),
                 HealthListen = health ? new IPEndPoint(IPAddress.Loopback, 0) : null,
                 Healthy = healthy,
-                EngineRevision = "576012aa17c403d9c3fcb8659ed4d3a47ba06864",
+                EngineRevision = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b",
                 CompileToolchain = compile ? compileToolchain ?? Toolchain : null,
                 CompiledRuntimeIdentity = execute ? runtimeIdentity ?? RuntimeIdentity : null
             }, served);

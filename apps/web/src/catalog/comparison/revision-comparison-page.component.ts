@@ -22,9 +22,9 @@ import {
   type Observable,
 } from "rxjs";
 import type { components } from "../../api/generated";
-import { NativeEvidenceComponent } from "../../mappings/native-evidence.component";
-import { MappingProjectionComponent } from "../../mappings/projection.component";
-import { ProjectionView } from "../../mappings/projection-view";
+import { NativeEvidenceComponent } from "../../workbench/native-evidence.component";
+import { MappingProjectionComponent } from "../../workbench/projection.component";
+import { ProjectionView } from "../../workbench/projection-view";
 import { CatalogContextStore } from "../catalog-context";
 import {
   CatalogRoutePage,

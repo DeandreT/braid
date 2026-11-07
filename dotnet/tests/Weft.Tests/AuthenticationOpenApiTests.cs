@@ -98,7 +98,7 @@ public sealed class AuthenticationOpenApiTests
             arm.GetProperty("properties").GetProperty("state").GetProperty("enum")[0].GetString()!).Order(StringComparer.Ordinal));
         foreach (var arm in arms)
         {
-            Shape(arm, ["version", "mode", "state", "authActionRequestToken", "requestToken", "identityContext"]);
+            Shape(arm, ["version", "mode", "state", "authActionRequestToken", "requestToken", "identityContext", "displayName"]);
             var properties = arm.GetProperty("properties");
             Version(properties.GetProperty("version"));
             Text(properties.GetProperty("mode"), "session");
@@ -109,11 +109,13 @@ public sealed class AuthenticationOpenApiTests
             {
                 Token(properties.GetProperty("requestToken"));
                 Fingerprint(properties.GetProperty("identityContext"));
+                Assert.Equal(200, properties.GetProperty("displayName").GetProperty("maxLength").GetInt32());
             }
             else
             {
                 Null(properties.GetProperty("requestToken"));
                 Null(properties.GetProperty("identityContext"));
+                Null(properties.GetProperty("displayName"));
             }
         }
         var mode = schemas.GetProperty("AuthModeStatusV1");
@@ -168,7 +170,7 @@ public sealed class AuthenticationOpenApiTests
                 Assert.False(headers.TryGetProperty("ETag", out _));
                 Assert.False(headers.TryGetProperty("Last-Modified", out _));
                 if (callback && response.Name == "303")
-                    Text(headers.GetProperty("Location").GetProperty("schema"), "/");
+                    ReturnPath(headers.GetProperty("Location").GetProperty("schema"));
                 else Assert.False(headers.TryGetProperty("Location", out _));
                 if (callback && response.Name is "401" or "503")
                 {
@@ -243,6 +245,7 @@ public sealed class AuthenticationOpenApiTests
             ? declared.EnumerateArray().ToArray() : [];
         string[] expected = action is null ? [] : method == "get" ? [action] :
             path == "/api/auth/forget-local" ? [action, "Origin", "X-Weft-Auth-Token"] :
+            path == "/api/auth/login" ? [action, "X-Weft-Invitation", "X-Weft-Return-To", "Origin", "X-Weft-Auth-Token", "X-XSRF-TOKEN"] :
             [action, "Origin", "X-Weft-Auth-Token", "X-XSRF-TOKEN"];
         Assert.Equal(expected, parameters.Select(parameter => parameter.GetProperty("name").GetString()!));
         foreach (var parameter in parameters)
@@ -250,12 +253,30 @@ public sealed class AuthenticationOpenApiTests
             Assert.Equal("header", parameter.GetProperty("in").GetString());
             var name = parameter.GetProperty("name").GetString();
             var required = parameter.TryGetProperty("required", out var flag) && flag.GetBoolean();
-            Assert.Equal(name != "X-XSRF-TOKEN", required);
+            Assert.Equal(name is not ("X-XSRF-TOKEN" or "X-Weft-Invitation" or "X-Weft-Return-To"), required);
             var value = parameter.GetProperty("schema");
             if (name == action) Text(value, "1");
+            else if (name == "X-Weft-Return-To") ReturnPath(value);
             else if (name == "Origin") Assert.Equal("string", value.GetProperty("type").GetString());
+            else if (name == "X-Weft-Invitation")
+            {
+                Assert.Equal("string", value.GetProperty("type").GetString());
+                Assert.Equal(64, value.GetProperty("minLength").GetInt32());
+                Assert.Equal(64, value.GetProperty("maxLength").GetInt32());
+                Assert.Equal("^[0-9a-f]{64}$", value.GetProperty("pattern").GetString());
+            }
             else Token(value);
         }
+    }
+
+    private static void ReturnPath(JsonElement schema)
+    {
+        Assert.Equal("string", schema.GetProperty("type").GetString());
+        Assert.Equal(1, schema.GetProperty("minLength").GetInt32());
+        Assert.Equal(Weft.Identity.BrowserReturnPath.MaximumLength, schema.GetProperty("maxLength").GetInt32());
+        var pattern = schema.GetProperty("pattern").GetString()!;
+        Assert.Equal("^/[A-Za-z0-9\\-._~!$&'()*+,;=:@/?%#]*$", pattern);
+        Assert.Matches(pattern, "/help/reports#coverage");
     }
 
     private static void Shape(JsonElement schema, string[] properties)

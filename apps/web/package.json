@@ -8,6 +8,7 @@
     "check": "ng build --configuration development",
     "check:contracts": "tsc -p tsconfig.contracts.json",
     "check:browser": "tsc -p tsconfig.browser.json",
+    "check:chat-types": "playwright test --config playwright.workspace-chat-node.config.ts",
     "check:browser-session-probe": "ng run weft:browser-session-probe:development",
     "build": "ng build",
     "build:browser-session-probe": "ng run weft:browser-session-probe:production",

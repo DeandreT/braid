@@ -12,6 +12,43 @@ namespace Weft.Tests;
 public sealed partial class RegressionCaseHttpTests
 {
     [PostgresFact]
+    public async Task Document_run_requires_its_exact_offered_runtime_and_retained_replay_survives_retirement()
+    {
+        await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture);
+        var original = data.Version(1);
+        var runtime = new RegressionRuntimeIdentity(data.Runtime.BackendId, data.Runtime.EngineRevision,
+            data.Runtime.BackendBuild, "document-adapter", DocumentPreviewPolicy.Profile);
+        var value = new RegressionCaseVersion(original.CaseId, original.Version, original.Owner, original.Name,
+            original.Revision, original.NativeDigest, runtime, original.Replay, original.ComparisonPolicy, original.Expected);
+        await data.Writer.SaveAsync(data.Actor, value);
+        var run = Guid.NewGuid();
+        await using (var unavailable = await CaseHttp.StartAsync(data))
+        {
+            using var refused = await unavailable.PutRunAsync(run, RunBody(value), await unavailable.TokenAsync());
+            Assert.Equal(HttpStatusCode.PreconditionFailed, refused.StatusCode);
+            Assert.Null(await unavailable.RunReader.ReadAsync(data.Actor, data.Mapping.OrganizationId, run));
+        }
+        await using (var admitted = await CaseHttp.StartAsync(data, runtime))
+        {
+            var token = await admitted.TokenAsync();
+            using var created = await admitted.PutRunAsync(run, RunBody(value), token);
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            var queued = await admitted.RunReader.ReadAsync(data.Actor, data.Mapping.OrganizationId, run);
+            Assert.Equal(new RegressionCaseEnvelopeCodec().Encode(value).Reference, queued!.Case);
+            using var replay = await admitted.PutRunAsync(run, RunBody(value), token);
+            Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        }
+        await using (var retired = await CaseHttp.StartAsync(data))
+        {
+            using var replay = await retired.PutRunAsync(run, RunBody(value), await retired.TokenAsync());
+            Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+            Assert.Equal("replayed", (await Json(replay)).GetProperty("outcome").GetString());
+            using var refused = await retired.PutRunAsync(Guid.NewGuid(), RunBody(value), await retired.TokenAsync());
+            Assert.Equal(HttpStatusCode.PreconditionFailed, refused.StatusCode);
+        }
+    }
+
+    [PostgresFact]
     public async Task Run_HTTP_queues_an_exact_case_then_reopens_verified_outputs_and_comparison()
     {
         await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture);

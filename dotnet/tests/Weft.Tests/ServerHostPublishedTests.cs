@@ -39,8 +39,8 @@ public sealed class ServerHostPublishedTests(PostgresFixture postgres)
                 "Disabled mode mapped a session authentication operation.");
             ServerHostCheck.That((await ServerHostHttp.SendAsync(client, "/api/v1/catalog/context")).Status == 404,
                 "Disabled mode admitted the catalog.");
-            if (mode == "disabled") ServerHostCheck.That((await ServerHostHttp.SendAsync(client, "/api/v1/examples/mappings")).Status == 200,
-                "Explicit disabled mode removed the existing Development example listing.");
+            ServerHostCheck.That((await ServerHostHttp.SendAsync(client, "/api/v1/examples/mappings")).Status == 404,
+                "The disabled host exposed the removed examples API.");
             ServerHostCheck.That(host.OwnedIpv4Listeners().Count == 1, "The disabled host acquired an additional listener.");
             await host.StopAsync();
         }
@@ -91,6 +91,8 @@ public sealed class ServerHostPublishedTests(PostgresFixture postgres)
                 && value.GetProperty("allowedOrganizationId").GetString() == test.Data.Project.OrganizationId.ToString("D")
                 && !value.TryGetProperty("identityContext", out _) && value.GetProperty("requestToken").GetString() is { Length: > 0 },
                 "Legacy Development catalog JSON or token behavior changed.");
+            ServerHostCheck.That((await ServerHostHttp.SendAsync(client, "/api/v1/examples/mappings")).Status == 404,
+                "The Development host exposed the removed examples API.");
             await host.StopAsync();
         });
 
@@ -329,11 +331,12 @@ public sealed class ServerHostPublishedTests(PostgresFixture postgres)
             {
                 var refused = await ServerHostHttp.StartupStatusAsync(client, originalCookie);
                 using var body = refused.Json(); var value = body.RootElement;
-                ServerHostCheck.That(refused.Status == 200 && value.EnumerateObject().Count() == 6
+                ServerHostCheck.That(refused.Status == 200 && value.EnumerateObject().Count() == 7
                     && value.GetProperty("version").GetInt32() == 1 && value.GetProperty("mode").GetString() == "session"
                     && value.GetProperty("state").GetString() == "authenticationRequired"
                     && value.GetProperty("requestToken").ValueKind == JsonValueKind.Null
-                    && value.GetProperty("identityContext").ValueKind == JsonValueKind.Null,
+                    && value.GetProperty("identityContext").ValueKind == JsonValueKind.Null
+                    && value.GetProperty("displayName").ValueKind == JsonValueKind.Null,
                     "A different application consumed the original protected session cookie.");
                 ServerHostHttp.PrivateHeaders(refused);
                 var context = await ServerHostHttp.SendAsync(client, "/api/v1/catalog/context", headers: new Dictionary<string, string>

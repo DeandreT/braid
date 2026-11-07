@@ -49,9 +49,21 @@ The exact required fields are:
 - `primaryBase64Url`, plus `namedInputs` containing `{ "name", "bytesBase64Url" }`.
 - `parameters` containing `{ "name", "kind", "value" }`. Kinds are `string`,
   `integer`, `float` or `boolean`; every value is lexical text, not a JSON number.
-- `comparisonPolicy`: explicitly `weft.regression.exact-bytes.v1`.
+- `comparisonPolicy`: explicitly `weft.regression.exact-bytes.v1`, or
+  `weft.regression.edi-segments.v1` for the document runtime.
 - `expected`: output `{ "name", "bytesBase64Url" }` entries; null names identify
   the primary output. An empty baseline remains unevaluated, not passed.
+
+When `documentRuntime` is advertised by capabilities, callers may select that
+complete runtime instead of the legacy `runtime`. Document expected outputs
+require `mediaType`: `application/json`, `application/edi-x12` or
+`application/edifact`. Named input descriptors remain unchanged: the native
+mapping declares their formats. The EDI segment policy requires
+`comparisonOptions` with the three booleans `compareSeparators`,
+`ignoreControlNumbers` and `ignoreDates`; exact-byte comparison omits options.
+Legacy runtime requests retain their original grammar without media or options.
+Capabilities advertise the available `comparisonPolicies` alongside the
+document runtime. No case is silently switched to a newer runtime profile.
 
 Byte strings use canonical unpadded Base64url (`A-Z`, `a-z`, `0-9`, `-`, `_`).
 Padding, whitespace and alternate spellings are rejected. This retains exact

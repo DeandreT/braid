@@ -7,7 +7,9 @@ authenticated actor and trusted turn/profile/grounding policy facts.
 
 ## Admission and dispatch
 
-Conversations already exist and pin immutable projection and validation reports.
+Conversations already exist. A revision conversation pins immutable projection
+and validation reports; a workspace conversation is bound to its organization
+(see [Workspace chat](workspace-chat.md)).
 The configured profile must match `ChatAiBridge.PinProfile`, permit mapping
 metadata and support the requested capabilities. The versioned instruction and
 ordered tool manifest must reproduce the turn's grounding-policy pin. A trusted
@@ -77,6 +79,17 @@ order, each returned citation whose target was offered and whose revision and
 report equal the conversation's pin, as one ledger Citation event in the same
 round. Anything else the port returns is omitted. Each target is published at
 most once per turn. Without a citation port no citation is published.
+
+In a workspace conversation the result's workspace candidates go to the
+`IChatWorkspaceCitationPort` instead. Each verified citation in the
+conversation's organization is published once per turn as a WorkspaceCitation
+event. A result that reports shared payload data is first recorded as a
+DataShared event; a revision conversation cannot record one, and such a result
+denies the turn.
+
+When the orchestrator has an `IChatTurnContextPort`, its bounded description of
+the turn's resolved focus and selectors is sent as a user-role message before the
+question. It is never part of the trusted system message.
 
 Citation events use the ordinary append bounds and version/fence checks. A
 verification that cannot complete yields no citations, never a partial or

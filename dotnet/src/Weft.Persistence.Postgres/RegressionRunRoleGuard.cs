@@ -9,7 +9,7 @@ internal static partial class RegressionRunRoleGuard
     internal const string Fingerprint = "92679f5a0bc28eb38e758022eec378a29ecde9856e3c7678ed9b6c9718dabae4";
     private static readonly Lazy<Dictionary<string, Match>> Functions = new(Load);
     private static readonly string[] WriterFunctions = ["submit_regression_run", "claim_regression_run", "observe_regression_run",
-        "finish_regression_run", "release_regression_run", "cancel_regression_run", "read_regression_run", "list_ready_regression_runs", "list_regression_run_history"];
+        "finish_regression_run", "release_regression_run", "cancel_regression_run", "read_regression_run", "read_regression_run_metadata", "list_ready_regression_runs", "list_regression_run_history"];
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, bool writer, CancellationToken token)
     {
@@ -36,9 +36,17 @@ internal static partial class RegressionRunRoleGuard
             """, connection, transaction))
         {
             check.Parameters.AddWithValue("role", role);
-            check.Parameters.AddWithValue("functions", writer ? WriterFunctions : ["read_regression_run", "list_regression_run_history"]);
+            check.Parameters.AddWithValue("functions", writer ? WriterFunctions.Concat(AutomationSchemaAdmission.WriteFunctions).ToArray() :
+                new[] { "read_regression_run", "read_regression_run_metadata", "list_regression_run_history" }.Concat(AutomationSchemaAdmission.ReadFunctions).ToArray());
             if (await check.ExecuteScalarAsync(token) is not true) throw Invalid();
         }
+        await ValidateContractAsync(connection, transaction, token);
+    }
+
+    // Catalog-only validation, shared with trusted callers that do not hold a
+    // run-reader/writer login. It grants no execution or source-table rights.
+    internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
+    {
         await using (var check = new NpgsqlCommand("""
             SELECT p.proname,p.prosrc,p.prosecdef,p.provolatile,l.lanname,pg_catalog.oidvectortypes(p.proargtypes),p.proargnames[1:p.pronargs],
                 p.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='weft_migrator')
@@ -82,6 +90,7 @@ internal static partial class RegressionRunRoleGuard
         ["release_regression_run"] = "boolean",
         ["cancel_regression_run"] = "boolean",
         ["read_regression_run"] = "SETOF weft.regression_runs",
+        ["read_regression_run_metadata"] = "TABLE(project_id uuid, mapping_id uuid, submitter_id uuid, case_id uuid, version bigint, revision_id uuid, state text, attempt integer, created_at timestamp with time zone)",
         ["list_ready_regression_runs"] = "TABLE(organization_id uuid, run_id uuid)",
         ["list_regression_run_history"] = "TABLE(run_id uuid, case_id uuid, version bigint, revision_id uuid, state text, attempt integer, created_at timestamp with time zone)"
     };
@@ -95,6 +104,18 @@ internal static partial class RegressionRunRoleGuard
             return reader.ReadToEnd();
         }));
         var functions = FunctionPattern().Matches(text).ToDictionary(match => match.Groups[1].Value, StringComparer.Ordinal);
+        using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Weft.Persistence.Postgres.Migrations.0033_preview_reads.sql") ?? throw Invalid())
+        using (var reader = new StreamReader(stream))
+        {
+            var source = reader.ReadToEnd();
+            var start = source.IndexOf("CREATE FUNCTION weft.read_regression_run_metadata(", StringComparison.Ordinal);
+            if (start < 0) throw Invalid();
+            // Earlier preview functions use different dollar-quote delimiters. Start at
+            // this definition so the legacy $body$ parser cannot span across them.
+            var metadata = FunctionPattern().Match(source, start);
+            if (!metadata.Success || metadata.Index != start || metadata.Groups[1].Value != "read_regression_run_metadata") throw Invalid();
+            functions.Add("read_regression_run_metadata", metadata);
+        }
         if (functions.Count != ResultTypes.Count) throw Invalid();
         return functions;
     }

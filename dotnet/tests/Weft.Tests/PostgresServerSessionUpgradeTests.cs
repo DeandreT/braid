@@ -274,7 +274,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
             "Session upgrade changed the previously selected historical report metadata.");
     }
 
-    private static async Task<ProjectionCacheKey> SeedHistoricalReportAsync(PostgresCase test, ActorContext actor, IngestionReceipt receipt)
+    internal static async Task<ProjectionCacheKey> SeedHistoricalReportAsync(PostgresCase test, ActorContext actor, IngestionReceipt receipt)
     {
         // This is explicitly synthetic metadata authored through genuine0006
         // constraints and transitions. No private report or native bytes exist.
@@ -452,7 +452,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
         var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.True(scripts.Count == PrefixVersion + 18
+        Assert.True(scripts.Count == PrefixVersion + 29
             && scripts.Take(PrefixVersion).Select(script => script.Checksum)
                 .SequenceEqual(PostgresServerSessionUpgradeConservation.PrefixChecksums, StringComparer.Ordinal)
             && scripts[PrefixVersion].Checksum == ServerSessionSchemaContract.MigrationChecksum
@@ -471,11 +471,22 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
             && scripts[PrefixVersion + 13].Version == 23 && scripts[PrefixVersion + 13].Checksum == MaintenanceSchemaContract.StoreKindMigrationChecksum
             && scripts[PrefixVersion + 14].Version == 24 && scripts[PrefixVersion + 14].Checksum == RegressionSchemaTestContract.MachineInvocationChecksum
             && scripts[PrefixVersion + 15].Version == 25 && scripts[PrefixVersion + 15].Checksum == RegressionSchemaTestContract.ApiRequestAuditChecksum
-            && scripts[PrefixVersion + 16].Version == 26 && scripts[PrefixVersion + 16].Checksum == MappingDraftSchemaTestContract.DraftChecksum
-            && scripts[PrefixVersion + 17].Version == 27 && scripts[PrefixVersion + 17].Checksum == MappingDraftSchemaTestContract.PreviewChecksum
+            && scripts[PrefixVersion + 16].Version == 26 && scripts[PrefixVersion + 16].Checksum == RegressionSchemaTestContract.AccountDisplayChecksum
+            && scripts[PrefixVersion + 17].Version == 27 && scripts[PrefixVersion + 17].Checksum == RegressionSchemaTestContract.AdministrationChecksum
+            && scripts[PrefixVersion + 18].Version == 28 && scripts[PrefixVersion + 18].Checksum == InterchangeSchemaTestContract.MigrationChecksum
+            && scripts[PrefixVersion + 19].Version == 29 && scripts[PrefixVersion + 19].Checksum == CatalogSearchSchemaAdmission.MigrationChecksum
+            && scripts[PrefixVersion + 20].Version == 30 && scripts[PrefixVersion + 20].Checksum == RegressionSchemaTestContract.AutomationChecksum
+            && scripts[PrefixVersion + 21].Version == 31 && scripts[PrefixVersion + 21].Checksum == RegressionSchemaTestContract.ReleaseOperationsChecksum
+            && scripts[PrefixVersion + 22].Version == 32 && scripts[PrefixVersion + 22].Checksum == ChatSchemaContract.WorkspaceMigrationChecksum
+            && scripts[PrefixVersion + 23].Version == 33 && scripts[PrefixVersion + 23].Checksum == PreviewSchemaTestContract.ReadsMigrationChecksum
+            && scripts[PrefixVersion + 24].Version == 34 && scripts[PrefixVersion + 24].Checksum == RegressionSchemaTestContract.DocumentPreviewsChecksum
+            && scripts[PrefixVersion + 25].Version == 35 && scripts[PrefixVersion + 25].Checksum == RegressionSchemaTestContract.X12InterchangeBuildsChecksum
+            && scripts[PrefixVersion + 26].Version == 36 && scripts[PrefixVersion + 26].Checksum == RegressionSchemaTestContract.ComparisonSettlementChecksum
+            && scripts[PrefixVersion + 27].Version == 37 && scripts[PrefixVersion + 27].Checksum == MappingDraftSchemaTestContract.DraftChecksum
+            && scripts[PrefixVersion + 28].Version == 38 && scripts[PrefixVersion + 28].Checksum == MappingDraftSchemaTestContract.PreviewChecksum
             && typeof(MigrationRunner).Assembly.GetManifestResourceNames().Contains(
                 "Weft.Persistence.Postgres.Migrations." + ServerSessionSchemaContract.MigrationName + ".sql", StringComparer.Ordinal),
-            "The embedded source is not the trusted prefix, exact session migration and exact chat and preview suffix.");
+            "The embedded source is not the trusted prefix, exact session migration and exact suffix through operations.");
         await PostgresServerSessionUpgradeConservation.AdmitChatSuffixAsync(test);
         Assert.True((await test.ScalarAsync<int[]>("SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"))
             .SequenceEqual(Enumerable.Range(1, scripts.Count)), "The complete journal versions changed.");

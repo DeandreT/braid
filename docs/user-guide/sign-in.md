@@ -15,11 +15,14 @@ Weft runs in one of two ways, chosen by whoever runs it:
 ## Sign in
 
 1. Open Weft in your browser.
-2. In the **Session** panel near the top of the page, choose **Sign in**.
+2. On the sign-in page, choose **Sign in with Microsoft**.
 3. Sign in with your work account on the Microsoft page.
-4. Microsoft returns you to Weft, and the panel shows **Signed in to Weft**.
+4. Microsoft returns you to the page you opened, or to the catalog. The account
+   menu in the header shows **Signed in to Weft** when you open it.
 
 Weft opens your organization for you. There is no organization to pick.
+The account menu shows your name, when available, and your organization. If you
+open the sign-in page while already signed in, Weft opens the catalog instead.
 
 Signing in leaves the page and reloads it. Anything you haven't saved, such as
 a form you were filling in, is lost, so finish or save your work first. A change
@@ -27,8 +30,8 @@ you already sent may have been saved even if you didn't see the reply.
 
 ## Sign out
 
-Choose **Sign out** in the **Session** panel. This ends your Weft session in
-this browser. It doesn't sign you out of your Microsoft account or other
+Open the account menu in the header and choose **Sign out**. This ends your Weft
+session in this browser. It doesn't sign you out of your Microsoft account or other
 Microsoft services.
 
 **Sign in again** repeats the Microsoft sign-in while you are signed in. It

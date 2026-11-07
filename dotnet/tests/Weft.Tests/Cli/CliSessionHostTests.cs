@@ -23,6 +23,28 @@ namespace Weft.Tests.Cli;
 public sealed partial class CliSessionHostTests(PostgresFixture postgres)
 {
     [PostgresFact]
+    public Task Administration_uses_the_same_bearer_identity_with_atomic_membership_audit_and_last_admin_refusal() => AuthHttpFixture.RunAsync(postgres, async test =>
+    {
+        using var cli = Harness(test, new ConcurrentQueue<AuthHttpRecord>());
+        await cli.ConfigureAsync(); await cli.LoginAsync();
+        var shown = await cli.RunAsync("administration", "show", "--json");
+        Assert.True(shown.Exit == 0, shown.ToString());
+        var version = JsonNode.Parse(shown.Out)!["version"]!.GetValue<long>();
+        var etag = $"\"admin-{test.Data.Seed.OrganizationA}-{version.ToString(CultureInfo.InvariantCulture)}\"";
+        var admitted = await cli.RunAsync("administration", "member", "--principal", test.Data.Seed.Admitted.ToString("D"),
+            "--role", "member", "--active", "false", "--if-match", etag);
+        Assert.True(admitted.Exit == 0, admitted.ToString());
+        Assert.False(await test.Data.Case.ScalarAsync<bool>("SELECT active FROM weft.organization_memberships WHERE organization_id=$1 AND principal_id=$2",
+            test.Data.Seed.OrganizationA, test.Data.Seed.Admitted));
+        Assert.Equal(1L, await test.Data.Case.ScalarAsync<long>("SELECT count(*) FROM weft.administration_audit WHERE operation='organizationMember'"));
+        var fresh = $"\"admin-{test.Data.Seed.OrganizationA}-{(version + 1).ToString(CultureInfo.InvariantCulture)}\"";
+        var last = await cli.RunAsync("administration", "member", "--principal", test.Data.Actor.PrincipalId.Value.ToString("D"),
+            "--role", "member", "--active", "true", "--if-match", fresh);
+        Assert.Equal(CliExitCode.Conflict, last.Code);
+        Assert.Contains("lastAdministrator", last.Error);
+    }, bearerBurst: 100, administration: true);
+
+    [PostgresFact]
     public Task TheSignedInCliReadsAndEditsAsTheBoundUserWithAnAuditedBearerMutation() => AuthHttpFixture.RunAsync(postgres, async test =>
     {
         var records = new ConcurrentQueue<AuthHttpRecord>();
@@ -175,7 +197,7 @@ public sealed partial class CliSessionHostTests(PostgresFixture postgres)
         Assert.Equal(4, cli.Time.Delays.Count);
     }, bearerBurst: 1);
 
-    private static CliHarness Harness(AuthHttpFixture test, ConcurrentQueue<AuthHttpRecord> records)
+    internal static CliHarness Harness(AuthHttpFixture test, ConcurrentQueue<AuthHttpRecord> records)
     {
         test.Issuer.PublicClients = [UserTokenValidationTests.Cli];
         test.Issuer.PublicScope = UserTokenValidationTests.Scope;

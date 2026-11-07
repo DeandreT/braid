@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { writeFile } from "node:fs/promises";
 import { controlledData } from "./revision-reports-controlled.fixture";
 import {
   catalogApi,
@@ -9,6 +10,15 @@ import {
 import type { components } from "../src/api/generated";
 import { workbenchLabels, dockLabels } from "../src/workbench/presentation";
 import { layoutStorageKey } from "../src/workbench/layout-preferences";
+
+// Exercise native scrollport geometry in headless runs too; Playwright's
+// default --hide-scrollbars would otherwise conceal lost usable viewport space.
+test.use({
+  launchOptions: {
+    executablePath: process.env.WEFT_CHROMIUM_EXECUTABLE,
+    ignoreDefaultArgs: ["--hide-scrollbars"],
+  },
+});
 
 const CASE = "50000000-0000-4000-8000-000000000091";
 const RUN = "60000000-0000-4000-8000-000000000091";
@@ -61,7 +71,7 @@ test("layout preferences survive reload and Reset layout without persisting priv
   });
   await resize.focus();
   await page.keyboard.press("ArrowRight");
-  await page.getByRole("button", { name: "compact · 28px rows" }).click();
+  await page.getByRole("button", { name: "comfortable · 32px rows" }).click();
   await page
     .getByRole("button", {
       name: 'Inspect field ["group0"]["value0"]',
@@ -85,7 +95,7 @@ test("layout preferences survive reload and Reset layout without persisting priv
   ).toHaveCount(3);
   await expect(resize).toHaveAttribute("aria-valuenow", "200");
   await expect(
-    page.getByRole("button", { name: "comfortable · 32px rows" }),
+    page.getByRole("button", { name: "dense · 24px rows" }),
   ).toBeVisible();
   await expect(page.getByLabel("Filter mapping fields")).toHaveValue("");
   await expect(page.locator("tr.wb-selected")).toHaveCount(0);
@@ -97,7 +107,7 @@ test("layout preferences survive reload and Reset layout without persisting priv
   ).toHaveCount(4);
   await expect(resize).toHaveAttribute("aria-valuenow", "190");
   await expect(
-    page.getByRole("button", { name: "compact · 28px rows" }),
+    page.getByRole("button", { name: "comfortable · 32px rows" }),
   ).toBeVisible();
 });
 
@@ -590,12 +600,15 @@ test("palette, responsive inspector and unavailable release state do not invent 
   const fixture = await workbench(page);
   await page.keyboard.press("Control+k");
   await expect(
-    page.getByRole("dialog", { name: "Go to…", exact: true }),
+    page.getByRole("dialog", { name: "Search / Go to", exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("combobox", { name: "Search commands and current context" })
+    .getByRole("searchbox", { name: "Search catalog" })
     .fill(workbenchLabels.releases);
-  await page.keyboard.press("Enter");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /^In use/ })
+    .click();
   await expect(
     page.getByRole("table").filter({ hasText: "Version currently in use" }),
   ).toContainText("This workspace can't show which version is in use.");
@@ -604,7 +617,9 @@ test("palette, responsive inspector and unavailable release state do not invent 
   await page
     .getByRole("tab", { name: workbenchLabels.mapping, exact: true })
     .click();
-  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Show inspector", exact: true })
+    .click();
   await expect(
     page.getByRole("complementary", { name: "Context inspector" }),
   ).toBeVisible();
@@ -668,8 +683,11 @@ test("columns, density and both resize handles work together on the dense layout
   await expect(table.getByRole("columnheader")).toHaveCount(4);
   await page.keyboard.press("Escape");
   await expect(page.locator(".wb-columns")).not.toHaveAttribute("open", "");
+  await page
+    .getByRole("button", { name: "Show inspector", exact: true })
+    .click();
   for (const [name, key] of [
-    ["Resize inspector", "ArrowLeft"],
+    ["Resize Incoming field column", "ArrowRight"],
     ["Resize investigation dock", "ArrowUp"],
   ]) {
     const separator = page.getByRole("separator", { name: name!, exact: true });
@@ -682,16 +700,16 @@ test("columns, density and both resize handles work together on the dense layout
     );
   }
   await page
-    .getByRole("button", { name: "compact · 28px rows", exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "comfortable · 32px rows", exact: true }),
-  ).toBeVisible();
-  await page
     .getByRole("button", { name: "comfortable · 32px rows", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "dense · 24px rows", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "dense · 24px rows", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "compact · 28px rows", exact: true }),
   ).toBeVisible();
   await table.locator("[data-row-key]").first().click();
   await page.getByRole("button", { name: "Data flow", exact: true }).click();
@@ -706,13 +724,15 @@ test("narrow scaled text keeps role, controls and overflow inside the workbench"
   await page.setViewportSize({ width: 390, height: 844 });
   await workbench(page, 60);
   await page.addStyleTag({ content: ":root {font-size:24px !important}" });
-  const catalog = await page.locator(".catalog-context").boundingBox();
+  const catalog = await page.locator(".app-header").boundingBox();
   const context = await page.locator(".wb-context-path").boundingBox();
   expect(catalog).not.toBeNull();
   expect(context).not.toBeNull();
   expect(context!.y).toBeGreaterThanOrEqual(catalog!.y + catalog!.height);
   await expect(page.locator(".wb-role")).toBeVisible();
-  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Show inspector", exact: true })
+    .click();
   const inspector = page.getByRole("complementary", {
     name: "Context inspector",
   });
@@ -720,7 +740,7 @@ test("narrow scaled text keeps role, controls and overflow inside the workbench"
   await inspector.getByRole("tab", { name: "Rule", exact: true }).focus();
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: "Inspector", exact: true }),
+    page.getByRole("button", { name: "Show inspector", exact: true }),
   ).toBeFocused();
   expect(
     await page.evaluate(
@@ -753,4 +773,62 @@ test("narrow enlarged text leaves a usable table viewport and keyboard-reachable
   await expect(
     page.getByRole("complementary", { name: "Context inspector" }),
   ).toContainText("value1");
+});
+
+test.describe("native scrollbar viewport", () => {
+  test("narrow enlarged text reserves usable height with non-overlay scrollbars", async ({
+    page,
+  }, testInfo) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await workbench(page, 60);
+    // Explicit native scrollbar geometry reproduces the headed-browser gutter
+    // even when a headless browser would normally use overlay scrollbars.
+    await page.addStyleTag({
+      content:
+        ":root {font-size:24px !important} .wb-table-scroll::-webkit-scrollbar {width:32px;height:32px}",
+    });
+    const viewport = page.locator(".wb-table-scroll");
+    const geometry = () =>
+      viewport.evaluate((element) => ({
+        outerHeight: (element as HTMLElement).offsetHeight,
+        clientHeight: element.clientHeight,
+        horizontalGutter:
+          (element as HTMLElement).offsetHeight - element.clientHeight,
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        minimumHeight: getComputedStyle(element).minHeight,
+      }));
+    await expect.poll(async () => (await geometry()).horizontalGutter).toBe(32);
+    await testInfo.attach("scrollbar-geometry", {
+      body: JSON.stringify(await geometry()),
+      contentType: "application/json",
+    });
+    await expect
+      .poll(async () => (await geometry()).clientHeight)
+      .toBeGreaterThanOrEqual(160);
+    await writeFile(
+      testInfo.outputPath("scrollbar-geometry.json"),
+      JSON.stringify(await geometry(), null, 2),
+    );
+    await testInfo.attach("settled-scrollbar-geometry", {
+      body: JSON.stringify(await geometry()),
+      contentType: "application/json",
+    });
+    await page.screenshot({
+      path: testInfo.outputPath("usable-table-viewport.png"),
+    });
+    const rows = page.locator("[data-row-key]");
+    await rows.first().focus();
+    await expect(rows.first()).toBeInViewport();
+    await page.keyboard.press("ArrowDown");
+    await expect(rows.nth(1)).toBeFocused();
+    await expect(rows.nth(1)).toBeInViewport();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("complementary", { name: "Context inspector" }),
+    ).toContainText("value1");
+    expect(errors).toEqual([]);
+  });
 });

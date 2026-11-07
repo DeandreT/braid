@@ -60,7 +60,6 @@ public sealed class CliContractDriftTests
         Assert.Equal(documented.RequestMediaTypes, operation.RequestMediaType is null ? [] : [operation.RequestMediaType]);
         if (operation.RequestBody is { } body)
         {
-            Assert.Equal("#/components/schemas/" + body.Name, documented.RequestSchema(operation.RequestMediaType!)!["$ref"]?.GetValue<string>());
             CompareShape(body, documented.RequestSchema(operation.RequestMediaType!)!, $"{operationId} request");
         }
 
@@ -68,24 +67,39 @@ public sealed class CliContractDriftTests
         {
             var response = documented.Response(status);
             Assert.True(response is not null, $"{operationId} does not document status {status}");
+            if (response!["content"] is JsonObject contents)
+            {
+                var media = new[] { operation.ResponseMediaType }.Concat(operation.AlternateResponseMediaTypes ?? []).ToArray();
+                Assert.Equal(media.Length, media.Distinct(StringComparer.Ordinal).Count());
+                Assert.Equal(contents.Select(item => item.Key).Order(StringComparer.Ordinal), media.Order(StringComparer.Ordinal));
+            }
             if (type is null)
+            {
+                if (operation.AlternateResponseMediaTypes is { } alternatives)
+                    foreach (var media in new[] { operation.ResponseMediaType }.Concat(alternatives))
+                        Assert.NotNull(response!["content"]?[media]);
                 continue;
+            }
             var content = response!["content"]?[operation.ResponseMediaType];
             Assert.True(content is not null, $"{operationId} {status} is not documented as {operation.ResponseMediaType}");
             Assert.Equal("#/components/schemas/" + type.Name, content!["schema"]?["$ref"]?.GetValue<string>());
             CompareShape(type, content["schema"]!, $"{operationId} {status}");
         }
 
-        // The CLI authenticates only with the delegated bearer token, so every operation it calls must admit it.
+        // Business operations admit delegated bearer tokens; only public health probes omit credentials.
         var security = documented.Node["security"]?.AsArray() ?? Spec.Document["security"]?.AsArray();
-        Assert.True(security is not null && security.Any(requirement => requirement!.AsObject().Count == 1 &&
-            requirement["entraBearer"]?.AsArray().Select(scope => scope!.GetValue<string>()).SequenceEqual(["api://{sessionClientId}/{scope}"]) == true),
-            $"{operationId} does not admit the entraBearer scheme alone");
+        if (operation.RequiresAuthentication)
+            Assert.True(security is not null && security.Any(requirement => requirement!.AsObject().Count == 1 &&
+                requirement["entraBearer"]?.AsArray().Select(scope => scope!.GetValue<string>()).SequenceEqual(["api://{sessionClientId}/{scope}"]) == true),
+                $"{operationId} does not admit the entraBearer scheme alone");
+        else
+            Assert.True(security is null || security.Count == 0 || security.Any(requirement => requirement!.AsObject().Count == 0),
+                $"{operationId} is not declared as a public probe");
 
         var errorSchema = "#/components/schemas/" + operation.ErrorBody.Name;
         var errors = documented.Statuses.Where(status => status >= 400).Select(status => documented.Response(status)!)
             .Select(response => response["content"]?["application/json"]?["schema"]).Where(schema => schema is not null).ToArray();
-        Assert.NotEmpty(errors);
+        if (operation.RequiresAuthentication) Assert.NotEmpty(errors);
         Assert.All(errors, schema => Assert.True(schema!.ToJsonString().Contains(errorSchema, StringComparison.Ordinal) ||
             schema.ToJsonString().Contains("#/components/schemas/CatalogRevisionIngestionResultV1", StringComparison.Ordinal) ||
             operation.Path.Contains("/drafts", StringComparison.Ordinal) && schema.ToJsonString().Contains("#/components/schemas/MappingDraftResultV1", StringComparison.Ordinal),

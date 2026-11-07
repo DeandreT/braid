@@ -12,7 +12,6 @@ using Microsoft.Extensions.Logging;
 using Weft.Api;
 using Weft.Api.Catalog;
 using Weft.Application;
-using Weft.Contracts.Examples;
 using Weft.Contracts.Operations;
 using Weft.Contracts.Projections;
 using Weft.Domain;

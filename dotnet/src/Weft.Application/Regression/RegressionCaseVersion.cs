@@ -40,7 +40,7 @@ public sealed class RegressionCaseVersion
 {
     public RegressionCaseVersion(Guid caseId, long version, PrincipalId owner, string name, RevisionScope revision,
         Sha256Digest nativeDigest, RegressionRuntimeIdentity runtime, RegressionReplay replay,
-        string comparisonPolicy, RegressionOutputSet expected)
+        string comparisonPolicy, RegressionOutputSet expected, EdiComparisonOptions? ediOptions = null)
     {
         if (caseId == Guid.Empty || version < 1) throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         ArgumentNullException.ThrowIfNull(owner);
@@ -49,8 +49,10 @@ public sealed class RegressionCaseVersion
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(replay);
         ArgumentNullException.ThrowIfNull(expected);
-        // This storage grammar is explicitly for the qualified JSON preview profile.
-        if (runtime.Profile != PreviewPolicy.Profile || comparisonPolicy != RegressionComparisonService.ExactBytesPolicy)
+        if (runtime.Profile is not (PreviewPolicy.Profile or DocumentPreviewPolicy.Profile) ||
+            comparisonPolicy is not (RegressionComparisonService.ExactBytesPolicy or RegressionComparisonService.EdiSegmentsPolicy) ||
+            (comparisonPolicy == RegressionComparisonService.EdiSegmentsPolicy) != (ediOptions is not null) ||
+            runtime.Profile == PreviewPolicy.Profile && (comparisonPolicy != RegressionComparisonService.ExactBytesPolicy || expected.Outputs.Any(output => output.MediaType != PreviewPolicy.MediaType)))
             throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (expected.Outputs.Count > replay.Limits.MaximumArtifacts || expected.ByteCount > replay.Limits.MaximumOutputBytes)
             throw new RegressionCaseException(RegressionCaseFailure.ResourceLimit);
@@ -70,6 +72,7 @@ public sealed class RegressionCaseVersion
         Runtime = runtime;
         Replay = replay;
         ComparisonPolicy = comparisonPolicy;
+        EdiOptions = ediOptions;
         Expected = expected;
     }
 
@@ -82,6 +85,7 @@ public sealed class RegressionCaseVersion
     public RegressionRuntimeIdentity Runtime { get; }
     public RegressionReplay Replay { get; }
     public string ComparisonPolicy { get; }
+    public EdiComparisonOptions? EdiOptions { get; }
     public RegressionOutputSet Expected { get; }
 
     /// <summary>Constructs exact replay input, not permission to execute; callers recheck current authority first.</summary>
@@ -96,7 +100,8 @@ public sealed class RegressionCaseVersion
         if (artifact.ByteCount > PreviewPolicy.MaximumNativeBytes)
             throw new RegressionCaseException(RegressionCaseFailure.ResourceLimit);
         return new(artifact, Replay.Target, Replay.Primary, Replay.NamedInputs, Replay.Parameters,
-            Replay.CurrentDateTime, Replay.Limits);
+            Replay.CurrentDateTime, Replay.Limits)
+        { Profile = Runtime.Profile == DocumentPreviewPolicy.Profile ? PreviewExecutionProfile.Document : PreviewExecutionProfile.LegacyJson };
     }
 
     public override string ToString() => nameof(RegressionCaseVersion);

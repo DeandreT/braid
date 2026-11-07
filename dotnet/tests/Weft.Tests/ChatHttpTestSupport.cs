@@ -13,6 +13,7 @@ using Weft.Ai;
 using Weft.Api;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
+using Weft.Api.Chat.Workspace;
 using Weft.Application;
 using Weft.Application.MappingTools;
 using Weft.Domain;
@@ -81,7 +82,7 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
     /// </summary>
     internal static async Task<ChatHttpTestSupport> StartAsync(PostgresCase test, ActorContext actor, RevisionScope revision,
         ChatApiOptions options, IRevisionReportReader? reports = null, IRevisionReportMetadataReader? metadata = null,
-        Func<IChatReadOnlyToolPort, IChatReadOnlyToolPort>? tools = null)
+        Func<IChatReadOnlyToolPort, IChatReadOnlyToolPort>? tools = null, bool workspace = false, string? browserWebRoot = null)
     {
         var reservation = new TcpListener(IPAddress.Loopback, 0);
         reservation.Start();
@@ -92,7 +93,7 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
         var writer = new PostgresChatDatabase(test.ChatWriterConnectionString, ChatDatabaseProfile.Writer);
         try
         {
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development", WebRootPath = browserWebRoot });
             builder.Logging.ClearProviders();
             builder.WebHost.ConfigureKestrel(server =>
                 server.Listen(IPAddress.Loopback, origin.Port, listen => listen.Protocols = HttpProtocols.Http1));
@@ -101,21 +102,43 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
             builder.Services.AddWeftCatalog(new(true, true, actor.PrincipalId.Value, revision.OrganizationId,
                 origin.GetLeftPart(UriPartial.Authority)), builder.Environment, new CatalogMetadataEditOptions(),
                 new CatalogRevisionIngestionOptions(), new CatalogProjectCreationOptions(), new CatalogRevisionReportOptions(reports is not null, false));
-            builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(catalog));
+            var catalogReader = new PostgresCatalogReader(catalog);
+            builder.Services.AddSingleton<ICatalogReader>(catalogReader);
+            builder.Services.AddSingleton<ICatalogResourceLocator>(catalogReader);
             if (reports is not null) builder.Services.AddSingleton(reports);
             if (reports is not null && metadata is not null)
             {
                 var service = new MappingToolService(metadata, reports);
                 builder.Services.AddSingleton(new ChatToolRegistry(MappingToolRegistry.Definitions, tools?.Invoke(service) ?? service, service));
+                // The workspace tools as the Server host composes them, with no optional families or guide.
+                if (workspace)
+                {
+                    builder.Services.AddSingleton(metadata);
+                    builder.Services.AddSingleton(provider => new WorkspaceToolService(provider, options,
+                        new WorkspaceToolFeatures(false, false, false, browserWebRoot is not null),
+                        browserWebRoot is null ? null : new WorkspaceUserGuide(Weft.Api.Help.UserGuide.Embedded)));
+                }
             }
             var readerStore = new PostgresChatStore(reader);
             var writerStore = new PostgresChatStore(writer);
             builder.Services.AddSingleton(new ChatPersistencePorts(readerStore, readerStore, writerStore, writerStore));
             builder.Services.AddSingleton<IAiCredentialResolver>(new Credentials());
             builder.Services.AddWeftChat(options);
+            if (browserWebRoot is not null)
+                Weft.Api.Auth.AuthenticationEndpoints.AddWeftAuthenticationHttp(builder.Services,
+                    new(Weft.Api.Auth.AuthenticationHttpMode.Development, origin.GetLeftPart(UriPartial.Authority)), builder.Environment);
             app = builder.Build();
+            if (browserWebRoot is not null) { app.UseDefaultFiles(); app.UseStaticFiles(); }
             app.MapWeftCatalog();
             app.MapWeftChat();
+            if (browserWebRoot is not null)
+            {
+                app.MapWeftHealth();
+                app.MapWeftHelp();
+                Weft.Api.Auth.AuthenticationEndpoints.MapWeftAuthentication(app);
+                app.Map("/api/{**path}", () => Microsoft.AspNetCore.Http.Results.NotFound());
+                app.MapFallbackToFile("index.html");
+            }
             reservation.Stop();
             await app.StartAsync();
             return new(app, catalog, reader, writer, origin, actor, revision);
@@ -130,6 +153,10 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
     }
 
     internal string ChatPath => CatalogRevisionReportHttpTestSupport.RevisionPath(Revision) + "/chat";
+    internal string WorkspacePath => $"/api/v1/organizations/{Revision.OrganizationId:D}/chat";
+    internal string WorkspaceConversationsPath => WorkspacePath + "/conversations";
+    internal string WorkspaceConversationPath(Guid conversation) => WorkspaceConversationsPath + $"/{conversation:D}";
+    internal string WorkspaceTurnPath(Guid conversation, Guid turn) => WorkspaceConversationPath(conversation) + $"/turns/{turn:D}";
     internal string ConversationsPath => ChatPath + "/conversations";
     internal string ConversationPath(Guid conversation) => ConversationsPath + $"/{conversation:D}";
     internal string TurnsPath(Guid conversation) => ConversationPath(conversation) + "/turns";
@@ -178,9 +205,9 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
 
     /// <summary>Reads one authenticated SSE response to its end; frames are returned in order.</summary>
     internal async Task<List<SseFrame>> StreamAsync(Guid conversation, Guid turn, int? after = null,
-        Func<SseFrame, Task>? onFrame = null, CancellationToken ct = default)
+        Func<SseFrame, Task>? onFrame = null, CancellationToken ct = default, string? path = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, TurnPath(conversation, turn) + "/events" + (after is { } n ? $"?after={n}" : ""));
+        using var request = new HttpRequestMessage(HttpMethod.Get, (path ?? TurnPath(conversation, turn)) + "/events" + (after is { } n ? $"?after={n}" : ""));
         request.Headers.Accept.ParseAdd("text/event-stream");
         using var bound = CancellationTokenSource.CreateLinkedTokenSource(ct);
         bound.CancelAfter(TimeSpan.FromSeconds(60));

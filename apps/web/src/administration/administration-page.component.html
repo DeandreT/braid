@@ -1,0 +1,359 @@
+<section class="administration" aria-labelledby="administration-heading">
+  <header>
+    <div>
+      <p class="eyebrow">Workspace settings</p>
+      <h1 id="administration-heading">Administration</h1>
+    </div>
+    <button type="button" (click)="refresh()" [disabled]="busy()">
+      Refresh access
+    </button>
+  </header>
+  <p>
+    Organization admission doesn't grant access to any project. Project roles,
+    payload access and machine invocation are separate permissions.
+  </p>
+  @if (message()) {
+    <p role="status">{{ message() }}</p>
+  }
+  @if (presented()) {
+    <fieldset [disabled]="busy() || !contexts.settled()">
+      @if (organization(); as snapshot) {
+        <h2>Organization members</h2>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Principal</th>
+                <th>Organization role</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of snapshot.body.members; track member.principalId) {
+                <tr>
+                  <td>
+                    <code>{{ member.principalId }}</code>
+                  </td>
+                  <td>
+                    <select
+                      #orgRole
+                      [ngModel]="
+                        rowRole('organization', member.principalId, member.role)
+                      "
+                      (ngModelChange)="
+                        changeRowRole(
+                          'organization',
+                          member.principalId,
+                          member.role,
+                          $event
+                        )
+                      "
+                      aria-label="Organization role"
+                    >
+                      <option value="member">Member</option>
+                      <option value="administrator">Administrator</option>
+                    </select>
+                  </td>
+                  <td>
+                    {{
+                      !member.principalActive
+                        ? "Disabled"
+                        : member.active
+                          ? "Admitted"
+                          : "Suspended"
+                    }}
+                  </td>
+                  <td>
+                    <button
+                      (click)="
+                        organizationMember(
+                          member.principalId,
+                          member.active,
+                          orgRole.value
+                        )
+                      "
+                      [disabled]="!member.principalActive"
+                    >
+                      Save role</button
+                    ><button
+                      (click)="
+                        organizationMember(
+                          member.principalId,
+                          !member.active,
+                          member.role
+                        )
+                      "
+                      [disabled]="!member.principalActive"
+                    >
+                      {{ member.active ? "Suspend" : "Restore" }}</button
+                    ><button
+                      (click)="disablePrincipal(member.principalId)"
+                      [disabled]="!member.principalActive"
+                    >
+                      Disable principal
+                    </button>
+                  </td>
+                </tr>
+                @for (binding of member.bindings; track binding.bindingId) {
+                  <tr>
+                    <td colspan="3">
+                      Identity
+                      <code>{{ binding.authority }}/{{ binding.subject }}</code>
+                      · {{ binding.enabled ? "Enabled" : "Disabled" }}
+                    </td>
+                    <td>
+                      <button
+                        (click)="disableBinding(binding.bindingId)"
+                        [disabled]="!binding.enabled"
+                      >
+                        Disable identity
+                      </button>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="controls">
+          <label
+            >Existing principal ID<input
+              [(ngModel)]="principalId"
+              autocomplete="off" /></label
+          ><label
+            >Organization role<select [(ngModel)]="memberRole">
+              <option value="member">Member</option>
+              <option value="administrator">Administrator</option>
+            </select></label
+          ><button (click)="organizationMember(principalId, true, memberRole)">
+            Admit existing principal
+          </button>
+        </div>
+        <h2>Invite a person</h2>
+        <p>
+          Share the link privately. It expires in 24 hours and binds the
+          signed-in tenant and object ID, never an email match.
+        </p>
+        <div class="controls">
+          <label
+            >Fixed Entra tenant ID<input
+              [(ngModel)]="tenantId"
+              autocomplete="off" /></label
+          ><label
+            >Expected Entra object ID (optional)<input
+              [(ngModel)]="expectedObjectId"
+              autocomplete="off"
+          /></label>
+        </div>
+        <div class="controls">
+          <label
+            >Optional project ID<input
+              [(ngModel)]="invitationProjectId" /></label
+          ><label
+            >Project role<select [(ngModel)]="invitationRole">
+              @for (role of roles; track role) {
+                <option [value]="role">{{ role }}</option>
+              }
+            </select></label
+          ><button (click)="addInvitationRole()">Add project role</button>
+        </div>
+        @for (role of invitationRoles(); track role.projectId) {
+          <p>
+            <code>{{ role.projectId }}</code> · {{ role.role }}
+          </p>
+        }
+        <button (click)="invite()">Create invitation</button
+        ><button (click)="invitationRoles.set([])">Clear project roles</button>
+        @if (invitationLink(); as link) {
+          <label class="invitation-link"
+            >Private invitation link (shown once)<input
+              readonly
+              [value]="link"
+              aria-label="Private invitation link"
+          /></label>
+        }
+        <ul>
+          @for (
+            invitation of snapshot.body.invitations;
+            track invitation.invitationId
+          ) {
+            <li>
+              <code>{{ invitation.invitationId }}</code> · expires
+              {{ invitation.expiresAt | date: "medium" }} ·
+              {{
+                invitation.redeemedAt
+                  ? "Redeemed"
+                  : invitation.revokedAt
+                    ? "Revoked"
+                    : "Pending"
+              }}
+              <button
+                (click)="revokeInvitation(invitation.invitationId)"
+                [disabled]="!!invitation.revokedAt || !!invitation.redeemedAt"
+              >
+                Revoke
+              </button>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p>
+          Organization administration is available only to an admitted
+          organization administrator when enabled by the operator.
+        </p>
+      }
+      <h2>Project administration</h2>
+      <p>
+        Enter the project ID from the catalog. Only that project's
+        administrators can manage its access.
+      </p>
+      <div class="controls">
+        <label
+          >Project ID<input [(ngModel)]="projectId" autocomplete="off" /></label
+        ><button (click)="selectProject()">Open project access</button>
+      </div>
+      @if (project(); as snapshot) {
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Principal</th>
+                <th>Project role</th>
+                <th>Payload read</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of snapshot.body.members; track member.principalId) {
+                <tr>
+                  <td>
+                    <code>{{ member.principalId }}</code> ·
+                    {{ member.active ? "Active" : "Removed" }}
+                  </td>
+                  <td>
+                    <select
+                      #role
+                      [ngModel]="
+                        rowRole('project', member.principalId, member.role)
+                      "
+                      (ngModelChange)="
+                        changeRowRole(
+                          'project',
+                          member.principalId,
+                          member.role,
+                          $event
+                        )
+                      "
+                      aria-label="Project role"
+                    >
+                      @for (value of roles; track value) {
+                        <option [value]="value">{{ value }}</option>
+                      }
+                    </select>
+                  </td>
+                  <td>
+                    {{ member.payloadRead ? "Granted" : "Not granted"
+                    }}<button
+                      (click)="payload(member.principalId, !member.payloadRead)"
+                    >
+                      {{
+                        member.payloadRead
+                          ? "Revoke payload read"
+                          : "Grant payload read"
+                      }}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      (click)="
+                        projectMember(
+                          member.principalId,
+                          member.active,
+                          role.value
+                        )
+                      "
+                    >
+                      Save role</button
+                    ><button
+                      (click)="
+                        projectMember(
+                          member.principalId,
+                          !member.active,
+                          member.role
+                        )
+                      "
+                    >
+                      {{ member.active ? "Remove member" : "Restore member" }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="controls">
+          <label
+            >Admitted principal ID<input
+              [(ngModel)]="projectPrincipalId"
+              autocomplete="off" /></label
+          ><label
+            >Project role<select [(ngModel)]="projectRole">
+              @for (role of roles; track role) {
+                <option [value]="role">{{ role }}</option>
+              }
+            </select></label
+          ><button
+            (click)="projectMember(projectPrincipalId, true, projectRole)"
+          >
+            Add project member
+          </button>
+        </div>
+        <h3>Machine callers and invocation grants</h3>
+        <p>
+          Use the machine's service-principal object ID, not its client
+          application ID. Each grant permits one exact registered target.
+        </p>
+        <div class="controls">
+          <label>Target ID<input [(ngModel)]="targetId" /></label
+          ><label>Fixed tenant ID<input [(ngModel)]="machineTenantId" /></label
+          ><label
+            >Machine object ID<input [(ngModel)]="machineObjectId" /></label
+          ><button (click)="grant()">Grant invocation</button>
+        </div>
+        <ul>
+          @for (grant of snapshot.body.grants; track grant.grantId) {
+            <li>
+              <code>{{ grant.objectId }}</code> → target
+              <code>{{ grant.targetId }}</code> ·
+              {{ grant.revokedAt ? "Revoked" : "Granted"
+              }}<button
+                (click)="revokeGrant(grant.grantId)"
+                [disabled]="!!grant.revokedAt"
+              >
+                Revoke invocation
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </fieldset>
+    @if (organization(); as snapshot) {
+      <h2>Recent administrative changes</h2>
+      <ol>
+        @for (event of snapshot.body.audit; track event.sequence) {
+          <li>
+            {{ event.recordedAt | date: "medium" }} · {{ event.operation }} ·
+            actor <code>{{ event.actorId }}</code> · target
+            <code>{{ event.targetId }}</code>
+            <details>
+              <summary>Before and after</summary>
+              <pre>{{ event.before | json }}</pre>
+              <pre>{{ event.after | json }}</pre>
+            </details>
+          </li>
+        }
+      </ol>
+    }
+  }
+</section>

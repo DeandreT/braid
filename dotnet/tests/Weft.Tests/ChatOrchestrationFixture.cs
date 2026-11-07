@@ -30,6 +30,9 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
     private readonly IReadOnlyList<AiToolDefinition> tools;
     private readonly IChatReadOnlyToolPort toolPort;
     private readonly IChatCitationPort? citationPort;
+    private readonly IChatWorkspaceCitationPort? workspaceCitationPort;
+    private readonly IChatTurnContextPort? contextPort;
+    private readonly string instructions;
     private readonly List<ChatTurnExecution> executions = [];
     private readonly List<Action> releases = [];
     private readonly List<AiTurnLease> idle = [];
@@ -39,7 +42,9 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
     internal ChatOrchestrationFixture(Func<AiHttpFixture.Exchange, CancellationToken, Task>? script = null,
         Resolver? credentials = null, TimeProvider? providerClock = null, Clock? applicationClock = null,
         bool metadataAllowed = true, ActorContext? actor = null, ChatConversationIntent? conversation = null,
-        IReadOnlyList<AiToolDefinition>? tools = null, IChatReadOnlyToolPort? toolPort = null, IChatCitationPort? citationPort = null)
+        IReadOnlyList<AiToolDefinition>? tools = null, IChatReadOnlyToolPort? toolPort = null, IChatCitationPort? citationPort = null,
+        string? instructions = null, IChatWorkspaceCitationPort? workspaceCitationPort = null, IChatTurnContextPort? contextPort = null,
+        bool payloadsAllowed = false)
     {
         Server = new(async (exchange, ct) =>
         {
@@ -50,7 +55,7 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
         ApplicationClock = applicationClock ?? new Clock();
         Profile = AiProfileSpec.Create(AiProfileKey.Create("orchestration-fixture", 1), AiDialect.ChatCompletionsSseV1,
             "fixture-model", Server.Endpoint("/v1/chat/completions"), true, AiAuthentication.Bearer, "fixture-reference",
-            AiCapability.Text | AiCapability.FunctionTools, "mapping-metadata", 1, metadataAllowed, false);
+            AiCapability.Text | AiCapability.FunctionTools, "mapping-metadata", 1, metadataAllowed, false, payloadsAllowed);
         Credentials = credentials ?? new Resolver();
         Client = new(AiProfileCatalog.Create([Profile]), Credentials, providerClock ?? new Clock());
         Actor = actor ?? new(new PrincipalId(Guid.Parse("12900000-0000-4000-8000-000000000001")));
@@ -64,6 +69,9 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
         this.tools = tools ?? Tools;
         this.toolPort = toolPort ?? Port;
         this.citationPort = citationPort;
+        this.workspaceCitationPort = workspaceCitationPort;
+        this.contextPort = contextPort;
+        this.instructions = instructions ?? Instructions;
     }
 
     internal ChatTurnIntent Intent(string text = "PRIVATE question", int rounds = 3, long outputBytes = 131072,
@@ -79,8 +87,9 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
     internal ChatTurnExecution Begin(ChatTurnIntent? intent = null, IEnumerable<Guid>? history = null,
         CancellationToken ct = default, ChatOrchestrationLimits? limits = null, ActorContext? actor = null)
     {
-        var orchestrator = new ChatTurnOrchestrator(Store, Store, Client, Profile, Instructions, tools, ProfilePolicy, toolPort,
-            ApplicationClock, InstanceId, limits ?? new(8, 4096, 65536, 131072), citationPort);
+        var orchestrator = new ChatTurnOrchestrator(Store, Store, Client, Profile, instructions, tools, ProfilePolicy, toolPort,
+            ApplicationClock, InstanceId, limits ?? new(8, 4096, 65536, 131072), citationPort, workspaceCitationPort, contextPort,
+            toolPort as IChatPayloadAuthorizationPort);
         var result = orchestrator.Begin(actor ?? Actor, Conversation.Key, intent ?? Intent(), history ?? [], ct);
         executions.Add(result);
         return result;
@@ -460,15 +469,21 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
                 var bytes = Encoding.UTF8.GetByteCount(data.MetadataJson);
                 var outcome = Allowed(actor, key) ? ChatTurnPolicy.AppendBytes(turn, round, expectedVersion, fence, bytes, Now) : ChatStoreOutcome.NotAuthorizedOrNotFound;
                 if (round.Intent.RoundId != roundId) outcome = ChatStoreOutcome.InvalidState;
-                // The same pin admission as the PostgreSQL ledger: a citation binds this conversation's exact report.
-                var pin = data.Citation.Facts.Target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport ? conversation.Validation : conversation.Projection;
-                if (outcome == ChatStoreOutcome.Applied && (data.Citation.Facts.Revision != key.Revision || data.Citation.Facts.Report != pin)) outcome = ChatStoreOutcome.Conflict;
+                // The same admission as the PostgreSQL ledger: a revision citation binds this conversation's exact report,
+                // a workspace citation this conversation's organization.
+                if (outcome == ChatStoreOutcome.Applied && data.Citation.Facts is { } facts)
+                {
+                    var pin = facts.Target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport ? conversation.PinnedValidation : conversation.PinnedProjection;
+                    if (key.Kind != ChatConversationKind.Revision || facts.Revision != key.Revision || facts.Report != pin) outcome = ChatStoreOutcome.Conflict;
+                }
+                else if (outcome == ChatStoreOutcome.Applied && (key.Kind != ChatConversationKind.Workspace || data.Citation.Workspace!.OrganizationId != key.OrganizationId))
+                    outcome = ChatStoreOutcome.Conflict;
                 if (outcome != ChatStoreOutcome.Applied) result = new(outcome, turn);
                 else
                 {
                     var next = Copy(turn, version: turn.Version + 1, eventCount: turn.EventCount + 1, eventBytes: turn.EventBytes + bytes);
-                    turns[turnId] = next; events[turnId].Add(new(next.EventCount, data.EventId, ChatEventKind.Citation, "", roundId, data.MetadataJson));
-                    trace.Add("event." + ChatEventKind.Citation); result = new(ChatStoreOutcome.Applied, next);
+                    turns[turnId] = next; events[turnId].Add(new(next.EventCount, data.EventId, data.Kind, "", roundId, data.MetadataJson));
+                    trace.Add("event." + data.Kind); result = new(ChatStoreOutcome.Applied, next);
                 }
             }
             await Returned(call); return result;
@@ -506,17 +521,20 @@ internal sealed class ChatOrchestrationFixture : IAsyncDisposable
         internal static bool IsTurnTerminal(ChatStoredEvent value) => value.Kind is ChatEventKind.Completed or ChatEventKind.Failed or ChatEventKind.Cancelled or ChatEventKind.Interrupted;
         internal static int CountedEventBytes(ChatStoredEvent value) => IsTurnTerminal(value) ? 0 :
             Encoding.UTF8.GetByteCount(value.Text) + (value.MetadataJson is null ? 0 : Encoding.UTF8.GetByteCount(value.MetadataJson));
-        internal void SeedHistory(ChatTurnIntent intent, DateTimeOffset created, string finalText, string intermediate = "PRIVATE intermediate", IReadOnlyList<string>? finalTextParts = null)
+        internal void SeedHistory(ChatTurnIntent intent, DateTimeOffset created, string finalText, string intermediate = "PRIVATE intermediate", IReadOnlyList<string>? finalTextParts = null,
+            IReadOnlyList<AiToolDefinition>? historyTools = null, string? historyInstructions = null, AiToolIntent? historyCall = null)
         {
             var parts = finalTextParts ?? [finalText];
             if (parts.Count == 0 || string.Concat(parts) != finalText) throw new InvalidOperationException("Invalid authored history pieces.");
             var instance = Guid.NewGuid();
-            var firstRequest = AiRoundRequest.Create(Guid.NewGuid(), [AiSystemMessage.Create(Instructions), AiUserMessage.Create(intent.OriginalRequest)], Tools, 128);
+            var actualTools = historyTools ?? Tools;
+            var actualInstructions = historyInstructions ?? Instructions;
+            var firstRequest = AiRoundRequest.Create(Guid.NewGuid(), [AiSystemMessage.Create(actualInstructions), AiUserMessage.Create(intent.OriginalRequest)], actualTools, 128);
             var first = ChatAiBridge.PrepareRound(conversation, intent, profile, intent.Envelope.GroundingPolicy, firstRequest, Guid.NewGuid(), instance).Intent;
-            var call = AiToolIntent.Create("seed-call", "read_mapping", AiJsonObject.CopyFrom("{\"field\":\"same\"}"));
+            var call = historyCall ?? AiToolIntent.Create("seed-call", "read_mapping", AiJsonObject.CopyFrom("{\"field\":\"same\"}"));
             var result = AiJsonObject.CopyFrom("{\"value\":1}");
-            var finalRequest = AiRoundRequest.Create(Guid.NewGuid(), [AiSystemMessage.Create(Instructions), AiUserMessage.Create(intent.OriginalRequest),
-                AiAssistantMessage.Create(intermediate, [call]), AiToolMessage.Create(call.CallId, call.Name, result)], Tools, 128);
+            var finalRequest = AiRoundRequest.Create(Guid.NewGuid(), [AiSystemMessage.Create(actualInstructions), AiUserMessage.Create(intent.OriginalRequest),
+                AiAssistantMessage.Create(intermediate, [call]), AiToolMessage.Create(call.CallId, call.Name, result)], actualTools, 128);
             var round = ChatAiBridge.PrepareRound(conversation, intent, profile, intent.Envelope.GroundingPolicy, finalRequest, Guid.NewGuid(), instance).Intent;
             var toolTerminal = new ChatTerminalMetadata(new(first.RoundId, ChatUsageOrigin.ProviderRoundTerminal, null, null, null), finishReason: ChatProviderFinishReason.ToolCalls);
             var terminal = new ChatTerminalMetadata(new(round.RoundId, ChatUsageOrigin.ProviderRoundTerminal, null, null, null), finishReason: ChatProviderFinishReason.Stop);

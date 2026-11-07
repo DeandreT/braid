@@ -1,4 +1,4 @@
-//! Bounded JSON sample preview through Ferrule's public in-memory payload API.
+//! Bounded sample preview through Ferrule's public in-memory payload API.
 
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -17,15 +17,15 @@ use admission::Refusal;
 use crate::protocol::{MAX_NATIVE_BYTES, MAX_TEXT_BYTES, bounded_text};
 use crate::{decode, framing, valid_context_parts};
 use protocol::{
-    MAX_PREVIEW_ARTIFACTS, MAX_PREVIEW_DISCARD_BYTES, MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_INPUTS,
-    MAX_PREVIEW_OUTPUT_BYTES, MAX_PREVIEW_PARAMETER_NAME_BYTES, MAX_PREVIEW_PARAMETER_TEXT_BYTES,
-    MAX_PREVIEW_PARAMETERS, MAX_PREVIEW_RESPONSE_BYTES, MAX_PREVIEW_TARGET_NAME_BYTES,
-    PREVIEW_PROTOCOL_VERSION, PreviewArtifact, PreviewFailure, PreviewInput, PreviewRequestHeader,
-    PreviewResponse, PreviewResult, PreviewTarget, PreviewValue,
+    DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_ARTIFACTS, MAX_PREVIEW_DISCARD_BYTES,
+    MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_INPUTS, MAX_PREVIEW_OUTPUT_BYTES,
+    MAX_PREVIEW_PARAMETER_NAME_BYTES, MAX_PREVIEW_PARAMETER_TEXT_BYTES, MAX_PREVIEW_PARAMETERS,
+    MAX_PREVIEW_RESPONSE_BYTES, MAX_PREVIEW_TARGET_NAME_BYTES, PREVIEW_PROTOCOL_VERSION,
+    PreviewArtifact, PreviewFailure, PreviewInput, PreviewRequestHeader, PreviewResponse,
+    PreviewResult, PreviewTarget, PreviewValue,
 };
 
 const PROJECT_ROOT: &str = "/weft";
-const PRIMARY_OUTPUT_PATH: &str = "/weft/output/primary.json";
 const MINIMUM_TEXT_BYTES: u32 = 64;
 
 /// A complete preview reply: the response header and its declared output bytes.
@@ -177,7 +177,7 @@ pub fn process_preview(
             return failure(code, &error.to_string(), None);
         }
     };
-    let project = decoded.project;
+    let mut project = decoded.project;
     let issues = ferrule_engine::validate(&project).len();
     if issues > 0 {
         return failure(
@@ -192,6 +192,46 @@ pub fn process_preview(
         Ok(admission) => admission,
         Err(refusal) => return refused(header, &refusal),
     };
+    if header.is_document_preview() {
+        for ((input, bytes), format) in header
+            .inputs
+            .iter()
+            .zip(inputs)
+            .zip(&admission.input_formats)
+        {
+            let options = match input {
+                PreviewInput::Primary { .. } => &project.source_options,
+                PreviewInput::Named { name, .. } => project
+                    .extra_sources
+                    .iter()
+                    .find(|source| source.name == *name)
+                    .map(|source| &source.options)
+                    .unwrap_or(&project.source_options),
+            };
+            let envelope = crate::edi_envelope::validate(*format, bytes);
+            if !crate::document_limits::within_limits(
+                *format,
+                bytes,
+                options.x12_separators.map(|settings| settings.segment),
+            ) {
+                return failure(
+                    "inputLimitExceeded",
+                    "The document exceeds its format-specific byte, nesting or segment limits.",
+                    Some(input_subject(input)),
+                );
+            }
+            if let Err(location) = envelope {
+                return failure(
+                    "invalidInput",
+                    &format!(
+                        "Invalid EDI envelope at interchange {} segment {} {} element {}.",
+                        location.interchange, location.segment, location.tag, location.element
+                    ),
+                    Some(input_subject(input)),
+                );
+            }
+        }
+    }
 
     let mut parameters = RuntimeParameters::new();
     for parameter in &header.parameters {
@@ -217,10 +257,15 @@ pub fn process_preview(
     let paths = header
         .inputs
         .iter()
+        .zip(&admission.input_formats)
         .enumerate()
-        .map(|(index, input)| match input {
-            PreviewInput::Primary { .. } => PathBuf::from("/weft/input/primary.json"),
-            PreviewInput::Named { .. } => PathBuf::from(format!("/weft/input/named-{index}.json")),
+        .map(|(index, (input, format))| match input {
+            PreviewInput::Primary { .. } => {
+                PathBuf::from(format!("/weft/input/primary.{}", format.extension()))
+            }
+            PreviewInput::Named { .. } => {
+                PathBuf::from(format!("/weft/input/named-{index}.{}", format.extension()))
+            }
         })
         .collect::<Vec<_>>();
     let mut primary = None;
@@ -253,10 +298,29 @@ pub fn process_preview(
         named.push(input);
     }
 
-    let output_path = Path::new(PRIMARY_OUTPUT_PATH);
+    // Only synthetic identities reach the document renderer; design-time paths
+    // neither select a codec nor escape into output artifact identities.
+    if header.is_document_preview() {
+        for target in &admission.targets {
+            if let Some(index) = target
+                .boundary_id
+                .strip_prefix("named-output:")
+                .and_then(|index| index.parse::<usize>().ok())
+            {
+                project.extra_targets[index].path = Some(format!(
+                    "/weft/output/named-{index}.{}",
+                    target.format.extension()
+                ));
+            }
+        }
+    }
+    let output_path = PathBuf::from(format!(
+        "/weft/output/primary.{}",
+        admission.targets[0].format.extension()
+    ));
     let mut options = PayloadRunOptions::new(primary)
         .with_extra_sources(&named)
-        .with_output_path(output_path)
+        .with_output_path(&output_path)
         .with_runtime_parameters(&parameters);
     if let Some(selection) = admission.selection {
         options = options.with_target(selection);
@@ -312,12 +376,25 @@ pub fn process_preview(
     let mut artifacts = Vec::with_capacity(outcome.artifacts.len());
     let mut outputs = Vec::with_capacity(outcome.artifacts.len());
     for (artifact, target) in outcome.artifacts.into_iter().zip(admission.targets) {
+        if header.is_document_preview()
+            && !crate::document_limits::within_limits(
+                target.format,
+                &artifact.bytes,
+                target.segment,
+            )
+        {
+            return failure(
+                "resultLimitExceeded",
+                "The output exceeds its format-specific byte, nesting or segment limits.",
+                Some(&target.boundary_id),
+            );
+        }
         let (target_name, target_name_truncated) = bounded_text(&target.name, maximum);
         artifacts.push(PreviewArtifact {
             boundary_id: target.boundary_id,
             target_name,
             target_name_truncated,
-            media_type: "application/json".into(),
+            media_type: target.format.media_type().into(),
             records_written: artifact.records_written as u64,
             byte_length: artifact.bytes.len() as u32,
             sha256: hex_digest(&artifact.bytes),
@@ -388,7 +465,10 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
             subject: subject.map(Into::into),
         })
     };
-    if header.protocol_version != PREVIEW_PROTOCOL_VERSION {
+    if !matches!(
+        header.protocol_version.as_str(),
+        PREVIEW_PROTOCOL_VERSION | DOCUMENT_PREVIEW_PROTOCOL_VERSION
+    ) {
         return failure(
             "unsupportedProtocolVersion",
             "The requested preview protocol version is not supported.",

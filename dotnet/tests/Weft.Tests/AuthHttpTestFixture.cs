@@ -19,6 +19,7 @@ using Weft.Api;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
+using Weft.Api.Chat.Workspace;
 using Weft.Application;
 using Weft.Identity;
 using Weft.Persistence.Postgres;
@@ -41,6 +42,7 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
     internal SessionTicketQualificationRoot Files { get; private set; } = null!;
     internal AuthHttpHost First { get; private set; } = null!;
     internal AuthHttpHost? Second { get; private set; }
+    internal PostgresAccountDisplayMetadata? DisplayMetadata { get; private set; }
     internal Uri Origin { get; private set; } = null!;
     internal AuthHttpRecord Current => current.Value ?? throw new AuthHttpFailure("An auth fixture port lost its request owner.");
     private readonly AsyncLocal<AuthHttpRecord?> current = new();
@@ -60,13 +62,17 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
 
     /// <summary>Also maps the chat routes on the restricted chat logins; their provider profile is never contacted.</summary>
     internal bool Chat { get; private init; }
-    internal Action<AuthHttpFixture, IServiceCollection>? ConfigureExtra { get; private init; }
+    internal bool WorkspaceChat { get; private init; }
+    internal Action<AuthHttpFixture, IServiceCollection>? ConfigureCatalogServices { get; private init; }
+    internal bool Administration { get; private init; }
+    internal bool Operations { get; private init; }
 
     internal static async Task RunAsync(PostgresFixture postgres, Func<AuthHttpFixture, Task> body, bool bindIssuer = true, int bearerBurst = 0,
-        bool chat = false, Action<AuthHttpFixture, IServiceCollection>? configureExtra = null)
+        bool chat = false, bool administration = false, bool displayMetadata = false, Action<AuthHttpFixture, IServiceCollection>? configureCatalogServices = null,
+        bool workspaceChat = false, bool operations = false)
     {
-        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat, ConfigureExtra = configureExtra }; Exception? primary = null; var cleanup = new List<Exception>();
-        try { await test.InitializeAsync(postgres, bindIssuer); await body(test); }
+        var test = new AuthHttpFixture { BearerBurst = bearerBurst, Chat = chat || workspaceChat, WorkspaceChat = workspaceChat, Administration = administration, Operations = operations, ConfigureCatalogServices = configureCatalogServices }; Exception? primary = null; var cleanup = new List<Exception>();
+        try { await test.InitializeAsync(postgres, bindIssuer, displayMetadata); await body(test); }
         catch (Exception error) { primary = Safe(error, "The independent auth HTTP case failed."); }
         finally { try { await test.DisposeAsync(); } catch (Exception error) { cleanup.Add(Safe(error, "The independent auth HTTP cleanup failed.")); } }
         Throw(primary, cleanup);
@@ -102,9 +108,12 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
         if (primary is not null) ExceptionDispatchInfo.Capture(primary).Throw();
         if (cleanup.Count != 0) throw new AggregateException("Auth HTTP original cleanup failed.", cleanup);
     }
-    private async Task InitializeAsync(PostgresFixture postgres, bool bindIssuer)
+    private async Task InitializeAsync(PostgresFixture postgres, bool bindIssuer, bool displayMetadata)
     {
         Data = await PostgresMappingMetadataTestSupport.CreateAsync(postgres); Owner = new(Data.Case.MigrationConnectionString);
+        if (Administration) await OrganizationAdministratorBootstrap.BootstrapAsync(Data.Case.MigrationConnectionString,
+            Data.Seed.OrganizationA, Data.Actor.PrincipalId.Value, EntraProtocolFixturePolicy.Tenant);
+        if (displayMetadata) DisplayMetadata = new(postgres.AccountDisplayConnectionString(Data.Case));
         if (bindIssuer)
         {
             var binding = await Owner.BindAsync(EntraProtocolFixturePolicy.UserKey, Data.Actor.PrincipalId);
@@ -275,6 +284,7 @@ internal sealed partial class AuthHttpFixture : IAsyncDisposable
             try { await host.ReleaseBorrowedAsync(); } catch (Exception) { dependencies = false; errors.Add(new AuthHttpFailure("An owned borrowed-resource release failed.")); }
         foreach (var profile in additionalProfiles) try { profile.Dispose(); } catch (Exception) { dependencies = false; errors.Add(new AuthHttpFailure("An owned extra profile did not settle.")); }
         if (Owner is not null) try { ownerRelease ??= Owner.DisposeAsync().AsTask(); await ownerRelease.WaitAsync(TimeSpan.FromSeconds(15)); } catch (Exception) { dependencies = false; errors.Add(new AuthHttpFailure("The fixture identity owner did not settle.")); }
+        if (DisplayMetadata is not null) try { await DisplayMetadata.DisposeAsync(); } catch (Exception) { dependencies = false; errors.Add(new AuthHttpFailure("The display metadata owner did not settle.")); }
         if (!dependencies) { Throw(null, errors); return; }
         try { Files?.Dispose(); } catch (Exception) { errors.Add(new AuthHttpFailure("The owned qualification key root did not settle.")); }
         try { Crypto?.Dispose(); } catch (Exception) { errors.Add(new AuthHttpFailure("The owned protocol certificates did not settle.")); }
@@ -323,7 +333,13 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
         Transport = new(test.Issuer.Port, test.Crypto.Root);
         EntraClientRegistration.AddForHttpsFixture(builder.Services, new(EntraProtocolFixturePolicy.Tenant, EntraProtocolFixturePolicy.Client, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, test.Crypto.ClientCertificate, Transport);
         builder.Services.AddSingleton<IExternalIdentityReader>(identities);
-        builder.Services.AddWeftEntraBrowserAuthentication(new(test.Data.Seed.OrganizationA, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, identities);
+        if (test.Administration)
+        {
+            builder.Services.AddSingleton(_ => new PostgresAdministrationStore(test.Data.Case.RegressionConnectionString("weft_administration")));
+            builder.Services.AddSingleton<IAdministrationStore>(p => p.GetRequiredService<PostgresAdministrationStore>());
+            builder.Services.AddSingleton<IOrganizationInvitationRedeemer>(p => p.GetRequiredService<PostgresAdministrationStore>());
+        }
+        builder.Services.AddWeftEntraBrowserAuthentication(new(test.Data.Seed.OrganizationA, test.Origin.GetLeftPart(UriPartial.Authority)), Profile, identities, test.DisplayMetadata);
         builder.Services.AddWeftSessionCatalog(new(test.Data.Seed.OrganizationA), new CatalogMetadataEditOptions(true), new CatalogRevisionIngestionOptions(false), new CatalogProjectCreationOptions(false), new CatalogRevisionReportOptions(false, false));
         if (test.BearerBurst > 0)
         {
@@ -338,7 +354,6 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
         builder.Services.AddSingleton<IMappingMetadataWriter>(new AuthHttpMetadataWriter(test.Data.Writer, test));
         builder.Services.AddSingleton<IOrganizationProjectCreationReader>(new PostgresProjectCreator(CreationPool));
         builder.Services.AddWeftAuthenticationHttp(new(AuthenticationHttpMode.Session, test.Origin.GetLeftPart(UriPartial.Authority)), builder.Environment);
-        test.ConfigureExtra?.Invoke(test, builder.Services);
         if (test.Chat)
         {
             ChatReaderPool = new(test.Data.Case.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
@@ -348,9 +363,19 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
             builder.Services.AddSingleton<IAiCredentialResolver>(new AuthHttpNoCredentials());
             var profile = AiProfileSpec.Create(AiProfileKey.Create("chat-fixture", 1), AiDialect.ChatCompletionsSseV1, "fixture-model",
                 new Uri("http://127.0.0.1:9/v1/chat/completions"), true, AiAuthentication.Bearer, "fixture-credential",
-                AiCapability.Text, "mapping-metadata", 1, true, false);
-            builder.Services.AddWeftChat(new([new ChatModelProfile("Fixture model", "fixture", profile)], TimeSpan.FromDays(1), TimeSpan.FromSeconds(60), 128));
+                AiCapability.Text | (test.WorkspaceChat ? AiCapability.FunctionTools : 0), "mapping-metadata", 1, true, false);
+            var chatOptions = new ChatApiOptions([new ChatModelProfile("Fixture model", "fixture", profile)], TimeSpan.FromDays(1), TimeSpan.FromSeconds(60), 128);
+            if (test.WorkspaceChat)
+            {
+                builder.Services.AddSingleton<ICatalogResourceLocator>(test.Data.Reader);
+                var noReports = new AuthHttpWorkspaceNoReports();
+                builder.Services.AddSingleton<IRevisionReportReader>(noReports);
+                builder.Services.AddSingleton<IRevisionReportMetadataReader>(noReports);
+                builder.Services.AddSingleton(provider => new WorkspaceToolService(provider, chatOptions, new(false, false, false, false)));
+            }
+            builder.Services.AddWeftChat(chatOptions);
         }
+        test.ConfigureCatalogServices?.Invoke(test, builder.Services);
         var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start(1); var port = ((IPEndPoint)reservation.LocalEndpoint).Port; PhysicalPort = port;
         try
         {
@@ -359,6 +384,7 @@ internal sealed class AuthHttpHost(AuthHttpFixture test) : IAsyncDisposable
             Application.Use((HttpContext context, RequestDelegate next) => test.MiddlewareAsync(this, context, next)); Application.UseAuthentication();
             Application.MapWeftAuthentication(); Application.MapWeftCatalog(); Application.MapWeftHelp();
             if (test.Chat) Application.MapWeftChat();
+            if (test.Operations) Application.MapWeftReleaseOperations();
             Client = AuthHttpFixture.NewClient(test.Crypto.Root, "127.0.0.1", test.Origin.Port, port); Client.BaseAddress = test.Origin;
             reservation.Stop(); using var start = new CancellationTokenSource(TimeSpan.FromSeconds(15)); await Application.StartAsync(start.Token);
             AuthHttpFixture.Check(Transport.SnapshotAttempts().Count == 0, "Dormant registration sent provider HTTP.");

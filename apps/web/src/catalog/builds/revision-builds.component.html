@@ -171,9 +171,26 @@
       @if (environmentCapabilities(); as administration) {
         @if (administration.canCreateVersions) {
           <p>
-            Administrators register only the server-offered profile. A new
-            version supersedes the old one.
+            Administrators register only a server-offered profile. A new version
+            supersedes the old one.
           </p>
+          @if (administration.documentProfile) {
+            <label
+              >Compiler profile<select
+                aria-label="Compiler profile"
+                [ngModel]="documentEnvironment()"
+                (ngModelChange)="documentEnvironment.set($event)"
+              >
+                <option ngValue="json">Legacy JSON</option>
+                <option ngValue="document">Declared document formats</option>
+                @if (administration.interchangeProfile) {
+                  <option ngValue="interchanges">
+                    X12 MapForce interchanges
+                  </option>
+                }
+              </select></label
+            >
+          }
           <div class="builds-actions">
             <button
               class="catalog-button"

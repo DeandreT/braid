@@ -4,6 +4,31 @@ export { networkCases, type NetworkCase } from "./network-names";
 
 export const blinkRestriction =
   "--disable-blink-features=AnimationWorklet,CSSLayoutAPI,SharedStorageAPI,AdInterestGroupAPI,Fledge,Parakeet";
+// Chromium uses the final disable-features argument. Retain Playwright 1.64's
+// defaults and add only its browser-owned autofill crowdsourcing service.
+// A source test checks this remains a superset of the pinned runner's defaults.
+export const browserRestriction =
+  "--disable-features=" +
+  [
+    "AvoidUnnecessaryBeforeUnloadCheckSync",
+    "DestroyProfileOnBrowserClose",
+    "DialMediaRouteProvider",
+    "GlobalMediaControls",
+    "HttpsUpgrades",
+    "LensOverlay",
+    "MediaRouter",
+    "PaintHolding",
+    "ThirdPartyStoragePartitioning",
+    "BlockOriginHeaderModificationOnRedirect",
+    "Translate",
+    "AutoDeElevate",
+    "OptimizationHints",
+    "NetworkTimeServiceQuerying",
+    "AimEnabled",
+    "msForceBrowserSignIn",
+    "msEdgeUpdateLaunchServicesPreferredVersion",
+    "AutofillServerCommunication",
+  ].join(",");
 export const networkCase = (scenario: string): NetworkCase | null => {
   if (!scenario.startsWith("network-")) return null;
   const name = scenario.slice(8);
@@ -39,7 +64,8 @@ export function expectedTuple(
           ? phase === "callback" || phase === "replay"
           : [
               "/",
-              "/examples",
+              "/catalog",
+              "/sign-in",
               "/auth-qualification",
               `/catalog/organizations/${cfg.organization}/projects`,
             ].includes(target)),
@@ -66,7 +92,6 @@ export function expectedTuple(
           "/api/auth/session",
           "/api/v1/catalog/context",
           "/api/v1/health",
-          "/api/v1/examples/mappings",
           `/api/v1/organizations/${cfg.organization}/projects?limit=10`,
         ].includes(target)) ||
         (method === "POST" &&

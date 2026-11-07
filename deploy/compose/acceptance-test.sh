@@ -140,7 +140,7 @@ fi
 
 for role in POSTGRES_ADMIN MIGRATOR RUNTIME INGEST CATALOG METADATA CREATOR REPORT DERIVATION MAINTENANCE \
   IDENTITY PAYLOAD_PERMISSION SESSION_READER SESSION_WRITER CHAT_READER CHAT_WRITER CHAT_LIFECYCLE \
-  PREVIEW_READER PREVIEW_WRITER CASE_READER CASE_WRITER RUN_READER RUN_WRITER BUILD_READER BUILD_WRITER BUILD_RUN_READER \
+  PREVIEW_READER PREVIEW_WRITER CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER \
   BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER; do
   export "WEFT_LOCAL_${role}_PASSWORD=$(openssl rand -hex 24)"
 done
@@ -214,8 +214,8 @@ export WEFT_FERRULE_SERVICE_IDENTITY WEFT_FERRULE_SERVICE_PEM WEFT_FERRULE_SERVI
   WEFT_RUNS_FERRULE_SERVICE_CLIENT_PEM WEFT_FERRULE_SERVICE_CERTIFICATE_SHA256 \
   WEFT_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256 WEFT_RUNS_FERRULE_SERVICE_CLIENT_CERTIFICATE_SHA256
 export WEFT_FERRULE_SERVICE_REPLICAS=${WEFT_FERRULE_SERVICE_REPLICAS:-2}
-WEFT_CHAT_PROFILES_JSON=$(printf '{"version":1,"retentionDays":7,"turnSeconds":180,"maxOutputTokens":512,"profiles":[{"id":"local-acceptance","version":1,"displayName":"Local acceptance model","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-metadata","version":1,"mappingMetadataAllowed":true}}],"credentials":[]}' \
-  "$WEFT_ACCEPTANCE_CHAT_MODEL")
+WEFT_CHAT_PROFILES_JSON=$(printf '{"version":1,"retentionDays":7,"turnSeconds":180,"maxOutputTokens":512,"profiles":[{"id":"local-acceptance","version":1,"displayName":"Local acceptance model","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-metadata","version":1,"mappingMetadataAllowed":true,"payloadsAllowed":false}},{"id":"local-acceptance-payloads","version":1,"displayName":"Local acceptance samples","provider":"ollama","dialect":"ollamaChatNdjson","model":"%s","endpoint":"http://127.0.0.1:11434/api/chat","loopbackFixture":true,"requestThinkFalse":true,"credentialReference":null,"capabilities":["text","functionTools"],"metadataPolicy":{"id":"mapping-and-samples","version":1,"mappingMetadataAllowed":true,"payloadsAllowed":true}}],"credentials":[]}' \
+  "$WEFT_ACCEPTANCE_CHAT_MODEL" "$WEFT_ACCEPTANCE_CHAT_MODEL")
 export WEFT_CHAT_PROFILES_JSON
 
 compose config --quiet || fail 'acceptance stack configuration'

@@ -26,6 +26,8 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
 {
     public const string Adapter = FerrulePreviewBackend.AdapterBuild;
     public static BuildRuntimeProfile Profile { get; } = new(BuildWorkerProtocol.Profile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes);
+    public static BuildRuntimeProfile DocumentProfile { get; } = new(BuildWorkerProtocol.DocumentProfile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes);
+    public static BuildRuntimeProfile X12InterchangesProfile { get; } = new(BuildWorkerProtocol.X12InterchangesProfile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes);
     private readonly IInspectionWorkerRunner runner;
     private readonly BuildNativeSource sources;
     public FerruleBuildCompiler(IInspectionWorkerRunner runner, BuildNativeSource sources)
@@ -40,25 +42,31 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
         ? source.CompilationBuildIdentity ?? throw new ArgumentException("The selected runner does not serve compilation.")
         : runner.BuildIdentity;
     public BuildBackendIdentity Backend => new("ferrule", BuildWorkerProtocol.Engine, CompilationIdentity, Adapter);
+    public BuildBackendIdentity DocumentBackend => new("ferrule", BuildWorkerProtocol.Engine, CompilationIdentity, FerrulePreviewBackend.DocumentAdapterBuild);
+    private bool Admits(BuildIntent intent) => (intent.Profile == Profile && intent.Backend == Backend ||
+        (intent.Profile == DocumentProfile || intent.Profile == X12InterchangesProfile) && intent.Backend == DocumentBackend) &&
+        intent.Boundaries.All(boundary => BuildWorkerProtocol.AdmitsFormat(intent.Profile.Id, boundary.Format));
 
     public async Task<BuildCapabilitySnapshot> InspectAsync(BuildIntent intent, CancellationToken token = default)
     {
-        if (intent.Backend != Backend || intent.Profile != Profile || intent.Boundaries.Any(boundary => boundary.Format != "json"))
+        var backend = BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id) ? DocumentBackend : Backend;
+        var profile = intent.Profile;
+        if (!Admits(intent))
             return new(intent.Revision, intent.NativeDigest, Backend, Profile, intent.Boundaries, CapabilityStatus.Unsupported);
         var native = await sources.ReadAsync(intent, token).ConfigureAwait(false);
         var reply = await RunAsync(intent, native, "inspect", token).ConfigureAwait(false);
         if (reply.Header.Files.Length != 0) throw new InvalidOperationException("Build inspection returned unexpected bytes.");
-        return new(intent.Revision, intent.NativeDigest, Backend, Profile,
+        return new(intent.Revision, intent.NativeDigest, backend, profile,
             reply.Header.Status == "supported" ? reply.Header.Boundaries.Select(BuildWorkerProtocol.ToBoundary).ToArray() : intent.Boundaries,
             reply.Header.Status == "supported" ? CapabilityStatus.Supported : CapabilityStatus.Unsupported);
     }
 
     public async Task<BuildBytes> BuildAsync(BuildIntent intent, BuildBytes native, CancellationToken token = default)
     {
-        if (intent.Backend != Backend || intent.Profile != Profile || native.Digest != intent.NativeDigest) throw new BuildContractException(BuildContractFailure.InvalidInput);
+        if (!Admits(intent) || native.Digest != intent.NativeDigest) throw new BuildContractException(BuildContractFailure.InvalidInput);
         var reply = await RunAsync(intent, native, "compile", token).ConfigureAwait(false);
         if (reply.Header.Status != "supported") throw new BuildContractException(BuildContractFailure.CapabilityUnavailable);
-        var capability = new BuildCapabilitySnapshot(intent.Revision, intent.NativeDigest, Backend, Profile, reply.Header.Boundaries.Select(BuildWorkerProtocol.ToBoundary).ToArray(), CapabilityStatus.Supported);
+        var capability = new BuildCapabilitySnapshot(intent.Revision, intent.NativeDigest, intent.Backend, intent.Profile, reply.Header.Boundaries.Select(BuildWorkerProtocol.ToBoundary).ToArray(), CapabilityStatus.Supported);
         if (new BuildPreflightService().Evaluate(intent, capability, token).Outcome != BuildPreflightOutcome.Supported ||
             reply.Header.Files.Length != 1 || reply.Header.Files[0].Path != "Ferrule.Generated.dll") throw new InvalidOperationException("Build output identity mismatch.");
         var bytes = reply.Contents[0];
@@ -67,7 +75,7 @@ public sealed class FerruleBuildCompiler : IBuildCompiler
         using var pe = new System.Reflection.PortableExecutable.PEReader(stream);
         if (!pe.HasMetadata || pe.PEHeaders.CorHeader is null) throw new InvalidOperationException("Build output is not a managed assembly.");
         token.ThrowIfCancellationRequested();
-        return new(bytes, Profile.MaximumArtifactBytes);
+        return new(bytes, intent.Profile.MaximumArtifactBytes);
     }
 
     private async Task<BuildWorkerProtocol.Reply> RunAsync(BuildIntent intent, BuildBytes native, string operation, CancellationToken token)

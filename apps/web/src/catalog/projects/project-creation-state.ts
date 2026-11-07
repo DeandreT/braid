@@ -24,6 +24,7 @@ import {
   type ProjectCreationInputErrors,
   type ProjectCreationResponse,
 } from "./project-creation-types";
+import { UnsentWork } from "../../workbench/unsent-work";
 
 type Owner = {
   readonly mode: CatalogContext["mode"];
@@ -212,6 +213,15 @@ export class ProjectCreationState {
   );
 
   constructor() {
+    inject(UnsentWork).track(() => {
+      const draft = this.storedDraft();
+      return (
+        this.pending() !== null ||
+        (this.acknowledged() === null &&
+          draft !== null &&
+          (draft.name.length > 0 || draft.description.length > 0))
+      );
+    });
     const invalidation = this.contexts.invalidated.subscribe(() => {
       this.cancelActive();
       this.admitted.set(null);

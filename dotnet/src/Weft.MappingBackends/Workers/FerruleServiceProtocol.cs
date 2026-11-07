@@ -16,14 +16,16 @@ public static class FerruleServiceProtocol
     public const string LivenessPath = "/v1/health/live";
     public const string ReadinessPath = "/v1/health/ready";
     public const string ProtocolHeader = "Weft-Service-Protocol";
+    public const string ReplicaHeader = "Weft-Service-Replica";
     public const string CompileToolchainHeader = "Weft-Compile-Toolchain";
     public const string CompiledRuntimeHeader = "Weft-Compiled-Runtime";
 
     /// <summary>Read-only inspection, validation and projection frames (<c>weft.ferrule-host.v1</c>).</summary>
     public const string InspectionProfile = "inspection";
 
-    /// <summary>Bounded JSON sample previews (<c>weft.ferrule-preview.v1</c>).</summary>
+    /// <summary>Bounded sample preview frames; the frame selects legacy JSON or explicit document admission.</summary>
     public const string PreviewProfile = "preview";
+    public const string InterchangeProfile = "interchange";
 
     /// <summary>Exact-base typed edit replay (<c>weft.ferrule-edit.v1</c>).</summary>
     public const string EditProfile = "edit";
@@ -41,6 +43,7 @@ public static class FerruleServiceProtocol
         InspectionProfile => DockerWorkerProfile.Inspection,
         PreviewProfile => DockerWorkerProfile.Preview,
         EditProfile => DockerWorkerProfile.Edit,
+        InterchangeProfile => DockerWorkerProfile.Interchange,
         CompileProfile => DockerWorkerProfile.Build,
         CompiledProfile => DockerWorkerProfile.Compiled,
         _ => null

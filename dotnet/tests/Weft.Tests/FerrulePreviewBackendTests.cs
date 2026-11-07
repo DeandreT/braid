@@ -22,6 +22,55 @@ public sealed class FerrulePreviewBackendTests
     private static readonly byte[] Shipment = "{\"orderId\":\"SO-1\"}"u8.ToArray();
     private static readonly byte[] Summary = "{\"lineCount\":2}"u8.ToArray();
 
+    [Theory]
+    [InlineData("application/edi-x12")]
+    [InlineData("application/edifact")]
+    [InlineData("application/json")]
+    public async Task ExplicitDocumentProfilePreservesFramesAndSeparateProvenance(string mediaType)
+    {
+        var runner = new TranscriptRunner(header => Reply(header, response =>
+        {
+            response["protocolVersion"] = FerrulePreviewBackend.DocumentProtocolVersion;
+            response["profile"] = DocumentPreviewPolicy.Profile;
+            foreach (var artifact in response["result"]!["artifacts"]!.AsArray())
+                artifact!["mediaType"] = mediaType;
+        }));
+        var result = await new FerrulePreviewBackend(runner, PreviewExecutionProfile.Document).PreviewAsync(Request());
+        Assert.Equal(MappingPreviewStatus.Succeeded, result.Status);
+        Assert.Equal(DocumentPreviewPolicy.Profile, result.Profile);
+        Assert.Equal(FerrulePreviewBackend.DocumentAdapterBuild, result.Provenance.AdapterBuild);
+        Assert.Equal(FerrulePreviewBackend.DocumentProtocolVersion, (string?)runner.LastHeader!["protocolVersion"]);
+        Assert.All(result.Artifacts, artifact => Assert.Equal(mediaType, artifact.MediaType));
+        Assert.Equal(Shipment, result.Artifacts[0].CopyBytes());
+    }
+
+    [Theory]
+    [InlineData("application/xml")]
+    [InlineData("text/plain")]
+    [InlineData("application/edi-x12; charset=utf-8")]
+    public async Task DocumentProfileRejectsUnadmittedMediaTypes(string mediaType)
+    {
+        var runner = new TranscriptRunner(header => Reply(header, response =>
+        {
+            response["protocolVersion"] = FerrulePreviewBackend.DocumentProtocolVersion;
+            response["profile"] = DocumentPreviewPolicy.Profile;
+            response["result"]!["artifacts"]![0]!["mediaType"] = mediaType;
+        }));
+        var result = await new FerrulePreviewBackend(runner, PreviewExecutionProfile.Document).PreviewAsync(Request());
+        Assert.Equal(MappingPreviewStatus.ProtocolFailure, result.Status);
+        Assert.Equal(DocumentPreviewPolicy.Profile, result.Profile);
+        Assert.False(result.Provenance.Confirmed);
+    }
+
+    [Fact]
+    public async Task DocumentProfileRejectsLegacyResponseInsteadOfDowngrading()
+    {
+        var runner = new TranscriptRunner(header => Reply(header));
+        var result = await new FerrulePreviewBackend(runner, PreviewExecutionProfile.Document).PreviewAsync(Request());
+        Assert.Equal(MappingPreviewStatus.ProtocolFailure, result.Status);
+        Assert.Empty(result.Artifacts);
+    }
+
     [Fact]
     public async Task VerifiedTranscriptReturnsExactOutputsAndSendsTheExactRequest()
     {

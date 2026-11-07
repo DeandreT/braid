@@ -12,8 +12,8 @@ public sealed class PostgresChatLedgerTests(PostgresFixture fixture)
     public async Task Report_operation_identity_and_original_profile_cannot_be_substituted()
     {
         await using var f = await PostgresChatTestSupport.CreateAsync(fixture);
-        var swapped = new ChatConversationIntent(new(f.Key.Revision, f.Actor.PrincipalId, Guid.NewGuid()),
-            f.Conversation.Validation, f.Conversation.Projection, f.Conversation.RetainUntilUtc);
+        var swapped = new ChatConversationIntent(new(f.Key.PinnedRevision, f.Actor.PrincipalId, Guid.NewGuid()),
+            f.Conversation.PinnedValidation, f.Conversation.PinnedProjection, f.Conversation.RetainUntilUtc);
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => f.Writer.CreateAsync(f.Actor, swapped));
         Assert.Equal("Private chat persistence failed.", error.Message);
         Assert.Null(error.InnerException);
@@ -57,7 +57,7 @@ public sealed class PostgresChatLedgerTests(PostgresFixture fixture)
         Assert.Equal(ChatStoreOutcome.Replayed, (await f.Writer.StartAsync(f.Actor, f.Key, turn.Intent)).Outcome);
         var changed = new ChatTurnIntent(turn.Intent.TurnId, new ChatOriginalEnvelope(turn.Intent.Envelope.RequestId, "changed original", [], turn.Intent.Envelope.ProviderBudget, turn.Intent.Envelope.GroundingPolicy), turn.Intent.Profile, turn.Intent.Budget, turn.Intent.DeadlineUtc);
         Assert.Equal(ChatStoreOutcome.Conflict, (await f.Writer.StartAsync(f.Actor, f.Key, changed)).Outcome);
-        var other = new ChatConversationKey(f.Key.Revision, f.OtherActor.PrincipalId, f.Key.ConversationId);
+        var other = new ChatConversationKey(f.Key.PinnedRevision, f.OtherActor.PrincipalId, f.Key.ConversationId);
         await f.Case.ExecuteAsync("UPDATE weft.project_memberships SET role='administrator',version=version+1 WHERE principal_id=$1", f.OtherActor.PrincipalId.Value);
         Assert.Null(await f.Reader.ReadAsync(f.OtherActor, f.Key));
         Assert.Null(await f.Reader.ReadAsync(f.OtherActor, other));
@@ -84,17 +84,17 @@ public sealed class PostgresChatLedgerTests(PostgresFixture fixture)
         Assert.Equal(ChatStoreOutcome.InvalidState, (await f.Writer.ReserveRoundAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, PostgresChatTestSupport.Round())).Outcome);
         var data = new ChatEventData(Guid.NewGuid(), ChatEventKind.TextDelta, "bounded private delta");
         var appended = await f.Writer.AppendAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, first.RoundId, first.Fence, data);
-        Assert.Equal(ChatStoreOutcome.Applied, appended.Outcome); turn = Assert.IsType<ChatTurnFacts>(appended.Facts);
+        Assert.Equal(ChatStoreOutcome.Applied, appended.Outcome); turn = Assert.IsType<ChatTurnFacts>(appended.Facts!);
         Assert.Equal(ChatStoreOutcome.Replayed, (await f.Writer.AppendAsync(f.Actor, f.Key, turn.Intent.TurnId, 1, first.RoundId, first.Fence, data)).Outcome);
         var completion = await f.Writer.CompleteRoundAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, first.RoundId, first.Fence, ChatRoundOutcome.ToolCalls);
-        Assert.Equal(ChatStoreOutcome.Applied, completion.Outcome); turn = Assert.IsType<ChatTurnFacts>(completion.Facts);
+        Assert.Equal(ChatStoreOutcome.Applied, completion.Outcome); turn = Assert.IsType<ChatTurnFacts>(completion.Facts!);
         var second = PostgresChatTestSupport.Round(first.InstanceId);
         reserved = await f.Writer.ReserveRoundAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, second);
         Assert.Equal(ChatStoreOutcome.Applied, reserved.Outcome); turn = Assert.IsType<ChatTurnFacts>(reserved.Turn);
         Assert.Equal(2, reserved.Round!.Ordinal);
         Assert.Equal(ChatStoreOutcome.InvalidState, (await f.Writer.AppendAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, first.RoundId, first.Fence, new(Guid.NewGuid(), ChatEventKind.TextDelta, "late"))).Outcome);
         completion = await f.Writer.CompleteRoundAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, second.RoundId, second.Fence, ChatRoundOutcome.Stopped);
-        Assert.Equal(ChatStoreOutcome.Applied, completion.Outcome); turn = Assert.IsType<ChatTurnFacts>(completion.Facts);
+        Assert.Equal(ChatStoreOutcome.Applied, completion.Outcome); turn = Assert.IsType<ChatTurnFacts>(completion.Facts!);
         var terminal = await f.Writer.FinishAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, ChatTurnPhase.Completed);
         Assert.Equal(ChatStoreOutcome.Applied, terminal.Outcome);
         Assert.Equal(ChatStoreOutcome.Conflict, (await f.Writer.FinishAsync(f.Actor, f.Key, turn.Intent.TurnId, turn.Version, ChatTurnPhase.Cancelled)).Outcome);

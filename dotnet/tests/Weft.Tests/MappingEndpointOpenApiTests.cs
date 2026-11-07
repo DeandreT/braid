@@ -49,8 +49,8 @@ public sealed class MappingEndpointOpenApiTests
         var requestId = Assert.Single(invoke["parameters"]!.AsArray());
         Assert.Equal(MappingEndpointRoutes.RequestIdHeader, requestId!["name"]!.GetValue<string>());
         Assert.True(requestId["required"]!.GetValue<bool>());
-        Assert.Equal("#/components/schemas/MappingInvocationRequestV1",
-            invoke["requestBody"]!["content"]!["application/json"]!["schema"]!["$ref"]!.GetValue<string>());
+        Assert.Equal(new[] { "#/components/schemas/MappingInvocationRequestV1", "#/components/schemas/MappingDocumentInvocationRequestV1" },
+            invoke["requestBody"]!["content"]!["application/json"]!["schema"]!["oneOf"]!.AsArray().Select(value => value!["$ref"]!.GetValue<string>()));
         var responses = invoke["responses"]!.AsObject();
         Assert.Equal(["200", "400", "401", "403", "409", "410", "413", "415", "422", "500", "503"], responses.Select(response => response.Key));
         Assert.Equal("Bearer", responses["401"]!["headers"]!["WWW-Authenticate"]!["schema"]!["enum"]![0]!.GetValue<string>());

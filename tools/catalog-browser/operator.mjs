@@ -11,7 +11,7 @@ await runBrowserFixture({
       2191,
     ],
     [
-      "dotnet/src/Weft.Api/NativeExamples/Artifacts/validation-cycle.json",
+      "dotnet/tests/Weft.Tests/Fixtures/validation-cycle.json",
       "54514537939302ceda435e4403da8051935f55c9e684dc2f9dadfb05145f52c2",
       526,
     ],

@@ -3,6 +3,7 @@
  * the .NET UserGuideTests fail when one is missing.
  */
 export const helpSectionIds = [
+  "administration",
   "reports",
   "comparisons",
   "previews",

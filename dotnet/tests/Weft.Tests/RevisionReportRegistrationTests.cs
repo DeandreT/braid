@@ -1,5 +1,5 @@
 using Weft.Application;
-using Weft.Contracts.Examples;
+using Weft.Contracts.Projections;
 using Weft.Contracts.Validation;
 using Weft.Domain;
 
@@ -7,6 +7,28 @@ namespace Weft.Tests;
 
 public sealed class RevisionReportRegistrationTests
 {
+    [Fact]
+    public void KnownAdmissionDoesNotResolveAnUnusedBackendAndBothSignalsMustAllowExecution()
+    {
+        var calls = 0;
+        var admission = new UnusedBackend { CanExecute = false };
+        var backend = new UnusedBackend();
+        var profile = new RevisionReportBackendProfile("provider", "engine", "build", "adapter");
+        var registration = new RevisionReportRegistration(profile, Format(), new(), () => { calls++; return backend; }, admission);
+        Assert.False(registration.CanExecute);
+        Assert.Equal(0, calls);
+        admission.CanExecute = true;
+        Assert.True(registration.CanExecute);
+        Assert.Equal(0, calls);
+        Assert.Same(backend, registration.GetBackend());
+        backend.CanExecute = false;
+        Assert.False(registration.CanExecute);
+        backend.CanExecute = true;
+        admission.CanExecute = false;
+        Assert.False(registration.CanExecute);
+        Assert.Equal(1, calls);
+    }
+
     [Fact]
     public void RegistryOwnsSelectionsAndHistoricalFormatsWithoutResolvingBackends()
     {
@@ -28,9 +50,15 @@ public sealed class RevisionReportRegistrationTests
         Assert.Null(registry.FindCurrent("provider", RevisionReportOperation.Validation));
         Assert.Same(validator, registry.FindStored(Format(algorithm: "old.algorithm.v1")));
         Assert.Null(registry.FindStored(currentFormat));
+        Assert.True(current.CanExecute);
         Assert.Equal(0, calls);
         Assert.Same(backend, current.GetBackend());
         Assert.Same(backend, current.GetBackend());
+        Assert.Equal(1, calls);
+        backend.CanExecute = false;
+        Assert.False(current.CanExecute);
+        backend.CanExecute = true;
+        Assert.True(current.CanExecute);
         Assert.Equal(1, calls);
     }
 
@@ -154,8 +182,9 @@ public sealed class RevisionReportRegistrationTests
     private static PrivateObjectReference Derived(RevisionReportKey key, long bytes) =>
         new(PrivateObjectId.Restore(key.Scope, Guid.NewGuid(), PrivateObjectClass.DerivedArtifact), key.NativeDigest, bytes);
 
-    private sealed class UnusedBackend : IRevisionReportBackend
+    private sealed class UnusedBackend : IRevisionReportBackend, IExecutionAdmission
     {
+        public bool CanExecute { get; set; } = true;
         public Task<RevisionReportBackendResult> DeriveAsync(RevisionReportKey key, NativeArtifact artifact, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("This constructor/registration test executes no backend.");
     }

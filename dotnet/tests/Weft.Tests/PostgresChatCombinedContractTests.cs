@@ -118,9 +118,9 @@ public sealed class PostgresChatCombinedContractTests(PostgresFixture fixture)
         await using (var scope = new NpgsqlCommand("SELECT set_config('weft.organization_id','bad-org',true),set_config('weft.chat_principal_id','bad-owner',true)", connection, transaction)) await scope.ExecuteNonQueryAsync();
         await using (var close = new NpgsqlCommand("SELECT weft.chat_lifecycle_close($1,$2,$3,$4,$5,$6,$7,$8,5,$9,NULL)", connection, transaction))
         {
-            close.Parameters.AddWithValue(f.Key.Revision.OrganizationId); close.Parameters.AddWithValue(f.Key.Creator.Value);
-            close.Parameters.AddWithValue(f.Key.ConversationId); close.Parameters.AddWithValue(f.Key.Revision.ProjectId);
-            close.Parameters.AddWithValue(f.Key.Revision.MappingId); close.Parameters.AddWithValue(f.Key.Revision.RevisionId);
+            close.Parameters.AddWithValue(f.Key.PinnedRevision.OrganizationId); close.Parameters.AddWithValue(f.Key.Creator.Value);
+            close.Parameters.AddWithValue(f.Key.ConversationId); close.Parameters.AddWithValue(f.Key.PinnedRevision.ProjectId);
+            close.Parameters.AddWithValue(f.Key.PinnedRevision.MappingId); close.Parameters.AddWithValue(f.Key.PinnedRevision.RevisionId);
             close.Parameters.AddWithValue(turn.Intent.TurnId); close.Parameters.AddWithValue(turn.Version); close.Parameters.AddWithValue(Guid.NewGuid());
             Assert.Equal("Applied", await close.ExecuteScalarAsync());
         }

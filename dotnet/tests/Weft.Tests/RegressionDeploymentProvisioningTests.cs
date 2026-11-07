@@ -14,10 +14,10 @@ public sealed class RegressionDeploymentProvisioningTests
     [
         "MIGRATOR", "RUNTIME", "INGEST", "CATALOG", "METADATA", "CREATOR", "REPORT", "DERIVATION",
         "MAINTENANCE", "IDENTITY", "PAYLOAD_PERMISSION", "SESSION_READER", "SESSION_WRITER", "CHAT_READER", "CHAT_WRITER",
-        "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER",
+        "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "COMPARISON",
         "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA",
         "QUALIFICATION_READER", "QUALIFICATION_WRITER", "RELEASE_READER", "RELEASE_WRITER", "INVOCATION_GRANT_WRITER", "INVOCATION_WRITER",
-        "API_AUDIT_WRITER"
+        "API_AUDIT_WRITER", "ADMINISTRATION"
     ];
 
     [Theory]
@@ -38,9 +38,11 @@ public sealed class RegressionDeploymentProvisioningTests
     }
 
     [RegressionNativeTheory]
-    [InlineData("deploy/local/postgres-init.sh")]
-    [InlineData("deploy/azure/provision-database.sh")]
-    public async Task Provisioning_SQL_creates_the_logins_required_by_the_full_migration_manifest(string script)
+    [InlineData("deploy/local/postgres-init.sh", true)]
+    [InlineData("deploy/local/postgres-init.sh", false)]
+    [InlineData("deploy/azure/provision-database.sh", true)]
+    [InlineData("deploy/azure/provision-database.sh", false)]
+    public async Task Provisioning_SQL_creates_the_logins_required_by_the_full_migration_manifest(string script, bool administration)
     {
         var bin = Environment.GetEnvironmentVariable("WEFT_POSTGRES_BIN")!;
         var root = Environment.GetEnvironmentVariable("WEFT_POSTGRES_WORK_ROOT") ?? Path.GetTempPath();
@@ -91,8 +93,9 @@ public sealed class RegressionDeploymentProvisioningTests
         start.Environment["PGGSSENCMODE"] = "disable";
         foreach (var (name, password) in passwords)
         {
-            start.Environment["WEFT_" + name + "_PASSWORD"] = password;
-            start.Environment["WEFT_LOCAL_" + name + "_PASSWORD"] = password;
+            var value = name == "ADMINISTRATION" && !administration ? "" : password;
+            start.Environment["WEFT_" + name + "_PASSWORD"] = value;
+            start.Environment["WEFT_LOCAL_" + name + "_PASSWORD"] = value;
         }
         using var process = Process.Start(start)!;
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -111,6 +114,12 @@ public sealed class RegressionDeploymentProvisioningTests
         }
         string Login(string name, string login) => new NpgsqlConnectionStringBuilder(baseline)
         { Database = "weft", Username = login, Password = passwords[name] }.ConnectionString;
+        await using (var admin = new NpgsqlConnection(baseline))
+        {
+            await admin.OpenAsync();
+            await using var optional = new NpgsqlCommand("SELECT rolpassword IS NULL FROM pg_catalog.pg_authid WHERE rolname='weft_administration'", admin);
+            Assert.Equal(!administration, (bool)(await optional.ExecuteScalarAsync())!);
+        }
         await using (var migrations = new MigrationRunner(Login("MIGRATOR", "weft_migrator"))) await migrations.MigrateAsync();
         await using var reader = new PostgresRegressionRunStore(Login("RUN_READER", "weft_run_reader"), writer: false);
         Assert.Null(await reader.ReadAsync(new ActorContext(new(Guid.NewGuid())), Guid.NewGuid(), Guid.NewGuid()));
@@ -120,12 +129,12 @@ public sealed class RegressionDeploymentProvisioningTests
     public void Deployment_inputs_supply_all_regression_passwords_without_enabling_runtime_features()
     {
         var root = Repository();
-        foreach (var role in new[] { "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA" })
+        foreach (var role in new[] { "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "COMPARISON", "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA" })
         {
             foreach (var path in new[] { "deploy/local/.env.example", "deploy/local/postgres.compose.yml", "deploy/compose/compose.yml" })
                 Assert.Contains("WEFT_LOCAL_" + role + "_PASSWORD", File.ReadAllText(Path.Combine(root, path)), StringComparison.Ordinal);
             var key = role.ToLowerInvariant().Replace('_', '-');
-            var login = "weft_" + role.ToLowerInvariant() + (role == "BUILD_METADATA" ? "_reader" : "");
+            var login = "weft_" + role.ToLowerInvariant() + (role == "BUILD_METADATA" ? "_reader" : role == "COMPARISON" ? "_settler" : "");
             Assert.Contains($"key: '{key}', env: '{role}'", File.ReadAllText(Path.Combine(root, "deploy/azure/modules/application.bicep")), StringComparison.Ordinal);
             Assert.Contains($"[{key}]={login}", File.ReadAllText(Path.Combine(root, "deploy/azure/initialize-secrets.sh")), StringComparison.Ordinal);
             Assert.Contains($"[\"{login}\", \"{role}\"]",

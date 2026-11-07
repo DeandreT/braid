@@ -40,7 +40,7 @@ internal sealed class RevisionIngestionTestSupport : IAsyncDisposable
     internal IngestionBackendRegistration Registration { get; }
     internal RevisionIngestionService Service { get; }
 
-    private RevisionIngestionTestSupport(PostgresCase test, PostgresSeedData seed, PrivateStorageTestRoot root)
+    private RevisionIngestionTestSupport(PostgresCase test, PostgresSeedData seed, PrivateStorageTestRoot root, IInspectionWorkerRunner? serviceRunner = null)
     {
         Case = test;
         Seed = seed;
@@ -55,16 +55,16 @@ internal sealed class RevisionIngestionTestSupport : IAsyncDisposable
         StorePort = new(PhysicalStore);
         Launcher = new();
         var docker = Environment.GetEnvironmentVariable("WEFT_DOCKER_EXECUTABLE") ?? "/usr/bin/docker";
-        Runner = new(new DockerInspectionWorkerRunner(new(docker, Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!), Launcher));
+        Runner = new(serviceRunner ?? new DockerInspectionWorkerRunner(new(docker, Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!), Launcher));
         var real = FerruleIngestionAdmissionBackend.CreateRegistration(Runner);
         BackendPort = new(real.Backend);
         Registration = new(real.Profile, real.NativeByteLimit, BackendPort);
         Service = NewService();
     }
 
-    internal static async Task<RevisionIngestionTestSupport> CreateAsync(PostgresFixture fixture)
+    internal static async Task<RevisionIngestionTestSupport> CreateAsync(PostgresFixture fixture, IInspectionWorkerRunner? serviceRunner = null)
     {
-        if (!PostgresFixture.IsConfigured || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")))
+        if (!PostgresFixture.IsConfigured || serviceRunner is null && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")))
             throw new InvalidOperationException("Complete integration requires both explicitly configured actual dependencies.");
         var test = await fixture.CreateCaseAsync();
         var root = new PrivateStorageTestRoot();
@@ -73,7 +73,7 @@ internal sealed class RevisionIngestionTestSupport : IAsyncDisposable
             var seed = await PostgresSeedData.CreateAsync(test);
             await test.ExecuteAsync("UPDATE weft.project_memberships SET role='publisher',version=version+1 WHERE principal_id=$1", seed.Alice);
             await seed.AddMembershipAsync(test, seed.OrganizationA, seed.ProjectA, seed.Admitted, "publisher");
-            return new(test, seed, root);
+            return new(test, seed, root, serviceRunner);
         }
         catch { root.Dispose(); await test.DisposeAsync(); throw; }
     }

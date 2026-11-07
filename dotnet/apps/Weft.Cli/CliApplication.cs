@@ -21,14 +21,21 @@ internal static class CliApplication
         root.Subcommands.Add(CatalogCommands.Mappings(globals));
         root.Subcommands.Add(CatalogCommands.Revisions(globals));
         root.Subcommands.Add(CatalogCommands.Ingestions(globals));
+        root.Subcommands.Add(MfdCommands.Create(globals));
         root.Subcommands.Add(ReportCommands.Reports(globals));
         root.Subcommands.Add(ReportCommands.Compare(globals));
         root.Subcommands.Add(DraftCommands.Drafts(globals));
         root.Subcommands.Add(PreviewCommands.Previews(globals));
         root.Subcommands.Add(RegressionCommands.Regression(globals));
         root.Subcommands.Add(BuildCommands.Builds(globals));
+        root.Subcommands.Add(OperationsCommands.Operations(globals));
         root.Subcommands.Add(ChatCommands.Chat(globals));
         root.Subcommands.Add(GuideCommands.Guide(globals));
+        root.Subcommands.Add(SearchCommands.Search(globals));
+        root.Subcommands.Add(AdministrationCommands.Administration(globals));
+        root.Subcommands.Add(HealthCommands.Health(globals));
+        root.Subcommands.Add(AutomationCommands.Automation(globals));
+        root.Subcommands.Add(AutomationCommands.Notifications(globals));
         return root;
     }
 

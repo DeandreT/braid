@@ -18,6 +18,7 @@ import {
   type AuthStatus,
   type SessionAuthStatus,
 } from "./browser-session-types";
+import { isReturnPath } from "./return-path";
 
 /** Same-origin observation and bodyless auth actions; no provider protocol or token cache. */
 @Injectable({ providedIn: "root" })
@@ -44,13 +45,29 @@ export class BrowserSessionApi {
     );
   }
 
-  login(status: SessionAuthStatus): Observable<AuthLogin> {
-    return defer(() =>
-      this.actions.post<unknown>("/api/auth/login", null, {
+  /**
+   * Sign-in returns to `returnTo`, which must satisfy the shared return-path rule; without one
+   * the server returns to the application root, which opens the catalog.
+   */
+  login(
+    status: SessionAuthStatus,
+    returnTo: string | null,
+    invitation?: string,
+  ): Observable<AuthLogin> {
+    return defer(() => {
+      if (returnTo !== null && !isReturnPath(returnTo))
+        throw new BrowserSessionError();
+      let headers = actionHeaders(status, "X-Weft-Login", true);
+      if (invitation !== undefined)
+        headers = headers.set("X-Weft-Invitation", invitation);
+      return this.actions.post<unknown>("/api/auth/login", null, {
         observe: "response",
-        headers: actionHeaders(status, "X-Weft-Login", true),
-      }),
-    ).pipe(
+        headers:
+          returnTo === null
+            ? headers
+            : headers.set("X-Weft-Return-To", returnTo),
+      });
+    }).pipe(
       timeout(8000),
       map((response) => {
         if (response.status !== 200 || !isAuthLogin(response.body))

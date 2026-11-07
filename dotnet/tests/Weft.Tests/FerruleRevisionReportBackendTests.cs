@@ -13,6 +13,27 @@ namespace Weft.Tests;
 public sealed class FerruleRevisionReportBackendTests
 {
     [Fact]
+    public void AnAlreadyKnownClosedRunnerBlocksBothUnusedRegistrationsWithoutResolvingIt()
+    {
+        var resolutions = 0;
+        var runner = new FerruleReportTestData.TranscriptRunner { CanExecute = false };
+        var registry = FerruleRevisionReportBackendFactory.CreateRegistry(FerruleReportTestData.Profile, new(),
+            () => { resolutions++; return runner; }, runner);
+        foreach (var operation in Enum.GetValues<RevisionReportOperation>())
+        {
+            var registration = registry.FindCurrent("ferrule", operation)!;
+            Assert.False(registration.CanExecute);
+            registration.GetBackend();
+            Assert.False(registration.CanExecute);
+        }
+        Assert.Equal(0, resolutions);
+        runner.CanExecute = true;
+        Assert.True(registry.FindCurrent("ferrule", RevisionReportOperation.Projection)!.CanExecute);
+        Assert.True(registry.FindCurrent("ferrule", RevisionReportOperation.Validation)!.CanExecute);
+        Assert.Equal(0, resolutions);
+    }
+
+    [Fact]
     public void PureRegistrationsAndBackendRetrievalDoNotResolveTheRunner()
     {
         var resolutions = 0;
@@ -111,6 +132,10 @@ public sealed class FerruleRevisionReportBackendTests
         var registry = FerruleRevisionReportBackendFactory.CreateRegistry(FerruleReportTestData.Profile, new(), () => { resolutions++; return runner; });
         var artifact = FerruleReportTestData.Artifact();
         var projected = await registry.FindCurrent("ferrule", RevisionReportOperation.Projection)!.GetBackend().DeriveAsync(FerruleReportTestData.ProjectionKey(artifact), artifact);
+        runner.CanExecute = false;
+        Assert.False(registry.FindCurrent("ferrule", RevisionReportOperation.Validation)!.CanExecute);
+        Assert.Equal(1, resolutions);
+        runner.CanExecute = true;
         var validated = await registry.FindCurrent("ferrule", RevisionReportOperation.Validation)!.GetBackend().DeriveAsync(FerruleReportTestData.ValidationKey(artifact), artifact);
         Assert.True(projected.IsUsable); Assert.True(validated.IsUsable);
         Assert.Equal(1, resolutions); Assert.Equal(2, runner.Calls);
@@ -173,9 +198,10 @@ internal static class FerruleReportTestData
         var header = checked((int)BinaryPrimitives.ReadUInt32BigEndian(frame));
         return frame[(header + 8)..];
     }
-    internal sealed class TranscriptRunner : IInspectionWorkerRunner
+    internal sealed class TranscriptRunner : IInspectionWorkerRunner, IExecutionAdmission
     {
         public string BuildIdentity { get; set; } = Image;
+        public bool CanExecute { get; set; } = true;
         internal int Calls { get; private set; }
         internal byte[]? LastRequest { get; private set; }
         internal bool Valid { get; set; } = true;

@@ -3,6 +3,7 @@ using Npgsql;
 using Weft.Application;
 using Weft.Domain;
 using Weft.MappingBackends;
+using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 using Weft.Server;
 using Weft.Storage.FileSystem;
@@ -74,9 +75,9 @@ internal sealed class PostgresClaimAwareStorageIntegrationSupport : IAsyncDispos
         Reports = NewReports();
     }
 
-    internal static async Task<PostgresClaimAwareStorageIntegrationSupport> CreateAsync(PostgresFixture fixture, bool activateLegacy = false)
+    internal static async Task<PostgresClaimAwareStorageIntegrationSupport> CreateAsync(PostgresFixture fixture, bool activateLegacy = false, IInspectionWorkerRunner? serviceRunner = null)
     {
-        var native = await RevisionIngestionTestSupport.CreateAsync(fixture);
+        var native = await RevisionIngestionTestSupport.CreateAsync(fixture, serviceRunner);
         var root = new PrivateStorageTestRoot();
         try
         {

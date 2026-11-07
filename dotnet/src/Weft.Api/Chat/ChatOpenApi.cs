@@ -8,6 +8,83 @@ namespace Weft.Api.Chat;
 
 public static partial class ChatEndpoints
 {
+    private static RouteHandlerBuilder DescribeChatResponseHeaders(this RouteHandlerBuilder route, bool stream) =>
+        route.AddOpenApiOperationTransformer((operation, context, _) =>
+        {
+            if (context.Description.HttpMethod == "POST")
+            {
+                operation.Parameters ??= [];
+                foreach (var (name, description) in new[]
+                {
+                    ("Origin", "The exact configured origin for this browser request."),
+                    ("X-XSRF-TOKEN", "The antiforgery request token issued by the catalog context; session tokens bind to the session epoch.")
+                })
+                    operation.Parameters.Add(new OpenApiParameter
+                    {
+                        Name = name,
+                        In = ParameterLocation.Header,
+                        Required = true,
+                        Description = description,
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+                    });
+            }
+            if (operation.Responses is not null)
+                foreach (var (status, response) in operation.Responses)
+                    if (response is OpenApiResponse concrete)
+                    {
+                        concrete.Headers ??= new Dictionary<string, IOpenApiHeader>();
+                        concrete.Headers["Cache-Control"] = new OpenApiHeader
+                        {
+                            Schema = new OpenApiSchema { Type = JsonSchemaType.String, Enum = [JsonValue.Create("no-store")!] }
+                        };
+                        if (stream && status == "200")
+                            concrete.Headers["X-Accel-Buffering"] = new OpenApiHeader
+                            {
+                                Schema = new OpenApiSchema { Type = JsonSchemaType.String, Enum = [JsonValue.Create("no")!] }
+                            };
+                    }
+            return Task.CompletedTask;
+        });
+
+    private static RouteHandlerBuilder DescribeWorkspaceQueries(this RouteHandlerBuilder route, bool listing) =>
+        route.AddOpenApiOperationTransformer((operation, _, _) =>
+        {
+            operation.Parameters ??= [];
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Name = listing ? "limit" : "after",
+                In = ParameterLocation.Query,
+                Description = listing ? "Maximum conversations, newest first; canonical decimal."
+                    : "Resume strictly after this durable event sequence; canonical decimal.",
+                Schema = new OpenApiSchema
+                {
+                    Type = JsonSchemaType.Integer,
+                    Minimum = listing ? "1" : "0",
+                    Maximum = listing ? "100" : ChatGrounding.MaxEvents.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Default = JsonValue.Create(listing ? 50 : 0)
+                }
+            });
+            if (listing)
+                foreach (var (name, description) in new[]
+                {
+                    ("after", "Continue after the last conversation identity from the previous page."),
+                    ("revisionId", "Only conversations about this freshly readable exact revision.")
+                })
+                    operation.Parameters.Add(new OpenApiParameter
+                    {
+                        Name = name,
+                        In = ParameterLocation.Query,
+                        Description = description,
+                        Schema = new OpenApiSchema
+                        {
+                            Type = JsonSchemaType.String,
+                            Format = "uuid",
+                            Pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                        }
+                    });
+            return Task.CompletedTask;
+        });
+
     /// <summary>OpenAPI only: runtime Accepts metadata would refuse media types before chat admission.</summary>
     private static RouteHandlerBuilder DescribeBody<T>(this RouteHandlerBuilder route) =>
         route.AddOpenApiOperationTransformer(async (operation, context, cancellationToken) =>
@@ -31,18 +108,53 @@ public static partial class ChatEndpoints
     {
         if (document.Components?.Schemas is not { } schemas)
             return;
-        if (schemas.TryGetValue(nameof(ChatAvailabilityV1), out var availabilitySchema) &&
-            availabilitySchema is OpenApiSchema { Properties: { } availability } availabilityObject)
+        foreach (var name in new[] { nameof(ChatAvailabilityV1), nameof(ChatWorkspaceAvailabilityV1) })
         {
-            availability["schemaVersion"] = new OpenApiSchema
+            if (schemas.TryGetValue(name, out var availabilitySchema) &&
+                availabilitySchema is OpenApiSchema { Properties: { } availability } availabilityObject)
             {
-                Type = JsonSchemaType.String,
-                Enum = [JsonValue.Create("weft.chat.v1")!],
-                ReadOnly = true
+                availability["schemaVersion"] = new OpenApiSchema
+                {
+                    Type = JsonSchemaType.String,
+                    Enum = [JsonValue.Create("weft.chat.v1")!],
+                    ReadOnly = true
+                };
+                availabilityObject.Required ??= new HashSet<string>();
+                availabilityObject.Required.Add("schemaVersion");
+                availabilityObject.Required.Add("profiles");
+            }
+        }
+        if (schemas.TryGetValue(nameof(ChatFocusV1), out var focusSchema) && focusSchema is OpenApiSchema focus)
+            focus.AdditionalPropertiesAllowed = false;
+        Nullable(nameof(ChatOrganizationConversationV1), "focus", nameof(ChatFocusV1));
+        Nullable(nameof(ChatOrganizationConversationV1), "revision", "CatalogRevisionScopeV1");
+        if (schemas.TryGetValue(nameof(ChatWorkspaceConversationCreateV1), out var createSchema) &&
+            createSchema is OpenApiSchema { Properties: { } createProperties } create &&
+            focusSchema is OpenApiSchema { Properties: { } focusProperties })
+        {
+            create.Required?.Remove("focus");
+            createProperties["focus"] = new OpenApiSchema
+            {
+                OneOf = [new OpenApiSchema { Type = JsonSchemaType.Null }, new OpenApiSchema
+                {
+                    Type = JsonSchemaType.Object,
+                    Properties = new Dictionary<string, IOpenApiSchema>(focusProperties),
+                    Required = new HashSet<string> { "projectId", "mappingId" },
+                    AdditionalPropertiesAllowed = false
+                }]
             };
-            availabilityObject.Required ??= new HashSet<string>();
-            availabilityObject.Required.Add("schemaVersion");
-            availabilityObject.Required.Add("profiles");
+        }
+        Nullable(nameof(ChatTurnFocusV1), "revision", "CatalogRevisionScopeV1");
+        Nullable(nameof(ChatTurnV1), "focus", nameof(ChatTurnFocusV1));
+        Nullable(nameof(ChatWorkspaceCitationV1), "target", nameof(ChatSelectorV1));
+
+        void Nullable(string owner, string property, string target)
+        {
+            if (schemas.TryGetValue(owner, out var schema) && schema is OpenApiSchema { Properties: { } properties })
+                properties[property] = new OpenApiSchema
+                {
+                    OneOf = [new OpenApiSchema { Type = JsonSchemaType.Null }, new OpenApiSchemaReference(target, document)]
+                };
         }
         foreach (var (name, schema) in schemas)
         {

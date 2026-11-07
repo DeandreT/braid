@@ -18,7 +18,7 @@ internal sealed class CatalogRegressionCaseRequestException(CatalogErrorCodeV1 c
 }
 
 internal sealed record CatalogRegressionCaseDefinition(string Name, Guid RevisionId, RegressionRuntimeIdentity Runtime,
-    RegressionReplay Replay, string Policy, RegressionOutputSet Expected);
+    RegressionReplay Replay, string Policy, RegressionOutputSet Expected, EdiComparisonOptions? EdiOptions);
 
 internal static class CatalogRegressionCaseRequest
 {
@@ -82,11 +82,21 @@ internal static class CatalogRegressionCaseRequest
 
     private static CatalogRegressionCaseDefinition Parse(JsonElement root, CancellationToken token)
     {
-        Shape(root, "name", "revisionId", "runtime", "currentDateTime", "target", "limits", "primaryBase64Url", "namedInputs", "parameters", "comparisonPolicy", "expected");
+        var hasOptions = root.TryGetProperty("comparisonOptions", out var optionsElement);
+        string[] fields = ["name", "revisionId", "runtime", "currentDateTime", "target", "limits", "primaryBase64Url", "namedInputs", "parameters", "comparisonPolicy", "expected"];
+        Shape(root, hasOptions ? [.. fields, "comparisonOptions"] : fields);
         var runtime = root.GetProperty("runtime");
         Shape(runtime, "backendId", "engineRevision", "backendBuild", "adapterBuild", "profile");
         var identity = new RegressionRuntimeIdentity(Text(runtime, "backendId"), Text(runtime, "engineRevision"), Text(runtime, "backendBuild"),
             Text(runtime, "adapterBuild"), Text(runtime, "profile"));
+        var documents = identity.Profile == DocumentPreviewPolicy.Profile;
+        if (hasOptions && !documents) throw Invalid();
+        EdiComparisonOptions? options = null;
+        if (hasOptions && optionsElement.ValueKind != JsonValueKind.Null)
+        {
+            Shape(optionsElement, "compareSeparators", "ignoreControlNumbers", "ignoreDates");
+            options = new(optionsElement.GetProperty("compareSeparators").GetBoolean(), optionsElement.GetProperty("ignoreControlNumbers").GetBoolean(), optionsElement.GetProperty("ignoreDates").GetBoolean());
+        }
         var targetValue = root.GetProperty("target");
         Shape(targetValue, "kind", "name");
         var targetName = NullableText(targetValue, "name");
@@ -135,15 +145,16 @@ internal static class CatalogRegressionCaseRequest
         foreach (var output in expected.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
-            Shape(output, "name", "bytesBase64Url");
+            Shape(output, documents ? ["name", "bytesBase64Url", "mediaType"] : ["name", "bytesBase64Url"]);
             var name = NullableText(output, "name");
             var bytes = Bytes(Text(output, "bytesBase64Url"), outputRemaining);
             outputRemaining -= bytes.Length;
-            outputs.Add(RegressionOutput.Capture(name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(name), bytes, token));
+            outputs.Add(RegressionOutput.Capture(name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(name), bytes, token,
+                documents ? Text(output, "mediaType") : PreviewPolicy.MediaType));
         }
         return new(Text(root, "name"), Id(Text(root, "revisionId")), identity,
             new(target, Text(root, "currentDateTime"), limits, primary, inputs, values, token),
-            Text(root, "comparisonPolicy"), RegressionOutputSet.Capture(outputs, token));
+            Text(root, "comparisonPolicy"), RegressionOutputSet.Capture(outputs, token), options);
     }
 
     private static byte[] Bytes(string text, int remaining)

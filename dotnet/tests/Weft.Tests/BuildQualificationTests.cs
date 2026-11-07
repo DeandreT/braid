@@ -7,6 +7,24 @@ namespace Weft.Tests;
 
 public sealed class BuildQualificationTests
 {
+    [Theory]
+    [InlineData("json")]
+    [InlineData("x12")]
+    [InlineData("edifact")]
+    public void Document_qualification_keeps_exact_bytes_media_and_the_declared_replay_identity(string format)
+    {
+        var value = new Fixture(format); var id = Guid.NewGuid();
+        var proof = value.Create(id);
+        var restored = BuildQualification.Restore(id, value.Actor, value.Build, value.Evidence, value.Case, value.Runtime,
+            proof.CopyCanonicalBytes(), proof.CopyResultBytes());
+        Assert.Equal(proof.Fingerprint, restored.Fingerprint);
+        var execution = new RegressionRunResultCodec().Decode(id, value.Case, restored.CopyResultBytes());
+        Assert.Equal(BuildWorkerProtocol.MediaType(format), Assert.Single(execution.Outputs!.Outputs).MediaType);
+        var wrongMedia = RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary,
+            value.Case.Expected.Outputs[0].CopyBytes(), mediaType: format == "json" ? "application/edi-x12" : "application/json")]);
+        Assert.Equal(BuildQualificationFailure.OutputMismatch, Assert.Throws<BuildQualificationException>(() =>
+            value.Create(Guid.NewGuid(), new(CompiledBuildOutcome.Completed, wrongMedia))).Failure);
+    }
     [Fact]
     public void Equal_exact_outputs_produce_stable_metadata_and_owned_private_result_bytes()
     {
@@ -95,6 +113,13 @@ public sealed class BuildQualificationTests
             BuildQualification.Create(Guid.NewGuid(), value.Actor, value.Build, value.Evidence, value.Case, "latest", value.Result)).Failure);
     }
 
+    [Fact]
+    public void Legacy_backend_qualification_does_not_require_a_Ferrule_document_codec()
+    {
+        var value = new Fixture(customProfile: true);
+        Assert.NotNull(value.Create(Guid.NewGuid()));
+    }
+
     internal sealed class Fixture
     {
         internal PrincipalId Actor { get; } = new(Guid.NewGuid());
@@ -103,14 +128,15 @@ public sealed class BuildQualificationTests
         internal RegressionRunSnapshot Evidence { get; }
         internal BuildRunSnapshot Build { get; }
         internal CompiledBuildResult Result { get; }
-        internal Fixture()
+        internal Fixture(string? format = null, bool customProfile = false)
         {
             var scope = new RevisionScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
             var native = Sha256Digest.FromBytes([1]);
             var backend = new BuildBackendIdentity("ferrule", BuildWorkerProtocol.Engine, "sha256:" + new string('a', 64), "adapter");
-            var outputs = RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, "{\"ok\":true}\n"u8)]);
+            var payload = format is "x12" or "edifact" ? System.Text.Encoding.UTF8.GetBytes(format == "x12" ? DocumentPreviewTestData.X12 : DocumentPreviewTestData.Edifact) : "{\"ok\":true}\n"u8.ToArray();
+            var outputs = RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, payload, mediaType: BuildWorkerProtocol.MediaType(format ?? "json"))]);
             Case = new(Guid.NewGuid(), 1, Actor, "qualification fixture", scope, native,
-                new(backend.BackendId, backend.EngineRevision, backend.EngineBuild, backend.AdapterVersion, PreviewPolicy.Profile),
+                new(backend.BackendId, backend.EngineRevision, backend.EngineBuild, backend.AdapterVersion, format is null ? PreviewPolicy.Profile : DocumentPreviewPolicy.Profile),
                 new(PreviewTargetSelection.All, "2026-10-21T00:00:00Z", PreviewLimits.Default, new(null, "{}"u8), [], []),
                 RegressionComparisonService.ExactBytesPolicy, outputs);
             var evidenceId = Guid.NewGuid();
@@ -118,8 +144,8 @@ public sealed class BuildQualificationTests
             var bytes = new RegressionRunResultCodec().EncodeObservation(evidenceId, Case, MappingPreviewStatus.Succeeded, outputs);
             Evidence = new(evidenceId, Actor, reference, RegressionRunState.Completed, 1, DateTimeOffset.UtcNow, bytes, Sha256Digest.FromBytes(bytes));
             var intent = new BuildIntent(Guid.NewGuid(), scope, native, backend,
-                new(BuildWorkerProtocol.Profile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes),
-                [new(BuildBoundaryKind.PrimaryInput, null, "json"), new(BuildBoundaryKind.PrimaryOutput, null, "json")],
+                new(customProfile ? "weft.fixture-compiler.v1" : format is null ? BuildWorkerProtocol.Profile : BuildWorkerProtocol.DocumentProfile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes),
+                [new(BuildBoundaryKind.PrimaryInput, null, "json"), new(BuildBoundaryKind.PrimaryOutput, null, customProfile ? "fixture-bytes" : format ?? "json")],
                 new(new(scope.OrganizationId, scope.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), evidenceId);
             Build = new(Actor, intent, BuildRunState.Succeeded, 1, DateTimeOffset.UtcNow, BuildExecutionOutcome.Created,
                 BuildArtifactReference.Restore(intent, Sha256Digest.FromBytes([2, 3]), 2));

@@ -76,13 +76,8 @@ public static partial class CatalogEndpoints
         RequireQuery(context);
         var mapping = CaseMapping(organizationId, projectId, mappingId, admission);
         if (mapping is null) return NotFound();
-        var current = await CaseCatalogMapping(context, admission.Actor!, mapping);
-        if (current is null) return NotFound();
-        var fresh = await CaseCatalogMapping(context, admission.Actor!, mapping);
-        if (fresh is null) return NotFound();
-        var response = new RegressionCaseCapabilitiesV1(Runtime(options.Runtime!), Limits(PreviewLimits.Default),
-            RegressionComparisonService.ExactBytesPolicy, CanReadCase(fresh.Access),
-            CanPublishCase(fresh.Access) && fresh.Summary.BackendId == options.Runtime!.BackendId);
+        var response = await RegressionCapabilitiesAsync(context.RequestServices, admission.Actor!, mapping, options, context.RequestAborted);
+        if (response is null) return NotFound();
         var bytes = PrepareCase(response, context.RequestAborted);
         return CaseResponse(bytes);
     });
@@ -101,14 +96,13 @@ public static partial class CatalogEndpoints
                 limit is < 1 or > 100 || value != limit.ToString(CultureInfo.InvariantCulture)) throw new CatalogInvalidRequestException();
         }
         var cursor = context.Request.Query.TryGetValue("afterCaseId", out var after) ? CatalogRegressionCaseRequest.Id(after[0]!) : (Guid?)null;
-        var page = await context.RequestServices.GetRequiredService<IRegressionCaseReader>().ListAsync(admission.Actor!, mapping,
-            limit, cursor, context.RequestAborted);
-        if (page.Cases.Count > limit || page.Cases.Any(item => !Belongs(item.Revision, mapping))) throw new InvalidOperationException("Invalid regression metadata scope.");
+        var page = await RegressionCasePageAsync(context.RequestServices, admission.Actor!, mapping, limit, cursor, context.RequestAborted);
+        if (page is null) return NotFound();
         var response = new RegressionCasePageV1(page.Cases.Select(item => new RegressionCaseMetadataV1(item.CaseId.ToString("D"),
             item.Version.ToString(CultureInfo.InvariantCulture), Scope(item.Revision), item.Name,
             item.CreatedAt.ToString("O", CultureInfo.InvariantCulture))).ToArray(), page.NextCaseId?.ToString("D"));
         var bytes = PrepareCase(response, context.RequestAborted);
-        return await CaseCatalogMapping(context, admission.Actor!, mapping) is null ? NotFound() : CaseResponse(bytes);
+        return CaseResponse(bytes);
     });
 
     private static Task<IResult> GetRegressionCaseVersion(string organizationId, string projectId, string mappingId, string caseId,
@@ -119,20 +113,9 @@ public static partial class CatalogEndpoints
         var id = CatalogRegressionCaseRequest.Id(caseId);
         var number = CatalogRegressionCaseRequest.Version(version);
         if (mapping is null) return NotFound();
-        var current = await CaseCatalogMapping(context, admission.Actor!, mapping);
-        if (current is null || !CanReadCase(current.Access)) return NotFound();
-        var value = await context.RequestServices.GetRequiredService<IRegressionCaseReader>().ReadAsync(admission.Actor!, mapping,
-            id, number, context.RequestAborted);
+        var value = await RegressionCaseVersionAsync(context.RequestServices, admission.Actor!, mapping, id, number, context.RequestAborted);
         if (value is null) return NotFound();
-        if (value.CaseId != id || value.Version != number || !Belongs(value.Revision, mapping)) throw new InvalidOperationException("Invalid regression version scope.");
-        var revision = await CaseCatalogRevision(context, admission.Actor!, value.Revision);
-        if (revision is null || !CanReadCase(revision.Access)) return NotFound();
-        if (revision.Summary.NativeDigest != value.NativeDigest || revision.Summary.BackendId != value.Runtime.BackendId)
-            throw new InvalidOperationException("Invalid regression native identity.");
         var bytes = PrepareCase(new RegressionCaseDetailV1(caseId, version, Scope(value.Revision), Definition(value)), context.RequestAborted);
-        var fresh = await CaseCatalogRevision(context, admission.Actor!, value.Revision);
-        if (fresh is null || !CanReadCase(fresh.Access)) return NotFound();
-        RequireScope(fresh.Summary == revision.Summary);
         return CaseResponse(bytes);
     });
 
@@ -149,7 +132,8 @@ public static partial class CatalogEndpoints
         if (!CanPublishCase(current.Access)) return Error(CatalogErrorCodeV1.PermissionDenied, StatusCodes.Status403Forbidden);
         // No body or private store is touched before session/CSRF and current project publication admission.
         var incoming = await CatalogRegressionCaseRequest.ReadAsync(context.Request, context.RequestAborted);
-        if (incoming.Runtime != options.Runtime || current.Summary.BackendId != options.Runtime!.BackendId)
+        var selectedRuntime = options.SelectRuntime(incoming.Runtime);
+        if (selectedRuntime is null || current.Summary.BackendId != options.Runtime!.BackendId)
             return Error(CatalogErrorCodeV1.PreconditionFailed, StatusCodes.Status412PreconditionFailed);
         var revisionScope = new RevisionScope(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, incoming.RevisionId);
         var revision = await CaseCatalogRevision(context, admission.Actor!, revisionScope);
@@ -171,8 +155,8 @@ public static partial class CatalogEndpoints
         RegressionCaseReference expected;
         try
         {
-            value = new(id, number, owner, incoming.Name, revisionScope, revision.Summary.NativeDigest, options.Runtime!,
-                incoming.Replay, incoming.Policy, incoming.Expected);
+            value = new(id, number, owner, incoming.Name, revisionScope, revision.Summary.NativeDigest, selectedRuntime,
+                incoming.Replay, incoming.Policy, incoming.Expected, incoming.EdiOptions);
             expected = new RegressionCaseEnvelopeCodec().Encode(value, context.RequestAborted).Reference;
         }
         catch (RegressionCaseException error)
@@ -220,26 +204,10 @@ public static partial class CatalogEndpoints
         var result = new MappingScope(CatalogRegressionCaseRequest.Id(organization), CatalogRegressionCaseRequest.Id(project), CatalogRegressionCaseRequest.Id(mapping));
         return result.OrganizationId == admission.AllowedOrganizationId ? result : null;
     }
-    private static async Task<CatalogMapping?> CaseCatalogMapping(HttpContext context, ActorContext actor, MappingScope scope)
-    {
-        var result = await context.RequestServices.GetRequiredService<ICatalogReader>().GetMappingAsync(actor, scope, context.RequestAborted);
-        if (result is not null)
-        {
-            RequireScope(result.Summary.Scope == scope);
-            RequireAccess(result.Access, actor, Project(scope));
-        }
-        return result;
-    }
-    private static async Task<CatalogRevision?> CaseCatalogRevision(HttpContext context, ActorContext actor, RevisionScope scope)
-    {
-        var result = await context.RequestServices.GetRequiredService<ICatalogReader>().GetRevisionAsync(actor, scope, context.RequestAborted);
-        if (result is not null)
-        {
-            RequireScope(result.Summary.Scope == scope);
-            RequireAccess(result.Access, actor, new(scope.OrganizationId, scope.ProjectId));
-        }
-        return result;
-    }
+    private static Task<CatalogMapping?> CaseCatalogMapping(HttpContext context, ActorContext actor, MappingScope scope) =>
+        ReadableMappingAsync(context.RequestServices, actor, scope, context.RequestAborted);
+    private static Task<CatalogRevision?> CaseCatalogRevision(HttpContext context, ActorContext actor, RevisionScope scope) =>
+        ReadableRevisionAsync(context.RequestServices, actor, scope, context.RequestAborted);
     private static bool CanReadCase(ProjectAccess access) => access.Can(ProjectAction.SubmitPreview);
     private static bool CanPublishCase(ProjectAccess access) => access.Can(ProjectAction.UploadRevision);
     private static bool Belongs(RevisionScope revision, MappingScope mapping) => revision.OrganizationId == mapping.OrganizationId &&
@@ -269,7 +237,7 @@ public static partial class CatalogEndpoints
     private static RegressionCasePutV1 Definition(RegressionCaseVersion value) => new(value.Name, value.Revision.RevisionId.ToString("D"), Runtime(value.Runtime),
         value.Replay.CurrentDateTime, new(value.Replay.Target.Kind switch { PreviewTargetKind.All => "all", PreviewTargetKind.Primary => "primary", _ => "named" }, value.Replay.Target.Name),
         Limits(value.Replay.Limits), WebEncoders.Base64UrlEncode(value.Replay.Primary.CopyBytes()),
-        value.Replay.NamedInputs.Select(input => new RegressionDocumentV1(input.Name, WebEncoders.Base64UrlEncode(input.CopyBytes()))).ToArray(),
+        value.Replay.NamedInputs.Select(input => new RegressionInputDocumentV1(input.Name, WebEncoders.Base64UrlEncode(input.CopyBytes()))).ToArray(),
         value.Replay.Parameters.Select(parameter => new RegressionParameterV1(parameter.Name, parameter.Kind switch
         {
             PreviewParameterKind.String => "string",
@@ -277,5 +245,7 @@ public static partial class CatalogEndpoints
             PreviewParameterKind.Float => "float",
             _ => "boolean"
         }, parameter.Value)).ToArray(), value.ComparisonPolicy,
-        value.Expected.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()))).ToArray());
+        value.Expected.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()),
+            value.Runtime.Profile == DocumentPreviewPolicy.Profile ? output.MediaType : null)).ToArray(),
+        value.EdiOptions is { } options ? new(options.CompareSeparators, options.IgnoreControlNumbers, options.IgnoreDates) : null);
 }

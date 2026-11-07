@@ -46,10 +46,14 @@ public sealed record ChatProviderBudget
     public override string ToString() => nameof(ChatProviderBudget);
 }
 
-/// <summary>V1 admits mapping metadata only: text and exact ordered selectors, no payload/attachment/action envelope.</summary>
+/// <summary>
+/// V1 admits mapping metadata only: text and exact ordered selectors, no payload/attachment/action envelope.
+/// V2 is a workspace turn's request: the same inputs plus the focus resolved when the turn started.
+/// </summary>
 public sealed class ChatOriginalEnvelope : IEquatable<ChatOriginalEnvelope>
 {
-    public ChatOriginalEnvelope(Guid requestId, string userText, IEnumerable<ChatCitationTarget> selectors, ChatProviderBudget providerBudget, ChatGroundingPolicyPin groundingPolicy)
+    public ChatOriginalEnvelope(Guid requestId, string userText, IEnumerable<ChatCitationTarget> selectors, ChatProviderBudget providerBudget,
+        ChatGroundingPolicyPin groundingPolicy, ChatTurnFocus? focus = null)
     {
         ChatBounds.Id(requestId); UserText = ChatBounds.Text(userText, 65536, false);
         ArgumentNullException.ThrowIfNull(selectors); ArgumentNullException.ThrowIfNull(providerBudget);
@@ -60,10 +64,11 @@ public sealed class ChatOriginalEnvelope : IEquatable<ChatOriginalEnvelope>
             if (selector is null || owned.Count == 32 || owned.Contains(selector)) throw ChatBounds.Invalid();
             owned.Add(selector);
         }
-        RequestId = requestId; Selectors = owned.ToImmutableArray(); ProviderBudget = providerBudget; GroundingPolicy = groundingPolicy;
+        RequestId = requestId; Selectors = owned.ToImmutableArray(); ProviderBudget = providerBudget; GroundingPolicy = groundingPolicy; Focus = focus;
         CanonicalJson = ChatCanonicalJson.Write(w =>
         {
-            w.WriteStartObject(); w.WriteString("schema", "weft.chat.original.v1"); w.WriteString("request", requestId); w.WriteString("text", UserText);
+            w.WriteStartObject(); w.WriteString("schema", focus is null ? "weft.chat.original.v1" : "weft.chat.original.v2");
+            w.WriteString("request", requestId); w.WriteString("text", UserText);
             w.WriteStartArray("selectors"); foreach (var target in Selectors)
             {
                 w.WriteStartObject(); w.WriteNumber("kind", (int)target.Kind); w.WriteString("resource", target.ResourceId);
@@ -77,7 +82,18 @@ public sealed class ChatOriginalEnvelope : IEquatable<ChatOriginalEnvelope>
             w.WriteNumber("rounds", providerBudget.MaxRounds); w.WriteNumber("requestBytes", providerBudget.MaxRequestBytes);
             w.WriteNumber("wireBytes", providerBudget.MaxWireBytes); w.WriteNumber("textBytes", providerBudget.MaxTextBytes);
             w.WriteNumber("toolCalls", providerBudget.MaxToolCalls); w.WriteNumber("outputTokens", providerBudget.MaxOutputTokens);
-            w.WriteEndObject(); w.WriteEndObject();
+            w.WriteEndObject();
+            if (focus is not null)
+            {
+                w.WriteStartObject("focus"); w.WriteNumber("state", (int)focus.State);
+                if (focus.Revision is { } revision)
+                {
+                    w.WriteString("organization", revision.OrganizationId); w.WriteString("project", revision.ProjectId);
+                    w.WriteString("mapping", revision.MappingId); w.WriteString("revision", revision.RevisionId);
+                }
+                w.WriteEndObject();
+            }
+            w.WriteEndObject();
         }, 524288);
         Fingerprint = Sha256Digest.FromBytes(Encoding.UTF8.GetBytes(CanonicalJson));
     }
@@ -86,6 +102,8 @@ public sealed class ChatOriginalEnvelope : IEquatable<ChatOriginalEnvelope>
     public ImmutableArray<ChatCitationTarget> Selectors { get; }
     public ChatProviderBudget ProviderBudget { get; }
     public ChatGroundingPolicyPin GroundingPolicy { get; }
+    /// <summary>The focus a workspace turn resolved at its start; null for a revision conversation's turn.</summary>
+    public ChatTurnFocus? Focus { get; }
     public string CanonicalJson { get; }
     public Sha256Digest Fingerprint { get; }
     public bool Equals(ChatOriginalEnvelope? other) => other is not null && CanonicalJson == other.CanonicalJson;
@@ -104,12 +122,22 @@ public sealed class ChatOriginalEnvelope : IEquatable<ChatOriginalEnvelope>
                 new(budget.GetProperty("durationTicks").GetInt64(), budget.GetProperty("rounds").GetInt32(), budget.GetProperty("requestBytes").GetInt64(),
                     budget.GetProperty("wireBytes").GetInt64(), budget.GetProperty("textBytes").GetInt64(), budget.GetProperty("toolCalls").GetInt32(), budget.GetProperty("outputTokens").GetInt32()),
                 new(policy.GetProperty("id").GetString()!, policy.GetProperty("version").GetInt32(), Sha256Digest.Parse(policy.GetProperty("instructionsFingerprint").GetString()!),
-                    Sha256Digest.Parse(policy.GetProperty("toolsFingerprint").GetString()!), policy.GetProperty("retrievedNodes").GetInt32(), policy.GetProperty("toolResultBytes").GetInt32(), policy.GetProperty("toolIterations").GetInt32()));
+                    Sha256Digest.Parse(policy.GetProperty("toolsFingerprint").GetString()!), policy.GetProperty("retrievedNodes").GetInt32(), policy.GetProperty("toolResultBytes").GetInt32(), policy.GetProperty("toolIterations").GetInt32()),
+                e.GetProperty("schema").GetString() == "weft.chat.original.v2" ? ReadFocus(e.GetProperty("focus")) : null);
             if (value.CanonicalJson != json) throw ChatBounds.Invalid(); return value;
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or ArgumentException or FormatException or OverflowException)
         { throw ChatBounds.Invalid(); }
     }
+
+    private static ChatTurnFocus ReadFocus(JsonElement e) => (ChatTurnFocusState)e.GetProperty("state").GetInt32() switch
+    {
+        ChatTurnFocusState.None => ChatTurnFocus.None,
+        ChatTurnFocusState.Unavailable => ChatTurnFocus.Unavailable,
+        ChatTurnFocusState.Resolved => ChatTurnFocus.Resolved(new(e.GetProperty("organization").GetGuid(), e.GetProperty("project").GetGuid(),
+            e.GetProperty("mapping").GetGuid(), e.GetProperty("revision").GetGuid())),
+        _ => throw ChatBounds.Invalid()
+    };
 }
 
 public static class ChatCanonicalJson

@@ -6,6 +6,125 @@ namespace Weft.Tests;
 
 public sealed class RegressionCaseExecutionTests
 {
+    [Theory]
+    [InlineData("application/edi-x12", false)]
+    [InlineData("application/edi-x12", true)]
+    [InlineData("application/edifact", false)]
+    [InlineData("application/edifact", true)]
+    public async Task New_revision_document_evaluation_retains_profile_comparison_options_and_original_evidence(string media, bool ignoreDates)
+    {
+        var test = new Harness { ReturnedNative = [8, 7, 6] };
+        var old = test.Value;
+        var runtime = new RegressionRuntimeIdentity(old.Runtime.BackendId, old.Runtime.EngineRevision, old.Runtime.BackendBuild,
+            "document-adapter", DocumentPreviewPolicy.Profile);
+        var text = media == "application/edi-x12" ? DocumentPreviewTestData.X12 : DocumentPreviewTestData.Edifact;
+        var expected = System.Text.Encoding.UTF8.GetBytes(text);
+        var actual = System.Text.Encoding.UTF8.GetBytes(text.Replace("261024", "261025", StringComparison.Ordinal));
+        test.Value = new(old.CaseId, old.Version, old.Owner, old.Name, old.Revision, old.NativeDigest, runtime, old.Replay,
+            RegressionComparisonService.EdiSegmentsPolicy, RegressionOutputSet.Capture([
+                RegressionOutput.Capture(RegressionOutputKey.Primary, expected, mediaType: media)]), new(false, true, ignoreDates));
+        var original = test.Reference;
+        var originalBytes = new RegressionCaseEnvelopeCodec().Encode(test.Value).CopyBytes();
+        var revision = new RevisionScope(old.Revision.OrganizationId, old.Revision.ProjectId, old.Revision.MappingId, Guid.NewGuid());
+        var digest = Sha256Digest.FromBytes(test.ReturnedNative);
+        test.Source = new(revision, new(PrivateObjectId.Create(revision, PrivateObjectClass.NativeArtifact), digest, test.ReturnedNative.Length),
+            IngestionIntent.EntryDocument, IngestionIntent.EmptyDependencyIdentity, "ferrule");
+        test.Transform = result => result with
+        {
+            Profile = runtime.Profile,
+            Artifacts = [Output("primary-output", "", actual, media: media)],
+            Provenance = result.Provenance with { AdapterBuild = runtime.AdapterBuild }
+        };
+        var service = new RegressionCaseExecutionService(test, test, test, test, test, test.Runtime, runtime);
+        var result = await service.EvaluateAsync(test.Actor, original, new(revision, digest));
+        Assert.Equal(ignoreDates ? RegressionComparisonOutcome.Passed : RegressionComparisonOutcome.Failed, result.Comparison!.Outcome);
+        Assert.Equal(media, Assert.Single(result.Outputs!.Outputs).MediaType);
+        var request = Assert.Single(test.Requests);
+        Assert.Equal(PreviewExecutionProfile.Document, request.Profile);
+        Assert.Equal(revision, request.Artifact.Scope);
+        Assert.Equal(digest, request.Artifact.Digest);
+        Assert.Equal(original, test.Reference);
+        Assert.Equal(originalBytes, new RegressionCaseEnvelopeCodec().Encode(test.Value).CopyBytes());
+        test.Transform = response => response with
+        {
+            Profile = runtime.Profile,
+            Artifacts = [Output("primary-output", "", actual, media: media)],
+            Provenance = response.Provenance with { Scope = old.Revision, NativeDigest = old.NativeDigest, AdapterBuild = runtime.AdapterBuild }
+        };
+        Refused(await service.EvaluateAsync(test.Actor, original, new(revision, digest)), RegressionCaseExecutionOutcome.ResultRejected);
+    }
+
+    [Theory]
+    [InlineData("application/edi-x12")]
+    [InlineData("application/edifact")]
+    public async Task Document_replay_requires_the_separately_pinned_runtime_and_keeps_media(string media)
+    {
+        var test = new Harness(); var old = test.Value;
+        var runtime = new RegressionRuntimeIdentity(old.Runtime.BackendId, old.Runtime.EngineRevision, old.Runtime.BackendBuild,
+            "document-adapter", DocumentPreviewPolicy.Profile);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(media == "application/edi-x12" ? DocumentPreviewTestData.X12 : DocumentPreviewTestData.Edifact);
+        test.Value = new(old.CaseId, old.Version, old.Owner, old.Name, old.Revision, old.NativeDigest, runtime, old.Replay,
+            RegressionComparisonService.EdiSegmentsPolicy, RegressionOutputSet.Capture([
+                RegressionOutput.Capture(RegressionOutputKey.Primary, bytes, mediaType: media)]), new(false, true, true));
+        Refused(await test.ExecuteAsync(), RegressionCaseExecutionOutcome.RuntimeMismatch);
+        Assert.Empty(test.Requests);
+        test.Transform = result => result with
+        {
+            Profile = runtime.Profile,
+            Artifacts = [Output("primary-output", "", bytes, media: media)],
+            Provenance = result.Provenance with { AdapterBuild = runtime.AdapterBuild }
+        };
+        var service = new RegressionCaseExecutionService(test, test, test, test, test, test.Runtime, runtime);
+        var result = await service.ExecuteAsync(test.Actor, test.Reference);
+        Assert.Equal(RegressionComparisonOutcome.Passed, result.Comparison!.Outcome);
+        Assert.Equal(media, Assert.Single(result.Outputs!.Outputs).MediaType);
+        Assert.Equal(PreviewExecutionProfile.Document, Assert.Single(test.Requests).Profile);
+    }
+
+    [Fact]
+    public async Task Evaluates_the_new_revision_without_rewriting_original_case_provenance()
+    {
+        var test = new Harness { ReturnedNative = [8, 7, 6] };
+        var original = test.Reference;
+        var originalBytes = new RegressionCaseEnvelopeCodec().Encode(test.Value).CopyBytes();
+        var revision = new RevisionScope(original.Revision.OrganizationId, original.Revision.ProjectId, original.Revision.MappingId, Guid.NewGuid());
+        var digest = Sha256Digest.FromBytes(test.ReturnedNative);
+        test.Source = new(revision, new(PrivateObjectId.Create(revision, PrivateObjectClass.NativeArtifact), digest, 3),
+            IngestionIntent.EntryDocument, IngestionIntent.EmptyDependencyIdentity, "ferrule");
+        var result = await test.Service.EvaluateAsync(test.Actor, original, new(revision, digest));
+        Assert.Equal(RegressionComparisonOutcome.Passed, result.Comparison!.Outcome);
+        Assert.Equal(revision, Assert.Single(test.Requests).Artifact.Scope);
+        Assert.Equal(digest, test.Requests[0].Artifact.Digest);
+        Assert.Equal(original, test.Reference);
+        Assert.Equal(originalBytes, new RegressionCaseEnvelopeCodec().Encode(test.Value).CopyBytes());
+    }
+
+    [Fact]
+    public async Task New_revision_evaluation_refuses_a_backend_replaying_the_original_revision()
+    {
+        var test = new Harness();
+        var original = test.Reference;
+        var revision = new RevisionScope(original.Revision.OrganizationId, original.Revision.ProjectId, original.Revision.MappingId, Guid.NewGuid());
+        test.Source = new(revision, new(PrivateObjectId.Create(revision, PrivateObjectClass.NativeArtifact), original.NativeDigest, test.Native.Length),
+            IngestionIntent.EntryDocument, IngestionIntent.EmptyDependencyIdentity, "ferrule");
+        test.Transform = result => result with { Provenance = result.Provenance with { Scope = original.Revision } };
+        Refused(await test.Service.EvaluateAsync(test.Actor, original, new(revision, original.NativeDigest)), RegressionCaseExecutionOutcome.ResultRejected);
+    }
+
+    [Fact]
+    public void Local_admission_tracks_the_same_backend_without_reading_case_or_payload_data()
+    {
+        var test = new Harness();
+        Assert.True(test.Service.CanExecute);
+        test.CanExecute = false;
+        Assert.False(test.Service.CanExecute);
+        test.CanExecute = true;
+        Assert.True(test.Service.CanExecute);
+        Assert.Equal(0, test.SourceReads);
+        Assert.Equal(0, test.StorageReads);
+        Assert.Empty(test.Requests);
+    }
+
     [Fact]
     public async Task Replays_the_exact_saved_revision_clock_parameters_and_bytes()
     {
@@ -342,8 +461,9 @@ public sealed class RegressionCaseExecutionTests
     private static PreviewOutputArtifact Output(string boundary, string name, ReadOnlySpan<byte> bytes,
         bool truncated = false, string media = PreviewPolicy.MediaType) => new(boundary, name, truncated, media, 1, bytes);
 
-    private sealed class Harness : IRegressionCaseReader, IProjectReader, IRevisionReportMetadataReader, IPrivateObjectStore, IMappingPreviewBackend
+    private sealed class Harness : IRegressionCaseReader, IProjectReader, IRevisionReportMetadataReader, IPrivateObjectStore, IMappingPreviewBackend, IExecutionAdmission
     {
+        public bool CanExecute { get; set; } = true;
         internal static readonly RevisionScope OtherScope = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         private readonly RevisionScope scope = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         private readonly Guid caseId = Guid.NewGuid();

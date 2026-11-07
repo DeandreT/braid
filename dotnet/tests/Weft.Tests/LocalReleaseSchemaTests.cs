@@ -24,7 +24,7 @@ public sealed class LocalReleaseSchemaTests(PostgresFixture fixture, ITestOutput
             BuildRoleGuard.LoadFunctions("0022_local_releases.sql", LocalReleaseRoleGuard.Names.Length), default);
         var fingerprint = await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, LocalReleaseRoleGuard.Tables, default);
         output.WriteLine("LocalReleaseFingerprint=" + fingerprint);
-        Assert.Equal(LocalReleaseRoleGuard.Fingerprint, fingerprint);
+        Assert.Equal(ReleaseOperationsRoleGuard.ReleaseFingerprint, fingerprint);
     }
 
     [PostgresFact]

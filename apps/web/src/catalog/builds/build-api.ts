@@ -72,15 +72,26 @@ export class BuildApi {
       undefined,
       (v) => {
         if (
-          !shape(v, [
-            "backend",
-            "profile",
-            "readOwnMetadata",
-            "approveBuilds",
-            "submitBuilds",
-          ]) ||
+          !shape(
+            v,
+            [
+              "backend",
+              "profile",
+              "readOwnMetadata",
+              "approveBuilds",
+              "submitBuilds",
+            ],
+            ["documentBackend", "documentProfile", "interchangeProfile"],
+          ) ||
           !backend(v.backend) ||
           !profile(v.profile) ||
+          (v.documentBackend !== undefined && !backend(v.documentBackend)) ||
+          (v.documentProfile !== undefined && !profile(v.documentProfile)) ||
+          (v.interchangeProfile !== undefined &&
+            (!profile(v.interchangeProfile) ||
+              v.documentProfile === undefined)) ||
+          (v.documentBackend === undefined) !==
+            (v.documentProfile === undefined) ||
           ![v.readOwnMetadata, v.approveBuilds, v.submitBuilds].every(
             (x) => typeof x === "boolean",
           ) ||
@@ -105,8 +116,16 @@ export class BuildApi {
       undefined,
       (v) => {
         if (
-          !shape(v, ["profile", "canCreateVersions"]) ||
+          !shape(
+            v,
+            ["profile", "canCreateVersions"],
+            ["documentProfile", "interchangeProfile"],
+          ) ||
           !profile(v.profile) ||
+          (v.documentProfile !== undefined && !profile(v.documentProfile)) ||
+          (v.interchangeProfile !== undefined &&
+            (!profile(v.interchangeProfile) ||
+              v.documentProfile === undefined)) ||
           typeof v.canCreateVersions !== "boolean"
         )
           invalid();

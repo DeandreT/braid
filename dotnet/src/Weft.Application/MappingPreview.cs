@@ -8,6 +8,21 @@ public interface IMappingPreviewBackend
     Task<MappingPreviewResult> PreviewAsync(MappingPreviewRequest request, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Separate admission policies; JSON callers never gain document codecs implicitly.</summary>
+public enum PreviewExecutionProfile
+{
+    LegacyJson,
+    Document
+}
+
+public static class DocumentPreviewPolicy
+{
+    public const string Profile = "weft.ferrule-document-preview.v1";
+
+    public static bool AdmitsMediaType(string mediaType) =>
+        mediaType is "application/json" or "application/edi-x12" or "application/edifact";
+}
+
 public enum PreviewTargetKind
 {
     All,
@@ -81,7 +96,10 @@ public sealed record MappingPreviewRequest(
     IReadOnlyList<PreviewInputDocument> NamedInputs,
     IReadOnlyList<PreviewParameter> Parameters,
     string CurrentDateTime,
-    PreviewLimits Limits);
+    PreviewLimits Limits)
+{
+    public PreviewExecutionProfile? Profile { get; init; }
+}
 
 public enum MappingPreviewStatus
 {

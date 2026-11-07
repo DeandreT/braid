@@ -43,6 +43,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string derivationPassword = Guid.NewGuid().ToString("N");
     private readonly string maintenancePassword = Guid.NewGuid().ToString("N");
     private readonly string identityPassword = Guid.NewGuid().ToString("N");
+    private readonly string accountDisplayPassword = Guid.NewGuid().ToString("N");
     private readonly string payloadPermissionPassword = Guid.NewGuid().ToString("N");
     private readonly string sessionReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string sessionWriterPassword = Guid.NewGuid().ToString("N");
@@ -55,6 +56,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string caseWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string runReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string runWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string comparisonPassword = Guid.NewGuid().ToString("N");
     private readonly string buildReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string buildWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string buildRunReaderPassword = Guid.NewGuid().ToString("N");
@@ -68,6 +70,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string invocationGrantWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string invocationWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string apiAuditWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string administrationPassword = Guid.NewGuid().ToString("N");
     private readonly string draftReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string draftWriterPassword = Guid.NewGuid().ToString("N");
     private readonly bool provisionMetadataEditor;
@@ -76,6 +79,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly bool provisionDeriver;
     private readonly bool provisionMaintenance;
     private readonly bool provisionIdentityReader;
+    private readonly bool provisionAccountDisplay;
     private readonly bool provisionPayloadPermissionReader;
     private readonly bool provisionSessionReader;
     private readonly bool provisionSessionWriter;
@@ -116,7 +120,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         bool provisionChatReader = true, bool provisionChatWriter = true, bool provisionChatLifecycle = true,
         bool provisionPreviewProfiles = true, bool provisionRegressionProfiles = true, bool provisionBuildProfiles = true,
         bool provisionBuildRunProfiles = true, bool provisionBuildMetadata = true, bool provisionQualifications = true, bool provisionLocalReleases = true,
-        bool provisionMachineInvocations = true, bool provisionApiAudit = true)
+        bool provisionMachineInvocations = true, bool provisionApiAudit = true, bool provisionAccountDisplay = true)
     {
         this.provisionMetadataEditor = provisionMetadataEditor;
         this.provisionProjectCreator = provisionProjectCreator;
@@ -124,6 +128,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         this.provisionDeriver = provisionDeriver;
         this.provisionMaintenance = provisionMaintenance;
         this.provisionIdentityReader = provisionIdentityReader;
+        this.provisionAccountDisplay = provisionAccountDisplay;
         this.provisionPayloadPermissionReader = provisionPayloadPermissionReader;
         this.provisionSessionReader = provisionSessionReader;
         this.provisionSessionWriter = provisionSessionWriter;
@@ -259,6 +264,14 @@ public sealed class PostgresFixture : IAsyncLifetime
             }
             if (provisionIdentityReader)
             {
+                if (provisionAccountDisplay)
+                {
+                    await using var displayRole = new NpgsqlCommand($"""
+                        CREATE ROLE weft_account_display LOGIN PASSWORD '{accountDisplayPassword}'
+                          NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                        """, bootstrap);
+                    await displayRole.ExecuteNonQueryAsync();
+                }
                 await using var identityRole = new NpgsqlCommand($"""
                     CREATE ROLE weft_identity_reader LOGIN PASSWORD '{identityPassword}'
                       NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
@@ -358,6 +371,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             if (provisionDeriver) connectRoles.Add("weft_deriver");
             if (provisionMaintenance) connectRoles.Add("weft_maintenance");
             if (provisionIdentityReader) connectRoles.Add("weft_identity_reader");
+            if (provisionIdentityReader && provisionAccountDisplay) connectRoles.Add("weft_account_display");
             if (provisionPayloadPermissionReader) connectRoles.Add("weft_payload_permission_reader");
             if (provisionSessionReader) connectRoles.Add("weft_session_reader");
             if (provisionSessionWriter) connectRoles.Add("weft_session_writer");
@@ -388,6 +402,12 @@ public sealed class PostgresFixture : IAsyncLifetime
             await using var ownerConnection = await test.Owner.OpenConnectionAsync();
             await using var publicSchema = new NpgsqlCommand("REVOKE ALL ON SCHEMA public FROM PUBLIC", ownerConnection);
             await publicSchema.ExecuteNonQueryAsync();
+            await test.BootstrapAsync("""
+                CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
+                CREATE EXTENSION pg_trgm WITH SCHEMA weft_search_extensions;
+                REVOKE ALL ON SCHEMA weft_search_extensions FROM PUBLIC;
+                REVOKE ALL ON ALL FUNCTIONS IN SCHEMA weft_search_extensions FROM PUBLIC;
+                """);
             if (migrate)
                 await test.MigrateAsync();
             return test;
@@ -410,8 +430,8 @@ public sealed class PostgresFixture : IAsyncLifetime
     }
 
     private (string Name, string Password)[] RegressionRoles() =>
-        [("weft_case_reader", caseReaderPassword), ("weft_case_writer", caseWriterPassword),
-         ("weft_run_reader", runReaderPassword), ("weft_run_writer", runWriterPassword),
+        [("weft_administration", administrationPassword), ("weft_case_reader", caseReaderPassword), ("weft_case_writer", caseWriterPassword),
+         ("weft_run_reader", runReaderPassword), ("weft_run_writer", runWriterPassword), ("weft_comparison_settler", comparisonPassword),
          .. (provisionBuildProfiles ? new (string Name, string Password)[] { ("weft_build_reader", buildReaderPassword), ("weft_build_writer", buildWriterPassword) } : []),
          .. (provisionBuildRunProfiles ? new (string Name, string Password)[] { ("weft_build_run_reader", buildRunReaderPassword),
              ("weft_build_run_writer", buildRunWriterPassword), ("weft_build_dispatcher", buildDispatcherPassword) } : []),
@@ -531,6 +551,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         await using var command = new NpgsqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync();
     }
+
+    internal string AccountDisplayConnectionString(PostgresCase test) =>
+        ConnectionString(test.Name, "weft_account_display", accountDisplayPassword);
 
     private string ConnectionString(string database, string username, string password, bool pooling = true) => new NpgsqlConnectionStringBuilder
     {
@@ -702,6 +725,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
 public sealed class PostgresCase : IAsyncDisposable
 {
+    internal string AccountDisplayConnectionString => fixture.AccountDisplayConnectionString(this);
     private readonly PostgresFixture fixture;
     private readonly SemaphoreSlim lifetime = new(1, 1);
     private bool ownerPoolClosed;

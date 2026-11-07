@@ -19,6 +19,7 @@ public static partial class CatalogEndpoints
         Describe<CatalogContextV1>(routes.MapGet("/api/v1/catalog/context", GetContext),
             "GetCatalogContext", "Read the explicitly configured catalog identity context and request token.");
         const string organization = "/api/v1/organizations/{organizationId}";
+        DescribeSearch(routes.MapGet(organization + "/search", SearchCatalog));
         const string project = organization + "/projects/{projectId}";
         const string mapping = project + "/mappings/{mappingId}";
         Describe<CatalogProjectPageV1>(routes.MapGet(organization + "/projects", GetProjects),
@@ -38,8 +39,10 @@ public static partial class CatalogEndpoints
             "GetCatalogRevision", "Read one scoped immutable revision's catalog metadata.");
         MapRevisionReports(routes, mapping + "/revisions/{revisionId}");
         MapRevisionComparisons(routes, mapping);
+        MapInterchange(routes, project, mapping);
         MapPreviews(routes, organization, mapping + "/revisions/{revisionId}");
         MapMappingDrafts(routes, mapping);
+        Administration.AdministrationEndpoints.MapWeftAdministration(endpoints);
         DescribeRevisionUpload(routes.MapPost(project + "/mappings", CreateCatalogMapping), create: true);
         DescribeRevisionUpload(routes.MapPost(mapping + "/revisions", AppendCatalogRevision), create: false);
         DescribeIngestionReceipt(routes.MapGet(project + "/revision-ingestions/{operationId}", GetCatalogIngestionReceipt));
@@ -82,7 +85,8 @@ public static partial class CatalogEndpoints
             return Results.Ok(CatalogPublicMapper.Context(organization, token, admission.ContextMode!, metadataEditOptions.Enabled,
                 ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
                 revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, admission.IdentityContext,
-                context.RequestServices.GetService<Chat.ChatApiOptions>()?.Enabled == true, PreviewEnabled(context), MappingEditingEnabled(context)));
+                context.RequestServices.GetService<Chat.ChatApiOptions>()?.Enabled == true, PreviewEnabled(context),
+                context.RequestServices.GetService<IAdministrationStore>() is not null, MappingEditingEnabled(context)));
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,
@@ -103,7 +107,8 @@ public static partial class CatalogEndpoints
                 foreach (var item in projects.Projects)
                     RequireAccess(item.Access, admission.Actor!, item.Summary.Scope);
                 return Results.Ok(CatalogPublicMapper.Projects(projects, ingestionOptions.Enabled,
-                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context)));
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context),
+                    context.RequestServices.GetService<IAdministrationStore>() is not null));
             });
         });
 
@@ -121,7 +126,8 @@ public static partial class CatalogEndpoints
                 RequireScope(project.Summary.Scope == scope);
                 RequireAccess(project.Access, admission.Actor!, scope);
                 return Results.Ok(CatalogPublicMapper.Project(project, ingestionOptions.Enabled,
-                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context)));
+                    revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, PreviewEnabled(context),
+                    context.RequestServices.GetService<IAdministrationStore>() is not null));
             });
         });
 

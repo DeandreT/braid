@@ -6,7 +6,7 @@ namespace Weft.Application;
 /// Composes short, freshly authorized metadata operations with exact native bytes,
 /// private storage, and one validation invocation per claimed attempt.
 /// </summary>
-public sealed class RevisionIngestionService : IRevisionIngestionService
+public sealed class RevisionIngestionService : IRevisionIngestionService, IReviewedRevisionIngestionService
 {
     private static readonly TimeSpan CancellationBookkeepingLimit = TimeSpan.FromSeconds(2);
     private readonly IIngestionMetadataStore _metadata;
@@ -38,6 +38,20 @@ public sealed class RevisionIngestionService : IRevisionIngestionService
     public async Task<RevisionIngestionResult> CreateAsync(ActorContext actor, ProjectScope project,
         Guid idempotencyKey, CreateRevisionRequest request, Stream nativeSource,
         CancellationToken cancellationToken = default)
+        => await CreateCoreAsync(actor, project, idempotencyKey, request, nativeSource, null, cancellationToken);
+
+    public async Task<RevisionIngestionResult> CreateReviewedAsync(ActorContext actor, ProjectScope project,
+        Guid idempotencyKey, CreateRevisionRequest request, ReviewedImportRevision reviewed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(reviewed);
+        using var source = reviewed.OpenNative();
+        return await CreateCoreAsync(actor, project, idempotencyKey, request, source, reviewed.Provenance, cancellationToken);
+    }
+
+    private async Task<RevisionIngestionResult> CreateCoreAsync(ActorContext actor, ProjectScope project,
+        Guid idempotencyKey, CreateRevisionRequest request, Stream nativeSource,
+        InterchangeImportProvenance? provenance, CancellationToken cancellationToken)
     {
         RequireSubmission(actor, project, idempotencyKey, request, nativeSource);
         if (!await HasUploadAccessAsync(actor, project, cancellationToken))
@@ -49,12 +63,26 @@ public sealed class RevisionIngestionService : IRevisionIngestionService
         RequireOwnKey(existing, actor, project, IngestionOperationKind.Create, null, idempotencyKey);
         return await SubmitAsync(actor, project, idempotencyKey, existing, request.BackendId,
             (digest, count) => IngestionIntent.ForCreate(request.Metadata, request.BackendId,
-                request.OriginalFilename, digest, count), nativeSource, cancellationToken);
+                request.OriginalFilename, digest, count, provenance), nativeSource, cancellationToken, provenance);
     }
 
     public async Task<RevisionIngestionResult> AppendAsync(ActorContext actor, MappingScope target,
         Guid idempotencyKey, AppendRevisionRequest request, Stream nativeSource,
         CancellationToken cancellationToken = default)
+        => await AppendCoreAsync(actor, target, idempotencyKey, request, nativeSource, null, cancellationToken);
+
+    public async Task<RevisionIngestionResult> AppendReviewedAsync(ActorContext actor, MappingScope target,
+        Guid idempotencyKey, AppendRevisionRequest request, ReviewedImportRevision reviewed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(reviewed);
+        using var source = reviewed.OpenNative();
+        return await AppendCoreAsync(actor, target, idempotencyKey, request, source, reviewed.Provenance, cancellationToken);
+    }
+
+    private async Task<RevisionIngestionResult> AppendCoreAsync(ActorContext actor, MappingScope target,
+        Guid idempotencyKey, AppendRevisionRequest request, Stream nativeSource,
+        InterchangeImportProvenance? provenance, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(target);
         var project = new ProjectScope(target.OrganizationId, target.ProjectId);
@@ -74,7 +102,7 @@ public sealed class RevisionIngestionService : IRevisionIngestionService
         RequireOwnKey(existing, actor, project, IngestionOperationKind.Append, target, idempotencyKey);
         return await SubmitAsync(actor, project, idempotencyKey, existing, appendTarget.BackendId,
             (digest, count) => IngestionIntent.ForAppend(target, appendTarget.BackendId,
-                request.OriginalFilename, request.HeadCondition, digest, count), nativeSource, cancellationToken);
+                request.OriginalFilename, request.HeadCondition, digest, count, provenance), nativeSource, cancellationToken, provenance);
     }
 
     public async Task<RevisionIngestionResult> ResumeAsync(ActorContext actor, ProjectScope project,
@@ -110,7 +138,7 @@ public sealed class RevisionIngestionService : IRevisionIngestionService
     private async Task<RevisionIngestionResult> SubmitAsync(ActorContext actor, ProjectScope project,
         Guid key, IngestionReceipt? existing, string backendId,
         Func<Sha256Digest, long, IngestionIntent> createIntent, Stream source,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, InterchangeImportProvenance? provenance = null)
     {
         IngestionBackendProfile profile;
         IngestionAdmissionPolicy policy;
@@ -121,10 +149,11 @@ public sealed class RevisionIngestionService : IRevisionIngestionService
         }
         else
         {
-            var registration = _backends.GetCurrent(backendId);
+            var registration = provenance is null ? _backends.GetCurrent(backendId) : _backends.GetReserved(provenance.Engine);
             if (registration is null)
                 return RevisionIngestionResult.RejectedBeforeReservation(RevisionIngestionRejection.UnregisteredBackend);
-            if (registration.Profile.BackendId != backendId)
+            if (registration.Profile.BackendId != backendId ||
+                provenance is not null && registration.Profile != provenance.Engine)
                 throw new InvalidOperationException("The registered ingestion backend identity is inconsistent.");
             profile = registration.Profile;
             policy = new IngestionAdmissionPolicy(IngestionAdmissionPolicy.InitialIdentity,
@@ -160,6 +189,12 @@ public sealed class RevisionIngestionService : IRevisionIngestionService
     private async Task<RevisionIngestionResult> ClaimAndRunAsync(ActorContext actor,
         IngestionReceipt receipt, byte[]? sourceBytes, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        // Preserve uploaded bytes and reusable eligible evidence. Only a resume that needs fresh engine work is
+        // held back; staging a new source and committing previously eligible evidence retain their normal paths.
+        if (sourceBytes is null && receipt.Phase is IngestionPhase.Staged or IngestionPhase.Ready && receipt.EligibleAttemptGeneration is null &&
+            _backends.GetReserved(receipt.Facts.BackendProfile)?.Backend is IExecutionAdmission { CanExecute: false })
+            return FromReceipt(receipt);
         var claimResult = await _metadata.ClaimAsync(actor, receipt.Facts.Project,
             receipt.Facts.OperationId, _serverInstanceId, cancellationToken);
         if (claimResult.Receipt is not { } claimedReceipt)

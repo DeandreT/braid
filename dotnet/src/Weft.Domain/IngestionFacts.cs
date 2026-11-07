@@ -96,7 +96,7 @@ public sealed record IngestionIntent
 
     private IngestionIntent(IngestionOperationKind kind, MappingScope? target, IngestionCreateMetadata? metadata,
         string backendId, string? originalFilename, HeadCondition headCondition, Sha256Digest nativeDigest,
-        long nativeByteCount)
+        long nativeByteCount, InterchangeImportProvenance? importProvenance = null)
     {
         ArgumentNullException.ThrowIfNull(headCondition);
         ArgumentNullException.ThrowIfNull(nativeDigest);
@@ -112,6 +112,10 @@ public sealed record IngestionIntent
         HeadCondition = headCondition;
         NativeDigest = nativeDigest;
         NativeByteCount = nativeByteCount;
+        if (importProvenance is not null && (importProvenance.NativeDigest != nativeDigest ||
+            importProvenance.Engine.BackendId != backendId))
+            throw new ArgumentException("Import provenance must bind the exact native digest and backend.", nameof(importProvenance));
+        ImportProvenance = importProvenance;
     }
 
     public IngestionOperationKind Kind { get; }
@@ -122,23 +126,26 @@ public sealed record IngestionIntent
     public HeadCondition HeadCondition { get; }
     public Sha256Digest NativeDigest { get; }
     public long NativeByteCount { get; }
+    public InterchangeImportProvenance? ImportProvenance { get; }
     public string LogicalDocument => EntryDocument;
     public string DependencyIdentity => EmptyDependencyIdentity;
 
     public static IngestionIntent ForCreate(IngestionCreateMetadata metadata, string backendId,
-        string? originalFilename, Sha256Digest nativeDigest, long nativeByteCount)
+        string? originalFilename, Sha256Digest nativeDigest, long nativeByteCount,
+        InterchangeImportProvenance? importProvenance = null)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         return new(IngestionOperationKind.Create, null, metadata, backendId, originalFilename, new AnyHead(),
-            nativeDigest, nativeByteCount);
+            nativeDigest, nativeByteCount, importProvenance);
     }
 
     public static IngestionIntent ForAppend(MappingScope target, string backendId, string? originalFilename,
-        HeadCondition headCondition, Sha256Digest nativeDigest, long nativeByteCount)
+        HeadCondition headCondition, Sha256Digest nativeDigest, long nativeByteCount,
+        InterchangeImportProvenance? importProvenance = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         return new(IngestionOperationKind.Append, target, null, backendId, originalFilename, headCondition,
-            nativeDigest, nativeByteCount);
+            nativeDigest, nativeByteCount, importProvenance);
     }
 
     private static string RequireFilename(string? value)
@@ -176,6 +183,7 @@ public sealed record ReservedIngestionFacts
             nativeObject.Id.Scope != futureRevision || nativeObject.Id.Class != PrivateObjectClass.NativeArtifact ||
             nativeObject.Digest != intent.NativeDigest || nativeObject.ByteCount != intent.NativeByteCount ||
             backendProfile.BackendId != intent.BackendId || admissionPolicy.EffectiveNativeByteLimit < intent.NativeByteCount ||
+            (intent.ImportProvenance is { } imported && imported.Engine != backendProfile) ||
             fingerprint != CanonicalFingerprint.Create(originalActor, project, intent))
             throw new ArgumentException("Reserved ingestion facts must agree in scope, identity, and immutable intent.");
 

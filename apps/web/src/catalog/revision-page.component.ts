@@ -47,8 +47,8 @@ import {
   type RevisionReportSelectors,
 } from "./reports/revision-report-state";
 import { RevisionReportsComponent } from "./reports/revision-reports.component";
-import { RevisionChatComponent } from "../chat/revision-chat.component";
-import { ChatViewRecovery } from "../chat/chat-view-recovery";
+import { MfdExportComponent } from "./uploads/mfd-export.component";
+import { WorkspaceConversation } from "../workbench/workspace-conversation";
 import { RevisionPreviewComponent } from "./previews/revision-preview.component";
 import { RevisionRegressionComponent } from "./regression/revision-regression.component";
 import { RevisionBuildsComponent } from "./builds/revision-builds.component";
@@ -72,11 +72,13 @@ import {
 import type {
   NodeReference,
   ProjectionView,
-} from "../mappings/projection-view";
+} from "../workbench/projection-view";
 import type { DockView } from "../workbench/workbench-model";
-import { NativeEvidenceComponent } from "../mappings/native-evidence.component";
+import { NativeEvidenceComponent } from "../workbench/native-evidence.component";
 import { StatusChipComponent } from "../workbench/status-chip.component";
 import { MetadataValueComponent } from "../workbench/metadata-value.component";
+import { RegressionStatusComponent } from "./automation/regression-status.component";
+import { DocumentViewComponent } from "../workbench/document-view.component";
 import { MappingEditorComponent } from "../edit/mapping-editor.component";
 import {
   buildStatus,
@@ -97,7 +99,7 @@ interface RevisionScreen {
     RouterLink,
     CatalogStatusComponent,
     RevisionReportsComponent,
-    RevisionChatComponent,
+    MfdExportComponent,
     RevisionPreviewComponent,
     RevisionRegressionComponent,
     RevisionBuildsComponent,
@@ -106,14 +108,11 @@ interface RevisionScreen {
     NativeEvidenceComponent,
     StatusChipComponent,
     MetadataValueComponent,
+    RegressionStatusComponent,
+    DocumentViewComponent,
     MappingEditorComponent,
   ],
-  providers: [
-    BuildViewRecovery,
-    RegressionViewRecovery,
-    ChatViewRecovery,
-    WorkbenchState,
-  ],
+  providers: [BuildViewRecovery, RegressionViewRecovery, WorkbenchState],
   templateUrl: "./revision-page.component.html",
   styleUrl: "./revision-page.component.css",
 })
@@ -171,6 +170,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
   private readonly sessions = inject(BrowserSessionState);
   private readonly workbenchRouter = inject(Router);
   readonly selectedDocument = signal<string | null>(null);
+  readonly regressionDocumentKind = signal<"observed" | "expected">("observed");
   readonly documentKey = documentKey;
   readonly diagnostic = signal<{ validation: boolean; ordinal: number } | null>(
     null,
@@ -238,6 +238,31 @@ export class RevisionPageComponent extends CatalogRoutePage<
   readonly outputDocuments = computed(() =>
     (this.selectedRun()?.outputs ?? []).map(displayDocument),
   );
+  readonly expectedDocuments = computed(() =>
+    (this.selectedCase()?.definition.expected ?? []).map(displayDocument),
+  );
+  readonly displayedOutputs = computed(() =>
+    this.regressionDocumentKind() === "expected"
+      ? this.expectedDocuments()
+      : this.outputDocuments(),
+  );
+  readonly selectedPreview = computed(() => {
+    const component = this.previewView(),
+      view = this.data(),
+      context = this.context();
+    const shown = component?.shown();
+    return component &&
+      view &&
+      context &&
+      shown &&
+      this.sessions.presents(context) &&
+      component.context() === context &&
+      component.allowed() &&
+      sameRevision(component.revision().scope, view.revision.scope) &&
+      component.preview.run()?.runId === shown.runId
+      ? shown
+      : null;
+  });
   readonly differences = computed(() => {
     const value = this.selectedCase(),
       run = this.selectedRun();
@@ -330,7 +355,10 @@ export class RevisionPageComponent extends CatalogRoutePage<
   private readonly contexts = inject(CatalogContextStore);
   private readonly buildRecovery = inject(BuildViewRecovery);
   private readonly regressionRecovery = inject(RegressionViewRecovery);
-  private readonly chatRecovery = inject(ChatViewRecovery);
+  readonly workspaceChat = inject(WorkspaceConversation);
+  requestChatLeave(): boolean {
+    return true; // Shared conversation remains mounted; form guards keep their own ownership.
+  }
   private readonly injector = inject(Injector);
   private readonly document = inject(DOCUMENT);
   private readonly reportDestroyRef = inject(DestroyRef);
@@ -346,6 +374,36 @@ export class RevisionPageComponent extends CatalogRoutePage<
 
   constructor() {
     super();
+    effect(() => {
+      this.workspaceChat.revision.set(this.data()?.revision.scope ?? null);
+      const view = this.data();
+      this.workspaceChat.viewLabel.set(
+        view
+          ? `${view.project.name} / ${view.mapping.name} / Version ${view.revision.sequence} · ${this.roleLabel(view.mapping.access.role)}`
+          : null,
+      );
+      this.workspaceChat.projectionId.set(
+        this.reportView()?.projectionPin()?.projectionDerivationId ?? null,
+      );
+      this.workspaceChat.validationId.set(
+        this.reportView()?.validationPin()?.validationDerivationId ?? null,
+      );
+    });
+    const citations = this.workspaceChat.citation.subscribe((value) =>
+      this.reportView()?.showChatCitation(value),
+    );
+    citations.add(
+      this.workspaceChat.workspaceCitation.subscribe((value) =>
+        this.reportView()?.showWorkspaceChatCitation(value),
+      ),
+    );
+    inject(DestroyRef).onDestroy(() => {
+      citations.unsubscribe();
+      this.workspaceChat.revision.set(null);
+      this.workspaceChat.viewLabel.set(null);
+      this.workspaceChat.projectionId.set(null);
+      this.workspaceChat.validationId.set(null);
+    });
     effect(() => {
       const context = this.context(),
         value = this.data(),
@@ -432,6 +490,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
       this.workbench.lifetime();
       untracked(() => {
         this.selectedDocument.set(null);
+        this.regressionDocumentKind.set("observed");
         this.diagnostic.set(null);
         this.historyRequest?.unsubscribe();
         this.historyRequest = null;
@@ -488,7 +547,6 @@ export class RevisionPageComponent extends CatalogRoutePage<
         const scope = this.reportSelection()?.scope ?? null;
         this.buildRecovery.routeScope(scope);
         this.regressionRecovery.routeScope(scope);
-        this.chatRecovery.routeScope(scope);
       });
     effect(() => {
       const selection = this.reportSelection();
@@ -517,6 +575,41 @@ export class RevisionPageComponent extends CatalogRoutePage<
       this.historyRequest?.unsubscribe();
       this.switcherRequest?.unsubscribe();
     });
+    const searchFragment = signal<string | null>(null);
+    this.route.fragment
+      .pipe(takeUntilDestroyed())
+      .subscribe((value) => searchFragment.set(value));
+    let openedSearchSelection: string | null = null;
+    effect(() => {
+      const fragment = searchFragment(),
+        projection = this.projection();
+      const selector = this.reportSelection()?.selectors.projectionDerivationId;
+      const binding = this.workbench.selection().binding;
+      if (
+        !fragment ||
+        !selector ||
+        !projection ||
+        !binding ||
+        this.reports.projection().response?.body.result?.derivationId !==
+          selector
+      )
+        return;
+      // The same retained report can return in a new, freshly admitted binding.
+      const selected = JSON.stringify([
+        this.workbench.lifetime(),
+        selector,
+        fragment,
+      ]);
+      if (selected === openedSearchSelection) return;
+      const reference: NodeReference | null = fragment.startsWith("field:")
+        ? { kind: "field", fieldId: fragment.slice(6) }
+        : fragment.startsWith("rule:")
+          ? { kind: "rule", ruleId: fragment.slice(5) }
+          : null;
+      if (!reference || !this.referenceExists(projection, reference)) return;
+      openedSearchSelection = selected;
+      untracked(() => this.inspect(reference));
+    });
   }
 
   inspect(reference: NodeReference | null): void {
@@ -532,8 +625,12 @@ export class RevisionPageComponent extends CatalogRoutePage<
     });
     if (reference) {
       this.workbench.dispatch({ kind: "view", view: "mapping" });
-      this.workbench.updateLayout({ inspectorCollapsed: false });
-      this.frame()?.mobileInspector.set(true);
+      this.workbench.dispatch({ kind: "dock", dock: "inspector" });
+      this.workbench.updateLayout({
+        inspectorCollapsed: false,
+        dockCollapsed: false,
+      });
+      this.frame()?.openInspector();
     }
   }
 
@@ -577,7 +674,7 @@ export class RevisionPageComponent extends CatalogRoutePage<
   returnToTest(): void {
     if (!this.investigation()) return;
     this.workbench.dispatch({ kind: "view", view: "tests" });
-    this.frame()?.mobileInspector.set(false);
+    if (this.frame()?.focusedTray()) this.frame()?.closeTray();
     afterNextRender(
       () =>
         this.document
@@ -627,10 +724,10 @@ export class RevisionPageComponent extends CatalogRoutePage<
   }
   displayedOutput() {
     return (
-      this.outputDocuments().find(
+      this.displayedOutputs().find(
         (value) => documentKey(value.name) === this.selectedDocument(),
       ) ??
-      this.outputDocuments()[0] ??
+      this.displayedOutputs()[0] ??
       null
     );
   }
@@ -648,8 +745,24 @@ export class RevisionPageComponent extends CatalogRoutePage<
   }
 
   openDock(dock: DockView): void {
+    if (this.frame()) {
+      this.frame()!.selectDock(dock, true);
+      return;
+    }
     this.workbench.dispatch({ kind: "dock", dock });
     this.workbench.updateLayout({ dockCollapsed: false });
+  }
+  showRegressionDocument(value: {
+    name: string | null;
+    expected: boolean;
+  }): void {
+    const documents = value.expected
+      ? this.expectedDocuments()
+      : this.outputDocuments();
+    if (!documents.some((document) => document.name === value.name)) return;
+    this.regressionDocumentKind.set(value.expected ? "expected" : "observed");
+    this.selectedDocument.set(documentKey(value.name));
+    this.openDock("output");
   }
   sampleMode(enabled: boolean): void {
     const { binding, epoch } = this.workbench.selection();

@@ -293,11 +293,12 @@ internal sealed class ServerHostSessionCase : IAsyncDisposable
     internal void PositiveStatus(ServerHostReply reply)
     {
         using var document = reply.Json(); var root = document.RootElement;
-        ServerHostCheck.That(reply.Status == 200 && root.EnumerateObject().Count() == 6
+        ServerHostCheck.That(reply.Status == 200 && root.EnumerateObject().Count() == 7
             && root.GetProperty("version").GetInt32() == 1 && root.GetProperty("mode").GetString() == "session"
             && root.GetProperty("state").GetString() == "authenticated"
             && Token(root.GetProperty("authActionRequestToken")) && Token(root.GetProperty("requestToken"))
-            && root.GetProperty("identityContext").GetString() == ExpectedIdentityContext,
+            && root.GetProperty("identityContext").GetString() == ExpectedIdentityContext
+            && root.GetProperty("displayName").ValueKind == JsonValueKind.Null,
             "The actual published host did not consume the trusted112 session exactly.");
         ServerHostHttp.PrivateHeaders(reply);
     }

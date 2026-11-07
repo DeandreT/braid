@@ -1,7 +1,7 @@
 import { requireOwned } from "./wire";
 
 const allowed =
-  /^(?:accept|accept-encoding|accept-language|cache-control|pragma|priority|user-agent|sec-ch-ua(?:-mobile|-platform)?|sec-fetch-[a-z-]+|upgrade-insecure-requests|origin|referer|cookie|host|connection|content-length|x-weft-session|x-weft-login|x-weft-logout|x-weft-auth-token|x-xsrf-token)$/;
+  /^(?:accept|accept-encoding|accept-language|cache-control|pragma|priority|user-agent|sec-ch-ua(?:-mobile|-platform)?|sec-fetch-[a-z-]+|upgrade-insecure-requests|origin|referer|cookie|host|connection|content-length|x-weft-session|x-weft-login|x-weft-logout|x-weft-auth-token|x-xsrf-token|x-weft-return-to)$/;
 const actions = ["x-weft-session", "x-weft-login", "x-weft-logout"] as const;
 // Called by the sole Fetch admission path, BEFORE any grant/continuation. Entries
 // preserve duplicate spellings/order; canonicalization must not silently overwrite.
@@ -35,6 +35,15 @@ export function requestHeaders(
       "/api/auth/login",
       "/api/auth/logout",
     ].includes(path);
+  if (Object.hasOwn(result, "x-weft-return-to"))
+    requireOwned(
+      method === "POST" &&
+        path === "/api/auth/login" &&
+        (result["x-weft-return-to"] === "/catalog" ||
+          /^\/catalog\/organizations\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/projects$/.test(
+            result["x-weft-return-to"]!,
+          )),
+    );
   if (auth) {
     const marker =
       path === "/api/auth/session"

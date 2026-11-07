@@ -1,19 +1,92 @@
 :host {
+  position: relative;
   display: block;
 }
 
-.session-panel {
-  display: flex;
+.account-trigger {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 16px 24px;
-  padding: 20px 0;
-  border-bottom: 1px solid #e0e7de;
+  gap: 8px;
+  max-width: 180px;
+  border: 1px solid #dce4da;
+  border-radius: 20px;
+  background: #fff;
+  color: #45614c;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.account-trigger[aria-expanded="true"] {
+  background: #eaf1e5;
+}
+.account-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--wb-evidence-text);
+}
+.account-trigger[data-tone="success"] .account-dot {
+  background: var(--wb-success-text);
+}
+.account-trigger[data-tone="running"] .account-dot {
+  background: var(--wb-running-text);
+}
+.account-trigger[data-tone="attention"] .account-dot,
+.account-trigger[data-tone="uncertain"] .account-dot {
+  background: var(--wb-attention-text);
+}
+.account-trigger[data-tone="unavailable"] .account-dot {
+  background: var(--wb-unavailable-text);
+}
+
+.session-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 18px;
+  border: 1px solid #e0e7de;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(23 77 63 / 14%);
+}
+
+/* The account stays anchored to the common top header on every workspace route. */
+:host-context(.app-workbench) .session-panel {
+  top: calc(100% + 8px);
+  right: 0;
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
 }
 
 .session-copy {
-  flex: 1 1 340px;
   min-width: 0;
+}
+
+.session-organization {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.session-account-name {
+  margin: 4px 0 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
 .session-copy h2 {
@@ -63,6 +136,20 @@
   font-size: 0.75rem;
   line-height: 1.65;
   overflow-wrap: anywhere;
+}
+@media (max-width: 820px) {
+  .account-trigger {
+    max-width: 110px;
+    padding: 6px 8px;
+  }
+  :host-context(.app-workbench) .session-panel {
+    position: fixed;
+    top: 100px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-height: calc(100dvh - 116px);
+  }
 }
 
 .session-actions {

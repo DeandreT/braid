@@ -31,7 +31,9 @@ public static partial class CatalogEndpoints
             var project = new ProjectScope(CatalogBuildRequest.Id(organizationId), CatalogBuildRequest.Id(projectId));
             if (!await BuildProjectAccess(context, admission, project)) return NotFound();
             var administrator = await BuildProjectAccess(context, admission, project, administrator: true);
-            var bytes = PrepareBuild(new BuildEnvironmentCapabilitiesV1(CatalogBuildMapping.Profile(options.Profile!), administrator), context.RequestAborted);
+            var bytes = PrepareBuild(new BuildEnvironmentCapabilitiesV1(CatalogBuildMapping.Profile(options.Profile!), administrator,
+                options.DocumentProfile is { } documentProfile ? CatalogBuildMapping.Profile(documentProfile) : null,
+                options.InterchangeProfile is { } interchangeProfile ? CatalogBuildMapping.Profile(interchangeProfile) : null), context.RequestAborted);
             return await BuildProjectAccess(context, admission, project, administrator) ? CaseResponse(bytes) : NotFound();
         });
 

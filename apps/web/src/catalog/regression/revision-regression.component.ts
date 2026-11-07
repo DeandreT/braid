@@ -6,6 +6,7 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
   untracked,
 } from "@angular/core";
@@ -33,6 +34,8 @@ import {
   decodeBytes,
   encodeBytes,
   exactPolicy,
+  ediPolicy,
+  documentProfile,
   type CaseCapabilities,
   type CaseDefinition,
   type CaseDetail,
@@ -50,6 +53,7 @@ import {
   type RegressionWork,
 } from "./regression-view-recovery";
 import { HelpLinkComponent } from "../../help/help-link.component";
+import { UnsentWork } from "../../workbench/unsent-work";
 
 const encoder = new TextEncoder();
 const maxBytes = 8 * 1024 * 1024;
@@ -81,6 +85,10 @@ export class RevisionRegressionComponent {
   readonly routes = catalogRoutes;
   readonly otherRevision = signal<CatalogRevisionScope | null>(null);
   readonly workbench = input(false);
+  readonly documentSelected = output<{
+    name: string | null;
+    expected: boolean;
+  }>();
   private readonly api = inject(RegressionApi);
   private readonly sessions = inject(BrowserSessionState);
   private readonly contexts = inject(CatalogContextStore);
@@ -154,8 +162,18 @@ export class RevisionRegressionComponent {
   clock = "";
   target = "all";
   targetName = "";
+  documentMode = false;
+  comparisonPolicy = exactPolicy;
+  compareSeparators = true;
+  ignoreControlNumbers = false;
+  ignoreDates = false;
+  readonly exactPolicy = exactPolicy;
+  readonly ediPolicy = ediPolicy;
 
   constructor() {
+    inject(UnsentWork).track(
+      () => this.editing() || !!this.pendingCase() || !!this.pendingRun(),
+    );
     effect(() => {
       this.binding();
       this.sessions.generation();
@@ -228,6 +246,10 @@ export class RevisionRegressionComponent {
     this.clock = new Date().toISOString();
     this.target = "all";
     this.targetName = "";
+    this.documentMode = false;
+    this.comparisonPolicy = exactPolicy;
+    this.compareSeparators = true;
+    this.ignoreControlNumbers = this.ignoreDates = false;
     this.inputs.set([this.draft("")]);
     this.outputs.set([this.draft("")]);
     this.parameters.set([]);
@@ -253,6 +275,13 @@ export class RevisionRegressionComponent {
     this.clock = definition.currentDateTime;
     this.target = definition.target.kind;
     this.targetName = definition.target.name || "";
+    this.documentMode = definition.runtime.profile === documentProfile;
+    this.comparisonPolicy = definition.comparisonPolicy;
+    this.compareSeparators =
+      definition.comparisonOptions?.compareSeparators ?? true;
+    this.ignoreControlNumbers =
+      definition.comparisonOptions?.ignoreControlNumbers ?? false;
+    this.ignoreDates = definition.comparisonOptions?.ignoreDates ?? false;
     this.inputs.set([
       this.savedDraft(null, definition.primaryBase64Url),
       ...definition.namedInputs.map((item) =>
@@ -261,7 +290,11 @@ export class RevisionRegressionComponent {
     ]);
     this.outputs.set(
       definition.expected.map((item) =>
-        this.savedDraft(item.name, item.bytesBase64Url),
+        this.savedDraft(
+          item.name,
+          item.bytesBase64Url,
+          item.mediaType ?? "application/json",
+        ),
       ),
     );
     this.parameters.set(
@@ -540,7 +573,11 @@ export class RevisionRegressionComponent {
     const value = this.run();
     if (value && active(value)) this.openRun(value.run.runId, true);
   }
-  show(item: RegressionDocument): void {
+  show(item: RegressionDocument, expected = false): void {
+    if (this.workbench()) {
+      this.documentSelected.emit({ name: item.name, expected });
+      return;
+    }
     const bytes = decodeBytes(item.bytesBase64Url);
     this.shown.set({
       name: item.name || "Primary output",
@@ -551,7 +588,9 @@ export class RevisionRegressionComponent {
   download(item: RegressionDocument): void {
     const bytes = decodeBytes(item.bytesBase64Url);
     const url = URL.createObjectURL(
-      new Blob([bytes as BlobPart], { type: "application/octet-stream" }),
+      new Blob([bytes as BlobPart], {
+        type: item.mediaType ?? "application/json",
+      }),
     );
     const link = this.document.createElement("a");
     link.href = url;
@@ -560,7 +599,11 @@ export class RevisionRegressionComponent {
       ((item.name || "primary")
         .replace(/[^a-zA-Z0-9._-]+/g, "_")
         .slice(0, 80) || "output") +
-      ".bin";
+      (item.mediaType === "application/edi-x12"
+        ? ".x12"
+        : item.mediaType === "application/edifact"
+          ? ".edi"
+          : ".json");
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
@@ -658,6 +701,17 @@ export class RevisionRegressionComponent {
       );
     const inputs = this.documents(this.inputs(), false);
     const expected = this.documents(this.outputs(), true);
+    const runtime = this.documentMode ? cap.documentRuntime : cap.runtime;
+    if (
+      !runtime ||
+      (!this.documentMode && this.comparisonPolicy !== exactPolicy) ||
+      ![exactPolicy, ediPolicy].includes(this.comparisonPolicy) ||
+      (this.comparisonPolicy === ediPolicy &&
+        !cap.comparisonPolicies?.includes(ediPolicy))
+    )
+      throw new Error(
+        "Choose an available explicit runtime and comparison policy.",
+      );
     if (this.target === "named" && !this.targetName)
       throw new Error("Enter the exact target name.");
     const names = new Set<string>();
@@ -678,9 +732,18 @@ export class RevisionRegressionComponent {
       name: this.name,
       currentDateTime: this.clock,
       revisionId: this.revision().scope.revisionId,
-      runtime: { ...cap.runtime },
+      runtime: { ...runtime },
       limits: { ...cap.limits },
-      comparisonPolicy: exactPolicy,
+      comparisonPolicy: this.comparisonPolicy,
+      ...(this.comparisonPolicy === ediPolicy
+        ? {
+            comparisonOptions: {
+              compareSeparators: this.compareSeparators,
+              ignoreControlNumbers: this.ignoreControlNumbers,
+              ignoreDates: this.ignoreDates,
+            },
+          }
+        : {}),
       target: {
         kind: this.target,
         name: this.target === "named" ? this.targetName : null,
@@ -715,15 +778,35 @@ export class RevisionRegressionComponent {
         throw new Error(
           "Combined inputs and combined expected outputs must each fit within 8 MiB.",
         );
-      return { name, bytesBase64Url: encoded };
+      const mediaType = value.mediaType ?? "application/json";
+      if (
+        output &&
+        this.documentMode &&
+        ![
+          "application/json",
+          "application/edi-x12",
+          "application/edifact",
+        ].includes(mediaType)
+      )
+        throw new Error("Choose the declared expected output media type.");
+      return {
+        name,
+        bytesBase64Url: encoded,
+        ...(output && this.documentMode ? { mediaType } : {}),
+      };
     });
   }
   private draft(name: string): DocumentDraft {
     return { id: ++this.sequence, name, text: "", file: null };
   }
-  private savedDraft(name: string | null, encoded: string): DocumentDraft {
+  private savedDraft(
+    name: string | null,
+    encoded: string,
+    mediaType = "application/json",
+  ): DocumentDraft {
     return {
       ...this.draft(name || ""),
+      mediaType,
       file: {
         name: "Saved exact bytes",
         encoded,
@@ -766,6 +849,11 @@ export class RevisionRegressionComponent {
           clock: this.clock,
           target: this.target,
           targetName: this.targetName,
+          documentMode: this.documentMode,
+          comparisonPolicy: this.comparisonPolicy,
+          compareSeparators: this.compareSeparators,
+          ignoreControlNumbers: this.ignoreControlNumbers,
+          ignoreDates: this.ignoreDates,
           inputs: this.inputs(),
           outputs: this.outputs(),
           parameters: this.parameters(),
@@ -791,6 +879,11 @@ export class RevisionRegressionComponent {
       this.clock = draft.clock;
       this.target = draft.target;
       this.targetName = draft.targetName;
+      this.documentMode = draft.documentMode ?? false;
+      this.comparisonPolicy = draft.comparisonPolicy ?? exactPolicy;
+      this.compareSeparators = draft.compareSeparators ?? true;
+      this.ignoreControlNumbers = draft.ignoreControlNumbers ?? false;
+      this.ignoreDates = draft.ignoreDates ?? false;
       this.inputs.set(draft.inputs.map((item) => this.renumber(item)));
       this.outputs.set(draft.outputs.map((item) => this.renumber(item)));
       this.parameters.set(draft.parameters.map((item) => this.renumber(item)));

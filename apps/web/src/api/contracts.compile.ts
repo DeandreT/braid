@@ -237,8 +237,6 @@ type NativeEndpoint = components["schemas"]["NativeEndpointV1"];
 type SchemaOwnerStep = components["schemas"]["SchemaNativeOwnerStepV1"];
 type ScopeOwnerStep = components["schemas"]["ScopeNativeOwnerStepV1"];
 type ValidationReport = components["schemas"]["ValidationReportV1"];
-type NativeExampleGet = paths["/api/v1/examples/mappings/{exampleId}"]["get"];
-type NativeExampleResult = components["schemas"]["NativeExampleResultV1"];
 
 export function nativeOwnerId(owner: NativeOwner): string {
   switch (owner.kind) {
@@ -324,20 +322,6 @@ export const numericScopeIndex: Extract<
 >["index"] = 9007199254740993;
 // @ts-expect-error No validator result must be represented by null, never a string status.
 export const invalidValidity: ValidationReport["isValid"] = "unavailable";
-
-export const nativeExampleParameters = {
-  exampleId: "basic",
-} satisfies NativeExampleGet["parameters"]["path"];
-
-export function nativeExampleResponse(
-  document: NativeExampleResult,
-): NativeExampleGet["responses"][200]["content"] {
-  return { "application/json": document };
-}
-
-// @ts-expect-error Native example 404 responses do not contain a projection/report body.
-export const nativeExampleMissingBody: NativeExampleGet["responses"][404]["content"] =
-  { "application/json": nativeFunctionOwner };
 
 type CatalogProject = components["schemas"]["CatalogProjectV1"];
 type CatalogMapping = components["schemas"]["CatalogMappingV1"];
@@ -739,6 +723,7 @@ export const authenticatedStatus = {
   authActionRequestToken: "action-token",
   requestToken: "epoch-token",
   identityContext: "v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  displayName: null,
 } satisfies AuthenticatedSession;
 
 export const anonymousStatus = {
@@ -834,6 +819,7 @@ export const authLoginHeaders = {
   "X-Weft-Login": "1",
   Origin: "https://weft.example",
   "X-Weft-Auth-Token": "action-token",
+  "X-Weft-Return-To": "/catalog",
 } satisfies AuthLogin["parameters"]["header"];
 export const authLogoutHeaders = {
   "X-Weft-Logout": "1",
@@ -868,7 +854,7 @@ export const callbackMethodRefusal: AuthCallback["responses"][405]["content"] =
     "application/json": { version: 1, code: "invalidRequest" },
   };
 export const callbackReturn: AuthCallback["responses"][303]["headers"]["Location"] =
-  "/";
+  "/catalog";
 
 // @ts-expect-error Auth wire versions remain the exact numeric literal 1.
 export const futureAuthVersion: AuthStatus["version"] = 2;
@@ -919,9 +905,6 @@ export const loginBody: AuthLogin["requestBody"] = {
 export const logoutBody: AuthLogout["responses"][204]["content"] = {
   "application/json": {},
 };
-// @ts-expect-error Callback redirects have a fixed local return target.
-export const callbackExternalReturn: AuthCallback["responses"][303]["headers"]["Location"] =
-  "https://elsewhere.example";
 export const callbackJson: AuthCallback["responses"][401]["content"] = {
   // @ts-expect-error Callback 401 failures contain readable HTML, not auth JSON.
   "application/json": { version: 1, code: "authenticationRequired" },

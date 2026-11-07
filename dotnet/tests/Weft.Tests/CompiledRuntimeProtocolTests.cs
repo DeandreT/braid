@@ -10,6 +10,43 @@ namespace Weft.Tests;
 
 public sealed class CompiledRuntimeProtocolTests
 {
+    [Theory]
+    [InlineData("json", "application/json")]
+    [InlineData("x12", "application/edi-x12")]
+    [InlineData("edifact", "application/edifact")]
+    public void Document_protocol_binds_declared_input_and_output_media_without_relabelling(string format, string media)
+    {
+        var value = Fixture(format);
+        var request = CompiledRuntimeProtocol.For(value.Reference, value.Replay);
+        Assert.Equal(CompiledRuntimeProtocol.DocumentProtocol, request.ProtocolVersion);
+        Assert.Equal(media, Assert.Single(request.Replay.Inputs).MediaType);
+        var invocation = CompiledRuntimeProtocol.DecodeRequest(CompiledRuntimeProtocol.EncodeRequest(request, value.Intent, value.Artifact, value.Replay));
+        var outputs = RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, value.Replay.Primary.CopyBytes(), mediaType: media)]);
+        var encoded = CompiledRuntimeProtocol.EncodeResponse(invocation, "succeeded", outputs);
+        var restored = CompiledRuntimeProtocol.DecodeResponse(encoded, request, value.Intent);
+        Assert.Equal(media, Assert.Single(restored.Outputs!.Outputs).MediaType);
+        Assert.Throws<InvalidOperationException>(() => CompiledRuntimeProtocol.EncodeResponse(invocation, "succeeded",
+            RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, value.Replay.Primary.CopyBytes(),
+                mediaType: media == "application/json" ? "application/edi-x12" : "application/json")])));
+        Assert.Throws<InvalidOperationException>(() => CompiledRuntimeProtocol.EncodeRequest(request with { ProtocolVersion = CompiledRuntimeProtocol.Protocol },
+            value.Intent, value.Artifact, value.Replay));
+    }
+
+    [Fact]
+    public void Legacy_protocol_omits_media_extensions_and_keeps_its_protocol_identity()
+    {
+        var value = Fixture(); var request = CompiledRuntimeProtocol.For(value.Reference, value.Replay);
+        Assert.Equal(CompiledRuntimeProtocol.Protocol, request.ProtocolVersion);
+        var bytes = CompiledRuntimeProtocol.EncodeRequest(request, value.Intent, value.Artifact, value.Replay);
+        Assert.DoesNotContain("mediaType", Encoding.UTF8.GetString(bytes, 4, BinaryPrimitives.ReadInt32BigEndian(bytes)));
+        var count = BinaryPrimitives.ReadInt32BigEndian(bytes);
+        var old = Encoding.UTF8.GetString(bytes, 4, count);
+        var raw = Encoding.UTF8.GetBytes(old.Replace("\"inputs\":[{", "\"inputs\":[{\"mediaType\":null,", StringComparison.Ordinal));
+        var changed = new byte[4 + raw.Length + bytes.Length - 4 - count];
+        BinaryPrimitives.WriteInt32BigEndian(changed, raw.Length);
+        raw.CopyTo(changed, 4); bytes.AsSpan(4 + count).CopyTo(changed.AsSpan(4 + raw.Length));
+        Assert.Throws<InvalidOperationException>(() => CompiledRuntimeProtocol.DecodeRequest(changed));
+    }
     [Fact]
     public void Request_round_trip_preserves_exact_artifact_input_parameter_and_clock_bytes()
     {
@@ -124,17 +161,18 @@ public sealed class CompiledRuntimeProtocolTests
         Assert.Equal(parameters.OrderBy(item => item.Name, StringComparer.Ordinal), CompiledRuntimeProtocol.DecodeRequest(bytes).Replay.Parameters);
     }
 
-    private static (BuildIntent Intent, BuildBytes Artifact, BuildArtifactReference Reference, RegressionReplay Replay) Fixture()
+    private static (BuildIntent Intent, BuildBytes Artifact, BuildArtifactReference Reference, RegressionReplay Replay) Fixture(string? format = null)
     {
         var revision = new RevisionScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var intent = new BuildIntent(Guid.NewGuid(), revision, Sha256Digest.FromBytes([1]),
             new("ferrule", BuildWorkerProtocol.Engine, "sha256:" + new string('a', 64), "adapter"),
-            new(BuildWorkerProtocol.Profile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes),
-            [new(BuildBoundaryKind.PrimaryInput, null, "json"), new(BuildBoundaryKind.PrimaryOutput, null, "json")],
+            new(format is null ? BuildWorkerProtocol.Profile : BuildWorkerProtocol.DocumentProfile, 1, "dotnet", BuildWorkerProtocol.RuntimeVersion, "weft.dotnet-assembly.v1", BuildWorkerProtocol.MaximumSourceBytes),
+            [new(BuildBoundaryKind.PrimaryInput, null, format ?? "json"), new(BuildBoundaryKind.PrimaryOutput, null, format ?? "json")],
             new(new(revision.OrganizationId, revision.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), Guid.NewGuid());
         var artifact = new BuildBytes([1, 2, 3, 4], intent.Profile.MaximumArtifactBytes);
         var replay = new RegressionReplay(PreviewTargetSelection.All, "2026-10-20T12:00:00.123456789-07:00", PreviewLimits.Default,
-            new(null, "{\"exact\":true}\n"u8), [], [new("integer", PreviewParameterKind.Integer, "9007199254740993")]);
+            new(null, format is "x12" or "edifact" ? Encoding.UTF8.GetBytes(format == "x12" ? DocumentPreviewTestData.X12 : DocumentPreviewTestData.Edifact) : "{\"exact\":true}\n"u8.ToArray()),
+            [], [new("integer", PreviewParameterKind.Integer, "9007199254740993")]);
         return (intent, artifact, BuildArtifactReference.Restore(intent, artifact.Digest, artifact.Length), replay);
     }
 }

@@ -1,26 +1,33 @@
 ---
 id: chat
-title: Chat about a revision
+title: Chat about your workspace
 order: 12
-summary: Ask questions about a revision and check the answers against its reports.
+summary: Ask read-only questions about mappings, projects, runs and the user guide.
 ---
 
-Chat answers questions about one revision, using its saved explanation and
-validation. It never reads production data, generates reports, runs samples or
-changes anything. Chat must be set up for your workspace; if it isn't, the chat
-panel says **Chat is not configured for this workspace**.
+Chat answers questions about projects and mappings you can read, saved reports,
+runs and this user guide. It never generates reports, starts runs or changes
+mappings. Chat must be set up for your workspace; if it isn't, the chat
+entry is unavailable; the Conversations page explains when chat is not configured.
 
 ## Ask a question
 
-1. Open the revision in the workbench and choose the **Ask Weft** tab in the
-   investigation dock.
+1. Choose **Show chat** in the header. The same right-hand panel is available
+   from mappings, projects, the guide and other workspace views.
 2. Choose **New conversation**, or pick one under **Saved conversations**.
 3. Choose a **Model profile**, type your **Question** and choose
    **Send question**.
 
-A new conversation needs the revision's saved explanation and validation. If
-they haven't been generated, [generate them](reports.md#generate-a-report)
-first.
+A new workspace conversation does not need saved reports. Report tools only
+read retained reports; they say when a report has not been generated. You can
+[generate a report](reports.md#generate-a-report) yourself when appropriate.
+
+Use **Focus for the next conversation** to search mappings.
+Choose the current head at each turn or an exact revision. New conversations
+from a revision initially suggest that exact revision; you can choose another focus.
+Focus guides context; it never
+limits tools to that mapping. **Open in chat** continues the same conversation
+in a separate tab without changing the panel's revision.
 
 The answer appears as it is written. **Cancel answer** stops it. If the
 connection drops, choose **Reconnect answer** to continue from where it
@@ -31,18 +38,25 @@ what it looked up.
 
 ## Check the answer
 
-Answers can cite fields, rules and diagnostics. Choose a citation to select it
-in the mapping table or the **Issues** tab. A citation works only while the
-page shows the same saved report the conversation used; otherwise Weft tells
-you it isn't available.
+Answers can cite fields, rules, diagnostics, other projects and mappings, runs,
+and sections of this guide. A citation of the open revision and displayed saved
+report selects its resource in the workbench. Other citations open their own
+view in a separate tab. Access is checked again; a resource you can no longer
+read is not shown.
 
 Chat can be wrong. Check its citations and the report's
 [coverage](reports.md#coverage) before relying on an answer.
 
 ## Your conversations
 
-Conversations are private: only you can see yours. Each one stays tied to the
-revision and reports it started with, even after newer revisions are uploaded.
+Conversations are private: only you can see yours. The exact focus resolved for
+each turn is recorded, so an answer never silently follows a later head.
+Existing revision-pinned conversations also appear in the list and keep their
+original revision and report pins.
+The **Conversations** navigation entry opens your library. Moving to another
+workspace page or hiding chat keeps the same conversation and unsent question.
+Use the left-edge splitter or width control to resize the panel. On a narrow
+screen it opens as a focused view; **Hide chat** returns to your work.
 Choose an earlier question in a conversation to read its answer again; this
 doesn't ask the model again.
 
@@ -52,3 +66,22 @@ ends, the conversation's content can be erased.
 If Weft can't confirm that a question was received, it keeps the question in
 the tab and offers **Recover original question**, which sends exactly the same
 question again.
+
+## Sample data policy
+
+The model profile shows whether its destination permits sample data. This is
+not a permission grant: a payload tool also needs your current project
+`run.payload.read` grant. Without both, sample payload tools are not offered.
+The server rechecks each tool call. Turns that actually share sample bytes are
+marked **Data shared with** the selected model and audited without their data
+content. Their answers may include sample-derived content and follow the
+conversation's retention period.
+
+Earlier turns that could use sample data stay visible to you but are not sent
+to the model again automatically. Ask it to read the current data again; the
+same profile and current project permission checks apply.
+
+If conversation creation was not acknowledged, **Recover conversation creation**
+reuses its original identity and focus. Unsent and uncertain work stays in tab
+memory only. Switching conversations or leaving the workspace warns when such work could be lost; nothing is sent again
+automatically.

@@ -29,7 +29,7 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
     internal NpgsqlDataSource DataSource => Source;
 
     internal Task<PostgresTransaction> BeginAsync(ActorContext actor, ChatConversationKey key, bool write, CancellationToken ct) =>
-        BeginAsync(actor, key.Revision.OrganizationId, write, ct);
+        BeginAsync(actor, key.OrganizationId, write, ct);
 
     internal async Task<PostgresTransaction> BeginAsync(ActorContext actor, Guid organizationId, bool write, CancellationToken ct)
     {

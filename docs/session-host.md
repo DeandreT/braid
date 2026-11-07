@@ -4,7 +4,7 @@ The Server selects `disabled`, `development`, or `session` with `WEFT_CATALOG_AU
 
 Absent mode preserves the old choice: catalog off means disabled; explicit catalog enablement uses the existing Development profile. An explicit disabled mode requires `WEFT_CATALOG_ENABLED=false`; development and session require `true`. Values and booleans are case-sensitive. Session never falls back to another mode.
 
-Disabled and Development retain the existing loopback HTTP listener and prototype routes. Disabled status is noncredential JSON with only version and mode; it creates no session, Entra or identity database resources. Enabled Development retains its existing identity/origin/environment checks and token contract. Its concrete origin must match the configured listener. `DevelopmentListenAddress.Parse` still accepts port zero. Only Disabled status may defer its origin: one actual nonzero bound loopback address is admitted after Kestrel starts, before application startup completes. Before that publication the status endpoint cannot return success. Neither Host nor forwarding headers select this origin.
+Disabled and Development use a loopback HTTP listener. Disabled status is noncredential JSON with only version and mode; it creates no session, Entra or identity database resources. Enabled Development retains its existing identity/origin/environment checks and token contract. Its concrete origin must match the configured listener. `DevelopmentListenAddress.Parse` still accepts port zero. Only Disabled status may defer its origin: one actual nonzero bound loopback address is admitted after Kestrel starts, before application startup completes. Before that publication the status endpoint cannot return success. Neither Host nor forwarding headers select this origin.
 
 Session requires the following explicit configuration. Deliver secrets through protected files, not command-line arguments or logged configuration dumps.
 
@@ -20,6 +20,7 @@ Session requires the following explicit configuration. Deliver secrets through p
 | `WEFT_SESSION_KEY_CERTIFICATE_FILE` / `WEFT_SESSION_KEY_PRIVATE_KEY_FILE` | Current usable RSA PEM certificate and matching key for durable key protection. |
 | `WEFT_SESSION_DECRYPT_CERTIFICATES_FILE` | Optional private JSON array of at most eight exact `{ "certificateFile": "...", "privateKeyFile": "..." }` pairs. Each pair is RSA PEM with a usable private key; historical certificate expiry is allowed for decryption. Absence is an empty overlap set. |
 | `WEFT_SESSION_READER_CONNECTION_STRING_FILE` / `WEFT_SESSION_WRITER_CONNECTION_STRING_FILE` / `WEFT_IDENTITY_READER_CONNECTION_STRING_FILE` | Three separately delivered private UTF-8 files with explicit nonempty usernames and passwords for the existing restricted reader, writer and external-identity reader roles. No owner/migration/runtime provisioner or ambient credential fallback. |
+| `WEFT_ACCOUNT_DISPLAY_CONNECTION_STRING_FILE` | Optional separate protected connection for `weft_account_display`; absent means null account labels. Plain credentials or a configured invalid delivery are refused. See [Account display names](account-display-name.md). |
 | `WEFT_ENTRA_TENANT_ID` / `WEFT_ENTRA_CLIENT_ID` | The fixed tenant/client UUIDs accepted by the Entra module. |
 | `WEFT_ENTRA_CLIENT_CERTIFICATE_FILE` / `WEFT_ENTRA_CLIENT_PRIVATE_KEY_FILE` | Separate usable RSA PEM client certificate/key. No client-secret or ambient-credential path. |
 | `WEFT_API_BEARER_ENABLED`, `WEFT_API_BEARER_AUDIENCE`, `WEFT_API_BEARER_SCOPE`, `WEFT_API_BEARER_CLIENT_IDS`, `WEFT_API_AUDIT_WRITER_CONNECTION_STRING_FILE` | Optional, all or none: [bearer access](api-authentication.md#configuration) for signed-in users' public clients, with its private audit-writer credential. Any partial set refuses startup. |
@@ -33,12 +34,13 @@ Each business feature stays off until its own flag is `true`. The table lists wh
 | --- | --- | --- | --- | --- |
 | Health, static application, unknown-API 404 | always | yes | yes | yes |
 | Authentication status | `WEFT_CATALOG_AUTH_MODE` | mode-only status | Development identity | Entra sign-in and browser sessions |
-| Native examples, projection fixtures | always (examples need the worker runner) | yes | yes | no |
+| Synthetic projection fixtures | `DOTNET_ENVIRONMENT=Development` | yes | yes | no |
 | OpenAPI document | `DOTNET_ENVIRONMENT=Development` | yes | yes | no |
 | Catalog reads | `WEFT_CATALOG_ENABLED`, `WEFT_CATALOG_CONNECTION_STRING` | no | yes | yes |
 | Metadata edits, project creation | `WEFT_METADATA_EDITS_ENABLED`, `WEFT_PROJECT_CREATION_ENABLED` and their connection strings | no | yes | yes |
 | Retained report reads and revision comparison | `WEFT_REVISION_REPORTS_ENABLED`, `WEFT_POSTGRES_REPORT_CONNECTION_STRING`, private storage | no | yes | yes |
 | Native upload and report derivation | `WEFT_REVISION_INGESTION_ENABLED`, `WEFT_REVISION_REPORT_DERIVATION_ENABLED` and their connection strings | no | yes; native work needs the Development worker runner (`WEFT_FERRULE_WORKER_IMAGE` in the Development environment) | yes, through the hosted inspection worker (below); startup refuses without it |
+| MFD import and export | `WEFT_MFD_INTERCHANGE_ENABLED`, native ingestion and retained report-read storage | no | separate Docker or Ferrule-service `interchange` profile | Ferrule service or dynamic sessions; not the inspection-only worker |
 | Chat | `WEFT_CHAT_ENABLED`, `WEFT_CHAT_PROFILES_FILE`, chat reader/writer | no | connection strings | Session `_FILE` |
 | Previews (submission, reads, cancel) | `WEFT_PREVIEWS_ENABLED`, preview reader/writer | no | connection strings | Session `_FILE` |
 | Regression cases and runs | `WEFT_REGRESSIONS_ENABLED`, `WEFT_FERRULE_WORKER_IMAGE`, four regression logins | no | connection strings | Session `_FILE` |
@@ -73,6 +75,7 @@ Session snapshots every feature flag before it opens any PEM, ring or credential
 | Session credential file | Login |
 | --- | --- |
 | `WEFT_CHAT_READER_CONNECTION_STRING_FILE` / `WEFT_CHAT_WRITER_CONNECTION_STRING_FILE` | `weft_chat_reader` / `weft_chat_writer` |
+| `WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE` (optional) | `weft_payload_permission_reader` |
 | `WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE` / `WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE` | `weft_preview_reader` / `weft_preview_writer` |
 
 A plain chat or preview connection-string setting refuses Session startup rather than being ignored, and each pair must name two different deliveries. The files use the same admission as the session/identity credentials: private-file checks, explicit username and password, no passfile, client certificate/key or ambient `PG*` credential, and password-only authentication.

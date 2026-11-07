@@ -53,6 +53,13 @@ public sealed record CanonicalFingerprint
         Span<byte> count = stackalloc byte[8];
         BinaryPrimitives.WriteUInt64BigEndian(count, (ulong)intent.NativeByteCount);
         buffer.Write(count);
+        // Preserve v1 native-only fingerprints exactly. Imported intents extend the domain
+        // with a tagged digest binding original bytes, conversion engine and reviewed report.
+        if (intent.ImportProvenance is { } provenance)
+        {
+            WriteText(buffer, "weft.interchange-provenance.v1");
+            buffer.Write(Convert.FromHexString(provenance.Digest.Value));
+        }
         return new(Sha256Digest.FromBytes(buffer.ToArray()));
     }
 

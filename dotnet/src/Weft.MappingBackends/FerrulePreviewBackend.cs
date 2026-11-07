@@ -11,21 +11,37 @@ using Weft.MappingBackends.Workers;
 
 namespace Weft.MappingBackends;
 
-/// <summary>Runs bounded JSON sample previews through the restricted Ferrule worker.</summary>
-public sealed class FerrulePreviewBackend : IMappingPreviewBackend
+/// <summary>Runs bounded previews through an explicitly selected restricted Ferrule admission profile.</summary>
+public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAdmission
 {
     public const string ProtocolVersion = "weft.ferrule-preview.v1";
     public const string AdapterBuild = "weft.ferrule-preview-adapter.v1";
+    public const string DocumentProtocolVersion = "weft.ferrule-document-preview.v1";
+    public const string DocumentAdapterBuild = "weft.ferrule-document-preview-adapter.v1";
     private const string PrimaryOutput = "primary-output";
     private const string NamedOutputPrefix = "named-output:";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
     private readonly IInspectionWorkerRunner _runner;
     private readonly string _backendBuild;
+    private readonly PreviewExecutionProfile _profile;
+    private string SelectedProfile => _profile == PreviewExecutionProfile.Document ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
+    private string SelectedProtocol => _profile == PreviewExecutionProfile.Document ? DocumentProtocolVersion : ProtocolVersion;
+    private string SelectedAdapter => _profile == PreviewExecutionProfile.Document ? DocumentAdapterBuild : AdapterBuild;
+
+    public bool CanExecute => _runner is not IExecutionAdmission { CanExecute: false };
 
     public FerrulePreviewBackend(IInspectionWorkerRunner runner)
+        : this(runner, PreviewExecutionProfile.LegacyJson)
+    {
+    }
+
+    public FerrulePreviewBackend(IInspectionWorkerRunner runner, PreviewExecutionProfile profile)
     {
         ArgumentNullException.ThrowIfNull(runner);
+        if (!Enum.IsDefined(profile))
+            throw new ArgumentOutOfRangeException(nameof(profile));
+        _profile = profile;
         if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Preview)
             throw new ArgumentException("Preview requires a runner configured with the preview worker profile.", nameof(runner));
         var identity = runner.BuildIdentity;
@@ -39,6 +55,8 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
     public async Task<MappingPreviewResult> PreviewAsync(MappingPreviewRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if (request.Profile is { } requested && requested != _profile)
+            return await new FerrulePreviewBackend(_runner, requested).PreviewAsync(request, cancellationToken).ConfigureAwait(false);
         ArgumentNullException.ThrowIfNull(request.Artifact);
         ArgumentNullException.ThrowIfNull(request.Target);
         ArgumentNullException.ThrowIfNull(request.Primary);
@@ -143,14 +161,14 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
         }
     }
 
-    private static byte[]? FrameRequest(MappingPreviewRequest request, string requestId)
+    private byte[]? FrameRequest(MappingPreviewRequest request, string requestId)
     {
         var artifact = request.Artifact;
         using var buffer = new MemoryStream();
         using (var json = new Utf8JsonWriter(buffer))
         {
             json.WriteStartObject();
-            json.WriteString("protocolVersion", ProtocolVersion);
+            json.WriteString("protocolVersion", SelectedProtocol);
             json.WriteString("requestId", requestId);
             json.WriteStartObject("revision");
             json.WriteString("organizationId", artifact.Scope.OrganizationId.ToString("D"));
@@ -245,11 +263,11 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
         var response = JsonSerializer.Deserialize<PreviewHostResponse>(json, JsonOptions) ?? throw new ProtocolException();
         var artifact = request.Artifact;
         var scope = artifact.Scope;
-        Require(response.ProtocolVersion == ProtocolVersion && response.RequestId == requestId
+        Require(response.ProtocolVersion == SelectedProtocol && response.RequestId == requestId
             && response.Revision == new HostRevision(scope.OrganizationId.ToString("D"), scope.ProjectId.ToString("D"),
                 scope.MappingId.ToString("D"), scope.RevisionId.ToString("D"))
             && response.NativeDigest == artifact.Digest.Value && response.DocumentId == InspectionPolicy.DocumentId);
-        Require(response.EngineRevision == FerruleInspectionBackend.EngineRevision && response.Profile == PreviewPolicy.Profile);
+        Require(response.EngineRevision == FerruleInspectionBackend.EngineRevision && response.Profile == SelectedProfile);
         Require((response.Result is null) != (response.Failure is null));
         var maximumText = request.Limits.MaximumTextBytes;
         var offset = 4 + (int)length;
@@ -262,7 +280,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
                 Text(failure.Subject, maximumText);
             else
                 Require(!failure.SubjectTruncated);
-            return new MappingPreviewResult(status, Provenance(artifact, true), PreviewPolicy.Profile, 0, [],
+            return new MappingPreviewResult(status, Provenance(artifact, true), SelectedProfile, 0, [],
                 new MappingPreviewFailure("ferrule." + failure.Code, failure.Message, failure.MessageTruncated, failure.Subject, failure.SubjectTruncated));
         }
 
@@ -275,7 +293,8 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
         long total = 0;
         foreach (var item in result.Artifacts)
         {
-            Require(item.MediaType == PreviewPolicy.MediaType && item.RecordsWritten <= long.MaxValue);
+            Require((_profile == PreviewExecutionProfile.Document ? DocumentPreviewPolicy.AdmitsMediaType(item.MediaType) : item.MediaType == PreviewPolicy.MediaType)
+                && item.RecordsWritten <= long.MaxValue);
             Text(item.TargetName, maximumText);
             var digest = Sha256Digest.Parse(item.Sha256);
             Require(digest.Value == item.Sha256);
@@ -292,7 +311,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
         Require(offset == output.Length);
         if (request.Target.Kind == PreviewTargetKind.Named)
             Require(artifacts[0].TargetNameTruncated || artifacts[0].TargetName == request.Target.Name);
-        return new MappingPreviewResult(MappingPreviewStatus.Succeeded, Provenance(artifact, true), PreviewPolicy.Profile,
+        return new MappingPreviewResult(MappingPreviewStatus.Succeeded, Provenance(artifact, true), SelectedProfile,
             (long)result.RecordsWritten, artifacts, null);
     }
 
@@ -359,7 +378,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
     };
 
     private PreviewProvenance Provenance(NativeArtifact artifact, bool confirmed) =>
-        new(artifact.Scope, artifact.Digest, "ferrule", FerruleInspectionBackend.EngineRevision, _backendBuild, AdapterBuild, confirmed);
+        new(artifact.Scope, artifact.Digest, "ferrule", FerruleInspectionBackend.EngineRevision, _backendBuild, SelectedAdapter, confirmed);
 
     private MappingPreviewResult LocalFailure(NativeArtifact artifact, MappingPreviewStatus status, string? code = null, string? message = null, string? subject = null)
     {
@@ -373,7 +392,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend
             MappingPreviewStatus.BackendUnavailable => ("preview.unavailable", "The configured isolated preview worker is unavailable."),
             _ => ("preview.failure", "The isolated preview worker failed.")
         };
-        return new MappingPreviewResult(status, Provenance(artifact, false), PreviewPolicy.Profile, 0, [],
+        return new MappingPreviewResult(status, Provenance(artifact, false), SelectedProfile, 0, [],
             new MappingPreviewFailure(code ?? defaultCode, message ?? defaultMessage, false, subject, false));
     }
 

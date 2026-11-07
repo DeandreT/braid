@@ -27,7 +27,7 @@ public sealed partial class AuthBrowserHttpsQualificationTests
         var context = InertContext(request); int delivered = 0;
         if (vector is "missing" or "detached-no-proof") context.Request.Headers.Remove(BrowserQualificationAdmission.Header);
         if (vector == "duplicate") context.Request.Headers[BrowserQualificationAdmission.Header] = new Microsoft.Extensions.Primitives.StringValues([request.Proof, request.Proof]);
-        if (vector == "mismatch") context.Features.Get<IHttpRequestFeature>()!.RawTarget = "/examples";
+        if (vector == "mismatch") context.Features.Get<IHttpRequestFeature>()!.RawTarget = "/sign-in";
         if (vector == "stale") { owner = new(input with { Generation = 2 }); }
         if (vector == "preflight") context.Request.Method = "OPTIONS";
         if (vector == "frame") context.Request.Headers["Sec-Fetch-Dest"] = "iframe";

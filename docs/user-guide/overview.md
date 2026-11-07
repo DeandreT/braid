@@ -43,3 +43,8 @@ Choose **Help** in the header at any time. Each help page has its own address,
 so you can bookmark it or share it with a colleague.
 
 To work from a terminal, see [Using the command line](cli.md).
+
+To check new versions automatically and choose activity alerts, see
+[Automation and notifications](automation.md).
+
+Administrators can manage people and permissions in [Administration](administration.md).

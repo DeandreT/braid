@@ -56,7 +56,7 @@ internal sealed class RevisionReportTestSupport : IAsyncDisposable
     }
 
     internal static async Task<RevisionReportTestSupport> CreateAsync(PostgresFixture fixture,
-        string nativeFixture = "versioned-exact")
+        string nativeFixture = "versioned-exact", IIngestionBackendRegistry? ingestionRegistry = null)
     {
         var ingestion = await RevisionIngestionTestSupport.CreateAsync(fixture);
         PostgresRevisionReportDatabase? reads = null;
@@ -64,7 +64,9 @@ internal sealed class RevisionReportTestSupport : IAsyncDisposable
         try
         {
             var bytes = RevisionIngestionTestSupport.Fixture(nativeFixture);
-            var created = await ingestion.CreateAsync(bytes);
+            var created = ingestionRegistry is null ? await ingestion.CreateAsync(bytes)
+                : await ingestion.NewService(ingestionRegistry).CreateAsync(ingestion.Actor, ingestion.Project, Guid.NewGuid(),
+                    RevisionIngestionTestSupport.Request(), new MemoryStream(bytes));
             Assert.True(created.Outcome is RevisionIngestionOutcome.CommittedValid or RevisionIngestionOutcome.CommittedDecodedInvalid,
                 $"Actual native fixture {nativeFixture}: ingestion outcome {created.Outcome}, failure {created.Failure}.");
             var receipt = Assert.IsType<IngestionReceipt>(await ingestion.PrivateReceiptAsync(created.Receipt!.OperationId));

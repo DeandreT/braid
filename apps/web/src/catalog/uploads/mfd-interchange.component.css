@@ -1,0 +1,65 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.mfd-card {
+  margin: 18px 0;
+  padding: 22px;
+  border: 1px solid #dce5d8;
+  border-radius: 14px;
+  background: #fff;
+  color: #284c3c;
+}
+h2,
+h3 {
+  margin: 0 0 12px;
+}
+p,
+li {
+  font-size: 0.875rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+label {
+  display: block;
+  margin: 14px 0;
+}
+input[type="checkbox"] {
+  display: inline-block;
+  width: auto;
+  margin: 0 0.5rem 0 0;
+  padding: 0;
+  vertical-align: middle;
+}
+input:not([type="checkbox"]),
+textarea,
+select {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid #aabbab;
+  border-radius: 8px;
+  color: #284c3c;
+  background: #fff;
+}
+button {
+  margin: 8px 10px 0 0;
+  padding: 10px 14px;
+  border: 1px solid #64806b;
+  border-radius: 8px;
+  background: #f3f6f1;
+  color: #284c3c;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+a {
+  color: #345d45;
+}
+code {
+  overflow-wrap: anywhere;
+}

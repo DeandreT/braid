@@ -20,11 +20,12 @@ internal static partial class PayloadPermissionSchemaContract
             await protect.ExecuteNonQueryAsync(cancellationToken);
         }
         await ValidateRelationsAsync(connection, transaction, names, cancellationToken);
+        var searchInstalled = await CatalogSearchSchemaAdmission.ValidateAsync(connection, transaction, cancellationToken);
         foreach (var name in names)
         {
             await ValidateColumnsAsync(connection, transaction, Tables[name], cancellationToken);
             await ValidateConstraintsAsync(connection, transaction, Tables[name], cancellationToken);
-            await ValidateIndexesAsync(connection, transaction, Tables[name], cancellationToken);
+            await ValidateIndexesAsync(connection, transaction, Tables[name], searchInstalled, cancellationToken);
             await ValidatePoliciesAsync(connection, transaction, Tables[name], cancellationToken);
         }
         foreach (var function in Functions.Value.Values)
@@ -147,7 +148,7 @@ internal static partial class PayloadPermissionSchemaContract
     private sealed record IndexDefinition(bool Primary, bool Unique, string[] Columns, string? Predicate = null);
 
     private static async Task ValidateIndexesAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        Table table, CancellationToken cancellationToken)
+        Table table, bool searchInstalled, CancellationToken cancellationToken)
     {
         await using var command = new NpgsqlCommand("""
             SELECT index_relation.relname,index_row.indisprimary,index_row.indisunique,index_row.indisexclusion,
@@ -178,6 +179,9 @@ internal static partial class PayloadPermissionSchemaContract
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
+            // These additive indexes have already passed the complete search-schema guard.
+            if (searchInstalled && CatalogSearchSchemaAdmission.IndexNames.Contains(reader.GetString(0), StringComparer.Ordinal))
+                continue;
             if (!expected.Remove(reader.GetString(0), out var definition) || reader.GetBoolean(1) != definition.Primary ||
                 reader.GetBoolean(2) != definition.Unique || reader.GetBoolean(3) || !reader.GetBoolean(4) || !reader.GetBoolean(5) ||
                 !reader.GetBoolean(6) || !reader.GetBoolean(7) || reader.GetBoolean(8) ||

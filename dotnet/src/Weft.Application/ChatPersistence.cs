@@ -52,6 +52,8 @@ public sealed record ChatStoredEvent(long Sequence, Guid EventId, ChatEventKind 
     public ChatUsageFact? Usage => Kind == ChatEventKind.Usage ? ChatMetadataCodec.ReadUsage(MetadataJson!) : TerminalMetadata?.Usage;
     public ChatProviderFailureFact? ProviderFailure => Kind == ChatEventKind.ProviderFailure ? ChatMetadataCodec.ReadFailure(MetadataJson!) : TerminalMetadata?.Failure;
     public ChatCitationFact? Citation => Kind == ChatEventKind.Citation ? ChatMetadataCodec.ReadCitation(MetadataJson!) : null;
+    public ChatWorkspaceCitationFact? WorkspaceCitation => Kind == ChatEventKind.WorkspaceCitation ? ChatMetadataCodec.ReadWorkspaceCitation(MetadataJson!) : null;
+    public ChatPayloadDisclosureFact? DataShared => Kind == ChatEventKind.DataShared ? ChatMetadataCodec.ReadDisclosure(MetadataJson!) : null;
     public ChatTerminalMetadata? TerminalMetadata => (Kind is ChatEventKind.Completed or ChatEventKind.Failed or ChatEventKind.Cancelled or ChatEventKind.Interrupted or ChatEventKind.RoundCompleted) && MetadataJson is not null
         ? ChatMetadataCodec.ReadTerminal(MetadataJson!) : null;
     public override string ToString() => nameof(ChatStoredEvent);
@@ -144,6 +146,16 @@ public interface IChatConversationReader
     Task<ChatConversationSummary?> GetConversationAsync(ActorContext actor, ChatConversationKey key, CancellationToken ct = default);
     /// <summary>Null when the conversation is not visible to its creator.</summary>
     Task<ChatTurnPage?> ListTurnsAsync(ActorContext actor, ChatConversationKey key, int limit, CancellationToken ct = default);
+    /// <summary>
+    /// The caller's conversations of both kinds in one organization, newest first. Revision conversations appear only
+    /// while their project is readable. With <paramref name="revision"/>, only workspace conversations focused on that
+    /// exact revision and revision conversations pinned to it. <paramref name="afterConversationId"/> continues after
+    /// a conversation of the same listing.
+    /// </summary>
+    Task<ChatConversationPage> ListOrganizationConversationsAsync(ActorContext actor, Guid organizationId, RevisionScope? revision,
+        int limit, Guid? afterConversationId, CancellationToken ct = default);
+    /// <summary>The caller's visible conversation of either kind by its identity, with its complete key.</summary>
+    Task<ChatConversationSummary?> FindConversationAsync(ActorContext actor, Guid organizationId, Guid conversationId, CancellationToken ct = default);
 }
 
 /// <summary>Separate trusted lifecycle credential. No owner ACL bypass is exposed through ordinary stores;

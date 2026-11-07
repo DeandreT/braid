@@ -156,6 +156,13 @@ async function install(page: Page): Promise<Fixture> {
       await route.fulfill({ json: { version: 1, mode: "development" } });
       return;
     }
+    if (url.pathname === "/api/v1/health") {
+      expect(request.method()).toBe("GET");
+      await route.fulfill({
+        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+      });
+      return;
+    }
     fixture.requests.push(`${request.method()} ${url.pathname}${url.search}`);
     expect(request.method()).toBe("GET");
     expect(request.headers()["x-xsrf-token"]).toBeUndefined();
@@ -428,12 +435,20 @@ test("going back restores the reading position instead of the anchor", async ({
     article(page).getByRole("heading", { level: 2, name: "Coverage" }),
   ).toBeFocused();
   // Read from the top of the section, well away from the anchored heading.
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await page
+    .locator("#main-content")
+    .evaluate((element) => element.scrollTo(0, 0));
+  await expect
+    .poll(() =>
+      page.locator("#main-content").evaluate((element) => element.scrollTop),
+    )
+    .toBe(0);
   const anchor = await article(page)
     .getByRole("heading", { level: 2, name: "Coverage" })
     .evaluate(
-      (element) => element.getBoundingClientRect().top + window.scrollY,
+      (element) =>
+        element.getBoundingClientRect().top +
+        document.getElementById("main-content")!.scrollTop,
     );
   expect(anchor).toBeGreaterThan(300);
   await contentsNav(page)
@@ -449,7 +464,11 @@ test("going back restores the reading position instead of the anchor", async ({
     article(page).getByRole("heading", { level: 2, name: "Coverage" }),
   ).toBeAttached();
   await page.waitForTimeout(500);
-  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(anchor / 2);
+  expect(
+    await page
+      .locator("#main-content")
+      .evaluate((element) => element.scrollTop),
+  ).toBeLessThan(anchor / 2);
 });
 
 test("content at the server's limits renders and beyond them is refused", async ({

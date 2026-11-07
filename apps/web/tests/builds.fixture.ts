@@ -21,6 +21,11 @@ const backend = {
   engineBuild: "sha256:" + "c".repeat(64),
   adapterVersion: "adapter",
 };
+const documentProfile = { ...profile, id: "weft.ferrule-csharp-document.v1" };
+const interchangeProfile = {
+  ...profile,
+  id: "weft.ferrule-csharp-x12-interchanges.v1",
+};
 type Environment = components["schemas"]["BuildEnvironmentV1"];
 type Approval = components["schemas"]["BuildApprovalV1"];
 type Run = components["schemas"]["BuildRunV1"];
@@ -39,6 +44,8 @@ export interface BuildFixture {
   run: Run | null;
   cancelWinsAsSuccess: boolean;
   forgeRun: boolean;
+  documentProfiles: boolean;
+  interchangeProfiles: boolean;
 }
 
 /** Synthetic protocol/UI boundary only. This fixture does not qualify compilation or persistence. */
@@ -53,6 +60,8 @@ export async function buildFixture(page: Page): Promise<BuildFixture> {
     run: null,
     cancelWinsAsSuccess: false,
     forgeRun: false,
+    documentProfiles: false,
+    interchangeProfiles: false,
   };
   const envs: Environment[] = [
     {
@@ -206,6 +215,16 @@ export async function buildFixture(page: Page): Promise<BuildFixture> {
         readOwnMetadata: state.readOwnMetadata,
         approveBuilds: state.readOwnMetadata,
         submitBuilds: state.readOwnMetadata,
+        ...(state.documentProfiles
+          ? {
+              documentProfile,
+              documentBackend: {
+                ...backend,
+                adapterVersion: "document-adapter",
+              },
+            }
+          : {}),
+        ...(state.interchangeProfiles ? { interchangeProfile } : {}),
       });
       return;
     }
@@ -216,6 +235,8 @@ export async function buildFixture(page: Page): Promise<BuildFixture> {
       await reply(route, {
         profile,
         canCreateVersions: state.role === "administrator",
+        ...(state.documentProfiles ? { documentProfile } : {}),
+        ...(state.interchangeProfiles ? { interchangeProfile } : {}),
       });
       return;
     }
@@ -244,9 +265,15 @@ export async function buildFixture(page: Page): Promise<BuildFixture> {
       }
       if (method === "PUT" && state.role === "administrator") {
         const body = request.postDataJSON();
+        const selectedProfile =
+          state.interchangeProfiles && body.profileId === interchangeProfile.id
+            ? interchangeProfile
+            : state.documentProfiles && body.profileId === documentProfile.id
+              ? documentProfile
+              : profile;
         if (
-          body.profileId !== profile.id ||
-          body.profileVersion !== profile.version
+          body.profileId !== selectedProfile.id ||
+          body.profileVersion !== selectedProfile.version
         ) {
           await reply(route, { code: "preconditionFailed" }, 412);
           return;
@@ -263,7 +290,7 @@ export async function buildFixture(page: Page): Promise<BuildFixture> {
               environmentId: id,
               version,
             },
-            profile: { ...profile },
+            profile: { ...selectedProfile },
             active: true,
             creatorPrincipalId: synthetic.actor,
             createdAtUtc: "2026-10-20T12:00:00Z",

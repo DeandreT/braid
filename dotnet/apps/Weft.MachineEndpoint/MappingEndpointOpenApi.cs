@@ -47,6 +47,13 @@ internal static class MappingEndpointOpenApi
                 services.ConfigureHttpJsonOptions(options => MappingEndpointContract.Configure(options.SerializerOptions));
                 services.AddOpenApi(DocumentName, options =>
                 {
+                    options.AddSchemaTransformer((schema, context, _) =>
+                    {
+                        if (context.JsonTypeInfo.Type == typeof(MappingDocumentInvocationInputV1) ||
+                            context.JsonTypeInfo.Type == typeof(MappingDocumentInvocationOutputV1))
+                            schema.Properties!["mediaType"] = Text("application/json", "application/edi-x12", "application/edifact");
+                        return Task.CompletedTask;
+                    });
                     options.AddDocumentTransformer((document, _, _) =>
                     {
                         Describe(document);
@@ -99,7 +106,16 @@ internal static class MappingEndpointOpenApi
         if (!schemas.TryGetValue(nameof(MappingInvocationResponseV1), out var completed) || completed is not OpenApiSchema { Properties: { } response })
             throw new InvalidOperationException("The completed response schema is missing.");
         response["schema"] = Text(MappingEndpointContract.ResponseSchema);
+        Set(nameof(MappingDocumentInvocationRequestV1), "schema", Text(MappingEndpointContract.DocumentRequestSchema));
+        Set(nameof(MappingDocumentInvocationResponseV1), "schema", Text(MappingEndpointContract.DocumentResponseSchema));
         OmittedWhenNull(document, typeof(MappingInvocationErrorV1));
+
+        void Set(string name, string property, OpenApiSchema value)
+        {
+            if (!schemas.TryGetValue(name, out var found) || found is not OpenApiSchema { Properties: { } properties })
+                throw new InvalidOperationException("The document schema " + name + " is missing.");
+            properties[property] = value;
+        }
     }
 
     private static async Task DescribeAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
@@ -130,18 +146,39 @@ internal static class MappingEndpointOpenApi
                 ];
                 var request = await context.GetOrCreateSchemaAsync(typeof(MappingInvocationRequestV1), parameterDescription: null, cancellationToken);
                 document.AddComponent(nameof(MappingInvocationRequestV1), request);
+                var documentRequest = await context.GetOrCreateSchemaAsync(typeof(MappingDocumentInvocationRequestV1), parameterDescription: null, cancellationToken);
+                document.AddComponent(nameof(MappingDocumentInvocationRequestV1), documentRequest);
+                var documentResponse = await context.GetOrCreateSchemaAsync(typeof(MappingDocumentInvocationResponseV1), parameterDescription: null, cancellationToken);
+                document.AddComponent(nameof(MappingDocumentInvocationResponseV1), documentResponse);
+                foreach (var type in new[] { typeof(MappingDocumentInvocationInputV1), typeof(MappingDocumentInvocationOutputV1) })
+                    document.AddComponent(type.Name, await context.GetOrCreateSchemaAsync(type, parameterDescription: null, cancellationToken));
                 operation.RequestBody = new OpenApiRequestBody
                 {
                     Required = true,
                     Description = "At most " + MappingEndpointRoutes.MaximumBodyBytes + " bytes as `application/json` " +
                         "(optionally `; charset=utf-8`) without a content encoding. Inputs total at most 1 MiB, outputs at most 1 MiB, " +
-                        "and the preview bounds on counts, names and parameters apply.",
+                        "and the preview bounds on counts, names and parameters apply. Legacy bodies omit schema and media. " +
+                        "Document bodies require weft.document-invocation-request.v1 and a mediaType per input matching the qualified boundary; no filename inference.",
                     Content = new Dictionary<string, OpenApiMediaType>
                     {
-                        [MappingEndpointContract.MediaType] = new() { Schema = new OpenApiSchemaReference(nameof(MappingInvocationRequestV1), document) }
+                        [MappingEndpointContract.MediaType] = new()
+                        {
+                            Schema = new OpenApiSchema
+                            {
+                                OneOf = [
+                            new OpenApiSchemaReference(nameof(MappingInvocationRequestV1), document),
+                            new OpenApiSchemaReference(nameof(MappingDocumentInvocationRequestV1), document)]
+                            }
+                        }
                     }
                 };
                 Invocation(operation, document);
+                ((OpenApiResponse)operation.Responses!["200"]).Content![MappingEndpointContract.MediaType].Schema = new OpenApiSchema
+                {
+                    OneOf = [
+                    new OpenApiSchemaReference(nameof(MappingInvocationResponseV1), document),
+                    new OpenApiSchemaReference(nameof(MappingDocumentInvocationResponseV1), document)]
+                };
                 break;
             case "GetLiveness":
                 operation.Summary = "Liveness probe.";

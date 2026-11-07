@@ -2,7 +2,7 @@ import {
   isCatalogId,
   type CatalogRevisionScope,
 } from "../catalog/catalog-types";
-import type { NodeReference } from "../mappings/projection-view";
+import type { NodeReference } from "./projection-view";
 
 export const workbenchViews = [
   "mapping",
@@ -16,7 +16,13 @@ export const workbenchViews = [
 ] as const;
 export type WorkbenchView = (typeof workbenchViews)[number];
 export type DockView =
-  "ask" | "diagnostics" | "input" | "output" | "diff" | "activity";
+  | "inspector"
+  | "ask"
+  | "diagnostics"
+  | "input"
+  | "output"
+  | "diff"
+  | "activity";
 export type WorkbenchDensity = "compact" | "comfortable" | "dense";
 export type InspectorTab = 0 | 1 | 2;
 
@@ -28,11 +34,11 @@ export interface WorkbenchLayout {
   dockCollapsed: boolean;
 }
 export const defaultWorkbenchLayout: Readonly<WorkbenchLayout> = Object.freeze({
-  density: "compact",
+  density: "comfortable",
   inspectorWidth: 244,
-  inspectorCollapsed: false,
-  dockHeight: 144,
-  dockCollapsed: false,
+  inspectorCollapsed: true,
+  dockHeight: 220,
+  dockCollapsed: true,
 });
 export const rowHeights: Readonly<Record<WorkbenchDensity, number>> = {
   compact: 28,
@@ -55,11 +61,11 @@ export function normalizeWorkbenchLayout(value: unknown): WorkbenchLayout {
       String(source.density),
     )
       ? (source.density as WorkbenchDensity)
-      : "compact",
+      : "comfortable",
     inspectorWidth: bounded("inspectorWidth", 244, 210, 420),
-    inspectorCollapsed: source.inspectorCollapsed === true,
-    dockHeight: bounded("dockHeight", 144, 90, 320),
-    dockCollapsed: source.dockCollapsed === true,
+    inspectorCollapsed: source.inspectorCollapsed !== false,
+    dockHeight: bounded("dockHeight", 220, 140, 480),
+    dockCollapsed: source.dockCollapsed !== false,
   };
 }
 
@@ -117,7 +123,7 @@ export function emptyWorkbenchSelection(
     binding,
     epoch,
     view: "mapping",
-    dock: "ask",
+    dock: "inspector",
     inspectorTab: 0,
     entity: null,
     case: null,

@@ -31,26 +31,30 @@ public sealed class RegressionOutput
     public const int MaximumByteCount = 16 * 1024 * 1024;
     private readonly byte[] bytes;
 
-    private RegressionOutput(RegressionOutputKey key, byte[] bytes)
+    private RegressionOutput(RegressionOutputKey key, byte[] bytes, string mediaType)
     {
         Key = key;
+        MediaType = mediaType;
         this.bytes = bytes;
         Digest = Sha256Digest.FromBytes(bytes);
     }
 
     public RegressionOutputKey Key { get; }
+    public string MediaType { get; }
     public int ByteCount => bytes.Length;
     public Sha256Digest Digest { get; }
     internal ReadOnlySpan<byte> Span => bytes;
 
     public static RegressionOutput Capture(RegressionOutputKey key, ReadOnlySpan<byte> bytes,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string mediaType = PreviewPolicy.MediaType)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(key);
+        if (!DocumentPreviewPolicy.AdmitsMediaType(mediaType))
+            throw new RegressionComparisonException(RegressionComparisonFailure.InvalidInput);
         if (bytes.Length > MaximumByteCount)
             throw new RegressionComparisonException(RegressionComparisonFailure.ResourceLimit);
-        var output = new RegressionOutput(key, bytes.ToArray());
+        var output = new RegressionOutput(key, bytes.ToArray(), mediaType);
         cancellationToken.ThrowIfCancellationRequested();
         return output;
     }

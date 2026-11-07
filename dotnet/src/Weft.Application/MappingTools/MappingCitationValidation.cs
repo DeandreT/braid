@@ -29,11 +29,39 @@ public sealed partial class MappingToolService
         return check.Outcome == MappingCitationOutcome.Valid ? check.Citations : Array.Empty<ChatValidatedCitation>();
     }
 
-    private async Task<MappingCitationCheck> CheckCitationsAsync(ActorContext actor, ChatConversationIntent conversation,
+    private Task<MappingCitationCheck> CheckCitationsAsync(ActorContext actor, ChatConversationIntent conversation,
         IReadOnlyList<ChatCitationTarget> candidates, bool omitUnverified, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(conversation);
+        // Conversations are creator-private; another principal never borrows their pins.
+        if (actor.PrincipalId != conversation.Key.Creator || conversation.Key.Kind != ChatConversationKind.Revision)
+            return Task.FromResult(new MappingCitationCheck(MappingCitationOutcome.NotAuthorizedOrNotFound));
+        return CheckCitationsAsync(actor, MappingReportContext.Of(conversation), candidates, omitUnverified,
+            (report, target) => ChatValidatedCitation.Validate(conversation, report, target), cancellationToken);
+    }
+
+    /// <summary>
+    /// The filtering check over an explicit report context, for a workspace conversation: verified targets become
+    /// workspace citations of the exact report they were read from.
+    /// </summary>
+    public Task<MappingCitationCheck> FilterWorkspaceCitationsAsync(ActorContext actor, ChatConversationIntent conversation,
+        MappingReportContext reports, IReadOnlyList<ChatCitationTarget> candidates, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(conversation);
+        ArgumentNullException.ThrowIfNull(reports);
+        if (actor.PrincipalId != conversation.Key.Creator || conversation.Key.Kind != ChatConversationKind.Workspace ||
+            reports.Revision.OrganizationId != conversation.Key.OrganizationId)
+            return Task.FromResult(new MappingCitationCheck(MappingCitationOutcome.NotAuthorizedOrNotFound));
+        return CheckCitationsAsync(actor, reports, candidates, omitUnverified: true,
+            (report, target) => ChatValidatedCitation.ValidateWorkspaceReport(conversation, report, target), cancellationToken);
+    }
+
+    private async Task<MappingCitationCheck> CheckCitationsAsync(ActorContext actor, MappingReportContext context,
+        IReadOnlyList<ChatCitationTarget> candidates, bool omitUnverified, Func<VerifiedRevisionReport, ChatCitationTarget, ChatValidatedCitation> validate,
+        CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         var admitted = false;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -41,7 +69,7 @@ public sealed partial class MappingToolService
         var token = deadline.Token;
         try
         {
-            var source = await AuthorizeAsync(actor, conversation, null, token);
+            var source = await AuthorizeAsync(actor, context.Revision, null, token);
             if (!capacity.Wait(0)) return new(MappingCitationOutcome.Busy);
             admitted = true;
             if (candidates is null || candidates.Count > limits.CitationCount)
@@ -59,14 +87,14 @@ public sealed partial class MappingToolService
             foreach (var target in snapshot)
             {
                 VerifiedRevisionReport report = target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport
-                    ? validation ??= await ReadValidationAsync(actor, conversation, source, token)
-                    : projection ??= await ReadProjectionAsync(actor, conversation, source, token);
+                    ? validation ??= await ReadValidationAsync(actor, context, source, token)
+                    : projection ??= await ReadProjectionAsync(actor, context, source, token);
                 work.Charge(Cost(report, target));
-                try { validated.Add(ChatValidatedCitation.Validate(conversation, report, target)); }
+                try { validated.Add(validate(report, target)); }
                 catch (ArgumentException) when (omitUnverified) { }
                 catch (ArgumentException) { return new(MappingCitationOutcome.Invalid); }
             }
-            await AuthorizeAsync(actor, conversation, source, token);
+            await AuthorizeAsync(actor, context.Revision, source, token);
             token.ThrowIfCancellationRequested();
             return new(MappingCitationOutcome.Valid, Array.AsReadOnly(validated.ToArray()));
         }

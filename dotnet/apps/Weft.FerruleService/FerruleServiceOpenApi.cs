@@ -34,7 +34,7 @@ internal static class FerruleServiceOpenApi
     internal static readonly string[] Profiles =
     [
         FerruleServiceProtocol.EditProfile, FerruleServiceProtocol.InspectionProfile, FerruleServiceProtocol.PreviewProfile, FerruleServiceProtocol.CompileProfile,
-        FerruleServiceProtocol.CompiledProfile
+        FerruleServiceProtocol.CompiledProfile, FerruleServiceProtocol.InterchangeProfile
     ];
 
     /// <summary>
@@ -116,7 +116,7 @@ internal static class FerruleServiceOpenApi
                 operation.Summary = "Confirm the service and its identities before sending a frame.";
                 operation.Description = "Over pinned TLS, reaching this route proves that the service admitted the client certificate.";
                 Respond(operation, "204", "Ready.", ServiceHeaders(), Image(), Toolchain(), Runtime());
-                Respond(operation, "503", "The replica is stopping. Send to another replica after `Retry-After`.", ServiceHeaders(), RetryAfter());
+                Respond(operation, "503", "The replica is stopping or its cleanup is unconfirmed. Send to another replica after `Retry-After`.", ServiceHeaders(), RetryAfter());
                 break;
             case "GetCapabilities":
                 operation.Summary = "Read the protocol, identities, replica limits and served profiles.";
@@ -179,6 +179,18 @@ internal static class FerruleServiceOpenApi
                 // A new route needs its description here before the document can be written.
                 throw new InvalidOperationException("The operation " + operation.OperationId + " is not described.");
         }
+        // Every mapped service response, including legacy inspection and plain health responses, identifies this
+        // process for diagnostics. It is not an affinity token or evidence that an uncertain operation settled.
+        foreach (var response in operation.Responses!.Values.Cast<OpenApiResponse>())
+        {
+            response.Headers ??= new Dictionary<string, IOpenApiHeader>();
+            response.Headers[FerruleServiceProtocol.ReplicaHeader] = new OpenApiHeader
+            {
+                Required = true,
+                Description = "Random per-process replica identity for diagnostics only; never proof of operation settlement or routing affinity.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String, Pattern = "^[0-9a-f]{32}$" }
+            };
+        }
     }
 
     private static string Operation(bool service) =>
@@ -235,7 +247,7 @@ internal static class FerruleServiceOpenApi
         Name = "profile",
         In = ParameterLocation.Path,
         Required = true,
-        Description = "`edit`, `inspection` and `preview` are always served. `compile` and `execute` are served only when enabled and " +
+        Description = "`edit`, `inspection`, `preview` and `interchange` are always served. `compile` and `execute` are served only when enabled and " +
             "otherwise answer `501`; another name answers `404` (`400` for a cancellation).",
         Schema = Text(Profiles)
     };

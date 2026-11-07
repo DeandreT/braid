@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Microsoft.OpenApi;
+using Weft.Identity;
 
 namespace Weft.Api.Auth;
 
@@ -26,6 +27,15 @@ internal static class AuthenticationOpenApi
             Pattern = "^v1\\.[A-Za-z0-9_-]{43}$"
         };
         var empty = new OpenApiSchema { Type = JsonSchemaType.Null };
+        // Weft.Identity.BrowserReturnPath is authoritative; the pattern states its character set.
+        var returnPath = new OpenApiSchema
+        {
+            Type = JsonSchemaType.String,
+            MinLength = 1,
+            MaxLength = BrowserReturnPath.MaximumLength,
+            Pattern = "^/[A-Za-z0-9\\-._~!$&'()*+,;=:@/?%#]*$",
+            Description = "Same-origin application wire path; path portion at most 1024 characters. Search permits singular q (256 UTF-8 bytes after trimming) and cursor (4096 base64url characters). Retained revision field/rule fragments require projectionDerivationId and a resource ID of at most 2048 UTF-8 bytes. Percent-encoded query/fragment data is decoded once; controls, malformed escapes, unknown query keys and external paths are refused."
+        };
         schemas["AuthSessionV1"] = new OpenApiSchema
         {
             OneOf = [Session("authenticated", token, fingerprint),
@@ -85,7 +95,15 @@ internal static class AuthenticationOpenApi
             ["state"] = Text(state),
             ["authActionRequestToken"] = token,
             ["requestToken"] = requestToken,
-            ["identityContext"] = identityContext
+            ["identityContext"] = identityContext,
+            ["displayName"] = state == "authenticated" ? new OpenApiSchema
+            {
+                Type = JsonSchemaType.String | JsonSchemaType.Null,
+                MinLength = 1,
+                MaxLength = 200,
+                Pattern = "^[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]*$",
+                Description = "Optional provider-supplied display text, never an identity or authority. At most 200 Unicode scalars; blank text is invalid."
+            } : empty
         });
 
         void Add(string path, HttpMethod method, string id, string? schema, string? actionHeader)
@@ -96,9 +114,10 @@ internal static class AuthenticationOpenApi
                 OperationId = id,
                 Summary = callback ? "Complete the fixed Entra code flow." : "Explicit browser authentication protocol.",
                 Description = "Supported contract; presence does not activate a runtime route or authentication mode. " +
-                    "Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity or request-selected return target. " +
-                    (callback ? "Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; no duplicates, token fields or code+error. " +
-                        "Success only303Location'/' after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text."
+                    "Bodyless, bounded, no-store/no-ETag/no-referrer. No bearer/ambient-claim identity. Only sign-in may select where it returns: " +
+                    "an optional X-Weft-Return-To application path, validated by the shared browser return-path rule and carried in the protected state. " +
+                    (callback ? $"Exactly code,state,session_state,client_info,iss,error,error_description,error_uri; protected state at most {BrowserReturnPath.MaximumProtectedStateLength} characters within the unchanged 16384-byte callback query bound. No duplicates, token fields or code+error. " +
+                        "Success only 303 to the validated return path, or '/' when sign-in named none, after acknowledged fresh issuance; failure is fixed readable401/503 HTML, never provider text."
                         : "One exact action header. Unsafe actions require exact Origin and separate standard auth-action AF; positive sessions additionally require112 epoch AF. " +
                             "Session fields/fingerprint are non-authority and memory-only. Forget success means revocation-unconfirmed only."),
                 Parameters = [],
@@ -106,6 +125,15 @@ internal static class AuthenticationOpenApi
                 RequestBody = null
             };
             if (actionHeader is not null) Header(actionHeader, true, Text("1"));
+            if (path == "/api/auth/login") Header("X-Weft-Invitation", false, new OpenApiSchema
+            {
+                Type = JsonSchemaType.String,
+                MinLength = 64,
+                MaxLength = 64,
+                Pattern = "^[0-9a-f]{64}$",
+                Description = "Optional single-use organization invitation from the redemption page. Protected inside the exact login flow state; never matched by email."
+            });
+            if (path == "/api/auth/login") Header("X-Weft-Return-To", false, returnPath);
             if (method == HttpMethod.Post)
             {
                 Header("Origin", true, new OpenApiSchema { Type = JsonSchemaType.String });
@@ -129,7 +157,7 @@ internal static class AuthenticationOpenApi
                 operation.Responses[failure] = response;
             }
             if (callback && operation.Responses["303"] is OpenApiResponse redirect)
-                redirect.Headers!["Location"] = new OpenApiHeader { Schema = Text("/") };
+                redirect.Headers!["Location"] = new OpenApiHeader { Schema = returnPath };
             var item = new OpenApiPathItem();
             item.AddOperation(method, operation);
             document.Paths[path] = item;

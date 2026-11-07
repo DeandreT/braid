@@ -1,119 +1,173 @@
-<section
-  class="session-panel"
-  aria-label="Sign-in and session"
-  [attr.aria-busy]="
-    session.busy() || session.checking() || session.state().kind === 'checking'
-  "
+<button
+  id="account-trigger"
+  class="account-trigger"
+  type="button"
+  [attr.aria-controls]="open() ? 'account-menu' : null"
+  [attr.aria-expanded]="open()"
+  [attr.data-tone]="tone()"
+  (click)="toggle()"
 >
-  <div class="session-copy">
-    <h2>Session</h2>
-    <p class="session-summary" role="status" [attr.data-tone]="tone()">
-      {{ summary() }}
-    </p>
-    <p class="session-detail">{{ detail() }}</p>
-  </div>
-  @if (
-    session.state().kind === "anonymous" ||
-    session.state().kind === "authenticationRequired" ||
-    session.state().kind === "authenticated"
-  ) {
-    <p id="sign-in-navigation-warning" class="session-notice">
-      Signing in opens Microsoft and reloads this page. Unsaved drafts and
-      in-tab recovery details may be lost. Previously sent changes may already
-      have committed.
-    </p>
-  }
-  <div class="session-actions">
-    @if (
-      session.state().kind === "anonymous" ||
-      session.state().kind === "authenticationRequired"
-    ) {
-      <button
-        class="secondary-button"
-        type="button"
-        aria-describedby="sign-in-navigation-warning"
-        [disabled]="!session.canPresent('login')"
-        (click)="signIn()"
-      >
-        Sign in
-      </button>
-    }
-    @if (session.state().kind === "authenticated") {
-      <button
-        class="secondary-button"
-        type="button"
-        aria-describedby="sign-in-navigation-warning"
-        [disabled]="!session.canPresent('login')"
-        (click)="signIn()"
-      >
-        Sign in again
-      </button>
-      <button
-        class="secondary-button"
-        type="button"
-        [disabled]="!session.canPresent('logout')"
-        (click)="logout()"
-      >
-        Sign out
-      </button>
-    }
-    <button
-      class="secondary-button"
-      type="button"
-      [disabled]="
-        session.busy() ||
-        session.checking() ||
-        session.state().kind === 'checking'
-      "
-      (click)="check()"
-    >
-      Check session
-    </button>
-    @if (session.state().kind === "authenticationRequired") {
-      <button
-        id="review-forget-local"
-        class="secondary-button"
-        type="button"
-        aria-controls="forget-local-review"
-        [attr.aria-expanded]="showForget()"
-        [disabled]="!session.canPresent('forgetLocal')"
-        (click)="reviewForget()"
-      >
-        Review local recovery
-      </button>
-    }
-  </div>
-  @if (actionMessage()) {
-    <p class="session-notice" role="status">{{ actionMessage() }}</p>
-  }
-  @if (showForget()) {
-    <section
-      id="forget-local-review"
-      class="forget-review"
-      tabindex="-1"
-      aria-labelledby="forget-local-title"
-      aria-describedby="forget-local-warning"
-    >
-      <h3 id="forget-local-title">Forget this local session?</h3>
-      <p id="forget-local-warning">
-        This only asks the server to clear unusable local cookies when its
-        restricted recovery rule allows it. Revocation is unconfirmed: a server
-        session may still exist. It does not sign you out of Microsoft Entra and
-        is not a fallback for failed sign-out or service errors.
+  <span class="account-dot" aria-hidden="true"></span>
+  <span class="account-label">{{ label() }}</span>
+</button>
+@if (open()) {
+  <section
+    id="account-menu"
+    class="session-panel"
+    aria-label="Sign-in and session"
+    [attr.aria-busy]="
+      session.busy() ||
+      session.checking() ||
+      session.state().kind === 'checking'
+    "
+    (keydown.escape)="close()"
+  >
+    <div class="session-copy">
+      <h2>Account</h2>
+      @if (session.state().kind === "authenticated") {
+        <p class="session-account-name">
+          {{ session.displayName() ?? "Account" }}
+        </p>
+      }
+      <p class="session-summary" role="status" [attr.data-tone]="tone()">
+        {{ summary() }}
       </p>
-      <div class="session-actions">
-        <button class="secondary-button" type="button" (click)="cancelForget()">
-          Cancel
+      @if (organization(); as name) {
+        <p class="session-organization">{{ name }}</p>
+      }
+      <p class="session-detail">{{ detail() }}</p>
+      @if (principal(); as value) {
+        <details class="session-detail">
+          <summary>Identity details</summary>
+          <p>
+            Principal <code>{{ value }}</code>
+          </p>
+          <p>
+            Organization <code>{{ organizationId() }}</code>
+          </p>
+        </details>
+      }
+    </div>
+    @if (
+      unsentWork() &&
+      (session.state().kind === "anonymous" ||
+        session.state().kind === "authenticationRequired" ||
+        session.state().kind === "authenticated")
+    ) {
+      <p id="sign-in-navigation-warning" class="session-notice">
+        This page holds unsent work. Signing in again reloads this page; signing
+        out ends this session. Unsaved drafts and in-tab recovery details may be
+        lost. Previously sent changes may already have committed.
+      </p>
+    }
+    <div class="session-actions">
+      @if (
+        session.state().kind === "anonymous" ||
+        session.state().kind === "authenticationRequired"
+      ) {
+        <button
+          class="secondary-button"
+          type="button"
+          [attr.aria-describedby]="
+            unsentWork() ? 'sign-in-navigation-warning' : null
+          "
+          [disabled]="!session.canPresent('login')"
+          (click)="signIn()"
+        >
+          Sign in
+        </button>
+      }
+      @if (session.state().kind === "authenticated") {
+        <button
+          class="secondary-button"
+          type="button"
+          [attr.aria-describedby]="
+            unsentWork() ? 'sign-in-navigation-warning' : null
+          "
+          [disabled]="!session.canPresent('login')"
+          (click)="signIn()"
+        >
+          Sign in again
         </button>
         <button
           class="secondary-button"
           type="button"
-          [disabled]="!session.canPresent('forgetLocal')"
-          (click)="confirmForget()"
+          [attr.aria-describedby]="
+            unsentWork() ? 'sign-in-navigation-warning' : null
+          "
+          [disabled]="!session.canPresent('logout')"
+          (click)="logout()"
         >
-          Forget local session — revocation unconfirmed
+          Sign out
         </button>
-      </div>
-    </section>
-  }
-</section>
+      }
+      @if (
+        session.state().kind !== "disabled" &&
+        session.state().kind !== "development"
+      ) {
+        <button
+          class="secondary-button"
+          type="button"
+          [disabled]="
+            session.busy() ||
+            session.checking() ||
+            session.state().kind === 'checking'
+          "
+          (click)="check()"
+        >
+          Check session
+        </button>
+      }
+      @if (session.state().kind === "authenticationRequired") {
+        <button
+          id="review-forget-local"
+          class="secondary-button"
+          type="button"
+          aria-controls="forget-local-review"
+          [attr.aria-expanded]="showForget()"
+          [disabled]="!session.canPresent('forgetLocal')"
+          (click)="reviewForget()"
+        >
+          Review local recovery
+        </button>
+      }
+    </div>
+    @if (actionMessage()) {
+      <p class="session-notice" role="status">{{ actionMessage() }}</p>
+    }
+    @if (showForget()) {
+      <section
+        id="forget-local-review"
+        class="forget-review"
+        tabindex="-1"
+        aria-labelledby="forget-local-title"
+        aria-describedby="forget-local-warning"
+      >
+        <h3 id="forget-local-title">Forget this local session?</h3>
+        <p id="forget-local-warning">
+          This only asks the server to clear unusable local cookies when its
+          restricted recovery rule allows it. Revocation is unconfirmed: a
+          server session may still exist. It does not sign you out of Microsoft
+          Entra and is not a fallback for failed sign-out or service errors.
+        </p>
+        <div class="session-actions">
+          <button
+            class="secondary-button"
+            type="button"
+            (click)="cancelForget()"
+          >
+            Cancel
+          </button>
+          <button
+            class="secondary-button"
+            type="button"
+            [disabled]="!session.canPresent('forgetLocal')"
+            (click)="confirmForget()"
+          >
+            Forget local session — revocation unconfirmed
+          </button>
+        </div>
+      </section>
+    }
+  </section>
+}

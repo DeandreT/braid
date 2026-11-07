@@ -53,7 +53,12 @@ export class CatalogRead<T> {
   private identityVersion: number;
   private readonly invalidation: Subscription;
 
-  constructor(private readonly contexts: CatalogContextStore) {
+  constructor(
+    private readonly contexts: CatalogContextStore,
+    private readonly validCursor: (
+      value: unknown,
+    ) => value is string = isCatalogCursor,
+  ) {
     this.identityVersion = contexts.identityVersion();
     this.invalidation = contexts.invalidated.subscribe(() => {
       this.cancel();
@@ -69,7 +74,7 @@ export class CatalogRead<T> {
     this.cancel();
     if (this.destroyed) return;
     try {
-      if (cursor !== null && !isCatalogCursor(cursor))
+      if (cursor !== null && !this.validCursor(cursor))
         throw new CatalogReadError("invalidLink");
       this.selection = {
         scope: scope === null ? null : snapshotCatalogScope(scope),
@@ -180,10 +185,13 @@ export class CatalogRead<T> {
 
 /** Call within a component's injection context; no polling or listeners survive its lifetime. */
 export function createCatalogRead<T>(
-  options: { refreshOnFocus?: boolean } = {},
+  options: {
+    refreshOnFocus?: boolean;
+    cursorValidator?: (value: unknown) => value is string;
+  } = {},
 ): CatalogRead<T> {
   const contexts = inject(CatalogContextStore);
-  const read = new CatalogRead<T>(contexts);
+  const read = new CatalogRead<T>(contexts, options.cursorValidator);
   const destroyRef = inject(DestroyRef);
   const document = inject(DOCUMENT);
   const window = document.defaultView;

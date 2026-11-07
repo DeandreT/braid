@@ -33,6 +33,28 @@ public sealed partial class CliCatalogCommandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SearchUsesTheSharedPagedContractAndRetainsExactResourceIdentity()
+    {
+        var report = Guid.NewGuid();
+        var hit = new CatalogSearchHitV1(CatalogSearchKindV1.Field, Guid.Parse(data.Organization), Guid.Parse(data.Project),
+            Guid.Parse(data.Mapping), Guid.Parse(data.Revision), report, "field/orders/id",
+            new("Order\u001b[31m ID", [new(0, 5)]), new("input:/orders/id", []));
+        stub.Reply("SearchCatalog", request => CliStubReply.Of(200, new CatalogSearchPageV1("Order %_",
+            request.Query.ContainsKey("cursor") ? [] : [hit], request.Query.ContainsKey("cursor") ? null : "bmV4dA")));
+        var result = await cli.RunAsync("search", "Order %_", "--all", "--json", "--limit", "1");
+        Assert.True(result.Exit == 0, result.ToString());
+        var document = JsonNode.Parse(result.Out)!;
+        Assert.Equal(report.ToString("D"), document["hits"]![0]!["projectionDerivationId"]!.GetValue<string>());
+        Assert.Equal("field/orders/id", document["hits"]![0]!["resourceId"]!.GetValue<string>());
+        Assert.Equal("Order %_", stub.Calls("SearchCatalog")[0].Query["q"]);
+        Assert.Equal("bmV4dA", stub.Calls("SearchCatalog")[1].Query["cursor"]);
+        var table = await cli.RunAsync("search", "Order %_");
+        Assert.DoesNotContain('\u001b', table.Out);
+        Assert.Contains("field/orders/id", table.Out, StringComparison.Ordinal);
+        Assert.Equal(CliExitCode.Usage, (await cli.RunAsync("search", new string('é', 129))).Code);
+    }
+
+    [Fact]
     public async Task ProjectListsFollowCursorsAndWriteTablesOrTheExactDocument()
     {
         var second = CliStubData.Id();

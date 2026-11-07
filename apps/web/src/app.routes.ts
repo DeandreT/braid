@@ -1,15 +1,37 @@
 import { DOCUMENT } from "@angular/common";
 import { inject } from "@angular/core";
-import { type CanDeactivateFn, type Routes } from "@angular/router";
+import {
+  type CanActivateFn,
+  type CanDeactivateFn,
+  type Routes,
+} from "@angular/router";
+import { UnsentWork } from "./workbench/unsent-work";
 import type { Observable } from "rxjs";
 import { BrowserSessionState } from "./auth/browser-session-state";
+import { requireSignIn, signInEntry } from "./auth/sign-in-guards";
+import { SignInPageComponent } from "./auth/sign-in-page.component";
 import { CatalogShellComponent } from "./catalog/catalog-shell.component";
 import { CreateProjectPageComponent } from "./catalog/projects/create-project-page.component";
 import type { EditMappingPageComponent } from "./catalog/metadata/edit-mapping-page.component";
 import type { UploadMappingPageComponent } from "./catalog/uploads/upload-mapping-page.component";
 import type { AppendRevisionPageComponent } from "./catalog/uploads/append-revision-page.component";
-import { ExamplesComponent } from "./examples.component";
+import type { OperationsPageComponent } from "./catalog/operations/operations-page.component";
+import type { AutomationPageComponent } from "./catalog/automation/automation-page.component";
 import { NotFoundComponent } from "./not-found.component";
+import type { ChatPageComponent } from "./chat/chat-page.component";
+import type { RevisionPageComponent } from "./catalog/revision-page.component";
+
+const leaveChat: CanDeactivateFn<ChatPageComponent> = (component) =>
+  component.requestLeave();
+/** Auth entry replaces the mounted workspace; ordinary content navigation does not. */
+const leaveWorkspaceEntry: CanActivateFn = () =>
+  !inject(UnsentWork).present() ||
+  (inject(DOCUMENT).defaultView?.confirm(
+    "Leave this workspace? Unsent work and recovery information kept only in this tab may be lost. A sent request may already have committed.",
+  ) ??
+    false);
+const leaveRevisionChat: CanDeactivateFn<RevisionPageComponent> = (component) =>
+  component.requestChatLeave();
 
 const leaveMappingEditor: CanDeactivateFn<EditMappingPageComponent> = (
   component,
@@ -22,6 +44,11 @@ const leaveMappingUpload: CanDeactivateFn<UploadMappingPageComponent> = (
 const leaveRevisionAppend: CanDeactivateFn<AppendRevisionPageComponent> = (
   component,
 ) => requestWorkspaceLeave(component);
+const leaveOperations: CanDeactivateFn<OperationsPageComponent> = (component) =>
+  requestWorkspaceLeave(component);
+
+const leaveAutomation: CanDeactivateFn<AutomationPageComponent> = (component) =>
+  requestWorkspaceLeave(component);
 
 function requestWorkspaceLeave(component: {
   requestLeave(): Observable<boolean>;
@@ -41,12 +68,90 @@ function requestWorkspaceLeave(component: {
 }
 
 export const routes: Routes = [
-  { path: "", pathMatch: "full", redirectTo: "examples" },
-  { path: "examples", component: ExamplesComponent, title: "Examples · Weft" },
+  {
+    path: "chat/resources",
+    canActivate: [requireSignIn],
+    loadComponent: () =>
+      import("./chat/chat-resource-page.component").then(
+        (module) => module.ChatResourcePageComponent,
+      ),
+    title: "Workspace reference · Weft",
+  },
+  {
+    path: "chat",
+    canActivate: [requireSignIn],
+    loadComponent: () =>
+      import("./chat/chat-page.component").then(
+        (module) => module.ChatPageComponent,
+      ),
+    canDeactivate: [leaveChat],
+    title: "Chat · Weft",
+  },
+  {
+    path: "notifications",
+    canActivate: [requireSignIn],
+    loadComponent: () =>
+      import("./catalog/automation/notification-centre.component").then(
+        (m) => m.NotificationCentreComponent,
+      ),
+    title: "Notifications · Weft",
+  },
+  {
+    path: "administration",
+    canActivate: [requireSignIn],
+    loadComponent: () =>
+      import("./administration/administration-page.component").then(
+        (m) => m.AdministrationPageComponent,
+      ),
+    title: "Administration · Weft",
+  },
+  {
+    path: "invitations",
+    canActivate: [leaveWorkspaceEntry],
+    loadComponent: () =>
+      import("./administration/invitation-page.component").then(
+        (m) => m.InvitationPageComponent,
+      ),
+    title: "Organization invitation · Weft",
+  },
+  { path: "", pathMatch: "full", redirectTo: "catalog" },
+  {
+    path: "sign-in",
+    component: SignInPageComponent,
+    canActivate: [signInEntry, leaveWorkspaceEntry],
+    title: "Sign in · Weft",
+  },
   {
     path: "catalog",
     component: CatalogShellComponent,
+    canActivate: [requireSignIn],
     children: [
+      {
+        path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/operations",
+        loadComponent: () =>
+          import("./catalog/operations/operations-page.component").then(
+            (module) => module.OperationsPageComponent,
+          ),
+        canDeactivate: [leaveOperations],
+        title: "Operations · Weft",
+      },
+      {
+        path: "organizations/:organizationId/projects/:projectId/automation",
+        canDeactivate: [leaveAutomation],
+        loadComponent: () =>
+          import("./catalog/automation/automation-page.component").then(
+            (module) => module.AutomationPageComponent,
+          ),
+        title: "Automation and notifications · Weft",
+      },
+      {
+        path: "search",
+        loadComponent: () =>
+          import("./catalog/search/search-page.component").then(
+            (module) => module.SearchPageComponent,
+          ),
+        title: "Search · Weft",
+      },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/new",
         loadComponent: () =>
@@ -92,6 +197,7 @@ export const routes: Routes = [
             (module) => module.RevisionPageComponent,
           ),
         title: "Revision · Weft",
+        canDeactivate: [leaveRevisionChat],
       },
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId",
@@ -127,6 +233,7 @@ export const routes: Routes = [
   },
   {
     path: "help",
+    canActivate: [requireSignIn],
     loadComponent: () =>
       import("./help/help-page.component").then(
         (module) => module.HelpPageComponent,
@@ -135,6 +242,7 @@ export const routes: Routes = [
   },
   {
     path: "help/:sectionId",
+    canActivate: [requireSignIn],
     loadComponent: () =>
       import("./help/help-page.component").then(
         (module) => module.HelpPageComponent,

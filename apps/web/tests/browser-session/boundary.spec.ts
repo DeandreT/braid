@@ -10,7 +10,6 @@ import {
   editField,
 } from "./fixture";
 import { inputIds, type Feature } from "./data";
-import { withExampleReads } from "./example-reads";
 
 const guarded = async (work: () => Promise<void>) => {
   try {
@@ -367,6 +366,26 @@ const malformed: ReadonlyArray<{
   name: string;
   mutate: (value: Record<string, unknown>) => unknown;
 }> = [
+  {
+    name: "missing-display-name",
+    mutate: ({ displayName: _, ...rest }) => rest,
+  },
+  {
+    name: "wrong-display-name-type",
+    mutate: (value) => ({ ...value, displayName: 1 }),
+  },
+  {
+    name: "oversized-display-name",
+    mutate: (value) => ({ ...value, displayName: "a".repeat(201) }),
+  },
+  {
+    name: "bidi-display-name",
+    mutate: (value) => ({ ...value, displayName: "a\u202eb" }),
+  },
+  {
+    name: "malformed-display-name",
+    mutate: (value) => ({ ...value, displayName: "a\ud800" }),
+  },
   { name: "missing-version", mutate: ({ version: _, ...rest }) => rest },
   { name: "future-version", mutate: (value) => ({ ...value, version: 2 }) },
   {
@@ -962,23 +981,21 @@ for (const variant of ["missing-fingerprint", "development-context"] as const)
       await expect.poll(sample(app, "context")).toBe(true);
     }));
 
-test("public examples remain reachable while protected status is unavailable", async ({
+test("the public sign-in page remains reachable while protected status is unavailable", async ({
   app,
   page,
 }) =>
-  guarded(() =>
-    withExampleReads(app, async (reads) => {
-      app.plans.set("status", refused(503));
-      await app.open("/examples");
-      await expect.poll(() => page.title()).toBe("Examples · Weft");
-      await expect
-        .poll(() => reads.health === 1 && reads.list === 1)
-        .toBe(true);
-      expect(app.count("context")).toBe(0);
-      expect(app.wires.length).toBe(0);
-      expect(app.authPosts).toBe(0);
-    }),
-  ));
+  guarded(async () => {
+    app.plans.set("status", refused(503));
+    await app.open("/sign-in");
+    await expect.poll(() => page.title()).toBe("Sign in · Weft");
+    await expect(
+      page.getByRole("button", { name: "Check again", exact: true }),
+    ).toBeVisible();
+    expect(app.count("context")).toBe(0);
+    expect(app.wires.length).toBe(0);
+    expect(app.authPosts).toBe(0);
+  }));
 
 for (const owner of [
   "generic",

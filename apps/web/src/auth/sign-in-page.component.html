@@ -1,0 +1,39 @@
+<section
+  class="sign-in"
+  aria-labelledby="sign-in-title"
+  [attr.aria-busy]="session.busy() || session.state().kind === 'checking'"
+>
+  <p class="brand sign-in-brand" aria-hidden="true">
+    <span class="brand-mark">w</span
+    ><span class="brand-name">weft<span class="brand-period">.</span></span>
+  </p>
+  <h1 id="sign-in-title">Sign in to Weft</h1>
+  <p class="sign-in-state" role="status" [attr.data-tone]="tone()">
+    {{ message() }}
+  </p>
+  @if (actionMessage()) {
+    <p class="sign-in-notice" role="status">{{ actionMessage() }}</p>
+  }
+  <div class="sign-in-actions">
+    @if (canSignIn()) {
+      <button
+        class="primary-button"
+        type="button"
+        [disabled]="!session.canPresent('login')"
+        (click)="signIn()"
+      >
+        Sign in with Microsoft
+      </button>
+    }
+    @if (session.state().kind === "unavailable") {
+      <button
+        class="secondary-button"
+        type="button"
+        [disabled]="session.busy()"
+        (click)="check()"
+      >
+        Check again
+      </button>
+    }
+  </div>
+</section>

@@ -83,7 +83,8 @@ public sealed partial class PostgresChatStore
     {
         ArgumentNullException.ThrowIfNull(data);
         if (data.Kind == ChatEventKind.Usage && ChatMetadataCodec.ReadUsage(data.MetadataJson!).RoundId != roundId ||
-            data.Kind == ChatEventKind.ProviderFailure && ChatMetadataCodec.ReadFailure(data.MetadataJson!).RoundId != roundId) throw ChatBounds.Invalid();
+            data.Kind == ChatEventKind.ProviderFailure && ChatMetadataCodec.ReadFailure(data.MetadataJson!).RoundId != roundId ||
+            data.Kind == ChatEventKind.DataShared && key.Kind != ChatConversationKind.Workspace) throw ChatBounds.Invalid();
         return AppendCoreAsync(actor, key, turnId, expectedVersion, roundId, fence, data.EventId, data.Kind, data.Text, data.MetadataJson, null, ct);
     }
 
@@ -91,8 +92,9 @@ public sealed partial class PostgresChatStore
         long expectedVersion, Guid roundId, Guid fence, ChatCitationEventData data, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(data);
-        if (data.Citation.Facts.Revision != key.Revision) throw ChatBounds.Invalid();
-        return AppendCoreAsync(actor, key, turnId, expectedVersion, roundId, fence, data.EventId, ChatEventKind.Citation, "", data.MetadataJson, data.Citation, ct);
+        if (data.Citation.Facts is { } facts ? facts.Revision != key.Revision || key.Kind != ChatConversationKind.Revision
+            : data.Citation.Workspace!.OrganizationId != key.OrganizationId || key.Kind != ChatConversationKind.Workspace) throw ChatBounds.Invalid();
+        return AppendCoreAsync(actor, key, turnId, expectedVersion, roundId, fence, data.EventId, data.Kind, "", data.MetadataJson, data.Citation, ct);
     }
 
     private Task<ChatTurnWriteResult> AppendCoreAsync(ActorContext actor, ChatConversationKey key, Guid turnId, long expectedVersion,
@@ -103,12 +105,12 @@ public sealed partial class PostgresChatStore
         return ExecuteAsync(actor, key, true, true, async tx =>
         {
             if (!await VisibleAsync(tx, key, ct)) return Denied();
-            if (citation is not null)
+            if (citation?.Facts is { } facts)
             {
                 var conversation = await ConversationAsync(tx, key, ct);
                 if (conversation is null) return Denied();
-                var expected = citation.Facts.Target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport ? conversation.Validation : conversation.Projection;
-                if (citation.Facts.Report != expected) return new(ChatStoreOutcome.Conflict);
+                var expected = facts.Target.Kind is ChatCitationKind.ValidationDiagnostic or ChatCitationKind.ValidationReport ? conversation.Validation : conversation.Projection;
+                if (facts.Report != expected) return new(ChatStoreOutcome.Conflict);
             }
             var turn = await TurnAsync(tx, key, turnId, ct); if (turn is null) return Denied();
             await using (var replay = Command(tx, $"SELECT kind,private_text,round_id,dispatch_fence,metadata_json FROM weft.chat_events WHERE {TurnScope} AND event_id=@event", key, turnId))

@@ -1,7 +1,10 @@
-# Compact revision workbench
+# Unified workbench
 
-The revision page uses a full-width data canvas, a compact application rail,
-a contextual inspector and a shared investigation dock. The displayed revision
+Authenticated catalog, mapping, search, operations, administration, notifications,
+guide and conversation routes share a full-width shell, navigation rail, account
+menu and Search / Go to palette. Sign-in and invitation entry remain separate
+identity boundaries. Existing URLs and admission checks keep their meanings.
+The revision page uses a data canvas and a bottom inspector/evidence tray. The displayed revision
 is immutable: opening a workflow tab does not follow the mapping's current head.
 The head marker describes the metadata read, not a continuously refreshed claim.
 
@@ -25,11 +28,27 @@ drafts, unresolved saves and conflicts. See [Mapping editing](mapping-editing.md
 - Arrow keys move field focus; Enter selects a field and Escape clears it.
   Source and target remain visible, while transformation and type columns can be
   hidden. Column and panel separators support pointer drag and arrow keys.
-- The inspector follows the workflow. Its narrow-screen toggle overlays the
-  canvas rather than shrinking the table. The dock and inspector can collapse.
+  The table reserves at least 160px of usable row viewport plus the measured
+  horizontal scrollbar height, including native non-overlay scrollbars.
+- The inspector follows the workflow in the bottom tray, alongside Issues,
+  Incoming data, Result, Diff and Activity. The tray collapses when not needed.
+  Its height is bounded to 40% of the available work region while reserving 240px
+  for the canvas. Small or short regions use a focused details view with a Back
+  action instead of an overlay.
 - Compact, comfortable and dense settings use minimum row heights of 28, 32 and
   24 CSS pixels. Content can increase a row's height. Text remains relative to
-  user scaling.
+  user scaling. Comfortable (32px) is the default.
+
+The right conversation is one mounted surface across route changes. Hiding it
+does not cancel a stream, send a draft or discard recovery. Its width starts at
+360px, ranges from 300–560px and is clamped to preserve the main content region.
+At phone width it becomes a focused panel rather than covering the canvas.
+Below 680px it fills the content width, hides resizing and closes on Escape.
+Short panels and enlarged text use one scroll surface so the model selector,
+transcript and composer remain reachable instead of competing for fixed height.
+The labeled separator supports pointer drag, Left/Right (10px), Shift (20px),
+and Home/End. Width and open-state preferences are harmless per-user layout
+data; conversations, drafts, tokens and request recovery never enter storage.
 
 ## Evidence and private state
 
@@ -47,7 +66,20 @@ revision rather than showing private content beneath the current revision. A
 mismatched recovery response does not discard the original pending request.
 The diff compares original decoded bytes and labels expected versus actual;
 reviewing it never replaces the baseline. Preview retains its independently
-verified run and output download controls.
+verified run and output download controls. In Try sample, Show opens that preview's
+verified output in the same Result dock, labeled with its own run identity. Tests
+can select expected bytes from the saved case or observed bytes from the selected
+run; neither selection accepts a new baseline.
+
+The document view shows declared media and at most 64 KiB. Valid declared X12 and
+EDIFACT outputs offer ordered segments and raw text. Headerless or malformed X12
+stays raw; invalid UTF-8 displays hexadecimal bytes. Filenames do not choose a
+format. These are display modes only: downloads keep the complete original bytes,
+and Diff remains a byte-level view distinct from the saved comparison policy.
+EDIFACT advice is read only at an envelope boundary, including after a complete
+standalone message. A later UNA selects that envelope's separators; without one,
+the default syntax resumes. Advice-looking field text and released separators
+do not create boundaries. Malformed or oversized display input stays raw.
 
 For JSON documents, the diff can link a concrete changed location to a field only
 when one output boundary and one matching projected field identify it. Duplicate
@@ -74,12 +106,20 @@ no simulated activation or rollback action.
 
 ## Checks
 
-`playwright.workbench-model.config.ts` covers the pure selection and JSON rules.
+`playwright.workbench-model.config.ts` covers the pure selection, JSON and document-display rules.
+`playwright.edi-hosted.config.ts` runs declared X12/EDIFACT previews, saved comparisons
+and exact downloads on the isolated packaged Session stack provided by
+`deploy/compose/acceptance-test.sh`, with the fixture model provider.
+`playwright.unified-workbench.config.ts` covers the shared shell and preserved
+route, form, chat and workbench workflows on a synthetic API boundary at port
+5186. `WEFT_UI_CAPTURE_DIR` optionally retains its responsive screenshots.
 `playwright.workbench.config.ts` covers the integrated Angular interactions using
 explicitly synthetic API boundary fixtures; these do not establish backend
 authorization or persistence qualification. The existing real-API suites remain
 the separate check for those contracts. Set `WEFT_CHROMIUM_EXECUTABLE` to a verified
 installed Chromium browser when the matching Playwright browser is unavailable.
+The workbench tests retain native scrollbars in headless Chromium; hiding them
+would conceal layout differences from headed browsers.
 The workbench suite uses port 5181 and leaves the local viewer on port 4102 alone.
 Its development server, like the chat and comparison suites', sends unrouted API
 requests to a closed loopback port (`proxy.synthetic.conf.json`), never to a local

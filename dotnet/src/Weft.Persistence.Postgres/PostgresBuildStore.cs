@@ -177,7 +177,10 @@ public sealed class PostgresBuildStore(string connectionString, bool writer, Bui
         command.Parameters.AddWithValue("info", NpgsqlDbType.Jsonb, info);
         command.Parameters.AddWithValue("intent", NpgsqlDbType.Bytea, (object?)intent ?? DBNull.Value);
         command.Parameters.AddWithValue("artifact", NpgsqlDbType.Bytea, (object?)artifact ?? DBNull.Value);
-        var value = await command.ExecuteScalarAsync(token);
+        object? value;
+        try { value = await command.ExecuteScalarAsync(token); }
+        catch (PostgresException error) when (error.SqlState == "23514" && error.ConstraintName == "automation_regression_gate")
+        { return (int)BuildControlOutcome.RegressionRequired; }
         if (value is not int result || result is < 0 or > 3) throw Invalid();
         await tx.CommitAsync(token);
         return result;

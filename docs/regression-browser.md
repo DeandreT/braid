@@ -17,6 +17,14 @@ is fixed, and typed parameter values remain strings so large numbers and lexical
 spelling survive. The first input is primary; a blank expected-output name marks
 the primary output. An empty expected-output set cannot pass comparison.
 
+When capabilities advertise a document runtime, the editor offers an explicit
+**Execution profile** choice and an expected media selector for every output.
+Input families still come from native mapping boundaries, not file extensions.
+The document profile supports exact bytes/media or ordered EDI segments; the
+latter exposes explicit separator, control-reference and date/time choices.
+Editing an existing document case restores its media and policy choices, and
+same-owner draft recovery preserves them without silently switching profiles.
+
 The server checks the authoritative byte, document and parameter bounds. The
 editor also checks its configured limits before sending. No fixture silently
 captures production payloads or derives expected bytes from an unverified result.
@@ -28,6 +36,11 @@ that revision and baseline even when the mapping's head or active runtime change
 Run history is scoped to the current submitter. Queued/running results may be
 refreshed or canceled; finished results show their explicit comparison outcome,
 bounded differences and exact downloadable output bytes.
+
+EDI differences include bounded interchange/segment/element/repetition/component
+locations. Invalid-envelope diagnostics identify the expected or actual side;
+they are not passing comparisons. Downloads use the retained media type and a
+matching JSON, X12 or EDI extension while preserving exact bytes.
 
 Output text is escaped and shown only as a bounded UTF-8 preview. Download is a
 separate action that preserves the binary bytes. Unknown or inconsistent response

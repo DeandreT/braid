@@ -48,7 +48,14 @@ internal static class QualificationRoleGuard
     internal static async Task ValidateContractAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
         await BuildRoleGuard.ValidateContractAsync(connection, transaction, token);
-        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, Definitions.Value, token);
+        var definitions = Definitions.Value;
+        if (await BuildRoleGuard.HasDocumentBuildsAsync(connection, transaction, token))
+            definitions = new(definitions, StringComparer.Ordinal)
+            {
+                ["qualification_valid"] =
+                await BuildRoleGuard.HasInterchangeBuildsAsync(connection, transaction, token) ? BuildRoleGuard.InterchangeQualificationDefinition : BuildRoleGuard.DocumentQualificationDefinition
+            };
+        await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Names, definitions, token);
         if (await RegressionCaseSchemaContract.CaptureAsync(connection, transaction, Tables, token) != Fingerprint) throw Invalid();
     }
     private static InvalidOperationException Invalid() => new("Qualification database contract unavailable.");

@@ -1,18 +1,21 @@
 import { DOCUMENT, NgTemplateOutlet } from "@angular/common";
 import {
   Component,
+  DestroyRef,
   ElementRef,
   HostListener,
   TemplateRef,
   computed,
+  effect,
+  afterNextRender,
   inject,
   input,
   output,
   signal,
-  viewChild,
 } from "@angular/core";
 import { ResizeHandleComponent } from "./resize-handle.component";
 import { WorkbenchState } from "./workbench-state";
+import { WorkspaceCommands } from "./workspace-commands";
 import { dockLabels, workbenchLabels } from "./presentation";
 import {
   rowHeights,
@@ -48,13 +51,17 @@ export class WorkbenchFrameComponent {
   readonly viewOptions = input<readonly WorkbenchView[]>(workbenchViews);
   readonly docks: readonly { id: DockView; label: string }[] = [
     ...(
-      ["ask", "diagnostics", "input", "output", "diff", "activity"] as const
+      [
+        "inspector",
+        "diagnostics",
+        "input",
+        "output",
+        "diff",
+        "activity",
+      ] as const
     ).map((id) => ({ id, label: dockLabels[id] })),
   ];
   readonly rowHeight = computed(() => rowHeights[this.state.layout().density]);
-  readonly mobileInspector = signal(false);
-  readonly query = signal("");
-  readonly activeCommand = signal(0);
   readonly paletteItems = computed(() => {
     const items = [
       ...this.viewOptions().map((view) => ({
@@ -65,89 +72,106 @@ export class WorkbenchFrameComponent {
       })),
       ...this.commands(),
     ];
-    const query = this.query().trim().toLocaleLowerCase();
-    return items
-      .filter(
-        (item) =>
-          !query ||
-          `${item.label} ${item.detail ?? ""}`
-            .toLocaleLowerCase()
-            .includes(query),
-      )
-      .slice(0, 40);
+    return items.slice(0, 40);
   });
-  private readonly palette =
-    viewChild<ElementRef<HTMLDialogElement>>("palette");
-  private readonly paletteInput =
-    viewChild<ElementRef<HTMLInputElement>>("paletteInput");
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly document = inject(DOCUMENT);
-  private paletteReturn: HTMLElement | null = null;
-
-  @HostListener("document:keydown", ["$event"])
-  keyboard(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      this.openPalette();
-    }
-    if (event.key === "Escape" && this.mobileInspector()) {
-      this.mobileInspector.set(false);
-      const target = event.target;
-      if (target instanceof HTMLElement && target.closest(".wb-inspector"))
-        this.focus(".wb-mobile-inspector-toggle");
-    }
+  private readonly sharedCommands = inject(WorkspaceCommands);
+  private readonly regionHeight = signal(600);
+  private readonly regionWidth = signal(800);
+  private trayReturn: HTMLElement | null = null;
+  readonly trayMaximum = computed(() =>
+    Math.floor(Math.min(this.regionHeight() * 0.4, this.regionHeight() - 240)),
+  );
+  readonly focusedTray = computed(
+    () => this.regionWidth() < 480 || this.trayMaximum() < 140,
+  );
+  readonly trayHeight = computed(() =>
+    Math.max(140, Math.min(this.trayMaximum(), this.state.layout().dockHeight)),
+  );
+  constructor() {
+    const destroy = inject(DestroyRef);
+    effect(() => this.sharedCommands.entries.set(this.paletteItems()));
+    const subscriptions = this.sharedCommands.chosen.subscribe((item) =>
+      this.choose(item),
+    );
+    subscriptions.add(
+      this.sharedCommands.opening.subscribe(() => this.paletteOpened.emit()),
+    );
+    afterNextRender(() => {
+      const region =
+        this.element.nativeElement.querySelector<HTMLElement>(".wb-workspace");
+      if (!region) return;
+      const observer = new ResizeObserver(() => {
+        this.regionHeight.set(region.clientHeight);
+        this.regionWidth.set(region.clientWidth);
+      });
+      observer.observe(region);
+      destroy.onDestroy(() => observer.disconnect());
+    });
+    destroy.onDestroy(() => {
+      subscriptions.unsubscribe();
+      this.sharedCommands.entries.set([]);
+    });
   }
-  openPalette(): void {
-    const dialog = this.palette()?.nativeElement;
-    if (!dialog || dialog.open) return;
-    this.paletteReturn =
+  openInspector(): void {
+    this.trayReturn =
       this.document.activeElement instanceof HTMLElement
         ? this.document.activeElement
         : null;
-    this.query.set("");
-    this.activeCommand.set(0);
-    dialog.showModal();
-    this.paletteInput()?.nativeElement.focus();
-    this.paletteOpened.emit();
+    this.state.dispatch({ kind: "dock", dock: "inspector" });
+    this.state.updateLayout({
+      dockCollapsed: false,
+      inspectorCollapsed: false,
+    });
+    if (this.focusedTray()) this.focus('[data-inspector="0"]');
   }
-  closePalette(): void {
-    this.palette()?.nativeElement.close();
-    if (this.paletteReturn?.isConnected) this.paletteReturn.focus();
-    this.paletteReturn = null;
+  closeTray(): void {
+    this.state.updateLayout({ dockCollapsed: true, inspectorCollapsed: true });
+    const target = this.trayReturn;
+    queueMicrotask(() => {
+      if (target?.isConnected && target.getClientRects().length) target.focus();
+      else this.focus(".wb-inspector-toggle");
+    });
+    this.trayReturn = null;
   }
-  paletteKey(event: KeyboardEvent): void {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      this.activeCommand.update((value) =>
-        Math.max(
-          0,
-          Math.min(
-            this.paletteItems().length - 1,
-            value + (event.key === "ArrowDown" ? 1 : -1),
-          ),
-        ),
-      );
-      queueMicrotask(() =>
-        this.element.nativeElement
-          .querySelector(`#wb-command-${this.activeCommand()}`)
-          ?.scrollIntoView({ block: "nearest" }),
-      );
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      const item = this.paletteItems()[this.activeCommand()];
-      if (item) this.choose(item);
+
+  @HostListener("document:keydown", ["$event"])
+  keyboard(event: KeyboardEvent): void {
+    if (
+      event.key === "Escape" &&
+      !event.defaultPrevented &&
+      !this.document.querySelector("#account-menu") &&
+      !this.document.querySelector(".chat-focused.chat-open") &&
+      this.focusedTray() &&
+      !this.state.layout().dockCollapsed &&
+      !this.document.querySelector("dialog[open]")
+    ) {
+      this.closeTray();
     }
   }
+  openPalette(): void {
+    this.sharedCommands.requested.next();
+  }
   choose(item: WorkbenchCommand): void {
-    this.closePalette();
     if (item.view) this.selectView(item.view, true);
     else this.command.emit(item);
   }
   selectView(view: WorkbenchView, focus = false): void {
     this.state.dispatch({ kind: "view", view });
     if (focus) this.focus(`[data-workflow="${view}"]`);
+    queueMicrotask(() =>
+      this.element.nativeElement
+        .querySelector(`[data-workflow="${view}"]`)
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" }),
+    );
   }
   selectDock(dock: DockView, focus = false): void {
+    if (this.state.layout().dockCollapsed)
+      this.trayReturn =
+        this.document.activeElement instanceof HTMLElement
+          ? this.document.activeElement
+          : null;
     this.state.dispatch({ kind: "dock", dock });
     this.state.updateLayout({ dockCollapsed: false });
     if (focus) this.focus(`[data-dock="${dock}"]`);

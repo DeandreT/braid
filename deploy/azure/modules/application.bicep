@@ -94,6 +94,7 @@ var roles = [
   { key: 'case-writer', env: 'CASE_WRITER' }
   { key: 'run-reader', env: 'RUN_READER' }
   { key: 'run-writer', env: 'RUN_WRITER' }
+  { key: 'comparison', env: 'COMPARISON' }
   { key: 'build-reader', env: 'BUILD_READER' }
   { key: 'build-writer', env: 'BUILD_WRITER' }
   { key: 'build-run-reader', env: 'BUILD_RUN_READER' }
@@ -140,10 +141,14 @@ var nativeWorkFiles = [
   { key: 'run-reader', setting: 'WEFT_BUILD_EVIDENCE_READER_CONNECTION_STRING', file: 'build-evidence' }
   { key: 'build-run-reader', setting: 'WEFT_BUILD_RUN_READER_CONNECTION_STRING', file: 'build-run-reader' }
   { key: 'build-run-writer', setting: 'WEFT_BUILD_RUN_WRITER_CONNECTION_STRING', file: 'build-run-writer' }
+  { key: 'release-reader', setting: 'WEFT_RELEASE_READER_CONNECTION_STRING', file: 'release-reader' }
+  { key: 'release-writer', setting: 'WEFT_RELEASE_WRITER_CONNECTION_STRING', file: 'release-writer' }
+  { key: 'qualification-reader', setting: 'WEFT_QUALIFICATION_READER_CONNECTION_STRING', file: 'qualification-reader' }
 ]
 var chatFiles = [
   { key: 'chat-reader', setting: 'WEFT_CHAT_READER_CONNECTION_STRING', file: 'chat-reader-connection' }
   { key: 'chat-writer', setting: 'WEFT_CHAT_WRITER_CONNECTION_STRING', file: 'chat-writer-connection' }
+  { key: 'payload-permission', setting: 'WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING', file: 'chat-payload-permission-connection' }
 ]
 // Mutating bearer requests are audited through their own append-only login.
 var bearerFiles = [
@@ -221,6 +226,7 @@ var serverEnvironment = concat([
   // Native upload, report reads and derivation run here through the selected runner; previews, regression runs
   // and builds are recorded here and executed by the worker app.
   { name: 'WEFT_REVISION_INGESTION_ENABLED', value: 'true' }
+  { name: 'WEFT_MFD_INTERCHANGE_ENABLED', value: ferruleRunner == 'worker' ? 'false' : 'true' }
   { name: 'WEFT_POSTGRES_INGESTION_CONNECTION_STRING', secretRef: 'ingest-connection' }
   { name: 'WEFT_REVISION_REPORTS_ENABLED', value: 'true' }
   { name: 'WEFT_POSTGRES_REPORT_CONNECTION_STRING', secretRef: 'report-connection' }
@@ -229,6 +235,7 @@ var serverEnvironment = concat([
   { name: 'WEFT_PREVIEWS_ENABLED', value: 'true' }
   { name: 'WEFT_REGRESSIONS_ENABLED', value: 'true' }
   { name: 'WEFT_BUILDS_ENABLED', value: 'true' }
+  { name: 'WEFT_RELEASE_OPERATIONS_ENABLED', value: 'true' }
 ] : [], chatEnabled ? [
   // The profile document and the model credential are private files; the profile's credential entry names
   // /run/weft/secrets/model-provider-credential or a managed-identity token.
@@ -322,7 +329,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               type: 'Readiness'
-              httpGet: healthProbe
+              httpGet: union(healthProbe, { path: '/api/v1/health/ready' })
               periodSeconds: 10
               failureThreshold: 3
             }

@@ -57,6 +57,26 @@ async function fixture(
   data.context.features.chat = options.enabled !== false;
   data.mapping.access.actions.chat = true;
   let conversation: ChatConversation | null = null;
+  let workspaceCreated = false;
+  const organizationRoot = `/api/v1/organizations/${data.revision.scope.organizationId}/chat`;
+  const organizationConversation = () =>
+    conversation && {
+      conversationId: conversation.conversationId,
+      kind: workspaceCreated ? "workspace" : "revision",
+      revision: workspaceCreated ? null : conversation.revision,
+      focus: workspaceCreated
+        ? {
+            projectId: data.revision.scope.projectId,
+            mappingId: data.revision.scope.mappingId,
+            revisionId: data.revision.scope.revisionId,
+          }
+        : null,
+      createdAtUtc: conversation.createdAtUtc,
+      retainUntilUtc: conversation.retainUntilUtc,
+      title: conversation.title,
+      turnCount: conversation.turnCount,
+      lastTurnAtUtc: conversation.lastTurnAtUtc,
+    };
   let turns: ChatTurn[] = [];
   const posts: { path: string; body: unknown; token?: string }[] = [];
   const reads: string[] = [];
@@ -125,6 +145,7 @@ async function fixture(
               authActionRequestToken: "YXV0aC1h",
               requestToken: null,
               identityContext: null,
+              displayName: null,
             }
           : { version: 1, mode: "development" },
       });
@@ -148,23 +169,47 @@ async function fixture(
       }
       return route.fulfill({ json: validation });
     }
-    const root = `${data.apiPath}/chat`;
+    const workspace = path.startsWith(organizationRoot);
+    const root = workspace ? organizationRoot : `${data.apiPath}/chat`;
     if (error && path.startsWith(root))
       return route.fulfill({
         status: error.status,
         json: { code: error.code },
       });
-    if (path === root) return route.fulfill({ json: availability });
+    if (path === root)
+      return workspace
+        ? route.fulfill(
+            options.profiles === false
+              ? { status: 409, json: { code: "profileUnavailable" } }
+              : {
+                  json: {
+                    schemaVersion: "weft.chat.v1",
+                    organizationId: data.revision.scope.organizationId,
+                    limits: availability.limits,
+                    profiles: availability.profiles.map((profile) => ({
+                      profile,
+                      payloadsAllowed: false,
+                    })),
+                  },
+                },
+          )
+        : route.fulfill({ json: availability });
     if (path === `${root}/conversations`) {
       if (request.method() === "POST") {
         conversation = makeConversation(
           request.postDataJSON().conversationId as string,
         );
-        return route.fulfill({ status: 201, json: conversation });
+        workspaceCreated = workspace;
+        return route.fulfill({
+          status: 201,
+          json: workspace ? organizationConversation() : conversation,
+        });
       }
       return route.fulfill({
         json: {
-          conversations: conversation ? [conversation] : [],
+          conversations: conversation
+            ? [workspace ? organizationConversation() : conversation]
+            : [],
           hasMore: false,
         },
       });
@@ -177,6 +222,24 @@ async function fixture(
         body:
           streamOverride ??
           responseEvents
+            .map((e) =>
+              workspace && e.type === "citation"
+                ? ({
+                    type: "workspace.citation",
+                    sequence: e.sequence,
+                    roundId: e.roundId,
+                    citation: {
+                      kind: "report",
+                      ...data.revision.scope,
+                      target: e.target,
+                      reportDerivationId: e.reportDerivationId,
+                      subjectId: null,
+                      version: null,
+                      sectionId: null,
+                    },
+                  } as ChatEvent)
+                : e,
+            )
             .filter((e) => e.sequence > after)
             .map(frame)
             .join(""),
@@ -213,6 +276,14 @@ async function fixture(
           deadlineUtc: "2026-01-01T00:02:00Z",
           finishedAtUtc: null,
           lastSequence: 1,
+          ...(workspace
+            ? {
+                focus: {
+                  state: "resolved" as const,
+                  revision: data.revision.scope,
+                },
+              }
+            : {}),
         },
       ];
       if (failSend) {
@@ -226,7 +297,11 @@ async function fixture(
       path === `${root}/conversations/${conversation.conversationId}`
     )
       return route.fulfill({
-        json: { conversation, turns, hasEarlierTurns: false },
+        json: {
+          conversation: workspace ? organizationConversation() : conversation,
+          turns,
+          hasEarlierTurns: false,
+        },
       });
     return route.fulfill({ status: 404, json: { code: "notFound" } });
   });
@@ -272,7 +347,17 @@ async function fixture(
   };
 }
 const panel = (page: Page) =>
-  page.getByRole("complementary", { name: "Mapping chat" });
+  page.getByRole("complementary", { name: "Workspace chat", exact: true });
+async function openPanel(page: Page) {
+  await page.locator("#workspace-chat-toggle").waitFor();
+  if (
+    (await page
+      .locator("#workspace-chat-toggle")
+      .getAttribute("aria-expanded")) === "false"
+  )
+    await page.locator("#workspace-chat-toggle").click();
+  await expect(panel(page)).toBeVisible();
+}
 
 async function holdSessionCheck(page: Page) {
   let release!: () => void;
@@ -291,6 +376,13 @@ async function holdSessionCheck(page: Page) {
   return { release, arrived };
 }
 async function start(page: Page) {
+  await page.locator("#workspace-chat-toggle").waitFor();
+  if (
+    (await page
+      .locator("#workspace-chat-toggle")
+      .getAttribute("aria-expanded")) === "false"
+  )
+    await page.locator("#workspace-chat-toggle").click();
   await panel(page)
     .getByRole("button", { name: "New conversation", exact: true })
     .click();
@@ -302,7 +394,7 @@ async function start(page: Page) {
     .click();
 }
 
-test("creates, streams, and reopens a private revision conversation", async ({
+test("creates, streams, and reopens a private workspace conversation focused on the revision", async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -332,7 +424,7 @@ test("creates, streams, and reopens a private revision conversation", async ({
   expect(f.posts).toHaveLength(2);
 });
 
-test("chat admission waits for the page's initial report reads", async ({
+test("workspace chat admission does not wait for retained report reads", async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -346,15 +438,16 @@ test("chat admission waits for the page's initial report reads", async ({
   });
   try {
     await page.goto(f.data.browserPath);
+    await openPanel(page);
     await expect(
-      panel(page).getByText(
-        "Waiting for the initial report reads before loading chat.",
-      ),
-    ).toBeVisible();
-    await expect(
-      panel(page).getByRole("button", { name: "Refresh chat", exact: true }),
-    ).toBeDisabled();
-    expect(f.reads.filter((path) => path.endsWith("/chat"))).toHaveLength(0);
+      panel(page).getByRole("button", {
+        name: "New conversation",
+        exact: true,
+      }),
+    ).toBeEnabled();
+    expect(
+      f.reads.filter((path) => path.endsWith("/chat")).length,
+    ).toBeGreaterThan(0);
     release();
     await expect(
       panel(page).getByRole("button", {
@@ -390,6 +483,7 @@ for (const failed of ["projection", "validation"] as const) {
     );
     try {
       await page.goto(f.data.browserPath);
+      await openPanel(page);
       await expect(
         panel(page).getByRole("button", {
           name: "New conversation",
@@ -413,6 +507,7 @@ test("keyboard creation restores focus to the composer after a delayed session c
 }) => {
   const f = await fixture(page);
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   const create = panel(page).getByRole("button", {
     name: "New conversation",
     exact: true,
@@ -465,6 +560,7 @@ test("an unacknowledged keyboard send focuses explicit recovery after admission"
 }) => {
   const f = await fixture(page);
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   await panel(page)
     .getByRole("button", { name: "New conversation", exact: true })
     .click();
@@ -497,6 +593,7 @@ test("admission completion does not steal deliberate focus outside chat", async 
 }) => {
   const f = await fixture(page);
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   const create = panel(page).getByRole("button", {
     name: "New conversation",
     exact: true,
@@ -507,15 +604,15 @@ test("admission completion does not steal deliberate focus outside chat", async 
     await create.focus();
     await page.keyboard.press("Enter");
     await held.arrived;
-    const examples = page
+    const catalog = page
       .getByRole("navigation", { name: "Workspace", exact: true })
-      .getByRole("link", { name: "Examples", exact: true });
-    await examples.focus();
+      .getByRole("link", { name: "Catalog", exact: true });
+    await catalog.focus();
     held.release();
     await expect(
       panel(page).getByLabel("Question", { exact: true }),
     ).toBeVisible();
-    await expect(examples).toBeFocused();
+    await expect(catalog).toBeFocused();
   } finally {
     held.release();
   }
@@ -528,6 +625,7 @@ test("unavailable report reading does not leave chat waiting for a nonexistent r
   f.data.mapping.access.actions.readReports = false;
   f.data.mapping.access.actions.deriveReports = false;
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   await expect(
     panel(page).getByRole("button", { name: "New conversation", exact: true }),
   ).toBeEnabled();
@@ -629,7 +727,7 @@ test("citations select the exact report's field without changing the revision UR
   expect(page.url()).toBe(url);
 });
 
-test("a citation with another report pin cannot select viewer resources", async ({
+test("a citation with another report pin links to its own view without selecting local resources", async ({
   page,
 }) => {
   const f = await fixture(page);
@@ -649,15 +747,15 @@ test("a citation with another report pin cannot select viewer resources", async 
   ]);
   await page.goto(f.data.browserPath);
   await start(page);
-  await panel(page)
-    .getByRole("button", { name: "Show field controlled-field" })
-    .click();
   await expect(
-    page.getByText(
-      "This citation belongs to a saved report that is not displayed.",
-      { exact: false },
-    ),
-  ).toBeVisible();
+    panel(page).getByRole("button", { name: "Show field controlled-field" }),
+  ).toHaveCount(0);
+  await expect(
+    panel(page).getByRole("link", { name: "Open report" }),
+  ).toHaveAttribute(
+    "href",
+    `${f.data.browserPath}?projectionDerivationId=${V}#field:controlled-field`,
+  );
 });
 
 for (const kind of [
@@ -721,9 +819,11 @@ test("a saved conversation reopens after reload without another turn POST", asyn
   const f = await fixture(page);
   f.saved();
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   await panel(page).getByLabel("Saved conversations").selectOption(C);
   await expect(panel(page)).toContainText("Answer complete.");
   await page.reload();
+  await openPanel(page);
   await panel(page).getByLabel("Saved conversations").selectOption(C);
   await expect(panel(page)).toContainText("This maps the saved value.");
   expect(f.posts).toHaveLength(0);
@@ -757,14 +857,18 @@ test("identity changes clear private chat instead of adopting another owner's co
   await panel(page)
     .getByRole("button", { name: "Refresh chat", exact: true })
     .click();
-  await expect(panel(page)).not.toContainText("This maps the saved value.");
+  await expect(
+    page.getByText("This maps the saved value.", { exact: true }),
+  ).toHaveCount(0);
   await expect(panel(page).getByLabel("Question", { exact: true })).toHaveCount(
     0,
   );
   expect(f.posts).toHaveLength(2);
   expect(
     await page.evaluate(() => ({
-      local: localStorage.length,
+      local: Object.keys(localStorage).filter(
+        (key) => !key.startsWith("weft.chat-width.v1:"),
+      ).length,
       session: sessionStorage.length,
     })),
   ).toEqual({ local: 0, session: 0 });
@@ -787,7 +891,9 @@ test("a same-owner refresh that disables chat clears the open conversation", asy
     "aria-busy",
     "true",
   );
-  await expect(panel(page)).not.toContainText("This maps the saved value.");
+  await expect(
+    page.getByText("This maps the saved value.", { exact: true }),
+  ).toHaveCount(0);
   await expect(panel(page).getByLabel("Question", { exact: true })).toHaveCount(
     0,
   );
@@ -820,6 +926,7 @@ async function failSessionCheck(page: Page) {
 }
 
 async function unsentQuestion(page: Page) {
+  await openPanel(page);
   await panel(page)
     .getByRole("button", { name: "New conversation", exact: true })
     .click();
@@ -874,6 +981,143 @@ test("an unacknowledged question keeps its original request across a failed sess
   await expect(panel(page)).toContainText("Answer complete.");
 });
 
+for (const outcome of ["ready", "unavailable", "identityChanged"] as const) {
+  test(`original-question recovery waits for an overlapping session check (${outcome})`, async ({
+    page,
+  }) => {
+    const f = await fixture(page);
+    let identityContext = `v1.${"A".repeat(43)}`;
+    const requestToken = "ZXBvY2gtYQ";
+    const context = () =>
+      outcome === "identityChanged"
+        ? { ...f.data.context, mode: "session", identityContext, requestToken }
+        : f.data.context;
+    const session = () => ({
+      version: 1,
+      mode: "session",
+      state: "authenticated",
+      authActionRequestToken: "YXV0aC1h",
+      requestToken,
+      identityContext,
+      displayName: "Fixture account",
+    });
+    if (outcome === "identityChanged") {
+      await page.route("**/api/v1/catalog/context", (route) =>
+        route.fulfill({ json: context() }),
+      );
+      await page.route("**/api/auth/session*", (route) =>
+        route.fulfill({ json: session() }),
+      );
+    }
+    f.loseSend();
+    await page.goto(f.data.browserPath);
+    await start(page);
+    const recover = panel(page).getByRole("button", {
+      name: "Recover original question",
+    });
+    await expect(recover).toBeVisible();
+    let releaseContext!: () => void;
+    const contextGate = new Promise<void>((resolve) => {
+      releaseContext = resolve;
+    });
+    let contextHeld!: () => void;
+    const heldContext = new Promise<void>((resolve) => {
+      contextHeld = resolve;
+    });
+    await page.route(
+      "**/api/v1/catalog/context",
+      async (route) => {
+        contextHeld();
+        await contextGate;
+        await route.fulfill({ json: context() });
+      },
+      { times: 1 },
+    );
+    await recover.click();
+    await heldContext;
+    let releaseSession!: () => void;
+    const sessionGate = new Promise<void>((resolve) => {
+      releaseSession = resolve;
+    });
+    let sessionHeld!: () => void;
+    const heldSession = new Promise<void>((resolve) => {
+      sessionHeld = resolve;
+    });
+    await page.route(
+      "**/api/auth/session*",
+      async (route) => {
+        sessionHeld();
+        await sessionGate;
+        if (outcome === "unavailable")
+          await route.fulfill({ status: 503, json: { code: "unavailable" } });
+        else if (outcome === "identityChanged") {
+          identityContext = `v1.${"B".repeat(42)}A`;
+          await route.fulfill({ json: session() });
+        } else await route.fallback();
+      },
+      { times: 1 },
+    );
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await heldSession;
+    const contextReceived = page.waitForResponse("**/api/v1/catalog/context");
+    releaseContext();
+    await contextReceived;
+    // Let the context continuation render while session admission remains held.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    expect(f.posts).toHaveLength(2);
+    await expect(
+      panel(page).getByLabel("Question", { exact: true }),
+    ).toHaveValue("How does this map?");
+    await expect(
+      panel(page).getByLabel("Question", { exact: true }),
+    ).toBeDisabled();
+    releaseSession();
+    if (outcome !== "ready") {
+      expect(f.posts).toHaveLength(2);
+      if (outcome === "identityChanged") {
+        await expect(panel(page)).toHaveCount(0);
+        await page.getByRole("button", { name: "Retry", exact: true }).click();
+        await openPanel(page);
+        await expect(
+          panel(page).getByRole("button", {
+            name: "New conversation",
+            exact: true,
+          }),
+        ).toBeEnabled();
+        await expect(recover).toHaveCount(0);
+        expect(f.posts).toHaveLength(2);
+        return;
+      }
+      await expect(panel(page)).toHaveCount(0);
+      await page
+        .getByRole("alert")
+        .filter({
+          has: page.getByRole("heading", {
+            name: "Workspace access unavailable",
+            exact: true,
+          }),
+        })
+        .getByRole("button", { name: "Retry", exact: true })
+        .click();
+      await expect(
+        page.getByRole("heading", { name: "Catalog unavailable", exact: true }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Retry", exact: true }).click();
+      await expect(recover).toBeVisible();
+      expect(f.posts).toHaveLength(2);
+      await recover.click();
+    }
+    await expect.poll(() => f.posts.length).toBe(3);
+    expect(f.posts[2]!.body).toEqual(f.posts[1]!.body);
+    await expect(panel(page)).toContainText("Answer complete.");
+  });
+}
+
 test("a different actor after a failed session check clears the unsent question", async ({
   page,
 }) => {
@@ -882,6 +1126,7 @@ test("a different actor after a failed session check clears the unsent question"
   await unsentQuestion(page);
   f.data.context.actorPrincipalId = "b0000000-0000-4000-8000-000000000001";
   await failSessionCheck(page);
+  await openPanel(page);
   await expect(
     panel(page).getByRole("button", { name: "New conversation", exact: true }),
   ).toBeEnabled();
@@ -963,6 +1208,7 @@ for (const mode of [
       profiles: mode !== "profiles",
     });
     await page.goto(f.data.browserPath);
+    if (mode !== "disabled") await openPanel(page);
     if (mode === "missingReports") {
       await expect(
         panel(page).getByRole("button", {
@@ -992,7 +1238,8 @@ for (const mode of [
     } else if (mode === "profiles")
       await expect(panel(page)).toContainText("No selectable model profile");
     else {
-      await expect(panel(page)).toContainText("Chat is not configured");
+      await expect(page.locator("#workspace-chat-toggle")).toHaveCount(0);
+      await expect(panel(page)).toHaveCount(0);
       expect(f.reads.filter((p) => p.endsWith("/chat"))).toHaveLength(0);
     }
   });
@@ -1001,7 +1248,10 @@ for (const mode of [
 test("signed-out session cannot load private chat", async ({ page }) => {
   const f = await fixture(page, { session: true });
   await page.goto(f.data.browserPath);
-  await expect(page.getByText("Not signed in", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Weft", exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/sign-in\?returnTo=/);
   expect(f.reads.filter((p) => p.includes("/chat"))).toHaveLength(0);
 });
 
@@ -1034,6 +1284,7 @@ test("provider failure is explicit and keyboard/mobile controls fit", async ({
   ]);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(f.data.browserPath);
+  await openPanel(page);
   const create = panel(page).getByRole("button", {
     name: "New conversation",
     exact: true,

@@ -66,14 +66,14 @@ makes the user its administrator.
 browser resolves only the public host and `login.microsoftonline.com`, each to the run's
 listener, and admits only the run's two TLS keys.
 
-1. Sign in through the session panel and the issuer's page; the status reports an
-   authenticated Session.
+1. Sign in through the sign-in page and the issuer's page; the account menu reports
+   an authenticated Session.
 2. Create a project.
 3. Upload a native mapping (the preview-orders fixture with JSON documents declared on
    every input and output); its registration carries the Blob profile identity.
 4. Generate and read the explanation and validation reports.
-5. Ask chat a question that calls `search_mapping`, and require a completed answer with
-   verified citations.
+5. Ask the workbench's workspace chat a question that calls `search_catalog`, and
+   require a completed answer with a verified mapping citation.
 6. Run a preview with sample JSON through the `runs` worker and the service, and compare
    the output with independently authored bytes.
 7. Append a second revision that renames one output field, generate its explanation and
@@ -99,6 +99,15 @@ The script then requires that every sign-in redeemed its code without an issuer 
 that every service replica is healthy, and that the maintenance tool observes the
 project's objects in the Blob store.
 
+With the fixture provider, the standalone `/chat` page also checks every
+combination of the model's payload policy and an explicit project payload-read
+grant against the saved preview. The fixture requests a payload tool only when
+it is actually offered, confirms the received UTF-8 byte count, and never logs
+payload content. Only the allowed combination may produce a data-sharing marker
+and audit row. The test revokes its own grant and checks that a subsequent turn
+cannot share the input. The two acceptance model profiles differ only in that
+payload policy; neither profile can grant project permission.
+
 On a slow host the application can report a read as timed out or unavailable, or discard
 an editor draft when a background session check fails. The spec then uses only the
 application's own recovery controls (Retry, read again, resend the original request, try
@@ -118,7 +127,8 @@ a new conversation.
 
 For explicit provider emulation, set `WEFT_ACCEPTANCE_MODEL_FIXTURE=true`. The
 test-only Node service implements the Ollama wire protocol and requests the real
-`search_mapping` tool; the application still retrieves and verifies its own
+workspace catalog or payload tool (and `search_mapping` for legacy revision
+chat); the application still retrieves and verifies its own
 evidence and citations. No model cache or Ollama image is used in this mode.
 The receipt records `modelFixture: true`. This qualifies application orchestration
 and recovery against an emulated provider, not live-model behavior. The default

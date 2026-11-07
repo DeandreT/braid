@@ -41,12 +41,18 @@ export class BuildError extends Error {
 export function invalid(): never {
   throw new BuildError("incompatible");
 }
-export function shape(value: unknown, fields: readonly string[]): value is Obj {
+export function shape(
+  value: unknown,
+  fields: readonly string[],
+  optional: readonly string[] = [],
+): value is Obj {
   return (
     !!value &&
     typeof value === "object" &&
     !Array.isArray(value) &&
-    Object.keys(value).length === fields.length &&
+    Object.keys(value).length ===
+      fields.length +
+        optional.filter((key) => Object.hasOwn(value, key)).length &&
     fields.every((key) => Object.hasOwn(value, key))
   );
 }

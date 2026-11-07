@@ -17,7 +17,7 @@ Inspection and validation were qualified in
 
 ## Native authority and results
 
-Ferrule libraries are pinned to `576012aa17c403d9c3fcb8659ed4d3a47ba06864`.
+Ferrule libraries are pinned to `dddc4dce6c93f4137fb2aa2a011360d089e0a51b`.
 `mapping::project_file::decode_bytes` admits the file;
 `engine::validate` supplies validation issues and typed owners. The worker never
 evaluates mappings or resolves design-time resources. Inspection returns boundary
@@ -175,6 +175,36 @@ only memory, CPU time, wall deadline and frame bounds; network, filesystem, user
 capability, process and cleanup policy are identical to inspection. Inspection
 results continue to report preview as `notQualified` until a product preview
 workflow is exposed.
+
+## Explicit document preview protocol
+
+The worker also accepts `weft.ferrule-document-preview.v1`, using the same
+bounded frame shape, target selection, digest verification and sandbox ceilings
+as JSON preview. Its response profile is `weft.ferrule-document-preview.v1`.
+This is a distinct admission contract: the existing JSON protocol and profile
+retain their original behavior.
+
+Document boundaries require an explicit `json_document` or `edi_kind` (`x12` or
+`edifact`) in the native mapping. Stored paths, sample filenames and caller media
+types never select the family. Only that family's closed format-option allowlist
+is accepted. External or unresolved EDI configuration, conflicting codecs,
+stateful formats, dynamic sources and dynamic output paths are refused before
+input parsing. Embedded EDI constraints, lexical formats, implied decimals and
+matching envelope autocomplete settings pass to Ferrule without reinterpretation.
+
+Inputs and selected outputs receive synthetic `/weft/input/` and `/weft/output/`
+identities with family-specific suffixes. Named targets need no stored path.
+Output frames preserve Ferrule's exact bytes and report `application/json`,
+`application/edi-x12` or `application/edifact` per selected target, including mixed
+target families. The C# adapter requires an explicit
+`PreviewExecutionProfile.Document` selection; its default remains legacy JSON.
+It checks the distinct protocol/profile and records a distinct adapter identity.
+
+Catalog preview submissions can explicitly request this profile; it is retained
+in the queued request and recorded result. See [Preview runs](preview-runs.md)
+for per-format limits, persistence and download behavior. Regression runtime
+contracts, compiled builds and endpoint content negotiation retain independent
+admission and do not gain document support from a successful sample preview.
 
 ## Local isolation and lifecycle
 

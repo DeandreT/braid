@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -29,7 +30,7 @@ public static partial class CatalogEndpoints
     private static void MapPreviews(IEndpointRouteBuilder endpoints, string organization, string revisionRoute)
     {
         DescribePreview<CatalogPreviewSubmitResultV1>(endpoints.MapPost(revisionRoute + "/previews", SubmitCatalogPreview),
-                "SubmitCatalogPreview", "Submit an idempotent bounded JSON sample preview of this exact revision.")
+                "SubmitCatalogPreview", "Submit an idempotent bounded sample preview of this exact revision with explicit legacy JSON or document admission.")
             .AddOpenApiOperationTransformer(async (operation, context, cancellationToken) =>
             {
                 // OpenAPI only: runtime Accepts metadata would refuse media before the handler's
@@ -60,6 +61,8 @@ public static partial class CatalogEndpoints
             .WithName("GetCatalogPreviewOutput").WithTags("Catalog")
             .WithSummary("Read the exact bytes of one output of a succeeded preview run.")
             .Produces(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces(StatusCodes.Status200OK, contentType: "application/edi-x12")
+            .Produces(StatusCodes.Status200OK, contentType: "application/edifact")
             .Produces<CatalogErrorV1>(StatusCodes.Status400BadRequest)
             .Produces<CatalogErrorV1>(StatusCodes.Status401Unauthorized)
             .Produces<CatalogErrorV1>(StatusCodes.Status404NotFound)
@@ -67,6 +70,37 @@ public static partial class CatalogEndpoints
         DescribePreview<CatalogPreviewCancelResultV1>(endpoints.MapPost(organization + "/previews/{runId}/cancel", CancelCatalogPreview),
             "CancelCatalogPreview", "Cancel a queued preview run or request cancellation of a running one.");
     }
+
+    internal static void TransformPreviewSchemas(OpenApiDocument document)
+    {
+        if (document.Components?.Schemas?.TryGetValue(nameof(CatalogPreviewSubmissionV1), out var schema) == true
+            && schema is OpenApiSchema submission && submission.Properties is { } properties)
+            properties["profile"] = new OpenApiSchema
+            {
+                Type = JsonSchemaType.String | JsonSchemaType.Null,
+                Description = "Omitted or null preserves legacy JSON admission. Document admission requires explicit native boundary formats; filenames never select them.",
+                Enum = [JsonValue.Create(PreviewPolicy.Profile)!, JsonValue.Create(DocumentPreviewPolicy.Profile)!, null!]
+            };
+        foreach (var path in document.Paths.Values)
+            foreach (var operation in path.Operations?.Values.AsEnumerable() ?? Enumerable.Empty<OpenApiOperation>())
+                if (operation.OperationId == "GetCatalogPreviewOutput" && operation.Responses?.TryGetValue("200", out var response) == true
+                    && response is OpenApiResponse output)
+                {
+                    output.Content = new Dictionary<string, OpenApiMediaType>();
+                    foreach (var media in new[] { "application/json", "application/edi-x12", "application/edifact" })
+                        output.Content[media] = new OpenApiMediaType { Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" } };
+                    output.Headers = new Dictionary<string, IOpenApiHeader>
+                    {
+                        ["Content-Digest"] = new OpenApiHeader { Required = true, Description = "SHA-256 of the exact retained output bytes (sha-256=:base64:).", Schema = new OpenApiSchema { Type = JsonSchemaType.String } },
+                        ["Content-Disposition"] = PreviewLiteralHeader("attachment"),
+                        ["X-Content-Type-Options"] = PreviewLiteralHeader("nosniff"),
+                        ["Cache-Control"] = PreviewLiteralHeader("no-store")
+                    };
+                }
+    }
+
+    private static OpenApiHeader PreviewLiteralHeader(string value) => new()
+    { Required = true, Schema = new OpenApiSchema { Type = JsonSchemaType.String, Enum = [JsonValue.Create(value)!] } };
 
     private static RouteHandlerBuilder DescribePreview<T>(RouteHandlerBuilder route, string name, string summary) =>
         route.WithName(name).WithTags("Catalog").WithSummary(summary)
@@ -161,7 +195,9 @@ public static partial class CatalogEndpoints
             context.Response.Headers["Content-Digest"] = "sha-256=:" + Convert.ToBase64String(Convert.FromHexString(output.Digest.Value)) + ":";
             context.Response.Headers.ContentDisposition = "attachment";
             context.Response.Headers.XContentTypeOptions = "nosniff";
-            return Results.Bytes(output.Content, PreviewPolicy.MediaType);
+            if (!DocumentPreviewPolicy.AdmitsMediaType(output.MediaType))
+                throw new InvalidOperationException("Stored preview media type is not admitted.");
+            return Results.Stream(new MemoryStream(output.Content, writable: false), output.MediaType);
         });
 
     private static Task<IResult> CancelCatalogPreview(string organizationId, string runId, HttpContext context) =>
@@ -282,7 +318,13 @@ public static partial class CatalogEndpoints
                 throw new CatalogInvalidRequestException();
             return new PreviewInputDocument(input.Name, bytes.AsSpan(0, length));
         }).ToArray();
-        return new PreviewRunSubmission(subject, key, target, inputs[0], inputs[1..], parameters);
+        var profile = body.Profile switch
+        {
+            null or PreviewPolicy.Profile => PreviewExecutionProfile.LegacyJson,
+            DocumentPreviewPolicy.Profile => PreviewExecutionProfile.Document,
+            _ => throw new CatalogInvalidRequestException()
+        };
+        return new PreviewRunSubmission(subject, key, target, inputs[0], inputs[1..], parameters) { Profile = profile };
     }
 
     private static CatalogPreviewRunV1 PreviewRun(PreviewRunSnapshot run) => new(

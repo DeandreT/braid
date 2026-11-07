@@ -6,6 +6,7 @@ using Weft.Jobs;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
+using Weft.Storage.FileSystem;
 using Weft.Storage.Hosting;
 using Weft.Worker;
 using Wolverine;
@@ -16,8 +17,8 @@ var settings = PreviewWorkerSettings.Read(read);
 var inspection = InspectionWorkerSettings.Read(read, settings.WorkerImage, settings.DockerExecutable);
 var previewRunner = PreviewRunnerSettings.Read(read, settings);
 const string previewRunnerKey = "preview-runner";
-if (!settings.PreviewEnabled && inspection is null)
-    throw new InvalidOperationException("The worker requires preview execution or the inspection service.");
+if (!settings.PreviewEnabled && inspection is null && read("WEFT_NOTIFICATIONS_ENABLED") != "true")
+    throw new InvalidOperationException("The worker requires execution, inspection or notifications.");
 var builder = Host.CreateApplicationBuilder(args);
 var contentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(builder.Environment.ContentRootPath));
 if (settings.PreviewEnabled)
@@ -40,7 +41,11 @@ if (settings.PreviewEnabled)
 }
 builder.Services.AddWeftRegressionWorker(read, () =>
     new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, previewRunner.ProfileIdentity(settings),
-        FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile));
+        FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile), () =>
+    new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, previewRunner.ProfileIdentity(settings),
+        FerrulePreviewBackend.DocumentAdapterBuild, DocumentPreviewPolicy.Profile),
+    (path, maximum) => ProtectedHostFiles.ReadText(path, maximum));
+builder.Services.AddWeftNotificationWorker(read, (path, maximum) => ProtectedHostFiles.ReadText(path, maximum));
 builder.Services.AddWeftBuildWorkerWithRunner(read, () => previewRunner.CreateBuildRunner(settings));
 if (inspection is { } hosted)
     builder.Services.AddWeftInspectionWorker(hosted.Transport, hosted.Runner);

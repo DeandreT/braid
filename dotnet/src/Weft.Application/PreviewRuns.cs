@@ -40,7 +40,10 @@ public sealed record PreviewRunSubmission(
     PreviewTargetSelection Target,
     PreviewInputDocument Primary,
     IReadOnlyList<PreviewInputDocument> NamedInputs,
-    IReadOnlyList<PreviewParameter> Parameters);
+    IReadOnlyList<PreviewParameter> Parameters)
+{
+    public PreviewExecutionProfile Profile { get; init; } = PreviewExecutionProfile.LegacyJson;
+}
 
 public enum PreviewSubmitOutcome
 {
@@ -136,7 +139,10 @@ public enum PreviewCancelOutcome
     NotAuthorizedOrNotFound
 }
 
-public sealed record PreviewOutputContent(Sha256Digest Digest, byte[] Content);
+public sealed record PreviewOutputContent(Sha256Digest Digest, byte[] Content)
+{
+    public string MediaType { get; init; } = PreviewPolicy.MediaType;
+}
 
 /// <summary>Writer port. Each call is one short transaction; none spans worker or storage I/O.</summary>
 public interface IPreviewRunStore
@@ -151,6 +157,15 @@ public interface IPreviewRunStore
     Task<PreviewCancelOutcome> CancelAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken cancellationToken = default);
 }
 
+public sealed record PreviewRunSummary(Guid RunId, RevisionScope Revision, PreviewRunState State, PreviewRunOutcome? Outcome,
+    DateTimeOffset CreatedAtUtc, DateTimeOffset? FinishedAtUtc, DateTimeOffset ExpiresAtUtc);
+
+/// <summary>Newest first; NextRunId continues the same mapping and submitter's history.</summary>
+public sealed record PreviewRunPage(IReadOnlyList<PreviewRunSummary> Runs, Guid? NextRunId);
+
+/// <summary>A submitted input: ordinal 0 is the primary document, later ordinals are named sources.</summary>
+public sealed record PreviewInputDescriptor(int Ordinal, string? Name, Sha256Digest Digest, int ByteCount);
+
 /// <summary>Submitter-only reads with fresh project authority; unauthorized and missing are indistinguishable.</summary>
 public interface IPreviewRunReader
 {
@@ -158,6 +173,14 @@ public interface IPreviewRunReader
         CancellationToken cancellationToken = default) => Task.FromResult<DraftPreviewSubject?>(null);
     Task<PreviewRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken cancellationToken = default);
     Task<PreviewOutputContent?> ReadOutputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
+        CancellationToken cancellationToken = default);
+    /// <summary>The caller's own runs of one mapping. A cursor outside the same listing yields an empty page.</summary>
+    Task<PreviewRunPage> ListAsync(ActorContext actor, MappingScope mapping, int limit, Guid? afterRunId = null,
+        CancellationToken cancellationToken = default);
+    /// <summary>Null when the run is not the caller's visible run; every run has at least one input.</summary>
+    Task<IReadOnlyList<PreviewInputDescriptor>?> ReadInputDescriptorsAsync(ActorContext actor, Guid organizationId, Guid runId,
+        CancellationToken cancellationToken = default);
+    Task<PreviewOutputContent?> ReadInputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
         CancellationToken cancellationToken = default);
 }
 

@@ -17,6 +17,9 @@ public sealed partial class ChatTurnOrchestrator
     private readonly IChatProfilePolicy _profilePolicy;
     private readonly IChatReadOnlyToolPort _toolPort;
     private readonly IChatCitationPort? _citationPort;
+    private readonly IChatWorkspaceCitationPort? _workspaceCitationPort;
+    private readonly IChatTurnContextPort? _contextPort;
+    private readonly IChatPayloadAuthorizationPort? _payloadAuthorization;
     private readonly Guid _instance;
     private readonly ChatOrchestrationLimits _limits;
     internal TimeProvider Clock { get; }
@@ -33,7 +36,8 @@ public sealed partial class ChatTurnOrchestrator
         AiRoundClient provider, AiProfileSpec profile, string trustedInstructions,
         IEnumerable<AiToolDefinition> tools, IChatProfilePolicy profilePolicy,
         IChatReadOnlyToolPort toolPort, TimeProvider time, Guid instanceId, ChatOrchestrationLimits limits,
-        IChatCitationPort? citationPort = null)
+        IChatCitationPort? citationPort = null, IChatWorkspaceCitationPort? workspaceCitationPort = null,
+        IChatTurnContextPort? contextPort = null, IChatPayloadAuthorizationPort? payloadAuthorization = null)
     {
         ArgumentNullException.ThrowIfNull(conversations); ArgumentNullException.ThrowIfNull(turns);
         ArgumentNullException.ThrowIfNull(provider); ArgumentNullException.ThrowIfNull(profile);
@@ -46,14 +50,16 @@ public sealed partial class ChatTurnOrchestrator
         {
             foreach (var tool in tools)
             {
-                if (tool is null || owned.Count == 16 || !names.Add(tool.Name)) throw ChatBounds.Invalid();
+                if (tool is null || owned.Count == ChatAiBridge.MaxTools || !names.Add(tool.Name)) throw ChatBounds.Invalid();
                 owned.Add(tool);
             }
         }
         catch (Exception e) when (ChatTurnExecution.Recoverable(e)) { throw ChatBounds.Invalid(); }
         _conversations = conversations; _turns = turns; _provider = provider; _profile = profile;
         _instructions = trustedInstructions; _tools = owned.ToImmutable(); _profilePolicy = profilePolicy;
-        _toolPort = toolPort; _citationPort = citationPort; Clock = time; _instance = instanceId; _limits = limits;
+        _toolPort = toolPort; _citationPort = citationPort; _workspaceCitationPort = workspaceCitationPort; _contextPort = contextPort;
+        _payloadAuthorization = payloadAuthorization;
+        Clock = time; _instance = instanceId; _limits = limits;
     }
 
     public ChatTurnExecution Begin(ActorContext actor, ChatConversationKey conversation, ChatTurnIntent intent,
@@ -105,6 +111,10 @@ public sealed partial class ChatTurnOrchestrator
             state = new(execution, actor, conversation, facts);
             state.Messages.Add(AiSystemMessage.Create(_instructions));
             await AddHistoryAsync(state, history).ConfigureAwait(false);
+            // Trusted, freshly read context about the turn's focus is data in its own user message, never instructions.
+            if (_contextPort is not null &&
+                await _contextPort.DescribeAsync(actor, conversation, intent, execution.Token).ConfigureAwait(false) is { } context)
+                state.Messages.Add(AiUserMessage.Create(ChatBounds.Text(context, 16_384, false)));
             state.Messages.Add(AiUserMessage.Create(intent.OriginalRequest));
 
             while (true)
@@ -218,6 +228,7 @@ public sealed partial class ChatTurnOrchestrator
                 s.Round.Intent.RoundId, s.Execution.Token).ConfigureAwait(false);
             if (round != s.Round) throw Stop(ChatOrchestrationOutcome.Interrupted);
         }
+        await CheckPayloadAuthorityAsync(s, s.PayloadSources).ConfigureAwait(false);
         CheckTime(s.Execution, s.Facts.Intent);
     }
 
@@ -226,6 +237,15 @@ public sealed partial class ChatTurnOrchestrator
         execution.Token.ThrowIfCancellationRequested();
         if (execution.Cancelled) throw Stop(execution.TimedOut ? ChatOrchestrationOutcome.BudgetExceeded : ChatOrchestrationOutcome.Cancelled);
         if (Now >= intent.DeadlineUtc) throw Stop(ChatOrchestrationOutcome.BudgetExceeded);
+    }
+
+    private async Task CheckPayloadAuthorityAsync(State s, IReadOnlyList<ChatPayloadDisclosureFact> sources)
+    {
+        if (sources.Count == 0) return;
+        if (_payloadAuthorization is null || !await _payloadAuthorization.AllowsAsync(s.Actor, s.Conversation,
+            s.Facts.Intent, _profile, sources, s.Execution.Token).ConfigureAwait(false))
+            throw Stop(ChatOrchestrationOutcome.Denied);
+        CheckTime(s.Execution, s.Facts.Intent);
     }
 
     private async Task PublishRejectionAsync(State s, AiFailure failure)
@@ -335,8 +355,10 @@ public sealed partial class ChatTurnOrchestrator
         internal bool TerminalAttempted { get; set; }
         internal AiTurnLease? Lease { get; set; }
         internal List<AiMessage> Messages { get; } = [];
+        internal List<ChatPayloadDisclosureFact> PayloadSources { get; } = [];
         internal HashSet<string> CallIds { get; } = new(StringComparer.Ordinal);
         internal HashSet<ChatCitationTarget> Cited { get; } = [];
+        internal HashSet<ChatWorkspaceCitationFact> CitedWorkspace { get; } = [];
         internal long OutputBytes { get; set; }
         internal int ToolCalls { get; set; }
         internal int ToolIterations { get; set; }

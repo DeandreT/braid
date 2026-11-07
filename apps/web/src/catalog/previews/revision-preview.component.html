@@ -1,8 +1,8 @@
 <section class="catalog-summary preview" aria-labelledby="sample-preview-title">
   <h2 id="sample-preview-title">Sample preview</h2>
   <p class="catalog-intro">
-    Run this saved revision on sample JSON documents. Results are kept for a
-    limited time and only you can read them.
+    Run this saved revision on sample documents. Results are kept for a limited
+    time and only you can read them.
   </p>
   <weft-help-link [section]="'previews'">About samples</weft-help-link>
   @if (!allowed()) {
@@ -43,6 +43,29 @@
     >
       <fieldset class="preview-group">
         <legend>Input documents</legend>
+        <label for="preview-admission">Preview admission</label>
+        <select
+          id="preview-admission"
+          class="preview-text"
+          [value]="preview.documentProfile() ? 'document' : 'json'"
+          (change)="
+            preview.documentProfile.set(
+              $any($event.target).value === 'document'
+            )
+          "
+        >
+          <option value="json">Legacy JSON</option>
+          <option value="document">
+            Explicit document boundaries (JSON, X12, EDIFACT)
+          </option>
+        </select>
+        @if (preview.documentProfile()) {
+          <p class="preview-hint">
+            The mapping must explicitly select each boundary format and embed
+            its settings. Filenames do not select formats. Preview admission
+            does not qualify regression, builds or endpoints.
+          </p>
+        }
         @for (
           item of preview.inputs();
           track item.id;
@@ -52,7 +75,9 @@
           <div class="preview-input">
             @if (first) {
               <label [for]="'preview-input-' + item.id"
-                >Primary input (JSON)</label
+                >Primary input ({{
+                  preview.documentProfile() ? "document" : "JSON"
+                }})</label
               >
             } @else {
               <label [for]="'preview-input-name-' + item.id">Source name</label>
@@ -69,7 +94,9 @@
                 "
               />
               <label [for]="'preview-input-' + item.id"
-                >Named input {{ index }} (JSON)</label
+                >Named input {{ index }} ({{
+                  preview.documentProfile() ? "document" : "JSON"
+                }})</label
               >
             }
             @if (item.file; as file) {
@@ -96,7 +123,9 @@
                 <input
                   #fileInput
                   type="file"
-                  accept="application/json,.json"
+                  [attr.accept]="
+                    preview.documentProfile() ? null : 'application/json,.json'
+                  "
                   (change)="chooseFile(item.id, $event)"
                 />
               </label>
@@ -392,16 +421,13 @@
         @if (outputError(); as kind) {
           <p class="catalog-inline-error" role="alert">{{ errorText(kind) }}</p>
         }
-        @if (shown(); as view) {
-          <figure class="preview-output">
-            <figcaption>
-              Output {{ view.ordinal + 1 }}
-              @if (view.truncated) {
-                (first 256 KiB; download for the complete document)
-              }
-            </figcaption>
-            <pre tabindex="0">{{ view.text }}</pre>
-          </figure>
+        @if (!workbench()) {
+          @if (shown(); as view) {
+            <figure class="preview-output">
+              <figcaption>Output {{ view.output.ordinal + 1 }}</figcaption>
+              <weft-document-view [data]="view.display" />
+            </figure>
+          }
         }
         @if (!preview.active()) {
           <button

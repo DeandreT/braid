@@ -1,414 +1,317 @@
+import type { Page } from "@playwright/test";
+import type { components } from "../src/api/generated";
 import {
+  displayData,
+  installDisplay,
+  type Projection,
+} from "./mapping-viewer.fixture";
+import {
+  ATTEMPT,
+  controlledData,
+  copy,
   expect,
   test,
-  type APIRequestContext,
-  type Locator,
-  type Page,
-} from "@playwright/test";
-import type { components } from "../src/api/generated";
+  type ControlledReports,
+  type Data,
+} from "./revision-reports-controlled.fixture";
+import {
+  expectReport,
+  pinnedPath,
+  reportApi,
+  revisionPath,
+  type ProjectionReport,
+  type ReportsOwner,
+  type Sample,
+  type ValidationReport,
+} from "./revision-reports-real.fixture";
 
-type ExampleResult = components["schemas"]["NativeExampleResultV1"];
-type Descriptor = components["schemas"]["NativeExampleDescriptorV1"];
-type Projection = components["schemas"]["ProjectionDocumentV1"];
-const pageErrors = new WeakMap<Page, string[]>();
-test.setTimeout(90000);
+// These tests exercise the authenticated catalog workbench, not the retired example page.
+// Real native evidence and controlled display/transport cases are named separately.
+test.setTimeout(300_000);
+const errors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
-  const errors: string[] = [];
-  pageErrors.set(page, errors);
-  page.on("pageerror", (error) => errors.push(error.message));
+  const observed: string[] = [];
+  errors.set(page, observed);
+  page.on("pageerror", (error) => observed.push(error.message));
 });
-test.afterEach(({ page }) => expect(pageErrors.get(page)).toEqual([]));
-
-async function tabTo(
-  page: Page,
-  target: Locator,
-  maximumStops = 40,
-): Promise<void> {
-  for (let stop = 0; stop < maximumStops; stop++) {
-    if (await target.evaluate((element) => element === document.activeElement))
-      return;
-    await page.keyboard.press("Tab");
-  }
-  await expect(target).toBeFocused();
+test.afterEach(({ page }) => {
+  // Worker-owner setup can fail before beforeEach installs the page observer.
+  // Preserve that setup failure rather than masking it with an undefined census.
+  const observed = errors.get(page);
+  if (observed) expect(observed).toEqual([]);
+});
+const table = (page: Page) =>
+  page.getByRole("table", { name: "Mapping field connections", exact: true });
+const inspector = (page: Page) =>
+  page.getByRole("complementary", { name: "Context inspector", exact: true });
+const rowButton = (page: Page, path: string) =>
+  table(page).getByRole("button", {
+    name: `Inspect field ${path}`,
+    exact: true,
+  });
+const row = (page: Page, path: string) =>
+  rowButton(page, path).locator("xpath=ancestor::tr");
+const search = (page: Page) =>
+  page.getByRole("searchbox", { name: "Filter mapping fields", exact: true });
+async function controls(page: Page): Promise<void> {
+  const summary = page.getByText("Report controls and evidence", {
+    exact: true,
+  });
+  if (
+    !(await summary
+      .locator("..")
+      .evaluate((element) => element.hasAttribute("open")))
+  )
+    await summary.click();
 }
-
-test("large display fixtures page all rows without hiding coverage and instantiate details on demand", async ({
-  page,
-  request,
-}) => {
-  const report = await displayFixture(request, "partial");
-  const document = report.projection.document!;
-  const templateRule = document.rules[0];
-  const templateField = document.fields.find(
-    (field) => field.id === templateRule.outputFieldId,
+async function inspectorTab(
+  page: Page,
+  name: "Rule" | "Data flow" | "Details",
+) {
+  await inspector(page).getByRole("tab", { name, exact: true }).click();
+}
+async function openDisplay(page: Page, reports: ControlledReports, data: Data) {
+  installDisplay(reports, data);
+  await page.goto(data.browserPath);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    `Version ${data.revision.sequence}`,
+  );
+}
+function documentOf(report: ProjectionReport): Projection {
+  expect(report.report?.status).toBe("succeeded");
+  if (!report.report?.document)
+    throw new Error("Expected an actual saved projection document");
+  return report.report.document;
+}
+function outputRule(document: Projection, name: string) {
+  const output = document.boundaries.find(
+    (boundary) => boundary.role === "primaryOutput",
   )!;
-  for (let index = 0; index < 220; index++) {
-    const name = `paged${String(index).padStart(3, "0")}`;
-    const field = {
-      ...templateField,
-      id: `display-field-${index}`,
-      name,
-      path: [{ kind: "field" as const, name }],
-    };
-    if (index === 150)
-      field.dataType = { kind: "array", scalarTypes: [], nativeName: null };
-    document.fields.push(field);
-    document.rules.push({
-      ...templateRule,
-      id: `display-rule-${index}`,
-      outputFieldId: field.id,
-      summary: `Populate ${name}`,
-      details: [
-        {
-          kind: "group",
-          label: "Paged rule explanation",
-          children: [
-            {
-              kind: "literal",
-              value: { kind: "string", value: `value${index}` },
-            },
-          ],
-        },
-      ],
-    });
-  }
-  const alternateBoundary = {
-    ...document.boundaries.find(
-      (boundary) => boundary.role === "primaryOutput",
-    )!,
-    id: "display-alternate-output",
-    name: "Alternate output",
-    role: "namedOutput" as const,
-    rootFieldId: null,
-  };
-  document.boundaries.push(alternateBoundary);
-  const alternateField = {
-    ...templateField,
-    id: "display-alternate-field",
-    name: "alternate",
-    boundaryId: alternateBoundary.id,
-    path: [{ kind: "field" as const, name: "alternate" }],
-    dataType: {
-      kind: "array" as const,
-      scalarTypes: ["string" as const],
-      nativeName: null,
-    },
-  };
-  document.fields.push(alternateField);
-  document.rules.push({
-    ...templateRule,
-    id: "display-alternate-rule",
-    outputFieldId: alternateField.id,
-  });
-  await routeFixture(page, report);
-  await page.goto("/");
-  const mapping = page.getByRole("region", {
-    name: "Source → rule → target",
-    exact: true,
-  });
-  const coverage = page.getByRole("region", {
-    name: "Explanation incomplete",
-    exact: true,
-  });
-  await expect(mapping.getByRole("article")).toHaveCount(100);
-  await expect(page.locator(".mapping-rows weft-mapping-details")).toHaveCount(
-    0,
-  );
-  const first = mapping.getByRole("article").first();
-  await first.getByText("Expand rule explanation", { exact: true }).click();
-  await expect(first.locator("weft-mapping-details").first()).toBeVisible();
-  await first.getByText("Expand rule explanation", { exact: true }).click();
-  await expect(page.locator(".mapping-rows weft-mapping-details")).toHaveCount(
-    0,
-  );
-  const pages = page.getByRole("navigation", {
-    name: "Mapping row pages",
-    exact: true,
-  });
-  await pages.getByRole("button", { name: "Next rows", exact: true }).click();
-  await expect(pages).toContainText("Rows 101–200 of 222");
-  await expect(mapping.getByRole("article")).toHaveCount(100);
-  await expect(coverage).toBeVisible();
-  await page.getByLabel("Find a field or rule").fill("paged150");
-  await expect(mapping.getByRole("article")).toHaveCount(1);
-  await mapping
-    .getByRole("button", { name: '["paged150"]', exact: true })
-    .click();
-  const details = page.getByRole("region", {
-    name: "Mapping details",
-    exact: true,
-  });
-  await expect(details).toBeFocused();
-  await expect(details).toContainText("Repeated values");
-  await expect(details).not.toContainText("Repeated object");
-  await expect(pages).toContainText("Rows 101–200 of 222");
-  await page
-    .getByLabel("Output", { exact: true })
-    .selectOption(alternateBoundary.id);
-  await expect(mapping.getByRole("article")).toHaveCount(1);
-  await expect(details).toHaveCount(0);
-  await mapping
-    .getByRole("button", { name: '["alternate"]', exact: true })
-    .click();
-  await expect(details).toContainText("Repeated text");
-  await page
-    .getByLabel("Output", { exact: true })
-    .selectOption(templateField.boundaryId);
-  await expect(pages).toContainText("Rows 1–100 of 222");
-  await expect(coverage).toBeVisible();
-});
-
-async function selectNative(page: Page, id: string): Promise<ExampleResult> {
-  const pending = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/v1/examples/mappings/${id}`) &&
-      response.request().method() === "GET",
-  );
-  await page.getByLabel("Example mapping", { exact: true }).selectOption(id);
-  const response = await pending;
-  expect(response.status()).toBe(200);
-  return (await response.json()) as ExampleResult;
+  const field = document.fields.find(
+    (field) => field.boundaryId === output.id && field.name === name,
+  )!;
+  expect(field).toBeDefined();
+  const rule = document.rules.find((rule) => rule.outputFieldId === field.id)!;
+  expect(rule).toBeDefined();
+  return { field, rule };
 }
-
-async function openNative(page: Page, id = "basic"): Promise<ExampleResult> {
-  const pending = page.waitForResponse((response) =>
-    response.url().endsWith("/api/v1/examples/mappings/basic"),
-  );
-  await page.goto("/");
-  const response = await pending;
-  expect(response.status()).toBe(200);
-  const basic = (await response.json()) as ExampleResult;
-  expect(basic.projection.status).toBe("succeeded");
-  expect(basic.projection.provenance?.backend.id).toBe("ferrule");
-  expect(basic.projection.provenance?.confirmed).toBe(true);
-  await expect(
-    page.getByRole("heading", { name: basic.example.title, exact: true }),
-  ).toBeVisible();
-  return id === "basic" ? basic : selectNative(page, id);
+function allDetails(
+  details: components["schemas"]["DetailNode"][],
+): components["schemas"]["DetailNode"][] {
+  return details.flatMap((detail) => [
+    detail,
+    ...allDetails(
+      detail.kind === "group"
+        ? detail.children
+        : detail.kind === "expression"
+          ? detail.arguments
+          : [],
+    ),
+  ]);
 }
-
-function documentOf(result: ExampleResult): Projection {
-  expect(result.projection.status).toBe("succeeded");
-  if (!result.projection.document)
-    throw new Error("The actual worker did not return a projection.");
-  return result.projection.document;
-}
-
-async function displayFixture(
-  request: APIRequestContext,
-  id: "direct" | "rich" | "partial" | "unavailable" = "direct",
-): Promise<ExampleResult> {
-  const response = await request.get(`/api/v1/fixtures/projections/${id}`);
-  expect(response.status()).toBe(200);
-  const document = (await response.json()) as Projection;
-  expect(document.provenance.backend.id).toBe("weft.synthetic");
-  return {
-    example: {
-      id: "display",
-      title: "Typed display fixture",
-      source: "Browser display fixture (weft.synthetic)",
-      revision: document.provenance.revision,
-      digest: document.provenance.nativeArtifactDigest,
-      byteCount: 1,
-    },
-    projection: {
-      status: "succeeded",
-      provenance: null,
-      document,
-      diagnostics: [],
-    },
-    validation: {
-      status: "succeeded",
-      provenance: null,
-      isValid: true,
-      totalIssueCount: 0,
-      emittedIssueCount: 0,
-      truncated: false,
-      diagnostics: [],
-    },
-  };
-}
-
-async function routeFixture(
+async function ruleFlow(
   page: Page,
-  report: ExampleResult,
-  descriptors: Descriptor[] = [report.example],
+  path: string,
+  summary: string,
 ): Promise<void> {
-  await page.route("**/api/v1/examples/mappings", (route) =>
-    route.fulfill({ json: descriptors }),
-  );
-  await page.route(
-    `**/api/v1/examples/mappings/${report.example.id}`,
-    (route) => route.fulfill({ json: report }),
-  );
+  await rowButton(page, path).click();
+  await inspectorTab(page, "Data flow");
+  await inspector(page)
+    .getByRole("button", { name: summary, exact: true })
+    .click();
+  await inspectorTab(page, "Data flow");
+}
+async function openNative(
+  page: Page,
+  owner: ReportsOwner,
+  sample: Sample = "basic",
+) {
+  // The owner performs ordinary private-host HTTP derivation; browser reads remain viewer-only.
+  for (const operation of ["projection", "validation"] as const)
+    await owner.control({ action: "derive-by-http", sample, operation });
+  const revision = owner.manifest.samples[sample].revision;
+  const capture = <T>(operation: "projection" | "validation") =>
+    page
+      .waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.origin === owner.manifest.readOrigin &&
+          url.pathname === reportApi(revision, operation) &&
+          !url.search &&
+          response.request().method() === "GET"
+        );
+      })
+      .then(async (response) => {
+        expect(response.status()).toBe(200);
+        return (await response.json()) as T;
+      });
+  const projectionReply = capture<ProjectionReport>("projection");
+  const validationReply = capture<ValidationReport>("validation");
+  await page.goto(revisionPath(revision));
+  const [projection, validation] = await Promise.all([
+    projectionReply,
+    validationReply,
+  ]);
+  expectReport(projection, revision, "projection");
+  expectReport(validation, revision, "validation");
+  return { projection, validation, revision };
 }
 
-test("the browser follows actual Ferrule fields with exact revision evidence and lineage", async ({
+test("actual saved Ferrule fields retain exact revision evidence and lineage", async ({
   page,
+  reportsOwner,
 }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  const result = await openNative(page);
-  const document = documentOf(result);
+  const { projection } = await openNative(page, reportsOwner);
+  const document = documentOf(projection);
   expect(document.provenance.backend.revision).toBe(
-    "576012aa17c403d9c3fcb8659ed4d3a47ba06864",
+    "dddc4dce6c93f4137fb2aa2a011360d089e0a51b",
   );
-  const mapping = page.getByRole("region", {
-    name: "Source → rule → target",
-    exact: true,
-  });
-  await expect(
-    mapping.getByRole("article", {
-      name: 'Mapping to ["dotted"]',
-      exact: true,
-    }),
-  ).toContainText('Source ["a.b"]');
-  await expect(
-    mapping.getByRole("article", {
-      name: 'Mapping to ["nestedOutput"]["b"]',
-      exact: true,
-    }),
-  ).toContainText('Source ["nested"]["b"]');
-  await page.getByLabel("Find a field or rule").fill("a.b");
-  await expect(mapping.getByRole("article")).toHaveCount(1);
-  await mapping
+  for (const operation of ["preview", "build"] as const) {
+    const capability = document.capabilities.find(
+      (item) => item.operation === operation,
+    )!;
+    expect(capability).toBeDefined();
+    expect(capability.status).toBe("notQualified");
+    expect(capability.profile).not.toBe("");
+  }
+  await expect(row(page, '["dotted"]')).toContainText('Source ["a.b"]');
+  await expect(row(page, '["nestedOutput"]["b"]')).toContainText(
+    'Source ["nested"]["b"]',
+  );
+  await search(page).fill("a.b");
+  await expect(table(page).locator(".wb-row-focus")).toHaveCount(1);
+  await rowButton(page, '["dotted"]').click();
+  await inspectorTab(page, "Data flow");
+  await inspector(page)
     .getByRole("button", { name: 'Source ["a.b"]', exact: true })
     .click();
-  const details = page.getByRole("region", {
-    name: "Mapping details",
-    exact: true,
-  });
-  await expect(details).toBeFocused();
+  await inspectorTab(page, "Data flow");
+  await expect(inspector(page)).toContainText("Used by");
   await expect(
-    details.getByRole("heading", { name: 'Source ["a.b"]', exact: true }),
+    inspector(page).getByRole("heading", {
+      name: 'Source ["a.b"]',
+      exact: true,
+    }),
   ).toBeVisible();
-  await expect(
-    details.getByRole("heading", { name: "Used by", exact: true }),
-  ).toBeVisible();
-  await details
-    .getByRole("button", { name: "Close details", exact: true })
-    .click();
-  await expect(
-    mapping.getByRole("button", { name: 'Source ["a.b"]', exact: true }),
-  ).toBeFocused();
-  await page
-    .getByText("Revision and backend evidence", { exact: true })
-    .click();
-  const evidence = page
-    .locator(".provenance-card")
-    .filter({ hasText: "Revision and backend evidence" });
-  await expect(evidence).toContainText(document.provenance.revision.revisionId);
-  await expect(evidence).toContainText(
+  await inspectorTab(page, "Details");
+  await inspector(page).getByText("Technical details", { exact: true }).click();
+  await expect(inspector(page)).toContainText(
+    document.provenance.revision.revisionId,
+  );
+  await expect(inspector(page)).toContainText(
     document.provenance.nativeArtifactDigest.value,
   );
-  await expect(evidence).toContainText(
-    result.projection.provenance!.backend.buildId,
+  await expect(inspector(page)).toContainText(
+    projection.report!.provenance!.backend.buildId,
   );
-  await evidence
-    .getByText("Revision and backend evidence", { exact: true })
-    .click();
-  await expect(
-    page.getByRole("region", { name: "Inputs and outputs", exact: true }),
-  ).toContainText("Format unknown");
-  await page.evaluate(() => {
-    if (globalThis.document.activeElement instanceof HTMLElement)
-      globalThis.document.activeElement.blur();
-    window.scrollTo(0, 0);
-  });
-  const firstRow = await mapping.getByRole("article").first().boundingBox();
-  expect(firstRow).not.toBeNull();
-  expect(firstRow!.y + firstRow!.height).toBeLessThanOrEqual(900);
   await page.screenshot({
-    path: testInfo.outputPath("native-mapping.png"),
+    path: testInfo.outputPath("saved-native-mapping.png"),
     fullPage: true,
   });
   await page.screenshot({
-    path: testInfo.outputPath("native-mapping-first-screen.png"),
+    path: testInfo.outputPath("saved-native-mapping-first-screen.png"),
     fullPage: false,
   });
 });
 
-test("actual integer and IEEE-754 values preserve large integers and negative zero", async ({
+test("actual saved integer and IEEE-754 details preserve large integers and negative zero", async ({
   page,
+  reportsOwner,
 }) => {
-  const result = await openNative(page, "exact");
-  documentOf(result);
-  const mapping = page.getByRole("region", {
-    name: "Source → rule → target",
-    exact: true,
-  });
-  const integer = mapping.getByRole("article", {
-    name: 'Mapping to ["exactInteger"]',
-    exact: true,
-  });
-  await expect(integer).toContainText("9007199254740993");
-  const zero = mapping.getByRole("article", {
-    name: 'Mapping to ["negativeZero"]',
-    exact: true,
-  });
-  await zero.getByText("Expand rule explanation", { exact: true }).click();
-  await expect(zero.locator(".literal-value")).toHaveText("-0");
-  await expect(zero.locator(".literal-bits")).toContainText("8000000000000000");
-  const integralFloat = mapping.getByRole("article", {
-    name: 'Mapping to ["integralFloat"]',
-    exact: true,
-  });
-  await integralFloat
-    .getByText("Expand rule explanation", { exact: true })
-    .click();
-  await expect(integralFloat.locator(".literal-kind")).toContainText(
+  documentOf((await openNative(page, reportsOwner, "exact")).projection);
+  await rowButton(page, '["exactInteger"]').click();
+  await expect(inspector(page)).toContainText("9007199254740993");
+  await rowButton(page, '["negativeZero"]').click();
+  await expect(inspector(page).locator(".literal-value")).toHaveText("-0");
+  await expect(inspector(page).locator(".literal-bits")).toContainText(
+    "8000000000000000",
+  );
+  await rowButton(page, '["integralFloat"]').click();
+  await expect(inspector(page).locator(".literal-kind")).toContainText(
     "Binary floating-point value",
   );
-  await expect(integralFloat.locator(".literal-bits")).toContainText(
+  await expect(inspector(page).locator(".literal-bits")).toContainText(
     "3ff0000000000000",
   );
 });
 
-test("actual conditions defaults parameters and null forms remain distinct", async ({
+test("actual saved conditions defaults host parameters and null forms remain distinct", async ({
   page,
+  reportsOwner,
 }) => {
-  const result = await openNative(page, "conditions");
-  documentOf(result);
-  await expect(
-    page
-      .locator(".mapping-rows .dependency-role")
-      .filter({ hasText: /^condition$/ })
-      .first(),
-  ).toBeVisible();
-  await expect(
-    page
-      .locator(".mapping-rows .dependency-role")
-      .filter({ hasText: /^default$/ })
-      .first(),
-  ).toBeVisible();
-  const controls = page.getByRole("region", {
-    name: "Controls and parameters",
-    exact: true,
+  const { projection, validation } = await openNative(
+    page,
+    reportsOwner,
+    "conditions",
+  );
+  const document = documentOf(projection);
+  expect(validation.report?.isValid).toBe(true);
+  const { rule: conditional } = outputRule(document, "conditional");
+  const enabled = document.fields.find((field) => field.name === "enabled")!;
+  expect(conditional.dependencies).toContainEqual({
+    kind: "field",
+    fieldId: enabled.id,
+    role: "condition",
   });
-  await controls
+  await ruleFlow(page, '["conditional"]', conditional.summary);
+  await expect(
+    inspector(page)
+      .locator(".dependency-role")
+      .filter({ hasText: /^condition$/ }),
+  ).toBeVisible();
+  await expect(inspector(page)).toContainText('Source ["enabled"]');
+  const { rule: parameterRule } = outputRule(document, "parameter");
+  const parameter = document.parameters.find(
+    (parameter) => parameter.name === "fallbackCode",
+  )!;
+  expect(parameter).toBeDefined();
+  expect(parameter.defaultValue).toEqual({ kind: "string", value: "fallback" });
+  expect(parameterRule.dependencies).toContainEqual({
+    kind: "parameter",
+    parameterId: parameter.id,
+    role: "value",
+  });
+  expect(parameterRule.dependencies).toContainEqual({
+    kind: "constant",
+    value: { kind: "string", value: "fallback" },
+    role: "default",
+  });
+  await ruleFlow(page, '["parameter"]', parameterRule.summary);
+  await expect(
+    inspector(page)
+      .locator(".dependency-role")
+      .filter({ hasText: /^default$/ }),
+  ).toBeVisible();
+  await inspector(page)
+    .locator(".dependency")
     .getByRole("button", { name: "Parameter: fallbackCode", exact: true })
     .click();
-  await expect(
-    page.getByRole("region", { name: "Mapping details", exact: true }),
-  ).toContainText("Default value");
-  for (const [field, label] of [
+  await expect(inspector(page)).toContainText("Default value");
+  await expect(inspector(page)).toContainText("fallback");
+  for (const [name, label] of [
     ["absent", "Absent value"],
     ["explicitNull", "Explicit null"],
     ["xmlNil", "XML nil"],
-  ]) {
-    const row = page.getByRole("article", {
-      name: `Mapping to ["${field}"]`,
-      exact: true,
+  ] as const) {
+    const { rule } = outputRule(document, name);
+    expect(allDetails(rule.details)).toContainEqual({
+      kind: "literal",
+      value: { kind: "null", nullKind: name },
     });
-    await row.getByText("Expand rule explanation", { exact: true }).click();
-    await expect(row.locator(".literal-value")).toContainText(label);
+    await rowButton(page, `["${name}"]`).click();
+    await expect(inspector(page).locator(".literal-value")).toContainText(
+      label,
+    );
   }
 });
 
-test("actual named outputs preserve order and group controls appear on descendant rows", async ({
+test("actual saved named outputs preserve order and parent grouping governs descendant rows", async ({
   page,
+  reportsOwner,
 }) => {
-  const result = await openNative(page, "controls");
-  const document = documentOf(result);
+  const { projection } = await openNative(page, reportsOwner, "controls");
+  const document = documentOf(projection);
   const outputs = document.boundaries.filter(
     (boundary) =>
       boundary.role === "primaryOutput" || boundary.role === "namedOutput",
@@ -418,107 +321,110 @@ test("actual named outputs preserve order and group controls appear on descendan
     "audit",
     "summary",
   ]);
-  const outputSelector = page.getByLabel("Output", { exact: true });
-  await expect(outputSelector.locator("option")).toHaveText([
+  const selector = page.getByLabel("Result document", { exact: true });
+  await expect(selector.locator("option")).toHaveText([
+    "All result documents",
     "Output",
-    "audit (named output)",
-    "summary (named output)",
+    "audit",
+    "summary",
   ]);
-  const amount = page.getByRole("article", {
-    name: 'Mapping to ["rows"][*]["amount"]',
-    exact: true,
+  const grouping = document.controls.find(
+    (control) => control.kind === "grouping",
+  )!;
+  expect(grouping).toBeDefined();
+  const { field: amount } = outputRule(document, "amount");
+  const parent = document.fields.find(
+    (field) => field.boundaryId === amount.boundaryId && field.name === "rows",
+  )!;
+  expect(parent).toBeDefined();
+  expect(grouping.appliesTo).toContainEqual({
+    kind: "field",
+    fieldId: parent.id,
   });
-  await amount.getByText("Expand rule explanation", { exact: true }).click();
-  await expect(
-    amount.getByRole("button", { name: /^grouping:/ }).first(),
-  ).toBeVisible();
-  const globalControls = page.getByRole("region", {
-    name: "Controls and parameters",
-    exact: true,
+  expect(grouping.appliesTo).not.toContainEqual({
+    kind: "field",
+    fieldId: amount.id,
   });
+  await rowButton(page, '["rows"][*]["amount"]').click();
   await expect(
-    globalControls.getByRole("button", { name: /join/ }).first(),
-  ).toBeVisible();
-  await outputSelector.selectOption(outputs[1].id);
-  await expect(
-    page.getByRole("article", { name: 'Mapping to ["rowCount"]', exact: true }),
-  ).toBeVisible();
-  await outputSelector.selectOption(outputs[2].id);
-  await expect(
-    page.getByRole("article", { name: 'Mapping to ["status"]', exact: true }),
-  ).toBeVisible();
-  await page.getByLabel("Find a field or rule").fill("there-is-no-such-field");
-  await expect(
-    page.getByRole("heading", { name: "No matching rows", exact: true }),
-  ).toBeVisible();
-  await expect(globalControls).toBeVisible();
-});
-
-test("actual reusable function definitions stay inspectable without becoming host parameters", async ({
-  page,
-}) => {
-  const result = await openNative(page, "functions");
-  const document = documentOf(result);
-  expect(document.parameters).toEqual([]);
-  const functionControl = document.controls.find(
-    (control) => control.kind === "construction",
-  );
-  expect(functionControl).toBeDefined();
-  const globalControls = page.getByRole("region", {
-    name: "Controls and parameters",
-    exact: true,
-  });
-  await globalControls
-    .getByRole("button", {
-      name: `${functionControl!.kind} ${functionControl!.summary}`,
+    inspector(page).getByRole("button", {
+      name: grouping.summary,
       exact: true,
-    })
-    .click();
-  const details = page.getByRole("region", {
-    name: "Mapping details",
-    exact: true,
-  });
-  await expect(details).toContainText("Private parameters");
-  await details.getByText("Native evidence", { exact: true }).last().click();
-  await expect(details).toContainText("18446744073709551615");
-});
-
-test("actual partial and native-only ambiguous gaps survive empty searches", async ({
-  page,
-}) => {
-  const partial = await openNative(page, "partial");
-  expect(documentOf(partial).coverage.status).toBe("partial");
-  const coverage = page.getByRole("region", {
-    name: "Explanation incomplete",
-    exact: true,
-  });
-  await expect(coverage).toContainText("Explanation gaps");
-  await page.getByLabel("Find a field or rule").fill("there-is-no-such-field");
-  await expect(
-    page.getByRole("heading", { name: "No matching rows", exact: true }),
+    }),
   ).toBeVisible();
-  await expect(coverage).toBeVisible();
-  const ambiguous = await selectNative(page, "ambiguous");
-  const document = documentOf(ambiguous);
-  expect(document.coverage.status).toBe("partial");
-  expect(
-    document.coverage.gaps.some((gap) => gap.projectionLocator == null),
-  ).toBe(true);
-  await expect(coverage).toContainText(
-    "Location is available in native evidence.",
-  );
-  await expect(
-    page.locator(".mapping-row .incomplete-label").first(),
-  ).toContainText("reads may be possible");
-  await page.getByLabel("Find a field or rule").fill("there-is-no-such-field");
-  await expect(coverage).toBeVisible();
+  await inspector(page)
+    .getByRole("button", { name: grouping.summary, exact: true })
+    .click();
+  await expect(inspector(page)).toContainText(grouping.summary);
+  // The retained grouping remains inspectable even when no mapping rows match.
+  await search(page).fill("there-is-no-such-field");
+  await expect(table(page)).toContainText("No fields match this selection.");
+  await expect(inspector(page)).toContainText(grouping.summary);
+  await search(page).fill("");
+  for (const [index, name] of [
+    [1, "rowCount"],
+    [2, "status"],
+  ] as const) {
+    await selector.selectOption(outputs[index].id);
+    await expect(rowButton(page, `["${name}"]`)).toBeVisible();
+  }
 });
 
-test("actual generated source context uses the qualified inner field", async ({
+test("actual saved reusable functions share inspectable private definitions without host parameters", async ({
   page,
+  reportsOwner,
 }) => {
-  const result = await openNative(page, "generated");
-  const document = documentOf(result);
+  const { projection } = await openNative(page, reportsOwner, "functions");
+  const document = documentOf(projection);
+  expect(document.parameters).toEqual([]);
+  const definition = document.controls.find(
+    (control) => control.summary === "Reusable function prefixCode",
+  )!;
+  expect(definition).toBeDefined();
+  expect(definition.kind).toBe("construction");
+  expect(definition.nativeLocator).toMatchObject({
+    kind: "jsonPointer",
+    pointer: "/user_functions/18446744073709551615",
+  });
+  for (const name of ["formatted", "other"]) {
+    const { rule } = outputRule(document, name);
+    const details = allDetails(rule.details);
+    expect(details).toContainEqual({
+      kind: "reference",
+      reference: { kind: "control", controlId: definition.id },
+    });
+    expect(
+      details.some(
+        (detail) =>
+          detail.kind === "expression" &&
+          detail.operation === "Reusable function call",
+      ),
+    ).toBe(true);
+    await rowButton(page, `["${name}"]`).click();
+    await inspector(page)
+      .getByRole("button", {
+        name: `${definition.kind}: ${definition.summary}`,
+        exact: true,
+      })
+      .click();
+    await expect(inspector(page)).toContainText("Private parameters");
+    await expect(inspector(page)).toContainText("Body");
+    await inspector(page)
+      .getByText("Native evidence", { exact: true })
+      .last()
+      .click();
+    await expect(inspector(page)).toContainText("18446744073709551615");
+  }
+});
+
+test("actual saved generated source context uses the qualified inner field", async ({
+  page,
+  reportsOwner,
+}) => {
+  const document = documentOf(
+    (await openNative(page, reportsOwner, "generated")).projection,
+  );
+  expect(document.rules).toHaveLength(1);
   const rule = document.rules[0];
   const dependencies = rule.dependencies.filter(
     (dependency) => dependency.kind === "field",
@@ -530,463 +436,701 @@ test("actual generated source context uses the qualified inner field", async ({
   expect(field.path).toEqual([
     { kind: "field", name: "numbers", namespaceUri: null },
   ]);
-  await expect(page.locator(".mapping-row .source-cell")).toContainText(
+  const button = table(page).locator(".wb-row-focus");
+  await expect(button).toHaveCount(1);
+  await expect(button.locator("xpath=ancestor::tr")).toContainText(
     'Source ["numbers"]',
   );
+  await button.click();
+  await inspectorTab(page, "Data flow");
+  await inspector(page)
+    .getByRole("button", { name: 'Source ["numbers"]', exact: true })
+    .click();
+  await expect(inspector(page)).toContainText('["numbers"]');
 });
 
-test("actual invalid mappings show usable validation findings and navigate unique native evidence", async ({
+test("actual saved named input lineage and composite joins retain source ownership", async ({
   page,
+  reportsOwner,
 }) => {
-  const result = await openNative(page, "invalid");
-  const document = documentOf(result);
-  expect(result.validation.status).toBe("invalidMapping");
-  expect(result.validation.isValid).toBe(false);
-  await expect(
-    page.getByRole("heading", {
-      name: "Native mapping has validation issues",
-      exact: true,
-    }),
-  ).toBeVisible();
-  const locations = page.getByRole("region", {
-    name: "Validation locations",
-    exact: true,
+  const { projection } = await openNative(page, reportsOwner, "namedInputs");
+  const document = documentOf(projection);
+  expect(
+    document.boundaries
+      .filter(
+        (boundary) =>
+          boundary.role === "primaryInput" || boundary.role === "namedInput",
+      )
+      .map((boundary) => [boundary.role, boundary.name]),
+  ).toEqual([
+    ["primaryInput", "Orders"],
+    ["namedInput", "catalog"],
+  ]);
+  const catalog = document.boundaries.find(
+    (boundary) => boundary.role === "namedInput",
+  )!;
+  const label = document.fields.find(
+    (field) => field.boundaryId === catalog.id && field.name === "label",
+  )!;
+  expect(label.path).toEqual([
+    { kind: "anyItem" },
+    { kind: "field", name: "label", namespaceUri: null },
+  ]);
+  const { rule: joinedLabel } = outputRule(document, "label");
+  expect(joinedLabel.dependencies).toContainEqual({
+    kind: "field",
+    fieldId: label.id,
+    role: "value",
   });
-  const linked = result.validation.diagnostics.find(
-    (diagnostic) => diagnostic.projectionLocator?.kind === "rule",
+  await expect(row(page, '["joined"][*]["label"]')).toContainText(
+    'catalog [*]["label"]',
   );
-  expect(linked).toBeDefined();
-  expect(linked!.owner).toEqual({
+  const join = document.controls.find((control) => control.kind === "join")!;
+  expect(join).toBeDefined();
+  const keys = join.dependencies
+    .filter((dependency) => dependency.kind === "field")
+    .map((dependency) =>
+      document.fields.find((field) => field.id === dependency.fieldId)!,
+    );
+  for (const name of ["orderId", "region"]) {
+    expect(keys.filter((field) => field.name === name)).toHaveLength(2);
+    expect(
+      new Set(
+        keys
+          .filter((field) => field.name === name)
+          .map((field) => field.boundaryId),
+      ).size,
+    ).toBe(2);
+  }
+  await rowButton(page, '["joined"][*]["label"]').click();
+  await inspector(page)
+    .getByRole("button", { name: join.summary, exact: true })
+    .click();
+  await expect(inspector(page)).toContainText(
+    'Orders ["orders"][*]["orderId"]',
+  );
+  await expect(inspector(page)).toContainText('catalog [*]["orderId"]');
+  await expect(inspector(page)).toContainText('Orders ["orders"][*]["region"]');
+  await expect(inspector(page)).toContainText('catalog [*]["region"]');
+});
+
+test("actual saved partial and native-only ambiguous gaps survive empty searches", async ({
+  page,
+  reportsOwner,
+}) => {
+  for (const sample of ["partial", "ambiguous"] as const) {
+    const document = documentOf(
+      (await openNative(page, reportsOwner, sample)).projection,
+    );
+    expect(document.coverage.status).toBe("partial");
+    if (sample === "ambiguous")
+      expect(
+        document.coverage.gaps.some((gap) => gap.projectionLocator == null),
+      ).toBe(true);
+    await inspector(page)
+      .locator("summary")
+      .filter({ hasText: "Missing mapping details" })
+      .click();
+    for (const gap of document.coverage.gaps)
+      await expect(inspector(page)).toContainText(gap.message);
+    await search(page).fill("there-is-no-such-field");
+    await expect(table(page)).toContainText("No fields match this selection.");
+    for (const gap of document.coverage.gaps)
+      await expect(inspector(page)).toContainText(gap.message);
+    await expect(page.locator(".wb-table-footer")).toContainText(
+      "partial explanation",
+    );
+  }
+});
+
+test("actual invalid saved mappings navigate diagnostics linked to the exact explanation", async ({
+  page,
+  reportsOwner,
+}) => {
+  const { projection, validation, revision } = await openNative(
+    page,
+    reportsOwner,
+    "invalid",
+  );
+  const document = documentOf(projection);
+  expect(validation.report?.status).toBe("invalidMapping");
+  expect(validation.report?.isValid).toBe(false);
+  const projectionId = projection.result!.derivationId;
+  const validationId = validation.result!.derivationId;
+  const reply = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.origin === reportsOwner.manifest.readOrigin &&
+      url.pathname === reportApi(revision, "validation", validationId) &&
+      url.searchParams.get("projectionDerivationId") === projectionId
+    );
+  });
+  await page.goto(pinnedPath(revision, projectionId, validationId));
+  const response = await reply;
+  expect(response.status()).toBe(200);
+  const linked = (await response.json()) as ValidationReport;
+  expectReport(linked, revision, "validation", validationId);
+  expect(linked.projectionDerivationId).toBe(projectionId);
+  const finding = linked.report!.diagnostics.find(
+    (item) => item.projectionLocator?.kind === "rule",
+  )!;
+  expect(finding).toBeDefined();
+  expect(finding.owner).toEqual({
     kind: "graphNode",
     functionId: null,
     nodeId: "1",
   });
   const ruleId =
-    linked!.projectionLocator!.kind === "rule"
-      ? linked!.projectionLocator!.ruleId
+    finding.projectionLocator!.kind === "rule"
+      ? finding.projectionLocator!.ruleId
       : "";
-  const rule = document.rules.find((rule) => rule.id === ruleId)!;
-  expect(rule).toBeDefined();
-  await locations
-    .getByRole("button", { name: "Show validation rule", exact: true })
+  const rule = document.rules.find((item) => item.id === ruleId)!;
+  await page.locator('[data-dock="diagnostics"]').click();
+  const dock = page.locator("#wb-dock-panel");
+  await dock
+    .getByRole("button", { name: "Inspect linked rule", exact: true })
     .first()
     .click();
-  const details = page.getByRole("region", {
-    name: "Mapping details",
-    exact: true,
-  });
-  await expect(details).toBeFocused();
-  await expect(details).toContainText(rule.summary);
-  await locations.getByText("Native evidence", { exact: true }).first().click();
-  await expect(locations).toContainText("Validator owner");
-  await expect(locations).toContainText('"nodeId":"1"');
+  await expect(inspector(page)).toContainText(rule.summary);
+  await expect(page.locator(".wb-report-bar")).toContainText(
+    "Native mapping has validation issues",
+  );
+  const diagnostic = dock
+    .locator("article")
+    .filter({ hasText: finding.message })
+    .first();
+  await diagnostic.getByText("Native evidence", { exact: true }).click();
+  await expect(diagnostic).toContainText(finding.nativeLocator!.documentId);
 });
 
-test("generic typed rendering preserves decimal namespaces indexes and operation qualification", async ({
+test("controlled large reports page all fields and create details only in the inspector", async ({
   page,
-  request,
+  reports,
 }) => {
-  const report = await displayFixture(request, "rich");
-  await routeFixture(page, report);
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Typed display fixture", exact: true }),
-  ).toBeVisible();
-  await expect(page.locator(".mapping-rows")).toContainText(
+  const data = displayData();
+  const document = data.projection.report!.document!;
+  document.coverage = {
+    status: "partial",
+    gaps: [
+      {
+        code: "displayGap",
+        message: "Display coverage remains incomplete",
+        nativeLocator: document.fields[0].nativeLocator,
+      },
+    ],
+  };
+  const templateRule = document.rules[0];
+  const templateField = document.fields[1];
+  for (let index = 0; index < 220; index++) {
+    const name = `paged${String(index).padStart(3, "0")}`;
+    document.fields.push({
+      ...templateField,
+      id: name,
+      path: [{ kind: "field", name }],
+      dataType:
+        index === 150
+          ? { kind: "array", scalarTypes: [] }
+          : templateField.dataType,
+    });
+    document.rules.push({
+      ...templateRule,
+      id: `${name}-rule`,
+      outputFieldId: name,
+    });
+  }
+  document.boundaries.push({
+    ...document.boundaries[0],
+    id: "alternate",
+    name: "Alternate",
+    role: "namedOutput",
+  });
+  document.fields.push({
+    ...templateField,
+    id: "alternate-field",
+    boundaryId: "alternate",
+    path: [{ kind: "field", name: "alternate" }],
+    dataType: { kind: "array", scalarTypes: ["string"] },
+  });
+  document.rules.push({
+    ...templateRule,
+    id: "alternate-rule",
+    outputFieldId: "alternate-field",
+  });
+  await openDisplay(page, reports, data);
+  await expect(table(page).locator(".wb-row-focus")).toHaveCount(100);
+  await expect(table(page).locator("weft-mapping-details")).toHaveCount(0);
+  await expect(inspector(page).locator("weft-mapping-details")).toHaveCount(0);
+  const pages = page.getByRole("navigation", {
+    name: "Mapping table pages",
+    exact: true,
+  });
+  await pages.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(pages).toContainText("2 / 3");
+  await expect(table(page).locator(".wb-row-focus")).toHaveCount(100);
+  await search(page).fill("paged150");
+  await expect(table(page).locator(".wb-row-focus")).toHaveCount(1);
+  await rowButton(page, '["paged150"]').click();
+  await expect(inspector(page)).toContainText("Repeated values");
+  await expect(inspector(page).locator("weft-mapping-details")).toHaveCount(1);
+  await page
+    .getByLabel("Result document", { exact: true })
+    .selectOption("alternate");
+  await search(page).fill("");
+  await rowButton(page, '["alternate"]').click();
+  await expect(inspector(page)).toContainText("Repeated text");
+  await page
+    .getByLabel("Result document", { exact: true })
+    .selectOption("controlled-output");
+  await expect(pages).toContainText("1 / 3");
+  await inspector(page)
+    .locator("summary")
+    .filter({ hasText: "Missing mapping details" })
+    .click();
+  await expect(inspector(page)).toContainText(
+    "Display coverage remains incomplete",
+  );
+});
+
+test("controlled typed paths preserve decimal namespaces indexes slashes Unicode and empty namespaces", async ({
+  page,
+  reports,
+}) => {
+  const data = displayData(true);
+  const document = data.projection.report!.document!;
+  const literalPath = [
+    { kind: "field" as const, name: "a~b/c.𝛼", namespaceUri: "" },
+  ];
+  document.fields.push(
+    { ...document.fields[2], id: "unicode-output", path: literalPath },
+    { ...document.fields[0], id: "unicode-source", path: literalPath },
+  );
+  document.rules.push({
+    ...document.rules[1],
+    id: "unicode-rule",
+    outputFieldId: "unicode-output",
+    dependencies: [{ kind: "field", fieldId: "unicode-source", role: "value" }],
+  });
+  document.rules[0].details.push({
+    kind: "literal",
+    value: {
+      kind: "exactNumber",
+      flavor: "decimal",
+      value: "0.1000000000000000000000000001",
+    },
+  });
+  await openDisplay(page, reports, data);
+  await expect(rowButton(page, '{""}["a~b/c.𝛼"]')).toBeVisible();
+  await expect(rowButton(page, '["display"]["name"]')).toBeVisible();
+  await expect(row(page, '{""}["a~b/c.𝛼"]')).toContainText(
+    'orders {""}["a~b/c.𝛼"]',
+  );
+  await expect(row(page, '[*]["total"]')).toContainText(
     'customers {"urn:weft:customers"}["customer"]{"urn:weft:customers"}["tier"]',
   );
-  const join = report.projection.document!.controls.find(
-    (control) => control.kind === "join",
-  )!;
-  await page
-    .getByRole("region", { name: "Controls and parameters", exact: true })
-    .getByRole("button", { name: `${join.kind} ${join.summary}`, exact: true })
-    .click();
-  await expect(
-    page.getByRole("region", { name: "Mapping details", exact: true }),
-  ).toContainText(
-    'customers {"urn:weft:customers"}["customer"]@{"urn:weft:identity"}["id"]',
-  );
-  await expect(page.locator(".mapping-rows")).toContainText(
+  await expect(row(page, '[*]["total"]')).toContainText(
     'rates ["rates"][0]["value"]',
   );
-  await expect(page.locator(".mapping-rows")).toContainText(
-    "0.1000000000000000000000000001",
-  );
-  await expect(page.locator(".mapping-rows")).toContainText('[*]["total"]');
-  await page.getByText("Available mapping operations", { exact: true }).click();
-  const capabilities = page.getByRole("region", {
-    name: "Available mapping operations",
-    exact: true,
-  });
-  await expect(capabilities).toContainText("preview");
-  await expect(capabilities).toContainText("Not yet verified");
-  await page
-    .getByText("Revision and backend evidence", { exact: true })
+  await rowButton(page, '[*]["total"]').click();
+  await expect(inspector(page)).toContainText("0.1000000000000000000000000001");
+  await inspector(page)
+    .getByRole("button", { name: "Join customer identity", exact: true })
     .click();
-  await expect(
-    page
-      .locator(".provenance-card")
-      .filter({ hasText: "Revision and backend evidence" }),
-  ).toContainText("weft.synthetic");
+  await expect(inspector(page)).toContainText(
+    'customers {"urn:weft:customers"}["customer"]@{"urn:weft:identity"}["id"]',
+  );
+  await rowButton(page, '{""}["a~b/c.𝛼"]').click();
+  await expect(inspector(page)).toContainText('{""}["a~b/c.𝛼"]');
 });
 
-test("unavailable coverage never presents an apparently complete graph", async ({
+test("controlled conditions defaults and null forms remain inspectable without conflating host parameters", async ({
   page,
-  request,
+  reports,
 }) => {
-  const report = await displayFixture(request, "unavailable");
-  await routeFixture(page, report);
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Explanation unavailable", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: "Native mapping is valid", exact: true }),
-  ).toBeVisible();
-});
-
-test("literal slashes Unicode and explicit empty namespaces remain distinct from nested fields", async ({
-  page,
-  request,
-}) => {
-  const report = await displayFixture(request);
-  const document = report.projection.document!;
-  const rule = document.rules[0];
-  const output = document.fields.find(
-    (field) => field.id === rule.outputFieldId,
-  )!;
-  output.path = [{ kind: "field", name: "a~b/c.𝛼", namespaceUri: "" }];
-  const dependency = rule.dependencies.find(
-    (dependency) => dependency.kind === "field",
-  )!;
-  const source = document.fields.find(
-    (field) => field.id === dependency.fieldId,
-  )!;
-  source.path = [{ kind: "field", name: "a~b/c.𝛼", namespaceUri: "" }];
-  await routeFixture(page, report);
-  await page.goto("/");
-  const row = page.getByRole("article", {
-    name: 'Mapping to {""}["a~b/c.𝛼"]',
-    exact: true,
+  const data = displayData();
+  const document = data.projection.report!.document!;
+  document.parameters.push({
+    id: "fallback",
+    name: "fallbackCode",
+    requirement: "optional",
+    dataType: { kind: "scalar", scalarTypes: ["string"] },
+    defaultValue: { kind: "string", value: "fallback" },
+    nativeLocator: document.fields[0].nativeLocator,
   });
-  await expect(row).toContainText('source {""}["a~b/c.𝛼"]');
+  document.rules[0].dependencies.push(
+    { kind: "field", fieldId: "source-value", role: "condition" },
+    { kind: "parameter", parameterId: "fallback", role: "default" },
+  );
+  for (const nullKind of ["absent", "explicitNull", "xmlNil"] as const) {
+    document.fields.push({
+      ...document.fields[1],
+      id: nullKind,
+      path: [{ kind: "field", name: nullKind }],
+    });
+    document.rules.push({
+      ...document.rules[0],
+      id: `${nullKind}-rule`,
+      outputFieldId: nullKind,
+      details: [{ kind: "literal", value: { kind: "null", nullKind } }],
+    });
+  }
+  await openDisplay(page, reports, data);
+  await rowButton(page, '["display.name"]').click();
+  await inspectorTab(page, "Data flow");
+  await inspector(page)
+    .getByRole("button", { name: "Populate displayed value", exact: true })
+    .click();
+  await inspectorTab(page, "Data flow");
+  for (const role of ["condition", "default"])
+    await expect(
+      inspector(page)
+        .locator(".dependency-role")
+        .filter({ hasText: new RegExp(`^${role}$`) })
+        .first(),
+    ).toBeVisible();
+  await inspector(page)
+    .locator(".dependency")
+    .getByRole("button", { name: "Parameter: fallbackCode", exact: true })
+    .click();
+  await inspectorTab(page, "Rule");
+  await expect(inspector(page)).toContainText("Default value");
+  for (const [name, label] of [
+    ["absent", "Absent value"],
+    ["explicitNull", "Explicit null"],
+    ["xmlNil", "XML nil"],
+  ]) {
+    await rowButton(page, `["${name}"]`).click();
+    await expect(inspector(page).locator(".literal-value")).toContainText(
+      label,
+    );
+  }
+});
+
+test("controlled named outputs and governing reusable controls retain inspectable private definitions", async ({
+  page,
+  reports,
+}) => {
+  const data = displayData();
+  const document = data.projection.report!.document!;
+  document.fields[1].path = [
+    { kind: "field", name: "rows" },
+    { kind: "anyItem" },
+    { kind: "field", name: "amount" },
+  ];
+  document.fields.push({
+    ...document.fields[1],
+    id: "rows-parent",
+    path: [{ kind: "field", name: "rows" }],
+    dataType: { kind: "array", scalarTypes: [] },
+  });
+  document.controls.push({
+    id: "group",
+    kind: "grouping",
+    summary: "Group parent rows",
+    appliesTo: [{ kind: "field", fieldId: "rows-parent" }],
+    dependencies: [],
+    details: [],
+    nativeLocator: document.fields[0].nativeLocator,
+  });
+  for (const [id, name] of [
+    ["audit", "rowCount"],
+    ["summary", "status"],
+  ]) {
+    document.boundaries.push({
+      ...document.boundaries[0],
+      id,
+      name: id,
+      role: "namedOutput",
+    });
+    document.fields.push({
+      ...document.fields[1],
+      id: `${id}-field`,
+      boundaryId: id,
+      path: [{ kind: "field", name }],
+    });
+    document.rules.push({
+      ...document.rules[0],
+      id: `${id}-rule`,
+      outputFieldId: `${id}-field`,
+    });
+  }
+  document.controls.push({
+    id: "function",
+    kind: "construction",
+    summary: "Reusable function",
+    appliesTo: [{ kind: "field", fieldId: "output-value" }],
+    dependencies: [],
+    nativeLocator: {
+      kind: "opaque",
+      documentId: "function",
+      scheme: "display",
+      value: "18446744073709551615",
+    },
+    details: [
+      {
+        kind: "group",
+        label: "Private parameters",
+        children: [
+          {
+            kind: "literal",
+            value: { kind: "string", value: "private argument" },
+          },
+        ],
+      },
+    ],
+  });
+  expect(document.parameters).toEqual([]);
+  await openDisplay(page, reports, data);
+  const selector = page.getByLabel("Result document", { exact: true });
+  await expect(selector.locator("option")).toHaveText([
+    "All result documents",
+    "target",
+    "audit",
+    "summary",
+  ]);
+  await rowButton(page, '["rows"][*]["amount"]').click();
   await expect(
-    page.getByRole("article", {
-      name: 'Mapping to ["display"]["name"]',
+    inspector(page).getByRole("button", {
+      name: "Group parent rows",
       exact: true,
     }),
   ).toBeVisible();
-  await row
-    .getByRole("button", { name: '{""}["a~b/c.𝛼"]', exact: true })
+  await inspector(page)
+    .getByRole("button", { name: "Reusable function", exact: true })
     .click();
-  await expect(
-    page.getByRole("region", { name: "Mapping details", exact: true }),
-  ).toContainText('{""}["a~b/c.𝛼"]');
+  await expect(inspector(page)).toContainText("Private parameters");
+  await inspector(page)
+    .getByText("Native evidence", { exact: true })
+    .last()
+    .click();
+  await expect(inspector(page)).toContainText("18446744073709551615");
+  for (const [id, name] of [
+    ["audit", "rowCount"],
+    ["summary", "status"],
+  ]) {
+    await selector.selectOption(id);
+    await expect(rowButton(page, `["${name}"]`)).toBeVisible();
+  }
 });
 
-test("operation failures cancellation and unknown validity stay explicit without stale data", async ({
+test("controlled generated source context keeps the qualified inner field", async ({
   page,
-  request,
+  reports,
 }) => {
-  const report = await displayFixture(request);
-  await routeFixture(page, report);
-  await page.goto("/");
+  const data = displayData();
+  data.projection.report!.document!.fields[0].path = [
+    { kind: "field", name: "numbers", namespaceUri: null },
+  ];
+  await openDisplay(page, reports, data);
+  await expect(row(page, '["display.name"]')).toContainText(
+    'source ["numbers"]',
+  );
+  await rowButton(page, '["display.name"]').click();
+  await page.getByRole("button", { name: "Data flow", exact: true }).click();
   await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toBeVisible();
-  const failure = structuredClone(report);
-  failure.projection = {
-    status: "canceled",
-    provenance: null,
-    document: null,
-    diagnostics: [],
+    page.locator(".wb-inline-lineage [data-role=source]"),
+  ).toContainText('source ["numbers"]');
+});
+
+test("controlled unavailable coverage stays explicit independently of valid native validation", async ({
+  page,
+  reports,
+}) => {
+  const data = displayData();
+  const document = data.projection.report!.document!;
+  document.coverage = {
+    status: "unavailable",
+    gaps: [
+      {
+        code: "opaque",
+        message: "No usable explanation is available",
+        nativeLocator: document.fields[0].nativeLocator,
+      },
+    ],
   };
-  failure.validation = {
-    ...failure.validation,
-    status: "backendUnavailable",
-    isValid: null,
-  };
-  await page.unroute(`**/api/v1/examples/mappings/${report.example.id}`);
-  await page.route(
-    `**/api/v1/examples/mappings/${report.example.id}`,
-    (route) => route.fulfill({ json: failure }),
+  document.fields = [];
+  document.rules = [];
+  await openDisplay(page, reports, data);
+  await expect(table(page)).toContainText("No field details are available");
+  await expect(page.locator(".wb-table-footer")).toContainText(
+    "unavailable explanation",
   );
-  await page
-    .getByLabel("Example mapping", { exact: true })
-    .selectOption(report.example.id);
-  await expect(
-    page.getByRole("heading", {
-      name: "Mapping explanation unavailable",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("The mapping operation was canceled.", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: "The mapping engine is unavailable",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toHaveCount(0);
-  await page.unroute(`**/api/v1/examples/mappings/${report.example.id}`);
-  await page.route(
-    `**/api/v1/examples/mappings/${report.example.id}`,
-    (route) => route.fulfill({ json: report }),
+  await expect(page.locator(".wb-report-bar")).toContainText(
+    "Native mapping is valid",
   );
-  await page
-    .getByRole("button", { name: "Retry mapping", exact: true })
+  await inspector(page)
+    .locator("summary")
+    .filter({ hasText: "Missing mapping details" })
     .click();
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toBeVisible();
-  await page.unroute(`**/api/v1/examples/mappings/${report.example.id}`);
-  await page.route(
-    `**/api/v1/examples/mappings/${report.example.id}`,
-    (route) =>
-      route.fulfill({
-        json: {
-          ...report,
-          validation: { ...report.validation, isValid: null },
-        },
-      }),
+  await expect(inspector(page)).toContainText(
+    "No usable explanation is available",
   );
-  await page
-    .getByLabel("Example mapping", { exact: true })
-    .selectOption(report.example.id);
-  await expect(
-    page.getByRole("heading", {
-      name: "Validation result is unknown",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      "Validation did not provide a validity decision for this attempt. Explanation coverage is reported separately.",
-      { exact: true },
-    ),
-  ).toBeVisible();
 });
 
-test("unknown examples and transport failures clear the view and can be retried", async ({
+test("controlled canceled and unavailable operations clear stale fields and unknown validity is refused", async ({
   page,
-  request,
+  reports,
 }) => {
-  const report = await displayFixture(request);
-  const missing = {
-    ...report.example,
-    id: "missing",
-    title: "Missing example",
-  };
-  const failed = { ...report.example, id: "failed", title: "Failed example" };
-  await routeFixture(page, report, [report.example, missing, failed]);
-  await page.route("**/api/v1/examples/mappings/missing", (route) =>
-    route.fulfill({ status: 404 }),
+  const data = displayData();
+  await openDisplay(page, reports, data);
+  await expect(table(page)).toBeVisible();
+  await controls(page);
+  for (const operation of ["projection", "validation"] as const) {
+    const failed = copy(
+      operation === "projection" ? data.projection : data.validation,
+    );
+    const failure =
+      operation === "projection" ? "canceled" : "backendUnavailable";
+    failed.state = "failed";
+    failed.status = failure;
+    failed.failure = failure;
+    failed.report = null;
+    failed.result = null;
+    failed.nextAttemptAtUtc = "2026-01-01T00:00:03Z";
+    failed.currentAttempt = {
+      derivationId: ATTEMPT,
+      generation: "2",
+      startedAtUtc: "2026-01-01T00:00:01Z",
+      finishedAtUtc: "2026-01-01T00:00:02Z",
+      status: failure,
+      failure,
+    };
+    reports.set("GET", data.reportPath(operation), { json: failed });
+    await page
+      .getByRole("button", {
+        name: `Read ${operation === "projection" ? "explanation" : "validation"} again`,
+        exact: true,
+      })
+      .click();
+  }
+  await expect(table(page)).toHaveCount(0);
+  await expect(page.locator(".wb-reports")).toContainText(
+    "The mapping operation was canceled.",
   );
-  await page.route("**/api/v1/examples/mappings/failed", (route) =>
-    route.fulfill({ status: 503 }),
+  await expect(page.locator(".wb-reports")).toContainText(
+    "The mapping engine is unavailable.",
   );
-  await page.goto("/");
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toBeVisible();
+  installDisplay(reports, data);
   await page
-    .getByLabel("Example mapping", { exact: true })
-    .selectOption("missing");
-  await expect(
-    page.getByRole("heading", { name: "Example not found", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toHaveCount(0);
-  await page
-    .getByLabel("Example mapping", { exact: true })
-    .selectOption("failed");
-  await expect(
-    page.getByRole("heading", {
-      name: "Mapping could not be loaded",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Example not found", exact: true }),
-  ).toHaveCount(0);
-  await page.unroute("**/api/v1/examples/mappings/failed");
-  await page.route("**/api/v1/examples/mappings/failed", (route) =>
-    route.fulfill({ json: { ...report, example: failed } }),
-  );
-  await page
-    .getByRole("button", { name: "Retry mapping", exact: true })
+    .getByRole("button", { name: "Read explanation again", exact: true })
     .click();
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toBeVisible();
-});
-
-test("a newer selection aborts the old request and never shows its late result", async ({
-  page,
-  request,
-}) => {
-  const report = await displayFixture(request);
-  const slow = { ...report.example, id: "slow", title: "Old slow selection" };
-  const latest = { ...report.example, id: "latest", title: "Latest selection" };
-  await routeFixture(page, report, [report.example, slow, latest]);
-  let release: () => void = () => {};
-  const released = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let started: () => void = () => {};
-  const slowStarted = new Promise<void>((resolve) => {
-    started = resolve;
-  });
-  let finished: () => void = () => {};
-  const slowFinished = new Promise<void>((resolve) => {
-    finished = resolve;
-  });
-  await page.route("**/api/v1/examples/mappings/slow", async (route) => {
-    started();
-    await released;
-    try {
-      await route.fulfill({ json: { ...report, example: slow } });
-    } catch {
-      /* The old browser request is intentionally canceled. */
-    } finally {
-      finished();
-    }
-  });
-  await page.route("**/api/v1/examples/mappings/latest", (route) =>
-    route.fulfill({ json: { ...report, example: latest } }),
-  );
-  await page.goto("/");
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toBeVisible();
-  const canceled = page.waitForEvent("requestfailed", (request) =>
-    request.url().endsWith("/slow"),
-  );
+  await expect(table(page)).toBeVisible();
+  // Saved successful validation requires a boolean decision; null is an incompatible response.
+  data.validation.report!.isValid = null;
+  installDisplay(reports, data);
   await page
-    .getByLabel("Example mapping", { exact: true })
-    .selectOption("slow");
-  await slowStarted;
-  await expect(
-    page
-      .getByRole("status", { name: "" })
-      .filter({ hasText: "Reading the selected mapping…" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toHaveCount(0);
-  await page
-    .getByLabel("Example mapping", { exact: true })
-    .selectOption("latest");
-  await canceled;
-  await expect(
-    page.getByRole("heading", { name: latest.title, exact: true }),
-  ).toBeVisible();
-  release();
-  await slowFinished;
-  await expect(
-    page.getByRole("heading", { name: slow.title, exact: true }),
-  ).toHaveCount(0);
-  await expect(page.getByLabel("Example mapping", { exact: true })).toHaveValue(
-    "latest",
-  );
-});
-
-test("the example list can be retried after a service failure", async ({
-  page,
-  request,
-}) => {
-  const report = await displayFixture(request);
-  await page.route("**/api/v1/examples/mappings", (route) =>
-    route.fulfill({ status: 503 }),
-  );
-  await page.goto("/");
-  await expect(
-    page.getByRole("heading", {
-      name: "Example mappings are unavailable",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await page.unroute("**/api/v1/examples/mappings");
-  await routeFixture(page, report);
-  await page
-    .getByRole("button", { name: "Retry example list", exact: true })
+    .getByRole("button", { name: "Read validation again", exact: true })
     .click();
-  await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
-  ).toBeVisible();
+  await expect(page.locator(".wb-reports").getByRole("alert")).toContainText(
+    "could not be verified",
+  );
+  await expect(page.locator(".wb-report-bar")).not.toContainText(
+    "Native mapping is valid",
+  );
 });
 
-test("keyboard navigation and mobile details stay readable without page overflow", async ({
+test("controlled missing and transport-failed report reads clear fields and recover on reread", async ({
   page,
-  request,
+  reports,
+}) => {
+  const data = displayData();
+  await openDisplay(page, reports, data);
+  await controls(page);
+  for (const status of [404, 503]) {
+    reports.set("GET", data.reportPath("projection"), {
+      status,
+      json: { code: status === 404 ? "notFound" : "revisionReportUnavailable" },
+    });
+    await page
+      .getByRole("button", { name: "Read explanation again", exact: true })
+      .click();
+    await expect(page.locator(".wb-reports").getByRole("alert")).toBeVisible();
+    await expect(table(page)).toHaveCount(0);
+    installDisplay(reports, data);
+    await page
+      .getByRole("button", { name: "Read explanation again", exact: true })
+      .click();
+    await expect(table(page)).toBeVisible();
+  }
+});
+
+test("controlled newer revision navigation cancels stale reads and ignores late reports", async ({
+  page,
+  reports,
+}) => {
+  const old = displayData();
+  const latest = controlledData("44444444-4444-4444-4444-444444444449");
+  installDisplay(reports, old);
+  reports.add(latest);
+  const slow = reports.hold("GET", old.reportPath("projection"), {
+    json: old.projection,
+  });
+  await page.goto(old.browserPath);
+  await expect.poll(slow.entered).toBe(true);
+  await page.evaluate((path) => {
+    history.pushState({}, "", path);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, latest.browserPath);
+  await expect(table(page)).toContainText("Controlled saved explanation");
+  await expect.poll(slow.cancelled).toBe(true);
+  slow.release();
+  await expect(table(page)).not.toContainText("Populate displayed value");
+  await expect(page).toHaveURL(new RegExp(latest.revision.scope.revisionId));
+});
+
+test("controlled catalog revision metadata failures can be retried", async ({
+  page,
+  reports,
+}) => {
+  const data = displayData();
+  installDisplay(reports, data);
+  reports.set("GET", data.apiPath, {
+    status: 503,
+    json: { code: "catalogUnavailable" },
+  });
+  await page.goto(data.browserPath);
+  await expect(
+    page.getByRole("button", { name: /Try again|Retry/ }),
+  ).toBeVisible();
+  installDisplay(reports, data);
+  await page.getByRole("button", { name: /Try again|Retry/ }).click();
+  await expect(table(page)).toBeVisible();
+});
+
+test("controlled keyboard field navigation and mobile inspector remain readable without page overflow", async ({
+  page,
+  reports,
 }, testInfo) => {
-  const report = await displayFixture(request, "rich");
-  await routeFixture(page, report);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await openDisplay(page, reports, displayData(true));
+  await expect(table(page)).toBeVisible();
+  const first = table(page).locator(".wb-row-focus").first();
+  await search(page).focus();
+  for (let stop = 0; stop < 40; stop++) {
+    if (await first.evaluate((element) => element === document.activeElement))
+      break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(table(page).locator(".wb-row-focus").nth(1)).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(inspector(page)).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "Source → rule → target", exact: true }),
+    inspector(page).getByRole("heading", { level: 3 }),
   ).toBeVisible();
-  await page.keyboard.press("Tab");
-  await expect(
-    page.getByRole("link", { name: "Skip to content", exact: true }),
-  ).toBeFocused();
-  const search = page.getByLabel("Find a field or rule");
-  await tabTo(page, search);
-  await page.keyboard.type("total");
-  await expect(page.locator(".mapping-rows .mapping-row")).toHaveCount(1);
-  const sourceReference = page
-    .getByRole("region", { name: "Source → rule → target", exact: true })
-    .getByRole("button", { name: 'orders [*]["amount"]', exact: true })
-    .first();
-  await tabTo(page, sourceReference);
-  await expect(sourceReference).toBeFocused();
-  await page.keyboard.press("Enter");
-  const details = page.getByRole("region", {
-    name: "Mapping details",
-    exact: true,
-  });
-  await expect(details).toBeFocused();
-  const close = details.getByRole("button", {
-    name: "Close details",
-    exact: true,
-  });
-  await tabTo(page, close, 8);
-  await expect(close).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(sourceReference).toBeFocused();
-  await tabTo(
-    page,
-    page.getByText("Revision and backend evidence", { exact: true }),
-    80,
-  );
-  await page.keyboard.press("Enter");
-  const evidence = page
-    .locator(".provenance-card")
-    .filter({ hasText: "Revision and backend evidence" });
-  await expect(evidence.locator("details")).toHaveAttribute("open", "");
-  await page.keyboard.press("Enter");
-  await page.evaluate(() => {
-    if (globalThis.document.activeElement instanceof HTMLElement)
-      globalThis.document.activeElement.blur();
-    window.scrollTo(0, 0);
-  });
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
+  await first.focus();
+  await page.keyboard.press("Escape");
+  await expect(first).toHaveAttribute("aria-pressed", "false");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth,
     ),
   ).toBe(false);
   await page.screenshot({
-    path: testInfo.outputPath("mapping-mobile.png"),
+    path: testInfo.outputPath("saved-mapping-mobile.png"),
     fullPage: true,
   });
 });

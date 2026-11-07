@@ -25,6 +25,14 @@ internal static class CatalogBusinessServices
         services.AddSingleton(_ => new PostgresCatalogDatabase(connectionString));
         services.AddSingleton(provider => new PostgresCatalogReader(provider.GetRequiredService<PostgresCatalogDatabase>()));
         services.AddSingleton<ICatalogReader>(provider => provider.GetRequiredService<PostgresCatalogReader>());
+        services.AddSingleton<ICatalogResourceLocator>(provider => provider.GetRequiredService<PostgresCatalogReader>());
+        services.AddSingleton(_ => new SearchIndexConnection(() => readEnvironment("WEFT_POSTGRES_DERIVATION_CONNECTION_STRING")));
+        services.AddSingleton<ICatalogSearch>(provider => new PostgresCatalogSearch(
+            provider.GetRequiredService<PostgresCatalogReader>(),
+            () => provider.GetService<IRevisionReportReader>(),
+            () => provider.GetService<PostgresRevisionDerivationDatabase>() ??
+                provider.GetRequiredService<SearchIndexConnection>().Database));
+        AdministrationHostConfiguration.Configure(services, readEnvironment);
         if (creationOptions.Enabled)
         {
             var creationConnectionString = readEnvironment("WEFT_POSTGRES_PROJECT_CREATION_CONNECTION_STRING");
@@ -72,7 +80,9 @@ internal static class CatalogBusinessServices
                 return new IngestionBackendRegistry(runner is null ? [] : [FerruleIngestionAdmissionBackend.CreateRegistration(runner)]);
             });
             services.AddSingleton(new RevisionIngestionOptions(nativeLimit));
-            services.AddSingleton<IRevisionIngestionService, RevisionIngestionService>();
+            services.AddSingleton<RevisionIngestionService>();
+            services.AddSingleton<IRevisionIngestionService>(provider => provider.GetRequiredService<RevisionIngestionService>());
+            services.AddSingleton<IReviewedRevisionIngestionService>(provider => provider.GetRequiredService<RevisionIngestionService>());
         }
         if (ingestionOptions.Enabled || reportOptions.Enabled)
         {
@@ -91,9 +101,27 @@ internal static class CatalogBusinessServices
             services.AddSingleton<IPrivateObjectPublicationStore>(provider => provider.GetRequiredService<LazyPrivateObjectStore>());
         }
         CatalogRevisionReportHostConfiguration.Configure(services, environment, reportOptions, readEnvironment, derivedReadByteLimit);
+        var interchange = readEnvironment("WEFT_MFD_INTERCHANGE_ENABLED");
+        if (interchange is not (null or "false" or "true"))
+            throw new InvalidOperationException("WEFT_MFD_INTERCHANGE_ENABLED must be true or false.");
+        if (interchange == "true")
+        {
+            if (!ingestionOptions.Enabled || !reportOptions.Enabled)
+                throw new InvalidOperationException("MFD interchange requires revision ingestion and revision report read storage.");
+            services.AddSingleton(new CatalogInterchangeOptions(true));
+            services.AddSingleton<IImportReviewStore>(provider => provider.GetRequiredService<PostgresRevisionIngestionStore>());
+            services.AddSingleton<IExportReviewStore>(provider => provider.GetRequiredService<PostgresRevisionIngestionStore>());
+            services.AddSingleton(provider => new InterchangeImportService(provider.GetRequiredService<IProjectReader>(),
+                provider.GetRequiredService<IIngestionWorkflowReader>(), provider.GetRequiredService<IInterchangeBackendRegistry>(),
+                provider.GetRequiredService<IImportReviewStore>(), provider.GetRequiredService<IReviewedRevisionIngestionService>(), TimeProvider.System));
+            services.AddSingleton(provider => new InterchangeExportService(provider.GetRequiredService<IRevisionReportMetadataReader>(),
+                provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IInterchangeBackendRegistry>(),
+                provider.GetRequiredService<IExportReviewStore>(), TimeProvider.System));
+        }
         CatalogRegressionHostConfiguration.Configure(services, readEnvironment, catalogEnabled: true);
         CatalogBuildHostConfiguration.Configure(services, environment, readEnvironment,
             buildRuntime ?? CatalogBuildHostConfiguration.ReadRuntime(readEnvironment, catalogEnabled: true));
+        ReleaseOperationsHostConfiguration.Configure(services, readEnvironment);
     }
 
     private static PostgresProjectCreationDatabase CreateProjectCreationDatabase(string connectionString)
@@ -102,6 +130,46 @@ internal static class CatalogBusinessServices
         catch (ArgumentException)
         {
             throw new InvalidOperationException("The project creation connection configuration is invalid.");
+        }
+    }
+
+    private static PostgresRevisionDerivationDatabase SearchIndexDatabase(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString)) throw new CatalogSearchIndexPendingException();
+        try { return new(connectionString); }
+        catch (ArgumentException) { throw new CatalogSearchIndexPendingException(); }
+    }
+
+    // Read-only hosts keep native derivation disabled. A cold search may resolve
+    // this separately owned cache connection, but resolving search itself must not.
+    private sealed class SearchIndexConnection(Func<string?> connectionString) : IAsyncDisposable
+    {
+        private readonly Lazy<PostgresRevisionDerivationDatabase> database = new(() => SearchIndexDatabase(connectionString()));
+        private readonly object lifetime = new();
+        private bool disposed;
+
+        internal PostgresRevisionDerivationDatabase Database
+        {
+            get
+            {
+                lock (lifetime)
+                {
+                    ObjectDisposedException.ThrowIf(disposed, this);
+                    return database.Value;
+                }
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            PostgresRevisionDerivationDatabase? value;
+            lock (lifetime)
+            {
+                if (disposed) return;
+                disposed = true;
+                value = database.IsValueCreated ? database.Value : null;
+            }
+            if (value is not null) await value.DisposeAsync();
         }
     }
 

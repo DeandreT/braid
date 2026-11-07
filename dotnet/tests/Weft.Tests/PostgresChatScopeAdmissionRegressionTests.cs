@@ -15,7 +15,7 @@ public sealed class PostgresChatScopeAdmissionRegressionTests(PostgresFixture fi
         await using var f = await PostgresChatTestSupport.CreateAsync(fixture);
         var turn = await f.StartAsync();
         var original = await PostgresChatSecurityTests.RowsAsync(f);
-        var org = f.Key.Revision.OrganizationId.ToString("D");
+        var org = f.Key.PinnedRevision.OrganizationId.ToString("D");
         var creator = f.Actor.PrincipalId.Value.ToString("D");
         var scopes = new[]
         {
@@ -167,9 +167,9 @@ public sealed class PostgresChatScopeAdmissionRegressionTests(PostgresFixture fi
         { terminal.Parameters.AddWithValue(turn.Intent.TurnId); terminal.Parameters.AddWithValue(Guid.NewGuid()); Assert.Equal(1, await terminal.ExecuteNonQueryAsync(deadline.Token)); }
         await using (var erase = new NpgsqlCommand("SELECT weft.chat_erase_expired($1,$2,$3,$4,$5,$6,$7,$8,$9)", connection, transaction))
         {
-            erase.Parameters.AddWithValue(f.Key.Revision.OrganizationId); erase.Parameters.AddWithValue(f.Key.Creator.Value);
-            erase.Parameters.AddWithValue(f.Key.ConversationId); erase.Parameters.AddWithValue(f.Key.Revision.ProjectId);
-            erase.Parameters.AddWithValue(f.Key.Revision.MappingId); erase.Parameters.AddWithValue(f.Key.Revision.RevisionId);
+            erase.Parameters.AddWithValue(f.Key.PinnedRevision.OrganizationId); erase.Parameters.AddWithValue(f.Key.Creator.Value);
+            erase.Parameters.AddWithValue(f.Key.ConversationId); erase.Parameters.AddWithValue(f.Key.PinnedRevision.ProjectId);
+            erase.Parameters.AddWithValue(f.Key.PinnedRevision.MappingId); erase.Parameters.AddWithValue(f.Key.PinnedRevision.RevisionId);
             erase.Parameters.AddWithValue(f.ErasurePolicy.PolicyId); erase.Parameters.AddWithValue(f.ErasurePolicy.Version);
             erase.Parameters.AddWithValue(f.ErasurePolicy.IdentityRetirementNotBeforeUtc);
             Assert.Equal("Applied", await erase.ExecuteScalarAsync(deadline.Token));

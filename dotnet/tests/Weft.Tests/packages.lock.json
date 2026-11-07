@@ -1012,7 +1012,8 @@
           "Microsoft.Identity.Client": "[4.84.2, )",
           "Microsoft.Identity.Client.Extensions.Msal": "[4.84.2, )",
           "System.CommandLine": "[2.0.13, )",
-          "Weft.Contracts": "[1.0.0, )"
+          "Weft.Contracts": "[1.0.0, )",
+          "Weft.Domain": "[1.0.0, )"
         }
       },
       "weft.contracts": {

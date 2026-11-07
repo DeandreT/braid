@@ -28,6 +28,10 @@ public sealed class DockerWorkerProfile
     public static DockerWorkerProfile Preview { get; } = new("preview", 536_870_912, 30,
         TimeSpan.FromSeconds(30), PreviewPolicy.MaximumRequestBytes, PreviewPolicy.MaximumResponseBytes);
 
+    /// <summary>In-memory MFD packages; inspection retains its smaller unchanged limits.</summary>
+    public static DockerWorkerProfile Interchange { get; } = new("interchange", 536_870_912, 30,
+        TimeSpan.FromSeconds(30), FerruleInterchangeBackend.MaximumRequestBytes, FerruleInterchangeBackend.MaximumResponseBytes);
+
     /// <summary>Package-free compilation from trusted native source emission; only a bounded private tmpfs is writable.</summary>
     public static DockerWorkerProfile Build { get; } = new("build", 2_147_483_648, 120,
         TimeSpan.FromSeconds(120), BuildWorkerProtocol.MaximumNativeBytes + 16388, BuildWorkerProtocol.MaximumReplyBytes);

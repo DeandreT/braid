@@ -10,6 +10,7 @@ import { Component, input, output } from "@angular/core";
     [attr.aria-valuenow]="value()"
     [attr.aria-valuemin]="minimum()"
     [attr.aria-valuemax]="maximum()"
+    [attr.aria-controls]="controls()"
     [class.vertical]="orientation() === 'vertical'"
     [class.horizontal]="orientation() === 'horizontal'"
     (pointerdown)="start($event)"
@@ -32,7 +33,7 @@ import { Component, input, output } from "@angular/core";
         width: 6px;
         top: 0;
         bottom: 0;
-        right: -3px;
+        left: 0;
         cursor: ew-resize;
       }
       .horizontal {
@@ -53,6 +54,7 @@ import { Component, input, output } from "@angular/core";
 })
 export class ResizeHandleComponent {
   readonly label = input.required<string>();
+  readonly controls = input<string | null>(null);
   readonly orientation = input<"vertical" | "horizontal">("vertical");
   readonly value = input.required<number>();
   readonly minimum = input(80);
