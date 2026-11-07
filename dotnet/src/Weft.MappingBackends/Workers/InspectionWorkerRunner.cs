@@ -19,4 +19,7 @@ public enum WorkerProcessFailure
     SandboxUnavailable
 }
 
-public sealed record WorkerProcessResult(byte[] Output, WorkerProcessFailure Failure);
+public sealed record WorkerProcessResult(byte[] Output, WorkerProcessFailure Failure)
+{
+    internal ChildAdmissionFailure AdmissionFailure => ChildAdmissionDiagnostics.GetFailure(this);
+}

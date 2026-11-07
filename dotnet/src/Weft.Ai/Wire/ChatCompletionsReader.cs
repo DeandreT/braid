@@ -17,7 +17,11 @@ internal sealed class ChatCompletionsReader
     private AiFinishReason? _finish;
     private AiTokenUsage _usage = AiTokenUsage.Unknown;
     private bool _usageObserved, _refused;
-    internal ChatCompletionsReader(AiTurnLease turn, AiCancellation cancellation) { _turn = turn; _cancellation = cancellation; }
+    private readonly bool _databricks;
+    internal ChatCompletionsReader(AiTurnLease turn, AiCancellation cancellation, bool databricks = false)
+    { _turn = turn; _cancellation = cancellation; _databricks = databricks; }
+    /// <summary>Databricks usage latched from fully validated frames but not yet published, for a round that ends in failure.</summary>
+    internal AiTokenUsage? PendingUsage => _databricks && _usageObserved ? _usage : null;
     internal async IAsyncEnumerable<AiDecoded> ReadAsync(Stream source, [EnumeratorCancellation] CancellationToken ct)
     {
         using var lines = new AiLineReader(source, _turn, _cancellation);
@@ -59,19 +63,22 @@ internal sealed class ChatCompletionsReader
             if (_finish is null) throw AiGuard.Protocol(AiFailureCode.TruncatedResponse);
             AiFinishReason reason = _refused ? AiFinishReason.Refused : _finish.Value;
             ImmutableArray<AiToolIntent> calls = reason == AiFinishReason.ToolCalls ? CompleteCalls() : ImmutableArray<AiToolIntent>.Empty;
-            return ImmutableArray.Create<AiDecoded>(new AiDecodedEnd(reason, calls, _usage, false));
+            return ImmutableArray.Create<AiDecoded>(new AiDecodedEnd(reason, calls, _usage, _databricks && _usageObserved));
         }
         using JsonDocument document = AiJson.Parse(data);
         JsonElement root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object) throw AiGuard.Protocol();
-        if (root.TryGetProperty("error", out _)) throw AiGuard.Protocol(AiFailureCode.ProviderUnavailable);
+        // Databricks reports failures as an error object with error_code and message.
+        if (root.TryGetProperty("error", out _) || (_databricks && root.TryGetProperty("error_code", out _)))
+            throw AiGuard.Protocol(AiFailureCode.ProviderUnavailable);
         if (root.TryGetProperty("object", out JsonElement kind))
         {
             if (kind.ValueKind != JsonValueKind.String) throw AiGuard.Protocol();
             if (kind.GetString() == "") return ParseAnnotation(root);
             if (kind.GetString() != "chat.completion.chunk") throw AiGuard.Protocol(AiFailureCode.UnsupportedResponse);
         }
-        if (root.TryGetProperty("id", out JsonElement identity) && identity.ValueKind != JsonValueKind.String) throw AiGuard.Protocol();
+        if (root.TryGetProperty("id", out JsonElement identity) && identity.ValueKind != JsonValueKind.String
+            && !(_databricks && identity.ValueKind == JsonValueKind.Null)) throw AiGuard.Protocol();
         if (!root.TryGetProperty("choices", out JsonElement choices) || choices.ValueKind != JsonValueKind.Array) throw AiGuard.Protocol();
         if (choices.GetArrayLength() > 1) throw AiGuard.Protocol(AiFailureCode.UnsupportedResponse);
         string? text = null;
@@ -97,14 +104,21 @@ internal sealed class ChatCompletionsReader
                 };
             }
         }
-        bool observed = false;
+        bool observed = false, carried = false;
+        AiTokenUsage? reported = null;
         if (root.TryGetProperty("usage", out JsonElement usage) && usage.ValueKind != JsonValueKind.Null)
         {
-            if (usage.ValueKind != JsonValueKind.Object || _usageObserved || _finish is null) throw AiGuard.Protocol();
-            _usage = AiTokenUsage.Create(AiJson.Count(usage, "prompt_tokens"), AiJson.Count(usage, "completion_tokens"), AiJson.Count(usage, "total_tokens"));
-            _usageObserved = true; observed = true;
+            if (usage.ValueKind != JsonValueKind.Object || (!_databricks && (_usageObserved || _finish is null))) throw AiGuard.Protocol();
+            long? input = AiJson.Count(usage, "prompt_tokens"), output = AiJson.Count(usage, "completion_tokens"), total = AiJson.Count(usage, "total_tokens");
+            // Databricks may repeat usage on every chunk, or omit it. The last complete report stands and is published only
+            // with the terminal (or a failure); a missing or partial one never replaces known counts.
+            if (!_databricks || (input is not null && output is not null && total is not null))
+                reported = AiTokenUsage.Create(input, output, total);
+            carried = true;
         }
-        if (choices.GetArrayLength() == 0 && !observed) throw AiGuard.Protocol();
+        if (choices.GetArrayLength() == 0 && !carried) throw AiGuard.Protocol();
+        // Latch only once the whole frame is valid.
+        if (reported is not null) { _usage = reported; _usageObserved = true; observed = !_databricks; }
         var decoded = ImmutableArray.CreateBuilder<AiDecoded>();
         // Validate the whole frame first, then latch its reported accounting
         // before same-frame text can exhaust a downstream text/event budget.

@@ -5,12 +5,13 @@ use weft_compile_sandbox as sandbox;
 
 fn main() -> ExitCode {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
-    let Ok(launch) = sandbox::parse_arguments(&arguments) else {
-        return ExitCode::FAILURE;
+    let launch = match sandbox::parse_arguments(&arguments) {
+        Ok(launch) => launch,
+        Err(error) => return ExitCode::from(error.exit_code()),
     };
     // Every control is in force before the marker; the program starts only after the service has verified them.
-    if sandbox::enter(&launch).is_err() {
-        return ExitCode::FAILURE;
+    if let Err(error) = sandbox::enter(&launch) {
+        return ExitCode::from(error.exit_code());
     }
     let mut output = io::stdout().lock();
     if output
@@ -18,7 +19,7 @@ fn main() -> ExitCode {
         .and_then(|()| output.flush())
         .is_err()
     {
-        return ExitCode::FAILURE;
+        return ExitCode::from(sandbox::SandboxError::ReadyMarker.exit_code());
     }
     drop(output);
     // One unbuffered byte: nothing beyond it is consumed from the program's standard input.

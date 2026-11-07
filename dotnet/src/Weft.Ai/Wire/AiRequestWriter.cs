@@ -11,9 +11,12 @@ internal static class AiRequestWriter
         using var output = new LimitedBuffer(AiCeilings.RequestBytes);
         using (var writer = new Utf8JsonWriter(output))
         {
-            bool chat = profile.Dialect == AiDialect.ChatCompletionsSseV1;
+            bool chat = profile.Dialect != AiDialect.OllamaChatNdjsonV1, databricks = profile.Dialect == AiDialect.DatabricksChatCompletionsSseV1;
             writer.WriteStartObject(); writer.WriteString("model", profile.Model); writer.WriteBoolean("stream", true);
-            if (chat)
+            // Databricks documents max_tokens and no storage or stream options for Chat Completions; n is for provisioned
+            // throughput only. Its stream chunks carry usage, when they do, without being asked.
+            if (databricks) writer.WriteNumber("max_tokens", request.MaxOutputTokens);
+            else if (chat)
             {
                 writer.WriteNumber("n", 1); writer.WriteBoolean("store", false);
                 writer.WriteNumber("max_completion_tokens", request.MaxOutputTokens);
@@ -35,7 +38,10 @@ internal static class AiRequestWriter
                     case AiUserMessage user:
                         writer.WriteString("role", "user"); writer.WriteString("content", user.Text); break;
                     case AiAssistantMessage assistant:
-                        writer.WriteString("role", "assistant"); writer.WriteString("content", assistant.Text);
+                        // Databricks documents an assistant message with tool calls without content, and accepts that form;
+                        // any text the model streamed before its calls is not sent back.
+                        writer.WriteString("role", "assistant");
+                        if (!databricks || assistant.ToolCalls.Length == 0) writer.WriteString("content", assistant.Text);
                         if (assistant.ToolCalls.Length > 0)
                         {
                             writer.WriteStartArray("tool_calls");

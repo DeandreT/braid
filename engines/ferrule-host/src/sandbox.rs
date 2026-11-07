@@ -26,12 +26,53 @@ pub struct Limits {
     pub open_files: u64,
 }
 
-#[derive(Debug)]
-pub struct SandboxError(&'static str);
+/// Closed startup categories. Exit codes carry no native error text or process operands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SandboxError {
+    Arguments,
+    Platform,
+    Procfs,
+    Descriptors,
+    Limits,
+    NonDumpable,
+    NoNewPrivileges,
+    FilterInvalid,
+    FilterInstall,
+    ReadyMarker,
+}
+
+impl SandboxError {
+    /// Shared with the service's internal admission diagnostics, not a worker response.
+    pub const fn exit_code(self) -> u8 {
+        match self {
+            Self::Arguments => 80,
+            Self::Platform => 81,
+            Self::Procfs => 82,
+            Self::Descriptors => 83,
+            Self::Limits => 84,
+            Self::NonDumpable => 85,
+            Self::NoNewPrivileges => 86,
+            Self::FilterInvalid => 87,
+            Self::FilterInstall => 88,
+            Self::ReadyMarker => 89,
+        }
+    }
+}
 
 impl fmt::Display for SandboxError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.0)
+        formatter.write_str(match self {
+            Self::Arguments => "The worker arguments are not admitted.",
+            Self::Platform => "The service sandbox requires Linux on x86_64.",
+            Self::Procfs => "Procfs is unavailable.",
+            Self::Descriptors => "The worker inherited an unexpected file descriptor.",
+            Self::Limits => "The worker could not apply its resource limits.",
+            Self::NonDumpable => "The worker could not become non-dumpable.",
+            Self::NoNewPrivileges => "The worker could not set no-new-privileges.",
+            Self::FilterInvalid => "The worker syscall filter is invalid.",
+            Self::FilterInstall => "The worker could not install its syscall filter.",
+            Self::ReadyMarker => "The worker could not write its readiness marker.",
+        })
     }
 }
 
@@ -39,7 +80,7 @@ impl std::error::Error for SandboxError {}
 
 /// Reads the exact argument shape. No arguments selects the unchanged container mode.
 pub fn parse_arguments(arguments: &[OsString]) -> Result<Option<Limits>, SandboxError> {
-    let invalid = SandboxError("The worker arguments are not admitted.");
+    let invalid = SandboxError::Arguments;
     let [flag, cpu, memory, files] = match arguments {
         [] => return Ok(None),
         [flag, cpu, memory, files] => [flag, cpu, memory, files],
@@ -78,9 +119,7 @@ pub fn parse_arguments(arguments: &[OsString]) -> Result<Option<Limits>, Sandbox
 
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 pub fn enter(_limits: &Limits) -> Result<(), SandboxError> {
-    Err(SandboxError(
-        "The service sandbox requires Linux on x86_64.",
-    ))
+    Err(SandboxError::Platform)
 }
 
 /// Applies every control to the calling single-threaded process. Any failure leaves the caller to exit
@@ -90,12 +129,10 @@ pub fn enter(limits: &Limits) -> Result<(), SandboxError> {
     require_standard_descriptors_only()?;
     apply_limits(limits)?;
     rustix::process::set_dumpable_behavior(rustix::process::DumpableBehavior::NotDumpable)
-        .map_err(|_| SandboxError("The worker could not become non-dumpable."))?;
-    rustix::thread::set_no_new_privs(true)
-        .map_err(|_| SandboxError("The worker could not set no-new-privileges."))?;
+        .map_err(|_| SandboxError::NonDumpable)?;
+    rustix::thread::set_no_new_privs(true).map_err(|_| SandboxError::NoNewPrivileges)?;
     for program in filters()? {
-        seccompiler::apply_filter(&program)
-            .map_err(|_| SandboxError("The worker could not install its syscall filter."))?;
+        seccompiler::apply_filter(&program).map_err(|_| SandboxError::FilterInstall)?;
     }
     Ok(())
 }
@@ -103,18 +140,16 @@ pub fn enter(limits: &Limits) -> Result<(), SandboxError> {
 /// The parent must not leak any descriptor beyond the three standard streams.
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn require_standard_descriptors_only() -> Result<(), SandboxError> {
-    let failure = SandboxError("The worker inherited an unexpected file descriptor.");
+    let failure = SandboxError::Descriptors;
     let own_listing = std::path::PathBuf::from(format!("/proc/{}/fd", std::process::id()));
     let mut listing_descriptors = 0;
-    for entry in
-        std::fs::read_dir("/proc/self/fd").map_err(|_| SandboxError("Procfs is unavailable."))?
-    {
-        let entry = entry.map_err(|_| SandboxError("Procfs is unavailable."))?;
+    for entry in std::fs::read_dir("/proc/self/fd").map_err(|_| SandboxError::Procfs)? {
+        let entry = entry.map_err(|_| SandboxError::Procfs)?;
         let descriptor = entry
             .file_name()
             .to_str()
             .and_then(|name| name.parse::<u32>().ok())
-            .ok_or(SandboxError("Procfs is unavailable."))?;
+            .ok_or(SandboxError::Procfs)?;
         if descriptor <= 2 {
             continue;
         }
@@ -150,8 +185,7 @@ fn apply_limits(limits: &Limits) -> Result<(), SandboxError> {
         (Resource::Locks, 0),
         (Resource::Rtprio, 0),
     ] {
-        setrlimit(resource, fixed(value))
-            .map_err(|_| SandboxError("The worker could not apply its resource limits."))?;
+        setrlimit(resource, fixed(value)).map_err(|_| SandboxError::Limits)?;
     }
     Ok(())
 }
@@ -174,10 +208,8 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
                 SeccompAction::Errno(errno as u32),
                 TargetArch::x86_64,
             )
-            .map_err(|_| SandboxError("The worker syscall filter is invalid."))?;
-            let program: BpfProgram = filter
-                .try_into()
-                .map_err(|_| SandboxError("The worker syscall filter is invalid."))?;
+            .map_err(|_| SandboxError::FilterInvalid)?;
+            let program: BpfProgram = filter.try_into().map_err(|_| SandboxError::FilterInvalid)?;
             Ok(program)
         };
     let unconditional = |numbers: &[i64]| {
@@ -192,10 +224,10 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
     let own = u64::from(std::process::id());
     let other_target = || -> Result<Vec<SeccompRule>, SandboxError> {
         let condition = SeccompCondition::new(0, SeccompCmpArgLen::Dword, SeccompCmpOp::Ne, own)
-            .map_err(|_| SandboxError("The worker syscall filter is invalid."))?;
-        Ok(vec![SeccompRule::new(vec![condition]).map_err(|_| {
-            SandboxError("The worker syscall filter is invalid.")
-        })?])
+            .map_err(|_| SandboxError::FilterInvalid)?;
+        Ok(vec![
+            SeccompRule::new(vec![condition]).map_err(|_| SandboxError::FilterInvalid)?,
+        ])
     };
     for number in [libc::SYS_kill, libc::SYS_tkill, libc::SYS_tgkill] {
         denied.insert(number, other_target()?);
@@ -337,3 +369,26 @@ const CHANGING: &[i64] = &[
     libc::SYS_removexattr,
     libc::SYS_lremovexattr,
 ];
+
+#[cfg(test)]
+mod startup_category_tests {
+    use super::SandboxError;
+
+    #[test]
+    fn startup_exit_categories_are_fixed() {
+        for (error, code) in [
+            (SandboxError::Arguments, 80),
+            (SandboxError::Platform, 81),
+            (SandboxError::Procfs, 82),
+            (SandboxError::Descriptors, 83),
+            (SandboxError::Limits, 84),
+            (SandboxError::NonDumpable, 85),
+            (SandboxError::NoNewPrivileges, 86),
+            (SandboxError::FilterInvalid, 87),
+            (SandboxError::FilterInstall, 88),
+            (SandboxError::ReadyMarker, 89),
+        ] {
+            assert_eq!(error.exit_code(), code);
+        }
+    }
+}

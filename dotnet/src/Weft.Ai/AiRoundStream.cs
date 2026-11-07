@@ -70,10 +70,15 @@ public sealed class AiRoundStream : IAsyncDisposable
                 Complete(null); _turn.ChargeEvent(true);
                 yield return AiRoundFailed.Create(failure, usage); yield break;
             }
-            IAsyncEnumerable<AiDecoded> native = _turn.Profile.Dialect == AiDialect.ChatCompletionsSseV1
-                ? new ChatCompletionsReader(_turn, _cancellation).ReadAsync(source!, _token)
-                : new OllamaChatReader(_turn, _round, _cancellation).ReadAsync(source!, _token);
+            ChatCompletionsReader? chat = _turn.Profile.Dialect == AiDialect.OllamaChatNdjsonV1 ? null
+                : new ChatCompletionsReader(_turn, _cancellation, _turn.Profile.Dialect == AiDialect.DatabricksChatCompletionsSseV1);
+            IAsyncEnumerable<AiDecoded> native = chat is null
+                ? new OllamaChatReader(_turn, _round, _cancellation).ReadAsync(source!, _token)
+                : chat.ReadAsync(source!, _token);
             reader = native.GetAsyncEnumerator(_token);
+            // A failure still reports accounting the provider already sent: published usage, or Databricks usage the
+            // reader holds for its terminal. Usage stays unknown only when none arrived.
+            AiTokenUsage Known() => chat?.PendingUsage ?? usage;
             while (true)
             {
                 AiDecoded? decoded = null; bool available = false; failure = null;
@@ -89,7 +94,7 @@ public sealed class AiRoundStream : IAsyncDisposable
                 if (failure is not null)
                 {
                     Complete(null); _turn.ChargeEvent(true);
-                    yield return AiRoundFailed.Create(failure, usage); yield break;
+                    yield return AiRoundFailed.Create(failure, Known()); yield break;
                 }
                 if (decoded is AiDecodedText text)
                 {
@@ -98,7 +103,7 @@ public sealed class AiRoundStream : IAsyncDisposable
                     if (failure is not null)
                     {
                         Complete(null); _turn.ChargeEvent(true);
-                        yield return AiRoundFailed.Create(failure, usage); yield break;
+                        yield return AiRoundFailed.Create(failure, Known()); yield break;
                     }
                     foreach (string piece in AiTextPieces.Split(text.Text))
                     {
@@ -107,7 +112,7 @@ public sealed class AiRoundStream : IAsyncDisposable
                         if (failure is not null)
                         {
                             Complete(null); _turn.ChargeEvent(true);
-                            yield return AiRoundFailed.Create(failure, usage); yield break;
+                            yield return AiRoundFailed.Create(failure, Known()); yield break;
                         }
                         yield return AiTextDelta.Create(piece);
                     }
@@ -121,7 +126,7 @@ public sealed class AiRoundStream : IAsyncDisposable
                     if (failure is not null)
                     {
                         Complete(null); _turn.ChargeEvent(true);
-                        yield return AiRoundFailed.Create(failure, usage); yield break;
+                        yield return AiRoundFailed.Create(failure, Known()); yield break;
                     }
                     yield return AiUsageObserved.Create(usage);
                     continue;
@@ -129,7 +134,7 @@ public sealed class AiRoundStream : IAsyncDisposable
                 if (decoded is not AiDecodedEnd end)
                 {
                     Complete(null); _turn.ChargeEvent(true);
-                    yield return AiRoundFailed.Create(AiFailure.Create(AiFailureCode.MalformedResponse, AiDispatchState.Attempted), usage); yield break;
+                    yield return AiRoundFailed.Create(AiFailure.Create(AiFailureCode.MalformedResponse, AiDispatchState.Attempted), Known()); yield break;
                 }
                 usage = end.Usage;
                 // Native framing/JSON/calls are fully validated. Close the owned
@@ -156,10 +161,10 @@ public sealed class AiRoundStream : IAsyncDisposable
                 if (failure is not null)
                 {
                     Complete(null); _turn.ChargeEvent(true);
-                    yield return AiRoundFailed.Create(failure, usage); yield break;
+                    yield return AiRoundFailed.Create(failure, Known()); yield break;
                 }
                 if (Complete(end.Reason)) yield return AiRoundFinished.Create(end.Reason, usage);
-                else yield return AiRoundFailed.Create(AiFailure.Create(CancellationCode, AiDispatchState.Attempted), usage);
+                else yield return AiRoundFailed.Create(AiFailure.Create(CancellationCode, AiDispatchState.Attempted), Known());
                 yield break;
             }
         }

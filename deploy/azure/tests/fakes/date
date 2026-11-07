@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# The tests' clock: real time plus the seconds the fake sleep has skipped, so waits for token expiry or job
+# completion pass at once. An explicit --date is converted unchanged.
+set -euo pipefail
+for argument in "$@"; do
+  [[ $argument == -d* || $argument == --date* ]] && exec "$FAKE_REAL_DATE" "$@"
+done
+exec "$FAKE_REAL_DATE" -d "@$(($("$FAKE_REAL_DATE" +%s) + $(cat "$FAKE_STATE/clock")))" "$@"

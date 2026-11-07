@@ -92,7 +92,7 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
             process = Process.Start(StartInfo(directory, output: false)) ?? throw new InvalidOperationException("The launcher did not start.");
             var marker = new byte[ProcessCompileOptions.ReadyMarker.Length];
             await process.StandardOutput.BaseStream.ReadExactlyAsync(marker, cancellationToken).ConfigureAwait(false);
-            return marker.AsSpan().SequenceEqual(ProcessCompileOptions.ReadyMarker) && Verified(process.Id);
+            return marker.AsSpan().SequenceEqual(ProcessCompileOptions.ReadyMarker) && Verify(process.Id) == ChildAdmissionFailure.None;
         }
         catch (Exception exception) when (exception is EndOfStreamException or IOException or Win32Exception or InvalidOperationException)
         {
@@ -213,11 +213,13 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
             }
 
             result = await ExchangeAsync(process, cancellationToken).ConfigureAwait(false);
-            if (result.Failure != WorkerProcessFailure.None) return result;
-            var output = new FileInfo(Path.Combine(directory, BuildCompilation.Output));
-            if (output.Length is < 1 or > BuildWorkerProtocol.MaximumSourceBytes) return result = Failed(WorkerProcessFailure.WorkerFailed);
-            var assembly = await File.ReadAllBytesAsync(output.FullName, cancellationToken).ConfigureAwait(false);
-            return result = new(BuildCompilation.Artifact(reply, assembly), WorkerProcessFailure.None);
+            if (result.Failure == WorkerProcessFailure.None)
+            {
+                var output = new FileInfo(Path.Combine(directory, BuildCompilation.Output));
+                if (output.Length is < 1 or > BuildWorkerProtocol.MaximumSourceBytes) return result = Failed(WorkerProcessFailure.WorkerFailed);
+                var assembly = await File.ReadAllBytesAsync(output.FullName, cancellationToken).ConfigureAwait(false);
+                return result = new(BuildCompilation.Artifact(reply, assembly), WorkerProcessFailure.None);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -236,6 +238,10 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
                     Interlocked.Exchange(ref unavailable, 1);
                     result = Failed(WorkerProcessFailure.CleanupFailed);
                 }
+                else if (result.AdmissionFailure == ChildAdmissionFailure.MarkerMissing)
+                {
+                    result = ChildAdmissionDiagnostics.Refused(ChildAdmissionDiagnostics.StartupExit(process.ExitCode));
+                }
 
                 process.Dispose();
             }
@@ -252,6 +258,7 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
                 }
             }
         }
+        return result;
     }
 
     private ProcessStartInfo StartInfo(string directory, bool output)
@@ -287,11 +294,13 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
             }
             catch (EndOfStreamException)
             {
-                return Failed(WorkerProcessFailure.SandboxUnavailable);
+                return ChildAdmissionDiagnostics.Refused(ChildAdmissionFailure.MarkerMissing);
             }
 
-            if (!marker.AsSpan().SequenceEqual(ProcessCompileOptions.ReadyMarker) || !Verified(process.Id))
-                return Failed(WorkerProcessFailure.SandboxUnavailable);
+            if (!marker.AsSpan().SequenceEqual(ProcessCompileOptions.ReadyMarker))
+                return ChildAdmissionDiagnostics.Refused(ChildAdmissionFailure.MarkerMismatch);
+            var admission = Verify(process.Id);
+            if (admission != ChildAdmissionFailure.None) return ChildAdmissionDiagnostics.Refused(admission);
             await process.StandardInput.BaseStream.WriteAsync(new[] { ProcessCompileOptions.Go }, cancellationToken).ConfigureAwait(false);
             await process.StandardInput.BaseStream.FlushAsync(cancellationToken).ConfigureAwait(false);
             process.StandardInput.Close();
@@ -321,7 +330,7 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
         }
     }
 
-    private bool Verified(int processId) => ChildSandboxVerification.Verified(processId, inheritedFilters + ProcessCompileOptions.LauncherFilters,
+    private ChildAdmissionFailure Verify(int processId) => ChildSandboxVerification.Verify(processId, inheritedFilters + ProcessCompileOptions.LauncherFilters,
     [
         ("Max cpu time", Profile.CpuSeconds),
         ("Max file size", ProcessCompileOptions.FileBytes),

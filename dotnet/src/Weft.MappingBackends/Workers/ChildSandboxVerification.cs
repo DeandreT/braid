@@ -9,37 +9,60 @@ internal static class ChildSandboxVerification
     /// Confirms no-new-privileges, filter mode, the exact filter count, every fixed limit (soft and hard) and
     /// that the child is non-dumpable, which hides its environment even from its own user.
     /// </summary>
-    internal static bool Verified(int processId, int expectedFilters, IEnumerable<(string Name, long Value)> limits)
+    internal static ChildAdmissionFailure Verify(int processId, int expectedFilters, IEnumerable<(string Name, long Value)> limits) =>
+        Verify(processId, expectedFilters, limits, File.ReadAllLines, File.ReadAllBytes);
+
+    // Per-call read-only seam for deterministic procfs qualification; production always uses the file readers above.
+    internal static ChildAdmissionFailure Verify(int processId, int expectedFilters, IEnumerable<(string Name, long Value)> limits,
+        Func<string, string[]> readLines, Func<string, byte[]> readBytes)
     {
+        var readFailure = ChildAdmissionFailure.StatusRead;
         try
         {
-            var status = File.ReadAllLines($"/proc/{processId}/status");
-            if (!status.Contains("NoNewPrivs:\t1", StringComparer.Ordinal) || !status.Contains("Seccomp:\t2", StringComparer.Ordinal) ||
-                SeccompFilters(status) != expectedFilters)
-                return false;
-            var lines = File.ReadAllLines($"/proc/{processId}/limits");
-            foreach (var (name, value) in limits)
-            {
-                var text = value.ToString(CultureInfo.InvariantCulture);
-                var line = lines.SingleOrDefault(candidate => candidate.StartsWith(name + "  ", StringComparison.Ordinal));
-                var fields = line?[name.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (fields is not { Length: >= 2 } || fields[0] != text || fields[1] != text) return false;
-            }
+            var status = readLines($"/proc/{processId}/status");
+            var statusFailure = VerifyStatus(status, expectedFilters);
+            if (statusFailure != ChildAdmissionFailure.None) return statusFailure;
+            readFailure = ChildAdmissionFailure.LimitsRead;
+            var lines = readLines($"/proc/{processId}/limits");
+            var limitFailure = VerifyLimits(lines, limits);
+            if (limitFailure != ChildAdmissionFailure.None) return limitFailure;
 
+            readFailure = ChildAdmissionFailure.EnvironmentRead;
             try
             {
-                _ = File.ReadAllBytes($"/proc/{processId}/environ");
-                return false;
+                _ = readBytes($"/proc/{processId}/environ");
+                return ChildAdmissionFailure.EnvironmentReadable;
             }
             catch (UnauthorizedAccessException)
             {
-                return true;
+                return ChildAdmissionFailure.None;
             }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            return false;
+            return readFailure;
         }
+    }
+
+    internal static ChildAdmissionFailure VerifyStatus(IEnumerable<string> status, int expectedFilters)
+    {
+        var lines = status.ToArray();
+        if (!lines.Contains("NoNewPrivs:\t1", StringComparer.Ordinal)) return ChildAdmissionFailure.NoNewPrivilegesVerification;
+        if (!lines.Contains("Seccomp:\t2", StringComparer.Ordinal)) return ChildAdmissionFailure.SeccompModeVerification;
+        return SeccompFilters(lines) == expectedFilters ? ChildAdmissionFailure.None : ChildAdmissionFailure.FilterCountVerification;
+    }
+
+    internal static ChildAdmissionFailure VerifyLimits(IEnumerable<string> lines, IEnumerable<(string Name, long Value)> limits)
+    {
+        var entries = lines.ToArray();
+        foreach (var (name, value) in limits)
+        {
+            var text = value.ToString(CultureInfo.InvariantCulture);
+            var matching = entries.Where(candidate => candidate.StartsWith(name + "  ", StringComparison.Ordinal)).ToArray();
+            var fields = matching.Length == 1 ? matching[0][name.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries) : null;
+            if (fields is not { Length: >= 2 } || fields[0] != text || fields[1] != text) return ChildAdmissionFailure.LimitVerification;
+        }
+        return ChildAdmissionFailure.None;
     }
 
     internal static int? SeccompFilters(IEnumerable<string> status)

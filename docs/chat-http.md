@@ -60,7 +60,10 @@ The profile document is strict JSON; unknown or duplicate properties are refused
   default 120) bounds a turn; `maxOutputTokens` (1–2048, default 1024) bounds
   each provider round.
 - `dialect` is `chatCompletionsSse` (`/v1/chat/completions`, or
-  `/openai/v1/chat/completions` for [Azure OpenAI](ai-chat.md#azure-openai-profiles)) or
+  `/openai/v1/chat/completions` for [Azure OpenAI](ai-chat.md#azure-openai-profiles)),
+  `databricksChatCompletionsSse` (`/serving-endpoints/chat/completions` on an
+  `adb-<workspace ID>.<n>.azuredatabricks.net` workspace; see
+  [Azure Databricks](ai-chat.md#azure-databricks-profiles)) or
   `ollamaChatNdjson` (`/api/chat`). Endpoints are fixed HTTPS URLs; a plain HTTP
   loopback endpoint requires `"loopbackFixture": true`. `requestThinkFalse` is
   allowed only for the Ollama dialect. Up to 16 profiles with distinct IDs.
@@ -74,17 +77,35 @@ The profile document is strict JSON; unknown or duplicate properties are refused
   resolve and every listed credential must be used. The credential file holds
   only the bearer value (one optional trailing LF) and is read with the same
   private-file admission at dispatch time, so rotation needs no restart. An
-  unreadable credential fails that turn as `credentialUnavailable`.
+  unreadable credential fails that turn as `credentialUnavailable`. A credential
+  used by a `databricksChatCompletionsSse` profile cannot also be used by a profile
+  of another dialect.
 - A credential can instead name a managed identity,
   `{ "reference": "azure-openai", "managedIdentity": { "clientId": "<uuid>" } }`
-  (an empty object selects the system-assigned identity). Its bearer value is a
-  Microsoft Entra access token for Azure OpenAI (`https://ai.azure.com/.default`)
-  from the Azure Container Apps managed-identity endpoint, which the host admits
-  at startup only as plain HTTP on loopback (`IDENTITY_ENDPOINT`, with
-  `IDENTITY_HEADER`). The token is cached in memory until five minutes before it
-  expires, for at most an hour, with one refresh at a time per identity. A failed
+  (without `clientId`, the system-assigned identity). Its bearer value is a
+  Microsoft Entra access token for the identity's `resource`: `azureAi` (the
+  default, Azure OpenAI, `https://ai.azure.com/.default`) or `azureDatabricks`
+  (Azure Databricks, `2ff814a6-3304-4ab8-85cb-cd0e6f879c1d/.default`). An
+  `azureDatabricks` identity serves only `databricksChatCompletionsSse` profiles,
+  and those profiles accept no other managed identity.
+- The identity's `source` names the endpoint that issues its tokens; Weft never
+  detects or falls back between them:
+  - `containerApps` (the default): the Azure Container Apps managed-identity
+    endpoint, which the host admits at startup only as plain HTTP on loopback
+    (`IDENTITY_ENDPOINT`, with `IDENTITY_HEADER`);
+  - `instanceMetadata`: an Azure virtual machine's Instance Metadata Service at the
+    fixed address `http://169.254.169.254/metadata/identity/oauth2/token`
+    (`api-version=2018-02-01`, header `Metadata: true`, `client_id` only for a
+    user-assigned identity), without a proxy or redirects. A 404, 410, 429, 5xx
+    or timeout is retried twice, after one and then two seconds; any other
+    failure, or a third failed attempt, fails that turn as `credentialUnavailable`.
+    Only the server's network may reach the address on the VM: other containers
+    on the host must not be able to obtain the VM's tokens.
+
+  The token is cached in memory until five minutes before it expires, for at most
+  an hour, with one refresh at a time per identity, resource and source. A failed
   refresh keeps the current token until a minute before it expires; after that the
-  turn fails as `credentialUnavailable`.
+  turn fails as `credentialUnavailable`. Response bodies are never logged or shown.
 - A profile whose metadata policy disallows mapping metadata is never offered.
   Changing any nonsecret profile field under an existing ID/version changes its
   pinned fingerprint; bump the version when changing a profile.

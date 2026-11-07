@@ -64,6 +64,8 @@ public sealed class FerruleCompiledServiceTests
             WorkerProcessResult result;
             try { result = await runner.RunAsync(System.Text.Encoding.UTF8.GetBytes(secret), default); }
             finally { Environment.SetEnvironmentVariable("WEFT_RUNTIME_PROBE_SECRET", previous); }
+            Assert.True(result.Failure == WorkerProcessFailure.None,
+                "Compiled launcher admission: " + ChildAdmissionDiagnostics.Category(result.AdmissionFailure));
             Assert.Equal(WorkerProcessFailure.None, result.Failure);
             var text = System.Text.Encoding.UTF8.GetString(result.Output).Replace("\r", "", StringComparison.Ordinal);
             Assert.Equal("outside-read=denied\nprivate-write=denied\nmetadata=denied\nnetwork=denied\nprocess=denied\nsignal-owner=denied\nenvironment=clean\n", text);
@@ -124,7 +126,12 @@ public sealed class FerruleCompiledServiceTests
         var root = TemporaryRoot();
         try
         {
-            await using (var runtime = new ProcessCompiledRuntimeRunner(Options(root))) Assert.True(await runtime.ProbeAsync(default));
+            await using (var runtime = new ProcessCompiledRuntimeRunner(Options(root)))
+            {
+                var probe = await runtime.ProbeResultAsync(default);
+                Assert.True(probe.Failure == WorkerProcessFailure.None,
+                    "Compiled runtime probe admission: " + ChildAdmissionDiagnostics.Category(probe.AdmissionFailure));
+            }
             // Another program behind the same launcher and controls starts, but it is not the runtime host.
             var other = Path.Combine(AppContext.BaseDirectory, "CompiledSandboxProbe", "Weft.CompiledSandboxProbe.dll");
             await using (var probe = new ProcessCompiledRuntimeRunner(new(PackagedFerruleService.Identity, other, Launcher!, root, Toolchain)))

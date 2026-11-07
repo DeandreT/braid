@@ -2,7 +2,7 @@ using System;
 
 namespace Weft.Ai;
 
-public enum AiDialect { ChatCompletionsSseV1, OllamaChatNdjsonV1 }
+public enum AiDialect { ChatCompletionsSseV1, OllamaChatNdjsonV1, DatabricksChatCompletionsSseV1 }
 [Flags]
 public enum AiCapability { Text = 1, FunctionTools = 2 }
 public enum AiAuthentication { None, Bearer }

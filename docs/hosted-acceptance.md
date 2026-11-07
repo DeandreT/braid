@@ -3,8 +3,9 @@
 `deploy/compose/acceptance-test.sh` is the local acceptance of the packaged Session
 stack: real sign-in, the main workflows through the Angular application, and recovery
 across a server restart and Ferrule service scaling. It qualifies the hosted shape on
-one machine; it does not provision Azure or use a live Entra tenant. Tracking work is
-[#243](https://github.com/DeandreT/weft/issues/243).
+one machine; it does not provision Azure or use a live Entra tenant. Its live counterpart
+in Azure is the [live qualification](azure-deployment.md#live-qualification) harness.
+Tracking work is [#243](https://github.com/DeandreT/weft/issues/243).
 
 ## What runs
 

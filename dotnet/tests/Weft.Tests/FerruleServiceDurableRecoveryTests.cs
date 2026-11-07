@@ -66,6 +66,7 @@ public sealed class FerruleServiceDurableRecoveryTests(PostgresFixture fixture)
                     await host.Services.GetRequiredService<IMessageBus>().PublishAsync(new RunPreview(org, run));
                     await observed.Closed.Task.WaitAsync(TimeSpan.FromSeconds(20));
                     Assert.Equal(1, (await api.ReadAsync(test.Alice, org, run))!.Attempt);
+                    await clock.TimerScheduled.WaitAsync(TimeSpan.FromSeconds(10));
                     clock.Advance(options.QuarantineBound);
                     await FerruleServiceRecoveryTests.Reopened(runner);
                     using var delivered = new CancellationTokenSource(TimeSpan.FromSeconds(45));
@@ -109,6 +110,7 @@ public sealed class FerruleServiceDurableRecoveryTests(PostgresFixture fixture)
                 Assert.Equal(RevisionIngestionOutcome.RetryableFailure, held.Outcome);
                 Assert.Equal(result.Receipt.ClaimCount, held.Receipt!.ClaimCount);
             }
+            await clock.TimerScheduled.WaitAsync(TimeSpan.FromSeconds(10));
             clock.Advance(options.QuarantineBound);
             await FerruleServiceRecoveryTests.Reopened(runner);
             var resumed = await api.ResumeAsync(test.Actor, test.Project, operation);
@@ -169,6 +171,7 @@ public sealed class FerruleServiceDurableRecoveryTests(PostgresFixture fixture)
                 Assert.Equal(before, await test.CountsAsync());
             }
             Assert.Equal(1, connector.Deliveries);
+            await clock.TimerScheduled.WaitAsync(TimeSpan.FromSeconds(10));
             clock.Advance(options.QuarantineBound);
             await FerruleServiceRecoveryTests.Reopened(runner);
             foreach (var operation in Enum.GetValues<RevisionReportOperation>())
@@ -216,6 +219,7 @@ public sealed class FerruleServiceDurableRecoveryTests(PostgresFixture fixture)
             Assert.Equal(RevisionReportEnsureOutcome.AdmissionBusy, held.Outcome);
             Assert.Equal(before, await test.CountsAsync());
             Assert.Equal(1, connector.Deliveries);
+            await clock.TimerScheduled.WaitAsync(TimeSpan.FromSeconds(10));
             clock.Advance(options.QuarantineBound);
             await FerruleServiceRecoveryTests.Reopened(runner);
             var recovered = await api.EnsureAsync(test.Actor, test.Revision, RevisionReportOperation.Projection);

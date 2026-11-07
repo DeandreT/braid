@@ -839,6 +839,11 @@ fn missing_grant_refuses_the_launch() {
         assert!(!output.status.success());
         assert!(output.stdout.is_empty());
         std::fs::write(directory.join("output.dll"), b"").unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(i32::from(sandbox::SandboxError::PathGrant.exit_code()))
+        );
+        assert!(output.stderr.is_empty());
     }
 }
 
@@ -925,7 +930,10 @@ fn helper(scenario: &str) {
             drop(child.stdin.take());
             let output = child.wait_with_output().unwrap();
             drop(leaked);
-            let refused = !output.status.success() && output.stdout.is_empty();
+            let refused = output.status.code()
+                == Some(i32::from(sandbox::SandboxError::Descriptors.exit_code()))
+                && output.stdout.is_empty()
+                && output.stderr.is_empty();
             println!("{}", if refused { "refused" } else { "admitted" });
         }
         "reserve" => {

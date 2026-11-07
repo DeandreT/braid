@@ -73,9 +73,14 @@ public sealed class AiProfileSpec
     {
         if (endpoint is null || !endpoint.IsAbsoluteUri) throw AiGuard.Invalid();
         AiGuard.Token(endpoint.OriginalString, 2048);
-        // Azure OpenAI serves the same Chat Completions dialect under /openai/v1.
-        bool path = dialect == AiDialect.ChatCompletionsSseV1
-            ? endpoint.AbsolutePath is "/v1/chat/completions" or "/openai/v1/chat/completions" : endpoint.AbsolutePath == "/api/chat";
+        // Azure OpenAI serves the same Chat Completions dialect under /openai/v1. An Azure Databricks workspace serves its
+        // own variant for the serving endpoint the model names.
+        bool path = dialect switch
+        {
+            AiDialect.ChatCompletionsSseV1 => endpoint.AbsolutePath is "/v1/chat/completions" or "/openai/v1/chat/completions",
+            AiDialect.DatabricksChatCompletionsSseV1 => endpoint.AbsolutePath == "/serving-endpoints/chat/completions",
+            _ => endpoint.AbsolutePath == "/api/chat"
+        };
         if (endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0
             || endpoint.OriginalString.Contains('\\') || !path || endpoint.Port <= 0) throw AiGuard.Invalid();
         if (fixture)
@@ -84,7 +89,27 @@ public sealed class AiProfileSpec
             if (endpoint.Scheme != Uri.UriSchemeHttp || !IPAddress.TryParse(host, out IPAddress? address)
                 || (!address.Equals(IPAddress.Loopback) && !address.Equals(IPAddress.IPv6Loopback))) throw AiGuard.Invalid();
         }
-        else if (endpoint.Scheme != Uri.UriSchemeHttps) throw AiGuard.Invalid();
+        else if (endpoint.Scheme != Uri.UriSchemeHttps
+            || (dialect == AiDialect.DatabricksChatCompletionsSseV1 && !AzureDatabricksWorkspaceHost(endpoint))) throw AiGuard.Invalid();
+    }
+    // Exactly a workspace origin, adb-<workspace ID>.<n>.azuredatabricks.net, on the default HTTPS port. The ASCII form is
+    // compared, so internationalized names, other subdomains (privatelink.*, accounts.*) and a trailing dot are refused.
+    private static bool AzureDatabricksWorkspaceHost(Uri endpoint)
+    {
+        if (endpoint.HostNameType != UriHostNameType.Dns || !endpoint.IsDefaultPort) return false;
+        string[] labels = endpoint.IdnHost.Split('.');
+        return labels.Length == 4 && labels[0].StartsWith("adb-", StringComparison.Ordinal) && Digits(labels[0].AsSpan(4), 19)
+            && Digits(labels[1], 4) && labels[2] == "azuredatabricks" && labels[3] == "net";
+    }
+    // Unity AI Gateway host: not admitted. Its documented base URL is https://<workspace-url>/ai-gateway/mlflow/v1
+    // (https://learn.microsoft.com/azure/databricks/large-language-models/llm-serving-intro,
+    // https://learn.microsoft.com/azure/databricks/ai-gateway/migrate-to-unity-gateway), but that path returned 404 on an
+    // Azure Databricks workspace (observed 2026-11-01). Add its path and host check here once the endpoint is confirmed.
+    private static bool Digits(ReadOnlySpan<char> value, int maximum)
+    {
+        if (value.Length is 0 || value.Length > maximum) return false;
+        foreach (char c in value) if (c is < '0' or > '9') return false;
+        return true;
     }
     public override string ToString() => nameof(AiProfileSpec);
 }

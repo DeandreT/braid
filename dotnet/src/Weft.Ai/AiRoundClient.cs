@@ -130,7 +130,7 @@ public sealed class AiRoundClient : IAsyncDisposable
             { Version = HttpVersion.Version11, VersionPolicy = HttpVersionPolicy.RequestVersionExact, Content = new ByteArrayContent(bytes) };
             message.Headers.ConnectionClose = true;
             message.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("identity"));
-            message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(profile.Dialect == AiDialect.ChatCompletionsSseV1 ? "text/event-stream" : "application/x-ndjson"));
+            message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(profile.Dialect == AiDialect.OllamaChatNdjsonV1 ? "application/x-ndjson" : "text/event-stream"));
             message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             if (secret is not null) message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret.HeaderValue());
             headerCancellation = new AiCancellation(turn.DisposalSettled);
@@ -139,7 +139,7 @@ public sealed class AiRoundClient : IAsyncDisposable
             response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, headerCancellation.Token).ConfigureAwait(false);
             headersComplete = true;
             if (response.StatusCode != HttpStatusCode.OK) return RejectRound(turn, StatusFailure(response.StatusCode), true);
-            string expected = profile.Dialect == AiDialect.ChatCompletionsSseV1 ? "text/event-stream" : "application/x-ndjson";
+            string expected = profile.Dialect == AiDialect.OllamaChatNdjsonV1 ? "application/x-ndjson" : "text/event-stream";
             if (!StringComparer.OrdinalIgnoreCase.Equals(response.Content.Headers.ContentType?.MediaType, expected)
                 || !IdentityEncoding(response))
                 return RejectRound(turn, AiFailureCode.UnsupportedResponse, true);

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Advances the tests' clock (see date) instead of waiting.
+set -euo pipefail
+echo $(($(cat "$FAKE_STATE/clock") + ${1%s})) >"$FAKE_STATE/clock"

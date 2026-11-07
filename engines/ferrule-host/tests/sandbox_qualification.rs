@@ -368,7 +368,12 @@ fn refused_arguments_never_read_input() {
             .write_all(&inspection_frame("inspect", b"{}"));
         let output = worker.wait_with_output().unwrap();
         assert!(!output.status.success());
+        assert_eq!(
+            output.status.code(),
+            Some(i32::from(sandbox::SandboxError::Arguments.exit_code()))
+        );
         assert!(output.stdout.is_empty());
+        assert!(output.stderr.is_empty());
     }
 }
 
@@ -456,7 +461,10 @@ fn helper(scenario: &str) {
             drop(worker.stdin.take());
             let output = worker.wait_with_output().unwrap();
             drop(leaked);
-            let refused = !output.status.success() && output.stdout.is_empty();
+            let refused = output.status.code()
+                == Some(i32::from(sandbox::SandboxError::Descriptors.exit_code()))
+                && output.stdout.is_empty()
+                && output.stderr.is_empty();
             println!("{}", if refused { "refused" } else { "admitted" });
         }
         "probe" => {

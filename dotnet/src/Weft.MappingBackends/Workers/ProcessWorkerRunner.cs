@@ -134,6 +134,11 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
                     Interlocked.Exchange(ref unavailable, 1);
                     result = Failed(WorkerProcessFailure.CleanupFailed);
                 }
+                else if (result.AdmissionFailure == ChildAdmissionFailure.MarkerMissing)
+                {
+                    // Inspect only after the existing reap, never wait longer or trust an unverified child.
+                    result = ChildAdmissionDiagnostics.Refused(ChildAdmissionDiagnostics.StartupExit(process.ExitCode));
+                }
 
                 process.Dispose();
             }
@@ -190,11 +195,13 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
             }
             catch (EndOfStreamException)
             {
-                return Failed(WorkerProcessFailure.SandboxUnavailable);
+                return ChildAdmissionDiagnostics.Refused(ChildAdmissionFailure.MarkerMissing);
             }
 
-            if (!marker.AsSpan().SequenceEqual(ProcessWorkerOptions.ReadyMarker) || !Verified(process.Id))
-                return Failed(WorkerProcessFailure.SandboxUnavailable);
+            if (!marker.AsSpan().SequenceEqual(ProcessWorkerOptions.ReadyMarker))
+                return ChildAdmissionDiagnostics.Refused(ChildAdmissionFailure.MarkerMismatch);
+            var admission = Verify(process.Id);
+            if (admission != ChildAdmissionFailure.None) return ChildAdmissionDiagnostics.Refused(admission);
 
             var output = DrainAsync(standardOutput, options.Profile.MaximumOutputBytes, ioCancellation.Token);
             Task[] operations = [output, error, WriteInputAsync(process, frame, ioCancellation.Token), process.WaitForExitAsync(ioCancellation.Token)];
@@ -206,9 +213,7 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
             await all.ConfigureAwait(false);
             _ = StrictUtf8.GetString(await error.ConfigureAwait(false));
             var bytes = await output.ConfigureAwait(false);
-            return process.ExitCode == 0
-                ? new WorkerProcessResult(bytes, WorkerProcessFailure.None)
-                : Failed(WorkerProcessFailure.WorkerFailed);
+            return CompletedExit(bytes, process.ExitCode);
         }
         catch (OutputLimitException)
         {
@@ -224,8 +229,12 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
         }
     }
 
+    internal static WorkerProcessResult CompletedExit(byte[] output, int exitCode) => exitCode == 0
+        ? new WorkerProcessResult(output, WorkerProcessFailure.None)
+        : Failed(WorkerProcessFailure.WorkerFailed);
+
     /// <summary>Confirms in procfs that the running child applied every control before it reads input.</summary>
-    private bool Verified(int processId) => ChildSandboxVerification.Verified(processId, inheritedFilters + 3,
+    private ChildAdmissionFailure Verify(int processId) => ChildSandboxVerification.Verify(processId, inheritedFilters + 3,
     [
         ("Max cpu time", options.Profile.CpuSeconds),
         ("Max file size", 0),

@@ -146,20 +146,31 @@ public sealed class AzureSessionsConnectorTests
         using var connector = Connector(pool, new FakeCredential());
         var clock = new MaintenanceServiceTestTimeProvider();
         var options = new FerruleServiceRunnerOptions(connector, "inspection", Identity) { Clock = clock };
-        await using var runner = new FerruleServiceRunner(options);
-        Assert.Equal(WorkerProcessFailure.CleanupFailed, (await runner.RunAsync(new byte[] { 1 }, default)).Failure);
-        Assert.False(runner.Available);
-        Assert.Single(pool.Sessions);
-        pool.FailAfterForwarding = null;
-        clock.Advance(options.QuarantineBound);
-        await FerruleServiceRecoveryTests.Reopened(runner);
-        Assert.Equal(2, pool.Sessions.Count);
-        Assert.Empty(pool.Sessions[1].Inspection.Frames);
-        Assert.Equal(new byte[] { 2 }, (await runner.RunAsync(new byte[] { 2 }, default)).Output);
-        Assert.Equal(3, pool.Sessions.Count);
-        Assert.Equal(3, pool.Sessions.Select(session => session.Identifier).Distinct(StringComparer.Ordinal).Count());
-        Assert.All(pool.Sessions, session => Assert.True(session.Stopped));
-        Assert.Empty(pool.Violations);
+        var runner = new FerruleServiceRunner(options);
+        var primary = await Record.ExceptionAsync(async () =>
+        {
+            Assert.Equal(WorkerProcessFailure.CleanupFailed, (await runner.RunAsync(new byte[] { 1 }, default)).Failure);
+            Assert.False(runner.Available);
+            Assert.Single(pool.Sessions);
+            pool.FailAfterForwarding = null;
+            // Recovery runs in the background. Register its timer before advancing
+            // the fake clock so it cannot begin another, unadvanced quarantine.
+            await clock.TimerScheduled.WaitAsync(TimeSpan.FromSeconds(10));
+            clock.Advance(options.QuarantineBound);
+            await FerruleServiceRecoveryTests.Reopened(runner);
+            Assert.Equal(2, pool.Sessions.Count);
+            Assert.Empty(pool.Sessions[1].Inspection.Frames);
+            Assert.Equal(new byte[] { 2 }, (await runner.RunAsync(new byte[] { 2 }, default)).Output);
+            Assert.Equal(3, pool.Sessions.Count);
+            Assert.Equal(3, pool.Sessions.Select(session => session.Identifier).Distinct(StringComparer.Ordinal).Count());
+            Assert.All(pool.Sessions, session => Assert.True(session.Stopped));
+            Assert.Empty(pool.Violations);
+            await runner.StopAsync();
+        });
+        var cleanup = await Record.ExceptionAsync(async () => await runner.DisposeAsync());
+        if (primary is not null && cleanup is not null) throw new AggregateException(primary, cleanup);
+        if (primary is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
+        if (cleanup is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cleanup).Throw();
     }
 
     [Fact]
