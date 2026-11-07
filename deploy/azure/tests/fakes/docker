@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Recording fake of the Docker CLI for deploy/azure/tests/qualify-test.sh: the Ferrule image builds, their
+# measured identities and the push of the service image.
+set -euo pipefail
+state=$FAKE_STATE
+printf 'docker %s\n' "$*" >>"$state/calls.log"
+native=$(printf 'fake ferrule host' | sha256sum | cut -d' ' -f1)
+case $1 in
+  build) echo 'sha256:0000000000000000000000000000000000000000000000000000000000000001' ;;
+  create) echo fake-native-container ;;
+  cp) printf 'fake ferrule host' >"$3" ;;
+  rm | tag | push) ;;
+  image)
+    if [[ $2 == inspect ]]; then echo "$native"; fi
+    ;;
+  run)
+    case ${!#} in
+      identity)
+        build=sha256:$(printf 'weft.compiler-identity.v1\nnative=sha256:%s\ntoolchain=%s\n' "$native" "$FAKE_TOOLCHAIN" | sha256sum | cut -d' ' -f1)
+        jq -cn --arg native "sha256:$native" --arg toolchain "$FAKE_TOOLCHAIN" --arg build "$build" \
+          '{schema: "weft.compiler-image-identity.v1", native: $native, toolchain: $toolchain, build: $build}'
+        ;;
+      runtime-identity)
+        jq -cn --arg native "sha256:$native" --arg runtime "$FAKE_RUNTIME_IDENTITY" \
+          '{schema: "weft.compiled-runtime-image-identity.v1", native: $native, runtime: $runtime}'
+        ;;
+      *) exit 2 ;;
+    esac
+    ;;
+  *) echo "Unexpected fake docker call: $*" >&2 && exit 2 ;;
+esac

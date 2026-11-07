@@ -377,6 +377,135 @@ like the endpoints, so qualification executes through the same runtime. Grants r
 `mappingEndpointGrantArguments` lists one argument list per configured caller. Pass arguments
 only: environment overrides replace each job's list.
 
+## Live qualification
+
+`deploy/azure/qualify.sh` runs this procedure end to end in a new resource group and qualifies the
+hosted Session stack and the mapping endpoint there: the platform, signed-in viewing, chat and
+previews, restart and scale recovery, and authorized, idempotent and recoverable endpoint invocation
+([#159](https://github.com/DeandreT/weft/issues/159)). It runs on Linux from a clean checkout, with
+bash, an authenticated Azure CLI with Bicep, Docker with BuildKit, git, curl, jq and openssl. Part of
+the run needs an operator at the terminal and in a browser.
+
+```sh
+deploy/azure/qualify.sh --subscription <id> --resource-group <new group> --location <region> \
+  --parameters deploy/azure/<private>.bicepparam --entra-tenant-id <tenant> --entra-client-id <client> \
+  --chat-profiles <profiles.json> --endpoint-audience <endpoint client> \
+  --caller-client-id <caller client> --caller-secret-file <file> --confirm-provisioning
+```
+
+| Option | Value |
+| --- | --- |
+| `--subscription` | The approved subscription. It must equal `az account show`, and every management command names it. |
+| `--resource-group` | A new group. The harness creates it, tags it `weft-qualification-run=<run ID>` with the commit, and refuses an existing group. |
+| `--location` | The region. |
+| `--parameters` | A private `.bicepparam` file that uses this repository's `deploy/azure/main.bicep`, with the operator principal, IP ranges, name and SKUs. The harness supplies the location, Entra IDs, a new organization ID, tags, images, identities, pins and feature switches, and generates the PostgreSQL administrator password into the deployments' environment. |
+| `--entra-tenant-id`, `--entra-client-id` | The sign-in tenant and the Session host's [app registration](#entra-app-registration). The Azure CLI's signed-in user must belong to that tenant: their object ID (`az ad signed-in-user show`) is bound to the first administrator. |
+| `--chat-profiles`, `--model-credential-file` | The [chat](#chat) profile document, and optionally the model-provider credential. |
+| `--endpoint-audience` | The client ID of the mapping endpoint's app registration, which accepts v2 access tokens. |
+| `--caller-client-id` with `--caller-secret-file` or `--caller-certificate-file` | A machine caller's app registration in the same tenant, and its client secret or its certificate and private key as one PEM file. |
+| `--confirm-provisioning` | Required: the run creates billable resources. |
+| `--yes`, `--state-dir`, `--teardown-at-end` | Accept the what-if without typing `yes`; the private run directory (default `~/.local/state/weft-qualification`, outside the repository); delete the group when the run ends, whether it passed or failed. |
+
+### Guards
+
+Before any change, the harness refuses with exit code 2 when an input is missing or malformed; when
+an option carries a credential (any option naming a secret, password, token, key or assertion), since
+credentials are read only from files owned by the operator and readable by no one else; when the
+parameter file uses another template; when the checkout has uncommitted or untracked changes; when
+the Azure CLI's current subscription is not `--subscription`; when its account is not in the
+`--entra-tenant-id` tenant or is not a signed-in user; when the group exists; or without
+`--confirm-provisioning`. It then creates the empty tagged group, because what-if needs one, shows
+`az deployment group what-if` for the platform and continues only after the operator types `yes` (or
+with `--yes`). Otherwise it deletes the empty group again.
+
+### What runs
+
+1. The [deployment](#deployment) steps: the platform; `initialize-secrets.sh`, repeated while the
+   operator's Key Vault roles take effect; the chat profile document and credential; the images from
+   a `git archive` of the checked-out commit, with the four registry builds and the Ferrule native and
+   service images built locally (they need BuildKit), measured as [hosted acceptance](hosted-acceptance.md)
+   measures them, and the service image pushed; the application with `nativeWorkEnabled`, `chatEnabled`
+   and `ferruleRunner = service` with compilation; the database, migration, key-ring and storage jobs; and
+   the start.
+2. The [first administrator](#first-administrator) through the owner job, binding the Azure CLI's
+   signed-in user by tenant and object ID with `bind-entra-user`.
+   The binding key reaches the job only through Key Vault, and the placeholder is restored afterwards.
+3. The app registration: `az ad app show` must list the redirect URI and the `weft-entra-client`
+   certificate. When either is missing, the harness prints what to add and waits for the operator.
+4. The browser part, then one [mapping endpoint](#mapping-endpoints) for the completed build, with the
+   machine caller granted, and the qualification caller job.
+
+Job results come from the executions' console lines in Log Analytics (`ContainerAppConsoleLogs_CL`).
+Database evidence comes from the `database-roles` job started with a replacement command: its
+PostgreSQL client signs in as the migration login in read-only transactions
+(`default_transaction_read_only`) and prints only counts, IDs and digests. The endpoints are internal,
+so calls run as executions of `<name>-qualify-caller`, a manual job from
+`deploy/azure/qualification/caller.bicep` that runs `caller.js` in the Node image pinned by
+`deploy/container/Dockerfile`, with no identity, registry credential or volume. The harness obtains the
+caller's app-only tokens on the operator's machine through the client-credentials grant and gives them
+to the job only as secure deployment parameters, from a private file. Each call prints its status,
+replay header and response body. The harness then verifies the body against independently authored
+bytes, as the [mapping endpoint stage](hosted-acceptance.md#mapping-endpoint-stage) does.
+
+### Checks
+
+Each automated check is recorded as passed or failed with its evidence. The first failure ends the run.
+
+| Checks | What they establish |
+| --- | --- |
+| `health-hsts`, `session-anonymous`, `catalog-same-origin`, `session-host-ready`, `worker-running`, `ferrule-service-ready`, `no-docker-socket` | The hosted platform: HTTPS with HSTS, the anonymous Session status, the application served from the same origin, the Session host's ready line, the worker and service replicas, and no container app or job with a Docker socket, host volume or Docker image. |
+| `browser-corroborated`, `build-provenance` | The database records the confirmed browser flows, and exactly one completed build names the Ferrule service's combined compiler identity. |
+| `build-qualified`, `release-activated`, `first`, `audit-first` | A build qualified through the service's execute profile, an activated release, and a call with a real client-credentials token that names the exact release, build, revision and artifact, with outputs equal to the expected bytes and one claimed and one completed ledger event. |
+| `retry`, `retry-replayed` | The same request ID returns identical bytes, marked as replayed, with no new ledger event: it did not run again. |
+| `second`, `rolled-back` | A new activation, then a rollback to the first release's qualified artifact, each serve the next call. |
+| `activation-refused`, `broken-revision`, `after-redeployment` | Failed-deployment recovery: an activation without a stored qualification is refused, and a revision whose configuration the endpoint refuses never takes traffic. The current release keeps serving in both cases, and redeploying restores a healthy revision. |
+| `wrong-audience`, `expired`, `revoked`, `revoked-replay` | The caller's token for another audience (the Session host's registration), and the run's first token after it has expired (the run waits for its expiry), are refused with 401. After revocation, a call and a replay are refused with 403. |
+| `server-restarted`, `ferrule-scaled`, `worker-restarted`, `retained-state`, `replay-after-restart` | The server restarts and the Ferrule service scales to three replicas and back while the operator keeps chat and preview work open. A call is served while scaled out, recorded work is unchanged, and the first call still replays. |
+| `ferrule-sandbox-admission` | Isolation through the service: internal-only ingress, the compile and execute profiles, and ready replicas, whose readiness requires the sandbox that the service proves for every child. |
+
+### Browser part
+
+Signed-in flows need a person. The harness writes the inputs to `materials/` in the run directory: the
+preview-orders fixture with JSON documents declared, the order and rates documents and the expected
+outputs. It then asks the operator to confirm, one item at a time, signing in, creating a project,
+uploading the mapping, reading the explanation and validation reports, a chat answer with verified
+citations, a preview whose output matches, a passing regression case, and a completed build. During the
+restart and scale checks, it asks the operator to keep the conversation and the preview open, then to
+confirm that both reopen in the same session. Any answer other than `yes` fails the run. The receipt
+records these confirmations separately from the automated checks. The harness corroborates them
+afterwards where the database can: recorded projects, revisions, derivations, chat turns, preview and
+regression runs, the completed build, and unchanged counts across the restart. What a page shows, a
+citation's correctness and the browser session's continuity rest on the operator's confirmation.
+
+### Receipt and teardown
+
+The run directory, `<state directory>/<run ID>` (mode 0700), holds:
+
+- `receipt.jsonl` (mode 0600): one JSON line per step, fact, check and confirmation, with its time,
+  kind (`step`, `fact`, `check`, `guided`, `run` or `teardown`), name, result and non-secret evidence
+  such as IDs, digests, statuses and counts. Facts include the commit and every image digest.
+- `run.log`, the `evidence/` console lines and query rows, `certificates/` with the certificate pins
+  and the Entra client's public certificate, and `materials/`.
+
+Credentials, generated passwords and tokens exist only in the private `work/` directory, which the
+harness removes when it ends. They are never passed as arguments or printed.
+
+When a run fails, the group is kept for investigation and the harness prints the teardown command:
+
+```sh
+deploy/azure/qualify.sh --teardown <run ID> --subscription <id> --resource-group <group>
+```
+
+Teardown deletes the group only when its `weft-qualification-run` tag equals the run ID, and only after
+the operator types the group's name (or with `--yes`). It then waits until Azure no longer reports the
+group, and records the result in the receipt. The Key Vault stays soft-deleted, with purge protection,
+until its retention period ends. Changes to the app registrations are not reverted.
+
+`deploy/azure/tests/qualify-test.sh` tests the harness offline, against recording fakes of the Azure
+CLI, curl and Docker, and `AzureQualificationHarnessTests` runs it with the .NET tests.
+`deploy/azure/tests/expected/successful-run.calls` is the exact command sequence of a passing run. To
+regenerate it after an intended change, set `WEFT_QUALIFY_UPDATE_EXPECTED=1`, then review the diff.
+
 ## Open questions and limits
 
 - **Private search extension.** Provisioning requires `pg_trgm` to be allowed by

@@ -199,6 +199,8 @@ reads only the listener and transport settings. See [runtime packaging](runtime-
   registered target through the service runtime, with its logins from Key Vault, at least one
   replica, scale-out at the endpoint's concurrency and 100 s to stop, plus manual grant and
   release jobs. See [Azure deployment](azure-deployment.md#mapping-endpoints).
+  `deploy/azure/qualify.sh` qualifies a deployed endpoint with real tokens; see
+  [live qualification](azure-deployment.md#live-qualification).
 - **Acceptance.** `deploy/compose/endpoint-acceptance-test.sh` qualifies and activates a build
   that the hosted acceptance completed, then calls, retries, activates, rolls back and revokes
   through the packaged endpoint. See [hosted acceptance](hosted-acceptance.md#mapping-endpoint-stage).

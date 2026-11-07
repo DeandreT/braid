@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Recording fake of curl for deploy/azure/tests/qualify-test.sh. It answers the Entra token endpoint with unsigned
+# test tokens for the client-credentials grant and the Session host's public routes; every issued token is added
+# to $FAKE_STATE/secrets for the leak scan. FAKE_NO_HSTS drops the HSTS header from the health answer.
+set -euo pipefail
+state=$FAKE_STATE
+printf 'curl %s\n' "$*" >>"$state/calls.log"
+output='' headers='' write_out='' url='' form=()
+while (($#)); do
+  case $1 in
+    --output) output=$2 && shift 2 ;;
+    --dump-header) headers=$2 && shift 2 ;;
+    --write-out) write_out=$2 && shift 2 ;;
+    --data-urlencode) form+=("$2") && shift 2 ;;
+    --max-time | --header) shift 2 ;;
+    --*) shift ;;
+    *) url=$1 && shift ;;
+  esac
+done
+
+field() { # name: a form value, read from its file for name@file
+  local item
+  for item in "${form[@]}"; do
+    if [[ $item == "$1="* ]]; then printf '%s' "${item#*=}"; return; fi
+    if [[ $item == "$1@"* ]]; then cat -- "${item#*@}"; return; fi
+  done
+}
+
+b64url() {
+  base64 -w0 | tr '+/' '-_' | tr -d '='
+}
+
+answer() { # status content-type body [extra-header]
+  [[ -z $headers ]] || printf 'HTTP/2 %s\r\ncontent-type: %s\r\n%s\r\n' "$1" "$2" "${4:-}" >"$headers"
+  printf '%s' "$3" >"${output:-/dev/stdout}"
+  [[ -z $write_out ]] || printf '%s' "$1"
+}
+
+case $url in
+  https://login.microsoftonline.com/*/oauth2/v2.0/token)
+    if [[ -n $(field client_secret) ]]; then
+      [[ $(field client_secret) == "$FAKE_CALLER_SECRET" ]] || { echo 'curl: (22) 401' >&2 && exit 22; }
+    else
+      [[ $(field client_assertion | tr -cd . | wc -c) == 2 ]] || { echo 'curl: (22) 401' >&2 && exit 22; }
+    fi
+    tenant=${url#https://login.microsoftonline.com/}
+    tenant=${tenant%%/*}
+    now=$(date +%s)
+    payload=$(jq -cn --arg aud "$(field scope | sed 's#/.default$##')" --arg tenant "$tenant" --arg client "$(field client_id)" \
+      --arg object "$FAKE_CALLER_OBJECT" --argjson now "$now" --argjson lifetime "${FAKE_TOKEN_LIFETIME:-3600}" \
+      '{aud: $aud, iss: "https://login.microsoftonline.com/\($tenant)/v2.0", iat: $now, nbf: $now, exp: ($now + $lifetime),
+        azp: $client, oid: $object, sub: $object, tid: $tenant, ver: "2.0", idtyp: "app"}' | b64url)
+    token="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url).$payload.$(openssl rand 64 | b64url)"
+    printf '%s\n' "$token" >>"$state/secrets"
+    answer 200 application/json "$(jq -cn --arg token "$token" '{token_type: "Bearer", expires_in: 3599, access_token: $token}')"
+    ;;
+  https://*/api/v1/health)
+    hsts='strict-transport-security: max-age=31536000'
+    [[ -z ${FAKE_NO_HSTS:-} ]] || hsts=''
+    answer 200 application/json '{"status":"ok"}' "${hsts:+$hsts$'\r\n'}"
+    ;;
+  https://*/api/auth/session) answer 200 application/json '{"mode":"session","state":"anonymous"}' ;;
+  https://*/catalog)
+    answer 200 'text/html; charset=utf-8' '<!doctype html><html><head><script src="/main.js" type="module"></script></head><body><weft-root></weft-root></body></html>'
+    ;;
+  *) echo "Unexpected fake curl request $url" >&2 && exit 2 ;;
+esac
