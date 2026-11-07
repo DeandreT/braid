@@ -2,6 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
   "include": [
+    "playwright.dependency-security.config.ts",
+    "tests/dependency-security-forms.spec.ts",
     "playwright.automation.config.ts",
     "tests/automation.spec.ts",
     "playwright.search-return-path.config.ts",
