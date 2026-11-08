@@ -39,6 +39,7 @@ export const browserFixtureMigrations = Object.freeze([
   "0036_automation_comparison_settlement.sql",
   "0037_mapping_drafts.sql",
   "0038_mapping_draft_previews.sql",
+  "0039_chat_mapping_writes.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
