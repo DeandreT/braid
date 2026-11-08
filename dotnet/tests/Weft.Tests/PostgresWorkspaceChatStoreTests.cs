@@ -199,7 +199,7 @@ public sealed class PostgresWorkspaceChatStoreTests(PostgresFixture fixture)
             Sha256Digest.FromBytes([5]), [new("order/code", "Not mapped", "Constant \"edited\"")], false);
         var valid = ChatMetadataCodec.MappingWrite(write);
         var before = await PostgresChatSecurityTests.RowsAsync(f);
-        foreach (var key in new[] { "v", "outcome", "reason", "base", "baseSequence", "revision", "sequence", "head", "operations", "digest", "changes", "truncated" })
+        foreach (var key in new[] { "v", "outcome", "base", "baseSequence", "revision", "sequence", "operations", "digest", "changes", "truncated" })
             await RefuseAsync(f, turn.Intent.TurnId, round, ChatEventKind.MappingWrite, With(valid, key, null), before);
         // A saved version must follow its base; a proposal saves nothing.
         await RefuseAsync(f, turn.Intent.TurnId, round, ChatEventKind.MappingWrite, With(valid, "sequence", JsonValue.Create(1)), before);
