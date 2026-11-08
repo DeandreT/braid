@@ -41,7 +41,7 @@ pub fn valid_context_parts(
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
-fn canonical_nonzero_guid(value: &str) -> bool {
+pub fn canonical_nonzero_guid(value: &str) -> bool {
     value.len() == 36
         && value != "00000000-0000-0000-0000-000000000000"
         && value.bytes().enumerate().all(|(index, byte)| {

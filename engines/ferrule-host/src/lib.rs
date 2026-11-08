@@ -16,7 +16,7 @@ pub mod preview;
 pub mod sandbox;
 mod x12_syntax;
 pub use weft_ferrule_core::{
-    decode, inspect, projection, protocol, valid_context_parts, validation,
+    canonical_nonzero_guid, decode, inspect, projection, protocol, valid_context_parts, validation,
 };
 
 use preview::protocol::{DOCUMENT_PREVIEW_PROTOCOL_VERSION, PREVIEW_PROTOCOL_VERSION};
