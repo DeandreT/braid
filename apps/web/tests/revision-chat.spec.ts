@@ -7,6 +7,12 @@ import type {
   ChatConversation,
 } from "../src/chat/chat-types";
 import { reconcileTurn } from "../src/chat/chat-types";
+import {
+  chooseSavedConversation,
+  openHistory,
+  openMore,
+  refreshChat,
+} from "./chat-ui.fixture";
 
 const C = "80000000-0000-4000-8000-000000000001";
 const T = "90000000-0000-4000-8000-000000000001";
@@ -414,12 +420,11 @@ test("creates, streams, and reopens a private workspace conversation focused on 
   expect(f.posts.every((p) => p.token === f.data.context.requestToken)).toBe(
     true,
   );
-  await panel(page)
-    .getByRole("button", { name: "Refresh chat", exact: true })
+  await refreshChat(panel(page));
+  const history = await openHistory(panel(page));
+  await history
+    .getByRole("button", { name: "Saved mapping question", exact: true })
     .click();
-  await panel(page)
-    .getByLabel("Saved conversations")
-    .selectOption({ label: "Saved mapping question" });
   await expect(panel(page)).toContainText("This maps the saved value.");
   expect(f.posts).toHaveLength(2);
 });
@@ -490,6 +495,7 @@ for (const failed of ["projection", "validation"] as const) {
           exact: true,
         }),
       ).toBeEnabled();
+      await openMore(panel(page));
       await expect(
         panel(page).getByRole("button", { name: "Refresh chat", exact: true }),
       ).toBeEnabled();
@@ -578,7 +584,7 @@ test("an unacknowledged keyboard send focuses explicit recovery after admission"
     held.release();
     await expect(
       panel(page).getByRole("button", {
-        name: "Recover original question",
+        name: "Retry original question",
         exact: true,
       }),
     ).toBeFocused();
@@ -666,11 +672,11 @@ test("unknown POST outcome only replays the original question deliberately", asy
   await page.goto(f.data.browserPath);
   await start(page);
   await expect(
-    panel(page).getByRole("button", { name: "Recover original question" }),
-  ).toBeVisible();
+    panel(page).getByRole("button", { name: "Retry original question" }),
+  ).toBeEnabled();
   expect(f.posts).toHaveLength(2);
   await panel(page)
-    .getByRole("button", { name: "Recover original question" })
+    .getByRole("button", { name: "Retry original question" })
     .click();
   await expect(panel(page)).toContainText("Answer complete.");
   expect(f.posts).toHaveLength(3);
@@ -820,11 +826,11 @@ test("a saved conversation reopens after reload without another turn POST", asyn
   f.saved();
   await page.goto(f.data.browserPath);
   await openPanel(page);
-  await panel(page).getByLabel("Saved conversations").selectOption(C);
+  await chooseSavedConversation(panel(page), C);
   await expect(panel(page)).toContainText("Answer complete.");
   await page.reload();
   await openPanel(page);
-  await panel(page).getByLabel("Saved conversations").selectOption(C);
+  await chooseSavedConversation(panel(page), C);
   await expect(panel(page)).toContainText("This maps the saved value.");
   expect(f.posts).toHaveLength(0);
 });
@@ -854,9 +860,7 @@ test("identity changes clear private chat instead of adopting another owner's co
   await start(page);
   await expect(panel(page)).toContainText("This maps the saved value.");
   f.data.context.actorPrincipalId = "b0000000-0000-4000-8000-000000000001";
-  await panel(page)
-    .getByRole("button", { name: "Refresh chat", exact: true })
-    .click();
+  await refreshChat(panel(page));
   await expect(
     page.getByText("This maps the saved value.", { exact: true }),
   ).toHaveCount(0);
@@ -962,21 +966,21 @@ test("an unacknowledged question keeps its original request across a failed sess
   await page.goto(f.data.browserPath);
   await start(page);
   await expect(
-    panel(page).getByRole("button", { name: "Recover original question" }),
-  ).toBeVisible();
+    panel(page).getByRole("button", { name: "Retry original question" }),
+  ).toBeEnabled();
   await failSessionCheck(page);
   await expect(
-    panel(page).getByRole("button", { name: "Recover original question" }),
-  ).toBeVisible();
+    panel(page).getByRole("button", { name: "Retry original question" }),
+  ).toBeEnabled();
   expect(f.posts).toHaveLength(2);
   // Reopening the conversation shows the committed turn; only the explicit resend confirms the request.
   await panel(page)
-    .getByRole("button", { name: "Recover original question" })
+    .getByRole("button", { name: "Retry original question" })
     .click();
   await expect.poll(() => f.posts.length).toBe(3);
   expect(f.posts[1]!.body).toEqual(f.posts[2]!.body);
   await expect(
-    panel(page).getByRole("button", { name: "Recover original question" }),
+    panel(page).getByRole("button", { name: "Retry original question" }),
   ).toHaveCount(0);
   await expect(panel(page)).toContainText("Answer complete.");
 });
@@ -1013,9 +1017,9 @@ for (const outcome of ["ready", "unavailable", "identityChanged"] as const) {
     await page.goto(f.data.browserPath);
     await start(page);
     const recover = panel(page).getByRole("button", {
-      name: "Recover original question",
+      name: "Retry original question",
     });
-    await expect(recover).toBeVisible();
+    await expect(recover).toBeEnabled();
     let releaseContext!: () => void;
     const contextGate = new Promise<void>((resolve) => {
       releaseContext = resolve;
@@ -1070,9 +1074,9 @@ for (const outcome of ["ready", "unavailable", "identityChanged"] as const) {
         ),
     );
     expect(f.posts).toHaveLength(2);
-    await expect(
-      panel(page).getByLabel("Question", { exact: true }),
-    ).toHaveValue("How does this map?");
+    await expect(panel(page).locator(".chat-user-pending")).toContainText(
+      "How does this map?",
+    );
     await expect(
       panel(page).getByLabel("Question", { exact: true }),
     ).toBeDisabled();
@@ -1185,15 +1189,15 @@ test("tool activity and per-round usage snapshots do not sum observations", asyn
   await page.goto(f.data.browserPath);
   await start(page);
   await panel(page)
-    .getByText("Token usage (latest snapshot per round)")
+    .getByRole("button", { name: "Answer details", exact: true })
     .click();
   await expect(panel(page)).toContainText(
     "Input 10 · Output 8 · Total unknown",
   );
   await panel(page)
-    .getByText("Read-only tool activity", { exact: true })
+    .getByRole("button", { name: "Checked 1 source", exact: true })
     .click();
-  await expect(panel(page)).toContainText("get_mapping_summary — completed");
+  await expect(panel(page)).toContainText("get_mapping_summary · completed");
 });
 
 for (const mode of [

@@ -9,6 +9,7 @@ export default defineConfig({
     "revision-chat.spec.ts",
     "workspace-chat.spec.ts",
     "workspace-chat-resources.spec.ts",
+    "chat-presentation.spec.ts",
     "browser-auth-controls.spec.ts",
     "sign-in-entry.spec.ts",
     "return-path.spec.ts",

@@ -2,6 +2,13 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { expectSignedInAccount } from "./hosted-account.fixture";
 import {
+  chooseSavedConversation,
+  historyTrigger,
+  openFocus,
+  openHistory,
+  openMore,
+} from "./chat-ui.fixture";
+import {
   workspaceFixture,
   legacyId,
   otherMapping,
@@ -10,6 +17,12 @@ import {
 
 const panel = (page: Page) =>
   page.getByRole("complementary", { name: /^(Workspace|Mapping) chat$/ });
+const expectComplete = (page: Page) =>
+  expect(
+    panel(page)
+      .getByRole("region", { name: "Selected answer" })
+      .getByRole("status"),
+  ).toHaveText("Answer complete.");
 
 test("the hosted session summary check dismisses its menu before workbench chat actions", async ({
   page,
@@ -48,7 +61,7 @@ test("the hosted session summary check dismisses its menu before workbench chat 
   await expect(panel(page)).toBeVisible();
   await create(page);
   await ask(page);
-  await expect(panel(page)).toContainText("Answer complete.");
+  await expectComplete(page);
 });
 
 test("new conversation route echoes do not replace an explicitly selected model profile", async ({
@@ -66,7 +79,7 @@ test("new conversation route echoes do not replace an explicitly selected model 
     await create(page);
     await expect(selector).toHaveValue("fixture-payloads");
     await ask(page, "Use the explicitly selected profile.");
-    await expect(panel(page)).toContainText("Answer complete.");
+    await expectComplete(page);
     expect(
       f.posts.filter((post) => post.path.endsWith("/turns")).at(-1)!.body
         .profileId,
@@ -96,12 +109,10 @@ async function create(page: Page, acknowledged = true) {
     const response = await created;
     expect(response.status()).toBe(201);
     const conversation = await response.json();
-    await expect(
-      panel(page).getByRole("combobox", {
-        name: "Saved conversations",
-        exact: true,
-      }),
-    ).toHaveValue(conversation.conversationId);
+    await expect(historyTrigger(panel(page))).toHaveAttribute(
+      "data-conversation-id",
+      conversation.conversationId,
+    );
     await expect(
       panel(page).getByLabel("Question", { exact: true }),
     ).toBeVisible();
@@ -125,12 +136,11 @@ test("standalone chat lists both kinds, searches mappings, pins focus and links 
   await expect(
     page.getByRole("heading", { name: "Conversations", exact: true }),
   ).toBeVisible();
-  await expect(panel(page).getByLabel("Saved conversations")).toContainText(
+  await expect(await openHistory(panel(page))).toContainText(
     "Earlier revision conversation",
   );
-  await page
-    .getByText("Focus for the next conversation", { exact: true })
-    .click();
+  await page.keyboard.press("Escape");
+  await openFocus(panel(page));
   await page.getByLabel("Find mapping").fill("Partner");
   await page
     .getByRole("button", { name: "Search mappings", exact: true })
@@ -141,6 +151,7 @@ test("standalone chat lists both kinds, searches mappings, pins focus and links 
   await page
     .getByLabel("Revision focus", { exact: true })
     .selectOption(f.data.revision.scope.revisionId);
+  await page.getByRole("button", { name: "Done", exact: true }).click();
   await create(page);
   expect(f.posts[0]!.body.focus).toEqual({
     projectId: otherProject,
@@ -148,7 +159,7 @@ test("standalone chat lists both kinds, searches mappings, pins focus and links 
     revisionId: f.data.revision.scope.revisionId,
   });
   await ask(page);
-  await expect(panel(page)).toContainText("Answer complete.");
+  await expectComplete(page);
   await expect(
     panel(page).getByRole("link", { name: "Open mapping", exact: true }),
   ).toHaveAttribute(
@@ -192,12 +203,13 @@ test("the workbench creates an exact-focused workspace thread and Open in chat c
     revisionId: f.data.revision.scope.revisionId,
   });
   await ask(page);
-  await expect(panel(page)).toContainText("Answer complete.");
+  await expectComplete(page);
   const original = page.url(),
     id = f.posts[0]!.body.conversationId;
   const next = page.context().waitForEvent("page");
+  await openMore(panel(page));
   await panel(page)
-    .getByRole("link", { name: "Open in chat", exact: true })
+    .getByRole("link", { name: "Open full page", exact: true })
     .click();
   const standalone = await next;
   await expect(standalone).toHaveURL(
@@ -216,12 +228,12 @@ test("existing revision-pinned conversations continue through the original route
 }) => {
   const f = await workspaceFixture(page);
   await page.goto("/chat");
-  await panel(page).getByLabel("Saved conversations").selectOption(legacyId);
-  await expect(panel(page)).toContainText(
-    "Legacy conversation: pinned to its original revision",
+  await chooseSavedConversation(panel(page), legacyId);
+  await expect(panel(page).locator(".chat-context")).toContainText(
+    "Pinned version",
   );
   await ask(page, "Continue the original pinned question.");
-  await expect(panel(page)).toContainText("Answer complete.");
+  await expectComplete(page);
   expect(f.posts[0]!.path).toBe(
     `${f.data.apiPath}/chat/conversations/${legacyId}/turns`,
   );
@@ -247,7 +259,7 @@ test("removing selectable model profiles does not hide a saved answer or dispatc
   await page.goto("/chat");
   await create(page);
   await ask(page);
-  await expect(panel(page)).toContainText("Answer complete.");
+  await expectComplete(page);
   f.state.profilesAvailable = false;
   await page.reload();
   await expect(panel(page)).toContainText(
@@ -281,9 +293,7 @@ test("focus search continues beyond its per-action scan budget without restartin
     },
   );
   await page.goto("/chat");
-  await page
-    .getByText("Focus for the next conversation", { exact: true })
-    .click();
+  await openFocus(panel(page));
   await page.getByLabel("Find mapping").fill("Later");
   await page
     .getByRole("button", { name: "Search mappings", exact: true })
@@ -330,9 +340,7 @@ test("a failed focus-search continuation retries pages whose matches were never 
     },
   );
   await page.goto("/chat");
-  await page
-    .getByText("Focus for the next conversation", { exact: true })
-    .click();
+  await openFocus(panel(page));
   await page.getByLabel("Find mapping").fill("Later match");
   await page
     .getByRole("button", { name: "Search mappings", exact: true })
@@ -367,7 +375,7 @@ for (const [policy, grant] of [
     await page.goto("/chat");
     await create(page);
     await ask(page);
-    await expect(panel(page)).toContainText("Answer complete.");
+    await expectComplete(page);
     if (policy && grant)
       await expect(panel(page)).toContainText("Data shared with fixture-model");
     else await expect(panel(page).getByText(/Data shared with/)).toHaveCount(0);
@@ -392,8 +400,12 @@ test("each send observes fresh authority and rotated tokens; grant loss cannot r
   f.state.grant = false;
   f.data.context.requestToken = "fresh-catalog-request-token";
   await ask(page, "Read again after my grant changed.");
-  await expect(panel(page)).toContainText("Answer complete.");
-  await expect(panel(page).getByText(/Data shared with/)).toHaveCount(0);
+  await expectComplete(page);
+  await expect(
+    panel(page)
+      .getByRole("region", { name: "Selected answer" })
+      .getByText(/Data shared with/),
+  ).toHaveCount(0);
   expect(f.offered.at(-1)).not.toContain("get_preview_output");
   expect(f.posts.at(-1)!.token).toBe("fresh-catalog-request-token");
   const count = f.posts.length;
@@ -422,9 +434,9 @@ test("unknown create and send outcomes recover only the original IDs; reconnect 
   f.state.loseSend = true;
   await ask(page, "Recover this exact original question.");
   await panel(page)
-    .getByRole("button", { name: "Recover original question", exact: true })
+    .getByRole("button", { name: "Retry original question", exact: true })
     .click();
-  await expect(panel(page)).toContainText("Answer complete.");
+  await expectComplete(page);
   expect(f.posts[2]!.body).toEqual(f.posts[3]!.body);
   f.state.partial = true;
   await ask(page, "A question whose stream disconnects.");
@@ -434,7 +446,7 @@ test("unknown create and send outcomes recover only the original IDs; reconnect 
   await panel(page)
     .getByRole("button", { name: "Reconnect answer", exact: true })
     .click();
-  await expect(panel(page)).toContainText("Answer complete.");
+  await expectComplete(page);
   expect(f.posts).toHaveLength(sent);
   f.state.partial = true;
   await ask(page, "Cancel this answer.");
@@ -504,13 +516,13 @@ test("capture sanitized chat page and workbench at a fixed viewport", async ({
   if (process.env.WEFT_CHAT_CAPTURE_BASE !== "true") {
     await create(page);
     await ask(page);
-    await expect(panel(page)).toContainText("Answer complete.");
+    await expectComplete(page);
   }
   await page.screenshot({ path: `${dir}/chat.png`, fullPage: true });
   await page.goto(f.data.browserPath);
   await create(page);
   await ask(page);
-  await expect(panel(page)).toContainText("Answer complete.");
+  await expectComplete(page);
   const resize = page.getByRole("separator", {
     name: "Resize chat",
   });

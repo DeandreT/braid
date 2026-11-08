@@ -8,6 +8,7 @@ export default defineConfig({
     "revision-chat.spec.ts",
     "workspace-chat.spec.ts",
     "workspace-chat-resources.spec.ts",
+    "chat-presentation.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

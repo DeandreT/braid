@@ -48,6 +48,9 @@ import { ResizeHandleComponent } from "./resize-handle.component";
             [minimum]="300"
             [maximum]="maximum()"
             (resized)="setWidth($event)"
+            (dblclick)="setWidth(360)"
+            (keydown)="resetWidth($event)"
+            description="Drag to resize. Double-click or press Enter to reset. Arrow keys adjust width."
           />
         </div>
         <aside
@@ -55,13 +58,9 @@ import { ResizeHandleComponent } from "./resize-handle.component";
           aria-labelledby="workspace-chat-heading"
           [hidden]="!chat.opened()"
         >
-          <header>
-            <h2 id="workspace-chat-heading" tabindex="-1">Ask Weft</h2>
-            <span>Read-only</span
-            ><button type="button" (click)="chat.hide()" aria-label="Hide chat">
-              Hide chat
-            </button>
-          </header>
+          <h2 id="workspace-chat-heading" class="chat-sr-only" tabindex="-1">
+            Ask Weft
+          </h2>
           <weft-revision-chat
             [context]="context"
             [requestedConversation]="chat.requested()"
@@ -75,19 +74,18 @@ import { ResizeHandleComponent } from "./resize-handle.component";
             (citation)="chat.citation.next($event)"
             (workspaceCitation)="chat.workspaceCitation.next($event)"
             (selectedConversation)="chat.selected.next($event)"
-          />
-          <div class="chat-width" [hidden]="narrow()">
-            <label
-              >Chat width
-              <input
-                type="range"
-                min="300"
-                [max]="maximum()"
-                [value]="width()"
-                (input)="setWidth(+$any($event.target).value)" /></label
-            ><output>{{ width() }}px</output
-            ><button type="button" (click)="setWidth(360)">Reset width</button>
-          </div>
+          >
+            <button
+              chatHeadEnd
+              type="button"
+              (click)="chat.hide()"
+              aria-label="Hide chat"
+              title="Hide chat"
+              class="chat-hide"
+            >
+              ×
+            </button>
+          </weft-revision-chat>
         </aside>
       }
     }
@@ -107,7 +105,7 @@ import { ResizeHandleComponent } from "./resize-handle.component";
       width: 8px;
       position: relative;
       flex-shrink: 0;
-      background: #eff3ec;
+      background: var(--wb-unavailable-tint);
       border-inline: 1px solid #d7e2d1;
     }
     aside {
@@ -118,60 +116,48 @@ import { ResizeHandleComponent } from "./resize-handle.component";
       min-width: 0;
       background: #fafdf6;
     }
-    header {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 8px 12px;
-      border-bottom: 1px solid #d7e2d1;
-    }
-    h2 {
-      font-size: 0.9375rem;
-      margin: 0;
-    }
-    header span {
-      font-size: 0.75rem;
-      color: #526b5e;
-    }
-    header button {
-      margin-left: auto;
-    }
-    button {
-      min-height: 32px;
+    .chat-hide {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
       font: inherit;
       color: inherit;
-      background: white;
-      border: 1px solid #7b8c78;
+      background: transparent;
+      border: 0;
       border-radius: 4px;
-      padding: 4px 8px;
+      padding: 4px;
+      font-size: 1.125rem;
+      cursor: pointer;
+    }
+    .chat-hide:focus-visible {
+      outline: 2px solid var(--wb-focus);
+      outline-offset: 1px;
+    }
+    .chat-hide:hover {
+      background: var(--wb-selection-tint);
+    }
+    @media (pointer: coarse), (max-width: 679px) {
+      .chat-hide {
+        min-width: 44px;
+        min-height: 44px;
+      }
+    }
+    .chat-sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      margin: -1px;
     }
     weft-revision-chat {
       flex: 1;
       min-height: 0;
       overflow: auto;
+      /* Keep focus rings clear of the edge after fractional-pixel scrolling. */
+      scroll-padding-block: 4px;
       container-type: size;
       container-name: workspace-conversation;
-    }
-    .chat-width {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 4px 12px;
-      border-top: 1px solid #d7e2d1;
-      font-size: 0.75rem;
-    }
-    label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 1;
-    }
-    input {
-      min-width: 40px;
-      width: 70px;
-      flex: 1;
     }
     :host.chat-focused.chat-open {
       width: 100%;
@@ -311,6 +297,11 @@ export class WorkspaceChatPanelComponent {
   private readonly destroy = inject(DestroyRef);
   private key(): string {
     return this.storageKey ?? "weft.chat-width.v1";
+  }
+  resetWidth(event: KeyboardEvent): void {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    this.setWidth(360);
   }
   setWidth(value: number): void {
     this.preferred.set(
