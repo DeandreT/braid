@@ -106,6 +106,8 @@ its placeholders.
    deploy/azure/initialize-secrets.sh <keyVaultName> <databaseHost> <private output directory>
    ```
 
+   With `WEFT_AZURE_SUBSCRIPTION=<id>` set, every Azure CLI call it makes names that subscription
+   instead of the CLI's default.
    The script keeps existing passwords, certificates and placeholders, so it can be rerun.
    It writes each certificate pin to `<certificate>.sha256` in the output directory. Upload the
    Entra client certificate as described above.
@@ -395,7 +397,7 @@ deploy/azure/qualify.sh --subscription <id> --resource-group <new group> --locat
 
 | Option | Value |
 | --- | --- |
-| `--subscription` | The approved subscription. It must equal `az account show`, and every management command names it. |
+| `--subscription` | The approved subscription. The signed-in account must see it (`az account show --subscription <id>`), and every Azure CLI call names it, including Key Vault, registry, Log Analytics, Graph and REST calls and `initialize-secrets.sh` (through `WEFT_AZURE_SUBSCRIPTION`). The CLI's default subscription is neither required nor changed: the harness never runs `az account set`. |
 | `--resource-group` | A new group. The harness creates it, tags it `weft-qualification-run=<run ID>` with the commit, and refuses an existing group. |
 | `--location` | The region. |
 | `--parameters` | A private `.bicepparam` file that uses this repository's `deploy/azure/main.bicep`, with the operator principal, IP ranges, name and SKUs. The harness supplies the location, Entra IDs, a new organization ID, tags, images, identities, pins and feature switches, and generates the PostgreSQL administrator password into the deployments' environment. |
@@ -412,8 +414,8 @@ Before any change, the harness refuses with exit code 2 when an input is missing
 an option carries a credential (any option naming a secret, password, token, key or assertion), since
 credentials are read only from files owned by the operator and readable by no one else; when the
 parameter file uses another template; when the checkout has uncommitted or untracked changes; when
-the Azure CLI's current subscription is not `--subscription`; when its account is not in the
-`--entra-tenant-id` tenant or is not a signed-in user; when the group exists; or without
+the Azure CLI's signed-in account cannot see `--subscription`; when that subscription is not in the
+`--entra-tenant-id` tenant or the account is not a signed-in user; when the group exists; or without
 `--confirm-provisioning`. It then creates the empty tagged group, because what-if needs one, shows
 `az deployment group what-if` for the platform and continues only after the operator types `yes` (or
 with `--yes`). Otherwise it deletes the empty group again.
@@ -502,7 +504,8 @@ group, and records the result in the receipt. The Key Vault stays soft-deleted, 
 until its retention period ends. Changes to the app registrations are not reverted.
 
 `deploy/azure/tests/qualify-test.sh` tests the harness offline, against recording fakes of the Azure
-CLI, curl and Docker, and `AzureQualificationHarnessTests` runs it with the .NET tests.
+CLI, curl and Docker, and `AzureQualificationHarnessTests` runs it with the .NET tests. The fake Azure
+CLI fails every scenario in which a call omits the approved subscription or runs `az account set`.
 `deploy/azure/tests/expected/successful-run.calls` is the exact command sequence of a passing run. To
 regenerate it after an intended change, set `WEFT_QUALIFY_UPDATE_EXPECTED=1`, then review the diff.
 

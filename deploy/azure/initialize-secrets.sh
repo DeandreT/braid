@@ -12,8 +12,13 @@
 # Values travel only through private temporary files; the script prints secret names, never
 # values. Writes the Entra client's public certificate to OUTPUT_DIRECTORY for the app registration.
 # Usage: initialize-secrets.sh VAULT_NAME DATABASE_HOST OUTPUT_DIRECTORY
+# With WEFT_AZURE_SUBSCRIPTION set, every Azure CLI call names that subscription instead of the CLI's default.
 set -euo pipefail
 umask 077
+
+az() {
+  command az "$@" ${WEFT_AZURE_SUBSCRIPTION:+--subscription "$WEFT_AZURE_SUBSCRIPTION"}
+}
 
 (($# == 3)) || { echo 'Usage: initialize-secrets.sh VAULT_NAME DATABASE_HOST OUTPUT_DIRECTORY' >&2; exit 2; }
 vault=$1
