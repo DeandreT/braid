@@ -182,9 +182,10 @@ public static partial class CatalogEndpoints
         string? draftId, bool unsafeRequest, Func<CatalogRequestAdmission, MappingScope, MappingDraftService, MappingDraftSnapshot?, Task<IResult>> action)
     {
         context.Response.Headers.CacheControl = "no-store";
-        if (!MappingEditingEnabled(context)) return Task.FromResult(NotFound());
+        // Admission runs first, so a disabled feature never bypasses authentication on these routes.
         return WithAdmission(context, context.RequestServices.GetRequiredService<CatalogRequestBoundary>(), async admission =>
         {
+            if (!MappingEditingEnabled(context)) return NotFound();
             var mapping = Mapping(organizationId, projectId, mappingId);
             if (mapping.OrganizationId != admission.AllowedOrganizationId) return NotFound();
             RequireQuery(context);
