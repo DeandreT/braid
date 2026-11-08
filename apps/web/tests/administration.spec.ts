@@ -44,6 +44,7 @@ const context = {
     createProjects: false,
     createMappings: false,
     editMetadata: false,
+    edit: false,
     uploadRevisions: false,
     readReports: false,
     chat: false,
