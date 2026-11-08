@@ -127,8 +127,12 @@ It serves admitted compiled Angular assets from the real catalog/chat host,
 with restricted PostgreSQL stores and an owned provider-wire fixture. The browser
 does not intercept API traffic. It checks standalone persistence and citations,
 exact workbench focus, continuing the same conversation on `/chat`, and a fresh
-cross-project membership withdrawal before the next tool call. The test host
-uses retained synthetic report sources and does not start a native worker.
+cross-project membership withdrawal before the next tool call. The browser
+reaches the host through an owned HTTP/1 reverse proxy that forwards bodyless
+cancellations as empty chunked requests; the test cancels an active turn and
+repeats cancellation of cancelled and completed turns, which must return the
+unchanged terminal state. The test host uses retained synthetic report sources
+and does not start a native worker.
 
 Build the frontend, publish `Weft.Server`, and build `Weft.Tests` at the same
 source revision. Prepare the existing owned-browser admission record with
