@@ -1,5 +1,6 @@
 <section
   class="catalog-summary builds-panel"
+  [class.builds-intro]="!capabilities()"
   aria-labelledby="builds-title"
   [attr.aria-busy]="busy()"
 >
@@ -17,7 +18,7 @@
       </p>
     }
     <button
-      class="catalog-button"
+      class="catalog-button catalog-button-primary"
       type="button"
       (click)="load()"
       [disabled]="busy()"

@@ -1,21 +1,19 @@
 <section
   class="catalog-summary regression-panel"
+  [class.regression-intro]="!capabilities()"
   aria-labelledby="regression-title"
 >
   <h2 id="regression-title">Regression tests</h2>
-  <p>
-    Save test cases and compare their results, including exact formatting. These
-    are not production payloads.
-  </p>
-  <weft-help-link [section]="'regression-tests'"
-    >About regression tests</weft-help-link
-  >
   @if (!capabilities()) {
+    <p>
+      Save test cases and compare their results, including exact formatting.
+      These are not production payloads. Cases load only when you ask.
+    </p>
     @if (kept(); as message) {
       <p role="status">{{ message }}</p>
     }
     <button
-      class="catalog-button"
+      class="catalog-button catalog-button-primary"
       type="button"
       (click)="load()"
       [disabled]="busy()"
@@ -23,6 +21,9 @@
       Load regression cases
     </button>
   }
+  <weft-help-link [section]="'regression-tests'"
+    >About regression tests</weft-help-link
+  >
   @if (error(); as message) {
     <p class="regression-error" role="alert">{{ message }}</p>
   }
@@ -37,10 +38,35 @@
     </p>
   }
   @if (capabilities(); as capability) {
-    <p class="regression-policy">
-      Default comparison: exact bytes · Fixed runtime:
-      <code>{{ capability.runtime.backendId }}</code>
-    </p>
+    <div class="regression-toolbar">
+      <weft-regression-status
+        [scope]="mapping().scope"
+        [context]="context()"
+        [revisionId]="revision().scope.revisionId"
+        [canRun]="mapping().access.actions.preview"
+        [runInline]="true"
+      />
+      <span class="regression-spacer"></span>
+      @if (workbench() && cases()) {
+        <label class="wb-case-filter"
+          >Filter cases
+          <input
+            type="search"
+            [value]="caseFilter()"
+            (input)="caseFilter.set($any($event.target).value)"
+        /></label>
+      }
+      @if (capability.publishCases) {
+        <button
+          class="catalog-button catalog-button-primary"
+          type="button"
+          (click)="newCase()"
+          [disabled]="busy() || !!pendingCase()"
+        >
+          New test case
+        </button>
+      }
+    </div>
     <div class="regression-actions">
       <button
         class="catalog-button"
@@ -58,16 +84,6 @@
       >
         Refresh cases
       </button>
-      @if (capability.publishCases) {
-        <button
-          class="catalog-button"
-          type="button"
-          (click)="newCase()"
-          [disabled]="busy() || !!pendingCase()"
-        >
-          New test case
-        </button>
-      }
       @if (capability.readSamples) {
         <button
           class="catalog-button"
@@ -78,16 +94,13 @@
           Load run history
         </button>
       }
+      <p class="regression-policy">
+        Default comparison: exact bytes · Fixed runtime:
+        <code>{{ capability.runtime.backendId }}</code>
+      </p>
     </div>
     @if (cases(); as page) {
       @if (workbench()) {
-        <label class="wb-case-filter"
-          >Filter cases
-          <input
-            type="search"
-            [value]="caseFilter()"
-            (input)="caseFilter.set($any($event.target).value)"
-        /></label>
         <table class="wb-case-table" aria-label="Saved regression cases">
           <thead>
             <tr>

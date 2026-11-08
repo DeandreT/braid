@@ -1,5 +1,11 @@
 import { DOCUMENT } from "@angular/common";
-import { Component, computed, inject, signal } from "@angular/core";
+import {
+  Component,
+  HostListener,
+  computed,
+  inject,
+  signal,
+} from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import {
   NavigationEnd,
@@ -14,6 +20,7 @@ import { BrowserAuthControlsComponent } from "./auth/browser-auth-controls.compo
 import { CatalogContextStore } from "./catalog/catalog-context";
 import { ConnectionNoticeComponent } from "./workbench/connection-notice.component";
 import { HeaderSearchComponent } from "./catalog/search/header-search.component";
+import { NotificationPopoverComponent } from "./catalog/automation/notification-popover.component";
 import { WorkspaceChatPanelComponent } from "./workbench/workspace-chat-panel.component";
 import { WorkspaceConversation } from "./workbench/workspace-conversation";
 
@@ -26,6 +33,7 @@ import { WorkspaceConversation } from "./workbench/workspace-conversation";
     BrowserAuthControlsComponent,
     ConnectionNoticeComponent,
     HeaderSearchComponent,
+    NotificationPopoverComponent,
     WorkspaceChatPanelComponent,
   ],
   templateUrl: "./app.component.html",
@@ -90,6 +98,42 @@ export class AppComponent {
         takeUntilDestroyed(),
       )
       .subscribe();
+  }
+
+  // Popup-style disclosures (column picker, overflow menus) close when the user clicks elsewhere.
+  @HostListener("document:pointerdown", ["$event"])
+  closePopups(event: PointerEvent): void {
+    for (const popup of this.document.querySelectorAll<HTMLDetailsElement>(
+      "details.wb-columns[open], details.catalog-menu[open]",
+    ))
+      if (!popup.contains(event.target as Node)) this.closePopup(popup);
+  }
+
+  // Overflow menus close on Escape like the column picker, returning focus to their summary.
+  @HostListener("document:keydown.escape", ["$event"])
+  escapePopup(event: Event): void {
+    const popup =
+      event.target instanceof Element
+        ? event.target.closest<HTMLDetailsElement>("details.catalog-menu[open]")
+        : null;
+    if (!popup) return;
+    event.preventDefault();
+    this.closePopup(popup, true);
+  }
+
+  /** Focus inside a closing popup would be hidden, so it moves to the popup's summary. */
+  private closePopup(popup: HTMLDetailsElement, refocus = false): void {
+    const hadFocus = popup.contains(this.document.activeElement);
+    popup.open = false;
+    const summary = popup.querySelector<HTMLElement>(":scope > summary");
+    if (refocus) summary?.focus();
+    else if (hadFocus)
+      // After the click settles: keep focus on a control the user clicked, but never on body.
+      setTimeout(() => {
+        const active = this.document.activeElement;
+        if (!active || active === this.document.body || popup.contains(active))
+          summary?.focus();
+      });
   }
 
   skipToContent(event: MouseEvent): void {

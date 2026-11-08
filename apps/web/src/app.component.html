@@ -40,19 +40,34 @@
       </div>
       @if (session.visible()) {
         <weft-header-search />
+        <weft-notification-popover />
       }
       @if (session.visible() && contexts.context()?.features?.chat) {
         <button
           id="workspace-chat-toggle"
+          class="header-icon-button"
           type="button"
           [attr.aria-expanded]="chat.opened()"
           aria-controls="workspace-chat"
+          [title]="chat.opened() ? 'Chat' : 'Show chat'"
           (click)="chat.opened() ? chat.hide() : chat.open()"
         >
-          {{ chat.opened() ? "Chat" : "Show chat"
-          }}{{
-            chat.unsent() ? " · Draft" : chat.streaming() ? " · Reading" : ""
-          }}
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 5h16v11H9l-5 4z" />
+          </svg>
+          <span class="header-sr-only"
+            >{{ chat.opened() ? "Chat" : "Show chat"
+            }}{{
+              chat.unsent() ? " · Draft" : chat.streaming() ? " · Reading" : ""
+            }}</span
+          >
+          @if (chat.unsent() || chat.streaming()) {
+            <span
+              class="header-dot"
+              [class.header-dot-running]="!chat.unsent()"
+              aria-hidden="true"
+            ></span>
+          }
         </button>
       }
       <weft-browser-auth-controls
@@ -96,7 +111,8 @@
           ariaCurrentWhenActive="page"
           aria-label="Catalog"
           title="Catalog"
-          ><span class="rail-icon" aria-hidden="true">▦</span
+          ><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" /></svg
           ><span class="rail-label">Catalog</span></a
         >
         @if (session.visible() && contexts.context()?.features?.chat) {
@@ -106,7 +122,8 @@
             ariaCurrentWhenActive="page"
             aria-label="Conversations"
             title="Conversations"
-            ><span class="rail-icon" aria-hidden="true">☰</span
+            ><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5h16v11H9l-5 4z" /></svg
             ><span class="rail-label">Conversations</span></a
           >
         }
@@ -116,7 +133,10 @@
           ariaCurrentWhenActive="page"
           aria-label="Notifications"
           title="Notifications"
-          ><span class="rail-icon" aria-hidden="true">♧</span
+          ><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"
+            /></svg
           ><span class="rail-label">Notifications</span></a
         >
         <a
@@ -125,7 +145,11 @@
           ariaCurrentWhenActive="page"
           aria-label="Help"
           title="Help"
-          ><span class="rail-icon" aria-hidden="true">?</span
+          ><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path
+              d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6M12 17h.01"
+            /></svg
           ><span class="rail-label">Guide</span></a
         >
         @if (session.visible()) {
@@ -135,7 +159,11 @@
             ariaCurrentWhenActive="page"
             aria-label="Administration"
             title="Administration"
-            ><span class="rail-icon" aria-hidden="true">⚙</span
+            ><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"
+              /></svg
             ><span class="rail-label">Administration</span></a
           >
         }

@@ -3,15 +3,20 @@
     <div>
       <p class="eyebrow">Workspace settings</p>
       <h1 id="administration-heading">Administration</h1>
+      <p class="admin-subtitle">
+        Organization admission doesn't grant access to any project. Project
+        roles, payload access and machine invocation are separate permissions.
+      </p>
     </div>
-    <button type="button" (click)="refresh()" [disabled]="busy()">
+    <button
+      class="catalog-button"
+      type="button"
+      (click)="refresh()"
+      [disabled]="busy()"
+    >
       Refresh access
     </button>
   </header>
-  <p>
-    Organization admission doesn't grant access to any project. Project roles,
-    payload access and machine invocation are separate permissions.
-  </p>
   @if (message()) {
     <p role="status">{{ message() }}</p>
   }
@@ -198,16 +203,46 @@
           }
         </ul>
       } @else {
-        <p>
-          Organization administration is available only to an admitted
-          organization administrator when enabled by the operator.
-        </p>
+        <div class="wb-state admin-state" data-state="unavailable">
+          <h2>Organization administration is off</h2>
+          <p>
+            Organization administration is available only to an admitted
+            organization administrator when enabled by the operator.
+          </p>
+        </div>
       }
       <h2>Project administration</h2>
-      <p>
-        Enter the project ID from the catalog. Only that project's
-        administrators can manage its access.
-      </p>
+      <p>Only a project's administrators can manage its access.</p>
+      <div class="admin-projects">
+        @if (adminProjects(); as list) {
+          <ul aria-label="Projects you administer">
+            @for (item of list; track item.scope.projectId) {
+              <li>
+                <span>{{ item.name }}</span>
+                <button
+                  type="button"
+                  (click)="manageProject(item.scope.projectId)"
+                >
+                  Manage access for {{ item.name }}
+                </button>
+              </li>
+            } @empty {
+              <li class="admin-muted">
+                No projects you administer on the first catalog page.
+              </li>
+            }
+          </ul>
+        } @else {
+          <button type="button" (click)="loadAdminProjects()">
+            Show projects you administer
+          </button>
+          @if (adminProjectsError()) {
+            <p class="admin-muted" role="status">
+              Projects are unavailable. Enter a project ID instead.
+            </p>
+          }
+        }
+      </div>
       <div class="controls">
         <label
           >Project ID<input [(ngModel)]="projectId" autocomplete="off" /></label

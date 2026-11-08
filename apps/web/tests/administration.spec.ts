@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
+import { synthetic } from "./catalog.fixture";
 
 test("capture authorized administration in the shared shell", async ({
   page,
@@ -293,6 +294,65 @@ test("account warning includes an in-flight administration mutation but not a co
   } finally {
     release();
   }
+});
+
+test("a projects read that settles after an owner change never shows the old owner's projects", async ({
+  page,
+}) => {
+  const fixture = await install(page, true);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let reads = 0;
+  const oldProject = {
+    ...structuredClone(synthetic.project),
+    name: "Previous owner project",
+    scope: { organizationId: org, projectId: project },
+  };
+  oldProject.access.role = "administrator";
+  await page.route(
+    `**/api/v1/organizations/${org}/projects*`,
+    async (route) => {
+      reads += 1;
+      await held;
+      await route.fulfill({
+        json: { projects: [oldProject], nextCursor: null },
+      });
+    },
+  );
+  await page.goto("/administration");
+  await expect(
+    page.getByRole("heading", { name: "Organization members", exact: true }),
+  ).toBeVisible();
+  const show = page.getByRole("button", {
+    name: "Show projects you administer",
+    exact: true,
+  });
+  await show.click();
+  await expect.poll(() => reads).toBe(1);
+  // A second click while the read is in flight is ignored.
+  await show.click();
+  // Another owner is admitted before the first read settles.
+  fixture.identityContext = `v1.${"C".repeat(42)}A`;
+  fixture.actor = otherProject;
+  await page.locator("#account-trigger").click();
+  await page
+    .getByRole("button", { name: "Check session", exact: true })
+    .click();
+  await closeAccount(page);
+  await page
+    .getByRole("button", { name: "Refresh access", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Organization members", exact: true }),
+  ).toBeVisible();
+  release();
+  await page.waitForTimeout(500);
+  await expect(page.getByText("Previous owner project")).toHaveCount(0);
+  await expect(
+    page.getByRole("list", { name: "Projects you administer" }),
+  ).toHaveCount(0);
+  await expect(show).toBeVisible();
+  expect(reads).toBe(1);
 });
 
 test("unavailable session checks hide administration drafts and restore only the same owner", async ({

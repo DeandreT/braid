@@ -14,28 +14,36 @@
       <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
         Projects
       </h1>
-      <p class="catalog-intro">Choose a project to browse its mappings.</p>
+      <p class="catalog-subtitle">Choose a project to browse its mappings.</p>
     </div>
-    @if (context(); as context) {
-      @if (
-        context.features.createProjects &&
-        context.organizationActions.createProjects
-      ) {
-        <a
-          class="catalog-button"
-          [routerLink]="routes.createProject(context.allowedOrganizationId)"
-          >Create project</a
-        >
+    <div class="catalog-actions">
+      <button
+        class="catalog-icon-button"
+        type="button"
+        aria-label="Refresh catalog"
+        title="Refresh catalog"
+        (click)="retry()"
+        [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+        </svg>
+      </button>
+      @if (context(); as context) {
+        @if (
+          context.features.createProjects &&
+          context.organizationActions.createProjects
+        ) {
+          <a
+            class="catalog-button catalog-button-primary"
+            [routerLink]="routes.createProject(context.allowedOrganizationId)"
+            ><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" /></svg
+            >Create project</a
+          >
+        }
       }
-    }
-    <button
-      class="catalog-button"
-      type="button"
-      (click)="retry()"
-      [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
-    >
-      Refresh catalog
-    </button>
+    </div>
   </header>
   @if (data(); as page) {
     <p class="catalog-live" role="status">
@@ -47,26 +55,37 @@
         <p>No projects are available on this page for your workspace.</p>
       </section>
     } @else {
-      <ul class="catalog-list" aria-label="Projects">
+      <ul class="catalog-list catalog-rows" aria-label="Projects">
         @for (project of page.projects; track project.scope.projectId) {
           <li class="catalog-list-item">
-            <div class="catalog-item-heading">
-              <h2>
+            <div class="catalog-row-main">
+              <h2 class="catalog-row-title">
                 <a [routerLink]="routes.project(project.scope)">{{
                   project.name
                 }}</a>
               </h2>
-              <span class="catalog-badge">{{
-                roleLabel(project.access.role)
-              }}</span>
+              @if (project.description) {
+                <p class="catalog-row-description">
+                  {{ project.description }}
+                </p>
+              } @else {
+                <p class="catalog-row-description catalog-description-empty">
+                  No description.
+                </p>
+              }
             </div>
-            @if (project.description) {
-              <p class="catalog-description">{{ project.description }}</p>
-            } @else {
-              <p class="catalog-description-empty">No description.</p>
-            }
-            <div class="catalog-item-meta">
-              <span>Version {{ project.version }}</span>
+            <div class="catalog-row-meta">
+              <time
+                [attr.datetime]="project.updatedAtUtc"
+                [title]="project.updatedAtUtc"
+                >Updated
+                {{ project.updatedAtUtc | date: "MMM d, y" : "UTC" }}</time
+              >
+              @if (project.access.role !== "administrator") {
+                <span class="catalog-badge">{{
+                  roleLabel(project.access.role)
+                }}</span>
+              }
             </div>
           </li>
         }
@@ -74,7 +93,11 @@
     }
     @if (context(); as context) {
       <nav class="catalog-pagination" aria-label="Project pages">
-        <p>Up to 10 projects per page.</p>
+        <p>
+          {{ page.projects.length }}
+          {{ page.projects.length === 1 ? "project" : "projects" }}
+          {{ page.nextCursor || cursor() ? "on this page" : "" }}
+        </p>
         @if (cursor()) {
           <a
             class="catalog-page-link"

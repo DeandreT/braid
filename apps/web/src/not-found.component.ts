@@ -4,11 +4,19 @@ import { RouterLink } from "@angular/router";
 @Component({
   selector: "weft-not-found",
   imports: [RouterLink],
-  template: `<section class="welcome" aria-labelledby="not-found-title">
-    <p class="eyebrow">Weft</p>
+  template: `<section class="weft-state" aria-labelledby="not-found-title">
+    <p class="weft-state-code">Not found</p>
     <h1 id="not-found-title">Page unavailable</h1>
-    <p>This link does not match a page in your workspace.</p>
-    <p><a routerLink="/catalog">Open the catalog</a>.</p>
+    <p>
+      This link does not match a page in your workspace. It may have moved, or
+      you may not have access to it.
+    </p>
+    <div class="weft-state-actions">
+      <a class="catalog-button catalog-button-primary" routerLink="/catalog"
+        >Open the catalog</a
+      >
+      <a class="catalog-button" routerLink="/help">Open the guide</a>
+    </div>
   </section>`,
 })
 export class NotFoundComponent {}

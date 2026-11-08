@@ -1,12 +1,14 @@
-<p role="status">{{ message() }}</p>
-<button
-  class="catalog-button"
-  type="button"
-  (click)="load()"
-  [disabled]="busy()"
->
-  Refresh saved settings and inbox
-</button>
+<div class="automation-toolbar">
+  <p role="status">{{ message() }}</p>
+  <button
+    class="catalog-button"
+    type="button"
+    (click)="load()"
+    [disabled]="busy()"
+  >
+    Refresh saved settings and inbox
+  </button>
+</div>
 <div class="automation-grid">
   @if (policy(); as p) {
     <section class="automation-box" aria-labelledby="policy-title">
@@ -17,7 +19,7 @@
         revision does not count.
       </p>
       <fieldset [disabled]="!admin() || busy()">
-        <label
+        <label class="automation-check"
           ><input
             type="checkbox"
             [(ngModel)]="p.requirePassingRegression"
@@ -25,40 +27,44 @@
           />
           Require passing exact-revision regression</label
         >
-        <label
-          >Error rate threshold (%)
-          <input
-            type="number"
-            min="1"
-            max="100"
-            [(ngModel)]="p.errorRatePercent"
-            (ngModelChange)="policyDirty.set(true)"
-        /></label>
-        <label
-          >Minimum requests
-          <input
-            type="number"
-            min="1"
-            max="10000"
-            [(ngModel)]="p.minimumRequests"
-            (ngModelChange)="policyDirty.set(true)"
-        /></label>
-        <label
-          >Window (seconds)
-          <input
-            type="number"
-            min="60"
-            max="3600"
-            [(ngModel)]="p.windowSeconds"
-            (ngModelChange)="policyDirty.set(true)"
-        /></label>
-        <button
-          class="catalog-button"
-          type="button"
-          (click)="save('/automation', p)"
-        >
-          Save policy
-        </button>
+        <div class="automation-numbers">
+          <label
+            >Error rate threshold (%)
+            <input
+              type="number"
+              min="1"
+              max="100"
+              [(ngModel)]="p.errorRatePercent"
+              (ngModelChange)="policyDirty.set(true)"
+          /></label>
+          <label
+            >Minimum requests
+            <input
+              type="number"
+              min="1"
+              max="10000"
+              [(ngModel)]="p.minimumRequests"
+              (ngModelChange)="policyDirty.set(true)"
+          /></label>
+          <label
+            >Window (seconds)
+            <input
+              type="number"
+              min="60"
+              max="3600"
+              [(ngModel)]="p.windowSeconds"
+              (ngModelChange)="policyDirty.set(true)"
+          /></label>
+        </div>
+        <div class="automation-save">
+          <button
+            class="catalog-button catalog-button-primary"
+            type="button"
+            (click)="save('/automation', p)"
+          >
+            Save policy
+          </button>
+        </div>
       </fieldset>
       @if (!admin()) {
         <p>A project administrator can change this policy.</p>
@@ -75,57 +81,74 @@
         </p>
         <fieldset [disabled]="busy()">
           <legend>Events</legend>
-          @for (eventName of o.events; track eventName) {
-            <label
-              ><input
-                type="checkbox"
-                [checked]="s.events.includes(eventName)"
-                (change)="event(eventName, $any($event.target).checked)"
-              />
-              {{ label(eventName) }}</label
+          <ul class="automation-options automation-events">
+            @for (eventName of o.events; track eventName) {
+              <li>
+                <label class="automation-check"
+                  ><input
+                    type="checkbox"
+                    [checked]="s.events.includes(eventName)"
+                    (change)="event(eventName, $any($event.target).checked)"
+                  />
+                  {{ label(eventName) }}</label
+                >
+              </li>
+            }
+          </ul>
+          <h3 class="automation-legend">Channels</h3>
+          <p class="automation-note">
+            Selected events are delivered to every selected channel.
+          </p>
+          <ul class="automation-options">
+            <li>
+              <label class="automation-check"
+                ><input
+                  type="checkbox"
+                  [(ngModel)]="s.inApp"
+                  (ngModelChange)="subscriptionDirty.set(true)"
+                />
+                In-app notification centre</label
+              >
+            </li>
+            <li>
+              <label class="automation-check"
+                ><input
+                  type="checkbox"
+                  [(ngModel)]="s.email"
+                  (ngModelChange)="subscriptionDirty.set(true)"
+                  [disabled]="!o.emailAvailable"
+                />
+                Email</label
+              >
+              @if (!o.emailAvailable) {
+                <p class="automation-note">
+                  Email needs an operator-configured provider and verified
+                  recipient.
+                </p>
+              }
+            </li>
+            @for (hook of o.webhooks; track hook) {
+              <li>
+                <label class="automation-check"
+                  ><input
+                    type="checkbox"
+                    [checked]="s.webhooks.includes(hook)"
+                    (change)="webhook(hook, $any($event.target).checked)"
+                  />
+                  Webhook {{ hook }}</label
+                >
+              </li>
+            }
+          </ul>
+          <div class="automation-save">
+            <button
+              class="catalog-button catalog-button-primary"
+              type="button"
+              (click)="save('/notification-subscription', s)"
             >
-          }
-          <legend>Channels</legend>
-          <label
-            ><input
-              type="checkbox"
-              [(ngModel)]="s.inApp"
-              (ngModelChange)="subscriptionDirty.set(true)"
-            />
-            In-app notification centre</label
-          >
-          <label
-            ><input
-              type="checkbox"
-              [(ngModel)]="s.email"
-              (ngModelChange)="subscriptionDirty.set(true)"
-              [disabled]="!o.emailAvailable"
-            />
-            Email</label
-          >
-          @if (!o.emailAvailable) {
-            <p>
-              Email needs an operator-configured provider and verified
-              recipient.
-            </p>
-          }
-          @for (hook of o.webhooks; track hook) {
-            <label
-              ><input
-                type="checkbox"
-                [checked]="s.webhooks.includes(hook)"
-                (change)="webhook(hook, $any($event.target).checked)"
-              />
-              Webhook {{ hook }}</label
-            >
-          }
-          <button
-            class="catalog-button"
-            type="button"
-            (click)="save('/notification-subscription', s)"
-          >
-            Save subscriptions
-          </button>
+              Save subscriptions
+            </button>
+          </div>
         </fieldset>
       </section>
     }

@@ -57,22 +57,41 @@
       </dl>
     }
     @if (data(); as page) {
-      @for (row of page.items; track $index) {
-        <article class="catalog-summary">
-          <dl>
-            @for (entry of entries(row); track entry[0]) {
-              <dt>{{ entry[0] }}</dt>
-              <dd class="catalog-code">{{ text(entry[1]) }}</dd>
-            }
-          </dl>
-          @if (section === "targets") {
-            <button class="catalog-button" (click)="select(row)">
-              Operate this target
-            </button>
-          }
-        </article>
-      } @empty {
-        <p>No records in this selection.</p>
+      @if (page.items.length) {
+        <div class="weft-table-wrap ops-table">
+          <table class="weft-table" aria-label="Operations records">
+            <thead>
+              <tr>
+                @for (key of columns(page.items); track key) {
+                  <th scope="col">{{ columnLabel(key) }}</th>
+                }
+                @if (page.items[0].kind === "target") {
+                  <th scope="col"><span class="ops-sr-only">Actions</span></th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of page.items; track $index) {
+                <tr>
+                  @for (key of columns(page.items); track key) {
+                    <td class="catalog-code">{{ cell(row, key) }}</td>
+                  }
+                  @if (row.kind === "target") {
+                    <td class="weft-table-actions">
+                      <button class="catalog-button" (click)="select(row)">
+                        Operate this target
+                      </button>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <p class="wb-state" data-state="unavailable">
+          No records in this selection.
+        </p>
       }
       @if (page.nextOffset !== null) {
         <button
@@ -84,68 +103,87 @@
         </button>
       }
     }
-    <h2>Change target</h2>
-    <p>
-      Publishers can activate and roll back. Disabling and enabling require an
-      Administrator. Activation and rollback use your own existing qualified
-      build and preserve its approval checks.
-    </p>
-    @if (visiblePending(); as original) {
+    <section class="ops-change" aria-labelledby="ops-change-title">
+      <h2 id="ops-change-title">Change target</h2>
+      @if (target) {
+        <p class="ops-selected">
+          Selected target <code class="catalog-code">{{ target }}</code>
+          @if (version) {
+            · reviewed version {{ version }}
+          }
+        </p>
+      }
       <p>
-        An operation may already have committed. Recovery reuses exactly the
-        same body, target version and ID: <code>{{ original.id }}</code
-        >.
+        Publishers can activate and roll back. Disabling and enabling require an
+        Administrator. Activation and rollback use your own existing qualified
+        build and preserve its approval checks.
       </p>
-      <button class="catalog-button" [disabled]="busy()" (click)="send()">
-        Recover original operation
-      </button>
-    } @else {
-      <form (ngSubmit)="send()">
-        <label
-          >Action
-          <select name="action" [(ngModel)]="action">
-            <option>activate</option>
-            <option>rollback</option>
-            <option>disable</option>
-            <option>enable</option>
-          </select></label
-        >
-        <label
-          >Environment ID
-          <input name="environment" [(ngModel)]="environment" required
-        /></label>
-        <label
-          >Environment version
-          <input
-            name="environmentVersion"
-            [(ngModel)]="environmentVersion"
-            required
-        /></label>
-        <label
-          >Reviewed target version
-          <input name="version" [(ngModel)]="version" required
-        /></label>
-        @if (action === "activate" || action === "rollback") {
-          <label
-            >Qualification ID
-            <input name="qualification" [(ngModel)]="qualification" required
-          /></label>
-        }
-        @if (action === "rollback") {
-          <label
-            >Previous release ID
-            <input name="source" [(ngModel)]="source" required
-          /></label>
-        }
-        <label
-          ><input type="checkbox" name="confirm" [(ngModel)]="confirming" /> I
-          reviewed this target, action and version.</label
-        >
-        <button class="catalog-button" [disabled]="busy() || !confirming">
-          Apply action
+      @if (visiblePending(); as original) {
+        <p>
+          An operation may already have committed. Recovery reuses exactly the
+          same body, target version and ID: <code>{{ original.id }}</code
+          >.
+        </p>
+        <button class="catalog-button" [disabled]="busy()" (click)="send()">
+          Recover original operation
         </button>
-      </form>
-    }
+      } @else {
+        <form (ngSubmit)="send()">
+          <label
+            >Action
+            <select name="action" [(ngModel)]="action">
+              <option value="activate">Activate</option>
+              <option value="rollback">Roll back</option>
+              <option value="disable">Disable</option>
+              <option value="enable">Enable</option>
+            </select></label
+          >
+          <label
+            >Environment ID
+            <input name="environment" [(ngModel)]="environment" required
+          /></label>
+          <label
+            >Environment version
+            <input
+              name="environmentVersion"
+              [(ngModel)]="environmentVersion"
+              required
+          /></label>
+          <label
+            >Reviewed target version
+            <input name="version" [(ngModel)]="version" required
+          /></label>
+          @if (action === "activate" || action === "rollback") {
+            <label
+              >Qualification ID
+              <input name="qualification" [(ngModel)]="qualification" required
+            /></label>
+          }
+          @if (action === "rollback") {
+            <label
+              >Previous release ID
+              <input name="source" [(ngModel)]="source" required
+            /></label>
+          }
+          <label
+            ><input type="checkbox" name="confirm" [(ngModel)]="confirming" /> I
+            reviewed this target, action and version.</label
+          >
+          <button
+            class="catalog-button catalog-button-primary"
+            [disabled]="busy() || !confirming"
+            aria-describedby="ops-apply-hint"
+          >
+            Apply action
+          </button>
+          @if (!confirming) {
+            <p id="ops-apply-hint" class="ops-hint">
+              Confirm the review above to apply this action.
+            </p>
+          }
+        </form>
+      }
+    </section>
     <p>
       Machine caller changes remain administrator-only. See
       <a routerLink="/administration">caller administration</a>.

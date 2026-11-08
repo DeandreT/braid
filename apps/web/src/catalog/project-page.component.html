@@ -24,29 +24,79 @@
         {{ data()?.project?.name ?? "Project" }}
       </h1>
     </div>
-    <button
-      class="catalog-button"
-      type="button"
-      (click)="retry()"
-      [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
-    >
-      Refresh catalog
-    </button>
+    <div class="catalog-actions">
+      <button
+        class="catalog-icon-button"
+        type="button"
+        aria-label="Refresh catalog"
+        title="Refresh catalog"
+        (click)="retry()"
+        [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+        </svg>
+      </button>
+      @if (data(); as view) {
+        <details class="catalog-menu">
+          <summary
+            class="catalog-icon-button"
+            aria-label="More project actions"
+            title="More project actions"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="5" cy="12" r="1" />
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="19" cy="12" r="1" />
+            </svg>
+          </summary>
+          <div class="catalog-menu-list">
+            <a
+              [routerLink]="[
+                '/catalog/organizations',
+                view.project.scope.organizationId,
+                'projects',
+                view.project.scope.projectId,
+                'automation',
+              ]"
+              >Automation and notifications</a
+            >
+          </div>
+        </details>
+        @if (context(); as context) {
+          @if (
+            context.features.createMappings === true &&
+            view.project.access.actions.createMappings === true
+          ) {
+            <a
+              class="catalog-button catalog-button-primary"
+              [routerLink]="routes.uploadMapping(view.project.scope)"
+              [queryParams]="{}"
+              ><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 19V5M6 11l6-6 6 6" /></svg
+              >Upload mapping</a
+            >
+          }
+        }
+      }
+    </div>
   </header>
   @if (data(); as view) {
     <p class="catalog-live" role="status">
       {{ view.page.mappings.length }} mappings shown.
     </p>
     <section class="catalog-summary" aria-label="Project metadata">
-      <dl class="catalog-facts">
-        <dt>Your role</dt>
-        <dd>{{ view.project.access.role }}</dd>
-      </dl>
       @if (view.project.description) {
         <p class="catalog-description">{{ view.project.description }}</p>
       } @else {
         <p class="catalog-description-empty">No description.</p>
       }
+      <dl class="catalog-inline-facts">
+        <div>
+          <dt>Your role</dt>
+          <dd>{{ view.project.access.role }}</dd>
+        </div>
+      </dl>
       <details class="catalog-details">
         <summary>Project details</summary>
         <dl class="catalog-facts">
@@ -87,32 +137,9 @@
         </dl>
       </details>
     </section>
-    <div class="catalog-section-heading">
-      <a
-        class="catalog-button"
-        [routerLink]="[
-          '/catalog/organizations',
-          view.project.scope.organizationId,
-          'projects',
-          view.project.scope.projectId,
-          'automation',
-        ]"
-        >Automation and notifications</a
-      >
+    <div class="catalog-section-bar">
       <h2 class="catalog-section-title">Mappings</h2>
-      @if (context(); as context) {
-        @if (
-          context.features.createMappings === true &&
-          view.project.access.actions.createMappings === true
-        ) {
-          <a
-            class="catalog-button"
-            [routerLink]="routes.uploadMapping(view.project.scope)"
-            [queryParams]="{}"
-            >Upload mapping</a
-          >
-        }
-      }
+      <p>{{ view.page.mappings.length }} on this page</p>
     </div>
     @if (view.page.mappings.length === 0) {
       <section class="catalog-state catalog-empty">
@@ -120,42 +147,55 @@
         <p>No mappings are available on this page in this project.</p>
       </section>
     } @else {
-      <ul class="catalog-list" aria-label="Mappings">
+      <ul class="catalog-list catalog-rows" aria-label="Mappings">
         @for (mapping of view.page.mappings; track mapping.scope.mappingId) {
           <li class="catalog-list-item">
-            <div class="catalog-item-heading">
-              <h3>
+            <div class="catalog-row-main">
+              <h3 class="catalog-row-title">
                 <a [routerLink]="routes.mapping(mapping.scope)">{{
                   mapping.name
                 }}</a>
               </h3>
-              <span class="catalog-badge">{{
-                roleLabel(mapping.access.role)
-              }}</span>
+              @if (mapping.description) {
+                <p class="catalog-row-description">
+                  {{ mapping.description }}
+                </p>
+              } @else {
+                <p class="catalog-row-description catalog-description-empty">
+                  No description.
+                </p>
+              }
             </div>
-            @if (mapping.description) {
-              <p class="catalog-description">{{ mapping.description }}</p>
-            } @else {
-              <p class="catalog-description-empty">No description.</p>
-            }
-            <div class="catalog-item-meta">
-              <span>Backend {{ mapping.backendId }}</span>
-              <span>Head revision {{ mapping.head.sequence }}</span>
-              <span>Version {{ mapping.version }}</span>
+            <div class="catalog-row-meta">
+              <span
+                >Revision {{ mapping.head.sequence }} ·
+                {{ mapping.backendId }}</span
+              >
+              @if (mapping.access.role !== view.project.access.role) {
+                <span class="catalog-badge">{{
+                  roleLabel(mapping.access.role)
+                }}</span>
+              }
+              @if (context(); as admission) {
+                <weft-regression-status
+                  [scope]="mapping.scope"
+                  [context]="admission"
+                  [revisionId]="mapping.head.scope.revisionId"
+                />
+              }
             </div>
-            @if (context(); as admission) {
-              <weft-regression-status
-                [scope]="mapping.scope"
-                [context]="admission"
-                [revisionId]="mapping.head.scope.revisionId"
-              />
-            }
           </li>
         }
       </ul>
     }
     <nav class="catalog-pagination" aria-label="Mapping pages">
-      <p>Up to 10 mappings per page.</p>
+      <p>
+        {{
+          view.page.nextCursor || cursor()
+            ? "More mappings on other pages."
+            : ""
+        }}
+      </p>
       @if (cursor()) {
         <a
           class="catalog-page-link"

@@ -9,8 +9,48 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px 8px;
+  flex: 1;
   min-width: 0;
+}
+.wb-context-path weft-regression-status {
+  min-width: 0;
+}
+.wb-context-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.wb-role {
+  color: #526b5e;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.wb-context-path .wb-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #526b5e;
+}
+.wb-context-path .wb-icon-button:hover {
+  background: var(--wb-selection-tint);
+  color: #213b34;
+}
+.wb-icon-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .wb-context-path a {
   text-decoration: none;
@@ -26,11 +66,25 @@
   color: #607456;
 }
 .wb-context-path .wb-badge {
-  border: 1px solid #d4e1c9;
-  background: #eef5e5;
-  padding: 2px 5px;
-  border-radius: 3px;
-  font-size: 0.6875rem;
+  border: 1px solid color-mix(in srgb, var(--wb-source-text) 40%, transparent);
+  background: var(--wb-source-tint);
+  color: var(--wb-source-text);
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wb-context-path .wb-badge-newer {
+  border-color: color-mix(in srgb, var(--wb-attention-text) 40%, transparent);
+  background: var(--wb-attention-tint);
+  color: var(--wb-attention-text);
+}
+@media (max-width: 679px) {
+  .wb-context-path .wb-icon-button {
+    width: 44px;
+    height: 44px;
+  }
 }
 button,
 select,
@@ -132,6 +186,43 @@ button:disabled {
 }
 .wb-history {
   overflow: auto;
+}
+.wb-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 12px;
+}
+.wb-tile {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #d7e2d1;
+  border-radius: 6px;
+  background: #fff;
+}
+.wb-tile h3 {
+  margin: 0 0 4px;
+  color: #526b5e;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.wb-tile p {
+  margin: 4px 0 0;
+  color: #526b5e;
+  font-size: 0.75rem;
+}
+.wb-tile .wb-tile-value {
+  margin: 0 0 6px;
+  color: #213b34;
+  font:
+    600 1rem "Manrope",
+    system-ui,
+    sans-serif;
+}
+.wb-tile-note {
+  padding: 0 12px;
 }
 dl {
   display: grid;

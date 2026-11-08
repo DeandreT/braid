@@ -30,24 +30,37 @@
           [canRun]="view.mapping.access.actions.preview"
         />
       }
-      <span class="wb-badge"
-        >Viewing this version{{
+      <span
+        class="wb-badge"
+        [class.wb-badge-newer]="
+          view.mapping.head.scope.revisionId !== view.revision.scope.revisionId
+        "
+        title="Checked when this view loaded"
+        >{{
           view.mapping.head.scope.revisionId === view.revision.scope.revisionId
-            ? " · latest when checked"
-            : " · a newer version is available"
+            ? "Latest version"
+            : "Newer version available"
         }}</span
       >
-      <span class="wb-role"
-        >{{ context()?.mode === "development" ? "Development" : "Workspace" }} ·
-        {{ roleLabel(view.mapping.access.role) }}</span
-      >
-      <button
-        type="button"
-        (click)="retry()"
-        title="Refresh current catalog access and metadata"
-      >
-        Refresh catalog
-      </button>
+      <span class="wb-context-end">
+        <span class="wb-role"
+          >{{
+            context()?.mode === "development" ? "Development" : "Workspace"
+          }}
+          · {{ roleLabel(view.mapping.access.role) }}</span
+        >
+        <button
+          class="wb-icon-button"
+          type="button"
+          aria-label="Refresh catalog"
+          (click)="retry()"
+          title="Refresh current catalog access and metadata"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+          </svg>
+        </button>
+      </span>
     </div>
     <div workbench-content class="wb-workflows">
       @if (investigation(); as trail) {
@@ -261,51 +274,38 @@
             Review preparation
           </button>
         </div>
-        <table class="wb-data-table">
-          <thead>
-            <tr>
-              <th>Fact</th>
-              <th>Available evidence</th>
-              <th>Next action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Version currently in use</td>
-              <td>This workspace can't show which version is in use.</td>
-              <td>Preparing a version does not put it in use.</td>
-            </tr>
-            <tr>
-              <td>Prepared candidate</td>
-              <td>
-                @if (buildView()?.selectedRun(); as run) {
-                  <weft-status-chip [status]="buildStatus(run.state)" />
-                } @else {
-                  No preparation selected
-                }
-              </td>
-              <td>
-                Review the selected preparation and its saved file details.
-              </td>
-            </tr>
-            <tr>
-              <td>Verification</td>
-              <td>Not available in this workspace</td>
-              <td>
-                Verification must cover the exact prepared version, file,
-                runtime and regression test result.
-              </td>
-            </tr>
-            <tr>
-              <td>Change the version in use</td>
-              <td>Not available in this workspace</td>
-              <td>
-                Requires permission and current verification. Nothing is put in
-                use from this screen.
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <ul class="wb-tiles" aria-label="Release status">
+          <li class="wb-tile">
+            <h3>Version currently in use</h3>
+            <p class="wb-tile-value">Unknown</p>
+            <p>This workspace can't show which version is in use.</p>
+            <p>Preparing a version does not put it in use.</p>
+          </li>
+          <li class="wb-tile">
+            <h3>Prepared candidate</h3>
+            <div class="wb-tile-value">
+              @if (buildView()?.selectedRun(); as run) {
+                <weft-status-chip [status]="buildStatus(run.state)" />
+              } @else {
+                No preparation selected
+              }
+            </div>
+            <p>Review the selected preparation and its saved file details.</p>
+          </li>
+          <li class="wb-tile">
+            <h3>Verification</h3>
+            <p class="wb-tile-value">Not available in this workspace</p>
+            <p>
+              Verification must cover the exact prepared version, file, runtime
+              and regression test result.
+            </p>
+          </li>
+        </ul>
+        <p class="wb-empty wb-tile-note">
+          <strong>Change the version in use:</strong> not available in this
+          workspace. It requires permission and current verification. Nothing is
+          put in use from this screen.
+        </p>
         <details class="wb-empty">
           <summary>Why this is unavailable</summary>
           The connected browser API does not provide release status,

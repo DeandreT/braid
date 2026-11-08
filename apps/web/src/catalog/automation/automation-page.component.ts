@@ -27,15 +27,33 @@ import { AutomationPanelComponent } from "./automation-panel.component";
   selector: "weft-automation-page",
   imports: [RouterLink, CatalogStatusComponent, AutomationPanelComponent],
   template: ` <section class="catalog-page">
-    <h1>Automation and notifications</h1>
     @if (data(); as project) {
-      <p>
-        <a [routerLink]="routes.project(project.scope)">{{ project.name }}</a>
-      </p>
+      <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li>
+            <a [routerLink]="routes.project(project.scope)">{{
+              project.name
+            }}</a>
+          </li>
+          <li><span aria-current="page">Automation</span></li>
+        </ol>
+      </nav>
     }
+    <header class="catalog-heading">
+      <div>
+        <h1>Automation and notifications</h1>
+        <p class="catalog-subtitle">
+          Build policy for this project and the notifications you receive.
+        </p>
+      </div>
+    </header>
     @if (heldProject(); as project) {
       @if (heldContext(); as admission) {
-        <div [hidden]="!data()" [attr.inert]="!data() ? '' : null">
+        <div
+          class="automation-page-body"
+          [hidden]="!data()"
+          [attr.inert]="!data() ? '' : null"
+        >
           <weft-automation-panel
             [scope]="project.scope"
             [context]="admission"

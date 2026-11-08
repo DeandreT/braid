@@ -403,6 +403,20 @@ export class OperationsPageComponent {
   entries(value: object): [string, unknown][] {
     return Object.entries(value);
   }
+  /** Every field any record on this page has, in first-seen order; "kind" is the same for all. */
+  columns(rows: OperationsPage["items"]): string[] {
+    const keys = new Set<string>();
+    for (const row of rows)
+      for (const key of Object.keys(row)) if (key !== "kind") keys.add(key);
+    return [...keys];
+  }
+  cell(row: object, key: string): string {
+    return key in row ? this.text((row as Record<string, unknown>)[key]) : "—";
+  }
+  columnLabel(key: string): string {
+    const words = key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ");
+    return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+  }
   requestLeave() {
     return of(
       !this.unsent() ||

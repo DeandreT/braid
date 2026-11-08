@@ -610,7 +610,9 @@ test("palette, responsive inspector and unavailable release state do not invent 
     .getByRole("button", { name: /^In use/ })
     .click();
   await expect(
-    page.getByRole("table").filter({ hasText: "Version currently in use" }),
+    page
+      .getByRole("list", { name: "Release status", exact: true })
+      .filter({ hasText: "Version currently in use" }),
   ).toContainText("This workspace can't show which version is in use.");
   expect(fixture.writes).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -682,6 +684,10 @@ test("columns, density and both resize handles work together on the dense layout
   await page.getByRole("checkbox", { name: "Rule", exact: true }).check();
   await expect(table.getByRole("columnheader")).toHaveCount(4);
   await page.keyboard.press("Escape");
+  await expect(page.locator(".wb-columns")).not.toHaveAttribute("open", "");
+  await page.locator(".wb-columns > summary").click();
+  await expect(page.locator(".wb-columns")).toHaveAttribute("open", "");
+  await page.locator("#main-content").dispatchEvent("pointerdown");
   await expect(page.locator(".wb-columns")).not.toHaveAttribute("open", "");
   await page
     .getByRole("button", { name: "Show inspector", exact: true })
