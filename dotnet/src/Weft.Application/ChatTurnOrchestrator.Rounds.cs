@@ -102,6 +102,12 @@ public sealed partial class ChatTurnOrchestrator
             await RecheckAsync(s).ConfigureAwait(false);
             var context = ToolContext(s, i + 1);
             var result = await _toolPort.ExecuteAsync(context, call, s.Execution.Token).ConfigureAwait(false);
+            // A saved edit already happened: record it before any recheck can end the turn, so it stays visible and audited.
+            if (result?.MappingWrite is { } write)
+            {
+                if (s.Conversation.Key.Kind != ChatConversationKind.Workspace) throw Stop(ChatOrchestrationOutcome.Denied);
+                await AppendAsync(s, ChatEventData.ForMappingWrite(Guid.NewGuid(), write)).ConfigureAwait(false);
+            }
             // A late result after cancellation/revocation is never accepted into provider history.
             await RecheckAsync(s).ConfigureAwait(false);
             if (result is null || result.Result.ByteCount > grounding.MaxToolResultBytes - s.ResultBytes ||

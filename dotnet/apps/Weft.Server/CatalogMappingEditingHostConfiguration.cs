@@ -36,6 +36,7 @@ internal static class CatalogMappingEditingHostConfiguration
             provider.GetRequiredKeyedService<PostgresMappingDraftDatabase>(MappingDraftDatabaseProfile.Reader),
             provider.GetRequiredKeyedService<PostgresMappingDraftDatabase>(MappingDraftDatabaseProfile.Writer)));
         services.AddSingleton<MappingDraftService>();
+        services.AddSingleton<MappingDirectEditService>();
         services.AddHostedService<MappingDraftExpiry>();
     }
 

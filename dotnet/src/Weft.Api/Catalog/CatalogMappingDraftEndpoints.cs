@@ -50,7 +50,21 @@ public static partial class CatalogEndpoints
             .Produces<CatalogRevisionIngestionResultV1>(StatusCodes.Status202Accepted);
         DraftBody<MappingDraftRebaseV1>(DraftRoute<MappingDraftResultV1>(endpoints.MapPost(draft + "/rebase", RebaseMappingDraft), "RebaseMappingDraft", "Explicitly replay all operations on the current head, or change nothing."), match: true);
         DraftCondition(DraftRoute<MappingDraftResultV1>(endpoints.MapDelete(draft, DiscardMappingDraft), "DiscardMappingDraft", "Discard the author's operation log and checkpoint content."));
+        DraftBody<MappingRevisionRestoreV1>(DraftRoute<CatalogRevisionIngestionResultV1>(endpoints.MapPost(mapping + "/revisions/{revisionId}/restore", RestoreMappingRevision), "RestoreMappingRevision", "Save an earlier version's exact content as the next version through conditional ingestion on the expected latest version."), key: true)
+            .Produces<CatalogRevisionIngestionResultV1>(StatusCodes.Status202Accepted);
     }
+
+    private static Task<IResult> RestoreMappingRevision(string organizationId, string projectId, string mappingId, string revisionId, HttpContext context) =>
+        WithMappingDraft(context, organizationId, projectId, mappingId, null, true, async (admission, mapping, _, _) =>
+        {
+            var key = CatalogRevisionRequestParser.Key(context.Request);
+            var body = await DraftBodyAsync<MappingRevisionRestoreV1>(context);
+            var source = Id(revisionId); var head = Id(body.ExpectedHeadRevisionId);
+            if (source == head) throw new CatalogInvalidRequestException();
+            var result = await context.RequestServices.GetRequiredService<MappingDirectEditService>()
+                .RestoreAsync(admission.Actor!, mapping, source, head, key, context.RequestAborted);
+            return Results.Json(CatalogRevisionIngestionMapper.Result(result), statusCode: CatalogRevisionIngestionMapper.Status(result));
+        });
 
     private static RouteHandlerBuilder DraftRoute<T>(RouteHandlerBuilder route, string name, string summary) =>
         DraftRoute(route, name, summary).Produces<T>(StatusCodes.Status200OK);
@@ -64,7 +78,7 @@ public static partial class CatalogEndpoints
             .Produces<CatalogErrorV1>(StatusCodes.Status500InternalServerError).Produces<CatalogErrorV1>(StatusCodes.Status503ServiceUnavailable)
             .AddOpenApiOperationTransformer(async (operation, context, token) =>
             {
-                await DraftErrorSchemas(operation, context, token, name == "SaveMappingDraft");
+                await DraftErrorSchemas(operation, context, token, name is "SaveMappingDraft" or "RestoreMappingRevision");
             });
 
     private static Task<IResult> CreateMappingDraft(string organizationId, string projectId, string mappingId, HttpContext context) =>

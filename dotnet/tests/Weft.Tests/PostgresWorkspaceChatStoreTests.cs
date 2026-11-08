@@ -184,6 +184,60 @@ public sealed class PostgresWorkspaceChatStoreTests(PostgresFixture fixture)
     }
 
     [PostgresFact]
+    public async Task A_mapping_write_is_recorded_with_the_turn_and_audited_by_identity_only()
+    {
+        await using var f = await PostgresChatTestSupport.CreateAsync(fixture);
+        var now = await NowAsync(f);
+        var conversation = Workspace(f, null, now.AddHours(1));
+        Assert.Equal(ChatStoreOutcome.Applied, await f.Writer.CreateAsync(f.Actor, conversation));
+        var turn = await StartAsync(f, conversation, ChatTurnFocus.None);
+        var round = PostgresChatTestSupport.Round();
+        var reserved = await f.Writer.ReserveRoundAsync(f.Actor, conversation.Key, turn.Intent.TurnId, turn.Version, round);
+        Assert.Equal(ChatStoreOutcome.Applied, reserved.Outcome);
+        var saved = Guid.NewGuid();
+        var write = new ChatMappingWriteFact(ChatMappingWriteOutcome.Saved, null, f.Revision, 1, saved, 2, null, null, 3,
+            Sha256Digest.FromBytes([5]), [new("order/code", "Not mapped", "Constant \"edited\"")], false);
+        var valid = ChatMetadataCodec.MappingWrite(write);
+        var before = await PostgresChatSecurityTests.RowsAsync(f);
+        foreach (var key in new[] { "v", "outcome", "reason", "base", "baseSequence", "revision", "sequence", "head", "operations", "digest", "changes", "truncated" })
+            await RefuseAsync(f, turn.Intent.TurnId, round, ChatEventKind.MappingWrite, With(valid, key, null), before);
+        // A saved version must follow its base; a proposal saves nothing.
+        await RefuseAsync(f, turn.Intent.TurnId, round, ChatEventKind.MappingWrite, With(valid, "sequence", JsonValue.Create(1)), before);
+        await RefuseAsync(f, turn.Intent.TurnId, round, ChatEventKind.MappingWrite, With(valid, "outcome", JsonValue.Create(2)), before);
+        // Recorded only for a project the creator can currently read, in this organization.
+        var hidden = ChatMetadataCodec.MappingWrite(new(ChatMappingWriteOutcome.Saved, null,
+            new(f.Revision.OrganizationId, f.Seed.HiddenProjectA, Guid.NewGuid(), Guid.NewGuid()), 1, saved, 2, null, null, 1, Sha256Digest.FromBytes([5]), [], false));
+        Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, (await Assert.ThrowsAsync<PostgresException>(() =>
+            PublishAsync(f, turn.Intent.TurnId, round, ChatEventKind.MappingWrite, hidden))).SqlState);
+        PostgresChatSecurityTests.Same(before, await PostgresChatSecurityTests.RowsAsync(f));
+
+        var data = ChatEventData.ForMappingWrite(Guid.NewGuid(), write);
+        Assert.Equal(ChatStoreOutcome.Applied, (await f.Writer.AppendAsync(f.Actor, conversation.Key, turn.Intent.TurnId, reserved.Turn!.Version, round.RoundId, round.Fence, data)).Outcome);
+        var events = await f.Reader.ReadEventsAsync(f.Actor, conversation.Key, turn.Intent.TurnId, 0, 10);
+        Assert.Equal(write.RevisionId, events[^1].MappingWrite!.RevisionId);
+        var audit = await f.Case.ScalarAsync<string>("SELECT to_jsonb(a)::text FROM weft.chat_mapping_write_audit a WHERE event_id=$1", data.EventId);
+        using (var row = JsonDocument.Parse(audit))
+        {
+            var root = row.RootElement;
+            Assert.Equal(f.Revision.RevisionId, root.GetProperty("base_revision_id").GetGuid());
+            Assert.Equal(saved, root.GetProperty("revision_id").GetGuid());
+            Assert.Equal(2, root.GetProperty("revision_sequence").GetInt64());
+            Assert.Equal(1, root.GetProperty("outcome").GetInt32());
+            Assert.Equal(turn.Intent.Profile.ModelId, root.GetProperty("model_id").GetString());
+            // Identities only: no change text, edit or conversation text.
+            Assert.DoesNotContain("order/code", audit, StringComparison.Ordinal);
+        }
+        foreach (var change in new[] { "UPDATE weft.chat_mapping_write_audit SET outcome=2", "DELETE FROM weft.chat_mapping_write_audit" })
+            Assert.Equal(PostgresErrorCodes.CheckViolation, (await Assert.ThrowsAsync<PostgresException>(() => f.Case.ExecuteAsync(change))).SqlState);
+        foreach (var route in new[] { f.Case.ChatReaderConnectionString, f.Case.ChatWriterConnectionString })
+        {
+            await using var connection = PostgresChatSecurityTests.Open(route); await connection.OpenAsync();
+            await using var read = new NpgsqlCommand("SELECT count(*) FROM weft.chat_mapping_write_audit", connection);
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, (await Assert.ThrowsAsync<PostgresException>(() => read.ExecuteScalarAsync())).SqlState);
+        }
+    }
+
+    [PostgresFact]
     public async Task Revocation_hides_revision_conversations_with_their_project_and_everything_with_the_organization()
     {
         await using var f = await PostgresChatTestSupport.CreateAsync(fixture);

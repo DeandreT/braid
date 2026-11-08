@@ -54,6 +54,7 @@ public sealed record ChatStoredEvent(long Sequence, Guid EventId, ChatEventKind 
     public ChatCitationFact? Citation => Kind == ChatEventKind.Citation ? ChatMetadataCodec.ReadCitation(MetadataJson!) : null;
     public ChatWorkspaceCitationFact? WorkspaceCitation => Kind == ChatEventKind.WorkspaceCitation ? ChatMetadataCodec.ReadWorkspaceCitation(MetadataJson!) : null;
     public ChatPayloadDisclosureFact? DataShared => Kind == ChatEventKind.DataShared ? ChatMetadataCodec.ReadDisclosure(MetadataJson!) : null;
+    public ChatMappingWriteFact? MappingWrite => Kind == ChatEventKind.MappingWrite ? ChatMetadataCodec.ReadMappingWrite(MetadataJson!) : null;
     public ChatTerminalMetadata? TerminalMetadata => (Kind is ChatEventKind.Completed or ChatEventKind.Failed or ChatEventKind.Cancelled or ChatEventKind.Interrupted or ChatEventKind.RoundCompleted) && MetadataJson is not null
         ? ChatMetadataCodec.ReadTerminal(MetadataJson!) : null;
     public override string ToString() => nameof(ChatStoredEvent);

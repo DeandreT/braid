@@ -11,8 +11,9 @@ public interface IChatProfilePolicy
         ChatTurnIntent turn, AiProfileSpec profile, CancellationToken ct);
 }
 
-/// <summary>Trusted read-only execution boundary. Validate has no execution side effects.
-/// Execute independently checks current scope/schema and never grants payload, edit or run access.</summary>
+/// <summary>Trusted tool execution boundary. Validate has no execution side effects.
+/// Execute independently checks current scope/schema and never grants payload, edit or run access. Its only write
+/// is a mapping edit saved through the user's own edit authority, reported as <see cref="ChatReadOnlyToolResult.MappingWrite"/>.</summary>
 public interface IChatReadOnlyToolPort
 {
     Task<bool> ValidateAsync(ChatReadOnlyToolContext context, AiToolIntent intent, CancellationToken ct);
@@ -61,7 +62,8 @@ public sealed record ChatReadOnlyToolResult
     public const int MaxCitationCandidates = 64;
 
     public ChatReadOnlyToolResult(AiJsonObject result, int retrievedNodes, IEnumerable<ChatCitationTarget>? citations = null,
-        IEnumerable<ChatWorkspaceCitationFact>? workspaceCitations = null, ChatPayloadDisclosureFact? dataShared = null)
+        IEnumerable<ChatWorkspaceCitationFact>? workspaceCitations = null, ChatPayloadDisclosureFact? dataShared = null,
+        ChatMappingWriteFact? mappingWrite = null)
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.ByteCount > 32768 || retrievedNodes is < 0 or > 1024) throw ChatBounds.Invalid();
@@ -70,7 +72,7 @@ public sealed record ChatReadOnlyToolResult
         if (owned.Length + workspace.Length > MaxCitationCandidates || owned.Any(candidate => candidate is null) ||
             workspace.Any(candidate => candidate is null) || dataShared is not null && dataShared.ByteCount > result.ByteCount)
             throw ChatBounds.Invalid();
-        Result = result; RetrievedNodes = retrievedNodes; Citations = owned; WorkspaceCitations = workspace; DataShared = dataShared;
+        Result = result; RetrievedNodes = retrievedNodes; Citations = owned; WorkspaceCitations = workspace; DataShared = dataShared; MappingWrite = mappingWrite;
     }
     public AiJsonObject Result { get; }
     public int RetrievedNodes { get; }
@@ -79,6 +81,8 @@ public sealed record ChatReadOnlyToolResult
     public ImmutableArray<ChatWorkspaceCitationFact> WorkspaceCitations { get; }
     /// <summary>Payload bytes the result carries to the model; recorded and audited before the next provider round.</summary>
     public ChatPayloadDisclosureFact? DataShared { get; }
+    /// <summary>A mapping edit this call saved or proposed; recorded, and audited by the ledger, as soon as the call returns.</summary>
+    public ChatMappingWriteFact? MappingWrite { get; }
     public override string ToString() => nameof(ChatReadOnlyToolResult);
 }
 

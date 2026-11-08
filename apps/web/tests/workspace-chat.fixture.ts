@@ -82,6 +82,8 @@ export async function workspaceFixture(
     reject: false,
     partial: false,
     foreignCitation: false,
+    /** A mapping.write event the next workspace answer carries at sequence 7. */
+    write: null as ChatEvent | null,
   };
   const secondProject = structuredClone(data.project);
   secondProject.scope = { organizationId: org, projectId: otherProject };
@@ -387,7 +389,9 @@ export async function workspaceFixture(
                 bytes: 32,
               },
             ]
-          : []),
+          : workspace && state.write
+            ? [state.write]
+            : []),
         { type: "turn.completed", sequence: 8 },
       ];
       events.set(body.turnId, response);

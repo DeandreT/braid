@@ -120,7 +120,9 @@ internal sealed class WorkspaceToolFixture : ICatalogReader, ICatalogResourceLoc
         ct.ThrowIfCancellationRequested();
     }
 
-    private CatalogMappingSummary MappingSummary() => new(Mapping, MappingName, MappingDescription, "neutral", Actor.PrincipalId, Actor.PrincipalId,
+    internal string BackendId { get; set; } = "neutral";
+
+    private CatalogMappingSummary MappingSummary() => new(Mapping, MappingName, MappingDescription, BackendId, Actor.PrincipalId, Actor.PrincipalId,
         Now.AddDays(-2), Now.AddDays(-1), 3, new(Head, 2, IngestionAdmissionClassification.EligibleValid));
 
     private static CatalogRevisionSummary RevisionSummary(RevisionScope revision) => revision == Head

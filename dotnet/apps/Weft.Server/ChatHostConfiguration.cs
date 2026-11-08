@@ -80,7 +80,7 @@ internal static class ChatHostConfiguration
                 provider.GetService<CatalogPreviewOptions>()?.Enabled == true,
                 provider.GetService<CatalogRegressionCaseOptions>()?.Enabled == true,
                 provider.GetService<CatalogBuildOptions>()?.Enabled == true,
-                guide is not null), guide);
+                guide is not null, provider.GetService<MappingDirectEditService>() is not null), guide);
         });
         services.AddWeftChat(configuration.Options);
 

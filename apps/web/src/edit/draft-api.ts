@@ -209,6 +209,24 @@ export class DraftApi {
       dispatched,
     );
   }
+  /** Save a version's exact content as the next version, only while `expectedHead` is still the latest. */
+  restore(
+    context: CatalogContext,
+    scope: CatalogMappingScope,
+    revisionId: string,
+    expectedHead: string,
+    key: string,
+  ): Promise<components["schemas"]["CatalogRevisionIngestionResultV1"]> {
+    if (!isCatalogId(revisionId)) throw new DraftError(0);
+    return this.request(
+      context,
+      scope,
+      "POST",
+      `/revisions/${revisionId}/restore`,
+      { expectedHeadRevisionId: expectedHead },
+      key,
+    );
+  }
   compare(
     context: CatalogContext,
     scope: CatalogMappingScope,
@@ -353,7 +371,13 @@ export class DraftApi {
       dispatched?.();
       const value = await firstValueFrom(
         this.http
-          .request<T>(method, path(scope) + suffix, { body, headers })
+          .request<T>(
+            method,
+            (suffix.startsWith("/revisions/")
+              ? path(scope).slice(0, -"/drafts".length)
+              : path(scope)) + suffix,
+            { body, headers },
+          )
           .pipe(timeout(60_000)),
       );
       this.current(context, generation);
@@ -364,7 +388,7 @@ export class DraftApi {
           this.sessions.rejectProtectedRequest(generation, context);
         this.current(context, generation);
         if (
-          suffix.endsWith("/save") &&
+          (suffix.endsWith("/save") || suffix.endsWith("/restore")) &&
           (error.status === 409 || error.status === 422)
         ) {
           const ingestion =

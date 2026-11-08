@@ -36,7 +36,9 @@ internal static partial class ChatSchemaContract
         new("chat_erase_expired", EraseTypes, EraseNames, "text", Roles: Writer),
         new("chat_lifecycle_erase", EraseTypes, EraseNames, "text", Definer: true, Scoped: true, Roles: Lifecycle),
         new("guard_chat_payload_audit", "", []),
-        new("audit_chat_payload", "", [], Definer: true)
+        new("audit_chat_payload", "", [], Definer: true),
+        new("guard_chat_mapping_write_audit", "", []),
+        new("audit_chat_mapping_write", "", [], Definer: true)
     ];
     internal static string[] FunctionGrants(ChatDatabaseProfile profile) => Functions
         .Where(f => f.Roles?.Contains(ChatRoleGuard.RoleName(profile), StringComparer.Ordinal) == true).Select(f => f.Signature).ToArray();

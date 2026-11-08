@@ -1603,6 +1603,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/revisions/{revisionId}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Save an earlier version's exact content as the next version through conditional ingestion on the expected latest version. */
+    post: operations["RestoreMappingRevision"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{resourceId}/automation": {
     parameters: {
       query?: never;
@@ -2813,6 +2830,15 @@ export interface components {
       /** Format: int32 */
       turnSeconds: number;
     };
+    ChatMappingChangeV1: {
+      after: string;
+      before: string;
+      field: string;
+    };
+    /** @enum {unknown} */
+    ChatMappingWriteOutcomeV1: "saved" | "proposed";
+    /** @enum {unknown} */
+    ChatMappingWriteReasonV1: "notPermitted" | "outOfDate" | null;
     ChatOrganizationConversationPageV1: {
       conversations: components["schemas"]["ChatOrganizationConversationV1"][];
       hasMore: boolean;
@@ -2915,6 +2941,7 @@ export interface components {
       | components["schemas"]["ChatTurnEventV1ChatCitationEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatWorkspaceCitationEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatDataSharedEventV1"]
+      | components["schemas"]["ChatTurnEventV1ChatMappingWriteEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnCompletedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnFailedEventV1"]
       | components["schemas"]["ChatTurnEventV1ChatTurnCancelledEventV1"];
@@ -2939,6 +2966,25 @@ export interface components {
       /** @enum {string} */
       type: "data.shared";
       version: null | string;
+    };
+    ChatTurnEventV1ChatMappingWriteEventV1: {
+      baseRevision: components["schemas"]["CatalogRevisionScopeV1"];
+      baseSequence: string;
+      changes: components["schemas"]["ChatMappingChangeV1"][];
+      changesTruncated: boolean;
+      headRevisionId: null | string;
+      headSequence: null | string;
+      /** Format: int32 */
+      operationCount: number;
+      outcome: components["schemas"]["ChatMappingWriteOutcomeV1"];
+      reason: components["schemas"]["ChatMappingWriteReasonV1"];
+      revisionId: null | string;
+      revisionSequence: null | string;
+      roundId: string;
+      /** Format: int32 */
+      sequence: number;
+      /** @enum {string} */
+      type: "mapping.write";
     };
     ChatTurnEventV1ChatTextDeltaEventV1: {
       roundId: string;
@@ -3905,6 +3951,9 @@ export interface components {
     };
     /** @enum {unknown} */
     MappingOperation: "inspect" | "project" | "validate" | "preview" | "build";
+    MappingRevisionRestoreV1: {
+      expectedHeadRevisionId: string;
+    };
     NativeDiagnosticOwnerV1:
       | components["schemas"]["NativeDiagnosticOwnerV1GraphNodeNativeOwnerV1"]
       | components["schemas"]["NativeDiagnosticOwnerV1UserFunctionNativeOwnerV1"]
@@ -17140,6 +17189,182 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  RestoreMappingRevision: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description One canonical nonzero lowercase UUID. Repeating the same intent recovers its original receipt. */
+        "Idempotency-Key": string;
+      };
+      path: {
+        mappingId: string;
+        organizationId: string;
+        projectId: string;
+        revisionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingRevisionRestoreV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"]
+            | components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Precondition Failed */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"]
+            | components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"]
+            | components["schemas"]["CatalogRevisionIngestionResultV1"];
+        };
+      };
+      /** @description Precondition Required */
+      428: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description A bounded request, replay or ingestion outcome; no native bytes are accepted from the caller. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json":
+            | components["schemas"]["CatalogErrorV1"]
+            | components["schemas"]["MappingDraftResultV1"]
+            | components["schemas"]["CatalogRevisionIngestionResultV1"];
         };
       };
     };

@@ -499,6 +499,107 @@
                     }
                   </ul>
                 }
+                @for (write of view.writes; track write.sequence) {
+                  @let mapping = writeMapping(write);
+                  @let key = writeKey(turn, write);
+                  <section
+                    class="chat-write"
+                    [class.chat-write-proposal]="write.outcome !== 'saved'"
+                    [attr.aria-label]="
+                      write.outcome === 'saved'
+                        ? 'Saved mapping edit'
+                        : 'Proposed mapping edit'
+                    "
+                  >
+                    <h3>
+                      @if (write.outcome === "saved") {
+                        Saved version {{ write.baseSequence }} →
+                        {{ write.revisionSequence }}
+                      } @else {
+                        Proposed edit to version {{ write.baseSequence }}
+                      }
+                    </h3>
+                    <p class="chat-muted">
+                      @if (write.outcome === "saved") {
+                        Saved as a new version. The version in use is unchanged,
+                        and nothing was built or run.
+                      } @else if (write.reason === "outOfDate") {
+                        Not saved: version {{ write.headSequence }} is newer
+                        than the version this edit was based on.
+                      } @else {
+                        Not saved: you don't have permission to edit this
+                        mapping. This is a read-only proposal.
+                      }
+                    </p>
+                    @if (write.changes.length) {
+                      <ul class="chat-write-changes">
+                        @for (change of write.changes; track $index) {
+                          <li>
+                            <strong>{{ change.field }}</strong>
+                            <span
+                              ><span class="chat-muted">Before:</span>
+                              {{ change.before }}</span
+                            >
+                            <span
+                              ><span class="chat-muted">After:</span>
+                              {{ change.after }}</span
+                            >
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      <p class="chat-muted">
+                        No field rule changed. Open the comparison for other
+                        changes.
+                      </p>
+                    }
+                    @if (write.changesTruncated) {
+                      <p class="chat-muted">
+                        More changes than shown. Open the comparison for all of
+                        them.
+                      </p>
+                    }
+                    <div class="chat-write-actions">
+                      @if (write.outcome === "saved") {
+                        <button
+                          type="button"
+                          [disabled]="writeStates()[key]?.busy"
+                          (click)="undoWrite(turn, write)"
+                        >
+                          Undo
+                        </button>
+                        <a
+                          [routerLink]="comparisonLink(write)"
+                          [queryParams]="comparisonParams(write)"
+                          >Diff</a
+                        >
+                        <a [routerLink]="savedLink(write)">Open version</a>
+                      } @else if (write.reason === "outOfDate") {
+                        <button
+                          type="button"
+                          [disabled]="!canUpdate()"
+                          (click)="updateWrite(write)"
+                        >
+                          Update for version {{ write.headSequence }}
+                        </button>
+                      }
+                    </div>
+                    @if (write.outcome === "saved") {
+                      <weft-regression-status
+                        [context]="context()"
+                        [scope]="mapping"
+                        [revisionId]="write.revisionId!"
+                        [manage]="true"
+                        [runInline]="true"
+                        [canRun]="true"
+                        runLabel="Run regression tests"
+                      />
+                    }
+                    @if (writeStates()[key]?.message; as message) {
+                      <p role="status">{{ message }}</p>
+                    }
+                  </section>
+                }
                 @if (view.sharedData) {
                   <p class="chat-footnote" role="note">
                     Data shared with {{ turn.profile.modelId }}. May include

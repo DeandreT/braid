@@ -21,7 +21,9 @@ import { CatalogContextStore } from "../catalog/catalog-context";
 import { CatalogApi } from "../catalog/catalog-api";
 import {
   catalogOwner,
+  catalogRoutes,
   type CatalogContext,
+  type CatalogMappingScope,
   type CatalogRevisionScope,
   type CatalogMapping,
   type CatalogMappingPage,
@@ -49,16 +51,24 @@ import {
   type AnyConversation,
   type ChatScope,
   type ChatFocus,
+  type MappingWriteEvent,
   type UiAvailability,
   type WorkspaceCitationEvent,
   type WorkspaceCitation,
 } from "./workspace-chat-types";
+import {
+  comparisonPath,
+  comparisonQuery,
+  currentSide,
+} from "../catalog/comparison/revision-comparison-selection";
+import { RegressionStatusComponent } from "../catalog/automation/regression-status.component";
+import { DraftApi } from "../edit/draft-api";
 import { UnsentWork } from "../workbench/unsent-work";
 import { hasChatUnsentWork } from "./chat-unsent-work";
 
 @Component({
   selector: "weft-revision-chat",
-  imports: [HelpLinkComponent, RouterLink],
+  imports: [HelpLinkComponent, RouterLink, RegressionStatusComponent],
   templateUrl: "./revision-chat.component.html",
   styleUrl: "./revision-chat.component.css",
 })
@@ -444,8 +454,100 @@ export class RevisionChatComponent {
         (e): e is WorkspaceCitationEvent => e.type === "workspace.citation",
       ),
       sharedData: (events ?? []).some((e) => e.type === "data.shared"),
+      writes: (events ?? []).filter(
+        (e): e is MappingWriteEvent => e.type === "mapping.write",
+      ),
       problem: this.answerProblems()[turn.turnId] ?? "",
     };
+  }
+
+  private readonly drafts = inject(DraftApi);
+  /** Per receipt: the Undo request key, retained until its outcome is known so a retry never saves twice. */
+  readonly writeStates = signal<
+    Record<string, { key: string; busy: boolean; message: string }>
+  >({});
+  writeKey(turn: ChatTurn, write: MappingWriteEvent): string {
+    return `${turn.turnId}:${write.sequence}`;
+  }
+  writeMapping(write: MappingWriteEvent): CatalogMappingScope {
+    const { organizationId, projectId, mappingId } = write.baseRevision;
+    return { organizationId, projectId, mappingId };
+  }
+  savedLink(write: MappingWriteEvent): string {
+    return catalogRoutes.revision({
+      ...write.baseRevision,
+      revisionId: write.revisionId!,
+    });
+  }
+  comparisonLink(write: MappingWriteEvent): string {
+    return comparisonPath(this.writeMapping(write));
+  }
+  comparisonParams(write: MappingWriteEvent) {
+    return comparisonQuery(
+      currentSide(write.baseRevision.revisionId),
+      currentSide(write.revisionId!),
+    );
+  }
+  async undoWrite(turn: ChatTurn, write: MappingWriteEvent): Promise<void> {
+    const id = this.writeKey(turn, write);
+    const state = this.writeStates()[id];
+    if (state?.busy || write.outcome !== "saved") return;
+    const key = state?.key ?? crypto.randomUUID();
+    const set = (busy: boolean, message: string, keep = true) =>
+      this.writeStates.update((all) => {
+        const next = { ...all };
+        if (keep) next[id] = { key, busy, message };
+        else next[id] = { key: crypto.randomUUID(), busy, message };
+        return next;
+      });
+    set(true, "Saving the previous content as a new version…");
+    try {
+      const result = await this.drafts.restore(
+        this.context(),
+        this.writeMapping(write),
+        write.baseRevision.revisionId,
+        write.revisionId!,
+        key,
+      );
+      const phase = result.receipt?.phase;
+      if (phase === "committed")
+        set(
+          false,
+          `Undone: version ${result.receipt?.committedSequence ?? "?"} has the content of version ${write.baseSequence}.`,
+        );
+      else if (phase === "headConflict")
+        set(
+          false,
+          "Not undone: a newer version was saved after this one. Nothing changed.",
+          false,
+        );
+      else
+        set(
+          false,
+          "The undo outcome isn't known yet. Undo again to check the same request.",
+        );
+    } catch {
+      set(
+        false,
+        "Undo couldn't be confirmed. Undo again to retry the same request.",
+      );
+    }
+  }
+  /** A new question, sent only by this click, asking for the same edit on the newer version. */
+  readonly canUpdate = computed(
+    () =>
+      !!this.current() &&
+      !this.busy() &&
+      !this.turns().some((t) => t.phase === "active") &&
+      !this.draft().trim(),
+  );
+  async updateWrite(write: MappingWriteEvent): Promise<void> {
+    if (!this.canUpdate() || this.hasPending() || write.headSequence === null)
+      return;
+    this.draft.set(
+      `Update the proposed edit for version ${write.headSequence} and save it.`,
+    );
+    await this.send();
   }
   readonly transcript = computed(() =>
     this.turns().map((turn) => ({ turn, ...this.turnView(turn) })),

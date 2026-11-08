@@ -6,8 +6,11 @@ using Weft.Application;
 
 namespace Weft.Api.Chat.Workspace;
 
-/// <summary>Which optional read families this host serves; a disabled family's tools are never offered.</summary>
-public sealed record WorkspaceToolFeatures(bool Previews, bool Regressions, bool Builds, bool Guide)
+/// <summary>
+/// Which optional families this host serves; a disabled family's tools are never offered. Edits is the one write:
+/// saving a typed mapping edit as the next version, through the user's own edit authority.
+/// </summary>
+public sealed record WorkspaceToolFeatures(bool Previews, bool Regressions, bool Builds, bool Guide, bool Edits = false)
 {
     public override string ToString() => nameof(WorkspaceToolFeatures);
 }
@@ -19,7 +22,10 @@ public sealed record WorkspaceToolFeatures(bool Previews, bool Regressions, bool
 public static class WorkspaceToolRegistry
 {
     internal const int ArgumentBytes = 4_096;
+    /// <summary>A save call carries a typed edit; it stays within one provider tool call's argument ceiling.</summary>
+    internal const int EditArgumentBytes = 16_384;
     internal const int MaximumItems = 20;
+    internal const string SaveEdit = "save_mapping_edit";
     private const string Uuid = """{"type":"string","minLength":36,"maxLength":36}""";
     private const string Limit = """{"type":"integer","minimum":1,"maximum":20}""";
 
@@ -71,6 +77,14 @@ public static class WorkspaceToolRegistry
 
     private const string Ordinal = """{"type":"integer","minimum":0,"maximum":127}""";
 
+    private static readonly AiToolDefinition Edit =
+        Define(SaveEdit, "Save a mapping edit as the next version when the user asks you to change a mapping. baseRevisionId must be the " +
+            "exact version you read, normally the mapping's current head. edit is a ferrule.edit.v1 script: {\"format\":\"ferrule.edit.v1\"," +
+            "\"operations\":[...]}, for example {\"op\":\"bind\",\"binding\":{\"scope\":{\"target\":{\"kind\":\"primary\"},\"children\":[]},\"field\":\"code\"}," +
+            "\"expression\":{\"kind\":\"constant\",\"id\":\"4294967294\",\"value\":{\"type\":\"string\",\"text\":\"X\"}}}; numbers are decimal strings. " +
+            "It never puts a version in use or starts a build or run. Without edit permission, or when a newer version exists, nothing is saved and the user sees a read-only proposal.",
+            Schema(["mappingId", Uuid], ["baseRevisionId", Uuid], ["edit", """{"type":"object"}"""]), "mappingId", "baseRevisionId", "edit");
+
     /// <summary>
     /// The ordered manifest for a host's features. Run kinds of a disabled family are not offered, and the payload
     /// data tools only in the separate payload manifest of a turn whose profile and creator may share sample data.
@@ -113,6 +127,7 @@ public static class WorkspaceToolRegistry
         }
         tools.Add(Capabilities);
         if (features.Guide) tools.AddRange(Guide);
+        if (features.Edits) tools.Add(Edit);
         return [.. tools];
     }
 
@@ -146,11 +161,13 @@ public static class WorkspaceToolRegistry
     /// </summary>
     internal static WorkspaceToolCall Parse(string name, string json, ImmutableArray<AiToolDefinition> manifest)
     {
-        if (!manifest.Any(tool => tool.Name == name) || json is null || json.Length > ArgumentBytes) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
+        // Only the save call nests: its edit object is checked whole by the closed edit schema when the call runs.
+        var limit = name == SaveEdit ? EditArgumentBytes : ArgumentBytes;
+        if (!manifest.Any(tool => tool.Name == name) || json is null || json.Length > limit) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
         try
         {
-            if (Encoding.UTF8.GetByteCount(json) > ArgumentBytes) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
-            using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 2 });
+            if (Encoding.UTF8.GetByteCount(json) > limit) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = name == SaveEdit ? 32 : 2 });
             if (document.RootElement.ValueKind != JsonValueKind.Object) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
             var properties = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             foreach (var property in document.RootElement.EnumerateObject())
@@ -195,6 +212,8 @@ public static class WorkspaceToolRegistry
                 var raw = value.GetRawText();
                 return !raw.Contains('.') && !raw.Contains('e') && !raw.Contains('E') && value.TryGetInt64(out var number) &&
                     number >= schema.GetProperty("minimum").GetInt64() && number <= schema.GetProperty("maximum").GetInt64();
+            case "object":
+                return value.ValueKind == JsonValueKind.Object;
             default:
                 return false;
         }
@@ -254,6 +273,10 @@ internal sealed class WorkspaceToolCall(string name, IReadOnlyDictionary<string,
             !value.TryGetInt64(out var number) || number < minimum || number > maximum) throw Invalid();
         return number;
     }
+
+    /// <summary>A declared object argument's exact JSON bytes, for a closed parser of its own.</summary>
+    internal byte[] Object(string key) =>
+        properties.TryGetValue(key, out var value) && value.ValueKind == JsonValueKind.Object ? Encoding.UTF8.GetBytes(value.GetRawText()) : throw Invalid();
 
     internal string Choice(string key, params string[] allowed)
     {

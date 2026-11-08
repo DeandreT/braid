@@ -80,7 +80,7 @@ export function regressionStateTone(state: string | undefined): string | null {
           [disabled]="saving()"
           (click)="recheck()"
         >
-          Run all current cases now
+          {{ runLabel() }}
         </button>
       }
       @if (message()) {
@@ -217,6 +217,7 @@ export class RegressionStatusComponent {
   readonly canRun = input(false);
   /** Show Run all next to the counts instead of the controls disclosure. */
   readonly runInline = input(false);
+  readonly runLabel = input("Run all current cases now");
   readonly suite = signal<Suite | null>(null);
   readonly policy = signal<Policy | null>(null);
   readonly enabled = signal<boolean | null>(null);

@@ -42,7 +42,7 @@ public sealed class ChatDatabaseConfigurationTests
         Assert.True(ChatSchemaContract.ColumnGrants(ChatDatabaseProfile.Lifecycle).Order(StringComparer.Ordinal).SequenceEqual(
             new[] { "schema_migrations|checksum|SELECT", "schema_migrations|version|SELECT" }, StringComparer.Ordinal));
         Assert.DoesNotContain(writer, g => g.StartsWith("chat_identities|", StringComparison.Ordinal) && g.EndsWith("|INSERT", StringComparison.Ordinal));
-        Assert.Equal(new[] { "chat_conversations", "chat_events", "chat_identities", "chat_payload_audit", "chat_rounds", "chat_turns" }, ChatSchemaContract.ChatTables.Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "chat_conversations", "chat_events", "chat_identities", "chat_mapping_write_audit", "chat_payload_audit", "chat_rounds", "chat_turns" }, ChatSchemaContract.ChatTables.Order(StringComparer.Ordinal));
         // The workspace migration adds the kind and focus columns; the payload audit is written only by its owner-defined trigger.
         Assert.Equal(ChatSchemaContract.WorkspaceMigrationChecksum, scripts[ChatSchemaContract.WorkspaceMigrationVersion - 1].Checksum);
         foreach (var column in new[] { "conversation_kind", "focus_project_id", "focus_mapping_id", "focus_revision_id" })
@@ -50,6 +50,6 @@ public sealed class ChatDatabaseConfigurationTests
             Assert.Contains($"chat_conversations|{column}|SELECT", reader);
             Assert.Contains($"chat_conversations|{column}|INSERT", writer);
         }
-        Assert.DoesNotContain(reader.Concat(writer), g => g.StartsWith("chat_payload_audit|", StringComparison.Ordinal));
+        Assert.DoesNotContain(reader.Concat(writer), g => g.StartsWith("chat_payload_audit|", StringComparison.Ordinal) || g.StartsWith("chat_mapping_write_audit|", StringComparison.Ordinal));
     }
 }

@@ -163,9 +163,48 @@ export function workspaceEvent(
       integer(value.bytes, 8192) &&
       value.bytes > 0
     );
+  if (value.type === "mapping.write")
+    return mappingWrite(value, organizationId);
   return (
     value.type === "workspace.citation" &&
     workspaceCitation(value.citation, organizationId)
+  );
+}
+export type MappingWriteEvent = Extract<ChatEvent, { type: "mapping.write" }>;
+function mappingWrite(
+  value: Record<string, unknown>,
+  organizationId: string,
+): boolean {
+  const base = value.baseRevision;
+  const optional = (id: unknown, sequence: unknown) =>
+    id === null ? sequence === null : isCatalogId(id) && decimal(sequence);
+  const saved = value.outcome === "saved";
+  return (
+    object(base) &&
+    base.organizationId === organizationId &&
+    [base.projectId, base.mappingId, base.revisionId].every(isCatalogId) &&
+    decimal(value.baseSequence) &&
+    (saved
+      ? value.reason === null && value.revisionId !== null
+      : value.outcome === "proposed" &&
+        (value.reason === "outOfDate"
+          ? value.headRevisionId !== null
+          : value.reason === "notPermitted" && value.headRevisionId === null) &&
+        value.revisionId === null) &&
+    optional(value.revisionId, value.revisionSequence) &&
+    optional(value.headRevisionId, value.headSequence) &&
+    integer(value.operationCount, 2000) &&
+    value.operationCount > 0 &&
+    typeof value.changesTruncated === "boolean" &&
+    Array.isArray(value.changes) &&
+    value.changes.length <= 8 &&
+    value.changes.every(
+      (c: unknown) =>
+        object(c) &&
+        [c.field, c.before, c.after].every(
+          (t) => typeof t === "string" && t.length > 0 && t.length <= 256,
+        ),
+    )
   );
 }
 export function workspaceCitation(
