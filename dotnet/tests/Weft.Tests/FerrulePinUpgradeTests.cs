@@ -22,7 +22,7 @@ public sealed class FerrulePinUpgradeTests
         { "0495822e102bba3f97d9bffd3c665adfb6138bec", "sha256:247f7e82f965ced7f6dcde5970d3dc3c584c6f648c9d4f359a9bb5b6ed3985a3", "weft.ferrule-adapter.v2" },
         { "577359a991a7dd44172a3c4af91fdcab7592457c", "sha256:aecc4b4f444e9ec414fd879282a5881b59ab7297cf1bb500f06dc2563818d184", "weft.ferrule-adapter.v3" },
         { "0169809123b8caebd141b26a625be4c07e750536", "sha256:" + new string('e', 64), "weft.ferrule-adapter.v3" },
-        { "dddc4dce6c93f4137fb2aa2a011360d089e0a51b", "sha256:" + new string('f', 64), "weft.ferrule-adapter.v3" },
+        { "576012aa17c403d9c3fcb8659ed4d3a47ba06864", "sha256:" + new string('f', 64), "weft.ferrule-adapter.v3" },
         { "cbae074d1dda69ed00b4c7ee6fe24574edcb6d67", "sha256:" + new string('d', 64), "weft.ferrule-adapter.v3" },
         { "8f3292b516457ab01db41f34d7ff71de63fc2813", "sha256:" + new string('c', 64), "weft.ferrule-adapter.v3" },
     };
@@ -127,7 +127,7 @@ public sealed class FerrulePinUpgradeTests
     [InlineData("0495822e102bba3f97d9bffd3c665adfb6138bec")]
     [InlineData("577359a991a7dd44172a3c4af91fdcab7592457c")]
     [InlineData("0169809123b8caebd141b26a625be4c07e750536")]
-    [InlineData("dddc4dce6c93f4137fb2aa2a011360d089e0a51b")]
+    [InlineData("576012aa17c403d9c3fcb8659ed4d3a47ba06864")]
     [InlineData("cbae074d1dda69ed00b4c7ee6fe24574edcb6d67")]
     [InlineData("ffffffffffffffffffffffffffffffffffffffff")]
     public async Task OldAndForgedLiveRepliesFailDefaultProjectionReportsAndIngestion(string revision)
