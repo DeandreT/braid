@@ -4,6 +4,7 @@ import {
   catalogApi,
   projectPath,
   mappingPath,
+  synthetic,
   syntheticCatalog,
 } from "./catalog.fixture";
 import {
@@ -73,6 +74,104 @@ test("catalog header exposes accessible search without overflowing", async ({
       fullPage: true,
     });
   }
+});
+
+test("notification popover closes on Escape from the bell and drops a read across an owner change", async ({
+  page,
+}) => {
+  await syntheticCatalog(page);
+  let actor = synthetic.context.actorPrincipalId;
+  await page.route("**/api/v1/catalog/context", (route) =>
+    route.fulfill({ json: { ...synthetic.context, actorPrincipalId: actor } }),
+  );
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let reads = 0;
+  await page.route(
+    `**/api/v1/organizations/${synthetic.org}/notifications*`,
+    async (route) => {
+      reads += 1;
+      // Only the second opening's read is held across the owner change.
+      if (reads === 2) await held;
+      await route
+        .fulfill({
+          json: {
+            notifications: [
+              {
+                id: synthetic.revision.scope.revisionId,
+                resourceId: synthetic.revision.scope.revisionId,
+                event: "regressionFailed",
+                projectId: synthetic.project.scope.projectId,
+                mappingId: synthetic.mapping.scope.mappingId,
+                revisionId: synthetic.revision.scope.revisionId,
+                link: mappingPath(synthetic.mapping.scope),
+                createdAtUtc: "2026-10-25T12:00:00Z",
+                read: false,
+              },
+            ],
+            nextId: null,
+          },
+        })
+        // The held request may already be cancelled by the client.
+        .catch(() => {});
+    },
+  );
+  await page.goto("/catalog");
+  await expect(
+    page.getByRole("link", { name: "Synthetic project", exact: true }),
+  ).toBeVisible();
+  const bell = page.getByRole("button", {
+    name: "Recent notifications",
+    exact: true,
+  });
+  const popover = page.getByRole("region", { name: "Notifications" });
+  // Escape right after opening, while focus is still on the bell.
+  await bell.click();
+  await expect(popover).toBeVisible();
+  await expect(bell).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(popover).toHaveCount(0);
+  await expect(bell).toBeFocused();
+  await expect(bell).toHaveAttribute("aria-expanded", "false");
+  // Another owner is admitted while the inbox read is held.
+  await bell.click();
+  await expect.poll(() => reads).toBe(2);
+  actor = synthetic.project.scope.projectId;
+  const refresh = page.getByRole("button", {
+    name: "Refresh catalog",
+    exact: true,
+  });
+  await refresh.focus();
+  await refresh.press("Enter");
+  await expect(popover).toHaveCount(0);
+  release();
+  await page.waitForTimeout(300);
+  await expect(page.getByText("Regression failed")).toHaveCount(0);
+});
+
+test("overflow menus close on Escape and outside clicks without stranding focus", async ({
+  page,
+}) => {
+  await syntheticCatalog(page);
+  await page.goto(projectPath(synthetic.project.scope));
+  const summary = page.getByLabel("More project actions", { exact: true });
+  const menu = page.locator("details.catalog-menu");
+  const automation = page.getByRole("link", {
+    name: "Automation and notifications",
+    exact: true,
+  });
+  await summary.click();
+  await expect(menu).toHaveAttribute("open", "");
+  await automation.focus();
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toHaveAttribute("open", "");
+  await expect(summary).toBeFocused();
+  await summary.press("Enter");
+  await expect(menu).toHaveAttribute("open", "");
+  await automation.focus();
+  await page.mouse.click(5, 400);
+  await expect(menu).not.toHaveAttribute("open", "");
+  await expect(summary).toBeFocused();
 });
 
 async function fixture(page: Page, session = false) {

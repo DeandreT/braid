@@ -12,6 +12,7 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
 } from "@angular/core";
 import { firstValueFrom, fromEvent, map, switchMap, takeUntil } from "rxjs";
 import { BrowserSessionState } from "../auth/browser-session-state";
@@ -148,6 +149,12 @@ export class RevisionChatComponent {
       ? "This profile permits sample data only with a current payload-read grant for the data's project. Each tool call rechecks both policies."
       : "Metadata only: sample payload tools are not offered to this profile.",
   );
+  readonly policySummary = computed(() =>
+    this.availability()?.profiles.find((p) => p.profileId === this.profile())
+      ?.payloadsAllowed
+      ? "Sample data needs a current payload-read grant."
+      : "Metadata only. Sample data isn't shared with this model.",
+  );
   readonly turns = signal<ChatTurn[]>([]);
   readonly selected = signal<ChatTurn | null>(null);
   readonly events = signal<ChatEvent[]>([]);
@@ -159,6 +166,320 @@ export class RevisionChatComponent {
   readonly hasMore = signal(false);
   readonly hasEarlier = signal(false);
   readonly problem = signal("");
+  private readonly problemCode = signal("");
+  readonly pendingProblem = computed(() =>
+    this.problemCode() === "unavailable"
+      ? "The request outcome is unknown."
+      : this.problem(),
+  );
+  readonly problemAtComposer = signal(false);
+  readonly menu = signal<
+    "history" | "more" | "scope" | "focus" | "notes" | null
+  >(null);
+  readonly historyQuery = signal("");
+  readonly title = computed(
+    () => this.current()?.title || this.turns()[0]?.text || "New chat",
+  );
+  readonly historyGroups = computed(() => {
+    this.menu();
+    const query = this.historyQuery().trim().toLocaleLowerCase();
+    const today = new Date().toDateString();
+    return ["Today", "Earlier"]
+      .map((label) => ({
+        label,
+        conversations: this.conversations().filter(
+          (conversation) =>
+            (conversation.title || conversation.createdAtUtc)
+              .toLocaleLowerCase()
+              .includes(query) &&
+            (new Date(
+              conversation.lastTurnAtUtc ?? conversation.createdAtUtc,
+            ).toDateString() ===
+              today) ===
+              (label === "Today"),
+        ),
+      }))
+      .filter((group) => group.conversations.length);
+  });
+  readonly starters = [
+    "Which fields does this mapping leave empty?",
+    "How can I investigate a failing test?",
+    "What changed between versions?",
+  ];
+  readonly draftBytes = computed(
+    () => new TextEncoder().encode(this.draft()).byteLength,
+  );
+  readonly nearLimit = computed(
+    () =>
+      this.draftBytes() >=
+      (this.availability()?.limits.maxTextBytes ?? 32768) * 0.8,
+  );
+  readonly pendingText = computed(() => this.pendingState()?.body.text ?? "");
+  readonly canStop = computed(
+    () =>
+      !!this.selected() &&
+      this.selectedPhase() === "active" &&
+      !this.events().some(terminal),
+  );
+  private readonly savedEvents = signal<Record<string, ChatEvent[]>>({});
+  private transcriptController: AbortController | null = null;
+  private readonly answerProblems = signal<Record<string, string>>({});
+  readonly expandedTools = signal<ReadonlySet<string>>(new Set());
+  readonly expandedDetails = signal<ReadonlySet<string>>(new Set());
+  readonly copiedTurn = signal("");
+  readonly copyProblem = signal("");
+  readonly dismissedTips = signal<ReadonlySet<string>>(new Set());
+  private readonly scroller = viewChild<ElementRef<HTMLElement>>("scroller");
+  private followBottom = true;
+  private menuTrigger: HTMLElement | null = null;
+  readonly conversationFocus = computed(() => {
+    const conversation = this.current();
+    if (conversation && !isWorkspace(conversation))
+      return {
+        label: "Pinned version",
+        detail: `Legacy conversation: pinned to its original revision ${conversation.revision?.revisionId ?? ""}. Citations never change the panel's version.`,
+      };
+    const focus =
+      conversation && isWorkspace(conversation) ? conversation.focus : null;
+    return this.describeFocus(focus);
+  });
+
+  private selectedPhase(): ChatTurn["phase"] | undefined {
+    return this.turns().find((turn) => turn.turnId === this.selected()?.turnId)
+      ?.phase;
+  }
+
+  private describeFocus(focus: ChatFocus | null): {
+    label: string;
+    detail: string;
+  } {
+    if (!focus)
+      return {
+        label: "Whole workspace",
+        detail:
+          "No mapping focus. Read-only tools can use any project you are authorized to read.",
+      };
+    const name =
+      this.focusMappings().find(
+        (mapping) => mapping.scope.mappingId === focus.mappingId,
+      )?.name ?? "Mapping";
+    return focus.revisionId
+      ? {
+          label: `${name} · pinned version`,
+          detail: `Pinned version: ${focus.revisionId}. Mapping ${focus.mappingId}. Focus stays fixed for this conversation and never limits authorized tools or changes the panel's version.`,
+        }
+      : {
+          label: `${name} · follows newest version`,
+          detail: `Follows newest version: mapping ${focus.mappingId}. Its head is resolved when each new turn starts. The recorded turn focus stays fixed. Focus never limits authorized tools or changes the panel's version.`,
+        };
+  }
+
+  nextFocusLabel(): string {
+    return this.describeFocus(this.newFocus()).label;
+  }
+
+  toggleMenu(
+    menu: NonNullable<ReturnType<typeof this.menu>>,
+    trigger: HTMLElement,
+  ): void {
+    if (this.menu() === menu) {
+      this.closeMenu(true);
+      return;
+    }
+    if (
+      menu === "history" &&
+      (!this.availability() || this.busy() || this.hasPending())
+    )
+      return;
+    this.menuTrigger = trigger;
+    this.menu.set(menu);
+    afterNextRender(
+      () => {
+        this.element.nativeElement
+          .querySelector<HTMLElement>(
+            `#chat-${menu === "notes" ? "composer-notes" : `${menu}-menu`} :is(input, button, a, select)`,
+          )
+          ?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  closeMenu(restore = true): void {
+    this.menu.set(null);
+    if (restore && this.menuTrigger?.isConnected) this.menuTrigger.focus();
+    this.menuTrigger = null;
+  }
+
+  allowTip(id: string): void {
+    this.dismissedTips.update((previous) => {
+      const next = new Set(previous);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  private dismissVisibleTips(): boolean {
+    const visible = [
+      ...this.element.nativeElement.querySelectorAll<HTMLElement>(
+        "[data-chat-tip]",
+      ),
+    ]
+      .filter(
+        (trigger) =>
+          trigger.querySelector(".chat-tip")?.getClientRects().length,
+      )
+      .map((trigger) => trigger.dataset["chatTip"]!);
+    if (!visible.length) return false;
+    this.dismissedTips.update((previous) => new Set([...previous, ...visible]));
+    return true;
+  }
+
+  async chooseConversation(id: string): Promise<void> {
+    this.closeMenu();
+    await this.open(id);
+    this.restoreFocus(".chat-title");
+  }
+
+  async refresh(): Promise<void> {
+    this.closeMenu();
+    await this.load();
+  }
+
+  async useStarter(text: string): Promise<void> {
+    if (!this.current()) await this.newConversation();
+    if (!this.current() || this.hasPending()) return;
+    this.draft.set(text);
+    this.restoreFocus("[data-chat-composer]");
+  }
+
+  editDraft(event: Event): void {
+    const textarea = event.target as HTMLTextAreaElement;
+    this.draft.set(textarea.value);
+    this.growComposer(textarea);
+  }
+
+  private growComposer(textarea: HTMLTextAreaElement): void {
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(160, textarea.scrollHeight)}px`;
+  }
+
+  followScroll(): void {
+    const element = this.scroller()?.nativeElement;
+    if (element)
+      this.followBottom =
+        element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+  }
+
+  private rememberSelected(): void {
+    const id = this.selected()?.turnId;
+    if (id)
+      this.savedEvents.update((saved) => ({ ...saved, [id]: this.events() }));
+  }
+
+  turnView(turn: ChatTurn) {
+    const selected = this.selected()?.turnId === turn.turnId;
+    const events = selected ? this.events() : this.savedEvents()[turn.turnId];
+    const tools = new Map<
+      string,
+      { key: string; name: string; completed: boolean }
+    >();
+    const usage = new Map<string, Extract<ChatEvent, { type: "usage" }>>();
+    for (const event of events ?? []) {
+      if (event.type === "tool.started" || event.type === "tool.completed") {
+        const key = `${event.roundId}:${event.ordinal}`;
+        tools.set(key, {
+          key,
+          name: event.name,
+          completed: event.type === "tool.completed",
+        });
+      }
+      if (event.type === "usage") usage.set(event.roundId, event);
+    }
+    const last = events?.at(-1);
+    const interrupted = selected
+      ? this.disconnected()
+      : !!events && !events.some(terminal);
+    const status = selected
+      ? this.status()
+      : interrupted
+        ? "Connection interrupted. Reconnect to read the remaining answer; this does not send another question."
+        : last?.type === "turn.failed"
+          ? last.reason === "interrupted"
+            ? "Answer interrupted. It will not be sent again automatically."
+            : `Answer failed: ${last.reason}${last.providerFailure ? ` (${last.providerFailure})` : ""}.`
+          : last?.type === "turn.cancelled"
+            ? "Answer cancelled."
+            : last?.type === "turn.completed"
+              ? "Answer complete."
+              : "";
+    return {
+      loaded: !!events,
+      selected,
+      status,
+      interrupted,
+      checking:
+        selected &&
+        this.streaming() &&
+        [...tools.values()].some((tool) => !tool.completed),
+      tone: interrupted
+        ? "uncertain"
+        : last?.type === "turn.failed"
+          ? "failure"
+          : last?.type === "turn.cancelled"
+            ? "attention"
+            : last?.type === "turn.completed"
+              ? "complete"
+              : "running",
+      answer: (events ?? [])
+        .filter((e) => e.type === "text.delta")
+        .map((e) => e.text)
+        .join(""),
+      tools: [...tools.values()],
+      usage: [...usage.values()],
+      citations: (events ?? []).filter(
+        (e): e is ChatCitation => e.type === "citation",
+      ),
+      workspaceCitations: (events ?? []).filter(
+        (e): e is WorkspaceCitationEvent => e.type === "workspace.citation",
+      ),
+      sharedData: (events ?? []).some((e) => e.type === "data.shared"),
+      problem: this.answerProblems()[turn.turnId] ?? "",
+    };
+  }
+  readonly transcript = computed(() =>
+    this.turns().map((turn) => ({ turn, ...this.turnView(turn) })),
+  );
+
+  toggleAnswer(set: typeof this.expandedTools, id: string): void {
+    set.update((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
+
+  chipRole(kind: string): string {
+    return kind === "field"
+      ? "source"
+      : ["rule", "parameter", "control"].includes(kind)
+        ? "rule"
+        : ["previewOutput", "regressionRunOutput"].includes(kind)
+          ? "output"
+          : "evidence";
+  }
+
+  async copyAnswer(turn: ChatTurn): Promise<void> {
+    this.copyProblem.set("");
+    try {
+      const clipboard = this.document.defaultView?.navigator.clipboard;
+      if (!clipboard) throw new Error("Clipboard unavailable");
+      await clipboard.writeText(this.turnView(turn).answer);
+      this.copiedTurn.set(turn.turnId);
+    } catch {
+      this.copyProblem.set("Couldn't copy. Select the answer text to copy it.");
+    }
+  }
   readonly answer = computed(() =>
     this.events()
       .filter(
@@ -254,6 +575,91 @@ export class RevisionChatComponent {
 
   constructor() {
     inject(UnsentWork).track(() => this.hasUnsent());
+    effect(() => {
+      this.draft();
+      afterNextRender(
+        () => {
+          const textarea =
+            this.element.nativeElement.querySelector<HTMLTextAreaElement>(
+              "[data-chat-composer]",
+            );
+          if (textarea) this.growComposer(textarea);
+        },
+        { injector: this.injector },
+      );
+    });
+    effect(() => {
+      this.events();
+      this.turns();
+      this.pendingState();
+      afterNextRender(
+        () => {
+          const element = this.scroller()?.nativeElement;
+          if (element && this.followBottom)
+            element.scrollTop = element.scrollHeight;
+        },
+        { injector: this.injector },
+      );
+    });
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || this.document.querySelector("dialog[open]"))
+        return;
+      // Escape elsewhere on the page belongs to that control, not to chat menus or tips.
+      // An open chat menu still closes when focus fell back to the page body.
+      const host = this.element.nativeElement;
+      const active = this.document.activeElement;
+      const inside =
+        (event.target instanceof Node && host.contains(event.target)) ||
+        host.contains(active);
+      const unfocused =
+        !active ||
+        active === this.document.body ||
+        active === this.document.documentElement;
+      if (!inside && !(this.menu() && unfocused)) return;
+      if (this.menu()) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeMenu();
+        this.dismissVisibleTips();
+      } else if (this.dismissVisibleTips()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    const outside = (event: PointerEvent) => {
+      if (
+        this.menu() &&
+        event.target instanceof Node &&
+        !this.element.nativeElement
+          .querySelector(
+            `#chat-${this.menu() === "notes" ? "composer-notes" : `${this.menu()}-menu`}`,
+          )
+          ?.contains(event.target) &&
+        !this.menuTrigger?.contains(event.target)
+      )
+        this.closeMenu(false);
+    };
+    this.document.addEventListener("keydown", key, true);
+    this.document.addEventListener("pointerdown", outside);
+    const leaveMenu = (event: FocusEvent) => {
+      const menu = this.menu();
+      if (!menu || !(event.relatedTarget instanceof Node)) return;
+      const popup = this.element.nativeElement.querySelector(
+        `#chat-${menu === "notes" ? "composer-notes" : `${menu}-menu`}`,
+      );
+      if (
+        popup?.contains(event.target as Node) &&
+        !popup.contains(event.relatedTarget) &&
+        !this.menuTrigger?.contains(event.relatedTarget)
+      )
+        this.closeMenu(false);
+    };
+    this.element.nativeElement.addEventListener("focusout", leaveMenu);
+    inject(DestroyRef).onDestroy(() => {
+      this.document.removeEventListener("keydown", key, true);
+      this.document.removeEventListener("pointerdown", outside);
+      this.element.nativeElement.removeEventListener("focusout", leaveMenu);
+    });
     effect(() => {
       const suggestion = this.suggestedFocus(),
         ready = this.availability();
@@ -380,6 +786,20 @@ export class RevisionChatComponent {
   }
 
   private clear(): void {
+    this.transcriptController?.abort();
+    this.transcriptController = null;
+    this.menu.set(null);
+    this.menuTrigger = null;
+    this.historyQuery.set("");
+    this.copyProblem.set("");
+    this.copiedTurn.set("");
+    this.dismissedTips.set(new Set());
+    this.problemAtComposer.set(false);
+    this.followBottom = true;
+    this.savedEvents.set({});
+    this.answerProblems.set({});
+    this.expandedTools.set(new Set());
+    this.expandedDetails.set(new Set());
     this.admission = null;
     ++this.generation;
     for (const c of this.operations) c.abort();
@@ -545,6 +965,7 @@ export class RevisionChatComponent {
       this.pendingConversation = null;
       this.pendingFocus = null;
       this.stopStream();
+      this.followBottom = true;
       this.current.set(result);
       this.availability.set(this.workspaceProfiles);
       // Creation finishes asynchronously. Keep an explicit, still-available profile
@@ -557,6 +978,8 @@ export class RevisionChatComponent {
         this.profile.set(this.workspaceProfiles?.profiles[0]?.profileId ?? "");
       this.selectedConversation.emit(result);
       this.turns.set([]);
+      this.savedEvents.set({});
+      this.answerProblems.set({});
       this.selected.set(null);
       this.events.set([]);
       this.hasEarlier.set(false);
@@ -593,6 +1016,7 @@ export class RevisionChatComponent {
     return true;
   }
   private async show(id: string): Promise<void> {
+    this.followBottom = true;
     const entry = this.conversations().find((c) => c.conversationId === id);
     const routeScope = entry
       ? conversationScope(entry, this.context().allowedOrganizationId)
@@ -603,6 +1027,8 @@ export class RevisionChatComponent {
     this.stopStream();
     this.current.set(null);
     this.turns.set([]);
+    this.savedEvents.set({});
+    this.answerProblems.set({});
     this.selected.set(null);
     this.events.set([]);
     await this.perform(async () => {
@@ -648,7 +1074,76 @@ export class RevisionChatComponent {
         this.acceptedBytes = 0;
       }
     });
-    if (this.selected()) await this.reconnect();
+    if (this.selected()) {
+      void this.readEarlierAnswers();
+      await this.reconnect();
+    }
+  }
+
+  /** Replays retained terminal answers only. It never creates or retries a turn. */
+  private async readEarlierAnswers(): Promise<void> {
+    const conversation = this.current();
+    if (!conversation) return;
+    const generation = this.generation;
+    const scope = this.activeScope();
+    const controller = new AbortController();
+    this.transcriptController = controller;
+    const turns = this.turns();
+    const skipped = (turn: ChatTurn) =>
+      turn.turnId === this.selected()?.turnId || turn.phase === "active";
+    if (turns.every(skipped)) return;
+    const stale = () =>
+      controller.signal.aborted ||
+      generation !== this.generation ||
+      this.current()?.conversationId !== conversation.conversationId;
+    const unreadable = (turnId: string) =>
+      this.answerProblems.update((problems) => ({
+        ...problems,
+        [turnId]:
+          "Couldn't read this saved answer. Select the question to reconnect.",
+      }));
+    try {
+      // One admission covers the replay; every stream request still checks dispatch and
+      // session generation itself, so an owner change mid-loop refuses the next read.
+      await this.admitted(async (context, signal) => {
+        for (const turn of turns) {
+          if (skipped(turn)) continue;
+          const events: ChatEvent[] = [];
+          try {
+            let bytes = 0;
+            await this.api.stream(
+              scope,
+              context,
+              AbortSignal.any([signal, controller.signal]),
+              conversation.conversationId,
+              turn.turnId,
+              0,
+              (event) => {
+                bytes += new TextEncoder().encode(
+                  JSON.stringify(event),
+                ).byteLength;
+                if (bytes > 4 * 1024 * 1024) throw new ChatError("bodyLimit");
+                events.push(event);
+              },
+            );
+            if (stale()) return;
+          } catch {
+            if (stale()) return;
+            unreadable(turn.turnId);
+          }
+          this.savedEvents.update((saved) => ({
+            ...saved,
+            [turn.turnId]: events,
+          }));
+        }
+      });
+    } catch {
+      if (stale()) return;
+      // Admission itself failed: no remaining saved answer was read.
+      for (const turn of turns)
+        if (!skipped(turn) && !(turn.turnId in this.savedEvents()))
+          unreadable(turn.turnId);
+    }
   }
   async send(): Promise<void> {
     if (!this.canSend()) return;
@@ -661,11 +1156,13 @@ export class RevisionChatComponent {
         (this.availability()?.limits.maxTextBytes ?? 0) ||
       this.draft().includes("\0")
     ) {
+      this.problemAtComposer.set(true);
       this.problem.set(
         "The question exceeds the text limit or contains a NUL character.",
       );
       return;
     }
+    this.followBottom = true;
     this.pending = {
       conversationId: this.current()!.conversationId,
       body: {
@@ -685,7 +1182,15 @@ export class RevisionChatComponent {
     return this.pendingConversation !== null;
   }
   async retryQuestion(): Promise<void> {
-    if (!this.pending || this.busy()) return;
+    if (
+      !this.pending ||
+      this.busy() ||
+      !this.contexts.canPresent(this.context()) ||
+      !this.context().features.chat
+    )
+      return;
+    const conversationId = this.pending.conversationId;
+    const needsConversation = !this.current();
     let accepted = false;
     await this.perform(async () => {
       const pending = this.pending!;
@@ -716,6 +1221,8 @@ export class RevisionChatComponent {
       }
       this.pending = null;
       this.draft.set("");
+      this.followBottom = true;
+      this.rememberSelected();
       this.stopStream();
       this.events.set([]);
       this.lastSequence = 0;
@@ -727,18 +1234,51 @@ export class RevisionChatComponent {
       this.selected.set(result);
       accepted = true;
     }, "[data-chat-composer]");
-    if (accepted) await this.reconnect();
+    if (accepted) {
+      if (needsConversation) await this.show(conversationId);
+      else await this.reconnect();
+    }
   }
   async selectTurn(turn: ChatTurn): Promise<void> {
-    if (this.busy()) return;
+    if (this.busy() || this.pending) return;
+    this.rememberSelected();
     this.stopStream();
     this.selected.set(turn);
     this.events.set([]);
     this.lastSequence = 0;
     this.acceptedBytes = 0;
+    this.answerProblems.update((problems) => {
+      const next = { ...problems };
+      delete next[turn.turnId];
+      return next;
+    });
+    await this.reconnect();
+  }
+  async reconnectTurn(turn: ChatTurn): Promise<void> {
+    if (this.busy() || this.pending) return;
+    if (this.selected()?.turnId !== turn.turnId) {
+      this.rememberSelected();
+      this.stopStream();
+      this.selected.set(turn);
+      const events = this.savedEvents()[turn.turnId] ?? [];
+      this.events.set(events);
+      this.lastSequence = events.at(-1)?.sequence ?? 0;
+      this.acceptedBytes = events.reduce(
+        (bytes, event) =>
+          bytes + new TextEncoder().encode(JSON.stringify(event)).byteLength,
+        0,
+      );
+      this.answerProblems.update((problems) => {
+        const next = { ...problems };
+        delete next[turn.turnId];
+        return next;
+      });
+    }
     await this.reconnect();
   }
   private stopStream(): void {
+    this.transcriptController?.abort();
+    this.transcriptController = null;
     this.streamController?.abort();
     this.streamController = null;
     this.streaming.set(false);
@@ -761,6 +1301,7 @@ export class RevisionChatComponent {
     this.streaming.set(true);
     this.disconnected.set(false);
     this.problem.set("");
+    this.problemAtComposer.set(false);
     try {
       await this.admitted(async (context, signal) => {
         const stop = () => controller.abort();
@@ -1064,6 +1605,7 @@ export class RevisionChatComponent {
     const generation = this.generation;
     this.busy.set(true);
     this.problem.set("");
+    this.problemAtComposer.set(false);
     let succeeded = false;
     try {
       await work();
@@ -1137,6 +1679,7 @@ export class RevisionChatComponent {
   }
   private showError(error: unknown): void {
     const code = error instanceof ChatError ? error.code : "unavailable";
+    this.problemCode.set(code);
     if (code === "stale") return;
     if (code === "identityRejected") {
       this.clear();

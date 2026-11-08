@@ -5,9 +5,37 @@
 .builds-panel {
   margin-top: 20px;
 }
+:host-context(.app-workbench) .builds-panel:not(.builds-intro) {
+  margin-top: 0;
+  border-bottom: 0;
+}
+.builds-panel > * {
+  max-width: 56rem;
+}
 .builds-panel p {
   line-height: 1.6;
   overflow-wrap: anywhere;
+}
+/* Before the explicit load, the tab is a short, centred introduction. */
+.builds-panel.builds-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 34rem;
+  margin: 32px auto;
+  padding: 20px 24px;
+  border: 1px solid #d7e2d1;
+  border-radius: 8px;
+  background: #fafdf6;
+  text-align: center;
+}
+.builds-intro p {
+  color: #526b5e;
+  margin: 0 0 8px;
+}
+.builds-intro > .catalog-button {
+  margin-top: 8px;
 }
 .builds-runtime {
   color: #3f5d4b;
@@ -43,16 +71,18 @@
 }
 .builds-recovery,
 .builds-result {
-  padding: 14px;
-  border-radius: 9px;
-  background: #f5f8f1;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #fafdf6;
+  border: 1px solid #d7e2d1;
   margin-top: 16px;
 }
 .builds-error {
   background: var(--wb-failure-tint);
   color: var(--wb-failure-text);
-  padding: 12px;
-  border-radius: 9px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--wb-failure-text);
+  border-radius: 4px;
 }
 .builds-uncertain,
 .builds-recovery[data-tone="uncertain"] {
@@ -76,10 +106,11 @@ label {
 }
 select {
   width: 100%;
+  max-width: 32rem;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border: 1px solid var(--wb-control-border);
-  border-radius: 8px;
+  border-radius: 4px;
   font: inherit;
 }
 code {

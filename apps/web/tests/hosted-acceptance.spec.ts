@@ -13,6 +13,12 @@ import { confirmAction } from "./confirmation.fixture";
 import { confirmHostedMutation } from "./hosted-mutation.fixture";
 import { readHostedState } from "./hosted-read.fixture";
 import { expectSignedInAccount } from "./hosted-account.fixture";
+import {
+  chooseSavedConversation,
+  historyTrigger,
+  openHistory,
+  refreshChat,
+} from "./chat-ui.fixture";
 
 /**
  * P8 local acceptance on the packaged Session stack owned by deploy/compose/acceptance-test.sh:
@@ -696,12 +702,10 @@ test("standalone workspace chat gates payload bytes by both profile and fresh pr
       expect(saved.conversation.conversationId).toBe(
         conversation.conversationId,
       );
-      await expect(
-        chat.getByRole("combobox", {
-          name: "Saved conversations",
-          exact: true,
-        }),
-      ).toHaveValue(conversation.conversationId);
+      await expect(historyTrigger(chat)).toHaveAttribute(
+        "data-conversation-id",
+        conversation.conversationId,
+      );
       const selector = chat.getByRole("combobox", {
         name: "Model profile",
         exact: true,
@@ -1377,9 +1381,7 @@ test("recovers retained work across a server restart and Ferrule service scaling
           .getAttribute("aria-expanded")) === "false"
       )
         await page.locator("#workspace-chat-toggle").click();
-      await chat
-        .getByRole("combobox", { name: "Saved conversations" })
-        .selectOption(conversationId);
+      await chooseSavedConversation(chat, conversationId);
     }
     const roundsAfterRestart = sql(
       `select count(*) from weft.chat_rounds where turn_id = '${turnId}'`,
@@ -1397,9 +1399,6 @@ test("recovers retained work across a server restart and Ferrule service scaling
     await expect(
       page.getByRole("table", { name: "Mapping field connections" }),
     ).toContainText('["orderId"]');
-    const conversations = chat.getByRole("combobox", {
-      name: "Saved conversations",
-    });
     const interrupted = chat
       .getByRole("region", { name: "Selected answer" })
       .getByRole("status");
@@ -1415,14 +1414,17 @@ test("recovers retained work across a server restart and Ferrule service scaling
         )
           await page.locator("#workspace-chat-toggle").click();
         if (reopen) {
-          await chat
-            .getByRole("button", { name: "Refresh chat", exact: true })
-            .click();
+          await refreshChat(chat);
         }
+        const conversations = await openHistory(chat);
         await expect(
-          conversations.locator(`option[value="${conversationId}"]`),
+          conversations.locator(
+            `button[data-conversation-id="${conversationId}"]`,
+          ),
         ).toHaveCount(1);
-        await conversations.selectOption(conversationId);
+        await conversations
+          .locator(`button[data-conversation-id="${conversationId}"]`)
+          .click();
         await Promise.all([
           page.waitForRequest(
             (request) =>
@@ -1432,8 +1434,8 @@ test("recovers retained work across a server restart and Ferrule service scaling
               ),
           ),
           chat
-            .getByRole("list", { name: "Questions" })
-            .getByRole("button")
+            .getByRole("list", { name: "Conversation transcript" })
+            .locator(".chat-bubble")
             .last()
             .click(),
         ]);

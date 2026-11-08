@@ -25,77 +25,103 @@ import {
       <div>
         <p class="catalog-eyebrow">Workspace activity</p>
         <h1 id="notifications-title">Notification centre</h1>
+        <p class="catalog-subtitle">
+          Visible project activity and invitations addressed to you.
+          Notifications contain IDs and links only. Choose subscriptions in each
+          project's automation settings.
+        </p>
       </div>
-      <button
-        type="button"
-        class="catalog-button"
-        (click)="read.retry()"
-        [disabled]="busy()"
-      >
-        Refresh
-      </button>
-    </header>
-    <p>
-      Visible project activity and invitations addressed to you. Notifications
-      contain IDs and links only. Choose subscriptions in each project's
-      automation settings.
-    </p>
-    @if (view(); as v) {
-      <p>
-        <a
-          [routerLink]="[
-            '/catalog/organizations',
-            v.context.allowedOrganizationId,
-            'projects',
-          ]"
-          >Projects and subscriptions</a
-        >
-      </p>
-      <ul class="catalog-list">
-        @for (item of v.data.notifications; track item.id) {
-          <li class="catalog-list-item">
-            <div class="catalog-item-heading">
-              <h2>{{ label(item.event) }}</h2>
-              <span class="catalog-badge">{{
-                item.read ? "Read" : "Unread"
-              }}</span>
-            </div>
-            <p>
-              <time>{{ item.createdAtUtc | date: "medium" : "UTC" }} UTC</time>
-              ·
-              {{
-                item.projectId ? "Project activity" : "Organization invitation"
-              }}
-            </p>
-            <p>
-              Resource <code class="catalog-code">{{ item.resourceId }}</code>
-            </p>
-            <a [routerLink]="item.link">Open related page</a>
-            @if (!item.read) {
-              <button
-                class="catalog-button"
-                type="button"
-                (click)="mark(item.id)"
-                [disabled]="busy()"
-              >
-                Mark read
-              </button>
-            }
-          </li>
-        } @empty {
-          <li class="catalog-state">No notifications on this page.</li>
-        }
-      </ul>
-      <nav class="catalog-pagination" aria-label="Notification pages">
-        <a routerLink="/notifications">Newest</a>
-        @if (v.data.nextId) {
+      <div class="catalog-actions">
+        @if (view(); as v) {
           <a
-            routerLink="/notifications"
-            [queryParams]="{ after: v.data.nextId }"
-            >Older notifications</a
+            class="catalog-button"
+            [routerLink]="[
+              '/catalog/organizations',
+              v.context.allowedOrganizationId,
+              'projects',
+            ]"
+            >Projects and subscriptions</a
           >
         }
-      </nav>
+        <button
+          type="button"
+          class="catalog-button"
+          (click)="read.retry()"
+          [disabled]="busy()"
+        >
+          Refresh
+        </button>
+      </div>
+    </header>
+    @if (view(); as v) {
+      <div class="notification-body">
+        @if (v.data.notifications.length) {
+          <ul class="catalog-list catalog-rows">
+            @for (item of v.data.notifications; track item.id) {
+              <li class="catalog-list-item">
+                <div class="catalog-row-main">
+                  <h2 class="catalog-row-title">{{ label(item.event) }}</h2>
+                  <p class="catalog-row-description">
+                    <time
+                      >{{
+                        item.createdAtUtc | date: "medium" : "UTC"
+                      }}
+                      UTC</time
+                    >
+                    ·
+                    {{
+                      item.projectId
+                        ? "Project activity"
+                        : "Organization invitation"
+                    }}
+                    · Resource
+                    <code class="catalog-code">{{ item.resourceId }}</code>
+                  </p>
+                </div>
+                <div class="catalog-row-meta">
+                  <span
+                    class="weft-pill"
+                    [attr.data-tone]="item.read ? null : 'running'"
+                    >{{ item.read ? "Read" : "Unread" }}</span
+                  >
+                  <a [routerLink]="item.link">Open related page</a>
+                  @if (!item.read) {
+                    <button
+                      class="catalog-button"
+                      type="button"
+                      (click)="mark(item.id)"
+                      [disabled]="busy()"
+                    >
+                      Mark read
+                    </button>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        } @else {
+          <section class="weft-state">
+            <h2>You're all caught up</h2>
+            <p>
+              No notifications on this page. Project activity and invitations
+              for you appear here.
+            </p>
+          </section>
+        }
+        <nav class="catalog-pagination" aria-label="Notification pages">
+          @if (v.data.nextId || after()) {
+            <a class="catalog-page-link" routerLink="/notifications">Newest</a>
+          }
+          @if (v.data.nextId) {
+            <a
+              class="catalog-page-link"
+              routerLink="/notifications"
+              [queryParams]="{ after: v.data.nextId }"
+              >Older notifications</a
+            >
+          }
+        </nav>
+      </div>
     } @else {
       <weft-catalog-status [kind]="read.state().kind" (retry)="read.retry()" />
     }
@@ -112,6 +138,7 @@ export class NotificationCentreComponent {
   });
   readonly busy = signal(false);
   readonly message = signal("");
+  readonly after = signal<string | null>(null);
   readonly label = notificationEventLabel;
   private readonly api = inject(AutomationApi);
   private readonly contexts = inject(CatalogContextStore);
@@ -122,6 +149,7 @@ export class NotificationCentreComponent {
       .queryParamMap.pipe(takeUntilDestroyed(this.destroy))
       .subscribe((query) => {
         const after = query.get("after");
+        this.after.set(after);
         if (after !== null && !isCatalogId(after)) {
           this.read.invalidLink();
           return;

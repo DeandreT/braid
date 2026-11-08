@@ -2,9 +2,10 @@
   display: block;
 }
 .administration {
-  max-width: 80rem;
+  max-width: 64rem;
   margin: 0;
   padding: 16px;
+  font-size: 0.8125rem;
 }
 header,
 .controls {
@@ -15,7 +16,18 @@ header,
 }
 header {
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #d7e2d1;
+}
+header > div {
+  flex: 1;
+  min-width: 0;
+}
+.admin-subtitle {
+  margin: 4px 0 0;
+  max-width: 60ch;
+  color: #526b5e;
 }
 .eyebrow {
   color: var(--text-muted);
@@ -28,32 +40,53 @@ fieldset {
   min-width: 0;
 }
 h2 {
-  margin-top: 24px;
+  margin: 24px 0 8px;
+  font-size: 1rem;
+}
+h3 {
+  margin: 20px 0 6px;
+  font-size: 0.875rem;
+}
+p {
+  line-height: 1.55;
 }
 label {
   display: grid;
   gap: 0.35rem;
+  font-weight: 600;
+  color: #3f5d4b;
 }
 input {
   min-width: min(15rem, 100%);
   max-width: 100%;
 }
 .controls {
-  margin: 1rem 0;
+  margin: 0.75rem 0;
 }
 .table-scroll {
   overflow-x: auto;
+  border: 1px solid #d7e2d1;
+  border-radius: 6px;
 }
 table {
   border-collapse: collapse;
   width: 100%;
   text-align: left;
 }
+th {
+  background: #f7faf3;
+  color: #526b5e;
+  font-weight: 600;
+  white-space: nowrap;
+}
 td,
 th {
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-bottom: 1px solid #d7e2d1;
-  vertical-align: top;
+  vertical-align: middle;
+}
+tbody tr:last-child td {
+  border-bottom: 0;
 }
 button {
   margin: 0.2rem;
@@ -64,7 +97,44 @@ pre {
   white-space: pre-wrap;
 }
 li {
-  margin: 0.75rem 0;
+  margin: 0.5rem 0;
+}
+.admin-state {
+  margin: 16px 0;
+}
+.admin-state h2 {
+  margin: 0 0 4px;
+  font-size: 0.875rem;
+}
+.admin-state p {
+  margin: 0;
+  color: #526b5e;
+}
+.admin-projects ul {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  border: 1px solid #d7e2d1;
+  border-radius: 6px;
+}
+.admin-projects li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid #d7e2d1;
+}
+.admin-projects li:last-child {
+  border-bottom: 0;
+}
+.admin-projects li > span {
+  font-weight: 600;
+}
+.admin-muted {
+  color: #526b5e;
 }
 .invitation-link {
   margin: 1rem 0;

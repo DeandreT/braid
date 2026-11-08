@@ -29,68 +29,77 @@
         {{ data()?.mapping?.name ?? "Mapping" }}
       </h1>
     </div>
-    <button
-      class="catalog-button"
-      type="button"
-      (click)="retry()"
-      [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
-    >
-      Refresh catalog
-    </button>
+    <div class="catalog-actions">
+      <button
+        class="catalog-icon-button"
+        type="button"
+        aria-label="Refresh catalog"
+        title="Refresh catalog"
+        (click)="retry()"
+        [disabled]="kind() === 'loading' || kind() === 'invalidLink'"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+        </svg>
+      </button>
+      @if (data(); as view) {
+        @if (context(); as context) {
+          <details class="catalog-menu">
+            <summary
+              class="catalog-icon-button"
+              aria-label="More mapping actions"
+              title="More mapping actions"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="5" cy="12" r="1" />
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="19" cy="12" r="1" />
+              </svg>
+            </summary>
+            <div class="catalog-menu-list">
+              <a
+                [routerLink]="[
+                  '/catalog/organizations',
+                  view.mapping.scope.organizationId,
+                  'projects',
+                  view.mapping.scope.projectId,
+                  'mappings',
+                  view.mapping.scope.mappingId,
+                  'operations',
+                ]"
+                >Operations</a
+              >
+            </div>
+          </details>
+          @if (
+            context.features.editMetadata &&
+            view.mapping.access.actions.editMetadata
+          ) {
+            <a
+              class="catalog-button"
+              [routerLink]="routes.editMapping(view.mapping.scope)"
+            >
+              Edit mapping metadata
+            </a>
+          }
+          @if (
+            context.features.uploadRevisions &&
+            view.mapping.access.actions.uploadRevisions &&
+            view.mapping.backendId === "ferrule"
+          ) {
+            <a
+              class="catalog-button catalog-button-primary"
+              [routerLink]="routes.appendRevision(view.mapping.scope)"
+              ><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 19V5M6 11l6-6 6 6" /></svg
+              >Upload revision</a
+            >
+          }
+        }
+      }
+    </div>
   </header>
   @if (data(); as view) {
-    @if (context(); as context) {
-      <p>
-        <a
-          class="catalog-button"
-          [routerLink]="[
-            '/catalog/organizations',
-            view.mapping.scope.organizationId,
-            'projects',
-            view.mapping.scope.projectId,
-            'mappings',
-            view.mapping.scope.mappingId,
-            'operations',
-          ]"
-          >Operations</a
-        >
-      </p>
-      <weft-regression-status
-        [scope]="view.mapping.scope"
-        [context]="context"
-        [revisionId]="view.mapping.head.scope.revisionId"
-        [manage]="true"
-        [admin]="view.mapping.access.role === 'administrator'"
-        [canRun]="view.mapping.access.actions.preview"
-      />
-      @if (
-        context.features.uploadRevisions &&
-        view.mapping.access.actions.uploadRevisions &&
-        view.mapping.backendId === "ferrule"
-      ) {
-        <p>
-          <a
-            class="catalog-button"
-            [routerLink]="routes.appendRevision(view.mapping.scope)"
-          >
-            Upload revision
-          </a>
-        </p>
-      }
-      @if (
-        context.features.editMetadata &&
-        view.mapping.access.actions.editMetadata
-      ) {
-        <p>
-          <a
-            class="catalog-button"
-            [routerLink]="routes.editMapping(view.mapping.scope)"
-          >
-            Edit mapping metadata
-          </a>
-        </p>
-      }
-    }
     <p class="catalog-live" role="status">
       {{ view.page.revisions.length }} revisions shown.
     </p>
@@ -101,14 +110,28 @@
       } @else {
         <p class="catalog-description-empty">No description.</p>
       }
-      <div class="catalog-item-meta">
-        <span>Backend {{ view.mapping.backendId }}</span>
-        <span>Version {{ view.mapping.version }}</span>
-      </div>
-      <dl class="catalog-facts">
-        <dt>Your role</dt>
-        <dd>{{ view.mapping.access.role }}</dd>
+      <dl class="catalog-inline-facts">
+        <div>
+          <dt>Backend</dt>
+          <dd>{{ view.mapping.backendId }}</dd>
+        </div>
+        <div>
+          <dt>Your role</dt>
+          <dd>{{ view.mapping.access.role }}</dd>
+        </div>
       </dl>
+      @if (context(); as context) {
+        <div class="catalog-summary-status">
+          <weft-regression-status
+            [scope]="view.mapping.scope"
+            [context]="context"
+            [revisionId]="view.mapping.head.scope.revisionId"
+            [manage]="true"
+            [admin]="view.mapping.access.role === 'administrator'"
+            [canRun]="view.mapping.access.actions.preview"
+          />
+        </div>
+      }
       <details class="catalog-details">
         <summary>Mapping details</summary>
         <dl class="catalog-facts">
@@ -154,8 +177,8 @@
       </details>
     </section>
     <section class="catalog-head" aria-label="Current head">
-      <div>
-        <p>Current head when this view loaded</p>
+      <p>
+        Latest when this view loaded:
         <a
           class="catalog-head-link"
           [routerLink]="routes.revision(view.mapping.head.scope)"
@@ -168,7 +191,7 @@
           "
           >{{ admissionLabel(view.mapping.head.admission) }}</span
         >
-      </div>
+      </p>
       <button
         class="catalog-button"
         type="button"
@@ -177,41 +200,55 @@
         View current head
       </button>
     </section>
-    <div class="catalog-section-heading">
+    <div class="catalog-section-bar">
       <h2 class="catalog-section-title">Revision history</h2>
       <p>Each link opens a specific saved revision.</p>
-    </div>
-    @if (
-      context()?.features?.readReports &&
-      view.mapping.access.actions.readReports
-    ) {
-      <p>
+      @if (
+        context()?.features?.readReports &&
+        view.mapping.access.actions.readReports
+      ) {
         <a
-          class="catalog-page-link"
+          class="catalog-button"
           [routerLink]="routes.mapping(view.mapping.scope) + '/comparisons'"
           [queryParams]="{ right: view.mapping.head.scope.revisionId }"
           >Compare revisions</a
         >
-      </p>
-    }
+      }
+    </div>
     @if (view.page.revisions.length === 0) {
       <section class="catalog-state catalog-empty">
         <h3>No revisions</h3>
         <p>No revisions are available on this page.</p>
       </section>
     } @else {
-      <ul class="catalog-list" aria-label="Revision history">
+      <ul class="catalog-list catalog-rows" aria-label="Revision history">
         @for (
           revision of view.page.revisions;
           track revision.scope.revisionId
         ) {
           <li class="catalog-list-item">
-            <div class="catalog-item-heading">
-              <h3>
+            <div class="catalog-row-main">
+              <h3 class="catalog-row-title">
                 <a [routerLink]="routes.revision(revision.scope)"
                   >Revision {{ revision.sequence }}</a
                 >
               </h3>
+              <p class="catalog-row-description">
+                <span class="catalog-code">{{
+                  revision.originalFilename
+                }}</span>
+                ·
+                <time
+                  [attr.datetime]="revision.committedAtUtc"
+                  [title]="revision.committedAtUtc"
+                  >{{
+                    revision.committedAtUtc | date: "medium" : "UTC"
+                  }}
+                  UTC</time
+                >
+              </p>
+            </div>
+            <div class="catalog-row-meta">
               <span
                 class="catalog-badge"
                 [class.catalog-badge-issues]="
@@ -219,8 +256,6 @@
                 "
                 >{{ admissionLabel(revision.admission) }}</span
               >
-            </div>
-            <div class="catalog-item-meta">
               @if (context(); as admission) {
                 <weft-regression-status
                   [scope]="view.mapping.scope"
@@ -228,24 +263,19 @@
                   [revisionId]="revision.scope.revisionId"
                 />
               }
-              <span>{{ revision.originalFilename }}</span>
-              <span
-                ><time
-                  [attr.datetime]="revision.committedAtUtc"
-                  [title]="revision.committedAtUtc"
-                  >{{
-                    revision.committedAtUtc | date: "medium" : "UTC"
-                  }}
-                  UTC</time
-                ></span
-              >
             </div>
           </li>
         }
       </ul>
     }
     <nav class="catalog-pagination" aria-label="Revision pages">
-      <p>Up to 10 revisions per page.</p>
+      <p>
+        {{
+          view.page.nextCursor || cursor()
+            ? "More revisions on other pages."
+            : ""
+        }}
+      </p>
       @if (cursor()) {
         <a
           class="catalog-page-link"

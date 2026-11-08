@@ -1,4 +1,11 @@
-import { Component, effect, inject, input, signal } from "@angular/core";
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from "@angular/core";
 import { RouterLink } from "@angular/router";
 import {
   finalize,
@@ -20,105 +27,185 @@ import {
   type Suite,
 } from "./automation-api";
 
+/** Suite states recorded by the server (see migrations 0030). Unknown states show as given. */
+export function regressionStateLabel(state: string | undefined): string {
+  switch (state) {
+    case undefined:
+      return "Tests not recorded";
+    case "noCases":
+      return "No tests yet";
+    case "queued":
+      return "Tests queued";
+    case "passed":
+      return "Tests passed";
+    case "failed":
+      return "Tests failed";
+    case "disabled":
+      return "Automatic checks off";
+    default:
+      return `Tests: ${state}`;
+  }
+}
+
+export function regressionStateTone(state: string | undefined): string | null {
+  return state === "passed"
+    ? "success"
+    : state === "failed"
+      ? "failure"
+      : state === "queued"
+        ? "running"
+        : null;
+}
+
 @Component({
   selector: "weft-regression-status",
   imports: [RouterLink],
   template: `
-    <span class="catalog-badge" role="status"
-      >Regression: {{ suite()?.state ?? "not recorded" }}</span
-    >
+    <span class="weft-pill" role="status" [attr.data-tone]="tone()">{{
+      label()
+    }}</span>
     @if (suite(); as s) {
-      <span>
-        {{ s.passedCases }}/{{ s.totalCases }} passed ·
-        {{ s.failedCases }} failed · {{ s.pendingCases }} pending</span
-      >
-    }
-    <details>
-      <summary>Check controls and policy</summary>
-      @if (policy(); as p) {
-        <p>
-          Build policy:
-          {{
-            p.requirePassingRegression
-              ? "passing exact-revision regression required"
-              : "regression gate not required"
-          }}.
-        </p>
+      @if (s.totalCases > 0) {
+        <span class="regression-counts">
+          {{ s.passedCases }}/{{ s.totalCases }} passed ·
+          {{ s.failedCases }} failed · {{ s.pendingCases }} pending</span
+        >
       }
-      @if (manage()) {
-        @if (canRun()) {
-          <button
-            type="button"
-            class="catalog-button"
-            [disabled]="saving()"
-            (click)="recheck()"
-          >
-            Run all current cases now
-          </button>
+    }
+    @if (runInline()) {
+      @if (canRun()) {
+        <button
+          type="button"
+          class="catalog-button"
+          [disabled]="saving()"
+          (click)="recheck()"
+        >
+          Run all current cases now
+        </button>
+      }
+      @if (message()) {
+        <span role="status">{{ message() }}</span>
+      }
+    } @else {
+      <details class="regression-controls">
+        <summary>Check controls and policy</summary>
+        @if (policy(); as p) {
+          <p>
+            Build policy:
+            {{
+              p.requirePassingRegression
+                ? "passing exact-revision regression required"
+                : "regression gate not required"
+            }}.
+          </p>
         }
-        @if (suite()) {
-          <button type="button" class="catalog-button" (click)="cases()">
-            Show case results
-          </button>
-        }
-        @if (evaluations(); as page) {
-          <ul>
-            @for (item of page.cases; track item.caseId) {
-              <li>
-                <code>{{ item.caseId }}</code> v{{ item.version }}:
-                {{ item.state }} ({{ item.attempts }} attempts); original
-                revision
-                <code>{{ item.originalRevisionId }}</code>
-              </li>
-            }
-          </ul>
-          @if (page.nextCaseId) {
-            <button type="button" (click)="cases(page.nextCaseId)">
-              Next case results
-            </button>
-          }
-        }
-        <p>
-          Automatic checks:
-          {{
-            enabled() === null
-              ? "unavailable"
-              : enabled()
-                ? "on (all current cases)"
-                : "off"
-          }}.
-          @if (admin() && enabled() !== null) {
+        @if (manage()) {
+          @if (canRun()) {
             <button
               type="button"
               class="catalog-button"
               [disabled]="saving()"
-              (click)="toggle()"
+              (click)="recheck()"
             >
-              {{
-                pendingToggle() !== null
-                  ? "Retry change"
-                  : enabled()
-                    ? "Turn off"
-                    : "Turn on"
-              }}
+              Run all current cases now
             </button>
           }
-        </p>
-        <a
-          [routerLink]="[
-            '/catalog/organizations',
-            scope().organizationId,
-            'projects',
-            scope().projectId,
-            'automation',
-          ]"
-          >Automation and notifications</a
-        >
-        @if (message()) {
-          <p role="status">{{ message() }}</p>
+          @if (suite()) {
+            <button type="button" class="catalog-button" (click)="cases()">
+              Show case results
+            </button>
+          }
+          @if (evaluations(); as page) {
+            <ul>
+              @for (item of page.cases; track item.caseId) {
+                <li>
+                  <code>{{ item.caseId }}</code> v{{ item.version }}:
+                  {{ item.state }} ({{ item.attempts }} attempts); original
+                  revision
+                  <code>{{ item.originalRevisionId }}</code>
+                </li>
+              }
+            </ul>
+            @if (page.nextCaseId) {
+              <button type="button" (click)="cases(page.nextCaseId)">
+                Next case results
+              </button>
+            }
+          }
+          <p>
+            Automatic checks:
+            {{
+              enabled() === null
+                ? "unavailable"
+                : enabled()
+                  ? "on (all current cases)"
+                  : "off"
+            }}.
+            @if (admin() && enabled() !== null) {
+              <button
+                type="button"
+                class="catalog-button"
+                [disabled]="saving()"
+                (click)="toggle()"
+              >
+                {{
+                  pendingToggle() !== null
+                    ? "Retry change"
+                    : enabled()
+                      ? "Turn off"
+                      : "Turn on"
+                }}
+              </button>
+            }
+          </p>
+          <a
+            [routerLink]="[
+              '/catalog/organizations',
+              scope().organizationId,
+              'projects',
+              scope().projectId,
+              'automation',
+            ]"
+            >Automation and notifications</a
+          >
+          @if (message()) {
+            <p role="status">{{ message() }}</p>
+          }
         }
-      }
-    </details>
+      </details>
+    }
+  `,
+  styles: `
+    :host {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 10px;
+      min-width: 0;
+      font-size: 0.75rem;
+    }
+    .regression-counts {
+      color: #526b5e;
+    }
+    .regression-controls > summary {
+      color: #526b5e;
+      cursor: pointer;
+    }
+    .regression-controls[open] {
+      flex-basis: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d7e2d1;
+      border-radius: 6px;
+      background: #fafdf6;
+      text-align: left;
+    }
+    .regression-controls[open] > summary {
+      margin-bottom: 6px;
+      color: #213b34;
+    }
+    .regression-controls p {
+      margin: 6px 0;
+    }
   `,
 })
 export class RegressionStatusComponent {
@@ -128,6 +215,8 @@ export class RegressionStatusComponent {
   readonly manage = input(false);
   readonly admin = input(false);
   readonly canRun = input(false);
+  /** Show Run all next to the counts instead of the controls disclosure. */
+  readonly runInline = input(false);
   readonly suite = signal<Suite | null>(null);
   readonly policy = signal<Policy | null>(null);
   readonly enabled = signal<boolean | null>(null);
@@ -136,6 +225,8 @@ export class RegressionStatusComponent {
   readonly uncertain = signal(false);
   readonly pendingToggle = signal<boolean | null>(null);
   readonly evaluations = signal<Evaluations | null>(null);
+  readonly label = computed(() => regressionStateLabel(this.suite()?.state));
+  readonly tone = computed(() => regressionStateTone(this.suite()?.state));
   private readonly api = inject(AutomationApi);
   private readonly contexts = inject(CatalogContextStore);
   private actions = new Set<RxSubscription>();

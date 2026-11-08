@@ -53,6 +53,7 @@ import {
   type RegressionWork,
 } from "./regression-view-recovery";
 import { HelpLinkComponent } from "../../help/help-link.component";
+import { RegressionStatusComponent } from "../automation/regression-status.component";
 import { UnsentWork } from "../../workbench/unsent-work";
 
 const encoder = new TextEncoder();
@@ -72,6 +73,7 @@ const maxBytes = 8 * 1024 * 1024;
     StatusChipComponent,
     MetadataValueComponent,
     HelpLinkComponent,
+    RegressionStatusComponent,
   ],
   templateUrl: "./revision-regression.component.html",
   styleUrl: "./revision-regression.component.css",

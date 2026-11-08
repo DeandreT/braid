@@ -5,6 +5,8 @@
   [attr.aria-controls]="open() ? 'account-menu' : null"
   [attr.aria-expanded]="open()"
   [attr.data-tone]="tone()"
+  [attr.data-initial]="label().trim().charAt(0).toUpperCase()"
+  [title]="label()"
   (click)="toggle()"
 >
   <span class="account-dot" aria-hidden="true"></span>

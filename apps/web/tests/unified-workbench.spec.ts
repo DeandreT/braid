@@ -2,19 +2,25 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { workspaceFixture, legacyId } from "./workspace-chat.fixture";
 import { projectPath } from "./catalog.fixture";
+import {
+  chooseSavedConversation,
+  historyTrigger,
+  openMore,
+  refreshChat,
+} from "./chat-ui.fixture";
 
 const chat = (page: Page) => page.locator("#workspace-chat");
 async function createConversation(page: Page): Promise<string> {
-  const previous = await chat(page)
-    .getByLabel("Saved conversations")
-    .inputValue();
+  const previous = await historyTrigger(chat(page)).getAttribute(
+    "data-conversation-id",
+  );
   await chat(page)
     .getByRole("button", { name: "New conversation", exact: true })
     .click();
-  const selector = chat(page).getByLabel("Saved conversations");
-  await expect(selector).not.toHaveValue("");
-  await expect(selector).not.toHaveValue(previous);
-  return selector.inputValue();
+  const selector = historyTrigger(chat(page));
+  await expect(selector).not.toHaveAttribute("data-conversation-id", "");
+  await expect(selector).not.toHaveAttribute("data-conversation-id", previous!);
+  return (await selector.getAttribute("data-conversation-id"))!;
 }
 
 test("returning to a previous chat URL reconciles with the actual panel and protects its draft", async ({
@@ -24,13 +30,13 @@ test("returning to a previous chat URL reconciles with the actual panel and prot
   await page.goto("/chat");
   const a = await createConversation(page),
     b = await createConversation(page);
-  await chat(page).getByLabel("Saved conversations").selectOption(a);
+  await chooseSavedConversation(chat(page), a);
   await expect(page).toHaveURL(new RegExp(`conversationId=${a}`));
   await page
     .getByRole("navigation", { name: "Workspace", exact: true })
     .getByRole("link", { name: "Help", exact: true })
     .click();
-  await chat(page).getByLabel("Saved conversations").selectOption(b);
+  await chooseSavedConversation(chat(page), b);
   await chat(page).getByLabel("Question", { exact: true }).fill("Keep B draft");
   let warnings = 0;
   page.on("dialog", async (dialog) => {
@@ -39,7 +45,10 @@ test("returning to a previous chat URL reconciles with the actual panel and prot
   });
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`conversationId=${b}`));
-  await expect(chat(page).getByLabel("Saved conversations")).toHaveValue(b);
+  await expect(historyTrigger(chat(page))).toHaveAttribute(
+    "data-conversation-id",
+    b,
+  );
   await expect(chat(page).getByLabel("Question", { exact: true })).toHaveValue(
     "Keep B draft",
   );
@@ -96,12 +105,15 @@ for (const ambiguous of [false, true])
       if (ambiguous)
         await expect(
           chat(page).getByRole("button", {
-            name: "Recover original question",
+            name: "Retry original question",
             exact: true,
           }),
         ).toBeVisible();
       else await expect(chat(page)).toContainText("Answer complete.");
-      await expect(chat(page).getByLabel("Saved conversations")).toHaveValue(a);
+      await expect(historyTrigger(chat(page))).toHaveAttribute(
+        "data-conversation-id",
+        a,
+      );
       const sends = fixture.posts.filter((p) => p.path.endsWith("/turns"));
       expect(sends).toHaveLength(1);
       expect(sends[0]!.path).toContain(a);
@@ -153,9 +165,7 @@ for (const outcome of ["ready", "unavailable", "identityRejected"] as const)
       await dialog.dismiss();
     });
     try {
-      await chat(page)
-        .getByRole("button", { name: "Refresh chat", exact: true })
-        .click();
+      await refreshChat(chat(page));
       await pending;
       for (
         let steps = 0;
@@ -192,11 +202,10 @@ for (const outcome of ["ready", "unavailable", "identityRejected"] as const)
         if (outcome === "unavailable") {
           await expect(chat(page)).toContainText("Chat is unavailable.");
           await page.unroute("**/api/v1/organizations/*/chat");
-          await chat(page)
-            .getByRole("button", { name: "Refresh chat", exact: true })
-            .click();
+          await refreshChat(chat(page));
         }
-        await expect(chat(page).getByLabel("Saved conversations")).toHaveValue(
+        await expect(historyTrigger(chat(page))).toHaveAttribute(
+          "data-conversation-id",
           a,
         );
         await expect(
@@ -466,9 +475,9 @@ test("one conversation and unsent draft survive route changes, resizing and hide
     .click();
   const question = chat(page).getByLabel("Question", { exact: true });
   await question.fill("Keep this draft across workspace contexts");
-  const conversation = await chat(page)
-    .getByLabel("Saved conversations")
-    .inputValue();
+  const conversation = (await historyTrigger(chat(page)).getAttribute(
+    "data-conversation-id",
+  ))!;
   const separator = page.getByRole("separator", {
     name: "Resize chat",
     exact: true,
@@ -502,7 +511,8 @@ test("one conversation and unsent draft survive route changes, resizing and hide
   await expect(question).toHaveValue(
     "Keep this draft across workspace contexts",
   );
-  await expect(chat(page).getByLabel("Saved conversations")).toHaveValue(
+  await expect(historyTrigger(chat(page))).toHaveAttribute(
+    "data-conversation-id",
     conversation,
   );
   await expect(page.locator("weft-revision-chat")).toHaveCount(1);
@@ -534,9 +544,9 @@ test("cancelled conversation changes restore the URL and retain the draft", asyn
   await chat(page)
     .getByRole("button", { name: "New conversation", exact: true })
     .click();
-  const selected = await chat(page)
-    .getByLabel("Saved conversations")
-    .inputValue();
+  const selected = (await historyTrigger(chat(page)).getAttribute(
+    "data-conversation-id",
+  ))!;
   await chat(page)
     .getByLabel("Question", { exact: true })
     .fill("Do not discard this question");
@@ -545,7 +555,7 @@ test("cancelled conversation changes restore the URL and retain the draft", asyn
     warnings++;
     await dialog.dismiss();
   });
-  await chat(page).getByLabel("Saved conversations").selectOption(legacyId);
+  await chooseSavedConversation(chat(page), legacyId);
   await expect(page).toHaveURL(new RegExp(`conversationId=${selected}`));
   await expect(chat(page).getByLabel("Question", { exact: true })).toHaveValue(
     "Do not discard this question",

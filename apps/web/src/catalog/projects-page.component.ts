@@ -1,3 +1,4 @@
+import { DatePipe } from "@angular/common";
 import { Component } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import {
@@ -8,7 +9,7 @@ import type { CatalogProjectPage } from "./catalog-types";
 
 @Component({
   selector: "weft-projects-page",
-  imports: [RouterLink, CatalogStatusComponent],
+  imports: [DatePipe, RouterLink, CatalogStatusComponent],
   templateUrl: "./projects-page.component.html",
 })
 export class ProjectsPageComponent extends CatalogRoutePage<

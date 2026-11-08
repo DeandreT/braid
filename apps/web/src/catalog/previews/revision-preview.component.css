@@ -2,24 +2,90 @@
   display: block;
   min-width: 0;
 }
-.preview-form {
+.preview {
+  container-type: inline-size;
+}
+:host-context(.app-workbench) .preview {
+  border-bottom: 0;
+}
+/* Playground: inputs and the result side by side when the panel is wide enough. */
+.preview-layout {
   display: grid;
   gap: 16px;
-  margin: 16px 0 0;
+  margin: 12px 0 0;
+}
+@container (min-width: 760px) {
+  .preview-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .preview-results {
+    position: sticky;
+    top: 0;
+  }
+}
+.preview-form {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #d7e2d1;
+  border-radius: 6px;
+  background: #f7faf3;
+}
+.preview-toolbar label {
+  color: #526b5e;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.preview-toolbar select.preview-text {
+  width: auto;
+  max-width: 100%;
+  font-family: inherit;
+}
+.preview-spacer {
+  flex: 1;
 }
 .preview-group {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   margin: 0;
-  padding: 14px;
-  border: 1px solid #dfe7da;
-  border-radius: 10px;
+  padding: 0;
+  border: 0;
 }
 .preview-group legend {
-  color: #284c3c;
+  color: #213b34;
   font-weight: 600;
-  padding: 0 6px;
+  font-size: 0.8125rem;
+  padding: 0;
+  margin-bottom: 4px;
+}
+.catalog-button.preview-add {
+  justify-self: start;
+  border-style: dashed;
+  background: #fff;
+  font-size: 0.75rem;
+}
+.preview-results {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #d7e2d1;
+  border-radius: 6px;
+  background: #fafdf6;
+}
+.preview-results-empty {
+  margin: 0;
+  padding: 24px 8px;
+  color: #526b5e;
+  font-size: 0.8125rem;
+  text-align: center;
 }
 .preview-input {
   display: grid;
@@ -49,9 +115,9 @@
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border: 1px solid var(--wb-control-border);
-  border-radius: 8px;
+  border-radius: 4px;
   font:
     13px ui-monospace,
     "SFMono-Regular",
@@ -77,27 +143,17 @@
   border-radius: 9px;
   background: #f5f8f1;
 }
-.preview-primary {
-  background: #345d45;
-  border-color: #345d45;
-  color: #fff;
-}
-.preview-primary:hover {
-  background: #284c3c;
-}
 .preview-error {
   display: grid;
   gap: 8px;
   justify-items: start;
 }
 .preview-run {
-  margin: 20px 0 0;
-  padding: 16px 0 0;
-  border-top: 1px solid #dfe7da;
+  margin: 0;
 }
 .preview-run h3 {
-  color: #284c3c;
-  font-size: 18px;
+  color: #213b34;
+  font-size: 0.9375rem;
   margin: 0 0 8px;
 }
 .preview-status {

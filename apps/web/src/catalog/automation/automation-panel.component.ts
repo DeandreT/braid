@@ -40,48 +40,130 @@ import {
   templateUrl: "./automation-panel.component.html",
   styles: [
     `
+      :host {
+        display: block;
+        font-size: 0.8125rem;
+      }
+      .automation-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin: 0 0 12px;
+      }
+      .automation-toolbar p {
+        flex: 1;
+        margin: 0;
+        color: #526b5e;
+      }
       .automation-grid {
         display: grid;
-        gap: 1rem;
+        gap: 12px;
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+        align-items: start;
       }
       .automation-box {
-        padding: 1rem;
-        background: var(--surface-raised, #ffffff08);
-        border: 1px solid var(--border, #8884);
-        border-radius: 0.5rem;
+        margin: 0 0 12px;
+        padding: 14px 16px;
+        background: #fff;
+        border: 1px solid #d7e2d1;
+        border-radius: 8px;
       }
-      .automation-box label {
+      .automation-box h2 {
+        margin: 0 0 6px;
+        font-size: 0.9375rem;
+      }
+      .automation-box > p {
+        margin: 0 0 10px;
+        color: #526b5e;
+        line-height: 1.5;
+      }
+      .automation-check {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        margin: 0.6rem 0;
+        gap: 8px;
+        margin: 0;
+        min-height: 28px;
       }
       .automation-box input[type="checkbox"] {
-        width: auto;
-        display: inline-block;
+        width: 16px;
+        height: 16px;
+        min-height: 0;
         margin: 0;
+        accent-color: var(--wb-selection-text);
       }
-      .automation-box input[type="number"] {
-        max-width: 6rem;
-        margin-left: 0.5rem;
+      .automation-numbers {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+        gap: 8px 12px;
+        margin: 10px 0;
+      }
+      .automation-numbers label {
+        display: grid;
+        gap: 4px;
+        color: #526b5e;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      .automation-numbers input {
+        width: 100%;
+      }
+      .automation-options {
+        list-style: none;
+        margin: 4px 0 10px;
+        padding: 0;
+        border: 1px solid #d7e2d1;
+        border-radius: 6px;
+      }
+      .automation-options li {
+        padding: 2px 10px;
+        border-bottom: 1px solid #d7e2d1;
+      }
+      .automation-options li:last-child {
+        border-bottom: 0;
+      }
+      .automation-events {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+      }
+      .automation-events li {
+        border-bottom: 0;
+      }
+      .automation-legend,
+      legend {
+        margin: 8px 0 4px;
+        padding: 0;
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+      .automation-note {
+        margin: 2px 0 6px;
+        color: #526b5e;
+        font-size: 0.75rem;
+      }
+      .automation-save {
+        display: flex;
+        justify-content: flex-end;
       }
       .automation-event {
-        padding: 0.8rem 0;
-        border-bottom: 1px solid var(--border, #8884);
+        padding: 8px 0;
+        border-bottom: 1px solid #d7e2d1;
+      }
+      .automation-event p {
+        margin: 4px 0;
       }
       code {
         overflow-wrap: anywhere;
       }
       button {
-        margin: 0.3rem;
+        margin: 0.2rem;
       }
       fieldset {
         border: 0;
+        margin: 0;
         padding: 0;
-      }
-      legend {
-        font-weight: 600;
+        min-width: 0;
       }
     `,
   ],

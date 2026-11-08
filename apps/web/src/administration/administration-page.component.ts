@@ -10,12 +10,14 @@ import {
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
-import { firstValueFrom } from "rxjs";
+import { finalize, firstValueFrom, type Subscription } from "rxjs";
 import { CatalogContextStore } from "../catalog/catalog-context";
+import { CatalogApi } from "../catalog/catalog-api";
 import {
   catalogOwner,
   isCatalogId,
   type CatalogContext,
+  type CatalogProject,
 } from "../catalog/catalog-types";
 import { UnsentWork } from "../workbench/unsent-work";
 import { BrowserSessionState } from "../auth/browser-session-state";
@@ -57,6 +59,10 @@ export class AdministrationPageComponent {
   readonly invitationLink = signal<string | null>(null);
   readonly roles = ["viewer", "runner", "publisher", "administrator"];
   readonly invitationRoles = signal<{ projectId: string; role: string }[]>([]);
+  readonly adminProjects = signal<CatalogProject[] | null>(null);
+  readonly adminProjectsError = signal(false);
+  private adminProjectsRead: Subscription | null = null;
+  private readonly catalog = inject(CatalogApi);
   private owner: CatalogContext | null = null;
   private retainedOwner: string | null = null;
   private readonly admitted = signal<CatalogContext | null>(null);
@@ -120,6 +126,7 @@ export class AdministrationPageComponent {
           this.admitted.set(null);
           this.organization.set(null);
           this.project.set(null);
+          this.cancelAdminProjects();
           this.loadedProjectId = null;
           this.clearDrafts();
           if (ended) this.retainedOwner = null;
@@ -237,6 +244,48 @@ export class AdministrationPageComponent {
     } finally {
       if (generation === this.generation) this.busy.set(false);
     }
+  }
+  /** An explicit read of the first catalog page; the page never lists projects on its own. */
+  loadAdminProjects(): void {
+    const context = this.admitted();
+    if (!context || !this.presented() || this.adminProjectsRead) return;
+    const generation = this.generation;
+    // Only the owner who asked may see the list; a later owner or session drops it.
+    const current = () =>
+      generation === this.generation &&
+      this.contexts.isCurrent(context) &&
+      this.contexts.canPresent(context);
+    this.adminProjectsError.set(false);
+    this.adminProjectsRead = this.catalog
+      .projects(context.allowedOrganizationId)
+      .pipe(
+        finalize(() => (this.adminProjectsRead = null)),
+        takeUntilDestroyed(this.lifetime),
+      )
+      .subscribe({
+        next: (page) => {
+          if (!current()) return;
+          this.adminProjects.set(
+            page.projects.filter(
+              (item) => item.access.role === "administrator",
+            ),
+          );
+        },
+        error: () => {
+          if (current()) this.adminProjectsError.set(true);
+        },
+      });
+  }
+  private cancelAdminProjects(): void {
+    this.adminProjectsRead?.unsubscribe();
+    this.adminProjectsRead = null;
+    this.adminProjects.set(null);
+    this.adminProjectsError.set(false);
+  }
+  async manageProject(id: string): Promise<void> {
+    this.projectId = id;
+    this.draftChanged();
+    await this.selectProject();
   }
   async selectProject(): Promise<void> {
     if (!isCatalogId(this.projectId)) {
@@ -487,6 +536,7 @@ export class AdministrationPageComponent {
     this.loadedProjectId = null;
     this.organization.set(null);
     this.project.set(null);
+    this.cancelAdminProjects();
     this.busy.set(false);
     this.mutationPending.set(false);
     this.message.set("");

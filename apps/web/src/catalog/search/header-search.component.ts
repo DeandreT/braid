@@ -22,7 +22,11 @@ import type { WorkbenchCommand } from "../../workbench/workbench-frame.component
       (click)="open()"
       aria-haspopup="dialog"
     >
-      Search / Go to <kbd>Ctrl K</kbd>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-4-4" />
+      </svg>
+      <span class="search-label">Search / Go to</span> <kbd>Ctrl K</kbd>
     </button>
     <dialog
       #dialog
@@ -76,8 +80,10 @@ import type { WorkbenchCommand } from "../../workbench/workbench-frame.component
   `,
   styles: `
     :host {
+      flex: 1;
+      display: flex;
+      justify-content: center;
       min-width: 0;
-      margin-left: auto;
     }
     button,
     input {
@@ -90,10 +96,33 @@ import type { WorkbenchCommand } from "../../workbench/workbench-frame.component
       background: white;
     }
     .search-trigger {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: min(28rem, 100%);
+      color: #526b5e;
       font-size: 0.8125rem;
+      cursor: text;
+    }
+    .search-trigger:hover {
+      border-color: #174d3f;
+    }
+    .search-trigger svg {
+      flex: none;
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+    }
+    .search-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     kbd {
-      margin-left: 12px;
+      margin-left: auto;
       color: #5d6e80;
       font-size: 0.6875rem;
     }

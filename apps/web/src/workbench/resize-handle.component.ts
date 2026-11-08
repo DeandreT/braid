@@ -6,6 +6,8 @@ import { Component, input, output } from "@angular/core";
     role="separator"
     tabindex="0"
     [attr.aria-label]="label()"
+    [attr.aria-description]="description()"
+    [attr.title]="description()"
     [attr.aria-orientation]="orientation()"
     [attr.aria-valuenow]="value()"
     [attr.aria-valuemin]="minimum()"
@@ -54,6 +56,7 @@ import { Component, input, output } from "@angular/core";
 })
 export class ResizeHandleComponent {
   readonly label = input.required<string>();
+  readonly description = input<string | null>(null);
   readonly controls = input<string | null>(null);
   readonly orientation = input<"vertical" | "horizontal">("vertical");
   readonly value = input.required<number>();
