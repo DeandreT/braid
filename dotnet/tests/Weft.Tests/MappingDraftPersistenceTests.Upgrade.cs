@@ -38,7 +38,7 @@ public sealed partial class MappingDraftPersistenceTests
         Assert.Equal(history, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m WHERE version<" + DraftMigration));
         Assert.Equal(before, JsonSerializer.Serialize(await previews.ReadAsync(actor, seed.OrganizationA, created.RunId.Value)));
         Assert.Equal(PreviewSubmitOutcome.Replayed, (await previews.SubmitAsync(actor, submission)).Outcome);
-        Assert.Equal(DraftMigration + 1L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
+        Assert.Equal((long)MigrationRunner.EmbeddedMigrations.Count, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
         Assert.False(await test.ScalarAsync<bool>("SELECT has_table_privilege('weft_draft_writer','weft.mapping_drafts','SELECT,INSERT,UPDATE,DELETE')"));
         Assert.False(await test.ScalarAsync<bool>("SELECT has_function_privilege('weft_draft_reader','weft.draft_checkpoint_write(uuid,uuid,uuid,bigint,bytea,bytea,bytea,bytea,boolean,integer,text,text,text)','EXECUTE')"));
     }
