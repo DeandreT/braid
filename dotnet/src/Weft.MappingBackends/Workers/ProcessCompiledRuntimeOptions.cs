@@ -28,6 +28,14 @@ public sealed class ProcessCompiledRuntimeOptions
     public string DotnetRoot { get; }
     public TimeSpan WallTimeout { get; }
     internal bool WithholdEndOfInput { get; init; }
+    // Parent-side qualification seams only. None is populated from service/request configuration.
+    internal Action<ProcessCompiledRuntimeRunner.OwnedOperation>? ObserveOperation { get; init; }
+    internal Action<CancellationToken>? ObserveShutdown { get; init; }
+    internal Func<CompiledRuntimeCleanupStage, Task>? BeforeCleanupStage { get; init; }
+    internal Func<ProcessCompiledRuntimeRunner.OwnedOperation, CompiledRuntimeIoKind, Task, Task>? WrapOwnedTask { get; init; }
+    internal Func<ProcessCompiledRuntimeRunner.OwnedOperation, Task>? BeforeLaunch { get; init; }
+    internal Func<ProcessCompiledRuntimeRunner.OwnedOperation, CompiledRuntimeIoKind, Task>? BeforeIoLaunch { get; init; }
+    internal Action<ProcessCompiledRuntimeRunner.OwnedOperation, long>? ObserveCleanupStart { get; init; }
 
     internal IReadOnlyDictionary<string, string> Environment(string directory) => new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -61,9 +69,16 @@ public sealed class ProcessCompiledRuntimeOptions
             "--open-files=" + Profile.FileLimit.ToString(CultureInfo.InvariantCulture),
             "--file-bytes=" + FileBytes.ToString(CultureInfo.InvariantCulture)
         };
+        result.AddRange(["--dotnet-root=" + DotnetRoot, "--profile=runtime", "--runtime-assembly=" + RuntimeAssembly]);
         result.AddRange(grants.Read.Append(Path.GetDirectoryName(RuntimeAssembly)!).Distinct(StringComparer.Ordinal).Select(path => "--read=" + path));
-        result.AddRange(grants.Execute.Select(path => "--execute=" + path));
-        result.AddRange(["--", BuildCompilation.Host(DotnetRoot), RuntimeAssembly]);
         return result;
     }
 }
+
+internal enum CompiledRuntimeCleanupStage { Process, Callbacks, Pipes, Handles, Directory }
+
+internal readonly record struct CompiledRuntimeCleanupStep(CompiledRuntimeCleanupStage Stage, long Deadline, TimeSpan Remaining);
+
+internal enum CompiledRuntimeIoKind { StandardError, Handshake, StandardOutput, Writer, ExitObserver, ReapConfirmation }
+
+internal sealed record CompiledRuntimeTaskOwnership(CompiledRuntimeIoKind Kind, Task Original, Task Owned);

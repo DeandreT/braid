@@ -49,6 +49,31 @@ when the native worker is unchanged.
 
 The existing launcher installs Landlock and seccomp before its readiness marker;
 the service checks the child in procfs before sending its start byte or payload.
+The native launcher stays the process. It loads only the pinned .NET 10.0.12
+hostfxr in-process, runs its one fixed installed managed entrypoint and never
+executes another image. Before loading hostfxr it seals dumpability at zero,
+no-new-privileges and empty active capabilities. Its filters deny both exec
+syscalls, every dumpability/ptracer-setting prctl (including upper-bit aliases),
+credential/group changes and capability mutation. Managed code and its threads
+cannot re-enable dumpability. Runtime initialization refuses a different framework,
+extra dependency roots or external probing. A host incompatibility fails closed.
+
+This privacy continuity begins at successful native hardening and covers trusted
+.NET startup and compiled execution. A trusted service account and deployment
+origin are prerequisites, not facts established by these checks: an unrestricted
+same-UID actor must not attach a tracer or open a memory handle before hardening.
+The launcher does not claim protection from process birth or from an already
+attached tracer. Untrusted workloads begin only after hardening; already hardened
+peers cannot trace them. Keep the admitted installation immutable and the initial
+launcher environment cleared, including loader, profiler, startup-hook and probing
+settings. `host_path` is .NET metadata, not the executed native image. Identity
+measurement includes the actual surviving launcher, its ELF interpreter and their
+dependencies, hostfxr, hostpolicy, CoreCLR and the installed runtime configs/deps.
+
+The `WFC2` readiness marker rejects the older launch contract. The changed runner
+and launcher also change the execution/compiler pins. A stale pin is refused;
+the service never approves or re-pins an installation automatically.
+
 The child can read its own empty operation directory, installed runtime and
 system libraries. No file is writable. Network sockets, new processes, metadata
 mutations and foreign-process access remain denied. The service and every child

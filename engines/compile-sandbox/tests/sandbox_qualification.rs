@@ -1,5 +1,5 @@
-//! Compile-sandbox qualification. This target has no libtest harness: each launch runs the real launcher, which
-//! executes a fresh copy of this executable as its program, so every control is observed after `execve`. Launches
+//! Low-level sandbox qualification. Each fresh test child enters the production library's controls and then runs
+//! its native probe in-process, without exec. Service tests separately qualify the real managed launcher. Launches
 //! can also simulate an older kernel's Landlock ABI, so the controls that must hold without Landlock's signal and
 //! abstract-socket scopes (ABI 3 to 5) are qualified on any kernel.
 
@@ -15,7 +15,6 @@ use weft_compile_sandbox::{self as sandbox, FILTERS, GO, MINIMUM_LANDLOCK_ABI, R
 
 const HELPER: &str = "WEFT_COMPILE_SANDBOX_QUALIFICATION_HELPER";
 const VICTIM: &str = "WEFT_COMPILE_SANDBOX_QUALIFICATION_VICTIM";
-const LAUNCHER: &str = env!("CARGO_BIN_EXE_weft-compile-sandbox");
 const MEMORY_BYTES: u64 = 1 << 30;
 const FILE_BYTES: u64 = 1 << 20;
 /// The kernel's own Landlock ABI, then every admitted ABI before 6, the first that scopes signals and abstract unix
@@ -25,12 +24,49 @@ const ABIS: [Option<i64>; 4] = [None, Some(5), Some(4), Some(MINIMUM_LANDLOCK_AB
 fn main() {
     close_inherited_descriptors_on_exec();
     if let Ok(scenario) = std::env::var(HELPER) {
+        let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+        if !arguments.is_empty() {
+            let value = |prefix: &str| {
+                arguments
+                    .iter()
+                    .find_map(|arg| arg.strip_prefix(prefix))
+                    .unwrap()
+                    .parse::<u64>()
+                    .unwrap()
+            };
+            let launch = sandbox::Launch {
+                cpu_seconds: value("--cpu-seconds="),
+                memory_bytes: value("--memory-bytes="),
+                open_files: value("--open-files="),
+                file_bytes: value("--file-bytes="),
+                output: arguments
+                    .iter()
+                    .find_map(|arg| arg.strip_prefix("--output="))
+                    .map(|name| CString::new(name).unwrap()),
+                read: arguments
+                    .iter()
+                    .filter_map(|arg| arg.strip_prefix("--read="))
+                    .map(|path| CString::new(path).unwrap())
+                    .collect(),
+                dotnet_root: CString::new("/unused-test-root").unwrap(),
+                profile: sandbox::ManagedProfile::Compile,
+            };
+            if let Err(error) = sandbox::enter(&launch) {
+                std::process::exit(i32::from(error.exit_code()));
+            }
+            std::io::stdout().write_all(&READY_MARKER).unwrap();
+            std::io::stdout().flush().unwrap();
+            let mut go = [0u8];
+            if unsafe { libc::read(0, go.as_mut_ptr().cast(), 1) } != 1 || go[0] != GO {
+                std::process::exit(1);
+            }
+        }
         helper(&scenario);
         return;
     }
     arguments_have_one_exact_shape();
     launcher_reports_every_control_before_the_program();
-    program_runs_confined_after_execve();
+    program_runs_confined_after_hardening();
     other_processes_are_unreachable_at_every_landlock_abi();
     without_an_output_grant_nothing_is_writable();
     anything_but_go_never_starts_the_program();
@@ -39,6 +75,7 @@ fn main() {
     address_space_limit_refuses_large_reservations();
     cpu_limit_terminates_a_spinning_program();
     file_size_limit_stops_the_output_growing();
+    privacy_transitions_are_sealed();
     println!("compile sandbox qualification: all scenarios passed");
 }
 
@@ -51,33 +88,33 @@ fn arguments_have_one_exact_shape() {
         "--memory-bytes=1073741824",
         "--open-files=64",
         "--file-bytes=1048576",
-        "--output=out.dll",
+        "--output=Ferrule.Generated.dll",
+        "--dotnet-root=/usr/share/dotnet",
+        "--profile=compile",
         "--read=/usr/share/dotnet",
         "--read=/dev/urandom",
-        "--execute=/lib64/ld-linux-x86-64.so.2",
-        "--",
-        "/usr/share/dotnet/dotnet",
-        "exec",
-        "@compiler.rsp",
     ])
     .unwrap();
     assert_eq!(accepted.cpu_seconds, 10);
     assert_eq!(accepted.memory_bytes, 1 << 30);
     assert_eq!(accepted.open_files, 64);
     assert_eq!(accepted.file_bytes, 1 << 20);
-    assert_eq!(accepted.output, Some(CString::new("out.dll").unwrap()));
+    assert_eq!(
+        accepted.output,
+        Some(CString::new("Ferrule.Generated.dll").unwrap())
+    );
     assert_eq!(accepted.read.len(), 2);
-    assert_eq!(accepted.execute.len(), 1);
-    assert_eq!(accepted.command.len(), 3);
+    assert_eq!(accepted.profile, sandbox::ManagedProfile::Compile);
     // Without an output grant nothing is writable.
     let unwritable = parse(&[
         "--cpu-seconds=10",
         "--memory-bytes=1073741824",
         "--open-files=64",
         "--file-bytes=1048576",
+        "--dotnet-root=/usr/share/dotnet",
+        "--profile=runtime",
+        "--runtime-assembly=/runtime/fixed.dll",
         "--read=/usr/share/dotnet",
-        "--",
-        "/usr/share/dotnet/dotnet",
     ])
     .unwrap();
     assert_eq!(unwritable.output, None);
@@ -87,12 +124,12 @@ fn arguments_have_one_exact_shape() {
         "--memory-bytes=1073741824",
         "--open-files=64",
         "--file-bytes=1048576",
-        "--output=out.dll",
+        "--output=Ferrule.Generated.dll",
     ];
     let with = |index: usize, value: &'static str| {
         let mut values = base.to_vec();
         values[index] = value;
-        values.extend(["--", "/usr/bin/program"]);
+        values.extend(["--dotnet-root=/usr/share/dotnet", "--profile=compile"]);
         values
     };
     for refused in [
@@ -225,7 +262,7 @@ fn interpreter(executable: &Path) -> String {
 }
 
 fn launch_arguments(cpu_seconds: u64, memory_bytes: u64, extra: &[String]) -> Vec<String> {
-    let (directories, interpreter) = runtime_grants();
+    let (directories, _) = runtime_grants();
     let mut arguments = vec![
         format!("--cpu-seconds={cpu_seconds}"),
         format!("--memory-bytes={memory_bytes}"),
@@ -239,9 +276,6 @@ fn launch_arguments(cpu_seconds: u64, memory_bytes: u64, extra: &[String]) -> Ve
             .map(|directory| format!("--read={directory}")),
     );
     arguments.extend(extra.iter().cloned());
-    arguments.push(format!("--execute={interpreter}"));
-    arguments.push("--".to_string());
-    arguments.push(std::env::current_exe().unwrap().display().to_string());
     arguments
 }
 
@@ -259,7 +293,7 @@ fn launcher_at(
     arguments: &[String],
     environment: &[(&str, String)],
 ) -> Child {
-    let mut command = Command::new(LAUNCHER);
+    let mut command = Command::new(std::env::current_exe().unwrap());
     command
         .args(arguments)
         .env_clear()
@@ -541,13 +575,13 @@ fn launcher_reports_every_control_before_the_program() {
     assert_eq!(String::from_utf8(output.stdout).unwrap(), "reported\n");
 }
 
-fn program_runs_confined_after_execve() {
+fn program_runs_confined_after_hardening() {
     for abi in ABIS {
-        program_runs_confined_after_execve_at(abi);
+        program_runs_confined_after_hardening_at(abi);
     }
 }
 
-fn program_runs_confined_after_execve_at(abi: Option<i64>) {
+fn program_runs_confined_after_hardening_at(abi: Option<i64>) {
     let directory = private_directory();
     let mut child = launcher_at(
         abi,
@@ -583,7 +617,7 @@ fn program_runs_confined_after_execve_at(abi: Option<i64>) {
         "read-parent-file=PermissionDenied",
         "list-parent=PermissionDenied",
         "read-other-process=PermissionDenied",
-        "execute-other=EACCES",
+        "execute-other=EPERM",
         "change-mode=EPERM",
         "change-read-grant-mode-by-fd=EPERM",
         "set-read-grant-attribute-at=EPERM",
@@ -879,6 +913,92 @@ fn address_space_limit_refuses_large_reservations() {
     );
 }
 
+fn privacy_transitions_are_sealed() {
+    let output = run_to_end("privacy", 10, MEMORY_BYTES);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(output.stdout, b"privacy=sealed\n");
+}
+
+fn privacy_probe() {
+    let denied = |value: libc::c_long| {
+        assert_eq!(value, -1);
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::EPERM)
+        );
+    };
+    assert_eq!(unsafe { libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0) }, 0);
+    for option in [
+        libc::PR_SET_DUMPABLE as u64,
+        (1u64 << 32) | libc::PR_SET_DUMPABLE as u64,
+        0xffff_ffff_0000_0000 | libc::PR_SET_DUMPABLE as u64,
+        libc::PR_SET_PTRACER as u64,
+        (1u64 << 32) | libc::PR_SET_PTRACER as u64,
+    ] {
+        let values: &[u64] = if option as u32 == libc::PR_SET_DUMPABLE as u32 {
+            &[0, 1]
+        } else {
+            &[0]
+        };
+        for &value in values {
+            denied(unsafe { libc::syscall(libc::SYS_prctl, option, value, 0u64, 0u64, 0u64) });
+        }
+    }
+    denied(unsafe {
+        libc::syscall(
+            libc::SYS_execve,
+            c"/bin/sh".as_ptr(),
+            std::ptr::null::<u8>(),
+            std::ptr::null::<u8>(),
+        )
+    });
+    denied(unsafe {
+        libc::syscall(
+            libc::SYS_execveat,
+            -1,
+            c"".as_ptr(),
+            std::ptr::null::<u8>(),
+            std::ptr::null::<u8>(),
+            0,
+        )
+    });
+    let uid = u64::from(unsafe { libc::getuid() });
+    let gid = u64::from(unsafe { libc::getgid() });
+    // Harmless same-ID setters would succeed without the filter, unlike a request to become root.
+    for (syscall, id) in [
+        (libc::SYS_setuid, uid),
+        (libc::SYS_setgid, gid),
+        (libc::SYS_setreuid, uid),
+        (libc::SYS_setregid, gid),
+        (libc::SYS_setresuid, uid),
+        (libc::SYS_setresgid, gid),
+        (libc::SYS_setfsuid, uid),
+        (libc::SYS_setfsgid, gid),
+    ] {
+        denied(unsafe { libc::syscall(syscall, id, id, id, 0u64, 0u64, 0u64) });
+    }
+    denied(unsafe { libc::syscall(libc::SYS_setgroups, 0u64, 0u64) });
+    // A valid no-op capset would also succeed for our already empty capabilities.
+    let header = [0x2008_0522u32, 0];
+    let capabilities = [[0u32; 3]; 2];
+    denied(unsafe { libc::syscall(libc::SYS_capset, header.as_ptr(), capabilities.as_ptr()) });
+    std::thread::spawn(|| {
+        assert_eq!(
+            unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 1, 0, 0, 0) },
+            -1
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::EPERM)
+        );
+        assert_eq!(unsafe { libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0) }, 0);
+    })
+    .join()
+    .unwrap();
+    assert_eq!(unsafe { libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0) }, 0);
+    println!("privacy=sealed");
+}
+
 fn cpu_limit_terminates_a_spinning_program() {
     let output = run_to_end("spin", 1, MEMORY_BYTES);
     assert!(
@@ -906,6 +1026,7 @@ fn helper(scenario: &str) {
             Err(error) => println!("{:?}", error.kind()),
         },
         "probe" => probe(),
+        "privacy" => privacy_probe(),
         "cross-process" => cross_process_probe(),
         "victim" => {
             // Default dispositions: SIGIO, SIGUSR1 or any other route that reaches this process ends it.
@@ -918,7 +1039,7 @@ fn helper(scenario: &str) {
         "leak-descriptor" => {
             // An inherited descriptor without close-on-exec must stop the launcher before its marker.
             let leaked = rustix::io::dup(std::io::stdout()).unwrap();
-            let mut child = Command::new(LAUNCHER)
+            let mut child = Command::new(std::env::current_exe().unwrap())
                 .args(launch_arguments(10, MEMORY_BYTES, &[]))
                 .env_clear()
                 .env(HELPER, "report")
@@ -976,7 +1097,7 @@ fn helper(scenario: &str) {
     }
 }
 
-/// Runs inside the launched program, after `execve`, and reports each attempted operation.
+/// Runs after native hardening, without another exec, and reports each attempted operation.
 // Calls newer than the pinned libc's tables.
 const SYS_SETXATTRAT: libc::c_long = 463;
 const SYS_REMOVEXATTRAT: libc::c_long = 466;

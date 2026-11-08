@@ -19,6 +19,9 @@ public static class BuildCompilation
     /// <summary>The installed .NET host under a toolchain root.</summary>
     public static string Host(string root) => root + "/dotnet";
 
+    /// <summary>The exact native host library, loaded in the already hardened launcher without exec.</summary>
+    public static string HostFxr(string root) => root + "/host/fxr/" + BuildWorkerProtocol.RuntimeVersion + "/libhostfxr.so";
+
     /// <summary>The pinned Roslyn compiler, invoked directly without MSBuild or a compiler server.</summary>
     public static string Compiler(string root) => root + "/sdk/" + BuildWorkerProtocol.SdkVersion + "/Roslyn/bincore/csc.dll";
 

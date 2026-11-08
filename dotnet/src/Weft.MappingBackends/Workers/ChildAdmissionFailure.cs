@@ -22,7 +22,9 @@ internal enum ChildAdmissionFailure
     PathGrant,
     LandlockRestriction,
     FilesystemConfinement,
+    UnprivilegedOrigin,
     StatusRead,
+    IdentityVerification,
     NoNewPrivilegesVerification,
     SeccompModeVerification,
     FilterCountVerification,
@@ -60,6 +62,7 @@ internal static class ChildAdmissionDiagnostics
         91 => ChildAdmissionFailure.PathGrant,
         92 => ChildAdmissionFailure.LandlockRestriction,
         93 => ChildAdmissionFailure.FilesystemConfinement,
+        94 => ChildAdmissionFailure.UnprivilegedOrigin,
         _ => ChildAdmissionFailure.MarkerMissing
     };
 
@@ -90,7 +93,9 @@ internal static class ChildAdmissionDiagnostics
         ChildAdmissionFailure.PathGrant => "marker-missing/path-grant",
         ChildAdmissionFailure.LandlockRestriction => "marker-missing/landlock-restriction",
         ChildAdmissionFailure.FilesystemConfinement => "marker-missing/filesystem-confinement",
+        ChildAdmissionFailure.UnprivilegedOrigin => "marker-missing/unprivileged-origin",
         ChildAdmissionFailure.StatusRead => "procfs/status-read",
+        ChildAdmissionFailure.IdentityVerification => "procfs/identity",
         ChildAdmissionFailure.NoNewPrivilegesVerification => "procfs/no-new-privileges",
         ChildAdmissionFailure.SeccompModeVerification => "procfs/seccomp-mode",
         ChildAdmissionFailure.FilterCountVerification => "procfs/filter-count",

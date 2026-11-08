@@ -176,6 +176,33 @@ public sealed class CompileWorkerIdentityTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
+    [Fact]
+    public void The_surviving_launcher_interpreters_own_dependencies_are_measured()
+    {
+        var root = Directory.CreateTempSubdirectory("weft-loader-identity-").FullName;
+        try
+        {
+            var compiler = Path.Combine(root, "compiler");
+            var references = Path.Combine(root, "references");
+            var host = Path.Combine(root, "host");
+            var runtime = Path.Combine(root, "shared/Microsoft.NETCore.App", BuildWorkerProtocol.RuntimeVersion);
+            var system = Path.Combine(root, "system");
+            foreach (var path in new[] { compiler, references, host, runtime, system }) Directory.CreateDirectory(path);
+            var launcher = Path.Combine(root, "launcher");
+            var interpreter = Path.Combine(system, "ld-linux-x86-64.so.2");
+            var dependency = Path.Combine(system, "libloader-only.so");
+            File.WriteAllBytes(Path.Combine(root, "dotnet"), Elf([]));
+            File.WriteAllBytes(launcher, Elf([]));
+            File.WriteAllBytes(interpreter, Elf(["libloader-only.so"]));
+            File.WriteAllBytes(dependency, "original"u8.ToArray());
+            string Identity() => ProcessCompileRunner.ComputeIdentity(root, compiler, references, launcher, [interpreter], [system]);
+            var first = Identity();
+            File.WriteAllBytes(dependency, "changed"u8.ToArray());
+            Assert.NotEqual(first, Identity());
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     /// <summary>A minimal x86-64 ELF shared object: one load segment holding its dynamic section and string table.</summary>
     internal static byte[] Elf(string[] needed, string[]? rPath = null, string[]? runPath = null)
     {

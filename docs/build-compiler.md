@@ -83,6 +83,18 @@ directories counts too (each directory, its `x86_64-linux-gnu` directory and the
 alternative copy changes the identity.
 Docker compilation remains the default runner for local development and tests.
 
+The compiler stays inside the already hardened native launcher. It loads only
+`host/fxr/10.0.12/libhostfxr.so`, initializes the fixed offline
+`exec sdk/10.0.112/Roslyn/bincore/csc.dll -noconfig @compiler.rsp` invocation through
+the hostfxr command-line API and runs it once, without another exec, SDK discovery,
+compiler server or fallback. The runtime and dependency properties must resolve
+within the admitted compiler directory and pinned CoreCLR installation. The
+launcher refuses later exec, dumpability/ptracer changes, credential changes and
+capability mutation before loading any hosting code. Its own ELF interpreter and
+dependencies are part of the toolchain identity, not just the dotnet metadata path.
+The trusted-origin prerequisite and post-hardening scope are the same as the
+[compiled runtime boundary](compiled-service-runtime.md#child-boundary).
+
 ### Launcher isolation from other processes
 
 The service and every compiler run as the same user, so the launcher's syscall
@@ -110,7 +122,15 @@ launcher qualification (`engines/compile-sandbox/tests/sandbox_qualification.rs`
 tries each route against an ordinary process of the same user and against a sibling
 in its own sandbox, at the kernel's Landlock ABI and at simulated ABIs 3, 4 and 5: a
 seccomp user notification answers the launcher's version query with the older ABI,
-so the unmodified launcher applies exactly that ABI's controls on any kernel.
+so the production sandbox library applies exactly that ABI's controls on any kernel.
+The low-level native probes enter the production sandbox library and continue
+in-process. The service tests additionally run the real launcher with pinned
+Roslyn and managed runtime workloads, including an asynchronous managed probe
+that attempts privacy mutations from its main thread and another thread. The
+supplementary `tools/compile-sandbox/privacy_negative_probe.py` observes actual
+post-managed-start dumpability and parent-owned attach/memory denial. Its dumpable
+positive control must work, otherwise the result is inconclusive. It is not proof
+of a production runner call or XML canonical-comparison invocation.
 
 Build the native image first from `engines/ferrule-host`, then use
 `tools/build-worker/build_image.py --native-image sha256:<id> --tag <tag>

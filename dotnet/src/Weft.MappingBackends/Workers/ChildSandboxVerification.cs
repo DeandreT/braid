@@ -9,17 +9,19 @@ internal static class ChildSandboxVerification
     /// Confirms no-new-privileges, filter mode, the exact filter count, every fixed limit (soft and hard) and
     /// that the child is non-dumpable, which hides its environment even from its own user.
     /// </summary>
-    internal static ChildAdmissionFailure Verify(int processId, int expectedFilters, IEnumerable<(string Name, long Value)> limits) =>
-        Verify(processId, expectedFilters, limits, File.ReadAllLines, File.ReadAllBytes);
+    internal static ChildAdmissionFailure Verify(int processId, int expectedFilters, IEnumerable<(string Name, long Value)> limits,
+        bool requireUnprivilegedIdentity = false) =>
+        Verify(processId, expectedFilters, limits, File.ReadAllLines, File.ReadAllBytes, requireUnprivilegedIdentity);
 
     // Per-call read-only seam for deterministic procfs qualification; production always uses the file readers above.
     internal static ChildAdmissionFailure Verify(int processId, int expectedFilters, IEnumerable<(string Name, long Value)> limits,
-        Func<string, string[]> readLines, Func<string, byte[]> readBytes)
+        Func<string, string[]> readLines, Func<string, byte[]> readBytes, bool requireUnprivilegedIdentity = false)
     {
         var readFailure = ChildAdmissionFailure.StatusRead;
         try
         {
             var status = readLines($"/proc/{processId}/status");
+            if (requireUnprivilegedIdentity && !UnprivilegedIdentity(status)) return ChildAdmissionFailure.IdentityVerification;
             var statusFailure = VerifyStatus(status, expectedFilters);
             if (statusFailure != ChildAdmissionFailure.None) return statusFailure;
             readFailure = ChildAdmissionFailure.LimitsRead;
@@ -50,6 +52,22 @@ internal static class ChildSandboxVerification
         if (!lines.Contains("NoNewPrivs:\t1", StringComparer.Ordinal)) return ChildAdmissionFailure.NoNewPrivilegesVerification;
         if (!lines.Contains("Seccomp:\t2", StringComparer.Ordinal)) return ChildAdmissionFailure.SeccompModeVerification;
         return SeccompFilters(lines) == expectedFilters ? ChildAdmissionFailure.None : ChildAdmissionFailure.FilterCountVerification;
+    }
+
+    // Stable non-root credentials, no capabilities and no tracer.
+    internal static bool UnprivilegedIdentity(IEnumerable<string> status)
+    {
+        var lines = status.ToArray();
+        string? Field(string name) => lines.Where(line => line.StartsWith(name, StringComparison.Ordinal)).ToArray() is [var line] ? line[name.Length..] : null;
+        foreach (var name in new[] { "CapInh:", "CapPrm:", "CapEff:", "CapAmb:", "TracerPid:" })
+            if (Field(name) is not { } value || !ulong.TryParse(value.AsSpan().Trim(), name == "TracerPid:" ? NumberStyles.None : NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out var number) || number != 0)
+                return false;
+        foreach (var name in new[] { "Uid:", "Gid:" })
+            if (Field(name)?.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries) is not { Length: 4 } values ||
+                values[0] == "0" || values.Any(value => value != values[0]))
+                return false;
+        return true;
     }
 
     internal static ChildAdmissionFailure VerifyLimits(IEnumerable<string> lines, IEnumerable<(string Name, long Value)> limits)

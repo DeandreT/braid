@@ -3,23 +3,29 @@
 //!
 //! The service writes an operation's trusted inputs (for a compile: the generated sources, the compiler response
 //! file and an empty output file) into a fresh private directory, then starts `weft-compile-sandbox` there with
-//! fixed limits and the exact program command. Before the program runs, the launcher applies hard resource limits,
+//! fixed limits and a closed managed profile. Before the program runs, the launcher applies hard resource limits,
 //! becomes non-dumpable, sets no-new-privileges, confines the filesystem with Landlock (read-only grants and private
-//! directory, write access to at most one existing output file, execute access to the program only, no TCP) and
+//! directory, write access to at most one existing output file, no execution or TCP) and
 //! installs syscall filters (no sockets, no new processes, no tracing or memory access, signals, descriptor owners,
 //! scheduling or limits for other processes, no System V IPC or message queues, no namespace or mount operations).
 //! The filters alone keep the program from other processes of the same user wherever Landlock does not scope
 //! signals and abstract sockets (ABI 3 to 5). It then writes
 //! [`READY_MARKER`] and waits for [`GO`], so the service can verify the applied state in procfs before the program
-//! starts. Every control survives `execve`.
+//! starts. The pinned hostfxr loads in this process: no exec resets dumpability. The deployment must supply a
+//! trusted origin without a preattached tracer or preopened foreign memory handle; this is not process-birth
+//! protection. Untrusted workloads start only after hardening, and already hardened peers cannot trace them.
 
 use std::ffi::{CString, OsString};
 use std::fmt;
 use std::ops::RangeInclusive;
-use std::os::unix::ffi::OsStrExt;
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+mod hostfxr;
+#[cfg(any(test, all(target_os = "linux", target_arch = "x86_64")))]
+mod hostfxr_abi;
 
 /// Written once to standard output after every control is in force and before the program starts.
-pub const READY_MARKER: [u8; 4] = *b"WFC1";
+pub const READY_MARKER: [u8; 4] = *b"WFC2";
 /// The one byte on standard input that starts the program; anything else stops the launcher.
 pub const GO: u8 = b'G';
 /// Landlock ABI 3 (Linux 6.2) also handles truncation, so no file outside the grants can be cut.
@@ -32,7 +38,14 @@ const MEMORY_BYTES: RangeInclusive<u64> = (64 << 20)..=(16 << 30);
 const OPEN_FILES: RangeInclusive<u64> = 8..=1024;
 const FILE_BYTES: RangeInclusive<u64> = (1 << 20)..=(1 << 30);
 const MAXIMUM_PATHS: usize = 16;
-const MAXIMUM_ARGUMENTS: usize = 64;
+pub const SDK_VERSION: &str = "10.0.112";
+pub const RUNTIME_VERSION: &str = "10.0.12";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ManagedProfile {
+    Compile,
+    Runtime(CString),
+}
 
 /// One launch, selected by the trusted service, never by a request.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,10 +58,9 @@ pub struct Launch {
     pub output: Option<CString>,
     /// Directories the program may read beneath, or single files such as /dev/urandom.
     pub read: Vec<CString>,
-    /// Further files the program may execute, such as the .NET host's ELF interpreter.
-    pub execute: Vec<CString>,
-    /// The absolute program to execute, followed by its arguments.
-    pub command: Vec<CString>,
+    /// Exact installed root, never resolved by PATH, nethost or a newest-version search.
+    pub dotnet_root: CString,
+    pub profile: ManagedProfile,
 }
 
 /// Closed startup categories. Exit codes carry no native error text or process operands.
@@ -68,6 +80,7 @@ pub enum SandboxError {
     PathGrant,
     LandlockRestrict,
     Confinement,
+    Origin,
     Execute,
 }
 
@@ -89,6 +102,7 @@ impl SandboxError {
             Self::PathGrant => 91,
             Self::LandlockRestrict => 92,
             Self::Confinement => 93,
+            Self::Origin => 94,
             Self::Execute => 1,
         }
     }
@@ -111,24 +125,74 @@ impl fmt::Display for SandboxError {
             Self::PathGrant => "The launcher could not grant a path.",
             Self::LandlockRestrict => "The launcher could not enforce Landlock.",
             Self::Confinement => "The launcher could not confirm its filesystem confinement.",
-            Self::Execute => "The launcher could not start the program.",
+            Self::Origin => "The launcher requires a single-threaded, stable non-root, capless and untraced origin.",
+            Self::Execute => "The pinned managed host could not run the application.",
         })
     }
 }
 
 impl std::error::Error for SandboxError {}
 
+#[cfg(test)]
+mod argument_tests {
+    use super::*;
+
+    #[test]
+    fn only_closed_managed_profiles_are_admitted() {
+        let base = [
+            "--cpu-seconds=30",
+            "--memory-bytes=3221225472",
+            "--open-files=128",
+            "--file-bytes=1048576",
+            "--dotnet-root=/usr/share/dotnet",
+        ];
+        let parse = |tail: &[&str]| {
+            parse_arguments(
+                &base
+                    .iter()
+                    .chain(tail)
+                    .map(OsString::from)
+                    .collect::<Vec<_>>(),
+            )
+        };
+        assert_eq!(
+            parse(&["--profile=compile"]).unwrap().profile,
+            ManagedProfile::Compile
+        );
+        assert!(matches!(
+            parse(&["--profile=runtime", "--runtime-assembly=/runtime/fixed.dll"])
+                .unwrap()
+                .profile,
+            ManagedProfile::Runtime(_)
+        ));
+        for tail in [
+            vec![],
+            vec!["--profile=runtime"],
+            vec!["--profile=runtime", "--runtime-assembly=relative.dll"],
+            vec!["--profile=runtime", "--runtime-assembly=/a/../fixed.dll"],
+            vec!["--profile=runtime", "--runtime-assembly=/runtime/fixed.exe"],
+            vec!["--profile=compile", "--profile=compile"],
+            vec!["--profile=compile", "--dotnet-root=/other"],
+            vec!["--profile=compile", "--execute=/bin/sh"],
+            vec!["--profile=compile", "--", "/bin/sh"],
+            vec![
+                "--profile=runtime",
+                "--runtime-assembly=/runtime/fixed.dll",
+                "extra",
+            ],
+            vec!["--profile=sdk"],
+        ] {
+            assert!(parse(&tail).is_err(), "{tail:?}");
+        }
+    }
+}
+
 /// Reads the exact argument shape:
-/// `--cpu-seconds=N --memory-bytes=N --open-files=N --file-bytes=N [--output=NAME] [--read=PATH]... [--execute=FILE]... -- PROGRAM [ARGUMENT]...`
+/// `--cpu-seconds=N --memory-bytes=N --open-files=N --file-bytes=N [--output=NAME]
+/// --dotnet-root=PATH --profile=compile|runtime [--runtime-assembly=PATH] [--read=PATH]...`
 pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
     let invalid = SandboxError::Arguments;
-    let separator = arguments
-        .iter()
-        .position(|argument| argument == "--")
-        .ok_or(SandboxError::Arguments)?;
-    let (options, command) = arguments.split_at(separator);
-    let command = &command[1..];
-    let [cpu, memory, files, file_bytes, rest @ ..] = options else {
+    let [cpu, memory, files, file_bytes, rest @ ..] = arguments else {
         return Err(invalid);
     };
     let value = |argument: &OsString, name: &str, range: RangeInclusive<u64>| {
@@ -173,35 +237,44 @@ pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
         }
         _ => (None, rest),
     };
+    let [root, profile, rest @ ..] = rest else {
+        return Err(invalid);
+    };
+    let dotnet_root = root
+        .to_str()
+        .and_then(|value| value.strip_prefix("--dotnet-root="))
+        .and_then(absolute)
+        .ok_or(SandboxError::Arguments)?;
+    let (profile, rest) = match (profile.to_str(), rest) {
+        (Some("--profile=compile"), rest)
+            if output
+                .as_ref()
+                .is_none_or(|name| name == c"Ferrule.Generated.dll") =>
+        {
+            (ManagedProfile::Compile, rest)
+        }
+        (Some("--profile=runtime"), [assembly, rest @ ..]) if output.is_none() => {
+            let path = assembly
+                .to_str()
+                .and_then(|value| value.strip_prefix("--runtime-assembly="))
+                .filter(|value| value.ends_with(".dll"))
+                .and_then(absolute)
+                .ok_or(SandboxError::Arguments)?;
+            (ManagedProfile::Runtime(path), rest)
+        }
+        _ => return Err(invalid),
+    };
     let mut read = Vec::new();
-    let mut execute = Vec::new();
     for option in rest {
         let text = option.to_str().ok_or(SandboxError::Arguments)?;
-        // Every read grant precedes every execute grant.
-        if let Some(path) = text.strip_prefix("--read=")
-            && execute.is_empty()
-        {
+        if let Some(path) = text.strip_prefix("--read=") {
             read.push(absolute(path).ok_or(SandboxError::Arguments)?);
-        } else if let Some(path) = text.strip_prefix("--execute=") {
-            execute.push(absolute(path).ok_or(SandboxError::Arguments)?);
         } else {
             return Err(invalid);
         }
     }
-    if read.len() > MAXIMUM_PATHS
-        || execute.len() > MAXIMUM_PATHS
-        || command.is_empty()
-        || command.len() > MAXIMUM_ARGUMENTS
-    {
+    if read.len() > MAXIMUM_PATHS {
         return Err(invalid);
-    }
-    let program = command[0]
-        .to_str()
-        .and_then(absolute)
-        .ok_or(SandboxError::Arguments)?;
-    let mut owned = vec![program];
-    for argument in &command[1..] {
-        owned.push(CString::new(argument.as_bytes()).map_err(|_| SandboxError::Arguments)?);
     }
     Ok(Launch {
         cpu_seconds,
@@ -210,8 +283,8 @@ pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
         file_bytes,
         output,
         read,
-        execute,
-        command: owned,
+        dotnet_root,
+        profile,
     })
 }
 
@@ -242,6 +315,7 @@ pub fn enter(_launch: &Launch) -> Result<(), SandboxError> {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub fn enter(launch: &Launch) -> Result<(), SandboxError> {
     require_standard_descriptors_only()?;
+    require_unprivileged_origin()?;
     prefer_out_of_memory_kill();
     let ruleset = landlock::Ruleset::new(launch)?;
     apply_limits(launch)?;
@@ -253,25 +327,64 @@ pub fn enter(launch: &Launch) -> Result<(), SandboxError> {
     for program in filters()? {
         seccompiler::apply_filter(&program).map_err(|_| SandboxError::FilterInstall)?;
     }
+    require_unprivileged_origin()?;
+    if unsafe { libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0) } != 0 {
+        return Err(SandboxError::NonDumpable);
+    }
+    if !rustix::thread::no_new_privs().map_err(|_| SandboxError::NoNewPrivileges)? {
+        return Err(SandboxError::NoNewPrivileges);
+    }
     Ok(())
 }
 
-/// Replaces the launcher with the program. Returns only on failure.
-pub fn execute(launch: &Launch) -> SandboxError {
-    let mut arguments = launch
-        .command
-        .iter()
-        .map(|argument| argument.as_ptr())
-        .collect::<Vec<_>>();
-    arguments.push(std::ptr::null());
-    // The service supplied the complete environment; it passes unchanged.
-    unsafe extern "C" {
-        static environ: *const *const libc::c_char;
+/// Runs the one managed application in the hardened process, without any exec or runtime fallback.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub fn execute(launch: &Launch) -> Result<i32, SandboxError> {
+    hostfxr::run(launch)
+}
+
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+pub fn execute(_launch: &Launch) -> Result<i32, SandboxError> {
+    Err(SandboxError::Platform)
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn require_unprivileged_origin() -> Result<(), SandboxError> {
+    let status = std::fs::read_to_string("/proc/self/status").map_err(|_| SandboxError::Procfs)?;
+    if status
+        .lines()
+        .find_map(|line| line.strip_prefix("Threads:"))
+        .map(str::trim)
+        != Some("1")
+    {
+        return Err(SandboxError::Origin);
     }
-    unsafe {
-        libc::execve(launch.command[0].as_ptr(), arguments.as_ptr(), environ);
+    for field in ["Uid:", "Gid:"] {
+        let ids = status
+            .lines()
+            .find_map(|line| line.strip_prefix(field))
+            .ok_or(SandboxError::Origin)?;
+        let values = ids
+            .split_whitespace()
+            .map(str::parse::<u32>)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| SandboxError::Origin)?;
+        if values.len() != 4 || values[0] == 0 || values.iter().any(|id| *id != values[0]) {
+            return Err(SandboxError::Origin);
+        }
     }
-    SandboxError::Execute
+    for field in ["CapInh:", "CapPrm:", "CapEff:", "CapAmb:", "TracerPid:"] {
+        let value = status
+            .lines()
+            .find_map(|line| line.strip_prefix(field))
+            .and_then(|text| {
+                u64::from_str_radix(text.trim(), if field == "TracerPid:" { 10 } else { 16 }).ok()
+            });
+        if value != Some(0) {
+            return Err(SandboxError::Origin);
+        }
+    }
+    Ok(())
 }
 
 /// The parent must not leak any descriptor beyond the three standard streams.
@@ -431,9 +544,6 @@ mod landlock {
             for directory in &launch.read {
                 ruleset.add(directory, READ_FILE | READ_DIR)?;
             }
-            for file in launch.execute.iter().chain(&launch.command[..1]) {
-                ruleset.add(file, EXECUTE | READ_FILE)?;
-            }
             // The private directory is read-only; its one output file may be rewritten, never extended to others.
             ruleset.add(c".", READ_FILE | READ_DIR)?;
             if let Some(output) = &launch.output {
@@ -579,6 +689,14 @@ fn filters() -> Result<Vec<seccompiler::BpfProgram>, SandboxError> {
         .map_err(|_| invalid())?,
     );
     denied.insert(libc::SYS_fcntl, fcntl);
+    // prctl takes an int option. Inspect its low word so noncanonical upper bits cannot bypass the denial.
+    denied.insert(
+        libc::SYS_prctl,
+        [libc::PR_SET_DUMPABLE, libc::PR_SET_PTRACER]
+            .into_iter()
+            .map(|option| rule(SeccompCmpArgLen::Dword, SeccompCmpOp::Eq, option as u64))
+            .collect::<Result<Vec<_>, _>>()?,
+    );
     // Threads only: a clone without CLONE_THREAD, or with any namespace flag, would be a new process.
     let thread = libc::CLONE_THREAD as u64;
     let mut clone = vec![rule(
@@ -691,7 +809,18 @@ const DENIED: &[i64] = &[
     libc::SYS_accept4,
     libc::SYS_fork,
     libc::SYS_vfork,
+    libc::SYS_execve,
     libc::SYS_execveat,
+    libc::SYS_setuid,
+    libc::SYS_setgid,
+    libc::SYS_setreuid,
+    libc::SYS_setregid,
+    libc::SYS_setresuid,
+    libc::SYS_setresgid,
+    libc::SYS_setfsuid,
+    libc::SYS_setfsgid,
+    libc::SYS_setgroups,
+    libc::SYS_capset,
     libc::SYS_ptrace,
     libc::SYS_process_vm_readv,
     libc::SYS_process_vm_writev,
@@ -795,6 +924,26 @@ const DENIED: &[i64] = &[
 #[cfg(all(test, target_os = "linux", target_arch = "x86_64"))]
 mod tests {
     #[test]
+    fn exec_and_credential_mutations_are_unconditionally_denied() {
+        for syscall in [
+            libc::SYS_execve,
+            libc::SYS_execveat,
+            libc::SYS_setuid,
+            libc::SYS_setgid,
+            libc::SYS_setreuid,
+            libc::SYS_setregid,
+            libc::SYS_setresuid,
+            libc::SYS_setresgid,
+            libc::SYS_setfsuid,
+            libc::SYS_setfsgid,
+            libc::SYS_setgroups,
+            libc::SYS_capset,
+        ] {
+            assert!(super::DENIED.contains(&syscall));
+        }
+    }
+
+    #[test]
     fn startup_exit_categories_are_fixed() {
         use super::SandboxError;
 
@@ -813,6 +962,7 @@ mod tests {
             (SandboxError::PathGrant, 91),
             (SandboxError::LandlockRestrict, 92),
             (SandboxError::Confinement, 93),
+            (SandboxError::Origin, 94),
             (SandboxError::Execute, 1),
         ] {
             assert_eq!(error.exit_code(), code);
