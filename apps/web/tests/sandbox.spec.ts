@@ -40,9 +40,11 @@ async function fixture(page: Page) {
     sends: [] as { url: string; body: string; token: string }[],
     deploys: [] as { url: string; body: string }[],
     actions: [] as { url: string; body: string; etag: string }[],
+    deployTarget: "",
+    extraTarget: "",
   };
-  const targetRow = () => ({
-    targetId: target,
+  const targetRow = (id = target) => ({
+    targetId: id,
     environmentId: environment,
     environmentVersion: "1",
     enabled: state.targetEnabled,
@@ -142,7 +144,10 @@ async function fixture(page: Page) {
       return route.fulfill({
         json: {
           mode: "localSimulation",
-          targets: [targetRow()],
+          targets: [
+            targetRow(),
+            ...(state.extraTarget ? [targetRow(state.extraTarget)] : []),
+          ],
           builds: [
             {
               buildId: build,
@@ -159,17 +164,21 @@ async function fixture(page: Page) {
       });
     if (path.startsWith(mapping + "/sandbox/deployments/")) {
       state.deploys.push({ url: path, body: request.postData()! });
+      state.extraTarget = state.deployTarget;
       return route.fulfill({
         json: {
           deploymentId: path.split("/").at(-1),
           outcome: "activated",
-          target: targetRow(),
+          target: targetRow(state.extraTarget || target),
           releaseId: state.active,
           qualificationId: qualification,
         },
       });
     }
-    const messages = `${mapping}/sandbox/${target}/messages`;
+    const requestedTarget = path
+      .slice((mapping + "/sandbox/").length)
+      .split("/")[0];
+    const messages = `${mapping}/sandbox/${requestedTarget}/messages`;
     if (path === messages)
       return route.fulfill({
         json: { items: state.messages.map((value) => view(value, false)) },
@@ -305,6 +314,21 @@ test("an uncertain send retries its original message ID and body", async ({
     source: "inline",
     inputs: [{ name: null, content: base64('{"items":[5]}') }],
   });
+});
+
+test("deploying a build for a new target selects its active release instead of the old inbox", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.deployTarget = "70000000-0000-4000-8000-000000000008";
+  await page.getByRole("button", { name: "Deploy to sandbox" }).click();
+  await expect(page.getByText("Deployed to the local sandbox.")).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Sandbox target" }),
+  ).toHaveValue(state.deployTarget);
+  await expect(
+    page.getByRole("button", { name: "Send to active release" }),
+  ).toBeEnabled();
 });
 
 test("disable goes through the operations API and a disabled instance says so", async ({

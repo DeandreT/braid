@@ -417,7 +417,19 @@ export class SandboxPageComponent {
           outcome?: string;
           status?: string;
           messageId?: string;
+          target?: SandboxTarget | null;
         };
+        if (
+          pending.kind === "deploy" &&
+          result.target &&
+          ["activated", "replayed"].includes(result.outcome ?? "")
+        ) {
+          this.target = result.target.targetId;
+          this.detail.set(null);
+          this.comparison.set(null);
+          this.compare.set([]);
+          this.rollbackSource = "";
+        }
         if (pending.kind === "send") {
           this.detail.set(value as SandboxMessage);
           if (this.source === "inline") {
