@@ -6,6 +6,10 @@ queue submission are separate explicit actions. A compiled build is not an
 endpoint deployment. The panel offers artifact metadata, not artifact or source
 downloads.
 
+![Prepare tab with a completed preparation, environment version and test evidence](images/workbench-builds.png)
+
+*The Prepare tab after an approved build completed.*
+
 ## Selection and authority
 
 Loading build controls makes fresh identity and mapping-access observations

@@ -24,7 +24,8 @@ public sealed class NativeChildAdmissionDiagnosticsTests
     [InlineData(1, "marker-missing/unknown-startup")]
     [InlineData(3, "marker-missing/unknown-startup")]
     [InlineData(79, "marker-missing/unknown-startup")]
-    [InlineData(94, "marker-missing/unknown-startup")]
+    [InlineData(94, "marker-missing/unprivileged-origin")]
+    [InlineData(95, "marker-missing/unknown-startup")]
     [InlineData(137, "marker-missing/unknown-startup")]
     [InlineData(255, "marker-missing/unknown-startup")]
     [InlineData(-1, "marker-missing/unknown-startup")]
@@ -50,7 +51,7 @@ public sealed class NativeChildAdmissionDiagnosticsTests
     }
 
     public static IEnumerable<object[]> CompletedWorkerNonzeroExits() =>
-        Enumerable.Range(80, 14).Concat([1, 3, 79, 94, 137, 255, -1, int.MinValue, int.MaxValue])
+        Enumerable.Range(80, 15).Concat([1, 3, 79, 95, 137, 255, -1, int.MinValue, int.MaxValue])
             .Select(code => new object[] { code });
 
     [Theory]
@@ -122,7 +123,9 @@ public sealed class NativeChildAdmissionDiagnosticsTests
         (ChildAdmissionFailure.PathGrant, "marker-missing/path-grant"),
         (ChildAdmissionFailure.LandlockRestriction, "marker-missing/landlock-restriction"),
         (ChildAdmissionFailure.FilesystemConfinement, "marker-missing/filesystem-confinement"),
+        (ChildAdmissionFailure.UnprivilegedOrigin, "marker-missing/unprivileged-origin"),
         (ChildAdmissionFailure.StatusRead, "procfs/status-read"),
+        (ChildAdmissionFailure.IdentityVerification, "procfs/identity"),
         (ChildAdmissionFailure.NoNewPrivilegesVerification, "procfs/no-new-privileges"),
         (ChildAdmissionFailure.SeccompModeVerification, "procfs/seccomp-mode"),
         (ChildAdmissionFailure.FilterCountVerification, "procfs/filter-count"),
@@ -338,6 +341,23 @@ public sealed class NativeChildAdmissionDiagnosticsTests
         Assert.Equal(ChildAdmissionFailure.SeccompModeVerification, ChildSandboxVerification.VerifyStatus([valid[0], valid[2]], 3));
         Assert.Equal(ChildAdmissionFailure.FilterCountVerification, ChildSandboxVerification.VerifyStatus(valid, 4));
         Assert.Equal(ChildAdmissionFailure.FilterCountVerification, ChildSandboxVerification.VerifyStatus([valid[0], valid[1], "Seccomp_filters:\tprivate-operand"], 3));
+    }
+
+    [Fact]
+    public void Procfs_identity_requires_stable_non_root_capless_untraced_credentials()
+    {
+        string[] valid = ["Uid:\t1000\t1000\t1000\t1000", "Gid:\t1000\t1000\t1000\t1000", "TracerPid:\t0",
+            "CapInh:\t0000000000000000", "CapPrm:\t0000000000000000", "CapEff:\t0000000000000000", "CapAmb:\t0000000000000000"];
+        Assert.True(ChildSandboxVerification.UnprivilegedIdentity(valid));
+        foreach (var (field, replacement) in new[]
+        {
+            ("Uid:", "Uid:\t0\t0\t0\t0"), ("Uid:", "Uid:\t1000\t0\t1000\t1000"), ("Gid:", "Gid:\t1000\t1000\t1000"),
+            ("TracerPid:", "TracerPid:\t42"), ("CapEff:", "CapEff:\t0000000000000001"), ("CapAmb:", "CapAmb:\tprivate-operand")
+        })
+            Assert.False(ChildSandboxVerification.UnprivilegedIdentity(valid.Select(line => line.StartsWith(field, StringComparison.Ordinal) ? replacement : line)));
+        Assert.False(ChildSandboxVerification.UnprivilegedIdentity(valid.Skip(1)));
+        Assert.False(ChildSandboxVerification.UnprivilegedIdentity(valid.Append(valid[0])));
+        Assert.Equal("procfs/identity", ChildAdmissionDiagnostics.Category(ChildAdmissionFailure.IdentityVerification));
     }
 
     [Fact]

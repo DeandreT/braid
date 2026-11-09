@@ -1,10 +1,31 @@
 # Workbench presentation
 
 The compact workbench separates structural roles, operation states and selection.
-`apps/web/src/workbench/semantic-tokens.css` owns their colors. Structural accents
+Their colors are tokens in `apps/web/src/style.css`; `semantic-tokens.css` applies them. Structural accents
 identify incoming data, rules, results and supporting details. They are not
 validation signals. Forest green identifies selection; an operation's status is
 a separate labeled chip.
+
+## Colour tokens and themes
+
+Every colour in the web app is a custom property defined once in
+`apps/web/src/style.css`: page and surfaces, text, borders, accents, status,
+search highlight, focus rings, overlays and shadows, plus the `--wb-*` structural
+and status tokens. Component styles use only `var(--token)`; do not add literal
+colours. Token names describe the role (`--text-muted`, `--border-warn`,
+`--surface-danger`). Numbered variants (`--text-muted-3`) keep each existing
+light shade exact; give a new style the base token unless it needs a distinct
+shade. `--primary` fills primary buttons, which carry `--text-on-accent`.
+
+`[data-theme="dark"]` overrides the same tokens and sets `color-scheme: dark`, so
+native controls and scrollbars follow. Keep text at 4.5:1 and control borders and
+focus rings at 3:1 against the surfaces they sit on; `tests/theme.spec.ts` checks
+the key pairs. The account menu offers Light, Dark and System (the default, which
+follows `prefers-color-scheme` live). The choice is stored as
+`weft.theme.v1` in local storage. `public/theme.js` applies it from `<head>`
+before the first paint, as a same-origin file because the CSP admits no inline
+script; `theme-preference.ts` owns it after start-up. Browser tests and the
+documentation screenshots run with the light colour scheme and no saved choice.
 
 ## Vocabulary and status ownership
 

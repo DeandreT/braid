@@ -4,6 +4,10 @@ The Angular catalog opens the user's admitted organization and visible projects.
 Saved revisions open in the workbench, with [saved mapping reports](saved-reports.md),
 uploads, metadata editing and chat governed by their own feature and access checks.
 
+![Projects list with role badges](images/catalog-projects.png)
+
+*The projects page lists the projects you can read, with your role in each.*
+
 ## Navigation
 
 The application root opens `/catalog`. Session deployments first show sign-in
@@ -28,6 +32,10 @@ logical document and commit time. A decoded-invalid revision remains part of
 history. Mapping names and descriptions alongside an old revision are labelled
 as current metadata. Catalog metadata reads never derive explanations. When
 report reading is enabled, the revision page reads saved reports separately.
+
+![Mapping page with current metadata and revision history](images/catalog-mapping.png)
+
+*A mapping page: current metadata, the head when the view loaded and the revision history.*
 
 ## Access and refresh
 

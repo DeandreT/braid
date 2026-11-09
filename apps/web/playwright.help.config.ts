@@ -1,9 +1,10 @@
 import { defineConfig } from "@playwright/test";
 
-// Synthetic API fixtures exercise the Angular help page, not the server's embedded guide.
+// Synthetic API fixtures exercise the Angular help page, not the server's embedded guide,
+// and the appearance choice in the shell.
 export default defineConfig({
   testDir: "./tests",
-  testMatch: "help.spec.ts",
+  testMatch: ["help.spec.ts", "theme.spec.ts"],
   fullyParallel: false,
   workers: 1,
   retries: 0,

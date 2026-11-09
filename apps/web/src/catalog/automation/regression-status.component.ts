@@ -5,6 +5,7 @@ import {
   inject,
   input,
   signal,
+  untracked,
 } from "@angular/core";
 import { RouterLink } from "@angular/router";
 import {
@@ -87,7 +88,10 @@ export function regressionStateTone(state: string | undefined): string | null {
         <span role="status">{{ message() }}</span>
       }
     } @else {
-      <details class="regression-controls">
+      <details
+        class="regression-controls"
+        (toggle)="controlsOpen.set($any($event.target).open)"
+      >
         <summary>Check controls and policy</summary>
         @if (policy(); as p) {
           <p>
@@ -110,10 +114,8 @@ export function regressionStateTone(state: string | undefined): string | null {
               Run all current cases now
             </button>
           }
-          @if (suite()) {
-            <button type="button" class="catalog-button" (click)="cases()">
-              Show case results
-            </button>
+          @if (casesLoading()) {
+            <p role="status">Loading case results…</p>
           }
           @if (evaluations(); as page) {
             <ul>
@@ -185,23 +187,23 @@ export function regressionStateTone(state: string | undefined): string | null {
       font-size: 0.75rem;
     }
     .regression-counts {
-      color: #526b5e;
+      color: var(--text-muted);
     }
     .regression-controls > summary {
-      color: #526b5e;
+      color: var(--text-muted);
       cursor: pointer;
     }
     .regression-controls[open] {
       flex-basis: 100%;
       padding: 8px 10px;
-      border: 1px solid #d7e2d1;
+      border: 1px solid var(--border);
       border-radius: 6px;
-      background: #fafdf6;
+      background: var(--surface-subtle-2);
       text-align: left;
     }
     .regression-controls[open] > summary {
       margin-bottom: 6px;
-      color: #213b34;
+      color: var(--text);
     }
     .regression-controls p {
       margin: 6px 0;
@@ -226,6 +228,8 @@ export class RegressionStatusComponent {
   readonly uncertain = signal(false);
   readonly pendingToggle = signal<boolean | null>(null);
   readonly evaluations = signal<Evaluations | null>(null);
+  readonly controlsOpen = signal(false);
+  readonly casesLoading = signal(false);
   readonly label = computed(() => regressionStateLabel(this.suite()?.state));
   readonly tone = computed(() => regressionStateTone(this.suite()?.state));
   private readonly api = inject(AutomationApi);
@@ -299,6 +303,12 @@ export class RegressionStatusComponent {
         this.actions.clear();
       });
     });
+    // Case results load when the controls are opened, once per suite read.
+    effect(() => {
+      const suite = this.suite();
+      if (this.controlsOpen() && this.manage() && suite && !this.evaluations())
+        untracked(() => this.cases());
+    });
   }
   toggle(): void {
     if (this.saving()) return;
@@ -339,7 +349,8 @@ export class RegressionStatusComponent {
   }
   cases(after?: string | null): void {
     const suite = this.suite();
-    if (!suite) return;
+    if (!suite || this.casesLoading()) return;
+    this.casesLoading.set(true);
     this.actions.add(
       this.api
         .read<Evaluations>(
@@ -347,6 +358,7 @@ export class RegressionStatusComponent {
           this.scope(),
           `/regression-suites/${suite.suiteId}/cases?limit=20${after ? "&afterId=" + after : ""}`,
         )
+        .pipe(finalize(() => this.casesLoading.set(false)))
         .subscribe({
           next: (value) => this.evaluations.set(value),
           error: () => this.message.set("Case results unavailable."),

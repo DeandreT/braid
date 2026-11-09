@@ -12,7 +12,8 @@
     "check:browser-session-probe": "ng run weft:browser-session-probe:development",
     "build": "ng build",
     "build:browser-session-probe": "ng run weft:browser-session-probe:production",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "docs:screenshots": "playwright test --config playwright.docs-screenshots.config.ts"
   },
   "dependencies": {
     "@angular/common": "22.2.2",

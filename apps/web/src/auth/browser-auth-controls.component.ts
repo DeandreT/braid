@@ -18,6 +18,7 @@ import type { Observable } from "rxjs";
 import { BrowserSessionState } from "./browser-session-state";
 import { sessionActionMessage, sessionTone } from "./browser-auth-presentation";
 import { UnsentWork } from "../workbench/unsent-work";
+import { ThemePreference, type ThemeChoice } from "../theme-preference";
 
 /** The header account menu: the session's state, organization and explicit session actions. */
 @Component({
@@ -34,6 +35,12 @@ export class BrowserAuthControlsComponent {
   /** Sign-in navigation or an ended session can discard work held only by this tab. */
   readonly unsentWork = inject(UnsentWork).present;
   readonly open = signal(false);
+  readonly theme = inject(ThemePreference);
+  readonly themes: readonly { value: ThemeChoice; label: string }[] = [
+    { value: "light", label: "Light" },
+    { value: "dark", label: "Dark" },
+    { value: "system", label: "System" },
+  ];
   private readonly router = inject(Router);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly tone = computed(() =>

@@ -82,11 +82,13 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
     /// </summary>
     internal static async Task<ChatHttpTestSupport> StartAsync(PostgresCase test, ActorContext actor, RevisionScope revision,
         ChatApiOptions options, IRevisionReportReader? reports = null, IRevisionReportMetadataReader? metadata = null,
-        Func<IChatReadOnlyToolPort, IChatReadOnlyToolPort>? tools = null, bool workspace = false, string? browserWebRoot = null)
+        Func<IChatReadOnlyToolPort, IChatReadOnlyToolPort>? tools = null, bool workspace = false, string? browserWebRoot = null,
+        Uri? publicOrigin = null)
     {
         var reservation = new TcpListener(IPAddress.Loopback, 0);
         reservation.Start();
         var origin = new Uri($"http://127.0.0.1:{((IPEndPoint)reservation.LocalEndpoint).Port}");
+        var configured = (publicOrigin ?? origin).GetLeftPart(UriPartial.Authority);
         WebApplication? app = null;
         var catalog = new PostgresCatalogDatabase(test.CatalogConnectionString);
         var reader = new PostgresChatDatabase(test.ChatReaderConnectionString, ChatDatabaseProfile.Reader);
@@ -100,7 +102,7 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
             builder.Services.AddWeftApi();
             builder.Services.AddSingleton(Keys);
             builder.Services.AddWeftCatalog(new(true, true, actor.PrincipalId.Value, revision.OrganizationId,
-                origin.GetLeftPart(UriPartial.Authority)), builder.Environment, new CatalogMetadataEditOptions(),
+                configured), builder.Environment, new CatalogMetadataEditOptions(),
                 new CatalogRevisionIngestionOptions(), new CatalogProjectCreationOptions(), new CatalogRevisionReportOptions(reports is not null, false));
             var catalogReader = new PostgresCatalogReader(catalog);
             builder.Services.AddSingleton<ICatalogReader>(catalogReader);
@@ -126,7 +128,7 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
             builder.Services.AddWeftChat(options);
             if (browserWebRoot is not null)
                 Weft.Api.Auth.AuthenticationEndpoints.AddWeftAuthenticationHttp(builder.Services,
-                    new(Weft.Api.Auth.AuthenticationHttpMode.Development, origin.GetLeftPart(UriPartial.Authority)), builder.Environment);
+                    new(Weft.Api.Auth.AuthenticationHttpMode.Development, configured), builder.Environment);
             app = builder.Build();
             if (browserWebRoot is not null) { app.UseDefaultFiles(); app.UseStaticFiles(); }
             app.MapWeftCatalog();

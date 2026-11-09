@@ -6,9 +6,9 @@
   max-width: 440px;
   margin: 72px auto 48px;
   padding: 36px 32px;
-  border: 1px solid #e0e7de;
+  border: 1px solid var(--border-3);
   border-radius: 16px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .sign-in-brand {
@@ -22,7 +22,7 @@ h1 {
 
 .sign-in-state {
   margin: 0;
-  color: #45614c;
+  color: var(--text-muted-9);
   font-size: 0.9375rem;
   line-height: 1.6;
 }
@@ -36,7 +36,7 @@ h1 {
 
 .sign-in-notice {
   margin: 10px 0 0;
-  color: #69786f;
+  color: var(--text-muted-8);
   font-size: 0.8125rem;
   line-height: 1.6;
 }
@@ -49,17 +49,17 @@ h1 {
 }
 
 .primary-button {
-  border: 1px solid #345d45;
+  border: 1px solid var(--border-accent-2);
   border-radius: 9px;
-  background: #345d45;
-  color: #fff;
+  background: var(--accent-3);
+  color: var(--text-on-accent);
   padding: 11px 18px;
   font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
 }
 .primary-button:hover {
-  background: #284c3c;
+  background: var(--accent-6);
 }
 .primary-button:disabled {
   opacity: 0.6;

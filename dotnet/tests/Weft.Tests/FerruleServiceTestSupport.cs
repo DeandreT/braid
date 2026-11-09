@@ -80,11 +80,11 @@ internal static class FerruleServiceTestSupport
     internal static bool CompileConfigured => !string.IsNullOrEmpty(Executable) && !string.IsNullOrEmpty(Launcher) &&
         File.Exists(Weft.Deployment.BuildCompilation.Compiler(Toolchain)) && Directory.Exists(Weft.Deployment.BuildCompilation.References(Toolchain));
 
-    internal static ProcessCompileOptions CompileOptions(string root, TimeSpan? deadline = null, IReadOnlyList<string>? command = null,
+    internal static ProcessCompileOptions CompileOptions(string root, TimeSpan? deadline = null, bool withholdCompiler = false,
         bool withholdGeneration = false) =>
         new(Executable!, Launcher!, root, Toolchain, deadline)
         {
-            CompilerCommand = command,
+            WithholdCompilerStart = withholdCompiler,
             Generation = new ProcessWorkerOptions(Executable!, DockerWorkerProfile.Build, root, deadline) { WithholdEndOfInput = withholdGeneration }
         };
 

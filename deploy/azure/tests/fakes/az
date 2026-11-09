@@ -2,11 +2,26 @@
 # Recording fake of the Azure CLI for deploy/azure/tests/qualify-test.sh: no network and no Azure. It appends every
 # call to $FAKE_STATE/calls.log, keeps the run's state (group, deployments, job executions and their console lines,
 # releases, grants and recorded invocations) under $FAKE_STATE, and answers as the commands qualify.sh and
-# initialize-secrets.sh use. FAKE_AZ_FAIL makes any call whose arguments contain it fail.
+# initialize-secrets.sh use. FAKE_AZ_FAIL makes any call whose arguments contain it fail. A call that does not name
+# the approved subscription FAKE_SUBSCRIPTION, or that changes the CLI's default, is refused and written to
+# $FAKE_STATE/violations, which the tests require to stay empty. The signed-in account sees only the subscriptions
+# in FAKE_VISIBLE_SUBSCRIPTIONS (default: the approved one).
 set -euo pipefail
 state=$FAKE_STATE
 printf 'az %s\n' "$*" >>"$state/calls.log"
 arguments=("$@")
+subscription_named=false
+for ((i = 0; i < ${#arguments[@]} - 1; i++)); do
+  if [[ ${arguments[i]} == --subscription ]]; then
+    [[ ${arguments[i + 1]} == "$FAKE_SUBSCRIPTION" ]] && subscription_named=true
+    break
+  fi
+done
+if [[ ${1:-} == account && ${2:-} == set ]] || ! $subscription_named; then
+  printf 'az %s\n' "$*" >>"$state/violations"
+  echo 'ERROR: the fake refuses a call that changes the default or does not name the approved subscription' >&2
+  exit 2
+fi
 if [[ -n ${FAKE_AZ_FAIL:-} && " $* " == *"$FAKE_AZ_FAIL"* ]]; then
   echo 'ERROR: injected failure' >&2
   exit 1
@@ -312,6 +327,9 @@ containerapp_show() {
 
 case "$*" in
   'account show'*)
+    if [[ " ${FAKE_VISIBLE_SUBSCRIPTIONS:-$FAKE_SUBSCRIPTION} " != *" $FAKE_SUBSCRIPTION "* ]]; then
+      echo "ERROR: Subscription '$FAKE_SUBSCRIPTION' not found. Check the spelling and casing and try again." >&2 && exit 1
+    fi
     if [[ $(option --query) == tenantId ]]; then echo "${FAKE_ACCOUNT_TENANT:-$FAKE_TENANT}"; else echo "$FAKE_SUBSCRIPTION"; fi
     ;;
   'ad signed-in-user show'*)

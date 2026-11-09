@@ -71,7 +71,7 @@ type ResourceView = {
       max-width: 64rem;
       margin: 0 auto;
       padding: 16px;
-      color: #213b34;
+      color: var(--text);
     }
     .chat-resource-page h1 {
       font-size: 2rem;
@@ -81,7 +81,7 @@ type ResourceView = {
       grid-template-columns: minmax(8rem, 1fr) minmax(0, 3fr);
       gap: 0.75rem;
       padding: 12px 16px;
-      background: #f0f6f2;
+      background: var(--surface-muted-20);
       border-radius: 4px;
     }
     dt {
@@ -92,7 +92,7 @@ type ResourceView = {
       overflow-wrap: anywhere;
     }
     a {
-      color: #287a60;
+      color: var(--text-accent-4);
     }
     @media (max-width: 600px) {
       dl {

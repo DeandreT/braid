@@ -14,7 +14,7 @@ namespace Weft.MappingBackends.Workers;
 public sealed class ProcessCompileOptions
 {
     /// <summary>The launcher writes these bytes once every control is in force and before the compiler starts.</summary>
-    public static ReadOnlySpan<byte> ReadyMarker => "WFC1"u8;
+    public static ReadOnlySpan<byte> ReadyMarker => "WFC2"u8;
 
     /// <summary>The one byte that starts the compiler after the controls are verified.</summary>
     public const byte Go = (byte)'G';
@@ -59,8 +59,8 @@ public sealed class ProcessCompileOptions
     public TimeSpan WallTimeout => Generation.WallTimeout;
     public static DockerWorkerProfile Profile => DockerWorkerProfile.Build;
 
-    /// <summary>Test seam: replaces the compiler command (absolute program and arguments) to observe termination.</summary>
-    internal IReadOnlyList<string>? CompilerCommand { get; init; }
+    /// <summary>Test seam: holds the verified launcher before starting the actual compiler.</summary>
+    internal bool WithholdCompilerStart { get; init; }
 
     /// <summary>The environment of the compiler host: nothing of the service, a bounded heap and no diagnostics channel.</summary>
     internal IReadOnlyDictionary<string, string> Environment(string directory) => new Dictionary<string, string>(StringComparer.Ordinal)
@@ -89,8 +89,7 @@ public sealed class ProcessCompileOptions
 
     /// <summary>
     /// The exact launcher arguments: fixed limits, the one writable output (absent for a probe), read access to the
-    /// toolchain, the system libraries and <c>/dev/urandom</c>, execute access to the host's ELF interpreter, then
-    /// the compiler command.
+    /// toolchain, the system libraries and <c>/dev/urandom</c>, then the closed in-process compiler profile.
     /// </summary>
     internal IReadOnlyList<string> LauncherArguments(string directory, ToolchainGrants grants, bool output)
     {
@@ -103,31 +102,24 @@ public sealed class ProcessCompileOptions
             "--file-bytes=" + Text(FileBytes)
         };
         if (output) arguments.Add("--output=" + BuildCompilation.Output);
+        arguments.Add("--dotnet-root=" + ToolchainRoot);
+        arguments.Add("--profile=compile");
         arguments.AddRange(grants.Read.Select(path => "--read=" + path));
-        arguments.AddRange(grants.Execute.Select(path => "--execute=" + path));
-        arguments.Add("--");
-        if (CompilerCommand is { } command) arguments.AddRange(command);
-        else
-        {
-            arguments.Add(BuildCompilation.Host(ToolchainRoot));
-            arguments.AddRange(BuildCompilation.CompilerArguments(ToolchainRoot, directory));
-        }
 
         return arguments;
     }
 
-    /// <summary>Read and execute grants derived once from the installed toolchain and system layout.</summary>
-    internal sealed record ToolchainGrants(IReadOnlyList<string> Read, IReadOnlyList<string> Execute)
+    /// <summary>Read grants and the surviving launcher's measured ELF interpreter. No execute grants.</summary>
+    internal sealed record ToolchainGrants(IReadOnlyList<string> Read, IReadOnlyList<string> Interpreters)
     {
         private static readonly string[] SystemLibraries = ["/lib", "/lib64", "/usr/lib", "/usr/lib64"];
 
         internal static ToolchainGrants Resolve(ProcessCompileOptions options)
-            => ResolveRoot(options.ToolchainRoot);
+            => ResolveRoot(options.ToolchainRoot, options.LauncherExecutable);
 
-        internal static ToolchainGrants ResolveRoot(string root)
+        internal static ToolchainGrants ResolveRoot(string root, string launcher)
         {
-            var host = BuildCompilation.Host(root);
-            var interpreter = Interpreter(host) ?? throw new ArgumentException("The .NET host has no admissible ELF interpreter.");
+            var interpreter = Interpreter(launcher) ?? throw new ArgumentException("The native launcher has no admissible ELF interpreter.");
             var read = new List<string> { root };
             read.AddRange(SystemLibraries.Where(Directory.Exists));
             if (File.Exists("/dev/urandom")) read.Add("/dev/urandom");
@@ -138,6 +130,7 @@ public sealed class ProcessCompileOptions
         private static string? Interpreter(string executable)
         {
             using var file = File.OpenRead(executable);
+            if (file.Length < 64) return null;
             Span<byte> header = stackalloc byte[64];
             file.ReadExactly(header);
             if (header[0] != 0x7F || header[1] != (byte)'E' || header[2] != (byte)'L' || header[3] != (byte)'F' || header[4] != 2 || header[5] != 1) return null;

@@ -136,6 +136,63 @@
     @if (citationNotice()) {
       <p role="status">{{ citationNotice() }}</p>
     }
+    <div role="status" class="report-generation">
+      @if (generating()) {
+        <p>
+          Generating this version's reports. The mapping appears here when
+          they're saved.
+        </p>
+        @if (progressUnobserved()) {
+          <button
+            type="button"
+            class="reports-button"
+            (click)="reports().readAgain('projection')"
+          >
+            Check progress
+          </button>
+        }
+      }
+    </div>
+    @if (missing().length && !generating() && !reports().busy()) {
+      <section
+        class="report-cta"
+        role="alert"
+        aria-labelledby="report-cta-title"
+      >
+        <h3 id="report-cta-title">{{ missingTitle() }}</h3>
+        @switch (reports().ensureBlocked()) {
+          @case ("disabled") {
+            <p>
+              Report generation is turned off in this workspace, so the mapping
+              can't be shown yet. Ask a workspace administrator to turn it on.
+            </p>
+          }
+          @case ("permission") {
+            <p>
+              You don't have permission to generate reports for this mapping.
+              Ask someone who can generate them to open this version; the
+              reports are then saved with it.
+            </p>
+          }
+          @default {
+            <p>
+              The mapping table, coverage and validation findings need these
+              reports.
+            </p>
+            <button
+              type="button"
+              class="reports-button reports-primary"
+              (click)="reports().ensure(missing()[0].operation)"
+              [disabled]="!reports().canEnsure()"
+            >
+              {{
+                missing()[0].failed ? "Try generating again" : "Generate now"
+              }}
+            </button>
+          }
+        }
+      </section>
+    }
     @for (pane of [projection(), validation()]; track $index) {
       @if (pane.error; as problem) {
         <p class="report-error" role="alert">{{ error(problem.kind) }}</p>
@@ -176,7 +233,8 @@
         <p class="reports-eyebrow">Understand this revision</p>
         <h2 id="revision-reports-title">Saved reports</h2>
         <p>
-          Reading a report does not generate one. Explanation and validation are
+          A report that was never generated is generated once when someone who
+          may generate it opens this revision. Explanation and validation are
           independent, and each belongs to this exact revision.
         </p>
         <weft-help-link [section]="'reports'">About reports</weft-help-link>

@@ -18,7 +18,7 @@ header {
   justify-content: space-between;
   align-items: flex-start;
   padding-bottom: 12px;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
 }
 header > div {
   flex: 1;
@@ -27,7 +27,7 @@ header > div {
 .admin-subtitle {
   margin: 4px 0 0;
   max-width: 60ch;
-  color: #526b5e;
+  color: var(--text-muted);
 }
 .eyebrow {
   color: var(--text-muted);
@@ -54,7 +54,7 @@ label {
   display: grid;
   gap: 0.35rem;
   font-weight: 600;
-  color: #3f5d4b;
+  color: var(--text-muted-5);
 }
 input {
   min-width: min(15rem, 100%);
@@ -65,7 +65,7 @@ input {
 }
 .table-scroll {
   overflow-x: auto;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 table {
@@ -74,15 +74,15 @@ table {
   text-align: left;
 }
 th {
-  background: #f7faf3;
-  color: #526b5e;
+  background: var(--surface-subtle);
+  color: var(--text-muted);
   font-weight: 600;
   white-space: nowrap;
 }
 td,
 th {
   padding: 6px 12px;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 tbody tr:last-child td {
@@ -108,13 +108,13 @@ li {
 }
 .admin-state p {
   margin: 0;
-  color: #526b5e;
+  color: var(--text-muted);
 }
 .admin-projects ul {
   list-style: none;
   margin: 8px 0;
   padding: 0;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 .admin-projects li {
@@ -125,7 +125,7 @@ li {
   gap: 8px;
   margin: 0;
   padding: 6px 12px;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
 }
 .admin-projects li:last-child {
   border-bottom: 0;
@@ -134,7 +134,7 @@ li {
   font-weight: 600;
 }
 .admin-muted {
-  color: #526b5e;
+  color: var(--text-muted);
 }
 .invitation-link {
   margin: 1rem 0;

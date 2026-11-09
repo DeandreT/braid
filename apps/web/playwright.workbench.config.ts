@@ -13,6 +13,7 @@ export default defineConfig({
     "auth-https-summary.spec.ts",
     "regression.spec.ts",
     "builds.spec.ts",
+    "revision-reports-auto.spec.ts",
     "revision-preview.spec.ts",
     "revision-chat.spec.ts",
     "revision-comparison.spec.ts",

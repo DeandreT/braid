@@ -17,14 +17,17 @@
         before sending another request.
       </p>
     }
-    <button
-      class="catalog-button catalog-button-primary"
-      type="button"
-      (click)="load()"
-      [disabled]="busy()"
-    >
-      {{ copy.load }}
-    </button>
+    @if (busy()) {
+      <p role="status">Loading preparation records…</p>
+    } @else {
+      <button
+        class="catalog-button catalog-button-primary"
+        type="button"
+        (click)="load()"
+      >
+        {{ copy.load }}
+      </button>
+    }
   }
   @if (error(); as value) {
     <p class="builds-error" role="alert">{{ value }}</p>
@@ -229,7 +232,7 @@
         (click)="loadEvidence()"
         [disabled]="busy()"
       >
-        Load saved regression runs
+        Refresh saved regression runs
       </button>
       @if (evidencePage(); as page) {
         <ul class="builds-list">

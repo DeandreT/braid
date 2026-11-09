@@ -82,6 +82,10 @@ The Help link in the header opens the contents. Pages link to their guide
 section with `<weft-help-link [section]="'reports'">`, whose IDs come from
 `apps/web/src/help/help-sections.ts`.
 
+![User guide contents listing every section with its summary](images/help.png)
+
+*The `/help` contents, built from each section's front matter.*
+
 ## Checks
 
 - `UserGuideTests` checks that every guide file is embedded with its exact

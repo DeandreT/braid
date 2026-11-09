@@ -103,16 +103,16 @@ import {
       right: 0;
       z-index: 30;
       width: min(320px, calc(100vw - 24px));
-      background: #fff;
-      border: 1px solid #d7e2d1;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      box-shadow: 0 6px 18px #18352b22;
+      box-shadow: 0 6px 18px var(--shadow-2);
       font-size: 0.8125rem;
       overflow: hidden;
     }
     header {
       padding: 10px 12px;
-      border-bottom: 1px solid #d7e2d1;
+      border-bottom: 1px solid var(--border);
     }
     h2 {
       margin: 0;
@@ -141,7 +141,7 @@ import {
     }
     small {
       display: block;
-      color: #526b5e;
+      color: var(--text-muted);
       font-size: 0.75rem;
     }
     .popover-dot {
@@ -153,19 +153,19 @@ import {
       background: var(--wb-running-text);
     }
     .popover-dot-read {
-      background: #c9d2c6;
+      background: var(--surface-muted-13);
     }
     .popover-note {
       margin: 0;
       padding: 12px;
-      color: #526b5e;
+      color: var(--text-muted);
     }
     .popover-footer {
       display: block;
       padding: 10px 12px;
-      border-top: 1px solid #d7e2d1;
+      border-top: 1px solid var(--border);
       text-align: center;
-      color: #174d3f;
+      color: var(--text-4);
       font-weight: 600;
     }
     @media (max-width: 679px) {

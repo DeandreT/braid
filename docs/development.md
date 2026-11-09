@@ -211,12 +211,51 @@ script, as for any existing installation.
 | `WEFT_DEV_CHAT_MODELS` | `qwen2.5:3b qwen2.5:1.5b` | Ollama models offered in chat, default first |
 | `WEFT_DEV_OLLAMA_CONTAINER` / `WEFT_DEV_OLLAMA_URL` | `weft-ollama` / `http://127.0.0.1:11434` | Ollama container to start (empty for an externally managed one) and its loopback origin |
 | `WEFT_DEV_BUILD_DOCKER_CONFIG` | none | Docker configuration with the buildx plugin, used only for image builds |
+| `WEFT_DEV_SEED` | `0` | `1` runs `dev-seed.sh` after startup ([Demo data](#demo-data)) |
 
 Pass the same variables to `dev-down.sh` and `dev-status.sh`. A second instance with
 its own name and ports leaves the first untouched; give it `--keep-ollama` when
 stopping it so a shared Ollama keeps serving the other. Chat on CPU can exceed the
 provider deadlines described in [Local model check](chat-http.md#local-model-check);
 the smaller model answers faster.
+
+### Demo data
+
+`deploy/local/dev-seed.sh` fills a running instance with invented demo data, or
+`WEFT_DEV_SEED=1 deploy/local/dev-up.sh` runs it after startup. Pass the same
+`WEFT_DEV_*` variables as for `dev-up.sh` to seed a second instance.
+
+```sh
+WEFT_DEV_FERRULE_EXAMPLES=../ferrule/examples deploy/local/dev-seed.sh
+```
+
+It works through the product API as the Development user, like the browser does,
+and never writes to the database directly. It creates five projects (order
+fulfilment, invoicing, shipping notices, inventory sync and partner onboarding)
+with 21 self-authored Ferrule mappings across JSON, CSV, XML, fixed-width text,
+X12 and EDIFACT. Each mapping has two or three revisions, so version history and
+comparison have something to show, and one revision is deliberately
+decoded-invalid. The seed saves each project's notification and automation
+settings, then saves projection and validation reports, runs previews, records
+regression cases (some with outdated baselines that fail), runs them, rechecks
+suites, and approves and builds JSON mappings whose cases pass. Invoicing requires
+passing regressions, so its failing cases keep its builds refused. With
+`WEFT_DEV_FERRULE_EXAMPLES` set to a Ferrule checkout's `examples` directory, it
+also uploads Ferrule's examples to "Local project". Unless `WEFT_DEV_SEED_CHAT=0`,
+it asks a few chat questions and waits a bounded time for the local model's answers.
+Release targets are registered only by the operator's `Weft.ReleaseTool`
+([Local release activation](local-releases.md#operator-commands)), so the seed
+leaves them out.
+
+Every create uses an idempotency key or resource ID derived from
+`WEFT_DEV_SEED_NAMESPACE` (default `weft-demo-v1`) and the item's name, so a rerun
+replays instead of duplicating. A step that fails is listed at the end, the rest
+still runs, and the script exits non-zero. On a busy host the server's Docker
+runner can stop answering; the seed then stops early, since each upload has a
+limited number of attempts. Restart the server unit
+(`systemctl --user restart weft-dev-server`) and run the seed again. The catalog
+lives in `deploy/local/demo-data/catalog.mjs`;
+`node --test deploy/local/demo-data/seed.test.mjs` checks it without an instance.
 
 ## Updating API contracts
 
@@ -280,6 +319,15 @@ npm run test:browser
 Host process tests require these explicit absolute paths to fresh publications of
 the same Release build. The privacy probe is a qualification tool, not a deployed
 Server dependency; keep its publication separate from the shipped host.
+
+### Documentation screenshots
+
+The README and docs embed screenshots from `docs/images`. A frontend change that
+affects a captured screen must rerun `npm run docs:screenshots`, with
+`WEFT_CHROMIUM_EXECUTABLE` set as for the browser checks, and commit the updated
+images in the same pull request. `npm run check` fails when a document references
+a missing image or the manifest disagrees with the images, the capture spec or
+the documents. See [docs/images](images/README.md).
 
 ### Docker test networks
 

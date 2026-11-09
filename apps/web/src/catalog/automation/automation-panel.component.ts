@@ -55,7 +55,7 @@ import {
       .automation-toolbar p {
         flex: 1;
         margin: 0;
-        color: #526b5e;
+        color: var(--text-muted);
       }
       .automation-grid {
         display: grid;
@@ -66,8 +66,8 @@ import {
       .automation-box {
         margin: 0 0 12px;
         padding: 14px 16px;
-        background: #fff;
-        border: 1px solid #d7e2d1;
+        background: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 8px;
       }
       .automation-box h2 {
@@ -76,7 +76,7 @@ import {
       }
       .automation-box > p {
         margin: 0 0 10px;
-        color: #526b5e;
+        color: var(--text-muted);
         line-height: 1.5;
       }
       .automation-check {
@@ -102,7 +102,7 @@ import {
       .automation-numbers label {
         display: grid;
         gap: 4px;
-        color: #526b5e;
+        color: var(--text-muted);
         font-size: 0.75rem;
         font-weight: 600;
       }
@@ -113,12 +113,12 @@ import {
         list-style: none;
         margin: 4px 0 10px;
         padding: 0;
-        border: 1px solid #d7e2d1;
+        border: 1px solid var(--border);
         border-radius: 6px;
       }
       .automation-options li {
         padding: 2px 10px;
-        border-bottom: 1px solid #d7e2d1;
+        border-bottom: 1px solid var(--border);
       }
       .automation-options li:last-child {
         border-bottom: 0;
@@ -139,7 +139,7 @@ import {
       }
       .automation-note {
         margin: 2px 0 6px;
-        color: #526b5e;
+        color: var(--text-muted);
         font-size: 0.75rem;
       }
       .automation-save {
@@ -148,7 +148,7 @@ import {
       }
       .automation-event {
         padding: 8px 0;
-        border-bottom: 1px solid #d7e2d1;
+        border-bottom: 1px solid var(--border);
       }
       .automation-event p {
         margin: 4px 0;

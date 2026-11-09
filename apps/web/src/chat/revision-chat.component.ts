@@ -46,6 +46,7 @@ import {
 import { HelpLinkComponent } from "../help/help-link.component";
 import {
   citationLink,
+  citationName,
   conversationScope,
   isWorkspace,
   type AnyConversation,
@@ -89,6 +90,7 @@ export class RevisionChatComponent {
   readonly workspaceCitation = output<WorkspaceCitationEvent>();
   readonly selectedConversation = output<AnyConversation>();
   readonly isWorkspace = isWorkspace;
+  readonly citationName = citationName;
   readonly citationLink = (citation: WorkspaceCitation): string => {
     const link = citationLink(citation),
       current = this.current();
@@ -135,6 +137,9 @@ export class RevisionChatComponent {
   );
   private focusChosen = false;
   readonly moreFocus = signal(false);
+  readonly focusBusy = signal(false);
+  private focusController: AbortController | null = null;
+  private focusTimer: ReturnType<typeof setTimeout> | undefined;
   private focusScan: {
     query: string;
     projects: CatalogProject[];
@@ -303,6 +308,8 @@ export class RevisionChatComponent {
       return;
     this.menuTrigger = trigger;
     this.menu.set(menu);
+    if (menu === "focus" && !this.focusScan && !this.focusBusy())
+      void this.searchFocus();
     afterNextRender(
       () => {
         this.element.nativeElement
@@ -919,6 +926,10 @@ export class RevisionChatComponent {
     this.focusNotice.set("");
     this.moreFocus.set(false);
     this.focusScan = null;
+    clearTimeout(this.focusTimer);
+    this.focusController?.abort();
+    this.focusController = null;
+    this.focusBusy.set(false);
     this.revisionCursor = null;
     this.moreRevisions.set(false);
     this.conversations.set([]);
@@ -1572,26 +1583,41 @@ export class RevisionChatComponent {
       this.hasMore.set(page.hasMore);
     });
   }
+  typeFocus(value: string): void {
+    this.focusQuery.set(value);
+    clearTimeout(this.focusTimer);
+    this.focusTimer = setTimeout(() => void this.searchFocus(), 250);
+  }
+  /** A new query cancels the scan in flight; more continues the scan already shown. */
   async searchFocus(more = false): Promise<void> {
-    if (this.busy() || this.scope()) return;
-    if (!more || !this.focusScan) {
-      this.focusScan = {
-        query: this.focusQuery().trim().toLocaleLowerCase(),
-        projects: [],
-        projectCursor: null,
-        projectIndex: 0,
-        mappingCursor: null,
-        started: false,
-      };
-      this.focusMappings.set([]);
-    }
+    if (this.scope()) return;
+    clearTimeout(this.focusTimer);
+    const query = this.focusQuery().trim().toLocaleLowerCase();
+    if (more && this.focusBusy()) return;
+    more &&= this.focusScan?.query === query;
+    this.focusController?.abort();
+    const controller = (this.focusController = new AbortController()),
+      generation = this.generation;
     // A failed later page must not advance beyond matches that were never presented.
-    const scan = { ...this.focusScan };
-    await this.perform(async () => {
+    const scan: NonNullable<RevisionChatComponent["focusScan"]> =
+      more && this.focusScan
+        ? { ...this.focusScan }
+        : {
+            query,
+            projects: [],
+            projectCursor: null,
+            projectIndex: 0,
+            mappingCursor: null,
+            started: false,
+          };
+    this.focusBusy.set(true);
+    this.focusNotice.set("Finding mappings…");
+    try {
       const found: CatalogMapping[] = [];
       let requests = 0,
         done = false;
-      await this.admitted(async (context, signal) => {
+      await this.admitted(async (context, admittedSignal) => {
+        const signal = AbortSignal.any([admittedSignal, controller.signal]);
         while (requests < 40 && found.length < 50) {
           if (scan.projectIndex >= scan.projects.length) {
             if (scan.started && !scan.projectCursor) {
@@ -1634,25 +1660,40 @@ export class RevisionChatComponent {
         )
           done = true;
       });
-      this.focusMappings.update((list) => [
-        ...list,
-        ...found.filter(
-          (mapping) =>
-            !list.some(
-              (old) => old.scope.mappingId === mapping.scope.mappingId,
-            ),
-        ),
-      ]);
+      if (controller.signal.aborted || generation !== this.generation) return;
+      this.focusMappings.update((old) => {
+        // A new query keeps only the chosen mapping so its label stays named.
+        const list = more
+          ? old
+          : old.filter((m) => m.scope.mappingId === this.newFocus()?.mappingId);
+        return [
+          ...list,
+          ...found.filter(
+            (mapping) =>
+              !list.some((m) => m.scope.mappingId === mapping.scope.mappingId),
+          ),
+        ];
+      });
       this.focusScan = scan;
       this.moreFocus.set(!done);
       this.focusNotice.set(
         !done
-          ? "More projects and mappings remain. Search more mappings to continue from this page."
+          ? "More projects and mappings remain. Show more mappings to continue from this page."
           : this.focusMappings().length
             ? "Select a mapping below."
             : "No readable mapping matched.",
       );
-    });
+    } catch (error) {
+      if (!controller.signal.aborted && generation === this.generation) {
+        this.focusNotice.set("");
+        this.showError(error);
+      }
+    } finally {
+      if (this.focusController === controller) {
+        this.focusController = null;
+        this.focusBusy.set(false);
+      }
+    }
   }
   async chooseFocus(mappingId: string): Promise<void> {
     if (this.busy() || this.pendingConversation) return;
@@ -1794,7 +1835,7 @@ export class RevisionChatComponent {
       reportsPending: "Wait for the report reads to finish before using chat.",
       unavailable: "Chat is unavailable. Refresh chat to check again.",
       reportsUnavailable:
-        "Generate the saved explanation and validation before starting a conversation.",
+        "This version's explanation and validation aren't saved yet. Opening the version generates them; refresh chat once they're saved.",
       profileUnavailable:
         "This model profile is no longer available. Refresh chat before choosing another profile.",
       turnActive:

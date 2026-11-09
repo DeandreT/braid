@@ -6,6 +6,10 @@ One persistent right panel shares private workspace conversations through the
 starts runs. Citations outside the open report are links to their own views;
 they never retarget the workbench panel.
 
+![Chat page with the conversation list and an answered question in the panel](images/chat.png)
+
+*`/chat` with the shared panel showing a completed answer and its citation links.*
+
 ## Conversations and questions
 
 Choose **New conversation** for an organization-scoped thread. The panel's
@@ -14,12 +18,18 @@ each turn or an exact revision. Workbench creation focuses the exact open
 revision. Focus guides context, not access: read-only tools can still answer
 questions about other authorized projects and the shipped user guide.
 
+The compact header opens saved conversations from the conversation title. Search
+chats in that menu, or choose **Show older chats** to page beyond the newest 50.
+The **More chat actions** menu holds refresh and **Open in chat**. The composer
+keeps mapping focus and the model profile beside the question and grows for
+multiline text. Its data-policy note stays visible beneath the composer.
+
 The list includes workspace and existing revision-pinned conversations; legacy
 threads continue through their original revision/report-pinned routes. The
 shared list is organization-scoped. **Open in chat** opens the
 same server conversation in a separate tab, leaving the panel and any unsent
-draft in place. **Load older conversations** pages beyond the newest 50. Up to 100
-recent questions are listed. Selecting a question reads its answer from the
+draft in place. Up to 100 recent questions and their answers share one transcript.
+Selecting a question reads its answer from the
 durable event stream; it does not run the model again.
 
 Choose a configured model profile, enter a question, and choose **Send question**.
@@ -28,9 +38,10 @@ while that profile remains available; a late creation response does not replace
 the selection with the default. This choice never grants payload access.
 The service controls provider endpoints, tools and limits. The browser sends
 only the profile ID/version, question, client-generated turn ID, and an empty
-selector list. Answers are plain text, not executable HTML. Tool activity and
-the latest token snapshot per round are displayed separately; unknown usage is
-not treated as zero, and observations are not added together.
+selector list. Answers are plain text, not executable HTML. Expand the checked-source
+count to inspect read-only tool activity; **Answer details** shows model and usage
+information. The latest token snapshot per round is retained separately; unknown
+usage is not treated as zero, and observations are not added together.
 
 **Cancel answer** makes an explicit cancellation request. **Reconnect answer**
 reads events after the last accepted sequence without creating another turn.
@@ -127,8 +138,12 @@ It serves admitted compiled Angular assets from the real catalog/chat host,
 with restricted PostgreSQL stores and an owned provider-wire fixture. The browser
 does not intercept API traffic. It checks standalone persistence and citations,
 exact workbench focus, continuing the same conversation on `/chat`, and a fresh
-cross-project membership withdrawal before the next tool call. The test host
-uses retained synthetic report sources and does not start a native worker.
+cross-project membership withdrawal before the next tool call. The browser
+reaches the host through an owned HTTP/1 reverse proxy that forwards bodyless
+cancellations as empty chunked requests; the test cancels an active turn and
+repeats cancellation of cancelled and completed turns, which must return the
+unchanged terminal state. The test host uses retained synthetic report sources
+and does not start a native worker.
 
 Build the frontend, publish `Weft.Server`, and build `Weft.Tests` at the same
 source revision. Prepare the existing owned-browser admission record with

@@ -47,8 +47,8 @@ import { Component, input, output } from "@angular/core";
       }
       div:hover,
       div:focus-visible {
-        background: #287a6070;
-        outline: 2px solid #287a60;
+        background: var(--overlay-3);
+        outline: 2px solid var(--focus-ring);
         outline-offset: -1px;
       }
     `,

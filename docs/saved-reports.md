@@ -8,12 +8,16 @@ Browser and clean-build qualification remain pending until recorded there.
 ## Reading and generating
 
 Opening a revision, returning to the tab or choosing Read again reads saved
-reports. These actions never generate one. Explanation and validation load
+reports. When a current (not pinned) report reads as never generated and the
+viewer may generate reports, the page requests it once for that selection, as
+if Generate had been chosen. A failed attempt is never repeated automatically.
+Someone who can't generate reports, or a workspace with generation turned off,
+sees a prominent notice that says so instead. Explanation and validation load
 independently; a failed report request leaves the other report and revision
 details available. A denied access check clears private report content.
 
-Generate explanation and Generate validation explicitly request work when no
-result exists. A failed attempt can offer Try derivation again. These actions
+Generate explanation and Generate validation request work when no result
+exists. A failed attempt can offer Try derivation again. These actions
 check current access first. Controls follow current service availability and
 mapping actions; a displayed role name does not grant an action.
 
@@ -21,7 +25,7 @@ An accepted request can remain in progress. The page observes it with a short,
 bounded sequence of reads and then offers Check again if needed. Check again
 only reads. Navigating away cancels browser requests and observation; an already
 accepted generation request may still complete. Returning to the revision reads
-its actual state without automatically submitting the request again.
+its actual state; only a report still never generated is requested again.
 
 ## Understanding results
 

@@ -106,7 +106,7 @@ import { ResizeHandleComponent } from "./resize-handle.component";
       position: relative;
       flex-shrink: 0;
       background: var(--wb-unavailable-tint);
-      border-inline: 1px solid #d7e2d1;
+      border-inline: 1px solid var(--border);
     }
     aside {
       display: flex;
@@ -114,7 +114,7 @@ import { ResizeHandleComponent } from "./resize-handle.component";
       width: var(--workspace-chat-width);
       min-height: 0;
       min-width: 0;
-      background: #fafdf6;
+      background: var(--surface-subtle-2);
     }
     .chat-hide {
       width: 28px;

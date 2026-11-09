@@ -1,28 +1,3 @@
-:root {
-  --wb-source-text: #2d62a8;
-  --wb-source-tint: #edf4fc;
-  --wb-rule-text: #7051a3;
-  --wb-rule-tint: #f3effa;
-  --wb-output-text: #1d7475;
-  --wb-output-tint: #eaf6f4;
-  --wb-evidence-text: #5d6e80;
-  --wb-evidence-tint: #f0f3f6;
-  --wb-selection-text: #174d3f;
-  --wb-selection-tint: #e8f1de;
-  --wb-success-text: #2d6d42;
-  --wb-success-tint: #eaf5e8;
-  --wb-running-text: var(--wb-source-text);
-  --wb-running-tint: var(--wb-source-tint);
-  --wb-attention-text: #855b12;
-  --wb-attention-tint: #fff3d6;
-  --wb-failure-text: #a33b32;
-  --wb-failure-tint: #fcece8;
-  --wb-unavailable-text: #5f705f;
-  --wb-unavailable-tint: #eff3ec;
-  --wb-focus: #174d3f;
-  --wb-control-border: #7b8c78;
-}
-
 .app-shell
   :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):not(
     :disabled

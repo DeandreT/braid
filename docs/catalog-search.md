@@ -11,6 +11,10 @@ rule summaries and field paths in retained projection reports. It does not searc
 sample inputs, outputs, literal dependencies, arbitrary report details or native
 mapping bytes. A search never invokes a mapping engine or derives a report.
 
+![Search results for a project, a mapping, fields and a rule](images/catalog-search.png)
+
+*`/catalog/search` with highlighted matches across projects, mappings, fields and rules.*
+
 ## Query and result contract
 
 `GET /api/v1/organizations/{organizationId}/search?q=...&limit=25&cursor=...`

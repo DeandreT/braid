@@ -89,11 +89,12 @@ guard_subscription() {
   [[ $group =~ ^[-A-Za-z0-9._()]{1,90}$ && $group != *. ]] || refuse '--resource-group is not a valid resource group name'
 }
 
+# The signed-in account must see the approved subscription; the CLI's default subscription is neither read nor changed.
 guard_account() {
-  local active
-  active=$(az account show --query id --output tsv) || refuse 'the Azure CLI has no signed-in account'
-  [[ $active == "$subscription" ]] ||
-    refuse 'the Azure CLI subscription (az account show) is not the approved --subscription'
+  local visible
+  visible=$(azs account show --query id --output tsv 2>/dev/null) || visible=''
+  [[ $visible == "$subscription" ]] ||
+    refuse 'the signed-in Azure CLI account cannot see the approved --subscription (az account show --subscription)'
 }
 
 state_root=$(realpath -m -- "$state_root")
@@ -184,9 +185,9 @@ using=$(sed -nE "s/^using '([^']+)'.*/\1/p" "$parameters" | head -n 1)
 commit=$(git -C "$repository" rev-parse HEAD)
 guard_account
 # The first administrator is the Azure CLI's signed-in user, bound by tenant and object ID as sign-in resolves them.
-[[ $(az account show --query tenantId --output tsv) == "$tenant" ]] ||
-  refuse 'the Azure CLI account (az account show) is not in the --entra-tenant-id tenant'
-owner_object=$(az ad signed-in-user show --query id --output tsv) ||
+[[ $(azs account show --query tenantId --output tsv) == "$tenant" ]] ||
+  refuse 'the approved --subscription (az account show --subscription) is not in the --entra-tenant-id tenant'
+owner_object=$(azs ad signed-in-user show --query id --output tsv) ||
   refuse 'the Azure CLI must be signed in as the user who becomes the first administrator (az ad signed-in-user show)'
 [[ $owner_object =~ $uuid_pattern ]] || refuse 'az ad signed-in-user show did not return a canonical object ID'
 group_absent || refuse "the resource group $group already exists; the harness creates and owns a new group"
@@ -305,7 +306,7 @@ certificates=$state/certificates
 mkdir -p -- "$certificates"
 # The operator's Key Vault roles can take minutes to apply after the platform deployment; the script is rerunnable.
 for attempt in 1 2 3 4 5 6; do
-  if "$repository/deploy/azure/initialize-secrets.sh" "$vault" "$database_host" "$certificates"; then break; fi
+  if WEFT_AZURE_SUBSCRIPTION=$subscription "$repository/deploy/azure/initialize-secrets.sh" "$vault" "$database_host" "$certificates"; then break; fi
   ((attempt < 6)) || fail secrets-initialized 'initialize-secrets.sh did not complete'
   sleep 60
 done
@@ -314,10 +315,10 @@ for certificate in weft-ferrule-service weft-ferrule-service-client weft-ferrule
   pins[$certificate]=$(<"$certificates/$certificate.sha256")
   [[ ${pins[$certificate]} =~ ^[0-9a-f]{64}$ ]] || fail secrets-initialized "the $certificate pin is malformed"
 done
-az keyvault secret set --vault-name "$vault" --name weft-chat-profiles --file "$chat_profiles" --encoding utf-8 \
+azs keyvault secret set --vault-name "$vault" --name weft-chat-profiles --file "$chat_profiles" --encoding utf-8 \
   --content-type application/json --output none
 if [[ -n $model_credential_file ]]; then
-  az keyvault secret set --vault-name "$vault" --name weft-model-provider-credential --file "$model_credential_file" \
+  azs keyvault secret set --vault-name "$vault" --name weft-model-provider-credential --file "$model_credential_file" \
     --encoding utf-8 --content-type text/plain --output none
 fi
 entra_der() {
@@ -339,7 +340,7 @@ for image in weft:weft edge:weft-edge weft-worker:weft-worker weft-mapping-endpo
   azs acr build --registry "$registry" --file deploy/container/Dockerfile --target "$target" --image "$repository_name:$tag" \
     "$source_tree" >"$work/acr-$repository_name.log" 2>&1 ||
     { tail -n 30 "$work/acr-$repository_name.log" >&2; fail images-built "the registry build of $target failed"; }
-  digest=$(az acr repository show --name "$registry" --image "$repository_name:$tag" --query digest --output tsv)
+  digest=$(azs acr repository show --name "$registry" --image "$repository_name:$tag" --query digest --output tsv)
   [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || fail images-built "no digest for $repository_name:$tag"
   record fact image recorded "$(evidence repository "$repository_name" tag "$tag" digest "$digest" commit "$commit")"
 done
@@ -374,12 +375,12 @@ runtime_identity=$(jq -er --arg native "$service_identity" '
   select(.schema == "weft.compiled-runtime-image-identity.v1" and .native == $native and (.runtime | test("^sha256:[0-9a-f]{64}$")))
   | .runtime' "$work/runtime-identity.json") || fail ferrule-identity 'the compiled runtime identity'
 mkdir -m 700 -- "$work/docker"
-DOCKER_CONFIG=$work/docker az acr login --name "$registry"
+DOCKER_CONFIG=$work/docker azs acr login --name "$registry"
 docker tag "weft-ferrule-service:$run_id" "$login_server/weft-ferrule-service:$tag"
 built_images+=("$login_server/weft-ferrule-service:$tag")
 DOCKER_CONFIG=$work/docker docker push --quiet "$login_server/weft-ferrule-service:$tag" >/dev/null
 rm -rf -- "$work/docker"
-service_digest=$(az acr repository show --name "$registry" --image "weft-ferrule-service:$tag" --query digest --output tsv)
+service_digest=$(azs acr repository show --name "$registry" --image "weft-ferrule-service:$tag" --query digest --output tsv)
 [[ $service_digest =~ ^sha256:[0-9a-f]{64}$ ]] || fail images-built 'no digest for the Ferrule service image'
 record fact image recorded "$(evidence repository weft-ferrule-service tag "$tag" digest "$service_digest" commit "$commit")"
 pass images-built "$(evidence commit "$commit" tag "$tag" ferruleServiceIdentity "$service_identity" \
@@ -490,7 +491,7 @@ job_step owner-project-creation "$prefix-owner" 'Project creation capability gra
   --args database set-project-creation-capability "$organization" "$principal" true
 # The binding key reaches the job only through Key Vault; the placeholder is restored afterwards.
 jq -cn --arg tenant "$tenant" --arg object "$owner_object" '{tenantId: $tenant, objectId: $object}' >"$work/owner-input.json"
-az keyvault secret set --vault-name "$vault" --name weft-owner-input --file "$work/owner-input.json" --encoding utf-8 \
+azs keyvault secret set --vault-name "$vault" --name weft-owner-input --file "$work/owner-input.json" --encoding utf-8 \
   --content-type application/json --output none
 rm -f -- "$work/owner-input.json"
 vault_uri=$(azg keyvault show --name "$vault" --query properties.vaultUri --output tsv)
@@ -500,14 +501,14 @@ azg containerapp job secret set --name "$prefix-owner" \
 job_step owner-binding "$prefix-owner" '"outcome":"(created|existing)"' --container-name owner \
   --args database bind-entra-user "$principal"
 printf '{}' >"$work/owner-input.json"
-az keyvault secret set --vault-name "$vault" --name weft-owner-input --file "$work/owner-input.json" --encoding utf-8 \
+azs keyvault secret set --vault-name "$vault" --name weft-owner-input --file "$work/owner-input.json" --encoding utf-8 \
   --content-type application/json --output none
 record fact administrator provisioned "$(evidence principal "$principal" organization "$organization")"
 
 step registration 'Session host app registration'
 redirect=https://$public_host/api/auth/callback/entra
 registration_ready() {
-  az ad app show --id "$client" --query '{uris: web.redirectUris, keys: keyCredentials[].customKeyIdentifier}' \
+  azs ad app show --id "$client" --query '{uris: web.redirectUris, keys: keyCredentials[].customKeyIdentifier}' \
     --output json >"$work/registration.json" &&
     jq -e --arg uri "$redirect" --arg hex "$entra_thumbprint" --arg b64 "$entra_thumbprint_b64" \
       '(.uris // [] | index($uri)) != null and any(.keys[]?; . == $b64 or ascii_upcase == ($hex | ascii_upcase))' \
@@ -518,7 +519,7 @@ if ! registration_ready; then
     "Before sign-in, the app registration $client needs:" \
     "- the Web redirect URI $redirect" \
     "- the certificate $certificates/weft-entra-client.pem, for example:" \
-    "  az ad app credential reset --id $client --cert @$certificates/weft-entra-client.pem --append" \
+    "  az ad app credential reset --id $client --cert @$certificates/weft-entra-client.pem --append --subscription $subscription" \
     'Answer yes once both are in place.'
   registration_ready || fail registration 'the redirect URI or the certificate credential is still missing'
 fi

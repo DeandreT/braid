@@ -13,7 +13,7 @@
 }
 .append-eyebrow {
   margin: 0 0 8px;
-  color: #64806b;
+  color: var(--text-muted-4);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -27,18 +27,18 @@ h1 {
 h2,
 h3 {
   margin: 0 0 12px;
-  color: #284c3c;
+  color: var(--text-accent);
   font-size: 1.25rem;
   overflow-wrap: anywhere;
 }
 p {
-  color: #536e5e;
+  color: var(--text-muted-3);
   font-size: 0.875rem;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
 a {
-  color: #345d45;
+  color: var(--text-2);
   overflow-wrap: anywhere;
 }
 .append-card {
@@ -46,9 +46,9 @@ a {
   min-width: 0;
   margin: 18px 0;
   padding: 22px;
-  border: 1px solid #dce5d8;
+  border: 1px solid var(--border-4);
   border-radius: 14px;
-  background: #fff;
+  background: var(--surface);
 }
 .append-form {
   display: grid;
@@ -63,7 +63,7 @@ a {
 label {
   display: block;
   margin-bottom: 8px;
-  color: #284c3c;
+  color: var(--text-accent);
   font-size: 0.875rem;
   font-weight: 600;
 }
@@ -75,10 +75,10 @@ input[type="file"] {
   min-width: 0;
   max-width: 100%;
   padding: 12px;
-  border: 1px solid #aabbab;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: #fff;
-  color: #193b2d;
+  background: var(--surface);
+  color: var(--text-3);
   font: inherit;
   font-size: 1rem;
 }
@@ -87,10 +87,10 @@ input[type="file"] {
 }
 input:read-only,
 input:disabled {
-  background: #f3f5f0;
+  background: var(--surface-muted-3);
 }
 input[aria-invalid="true"] {
-  border-color: #a33e32;
+  border-color: var(--border-danger);
 }
 button,
 .append-button {
@@ -102,10 +102,10 @@ button,
   max-width: 100%;
   min-height: 44px;
   padding: 10px 15px;
-  border: 1px solid #b9ccb7;
+  border: 1px solid var(--border-6);
   border-radius: 8px;
-  background: #f0f5e9;
-  color: #284c3c;
+  background: var(--surface-muted-2);
+  color: var(--text-accent);
   font: inherit;
   font-size: 0.875rem;
   font-weight: 600;
@@ -116,7 +116,7 @@ button,
 }
 button:hover,
 .append-button:hover {
-  background: #e5eddd;
+  background: var(--surface-muted-4);
 }
 button:disabled {
   opacity: 0.6;
@@ -124,12 +124,12 @@ button:disabled {
 }
 .append-primary {
   justify-self: start;
-  border-color: #285a40;
-  background: #285a40;
-  color: #fff;
+  border-color: var(--border-accent);
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 .append-primary:hover {
-  background: #1c4831;
+  background: var(--accent-2);
 }
 .append-actions {
   display: flex;
@@ -144,11 +144,11 @@ button:disabled {
 }
 .append-error,
 .append-error a {
-  color: #96382e;
+  color: var(--text-danger);
 }
 .append-card.append-error {
-  border-color: #c99185;
-  background: #fff7f2;
+  border-color: var(--border-danger-2);
+  background: var(--surface-warn-2);
 }
 .append-error li {
   margin: 10px 0;
@@ -158,19 +158,19 @@ button:disabled {
 }
 .append-notice {
   padding: 14px 18px;
-  border-color: #d8d6b5;
-  background: #fcfbed;
+  border-color: var(--border-warn-2);
+  background: var(--surface-warn-3);
 }
 .append-facts {
   display: grid;
   grid-template-columns: minmax(110px, 1fr) minmax(0, 3fr);
   gap: 10px 18px;
-  color: #284c3c;
+  color: var(--text-accent);
   font-size: 0.875rem;
 }
 dt {
   min-width: 0;
-  color: #657967;
+  color: var(--text-muted-2);
   overflow-wrap: anywhere;
 }
 dd {
@@ -205,7 +205,7 @@ dd {
 }
 :is(button, a, input):focus-visible,
 [tabindex="-1"]:focus {
-  outline: 3px solid #967b30;
+  outline: 3px solid var(--focus-ring-warn);
   outline-offset: 3px;
 }
 @media (max-width: 540px) {

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { expectSignedInAccount } from "./hosted-account.fixture";
 import {
@@ -17,6 +17,8 @@ import {
 
 const panel = (page: Page) =>
   page.getByRole("complementary", { name: /^(Workspace|Mapping) chat$/ });
+const focusStatus = (page: Page) =>
+  panel(page).locator("#chat-focus-menu").getByRole("status");
 const expectComplete = (page: Page) =>
   expect(
     panel(page)
@@ -143,9 +145,6 @@ test("standalone chat lists both kinds, searches mappings, pins focus and links 
   await openFocus(panel(page));
   await page.getByLabel("Find mapping").fill("Partner");
   await page
-    .getByRole("button", { name: "Search mappings", exact: true })
-    .click();
-  await page
     .getByLabel("Mapping focus", { exact: true })
     .selectOption(otherMapping);
   await page
@@ -167,7 +166,7 @@ test("standalone chat lists both kinds, searches mappings, pins focus and links 
     `/catalog/organizations/${f.data.revision.scope.organizationId}/projects/${otherProject}/mappings/${otherMapping}`,
   );
   const guide = panel(page).getByRole("link", {
-    name: "Open guideSection chat",
+    name: "Open help chat",
     exact: true,
   });
   await expect(guide).toHaveAttribute("href", "/help/chat");
@@ -244,7 +243,7 @@ test("existing revision-pinned conversations continue through the original route
   expect(f.posts).toHaveLength(1);
   await expect(
     panel(page).getByRole("link", {
-      name: "Open saved projectionReport report",
+      name: "Open saved explanation report",
     }),
   ).toHaveAttribute(
     "href",
@@ -271,6 +270,60 @@ test("removing selectable model profiles does not hide a saved answer or dispatc
   expect(f.posts).toHaveLength(2);
 });
 
+test("the focus panel lists mappings when it opens and filters as the user types, ignoring a superseded scan", async ({
+  page,
+}) => {
+  const f = await workspaceFixture(page);
+  const held: Route[] = [];
+  let hold = false,
+    projectReads = 0;
+  await page.route(
+    new RegExp(
+      `/api/v1/organizations/${f.data.revision.scope.organizationId}/projects(\\?|$)`,
+    ),
+    (route) => {
+      projectReads++;
+      return route.fallback();
+    },
+  );
+  await page.route(
+    new RegExp(`/projects/${otherProject}/mappings(\\?|$)`),
+    (route) => {
+      if (!hold) return route.fallback();
+      hold = false;
+      held.push(route);
+    },
+  );
+  await page.goto("/chat");
+  await openFocus(panel(page));
+  const focus = page.getByRole("combobox", {
+    name: "Mapping focus",
+    exact: true,
+  });
+  await expect(focus).toContainText("Partner orders");
+  await expect(focusStatus(page)).toHaveText("Select a mapping below.");
+  expect(projectReads).toBe(1);
+  await expect(page.getByLabel("Find mapping")).toBeFocused();
+
+  hold = true;
+  await page.getByLabel("Find mapping").fill("Partner");
+  await expect.poll(() => held.length).toBe(1);
+  await page.getByLabel("Find mapping").fill("Nothing matches this");
+  await expect(focusStatus(page)).toHaveText("No readable mapping matched.");
+  await held[0]!
+    .fulfill({
+      json: {
+        mappings: [{ ...f.data.mapping, name: "Partner orders" }],
+        nextCursor: null,
+      },
+    })
+    .catch(() => {});
+  await expect(focusStatus(page)).toHaveText("No readable mapping matched.");
+  await expect(focus).not.toContainText("Partner orders");
+  await expect(page.getByLabel("Find mapping")).toBeFocused();
+  expect(projectReads).toBe(3);
+});
+
 test("focus search continues beyond its per-action scan budget without restarting earlier pages", async ({
   page,
 }) => {
@@ -294,12 +347,13 @@ test("focus search continues beyond its per-action scan budget without restartin
   );
   await page.goto("/chat");
   await openFocus(panel(page));
+  await expect(focusStatus(page)).toContainText("More projects");
+  pages = 0;
   await page.getByLabel("Find mapping").fill("Later");
+  await expect.poll(() => pages).toBeGreaterThan(0);
+  await expect(focusStatus(page)).toContainText("More projects");
   await page
-    .getByRole("button", { name: "Search mappings", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Search more mappings", exact: true })
+    .getByRole("button", { name: "Show more mappings", exact: true })
     .click();
   await expect(
     page.getByRole("combobox", { name: "Mapping focus", exact: true }),
@@ -341,16 +395,18 @@ test("a failed focus-search continuation retries pages whose matches were never 
   );
   await page.goto("/chat");
   await openFocus(panel(page));
+  await expect(focusStatus(page)).toContainText("More projects");
+  cursors.length = 0;
+  fail = true;
   await page.getByLabel("Find mapping").fill("Later match");
+  await expect.poll(() => cursors.length).toBeGreaterThan(0);
+  await expect(focusStatus(page)).toContainText("More projects");
   await page
-    .getByRole("button", { name: "Search mappings", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Search more mappings", exact: true })
+    .getByRole("button", { name: "Show more mappings", exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toBeVisible();
   await page
-    .getByRole("button", { name: "Search more mappings", exact: true })
+    .getByRole("button", { name: "Show more mappings", exact: true })
     .click();
   await expect(
     page.getByRole("combobox", { name: "Mapping focus", exact: true }),
