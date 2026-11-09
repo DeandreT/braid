@@ -64,7 +64,7 @@ export function encodeContent(bytes: Uint8Array): string {
   selector: "weft-sandbox-page",
   imports: [FormsModule, RouterLink],
   templateUrl: "./sandbox-page.component.html",
-  styleUrl: "../catalog.css",
+  styleUrls: ["../catalog.css", "./sandbox-page.component.css"],
 })
 export class SandboxPageComponent {
   readonly context = inject(CatalogContextStore);

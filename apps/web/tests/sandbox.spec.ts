@@ -86,6 +86,10 @@ async function fixture(page: Page) {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+    if (path === "/api/v1/health")
+      return route.fulfill({
+        json: { status: "ok", service: "weft-api", apiVersion: "v1" },
+      });
     if (path === mapping.split("/mappings/")[0])
       return route.fulfill({
         json: {
@@ -353,6 +357,9 @@ test("uploaded bytes survive the inbox and the page uses dark theme tokens", asy
     };
   });
   expect(colors.expected).not.toBe("");
+  await page
+    .getByRole("heading", { name: "Local sandbox", exact: true })
+    .scrollIntoViewIfNeeded();
   await page.screenshot({
     path: testInfo.outputPath("sandbox-dark.png"),
     fullPage: true,
