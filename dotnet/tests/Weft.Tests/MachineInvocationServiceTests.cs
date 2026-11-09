@@ -158,11 +158,11 @@ public sealed class MachineInvocationServiceTests
         internal Func<CancellationToken, Task<CompiledBuildResult>>? Execute;
         public string RuntimeImage => Data.Runtime;
 
-        internal Fixture(TimeSpan? releaseBound = null)
+        internal Fixture(TimeSpan? releaseBound = null, Func<BuildIntent, string, Guid>? targetId = null)
         {
             var revision = Data.Build.Intent.Revision;
-            Target = new(new(new(revision.OrganizationId, revision.ProjectId, revision.MappingId), Data.Build.Intent.Environment, Guid.NewGuid()),
-                Data.Build.Intent.Profile, Data.Runtime);
+            Target = new(new(new(revision.OrganizationId, revision.ProjectId, revision.MappingId), Data.Build.Intent.Environment,
+                targetId?.Invoke(Data.Build.Intent, Data.Runtime) ?? Guid.NewGuid()), Data.Build.Intent.Profile, Data.Runtime);
             Service = new(this, this, _ => new LocalReleaseInvocation(this, new(this, this, this, this, this)), TimeProvider.System,
                 new(1024 * 1024, 1024 * 1024, PreviewPolicy.MaximumArtifacts, PreviewPolicy.MaximumTextBytes), releaseBound);
         }

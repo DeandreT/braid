@@ -33,6 +33,7 @@ public static class CatalogHostConfiguration
             CatalogRegressionHostConfiguration.Configure(builder.Services, readEnvironment, catalogEnabled: false);
             _ = CatalogBuildHostConfiguration.ReadRuntime(readEnvironment, catalogEnabled: false);
             _ = ReleaseOperationsHostConfiguration.ReadEnabled(readEnvironment, catalogEnabled: false);
+            LocalSandboxHostConfiguration.Configure(builder.Services, builder.Environment, readEnvironment, catalogEnabled: false);
             ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, false, reportOptions);
             return;
         }
@@ -42,6 +43,7 @@ public static class CatalogHostConfiguration
             throw new InvalidOperationException("The catalog browser origin must match the concrete configured loopback listener.");
         CatalogBusinessServices.Configure(builder.Services, builder.Environment, metadataOptions, ingestionOptions,
             creationOptions, reportOptions, readEnvironment);
+        LocalSandboxHostConfiguration.Configure(builder.Services, builder.Environment, readEnvironment, catalogEnabled: true);
         ChatHostConfiguration.Configure(builder.Services, readEnvironment, chat, true, reportOptions);
         CatalogPreviewHostConfiguration.Configure(builder.Services, previewOptions, readEnvironment);
 

@@ -39,6 +39,7 @@ app.MapWeftRegressionRuns();
 app.MapWeftAutomation();
 app.MapWeftBuilds();
 app.MapWeftReleaseOperations();
+app.MapWeftLocalSandbox();
 app.MapWeftChat();
 app.MapWeftHelp();
 app.MapWeftAuthentication();

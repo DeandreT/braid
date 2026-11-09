@@ -16,6 +16,7 @@ public static class ApiConfiguration
         services.AddWeftRegressionRuns();
         services.AddWeftBuildApi();
         services.AddSingleton(new ReleaseOperationsOptions());
+        services.AddSingleton(new LocalSandboxOptions());
         services.AddSingleton(new CatalogAutomationOptions(false));
         services.ConfigureHttpJsonOptions(options => ProjectionJson.Configure(options.SerializerOptions));
         services.AddOpenApi(options => options.AddDocumentTransformer((document, context, _) =>

@@ -283,7 +283,16 @@ WEFT_RELEASE_OPERATIONS_ENABLED=true
 WEFT_RELEASE_READER_CONNECTION_STRING=$(connection weft_release_reader RELEASE_READER)
 WEFT_RELEASE_WRITER_CONNECTION_STRING=$(connection weft_release_writer RELEASE_WRITER)
 WEFT_QUALIFICATION_READER_CONNECTION_STRING=$(connection weft_qualification_reader QUALIFICATION_READER)
+WEFT_LOCAL_SANDBOX_ENABLED=true
+WEFT_LOCAL_SANDBOX_HISTORY_DIRECTORY=$dev_home/sandbox
+WEFT_LOCAL_SANDBOX_RUNTIME_IMAGE=$worker_image
+WEFT_LOCAL_SANDBOX_DOCKER_EXECUTABLE=$(command -v docker)
+WEFT_LOCAL_SANDBOX_QUALIFICATION_WRITER_CONNECTION_STRING=$(connection weft_qualification_writer QUALIFICATION_WRITER)
+WEFT_LOCAL_SANDBOX_BUILD_READER_CONNECTION_STRING=$(connection weft_build_reader BUILD_READER)
+WEFT_LOCAL_SANDBOX_INVOCATION_WRITER_CONNECTION_STRING=$(connection weft_invocation_writer INVOCATION_WRITER)
+WEFT_LOCAL_SANDBOX_INVOCATION_GRANT_WRITER_CONNECTION_STRING=$(connection weft_invocation_grant_writer INVOCATION_GRANT_WRITER)
 EOF
+install -d -m 0700 "$dev_home/sandbox"
 worker_env=$dev_config/worker.env
 cat >"$worker_env" <<EOF
 DOTNET_ENVIRONMENT=Development
@@ -404,6 +413,7 @@ cat <<EOF
 Weft is running at $dev_origin/catalog (Development identity, loopback only).
   Build:    $build_key, Ferrule image $worker_image
   Chat:     ${chat_models[*]} through $dev_ollama_url (default ${chat_models[0]})
+  Sandbox:  local deployment simulation on each mapping's Sandbox page (docs/local-sandbox.md)
   Logs:     $dev_logs
   Settings: $dev_config (private)
   Status:   $dev_home/status.sh

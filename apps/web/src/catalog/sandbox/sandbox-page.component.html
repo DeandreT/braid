@@ -1,0 +1,331 @@
+<section class="catalog-page" aria-labelledby="sandbox-title">
+  <h1 id="sandbox-title">Local sandbox</h1>
+  <p class="wb-state" data-tone="attention" role="note">
+    Simulation on this local instance only. Deployments qualify and activate a
+    build through the normal release checks, and messages run through the
+    mapping endpoint's invocation path, but nothing leaves this machine.
+  </p>
+  @if (unavailable()) {
+    <p class="wb-state" data-state="unavailable">
+      The local sandbox is not enabled here. It is available on a local instance
+      started with <code>deploy/local/dev-up.sh</code>.
+    </p>
+  } @else if (!presented()) {
+    <p>Refresh to confirm access before using the sandbox.</p>
+    <button class="catalog-button" [disabled]="busy()" (click)="load()">
+      Refresh sandbox
+    </button>
+  }
+  <p role="status">{{ message() }}</p>
+  @if (busy()) {
+    <p role="status">Working…</p>
+  }
+  @if (pending(); as original) {
+    <div class="wb-state" data-tone="uncertain">
+      <p>
+        A {{ original.kind }} request may already have been applied. Retrying
+        reuses its ID <code class="catalog-code">{{ original.id }}</code
+        >.
+      </p>
+      <button class="catalog-button" [disabled]="busy()" (click)="recover()">
+        Retry original request
+      </button>
+    </div>
+  }
+  @if (state(); as view) {
+    <div [hidden]="!presented()" [attr.inert]="presented() ? null : ''">
+      <section aria-labelledby="sandbox-release-title">
+        <h2 id="sandbox-release-title">Active release</h2>
+        @if (view.targets.length) {
+          <label
+            >Sandbox target
+            <select
+              name="target"
+              [(ngModel)]="target"
+              (change)="selectTarget()"
+              [disabled]="busy() || !!pending()"
+            >
+              @for (item of view.targets; track item.targetId) {
+                <option [value]="item.targetId">
+                  Environment {{ item.environmentId }} v{{
+                    item.environmentVersion
+                  }}
+                </option>
+              }
+            </select></label
+          >
+          @if (current(); as item) {
+            <dl>
+              <dt>Active release</dt>
+              <dd class="catalog-code">{{ item.activeReleaseId ?? "None" }}</dd>
+              <dt>Target</dt>
+              <dd class="catalog-code">
+                {{ item.enabled ? "Enabled" : "Disabled" }} · version
+                {{ item.version }}
+              </dd>
+            </dl>
+            <label
+              >Roll back to
+              <select name="rollbackSource" [(ngModel)]="rollbackSource">
+                <option value="">Choose an earlier release</option>
+                @for (release of releases(); track release.release_id) {
+                  @if (release.release_id !== item.activeReleaseId) {
+                    <option [value]="release.release_id">
+                      {{ release.release_id }} · build {{ release.build_id }}
+                    </option>
+                  }
+                }
+              </select></label
+            >
+            <button
+              class="catalog-button"
+              [disabled]="busy() || !!pending() || !rollbackSource"
+              (click)="operate('rollback')"
+            >
+              Roll back
+            </button>
+            @if (item.enabled) {
+              <button
+                class="catalog-button"
+                [disabled]="busy() || !!pending()"
+                (click)="operate('disable')"
+              >
+                Disable target
+              </button>
+            } @else {
+              <button
+                class="catalog-button"
+                [disabled]="busy() || !!pending()"
+                (click)="operate('enable')"
+              >
+                Enable target
+              </button>
+            }
+          }
+        } @else {
+          <p class="wb-state" data-state="unavailable">
+            Nothing is deployed to the sandbox yet.
+          </p>
+        }
+        <h3>Deploy a build</h3>
+        @if (view.builds.length) {
+          <label
+            >Completed build
+            <select name="build" [(ngModel)]="build">
+              @for (item of view.builds; track item.buildId) {
+                <option [value]="item.buildId">
+                  {{ item.buildId }} · {{ item.createdAtUtc }}
+                </option>
+              }
+            </select></label
+          >
+          <button
+            class="catalog-button catalog-button-primary"
+            [disabled]="busy() || !!pending() || !build"
+            (click)="deploy()"
+          >
+            Deploy to sandbox
+          </button>
+          <p>
+            Deploying qualifies the build against its saved regression evidence,
+            then activates it. Administrators only.
+          </p>
+        } @else {
+          <p class="wb-state" data-state="unavailable">
+            No completed builds of yours. Prepare one from a revision first.
+          </p>
+        }
+        <p>
+          Release history and audit are on the
+          <a routerLink="../operations">Operations page</a>.
+        </p>
+      </section>
+      @if (current()?.activeReleaseId) {
+        <section aria-labelledby="sandbox-inbox-title">
+          <h2 id="sandbox-inbox-title">Inbox</h2>
+          <form (ngSubmit)="sendSample()">
+            <label
+              >Sample
+              <select name="source" [(ngModel)]="source">
+                <option value="case">Saved regression case</option>
+                <option value="inline">Paste or upload</option>
+              </select></label
+            >
+            @if (source === "case") {
+              <label
+                >Case
+                <select name="sample" [(ngModel)]="sample">
+                  @for (item of view.samples; track item.reference) {
+                    <option [value]="item.reference">{{ item.name }}</option>
+                  }
+                </select></label
+              >
+            } @else {
+              <label
+                >Primary input
+                <textarea
+                  name="primary"
+                  rows="8"
+                  [(ngModel)]="primary"
+                ></textarea>
+              </label>
+              <label
+                >Or upload a file
+                <input type="file" name="file" (change)="upload($event)"
+              /></label>
+              @for (input of named; track $index) {
+                <label
+                  >Named input
+                  <input [name]="'name' + $index" [(ngModel)]="input.name"
+                /></label>
+                <label
+                  >Content
+                  <textarea
+                    [name]="'text' + $index"
+                    rows="4"
+                    [(ngModel)]="input.text"
+                  ></textarea>
+                </label>
+              }
+              <button type="button" class="catalog-button" (click)="addNamed()">
+                Add named input
+              </button>
+            }
+            <button
+              class="catalog-button catalog-button-primary"
+              [disabled]="busy() || !!pending() || !current()?.enabled"
+            >
+              Send to active release
+            </button>
+          </form>
+        </section>
+      }
+      @if (target) {
+        <section aria-labelledby="sandbox-outbox-title">
+          <h2 id="sandbox-outbox-title">Outbox</h2>
+          @if (history().length) {
+            <div class="weft-table-wrap">
+              <table class="weft-table" aria-label="Sandbox messages">
+                <thead>
+                  <tr>
+                    <th scope="col">Sent</th>
+                    <th scope="col">Source</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Duration (ms)</th>
+                    <th scope="col">Release</th>
+                    <th scope="col">Build</th>
+                    <th scope="col">Compare</th>
+                    <th scope="col">
+                      <span class="ops-sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of history(); track item.messageId) {
+                    <tr>
+                      <td>{{ item.sentAtUtc }}</td>
+                      <td>{{ item.source }}</td>
+                      <td>
+                        {{ item.status
+                        }}{{ item.outcome ? " · " + item.outcome : "" }}
+                      </td>
+                      <td>{{ item.durationMs }}</td>
+                      <td class="catalog-code">{{ item.releaseId ?? "—" }}</td>
+                      <td class="catalog-code">{{ item.buildId ?? "—" }}</td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          [attr.aria-label]="'Compare ' + item.messageId"
+                          [checked]="compare().includes(item.messageId)"
+                          (change)="toggleCompare(item.messageId)"
+                        />
+                      </td>
+                      <td class="weft-table-actions">
+                        <button class="catalog-button" (click)="open(item)">
+                          View
+                        </button>
+                        <button
+                          class="catalog-button"
+                          [disabled]="
+                            busy() ||
+                            !!pending() ||
+                            !current()?.activeReleaseId ||
+                            !current()?.enabled
+                          "
+                          (click)="replay(item)"
+                        >
+                          Replay
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <button
+              class="catalog-button"
+              [disabled]="busy() || compare().length !== 2"
+              (click)="runComparison()"
+            >
+              Compare selected outputs
+            </button>
+            <p>
+              Up to 100 messages per target are kept on this machine, newest
+              first.
+            </p>
+          } @else {
+            <p class="wb-state" data-state="unavailable">No messages yet.</p>
+          }
+        </section>
+      }
+      @if (detail(); as item) {
+        <section aria-labelledby="sandbox-detail-title">
+          <h2 id="sandbox-detail-title">Message {{ item.messageId }}</h2>
+          <p
+            class="wb-state"
+            [attr.data-tone]="
+              item.status === 'completed' ? 'success' : 'failure'
+            "
+          >
+            {{ item.status }}{{ item.outcome ? " · " + item.outcome : "" }} ·
+            {{ item.durationMs }} ms · release {{ item.releaseId ?? "none" }}
+          </p>
+          @for (input of item.inputs ?? []; track $index) {
+            <h3>Input {{ input.name ?? "(primary)" }}</h3>
+            <pre class="catalog-code">{{ decode(input.content) }}</pre>
+          }
+          @for (output of item.outputs ?? []; track $index) {
+            <h3>Output {{ output.name ?? "(primary)" }}</h3>
+            <pre class="catalog-code">{{ decode(output.content) }}</pre>
+          }
+        </section>
+      }
+      @if (comparison(); as pair) {
+        <section aria-labelledby="sandbox-compare-title">
+          <h2 id="sandbox-compare-title">Output comparison</h2>
+          <p>
+            Release {{ pair[0].releaseId ?? "none" }} against release
+            {{ pair[1].releaseId ?? "none" }}
+          </p>
+          @for (row of differences(pair); track row.name) {
+            <h3>{{ row.name }}: {{ row.same ? "identical" : "different" }}</h3>
+            <div class="weft-table-wrap">
+              <table class="weft-table" [attr.aria-label]="row.name">
+                <tbody>
+                  <tr>
+                    <td>
+                      <pre class="catalog-code">{{ row.left }}</pre>
+                    </td>
+                    <td>
+                      <pre class="catalog-code">{{ row.right }}</pre>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      }
+    </div>
+  }
+</section>

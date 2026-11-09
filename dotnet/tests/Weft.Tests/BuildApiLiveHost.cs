@@ -66,7 +66,7 @@ internal sealed class BuildApiLiveHost : IAsyncDisposable
         var lookup = app.Services.GetRequiredService<IServiceProviderIsService>();
         foreach (var type in new[] { typeof(IBuildCompiler), typeof(IBuildRunQueue), typeof(IBuildRunStore), typeof(IBuildPublicationCatalog), typeof(IInspectionWorkerRunner) })
             Assert.False(lookup.IsService(type));
-        app.MapWeftCatalog(); app.MapWeftBuilds(); reservation.Stop();
+        app.MapWeftCatalog(); app.MapWeftBuilds(); app.MapWeftReleaseOperations(); app.MapWeftLocalSandbox(); reservation.Stop();
         var client = new HttpClient(new HttpClientHandler { UseCookies = true, CookieContainer = new(), UseProxy = false, AllowAutoRedirect = false })
         { BaseAddress = origin, Timeout = TimeSpan.FromSeconds(45) };
         try
@@ -136,5 +136,15 @@ internal sealed class BuildApiLiveHost : IAsyncDisposable
         return await client.SendAsync(request);
     }
     private static string Mapping(RevisionScope scope) => $"/api/v1/organizations/{scope.OrganizationId:D}/projects/{scope.ProjectId:D}/mappings/{scope.MappingId:D}";
+    internal async Task<HttpResponseMessage> SandboxAsync(RevisionScope scope, HttpMethod method, string suffix = "", object? body = null,
+        string? etag = null, bool antiforgery = true)
+    {
+        using var request = new HttpRequestMessage(method, Mapping(scope) + suffix);
+        if (body is not null) request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        request.Headers.TryAddWithoutValidation("Origin", client.BaseAddress!.GetLeftPart(UriPartial.Authority));
+        if (antiforgery) request.Headers.TryAddWithoutValidation(CatalogRequestBoundary.RequestTokenHeader, token);
+        if (etag is not null) request.Headers.TryAddWithoutValidation("If-Match", etag);
+        return await client.SendAsync(request);
+    }
     public async ValueTask DisposeAsync() { client.Dispose(); await app.StopAsync(); await app.DisposeAsync(); }
 }
