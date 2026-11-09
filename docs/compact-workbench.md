@@ -8,6 +8,10 @@ The revision page uses a data canvas and a bottom inspector/evidence tray. The d
 is immutable: opening a workflow tab does not follow the mapping's current head.
 The head marker describes the metadata read, not a continuously refreshed claim.
 
+![Revision workbench with workflow tabs, mapping table and status bar](images/workbench-mapping.png)
+
+*The revision page: workflow tabs, the data canvas and the collapsed inspector tray.*
+
 ## Navigation and inspection
 
 - **Ctrl+K** opens the command palette. It includes workflow tabs and freshly

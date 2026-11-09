@@ -192,6 +192,10 @@ primary JSON document and named inputs as pasted text (sent as UTF-8) or as
 chosen files (sent as their exact bytes), typed parameters and the output target.
 It checks the policy's input, name and parameter bounds before submitting.
 
+![Sample preview form with a JSON input and the output in the Result tab](images/workbench-preview.png)
+
+*Try sample: the preview form and a successful run's output in the Result tab.*
+
 `tools/preview-browser/run.mjs` qualifies this panel end to end against the actual
 API, database, `Weft.Worker` host and Ferrule worker image; see its
 [README](../tools/preview-browser/README.md).

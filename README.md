@@ -6,6 +6,30 @@ Weft is a web application for exploring, reviewing, testing, and operating data
 mappings. Ferrule is its first mapping backend; other engines require explicit
 adapters and their own capability checks.
 
+## What it looks like
+
+![Workbench showing a purchase order mapping's field connections](docs/images/workbench-mapping.png)
+
+*The revision workbench: each incoming field, the rule that uses it and the result field it fills.*
+
+![Sample preview with its JSON input and the mapped output](docs/images/workbench-preview.png)
+
+*Try a sample: run a saved revision on a sample document and read its exact output.*
+
+![Regression run result with expected and actual output side by side](docs/images/workbench-regression.png)
+
+*Regression tests: a saved case's run shows where the result differs from the expected output.*
+
+![Comparison of two revisions grouped by inputs, fields, parameters and rules](docs/images/revision-comparison.png)
+
+*Compare revisions: semantic differences between two saved explanations.*
+
+![Workspace chat panel answering a question with citations](docs/images/chat.png)
+
+*Workspace chat: read-only questions answered with links to their sources.*
+
+Screenshots use demo data; see [docs/images](docs/images/README.md) for how they are produced.
+
 ## Implemented workflows
 
 - A mapping catalog with immutable revisions, native-file uploads and project ownership.

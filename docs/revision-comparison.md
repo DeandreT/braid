@@ -60,6 +60,10 @@ on the right; the user chooses the other side from the mapping's paged
 revision list. Both links appear only when report reading is available for the
 mapping.
 
+![Comparison results grouped by entity with facet filters](images/revision-comparison.png)
+
+*Differences grouped by entity, with per-group filters and both sides' citations.*
+
 The browser query is closed: `left` and `right` name revisions, the optional
 `leftProjection`, `leftValidation`, `rightProjection` and `rightValidation` pin
 exact saved reports, and `cursor` pages the revision list. Each name may appear

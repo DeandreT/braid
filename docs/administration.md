@@ -5,6 +5,10 @@ project memberships, production-payload read permission, and machine invocation
 grants. It uses the same cookie/CSRF or delegated-bearer admission as the catalog.
 Every operation is described in the generated `contracts/weft-v1.json`.
 
+![Administration page with organization members and the invitation form](images/administration.png)
+
+*Organization members, their roles and the invitation form.*
+
 ## Authority
 
 An organization has two administrative roles: `member` and `administrator`.

@@ -7,6 +7,10 @@ Publisher or Administrator authority is checked against the current project on e
 read. Activation and rollback accept those roles; disabling and enabling retain
 Administrator-only target control. A machine token does not authorize these application routes.
 
+![Operations page listing endpoint targets](images/operations.png)
+
+*The Operations page listing a mapping's endpoint targets.*
+
 ## Host configuration
 
 Set `WEFT_RELEASE_OPERATIONS_ENABLED=true` to enable the routes. Supply the existing

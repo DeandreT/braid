@@ -37,6 +37,10 @@ Run history is scoped to the current submitter. Queued/running results may be
 refreshed or canceled; finished results show their explicit comparison outcome,
 bounded differences and exact downloadable output bytes.
 
+![Failed regression run with expected and actual output in the Diff tab](images/workbench-regression.png)
+
+*A finished run whose result differs from the expected output, compared in the Diff tab.*
+
 EDI differences include bounded interchange/segment/element/repetition/component
 locations. Invalid-envelope diagnostics identify the expected or actual side;
 they are not passing comparisons. Downloads use the retained media type and a

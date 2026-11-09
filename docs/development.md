@@ -281,6 +281,15 @@ Host process tests require these explicit absolute paths to fresh publications o
 the same Release build. The privacy probe is a qualification tool, not a deployed
 Server dependency; keep its publication separate from the shipped host.
 
+### Documentation screenshots
+
+The README and docs embed screenshots from `docs/images`. A frontend change that
+affects a captured screen must rerun `npm run docs:screenshots`, with
+`WEFT_CHROMIUM_EXECUTABLE` set as for the browser checks, and commit the updated
+images in the same pull request. `npm run check` fails when a document references
+a missing image or the manifest disagrees with the images, the capture spec or
+the documents. See [docs/images](images/README.md).
+
 ### Docker test networks
 
 A Docker network created without a subnet takes a whole /16 or /20 from the
