@@ -13,10 +13,11 @@ namespace Weft.Tests;
 public sealed class AzureQualificationHarnessTests
 {
     [AzureQualificationTheory]
+    [InlineData("fake_enforces_subscription")]
     [InlineData("refuses_missing_inputs")]
     [InlineData("refuses_without_confirmation")]
     [InlineData("refuses_credential_arguments")]
-    [InlineData("refuses_wrong_subscription")]
+    [InlineData("refuses_unavailable_subscription")]
     [InlineData("refuses_owner_account")]
     [InlineData("refuses_existing_group")]
     [InlineData("refuses_dirty_tree")]

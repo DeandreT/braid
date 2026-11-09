@@ -207,7 +207,7 @@ import type { InspectorTab } from "./workbench-model";
       :host {
         display: block;
         font-size: 0.8125rem;
-        color: #213b34;
+        color: var(--text);
       }
       h3 {
         margin: 3px 0 8px;
@@ -235,7 +235,7 @@ import type { InspectorTab } from "./workbench-model";
         margin: 6px 0;
       }
       dt {
-        color: #64785f;
+        color: var(--text-muted-17);
       }
       dd {
         margin: 0;
@@ -247,7 +247,7 @@ import type { InspectorTab } from "./workbench-model";
       button {
         display: block;
         border: 1px solid var(--wb-control-border);
-        background: #fff;
+        background: var(--surface);
         border-radius: 3px;
         padding: 4px 6px;
         text-align: left;
@@ -262,7 +262,7 @@ import type { InspectorTab } from "./workbench-model";
         outline-offset: 1px;
       }
       .link {
-        color: #276940;
+        color: var(--text-accent-5);
         border: 0;
         background: none;
         padding-left: 0;
@@ -274,12 +274,12 @@ import type { InspectorTab } from "./workbench-model";
         cursor: pointer;
       }
       .warning {
-        border-left: 2px solid #ad842f;
+        border-left: 2px solid var(--border-warn-5);
         padding-left: 6px;
         color: var(--wb-attention-text);
       }
       .empty {
-        color: #64785f;
+        color: var(--text-muted-17);
       }
     `,
   ],

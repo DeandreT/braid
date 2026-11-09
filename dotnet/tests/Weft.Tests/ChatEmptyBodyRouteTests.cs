@@ -63,7 +63,8 @@ public sealed class ChatEmptyBodyRouteTests
         app.MapWeftChat();
         reservation.Stop();
         await app.StartAsync();
-        using var client = new HttpClient(new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false, UseCookies = true, CookieContainer = new() })
+        var cookies = new CookieContainer();
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false, UseCookies = true, CookieContainer = cookies })
         {
             BaseAddress = origin,
             Timeout = TimeSpan.FromSeconds(20),
@@ -85,6 +86,27 @@ public sealed class ChatEmptyBodyRouteTests
         Assert.Equal(0, ledger.Count("read-turn"));
         using (var nonempty = await SendAsync(token, bytes: [1])) Assert.Equal(HttpStatusCode.BadRequest, nonempty.StatusCode);
         Assert.Equal(0, ledger.Count("read-turn"));
+
+        // Fully authorized but refused framing must close the connection before an appended cancellation runs.
+        var authority = $"Host: {origin.Authority}\r\nOrigin: {origin.GetLeftPart(UriPartial.Authority)}\r\nX-XSRF-TOKEN: {token}\r\nCookie: {cookies.GetCookieHeader(new Uri(origin, path))}\r\n";
+        var appended = $"POST {path} HTTP/1.1\r\n{authority}Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n0\r\n\r\n";
+        foreach (var (headers, body) in new[]
+        {
+            ("Transfer-Encoding: chunked\r\n", "1\r\nx\r\n0\r\n\r\n"),
+            ("Transfer-Encoding: chunked\r\n", "0\r\nX-Undeclared: refused\r\n\r\n"),
+            ("Transfer-Encoding: chunked\r\nTrailer: X-Extra\r\n", "0\r\n\r\n"),
+            ("Transfer-Encoding: chunked\r\n", "z\r\n"),
+            ("Transfer-Encoding: chunked\r\nContent-Length: 0\r\n", "0\r\n\r\n"),
+            ("Content-Length: 1\r\n", "x")
+        })
+        {
+            var response = await ExchangeAsync($"POST {path} HTTP/1.1\r\n{authority}{headers}\r\n{body}{appended}");
+            Assert.StartsWith("HTTP/1.1 400", response, StringComparison.Ordinal);
+            // Exactly one response: the appended request was never parsed, not merely refused.
+            Assert.Equal(-1, response.IndexOf("HTTP/1.1 ", 1, StringComparison.Ordinal));
+            Assert.Equal(0, ledger.Count("read-turn"));
+            Assert.Equal(0, ledger.Count("finish"));
+        }
 
         using var first = await SendAsync(token);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
@@ -109,9 +131,26 @@ public sealed class ChatEmptyBodyRouteTests
             request.Headers.TransferEncodingChunked = true;
             return await client.SendAsync(request);
         }
+
+        async Task<string> ExchangeAsync(string message)
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            using var raw = new TcpClient();
+            await raw.ConnectAsync(IPAddress.Loopback, port, deadline.Token);
+            await using var stream = raw.GetStream();
+            await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(message), deadline.Token);
+            using var received = new MemoryStream();
+            var buffer = new byte[4096];
+            while (await stream.ReadAsync(buffer, deadline.Token) is var count and > 0)
+            {
+                Assert.True(received.Length + count <= 65536, "The fixture response exceeded its bound.");
+                received.Write(buffer, 0, count);
+            }
+            return System.Text.Encoding.ASCII.GetString(received.ToArray());
+        }
     }
 
-    private sealed class ChunkedContent(byte[] bytes) : HttpContent
+    internal sealed class ChunkedContent(byte[] bytes) : HttpContent
     {
         protected override bool TryComputeLength(out long length) { length = 0; return false; }
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) => stream.WriteAsync(bytes).AsTask();

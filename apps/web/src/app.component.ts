@@ -23,6 +23,7 @@ import { HeaderSearchComponent } from "./catalog/search/header-search.component"
 import { NotificationPopoverComponent } from "./catalog/automation/notification-popover.component";
 import { WorkspaceChatPanelComponent } from "./workbench/workspace-chat-panel.component";
 import { WorkspaceConversation } from "./workbench/workspace-conversation";
+import { ThemePreference } from "./theme-preference";
 
 @Component({
   selector: "weft-root",
@@ -55,6 +56,8 @@ export class AppComponent {
   readonly signInPage = signal(false);
 
   constructor() {
+    // Created with the shell so the System appearance follows the OS on every page.
+    inject(ThemePreference);
     this.session
       .observe()
       .pipe(takeUntilDestroyed())

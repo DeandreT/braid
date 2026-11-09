@@ -22,7 +22,9 @@ A new workspace conversation does not need saved reports. Report tools only
 read retained reports; they say when a report has not been generated. You can
 [generate a report](reports.md#generate-a-report) yourself when appropriate.
 
-Use **Focus for the next conversation** to search mappings.
+Use **Focus for the next conversation** to choose a mapping. It lists the
+mappings you can read as soon as it opens; type in **Find mapping** to filter
+the list.
 Choose the current head at each turn or an exact revision. New conversations
 from a revision initially suggest that exact revision; you can choose another focus.
 Focus guides context; it never

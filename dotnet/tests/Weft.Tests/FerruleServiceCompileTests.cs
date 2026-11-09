@@ -283,13 +283,13 @@ public sealed class FerruleServiceCompileTests
     [ServiceCompileFact]
     public Task CallerCancellationKillsTheCompilerAndAdmitsTheNextOperation() => TerminationKillsCompiler(cancel: true);
 
-    /// <summary>A held program in the compiler's place, under the same launcher and controls, runs until it is killed.</summary>
+    /// <summary>The actual hardened compiler launcher waits for GO until it is killed.</summary>
     private static async Task TerminationKillsCompiler(bool cancel)
     {
         var root = TemporaryRoot();
         try
         {
-            await using var held = new ProcessCompileRunner(CompileOptions(root, TimeSpan.FromSeconds(cancel ? 60 : 8), ["/usr/bin/sleep", "300"]));
+            await using var held = new ProcessCompileRunner(CompileOptions(root, TimeSpan.FromSeconds(cancel ? 60 : 8), withholdCompiler: true));
             using var cancellation = new CancellationTokenSource();
             var running = held.RunAsync(BuildFrame("valid-basic", "compile"), cancellation.Token);
             var child = await WaitForHeldCompiler();
@@ -338,7 +338,7 @@ public sealed class FerruleServiceCompileTests
         var root = TemporaryRoot();
         try
         {
-            var runner = new ProcessCompileRunner(CompileOptions(root, command: ["/usr/bin/sleep", "300"]));
+            var runner = new ProcessCompileRunner(CompileOptions(root, withholdCompiler: true));
             var running = runner.RunAsync(BuildFrame("valid-basic", "compile"), CancellationToken.None);
             var child = await WaitForHeldCompiler();
             await runner.StopAsync().WaitAsync(TimeSpan.FromSeconds(30));
@@ -356,7 +356,7 @@ public sealed class FerruleServiceCompileTests
     }
 
     [Fact]
-    public async Task LauncherWithoutVerifiedControlsNeverStartsTheCompiler()
+    public void A_non_native_launcher_is_refused_before_any_execution()
     {
         if (!OperatingSystem.IsLinux()) return;
         var root = TemporaryRoot();
@@ -367,24 +367,16 @@ public sealed class FerruleServiceCompileTests
             var launcher = installation.Script("launcher", $"""
                 #!/bin/sh
                 env > '{installation.Directory}/environment'
-                printf WFC1
+                printf WFC2
                 cat > '{installation.Directory}/go'
                 """);
             Environment.SetEnvironmentVariable("WEFT_SERVICE_TEST_SECRET", "must-not-reach-a-child");
-            await using var runner = new ProcessCompileRunner(new ProcessCompileOptions(launcher, launcher, root, installation.Toolchain));
-            Assert.False(await runner.ProbeAsync(CancellationToken.None));
-            // The launcher was killed without the start byte, before or after it began to wait for it.
-            var go = new FileInfo(Path.Combine(installation.Directory, "go"));
-            Assert.True(!go.Exists || go.Length == 0);
-            var environment = await File.ReadAllTextAsync(Path.Combine(installation.Directory, "environment"));
-            Assert.DoesNotContain("WEFT_SERVICE_TEST_SECRET", environment, StringComparison.Ordinal);
-            Assert.Contains("DOTNET_GCHeapHardLimit=0x80000000", environment, StringComparison.Ordinal);
-            // An inadmissible frame is refused before any child starts.
-            Assert.Equal(WorkerProcessFailure.WorkerFailed, (await runner.RunAsync(new byte[] { 1, 2, 3 }, CancellationToken.None)).Failure);
-            Assert.Throws<ArgumentException>(() =>
-                runner.RunAsync(new byte[DockerWorkerProfile.Build.MaximumRequestBytes + 1], CancellationToken.None).GetAwaiter().GetResult());
+            // A shell wrapper is not the surviving measured native image, even if it knows the marker.
+            var toolchain = installation.Toolchain;
+            Assert.Throws<ArgumentException>(() => new ProcessCompileRunner(new ProcessCompileOptions(launcher, launcher, root, toolchain)));
+            Assert.False(File.Exists(Path.Combine(installation.Directory, "environment")));
+            Assert.DoesNotContain("WEFT_SERVICE_TEST_SECRET", new ProcessCompileOptions(launcher, launcher, root, installation.Toolchain).Environment(root).Keys);
             Assert.Empty(Directory.EnumerateFileSystemEntries(root));
-            Assert.True(runner.Available);
         }
         finally
         {
@@ -397,38 +389,57 @@ public sealed class FerruleServiceCompileTests
     public void OptionsPinTheLauncherLimitsGrantsAndCompilerEnvironment()
     {
         if (!OperatingSystem.IsLinux()) return;
-        using var installation = new FakeInstallation();
-        var options = new ProcessCompileOptions("/ferrule-host", "/weft-compile-sandbox", "/tmp", installation.Toolchain);
-        Assert.Equal(DockerWorkerProfile.Build, options.Generation.Profile);
-        Assert.Equal(TimeSpan.FromSeconds(120), options.WallTimeout);
-        Assert.Equal(["--service-sandbox", "--cpu-seconds=120", "--memory-bytes=2147483648", "--open-files=256"], options.Generation.Arguments);
-        var grants = ProcessCompileOptions.ToolchainGrants.Resolve(options);
-        var arguments = options.LauncherArguments("/tmp/weft-compile-1", grants, output: true);
-        Assert.Equal(["--cpu-seconds=120", "--memory-bytes=6442450944", "--open-files=256", "--file-bytes=67108864", "--output=Ferrule.Generated.dll",
-            "--read=" + installation.Toolchain], arguments.Take(6));
-        Assert.Equal(["--", installation.Toolchain + "/dotnet", "exec", installation.Toolchain + "/sdk/10.0.112/Roslyn/bincore/csc.dll", "-noconfig",
-            "@/tmp/weft-compile-1/compiler.rsp"], arguments.TakeLast(6));
-        Assert.Single(arguments, argument => argument.StartsWith("--execute=/", StringComparison.Ordinal) && argument.Contains("ld-linux", StringComparison.Ordinal));
-        var toolchain = installation.Toolchain;
-        Assert.All(arguments.Where(argument => argument.StartsWith("--read=", StringComparison.Ordinal)), argument =>
-            Assert.True(argument == "--read=" + toolchain || argument == "--read=/dev/urandom" ||
-                argument is "--read=/lib" or "--read=/lib64" or "--read=/usr/lib" or "--read=/usr/lib64", argument));
-        Assert.DoesNotContain("--output=Ferrule.Generated.dll", options.LauncherArguments("/tmp/weft-compile-1", grants, output: false));
-        var environment = options.Environment("/tmp/weft-compile-1");
-        Assert.Equal("0x80000000", environment["DOTNET_GCHeapHardLimit"]);
-        Assert.Equal("0x80000000", environment["DOTNET_GCRegionRange"]);
-        Assert.Equal("0", environment["DOTNET_EnableDiagnostics"]);
-        Assert.Equal("Disable", environment["DOTNET_ROLL_FORWARD"]);
-        Assert.Equal("0", environment["DOTNET_MULTILEVEL_LOOKUP"]);
-        Assert.Equal("/tmp/weft-compile-1", environment["TMPDIR"]);
-        Assert.Equal(installation.Toolchain, environment["DOTNET_ROOT"]);
-        Assert.Throws<ArgumentException>(() => new ProcessCompileOptions("/ferrule-host", "weft-compile-sandbox", "/tmp"));
-        Assert.Throws<ArgumentException>(() => new ProcessCompileOptions("/ferrule-host", "/weft-compile-sandbox", "/tmp", "/usr/share/../dotnet"));
-        Assert.Throws<ArgumentException>(() => new ProcessCompileOptions("/ferrule-host", "/weft-compile-sandbox", "/tmp")
+        var previousWorker = Environment.GetEnvironmentVariable("WEFT_FERRULE_HOST_EXECUTABLE");
+        Environment.SetEnvironmentVariable("WEFT_FERRULE_HOST_EXECUTABLE", null);
+        try
         {
-            Generation = new ProcessWorkerOptions("/ferrule-host", DockerWorkerProfile.Preview, "/tmp")
-        });
-        Assert.Equal("WFC1", Encoding.ASCII.GetString(ProcessCompileOptions.ReadyMarker));
+            // This ordinary contract test must remain usable without the optional live worker.
+            Assert.Null(Environment.GetEnvironmentVariable("WEFT_FERRULE_HOST_EXECUTABLE"));
+            using var installation = new FakeInstallation();
+            var options = new ProcessCompileOptions("/ferrule-host", BuildCompilation.Host(installation.Toolchain), "/tmp", installation.Toolchain);
+            Assert.Equal(DockerWorkerProfile.Build, options.Generation.Profile);
+            Assert.Equal(TimeSpan.FromSeconds(120), options.WallTimeout);
+            Assert.Equal(["--service-sandbox", "--cpu-seconds=120", "--memory-bytes=2147483648", "--open-files=256"], options.Generation.Arguments);
+            var grants = ProcessCompileOptions.ToolchainGrants.Resolve(options);
+            var toolchain = installation.Toolchain;
+            var expectedReads = new List<string> { toolchain };
+            expectedReads.AddRange(new[] { "/lib", "/lib64", "/usr/lib", "/usr/lib64" }.Where(Directory.Exists));
+            if (File.Exists("/dev/urandom")) expectedReads.Add("/dev/urandom");
+            Assert.Equal(expectedReads, grants.Read);
+            var arguments = options.LauncherArguments("/tmp/weft-compile-1", grants, output: true);
+            string[] expectedCompile = ["--cpu-seconds=120", "--memory-bytes=6442450944", "--open-files=256", "--file-bytes=67108864",
+            "--output=Ferrule.Generated.dll", "--dotnet-root=" + toolchain, "--profile=compile", .. expectedReads.Select(path => "--read=" + path)];
+            Assert.Equal(expectedCompile, arguments);
+            Assert.Equal(expectedCompile.Where(argument => argument != "--output=Ferrule.Generated.dll"),
+                options.LauncherArguments("/tmp/weft-compile-1", grants, output: false));
+            Assert.Single(grants.Interpreters);
+            Assert.Equal(toolchain + "/host/fxr/10.0.12/libhostfxr.so", BuildCompilation.HostFxr(toolchain));
+            Assert.Equal(toolchain + "/sdk/10.0.112/Roslyn/bincore/csc.dll", BuildCompilation.Compiler(toolchain));
+            Assert.Equal(toolchain + "/packs/Microsoft.NETCore.App.Ref/10.0.12/ref/net10.0", BuildCompilation.References(toolchain));
+            Assert.Equal(["exec", toolchain + "/sdk/10.0.112/Roslyn/bincore/csc.dll", "-noconfig", "@/tmp/weft-compile-1/compiler.rsp"],
+                BuildCompilation.CompilerArguments(toolchain, "/tmp/weft-compile-1"));
+            var runtime = new ProcessCompiledRuntimeOptions("sha256:" + new string('a', 64), "/runtime/weft-compiled-runtime.dll",
+                options.LauncherExecutable, "/tmp", toolchain);
+            Assert.Equal(["--cpu-seconds=30", "--memory-bytes=3221225472", "--open-files=128", "--file-bytes=1048576",
+            "--dotnet-root=" + toolchain, "--profile=runtime", "--runtime-assembly=/runtime/weft-compiled-runtime.dll",
+            .. expectedReads.Append("/runtime").Select(path => "--read=" + path)], runtime.Arguments(grants));
+            var environment = options.Environment("/tmp/weft-compile-1");
+            Assert.Equal("0x80000000", environment["DOTNET_GCHeapHardLimit"]);
+            Assert.Equal("0x80000000", environment["DOTNET_GCRegionRange"]);
+            Assert.Equal("0", environment["DOTNET_EnableDiagnostics"]);
+            Assert.Equal("Disable", environment["DOTNET_ROLL_FORWARD"]);
+            Assert.Equal("0", environment["DOTNET_MULTILEVEL_LOOKUP"]);
+            Assert.Equal("/tmp/weft-compile-1", environment["TMPDIR"]);
+            Assert.Equal(installation.Toolchain, environment["DOTNET_ROOT"]);
+            Assert.Throws<ArgumentException>(() => new ProcessCompileOptions("/ferrule-host", "weft-compile-sandbox", "/tmp"));
+            Assert.Throws<ArgumentException>(() => new ProcessCompileOptions("/ferrule-host", "/weft-compile-sandbox", "/tmp", "/usr/share/../dotnet"));
+            Assert.Throws<ArgumentException>(() => new ProcessCompileOptions("/ferrule-host", "/weft-compile-sandbox", "/tmp")
+            {
+                Generation = new ProcessWorkerOptions("/ferrule-host", DockerWorkerProfile.Preview, "/tmp")
+            });
+            Assert.Equal("WFC2", Encoding.ASCII.GetString(ProcessCompileOptions.ReadyMarker));
+        }
+        finally { Environment.SetEnvironmentVariable("WEFT_FERRULE_HOST_EXECUTABLE", previousWorker); }
     }
 
     /// <summary>
@@ -449,12 +460,12 @@ public sealed class FerruleServiceCompileTests
         }
     }
 
-    /// <summary>The first held program (the compiler's stand-in) running under every launcher control.</summary>
+    /// <summary>The actual compiler launcher held after its sandbox controls are installed.</summary>
     private static async Task<int> WaitForHeldCompiler()
     {
         for (var attempt = 0; attempt < 1200; attempt++)
         {
-            foreach (var pid in Children("sleep"))
+            foreach (var pid in Children(Path.GetFileName(Launcher!)))
             {
                 try
                 {
@@ -504,7 +515,7 @@ public sealed class FerruleServiceCompileTests
             Toolchain = Path.Combine(Directory, "dotnet-root");
             System.IO.Directory.CreateDirectory(Path.GetDirectoryName(BuildCompilation.Compiler(Toolchain))!);
             System.IO.Directory.CreateDirectory(BuildCompilation.References(Toolchain));
-            var host = Path.Combine(Toolchain, "host/fxr/pinned");
+            var host = Path.Combine(Toolchain, "host/fxr", BuildWorkerProtocol.RuntimeVersion);
             var runtime = Path.Combine(Toolchain, "shared/Microsoft.NETCore.App", BuildWorkerProtocol.RuntimeVersion);
             System.IO.Directory.CreateDirectory(host);
             System.IO.Directory.CreateDirectory(runtime);

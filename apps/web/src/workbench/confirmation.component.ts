@@ -49,13 +49,13 @@ let nextConfirmation = 0;
       dialog {
         max-width: min(520px, calc(100% - 24px));
         padding: 14px;
-        border: 1px solid #bcccaf;
+        border: 1px solid var(--border-strong-7);
         border-radius: 5px;
-        background: #fff;
-        color: #213b34;
+        background: var(--surface);
+        color: var(--text);
       }
       dialog::backdrop {
-        background: #1c342b55;
+        background: var(--overlay-2);
       }
       h2 {
         font-size: 1rem;
@@ -91,16 +91,16 @@ let nextConfirmation = 0;
         border: 1px solid var(--wb-control-border);
         border-radius: 3px;
         padding: 5px 9px;
-        background: #fff;
-        color: #213b34;
+        background: var(--surface);
+        color: var(--text);
         font: inherit;
         font-size: 0.8125rem;
         cursor: pointer;
       }
       .primary {
-        background: var(--wb-selection-text);
-        border-color: var(--wb-selection-text);
-        color: #fff;
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--text-on-accent);
       }
       button:focus-visible {
         outline: 2px solid var(--wb-focus);

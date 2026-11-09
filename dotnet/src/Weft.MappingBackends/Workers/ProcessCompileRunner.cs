@@ -41,13 +41,13 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
         this.options = options;
         var compiler = BuildCompilation.Compiler(options.ToolchainRoot);
         var references = BuildCompilation.References(options.ToolchainRoot);
-        if (!File.Exists(options.LauncherExecutable) || !File.Exists(BuildCompilation.Host(options.ToolchainRoot)) ||
+        if (!File.Exists(options.LauncherExecutable) || !File.Exists(BuildCompilation.Host(options.ToolchainRoot)) || !File.Exists(BuildCompilation.HostFxr(options.ToolchainRoot)) ||
             !File.Exists(compiler) || !Directory.Exists(references))
             throw new ArgumentException("The compile launcher and the pinned toolchain must be installed.", nameof(options));
         grants = ProcessCompileOptions.ToolchainGrants.Resolve(options);
         // Every granted directory beside the toolchain holds system libraries; /dev/urandom is a file.
         ToolchainIdentity = ComputeIdentity(options.ToolchainRoot, Path.GetDirectoryName(compiler)!, references, options.LauncherExecutable,
-            grants.Execute, [.. grants.Read.Where(path => path != options.ToolchainRoot && Directory.Exists(path))]);
+            grants.Interpreters, [.. grants.Read.Where(path => path != options.ToolchainRoot && Directory.Exists(path))]);
         inheritedFilters = ChildSandboxVerification.InheritedFilters();
         // Verifies the worker and the writable temporary root; the identity is the worker's, like every profile's.
         generation = new ProcessWorkerRunner(options.Generation);
@@ -301,6 +301,7 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
                 return ChildAdmissionDiagnostics.Refused(ChildAdmissionFailure.MarkerMismatch);
             var admission = Verify(process.Id);
             if (admission != ChildAdmissionFailure.None) return ChildAdmissionDiagnostics.Refused(admission);
+            if (options.WithholdCompilerStart) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
             await process.StandardInput.BaseStream.WriteAsync(new[] { ProcessCompileOptions.Go }, cancellationToken).ConfigureAwait(false);
             await process.StandardInput.BaseStream.FlushAsync(cancellationToken).ConfigureAwait(false);
             process.StandardInput.Close();
@@ -341,7 +342,7 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
         ("Max file locks", 0),
         ("Max msgqueue size", 0),
         ("Max realtime priority", 0)
-    ]);
+    ], requireUnprivilegedIdentity: true);
 
     /// <summary>Kills a launcher or compiler that is still running and waits, within a bound, until it is reaped.</summary>
     private static async Task<bool> SettleAsync(Process process)
@@ -383,7 +384,7 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
         }
     }
 
-    /// <param name="interpreters">The granted ELF interpreters, which <c>execve</c> maps for the host.</param>
+    /// <param name="interpreters">The surviving native launcher's ELF interpreter, mapped by its initial exec.</param>
     /// <param name="libraryDirectories">The granted system library directories, which the image fills from unpinned packages.</param>
     internal static string ComputeIdentity(string root, string compiler, string references, string launcher,
         IReadOnlyList<string> interpreters, IReadOnlyList<string> libraryDirectories)
@@ -411,7 +412,7 @@ public sealed class ProcessCompileRunner : IInspectionWorkerRunner, ICompilation
         var measured = Directory.EnumerateFiles(host, "*", SearchOption.AllDirectories)
             .Concat(Directory.EnumerateFiles(runtime, "*", SearchOption.AllDirectories))
             .Select(Path.GetFullPath).Order(StringComparer.Ordinal).ToArray();
-        foreach (var library in ElfLibraryClosure.Resolve(measured.Prepend(BuildCompilation.Host(root)).Prepend(launcher),
+        foreach (var library in ElfLibraryClosure.Resolve(measured.Prepend(BuildCompilation.Host(root)).Prepend(launcher).Concat(interpreters),
                      ElfLibraryClosure.RuntimeOpenedLibraries, libraryDirectories).Except(measured, StringComparer.Ordinal))
             Add("library" + library, library);
         return "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(manifest.ToString())));

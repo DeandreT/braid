@@ -91,21 +91,21 @@ import type { WorkbenchCommand } from "../../workbench/workbench-frame.component
       color: inherit;
       min-height: 32px;
       padding: 6px 8px;
-      border: 1px solid #7b8c78;
+      border: 1px solid var(--wb-control-border);
       border-radius: 4px;
-      background: white;
+      background: var(--surface);
     }
     .search-trigger {
       display: flex;
       align-items: center;
       gap: 8px;
       width: min(28rem, 100%);
-      color: #526b5e;
+      color: var(--text-muted);
       font-size: 0.8125rem;
       cursor: text;
     }
     .search-trigger:hover {
-      border-color: #174d3f;
+      border-color: var(--border-accent-3);
     }
     .search-trigger svg {
       flex: none;
@@ -123,13 +123,13 @@ import type { WorkbenchCommand } from "../../workbench/workbench-frame.component
     }
     kbd {
       margin-left: auto;
-      color: #5d6e80;
+      color: var(--wb-evidence-text);
       font-size: 0.6875rem;
     }
     dialog {
-      color: #213b34;
-      background: white;
-      border: 1px solid #b5c4ac;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border-strong-5);
       border-radius: 6px;
       padding: 16px;
       width: min(540px, calc(100% - 24px));
@@ -137,7 +137,7 @@ import type { WorkbenchCommand } from "../../workbench/workbench-frame.component
       overflow: auto;
     }
     dialog::backdrop {
-      background: #153f3344;
+      background: var(--overlay);
     }
     header {
       display: flex;
@@ -174,7 +174,7 @@ import type { WorkbenchCommand } from "../../workbench/workbench-frame.component
     }
     small {
       display: block;
-      color: #5d6e80;
+      color: var(--wb-evidence-text);
     }
     nav {
       display: flex;

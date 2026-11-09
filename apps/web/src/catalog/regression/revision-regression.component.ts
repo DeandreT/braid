@@ -87,6 +87,8 @@ export class RevisionRegressionComponent {
   readonly routes = catalogRoutes;
   readonly otherRevision = signal<CatalogRevisionScope | null>(null);
   readonly workbench = input(false);
+  /** Cases load once the panel is shown; a hidden workbench tab sends nothing. */
+  readonly active = input(true);
   readonly documentSelected = output<{
     name: string | null;
     expected: boolean;
@@ -121,7 +123,7 @@ export class RevisionRegressionComponent {
       work.pendingCase || work.pendingRun
         ? "Recovery details for an earlier request are kept in this tab."
         : null,
-      "Load regression cases to continue with it.",
+      "It is restored when the cases load.",
     ]
       .filter(Boolean)
       .join(" ");
@@ -181,6 +183,20 @@ export class RevisionRegressionComponent {
       this.sessions.generation();
       untracked(() => this.suspend());
     });
+    // One automatic read per admitted context; a failed or invalidated one waits for a fresh context.
+    let autoContext: CatalogContext | null = null;
+    effect(() => {
+      const context = this.context();
+      if (
+        !this.active() ||
+        this.capabilities() ||
+        this.busy() ||
+        context === autoContext
+      )
+        return;
+      autoContext = context;
+      untracked(() => this.load());
+    });
     // A failed or negative check is not a new owner: suspend unsent work rather than discard it.
     const invalidation = this.sessions.invalidated.subscribe(() =>
       this.suspend(),
@@ -203,17 +219,20 @@ export class RevisionRegressionComponent {
         };
         this.resume(value);
         if (!value.readSamples) this.hidePrivate();
-        this.loadCases();
+        this.loadCases(false, true);
       },
     );
   }
-  loadCases(next = false): void {
+  loadCases(next = false, thenHistory = false): void {
     if (!this.capabilities()) return;
     const after = next ? this.cases()?.nextCaseId : null;
     this.send(
       (context) =>
         this.api.cases(context, this.mapping().scope, after || undefined),
-      (page) => this.cases.set(page),
+      (page) => {
+        this.cases.set(page);
+        if (thenHistory) this.loadHistory();
+      },
     );
   }
   loadHistory(next = false): void {

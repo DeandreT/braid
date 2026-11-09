@@ -5,10 +5,10 @@
 .mfd-card {
   margin: 18px 0;
   padding: 22px;
-  border: 1px solid #dce5d8;
+  border: 1px solid var(--border-4);
   border-radius: 14px;
-  background: #fff;
-  color: #284c3c;
+  background: var(--surface);
+  color: var(--text-accent);
 }
 h2,
 h3 {
@@ -39,18 +39,18 @@ select {
   width: 100%;
   margin-top: 6px;
   padding: 10px;
-  border: 1px solid #aabbab;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  color: #284c3c;
-  background: #fff;
+  color: var(--text-accent);
+  background: var(--surface);
 }
 button {
   margin: 8px 10px 0 0;
   padding: 10px 14px;
-  border: 1px solid #64806b;
+  border: 1px solid var(--border-strong-6);
   border-radius: 8px;
-  background: #f3f6f1;
-  color: #284c3c;
+  background: var(--surface-muted-19);
+  color: var(--text-accent);
   cursor: pointer;
 }
 button:disabled {
@@ -58,7 +58,7 @@ button:disabled {
   cursor: default;
 }
 a {
-  color: #345d45;
+  color: var(--text-2);
 }
 code {
   overflow-wrap: anywhere;

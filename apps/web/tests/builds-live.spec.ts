@@ -23,9 +23,6 @@ function revisionPath(): string {
 async function open(page: Page) {
   await page.goto(revisionPath());
   await page.getByRole("tab", { name: "Prepare", exact: true }).click();
-  await panel(page)
-    .getByRole("button", { name: "Load preparation controls", exact: true })
-    .click();
   await expect(
     panel(page).getByRole("combobox", {
       name: "Environment version",
@@ -65,9 +62,6 @@ async function mutation(
 async function approve(
   page: Page,
 ): Promise<{ approvalId: string; buildId: string }> {
-  await panel(page)
-    .getByRole("button", { name: "Load saved regression runs", exact: true })
-    .click();
   await panel(page)
     .getByRole("button", { name: "Verify this evidence", exact: true })
     .click();
@@ -126,9 +120,6 @@ async function showTechnicalDetails(page: Page): Promise<void> {
     await details.locator(":scope > summary").click();
 }
 async function openHistory(page: Page, buildId: string): Promise<void> {
-  await panel(page)
-    .getByRole("button", { name: "Load preparation history", exact: true })
-    .click();
   const row = panel(page)
     .locator(".wb-build-table tbody tr")
     .filter({ hasText: buildId });
@@ -137,9 +128,6 @@ async function openHistory(page: Page, buildId: string): Promise<void> {
     .click();
 }
 async function openApproval(page: Page, approvalId: string): Promise<void> {
-  await panel(page)
-    .getByRole("button", { name: "Load your approvals", exact: true })
-    .click();
   const row = panel(page)
     .locator(".builds-list li")
     .filter({ hasText: approvalId });
@@ -317,9 +305,6 @@ test("real environment approval compilation restart and revocation preserve exac
   await owner.control("restart-profile", { profile: "viewer" });
   await page.goto(revisionPath());
   await page.getByRole("tab", { name: "Prepare", exact: true }).click();
-  await panel(page)
-    .getByRole("button", { name: "Load preparation controls", exact: true })
-    .click();
   await expect(panel(page).getByRole("alert")).toContainText("access changed");
   expect((await owner.control("checkpoint")).capturedBuilds).toBe(3);
 });

@@ -800,7 +800,11 @@ for (const kind of [
     await start(page);
     const url = page.url();
     await panel(page)
-      .getByRole("button", { name: new RegExp(`^Show ${kind}`) })
+      .getByRole("button", {
+        name: new RegExp(
+          `^Show ${{ rule: "rule", projectionDiagnostic: "explanation issue", validationDiagnostic: "validation issue" }[kind]}`,
+        ),
+      })
       .click();
     if (kind === "rule")
       await expect(
@@ -1225,7 +1229,7 @@ for (const mode of [
         .getByRole("button", { name: "New conversation", exact: true })
         .click();
       await expect(panel(page)).toContainText(
-        "Generate the saved explanation and validation",
+        "explanation and validation aren't saved yet",
       );
     } else if (mode === "rejected") {
       await expect(

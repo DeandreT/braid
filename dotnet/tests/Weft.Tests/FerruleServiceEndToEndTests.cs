@@ -315,7 +315,7 @@ public sealed class FerruleServiceEndToEndTests
         try
         {
             // A launcher that announces itself without any control can never be admitted.
-            var launcher = installation.Script("launcher", "#!/bin/sh\nprintf WFC1\ncat >/dev/null\n");
+            var launcher = installation.Script("launcher", "#!/bin/sh\nprintf WFC2\ncat >/dev/null\n");
             using var process = PackagedFerruleService.Launch(new Dictionary<string, string>
             {
                 ["WEFT_FERRULE_SERVICE_LISTEN_ADDR"] = "127.0.0.1:" + PackagedFerruleService.FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture),

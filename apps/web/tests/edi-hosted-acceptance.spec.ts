@@ -225,9 +225,6 @@ test("declared EDI preview and saved comparison use real bytes in the authentica
       exact: true,
     });
     await cases
-      .getByRole("button", { name: "Load regression cases", exact: true })
-      .click();
-    await cases
       .getByRole("button", { name: "New test case", exact: true })
       .click();
     await cases

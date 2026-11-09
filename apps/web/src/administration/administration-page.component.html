@@ -232,15 +232,15 @@
               </li>
             }
           </ul>
+        } @else if (adminProjectsError()) {
+          <p class="admin-muted" role="status">
+            Projects are unavailable. Refresh access or enter a project ID
+            instead.
+          </p>
         } @else {
-          <button type="button" (click)="loadAdminProjects()">
-            Show projects you administer
-          </button>
-          @if (adminProjectsError()) {
-            <p class="admin-muted" role="status">
-              Projects are unavailable. Enter a project ID instead.
-            </p>
-          }
+          <p class="admin-muted" role="status">
+            Loading projects you administer…
+          </p>
         }
       </div>
       <div class="controls">

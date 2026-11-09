@@ -13,6 +13,10 @@ writing to one field retain their order. Structural fields remain available in
 boundary and entity details. Search includes sources, targets, expression
 details, and applicable controls across the full selected output.
 
+![Mapping table with incoming fields, rules and result fields](images/workbench-mapping.png)
+
+*The mapping table grouped by structure, with the selected field's data flow above it.*
+
 Expand a rule to inspect values, conditions, defaults, parameters, expressions,
 and controls inherited from its enclosing target fields. Controls and reusable
 function definitions also remain available outside table filters. Details open

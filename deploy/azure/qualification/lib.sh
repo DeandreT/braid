@@ -4,8 +4,8 @@
 # Secret values (passwords, client credentials, assertions, tokens) live only in private files under $work
 # and reach commands as file references or environment values, never as arguments or output.
 
-# Every management command names the approved subscription, whatever the CLI's default becomes. Data-plane
-# commands (Key Vault items, registry repositories, Log Analytics queries) address resources by name or ID.
+# Every command names the approved subscription and never changes the CLI's default. Data-plane, Graph and REST
+# commands name it too: the CLI resolves registry names in it and signs their tokens in its tenant.
 azs() {
   az "$@" --subscription "$subscription"
 }
@@ -128,7 +128,7 @@ echo weft-qualify-end'
   jq --arg script "$script" --arg sql "$sql" \
     '{containers: [.containers[0] | {image, name, env, resources, command: ["bash", "-c", $script, "weft-qualify", $sql], args: []}]}' \
     "$work/$label.template.json" >"$work/$label.start.json"
-  execution=$(az rest --method post --url "$arm/resourceGroups/$group/providers/Microsoft.App/jobs/$job/start?api-version=2024-03-01" \
+  execution=$(azs rest --method post --url "$arm/resourceGroups/$group/providers/Microsoft.App/jobs/$job/start?api-version=2024-03-01" \
     --body "@$work/$label.start.json" --query name --output tsv)
   [[ -n $execution ]] || fail "$label" 'the evidence query did not report an execution'
   await_execution "$label" "$job" "$execution"
@@ -172,7 +172,7 @@ app_lines() { # app since pattern output
 }
 
 log_query() { # kql → one console line per output line
-  az monitor log-analytics query --workspace "$workspace" --analytics-query "$1" --output json | jq -r '.[].Log_s'
+  azs monitor log-analytics query --workspace "$workspace" --analytics-query "$1" --output json | jq -r '.[].Log_s'
 }
 
 # The single JSON line a release or grant command prints, with the execution's end state.

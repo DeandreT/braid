@@ -1,0 +1,358 @@
+{
+  "images": [
+    {
+      "file": "catalog-projects.png",
+      "screen": "Projects list",
+      "route": "/catalog/organizations/:organizationId/projects",
+      "capture": "catalog projects",
+      "embeddedIn": [
+        "docs/catalog-browser.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "15272853e512b67076b9d55aef8ba5ea16b401e328f7e14bafa265aac6725f05",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "catalog-mapping.png",
+      "screen": "Mapping page with revision history",
+      "route": "/catalog/organizations/:organizationId/projects/:projectId/mappings/:mappingId",
+      "capture": "mapping revisions",
+      "embeddedIn": [
+        "docs/catalog-browser.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "bcad4c4e81a2a99632004be5ae3089827cb8cf01cd3ea5907fe1d0ab540ca98a",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "catalog-search.png",
+      "screen": "Catalog search results",
+      "route": "/catalog/search?q=order",
+      "capture": "catalog search",
+      "embeddedIn": [
+        "docs/catalog-search.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "9bf523070203871b26febaf3619202872300d77d99c9842ccfaf93485792f44a",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "workbench-mapping.png",
+      "screen": "Revision workbench, Data mapping view",
+      "route": "/catalog/organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",
+      "capture": "workbench data mapping",
+      "embeddedIn": [
+        "README.md",
+        "docs/compact-workbench.md",
+        "docs/mapping-viewer.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "5906fbc73a8a3436c2d0a58c1bac7e271a7af33805a5b17401ad026a039f946d",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "workbench-preview.png",
+      "screen": "Revision workbench, Try sample view with a result",
+      "route": "/catalog/organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",
+      "capture": "workbench sample preview",
+      "embeddedIn": [
+        "README.md",
+        "docs/preview-runs.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "8750f706a8ceea83d8eebae8042f8f3e36926bf1b94dd4267bcd362c3722666b",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "workbench-regression.png",
+      "screen": "Revision workbench, Tests view with a run diff",
+      "route": "/catalog/organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",
+      "capture": "workbench regression test",
+      "embeddedIn": [
+        "README.md",
+        "docs/regression-browser.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "8f5600ef90f9eaf2ccad793b749a91e61e4fce5627b81ba29977b7b3d0c993b6",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "workbench-builds.png",
+      "screen": "Revision workbench, Prepare view after a build",
+      "route": "/catalog/organizations/:organizationId/projects/:projectId/mappings/:mappingId/revisions/:revisionId",
+      "capture": "workbench build preparation",
+      "embeddedIn": [
+        "docs/build-browser.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "6f5a57d8c70aed2fc035d00254849a29c67d2f50750ee80edf8565264b9352ae",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "revision-comparison.png",
+      "screen": "Revision comparison results",
+      "route": "/catalog/organizations/:organizationId/projects/:projectId/mappings/:mappingId/comparisons?left=:revisionId&right=:revisionId",
+      "capture": "revision comparison",
+      "embeddedIn": [
+        "README.md",
+        "docs/revision-comparison.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "0ff704d6df48459b9037e8352ca6cc020a555b70f47aac834625bd02b964135f",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "chat.png",
+      "screen": "Chat page with an answered workspace question",
+      "route": "/chat",
+      "capture": "workspace chat",
+      "embeddedIn": [
+        "README.md",
+        "docs/chat-ui.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "fcf829e0139e040ed796fcb71614963579c2ffc07c3055c6694efb1a448a5ab2",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "help.png",
+      "screen": "User guide contents",
+      "route": "/help",
+      "capture": "user guide",
+      "embeddedIn": [
+        "docs/help.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "ad0c3758157b7c9acb7354d7345ffd978cb516caae1a0e0f2b4a94cb9ed17538",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "administration.png",
+      "screen": "Organization administration",
+      "route": "/administration",
+      "capture": "organization administration",
+      "embeddedIn": [
+        "docs/administration.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "f2a7d6393b3ea3e2113256a257173531ae24263413a92d10249b704421bcd227",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    },
+    {
+      "file": "operations.png",
+      "screen": "Mapping operations targets",
+      "route": "/catalog/organizations/:organizationId/projects/:projectId/mappings/:mappingId/operations",
+      "capture": "mapping operations",
+      "embeddedIn": [
+        "docs/release-operations.md"
+      ],
+      "provenance": {
+        "sourceCommit": "aa4784e8c63efdb61b9f8d3a3f3cca1c841a6682",
+        "sourceChanges": [],
+        "sourceSha256": "e7042735480971e6b550aaa40fa018d6f8797da77a9bd0bae1ee44cd1c931c3e",
+        "captureSpecSha256": "bed36748a637d06e02ee9a642c2e674015e221ea0b046a33dc5e406edd174c8b",
+        "imageSha256": "f8d45f00df053961724e8d4a0308015640695fdf50d32e68684a017fc4472b4e",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "colorScheme": "light",
+        "locale": "en-US",
+        "timezoneId": "UTC",
+        "fixedTime": "2026-10-24T15:00:00.000Z",
+        "browser": "157.0.8090.0",
+        "node": "v22.23.3",
+        "npm": "12.1.0",
+        "platform": "win32"
+      }
+    }
+  ]
+}

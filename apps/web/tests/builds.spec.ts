@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import {
   buildFixture,
   environmentId,
+  openPrepare,
   scope,
   type BuildFixture,
 } from "./builds.fixture";
@@ -11,9 +12,6 @@ import { synthetic } from "./catalog.fixture";
 const panel = (page: Page) =>
   page.getByRole("region", { name: "Prepare this version", exact: true });
 async function loaded(page: Page) {
-  await panel(page)
-    .getByRole("button", { name: "Load preparation controls", exact: true })
-    .click();
   await expect(
     panel(page).getByRole("combobox", {
       name: "Environment version",
@@ -31,8 +29,9 @@ async function loaded(page: Page) {
 test("document compiler environments use the explicitly offered profile", async ({
   page,
 }) => {
-  const state = await buildFixture(page);
+  const state = await buildFixture(page, false);
   state.documentProfiles = true;
+  await openPrepare(page);
   await loaded(page);
   await panel(page)
     .getByRole("button", { name: "Environment administration", exact: true })
@@ -57,9 +56,10 @@ test("document compiler environments use the explicitly offered profile", async 
 test("X12 compiler environments bind the explicitly offered interchange profile", async ({
   page,
 }) => {
-  const state = await buildFixture(page);
+  const state = await buildFixture(page, false);
   state.documentProfiles = true;
   state.interchangeProfiles = true;
+  await openPrepare(page);
   await loaded(page);
   await panel(page)
     .getByRole("button", { name: "Environment administration", exact: true })
@@ -81,11 +81,45 @@ test("X12 compiler environments bind the explicitly offered interchange profile"
     profileVersion: "1",
   });
 });
+test("the Prepare tab reads its records once when shown and nothing while hidden", async ({
+  page,
+}) => {
+  const reads: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    const name = /\/(build-[a-z-]+|regression-runs)$/.exec(path)?.[1];
+    if (request.method() === "GET" && name) reads.push(name);
+  });
+  await buildFixture(page, false);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
+  await page.waitForTimeout(500);
+  expect(reads).toEqual([]);
+  await openPrepare(page);
+  await loaded(page);
+  await expect(
+    panel(page).getByRole("button", {
+      name: "Verify this evidence",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Data mapping", exact: true }).click();
+  await openPrepare(page);
+  await expect(
+    panel(page).getByRole("button", {
+      name: "Verify this evidence",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(reads).toEqual([
+    "build-capabilities",
+    "build-environments",
+    "build-approvals",
+    "build-runs",
+    "regression-runs",
+  ]);
+});
 async function approved(page: Page, state: BuildFixture) {
   await loaded(page);
-  await panel(page)
-    .getByRole("button", { name: "Load saved regression runs", exact: true })
-    .click();
   await panel(page)
     .getByRole("button", { name: "Verify this evidence", exact: true })
     .click();
@@ -122,9 +156,6 @@ test("approval confirmation names the exact version and environment and Escape s
 }) => {
   const state = await buildFixture(page);
   await loaded(page);
-  await panel(page)
-    .getByRole("button", { name: "Load saved regression runs", exact: true })
-    .click();
   await panel(page)
     .getByRole("button", { name: "Verify this evidence", exact: true })
     .click();
@@ -298,9 +329,6 @@ test("lost approval reply retries the original URL and exact body without creati
   const state = await buildFixture(page);
   await loaded(page);
   await panel(page)
-    .getByRole("button", { name: "Load saved regression runs", exact: true })
-    .click();
-  await panel(page)
     .getByRole("button", { name: "Verify this evidence", exact: true })
     .click();
   state.nextWriteFailure = "abort";
@@ -440,7 +468,8 @@ async function lostRegistration(page: Page, state: BuildFixture) {
 test("controls requested during a routine refresh load after it without disturbing the page", async ({
   page,
 }) => {
-  await buildFixture(page);
+  await buildFixture(page, false);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Version 1");
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -468,10 +497,8 @@ test("controls requested during a routine refresh load after it without disturbi
     .click();
   await arrived;
   try {
-    // The request waits for the pending context read instead of being refused.
-    await panel(page)
-      .getByRole("button", { name: "Load preparation controls", exact: true })
-      .click();
+    // Showing the panel starts its read, which waits for the pending context read instead of being refused.
+    await openPrepare(page);
   } finally {
     release();
   }
@@ -568,6 +595,10 @@ test("fresh administrator-to-publisher change clears the old operation before mu
     }),
   ).toHaveCount(0);
   expect(state.writes).toHaveLength(1);
+  // A refused request is not retried automatically under the same admission.
+  await panel(page)
+    .getByRole("button", { name: "Load preparation controls", exact: true })
+    .click();
   await loaded(page);
   await expect(
     panel(page).getByRole("button", {
@@ -597,6 +628,9 @@ test("an opaque post-commit 404 hides metadata without replacing a still-owned o
     }),
   ).toBeVisible();
   const original = state.writes[0];
+  await panel(page)
+    .getByRole("button", { name: "Load preparation controls", exact: true })
+    .click();
   await loaded(page);
   await panel(page)
     .getByRole("button", { name: "Check previous result", exact: true })
@@ -717,11 +751,9 @@ test("a changed actor clears private recovery before another write", async ({
 test("viewer admission does not dispatch a private build request", async ({
   page,
 }) => {
-  const state = await buildFixture(page);
+  const state = await buildFixture(page, false);
   state.role = "viewer";
-  await panel(page)
-    .getByRole("button", { name: "Load preparation controls", exact: true })
-    .click();
+  await openPrepare(page);
   await expect(panel(page).getByRole("alert")).toContainText("access changed");
   await expect(
     panel(page).getByRole("heading", {
@@ -735,11 +767,9 @@ test("viewer admission does not dispatch a private build request", async ({
 test("an explicit metadata capability refusal does not display private build controls", async ({
   page,
 }) => {
-  const state = await buildFixture(page);
+  const state = await buildFixture(page, false);
   state.readOwnMetadata = false;
-  await panel(page)
-    .getByRole("button", { name: "Load preparation controls", exact: true })
-    .click();
+  await openPrepare(page);
   await expect(panel(page).getByRole("alert")).toContainText(
     "cannot read private build metadata",
   );
@@ -785,13 +815,10 @@ test("foreign run scope is refused without replacing the displayed original resu
 test("narrow keyboard interaction keeps the build panel within the viewport", async ({
   page,
 }) => {
-  await buildFixture(page);
+  await buildFixture(page, false);
   await page.setViewportSize({ width: 360, height: 780 });
-  const load = panel(page).getByRole("button", {
-    name: "Load preparation controls",
-    exact: true,
-  });
-  await load.focus();
+  const tab = page.getByRole("tab", { name: "Prepare", exact: true });
+  await tab.focus();
   await page.keyboard.press("Enter");
   await expect(
     panel(page).getByRole("combobox", {

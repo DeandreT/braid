@@ -25,23 +25,23 @@
   max-width: 34rem;
   margin: 32px auto;
   padding: 20px 24px;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fafdf6;
+  background: var(--surface-subtle-2);
   text-align: center;
 }
 .builds-intro p {
-  color: #526b5e;
+  color: var(--text-muted);
   margin: 0 0 8px;
 }
 .builds-intro > .catalog-button {
   margin-top: 8px;
 }
 .builds-runtime {
-  color: #3f5d4b;
+  color: var(--text-muted-5);
 }
 .builds-section {
-  border-top: 1px solid #dfe7da;
+  border-top: 1px solid var(--border-2);
   margin-top: 20px;
   padding-top: 16px;
 }
@@ -52,8 +52,8 @@
   margin: 12px 0;
 }
 .builds-primary {
-  background: #345d45;
-  color: white;
+  background: var(--accent-3);
+  color: var(--text-on-accent);
 }
 .builds-list {
   list-style: none;
@@ -66,15 +66,15 @@
   justify-content: space-between;
   gap: 10px;
   padding: 12px 0;
-  border-bottom: 1px solid #dfe7da;
+  border-bottom: 1px solid var(--border-2);
   overflow-wrap: anywhere;
 }
 .builds-recovery,
 .builds-result {
   padding: 12px 14px;
   border-radius: 6px;
-  background: #fafdf6;
-  border: 1px solid #d7e2d1;
+  background: var(--surface-subtle-2);
+  border: 1px solid var(--border);
   margin-top: 16px;
 }
 .builds-error {
@@ -95,12 +95,12 @@
 }
 h3,
 h4 {
-  color: #284c3c;
+  color: var(--text-accent);
 }
 label {
   display: grid;
   gap: 6px;
-  color: #3f5d4b;
+  color: var(--text-muted-5);
   font-size: 13px;
   font-weight: 600;
 }
@@ -132,11 +132,11 @@ code {
   text-align: left;
   padding: 3px 6px;
   height: var(--wb-row-height, 28px);
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
 }
 .wb-build-table th {
   font-size: 0.75rem;
-  background: #f1f6e9;
-  color: #607456;
+  background: var(--surface-muted-5);
+  color: var(--text-muted-6);
   font-weight: 500;
 }

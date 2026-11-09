@@ -21,7 +21,7 @@ weft-native-evidence {
   margin-top: 8px;
   font-size: 14px;
   line-height: 1.5;
-  color: #586c60;
+  color: var(--text-muted-11);
 }
 main > .connection-card {
   margin-top: 12px;
@@ -59,7 +59,7 @@ main > .connection-card {
 }
 .example-label {
   padding-bottom: 11px;
-  color: #64786b;
+  color: var(--text-muted-32);
   font-size: 12px;
 }
 .form-field {
@@ -79,16 +79,16 @@ input {
   font: inherit;
   font-size: 14px;
   padding: 9px;
-  color: #213b34;
-  background: white;
-  border: 1px solid #b9cdbd;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-14);
   border-radius: 8px;
 }
 input:focus-visible,
 select:focus-visible,
 summary:focus-visible,
 .entity-panel:focus-visible {
-  outline: 3px solid #287a60;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 .example-description {
@@ -108,7 +108,7 @@ summary:focus-visible,
 .example-description p {
   font-size: 13px;
   margin: 0;
-  color: #586c60;
+  color: var(--text-muted-11);
 }
 .coverage-card,
 .validation-summary,
@@ -122,19 +122,19 @@ summary:focus-visible,
 .empty-state {
   margin: 0 0 14px;
   padding: 18px;
-  background: #fff;
-  border: 1px solid #d8e3d6;
+  background: var(--surface);
+  border: 1px solid var(--border-15);
   border-radius: 14px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .coverage-card {
-  background: #eef5ea;
-  border-color: #bad0b1;
+  background: var(--surface-muted-24);
+  border-color: var(--border-16);
 }
 .coverage-card.incomplete {
-  background: #fff7e9;
-  border-color: #dfc28c;
+  background: var(--surface-warn-8);
+  border-color: var(--border-warn-6);
 }
 .coverage-card,
 .validation-summary,
@@ -201,7 +201,7 @@ details > summary {
 .coverage-gaps li,
 .diagnostics-list li {
   padding: 14px 0;
-  border-top: 1px solid #d9dfcf;
+  border-top: 1px solid var(--border-17);
 }
 .coverage-gaps li p,
 .diagnostics-list p,
@@ -219,7 +219,7 @@ details > summary {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #657969;
+  color: var(--text-muted-33);
   margin: 0 0 6px;
 }
 .boundary-button {
@@ -229,10 +229,10 @@ details > summary {
   justify-content: space-between;
   gap: 4px 12px;
   text-align: left;
-  background: #f5f8f2;
-  border: 1px solid #dde6d7;
+  background: var(--surface-muted-25);
+  border: 1px solid var(--border-18);
   border-radius: 8px;
-  color: #213b34;
+  color: var(--text);
   padding: 8px 10px;
   width: 100%;
   margin-bottom: 4px;
@@ -246,7 +246,7 @@ details > summary {
 .boundary-button span {
   font-size: 10px;
   margin-top: 0;
-  color: #576e5c;
+  color: var(--text-muted-34);
 }
 .mapping-card {
   padding: 16px 0 0;
@@ -266,7 +266,7 @@ details > summary {
   font-size: 20px;
 }
 .mapping-card .section-heading > span {
-  color: #586c60;
+  color: var(--text-muted-11);
   font-size: 12px;
 }
 .mapping-toolbar {
@@ -287,13 +287,13 @@ details > summary {
   padding: 0 18px 10px;
   margin: 0;
   font-size: 10px;
-  color: #607064;
+  color: var(--text-muted-12);
   line-height: 1.7;
 }
 .mapping-column-headings {
-  background: #edf3e8;
+  background: var(--surface-muted-26);
   padding: 10px 18px;
-  color: #587060;
+  color: var(--text-muted-35);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-size: 10px;
@@ -301,7 +301,7 @@ details > summary {
 }
 .mapping-row {
   padding: 0 18px;
-  border-top: 1px solid #e1e8db;
+  border-top: 1px solid var(--border-8);
 }
 .mapping-cell {
   padding: 14px 12px 14px 0;
@@ -319,13 +319,13 @@ details > summary {
   font: inherit;
   font-size: 13px;
   text-align: left;
-  color: #205e49;
+  color: var(--text-accent-6);
   border: 0;
   background: transparent;
   padding: 3px 0;
   cursor: pointer;
   text-decoration: underline;
-  text-decoration-color: #9dbba9;
+  text-decoration-color: var(--text-subtle-5);
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
   max-width: 100%;
@@ -333,8 +333,8 @@ details > summary {
 .text-button:hover,
 .rule-button:hover,
 .lineage-link:hover {
-  color: #143d2f;
-  text-decoration-color: #143d2f;
+  color: var(--text-5);
+  text-decoration-color: var(--text-5);
 }
 .rule-button {
   font-weight: 600;
@@ -356,7 +356,7 @@ details > summary {
 .diagnostic-severity,
 .control-kind {
   font-size: 10px;
-  color: #5b6e5f;
+  color: var(--text-muted-36);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -373,7 +373,7 @@ code {
 }
 .incomplete-label {
   display: block;
-  color: #875c23;
+  color: var(--text-warn-4);
   font-size: 11px;
   margin: 6px 0;
 }
@@ -399,7 +399,7 @@ code {
 }
 .mapping-details summary {
   font-size: 12px;
-  color: #43604d;
+  color: var(--text-muted-37);
 }
 .native-evidence {
   margin: 10px 0 0;
@@ -407,7 +407,7 @@ code {
 .native-evidence summary {
   font-size: 11px;
   font-weight: 500;
-  color: #607064;
+  color: var(--text-muted-12);
 }
 .native-evidence p {
   font:
@@ -421,8 +421,8 @@ code {
 .explanation-gap,
 .uncertainty-note {
   padding: 12px;
-  background: #fff5e5;
-  border: 1px solid #e4c796;
+  background: var(--surface-warn-9);
+  border: 1px solid var(--border-warn-7);
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.7;
@@ -466,7 +466,7 @@ code {
 }
 .field-metadata dt {
   font-size: 11px;
-  color: #617467;
+  color: var(--text-muted-38);
 }
 .field-metadata dd {
   margin: 0;
@@ -474,12 +474,12 @@ code {
 }
 .muted {
   font-size: 12px;
-  color: #607064;
+  color: var(--text-muted-12);
   line-height: 1.7;
 }
 .loading-state {
   padding: 30px 0;
-  color: #58715d;
+  color: var(--text-muted-39);
   font-size: 14px;
 }
 .empty-state .secondary-button {
@@ -503,8 +503,8 @@ code {
   align-items: center;
   gap: 14px;
   padding: 18px 22px;
-  background: #f5f8f1;
-  border-top: 1px solid #e1e8db;
+  background: var(--surface-muted);
+  border-top: 1px solid var(--border-8);
   font-size: 12px;
 }
 .mapping-pagination > div {
@@ -573,7 +573,7 @@ code {
     text-transform: uppercase;
     letter-spacing: 0.07em;
     margin-bottom: 9px;
-    color: #657a69;
+    color: var(--text-muted-40);
   }
   .coverage-card,
   .validation-summary,

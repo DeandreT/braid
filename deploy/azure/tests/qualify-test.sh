@@ -24,7 +24,7 @@ export FAKE_SUBSCRIPTION=$subscription FAKE_TENANT=$tenant FAKE_OWNER_OBJECT=5f0
   FAKE_PROJECT=5f0c3a2e-0000-4000-8000-000000000007 FAKE_MAPPING=5f0c3a2e-0000-4000-8000-000000000008 \
   FAKE_BUILD=5f0c3a2e-0000-4000-8000-000000000009 FAKE_ENVIRONMENT=5f0c3a2e-0000-4000-8000-00000000000a \
   FAKE_ARTIFACT FAKE_TOOLCHAIN FAKE_RUNTIME_IDENTITY FAKE_CALLER_SECRET FAKE_REAL_DATE
-unset FAKE_AZ_FAIL FAKE_NO_HSTS FAKE_ACCOUNT_TENANT FAKE_NO_SIGNED_IN_USER
+unset FAKE_AZ_FAIL FAKE_NO_HSTS FAKE_ACCOUNT_TENANT FAKE_NO_SIGNED_IN_USER FAKE_VISIBLE_SUBSCRIPTIONS
 
 failed=false
 expect() { # description command...
@@ -37,6 +37,7 @@ expect() { # description command...
 contains() { grep -qF -- "$2" "$1"; }
 lacks() { ! grep -qF -- "$2" "$1"; }
 equals() { [[ $1 == "$2" ]]; }
+not() { ! "$@"; }
 
 setup() {
   root=$(mktemp -d "${TMPDIR:-/tmp}/weft-qualify-test.XXXXXXXX")
@@ -75,15 +76,18 @@ setup() {
     --confirm-provisioning)
 }
 
-# Runs the harness from the copy with the fakes first on PATH; input is its standard input.
+# Runs the harness from the copy with the fakes first on PATH; input is its standard input. Every run must name the
+# approved subscription on each Azure CLI call and never change the CLI's default.
 run() { # input arguments...
   local input=$1
   shift
   : >"$fake/calls.log"
+  : >"$fake/violations"
   set +e
   (cd "$repo" && PATH="$root/bin:$PATH" bash deploy/azure/qualify.sh "$@" <<<"$input" >"$root/output" 2>&1)
   code=$?
   set -e
+  expect 'every Azure CLI call names the approved subscription and none changes the default' test ! -s "$fake/violations"
 }
 
 without() { # option: the default arguments without it and its value
@@ -181,10 +185,22 @@ scenario_refuses_credential_arguments() {
   expect 'two credentials: is refused' contains "$root/output" 'use only one of'
 }
 
-scenario_refuses_wrong_subscription() {
-  FAKE_SUBSCRIPTION=5f0c3a2e-0000-4000-8000-0000000000ff run '' "${arguments[@]}"
+# The fake itself refuses a call without the approved subscription and any change of the CLI's default.
+scenario_fake_enforces_subscription() {
+  local bin=$root/bin
+  : >"$fake/violations"
+  expect 'a call without --subscription is refused' not "$bin/az" group exists --name "$group"
+  expect 'a call naming another subscription is refused' not "$bin/az" group exists --name "$group" \
+    --subscription 5f0c3a2e-0000-4000-8000-0000000000ff
+  expect 'az account set is refused' not "$bin/az" account set --subscription "$subscription"
+  expect 'each refusal is recorded' test "$(wc -l <"$fake/violations")" -eq 3
+  expect 'a call naming the approved subscription runs' "$bin/az" group exists --name "$group" --subscription "$subscription"
+}
+
+scenario_refuses_unavailable_subscription() {
+  FAKE_VISIBLE_SUBSCRIPTIONS=5f0c3a2e-0000-4000-8000-0000000000ff run '' "${arguments[@]}"
   expect 'exits 2' equals "$code" 2
-  expect 'names the mismatch' contains "$root/output" 'is not the approved --subscription'
+  expect 'names the subscription' contains "$root/output" 'cannot see the approved --subscription'
   expect 'only read the account' only_guard_calls
   expect 'checked no group' lacks "$fake/calls.log" 'group exists'
 }
@@ -313,7 +329,7 @@ scenario_teardown_scoping() {
   expect "another run's group: exits 2" equals "$code" 2
   expect "another run's group: is not deleted" lacks "$fake/calls.log" 'az group delete'
   echo "$run_id" >"$fake/group-tag"
-  FAKE_SUBSCRIPTION=5f0c3a2e-0000-4000-8000-0000000000ff run '' "${teardown[@]}" --yes
+  FAKE_VISIBLE_SUBSCRIPTIONS=5f0c3a2e-0000-4000-8000-0000000000ff run '' "${teardown[@]}" --yes
   expect 'another subscription: exits 2' equals "$code" 2
   expect 'another subscription: only read the account' only_guard_calls
   run nope "${teardown[@]}"
@@ -327,9 +343,9 @@ scenario_teardown_scoping() {
   expect 'the teardown is recorded' receipt_has 'last | .kind == "teardown" and .result == "pass"'
 }
 
-all=(refuses_missing_inputs refuses_without_confirmation refuses_credential_arguments refuses_wrong_subscription
-  refuses_owner_account refuses_existing_group refuses_dirty_tree declined_confirmation successful_run failure_partway failed_check_recorded
-  teardown_at_end_after_failure teardown_scoping)
+all=(fake_enforces_subscription refuses_missing_inputs refuses_without_confirmation refuses_credential_arguments
+  refuses_unavailable_subscription refuses_owner_account refuses_existing_group refuses_dirty_tree declined_confirmation
+  successful_run failure_partway failed_check_recorded teardown_at_end_after_failure teardown_scoping)
 status=0
 scenarios=("$@")
 ((${#scenarios[@]})) || scenarios=("${all[@]}")

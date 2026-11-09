@@ -49,7 +49,10 @@ export interface BuildFixture {
 }
 
 /** Synthetic protocol/UI boundary only. This fixture does not qualify compilation or persistence. */
-export async function buildFixture(page: Page): Promise<BuildFixture> {
+export async function buildFixture(
+  page: Page,
+  open = true,
+): Promise<BuildFixture> {
   const state: BuildFixture = {
     role: "administrator",
     nextWriteFailure: null,
@@ -427,6 +430,11 @@ export async function buildFixture(page: Page): Promise<BuildFixture> {
     await missing(route);
   });
   await page.goto(revisionPath(synthetic.revision.scope));
-  await page.getByRole("tab", { name: "Prepare", exact: true }).click();
+  // The shown panel loads itself, so tests that change the fixture first open it later.
+  if (open) await openPrepare(page);
   return state;
+}
+
+export async function openPrepare(page: Page): Promise<void> {
+  await page.getByRole("tab", { name: "Prepare", exact: true }).click();
 }

@@ -6,6 +6,8 @@
     "tests/dependency-security-forms.spec.ts",
     "playwright.automation.config.ts",
     "tests/automation.spec.ts",
+    "playwright.docs-screenshots.config.ts",
+    "tests/docs-screenshots.spec.ts",
     "playwright.search-return-path.config.ts",
     "tests/search-return-path.spec.ts",
     "tests/return-path.spec.ts",

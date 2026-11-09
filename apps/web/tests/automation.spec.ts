@@ -123,9 +123,6 @@ for (const kind of ["centre", "project", "deliveries", "cases"] as const) {
         .getByText("Check controls and policy", { exact: true })
         .first()
         .click();
-      await page
-        .getByRole("button", { name: "Show case results", exact: true })
-        .click();
     }
     const rows =
       kind === "centre"

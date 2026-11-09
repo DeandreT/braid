@@ -836,9 +836,6 @@ const tests = (target: Page) =>
 async function openTests(target: Page): Promise<void> {
   await target.goto(revisionPath(scopes.first!));
   await workflow(target, "Tests").click();
-  await tests(target)
-    .getByRole("button", { name: "Load regression cases" })
-    .click();
   await expect(
     tests(target).getByRole("button", { name: "Refresh cases" }),
   ).toBeEnabled();
@@ -1145,9 +1142,6 @@ test("prepares and completes a build through the Ferrule service", async () => {
     .filter({ hasText: "Your access changed" });
   const loadControls = async () => {
     for (let attempt = 1; ; attempt++) {
-      await panel
-        .getByRole("button", { name: "Load preparation controls" })
-        .click();
       const refresh = panel.getByRole("button", {
         name: "Refresh environments",
       });
@@ -1200,9 +1194,6 @@ test("prepares and completes a build through the Ferrule service", async () => {
   }
   await expect(environment.locator("option")).toHaveCount(2);
   await environment.selectOption({ index: 1 });
-  await panel
-    .getByRole("button", { name: "Load saved regression runs" })
-    .click();
   await panel
     .getByRole("button", { name: "Verify this evidence" })
     .first()

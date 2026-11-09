@@ -35,12 +35,12 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #f7faf3;
+  background: var(--surface-subtle);
 }
 .preview-toolbar label {
-  color: #526b5e;
+  color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -61,7 +61,7 @@
   border: 0;
 }
 .preview-group legend {
-  color: #213b34;
+  color: var(--text);
   font-weight: 600;
   font-size: 0.8125rem;
   padding: 0;
@@ -70,20 +70,20 @@
 .catalog-button.preview-add {
   justify-self: start;
   border-style: dashed;
-  background: #fff;
+  background: var(--surface);
   font-size: 0.75rem;
 }
 .preview-results {
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fafdf6;
+  background: var(--surface-subtle-2);
 }
 .preview-results-empty {
   margin: 0;
   padding: 24px 8px;
-  color: #526b5e;
+  color: var(--text-muted);
   font-size: 0.8125rem;
   text-align: center;
 }
@@ -94,7 +94,7 @@
 }
 .preview-input label,
 .preview-row label {
-  color: #3f5d4b;
+  color: var(--text-muted-5);
   font-size: 13px;
   font-weight: 600;
 }
@@ -133,7 +133,7 @@
 .preview-hint,
 .preview-note,
 .preview-message {
-  color: #536e5e;
+  color: var(--text-muted-3);
   font-size: 13px;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -141,7 +141,7 @@
 .preview-note {
   padding: 10px 12px;
   border-radius: 9px;
-  background: #f5f8f1;
+  background: var(--surface-muted);
 }
 .preview-error {
   display: grid;
@@ -152,19 +152,19 @@
   margin: 0;
 }
 .preview-run h3 {
-  color: #213b34;
+  color: var(--text);
   font-size: 0.9375rem;
   margin: 0 0 8px;
 }
 .preview-status {
   font-weight: 600;
-  color: #345d45;
+  color: var(--text-2);
 }
 .preview-failure {
   padding: 10px 12px;
   border-radius: 9px;
   background: var(--wb-evidence-tint);
-  color: #213b34;
+  color: var(--text);
 }
 .preview-failure[data-tone="failure"] {
   background: var(--wb-failure-tint);
@@ -192,7 +192,7 @@
   text-align: left;
   vertical-align: top;
   padding: 8px;
-  border-bottom: 1px solid #e6ece2;
+  border-bottom: 1px solid var(--border-7);
 }
 .preview-digest {
   word-break: break-all;
@@ -209,7 +209,7 @@
   overflow: auto;
   padding: 12px;
   border-radius: 9px;
-  background: #f6f8f4;
+  background: var(--surface-muted-10);
   font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

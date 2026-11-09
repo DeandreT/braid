@@ -94,7 +94,7 @@ import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
     }
     .workspace-chat-page > header {
       margin-bottom: 16px;
-      color: #213b34;
+      color: var(--text);
     }
     .workspace-chat-page h1 {
       font-size: 1.5rem;
@@ -105,7 +105,7 @@ import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
       text-transform: uppercase;
       letter-spacing: 0.12em;
       font-size: 0.75rem;
-      color: #526b5e;
+      color: var(--text-muted);
     }
   `,
 })

@@ -78,6 +78,52 @@ export class RevisionReportsComponent {
     this.document() ? new ProjectionView(this.document()!) : null,
   );
   readonly linkedValidation = computed(() => this.reports().linkedValidation());
+  private readonly panes = computed(() => [
+    { operation: "projection" as const, pane: this.projection() },
+    { operation: "validation" as const, pane: this.validation() },
+  ]);
+  /** A report is being requested, observed or still recorded as in progress. */
+  readonly generating = computed(() =>
+    this.panes().some(
+      ({ pane }) =>
+        pane.phase === "ensuring" ||
+        pane.phase === "polling" ||
+        pane.response?.body.state === "pending",
+    ),
+  );
+  /** Progress is no longer observed automatically; only an explicit read checks it. */
+  readonly progressUnobserved = computed(
+    () =>
+      this.generating() &&
+      !this.reports().busy() &&
+      this.panes().every(({ pane }) => !this.busy(pane)),
+  );
+  /** Current reports still missing once reads and automatic generation have settled. */
+  readonly missing = computed(() =>
+    this.panes()
+      .filter(
+        ({ pane }) =>
+          !pane.pinned &&
+          pane.phase === "ready" &&
+          (pane.response?.body.state === "notDerived" ||
+            pane.response?.body.state === "failed"),
+      )
+      .map(({ operation, pane }) => ({
+        operation,
+        failed: pane.response?.body.state === "failed",
+      })),
+  );
+  readonly missingTitle = computed(() => {
+    const missing = this.missing(),
+      names = missing
+        .map((item) =>
+          item.operation === "projection" ? "explanation" : "validation",
+        )
+        .join(" and ");
+    return missing.some((item) => item.failed)
+      ? `Generating this version's ${names} failed`
+      : `This version's ${names} ${missing.length > 1 ? "haven't" : "hasn't"} been generated`;
+  });
   readonly pinned = computed(
     () => this.projection().pinned || this.validation().pinned,
   );
