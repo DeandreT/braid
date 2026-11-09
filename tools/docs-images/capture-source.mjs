@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 
 const sourcePaths = [
   "apps/web/src",
+  "apps/web/public",
   "apps/web/tests",
   "apps/web/angular.json",
   "apps/web/index.html",

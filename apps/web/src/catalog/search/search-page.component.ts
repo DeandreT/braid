@@ -136,8 +136,8 @@ import {
       min-width: 10rem;
       flex: 1;
       color: inherit;
-      background: #fff;
-      border: 1px solid var(--wb-control-border, #7b8c78);
+      background: var(--surface);
+      border: 1px solid var(--wb-control-border);
       border-radius: 0.4rem;
       padding: 0.65rem;
     }
@@ -147,7 +147,7 @@ import {
     }
     li {
       padding: 1rem 0;
-      border-bottom: 1px solid #dce4da;
+      border-bottom: 1px solid var(--border-13);
       overflow-wrap: anywhere;
     }
     li a {
@@ -163,8 +163,8 @@ import {
       opacity: 0.7;
     }
     mark {
-      background: #f3d77d;
-      color: #24200e;
+      background: var(--mark);
+      color: var(--mark-text);
       border-radius: 0.1rem;
     }
   `,

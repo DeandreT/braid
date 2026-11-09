@@ -187,23 +187,23 @@ export function regressionStateTone(state: string | undefined): string | null {
       font-size: 0.75rem;
     }
     .regression-counts {
-      color: #526b5e;
+      color: var(--text-muted);
     }
     .regression-controls > summary {
-      color: #526b5e;
+      color: var(--text-muted);
       cursor: pointer;
     }
     .regression-controls[open] {
       flex-basis: 100%;
       padding: 8px 10px;
-      border: 1px solid #d7e2d1;
+      border: 1px solid var(--border);
       border-radius: 6px;
-      background: #fafdf6;
+      background: var(--surface-subtle-2);
       text-align: left;
     }
     .regression-controls[open] > summary {
       margin-bottom: 6px;
-      color: #213b34;
+      color: var(--text);
     }
     .regression-controls p {
       margin: 6px 0;

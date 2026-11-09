@@ -11,7 +11,7 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 6px;
-  border-bottom: 1px solid var(--wb-border, #d7e2d1);
+  border-bottom: 1px solid var(--wb-border, var(--border));
 }
 .wb-table-toolbar input[type="search"] {
   flex: 1;
@@ -36,15 +36,15 @@ button {
   border: 1px solid var(--wb-control-border);
   border-radius: 3px;
   padding: 3px 6px;
-  background: #fff;
-  color: #213b34;
+  background: var(--surface);
+  color: var(--text);
 }
 button {
   cursor: pointer;
 }
 button:disabled {
   cursor: default;
-  color: #73846d;
+  color: var(--text-muted-30);
 }
 button:focus-visible,
 input:focus-visible,
@@ -67,7 +67,7 @@ table {
 th,
 td {
   padding: 3px 6px;
-  border-bottom: 1px solid var(--wb-border, #d7e2d1);
+  border-bottom: 1px solid var(--wb-border, var(--border));
   height: var(--wb-row-height, 28px);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -79,8 +79,8 @@ thead th {
   top: 0;
   z-index: 1;
   font-weight: 500;
-  background: var(--wb-role-tint, #f0f5e9);
-  color: var(--wb-role-text, #5f7557);
+  background: var(--wb-role-tint, var(--surface-muted-2));
+  color: var(--wb-role-text, var(--text-muted-31));
   box-shadow: inset 0 2px var(--wb-role-text, transparent);
   overflow: visible;
 }
@@ -97,7 +97,7 @@ thead th > button {
   height: 25px;
   padding: 0;
   font-weight: 600;
-  background: #f3f7ee;
+  background: var(--surface-muted-23);
 }
 .wb-group-row button {
   display: flex;
@@ -119,7 +119,7 @@ thead th > button {
   box-shadow: inset 3px 0 var(--wb-selection-text);
 }
 tbody tr:not(.wb-group-row):not(.wb-selected):hover td {
-  background: #f0f6e8;
+  background: var(--surface-muted-12);
 }
 .wb-row-focus {
   border: 0;
@@ -142,7 +142,7 @@ code {
   font-size: 0.6875rem;
 }
 .wb-muted {
-  color: #61745c;
+  color: var(--text-muted-10);
 }
 .wb-sample-cell {
   background: var(--wb-evidence-tint);
@@ -153,12 +153,12 @@ code {
 .wb-observed-source > span {
   display: block;
   font-size: 0.6875rem;
-  color: #61745c;
+  color: var(--text-muted-10);
 }
 .wb-sample-label,
 .wb-inline-lineage {
   padding: 5px 6px;
-  border-bottom: 1px solid var(--wb-border, #d7e2d1);
+  border-bottom: 1px solid var(--wb-border, var(--border));
   font-size: 0.75rem;
   background: var(--wb-evidence-tint);
 }
@@ -167,7 +167,7 @@ code {
   gap: 8px;
   overflow: auto;
   white-space: nowrap;
-  background: #f8fbf3;
+  background: var(--surface-subtle-5);
 }
 .wb-inline-lineage [data-role] {
   display: flex;
@@ -185,7 +185,7 @@ code {
   position: sticky;
   left: 0;
   z-index: 1;
-  background: #fff;
+  background: var(--surface);
 }
 .wb-pin-key thead th:first-child {
   left: 0;
@@ -195,7 +195,7 @@ code {
   background: var(--wb-selection-tint);
 }
 .wb-pin-key tbody tr:not(.wb-group-row):not(.wb-selected):hover td:first-child {
-  background: #f0f6e8;
+  background: var(--surface-muted-12);
 }
 @media (max-width: 600px) {
   .wb-pin-key tbody tr:not(.wb-group-row) td:first-child {
@@ -218,9 +218,9 @@ code {
   right: 0;
   min-width: 150px;
   padding: 6px;
-  background: #fff;
-  border: 1px solid var(--wb-border, #d7e2d1);
-  box-shadow: 0 3px 12px #213b341a;
+  background: var(--surface);
+  border: 1px solid var(--wb-border, var(--border));
+  box-shadow: 0 3px 12px var(--shadow);
 }
 .wb-columns label {
   display: flex;
@@ -237,9 +237,9 @@ code {
   justify-content: space-between;
   gap: 6px;
   padding: 4px 6px;
-  border-top: 1px solid var(--wb-border, #d7e2d1);
+  border-top: 1px solid var(--wb-border, var(--border));
   font-size: 0.6875rem;
-  color: #61745c;
+  color: var(--text-muted-10);
 }
 .wb-table-footer nav {
   display: flex;

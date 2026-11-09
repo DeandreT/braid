@@ -6,7 +6,7 @@ a {
 }
 :is(h2, h3) {
   font-family: "Manrope", system-ui, sans-serif;
-  color: #284c3c;
+  color: var(--text-accent);
   scroll-margin-top: 16px;
 }
 h2 {
@@ -14,7 +14,7 @@ h2 {
   font-weight: 600;
   margin: 32px 0 10px;
   padding-top: 18px;
-  border-top: 1px solid #e0e7de;
+  border-top: 1px solid var(--border-3);
 }
 h3 {
   font-size: 17px;
@@ -40,19 +40,19 @@ li + li {
 }
 strong {
   font-weight: 700;
-  color: #213b34;
+  color: var(--text);
 }
 code {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-size: 0.875em;
   background: var(--wb-evidence-tint);
-  color: #213b34;
+  color: var(--text);
   border-radius: 5px;
   padding: 1px 5px;
 }
 pre {
   background: var(--wb-evidence-tint);
-  border: 1px solid #dfe7da;
+  border: 1px solid var(--border-2);
   border-radius: 10px;
   padding: 12px 14px;
   overflow-x: auto;
@@ -65,9 +65,9 @@ pre code {
 .help-table {
   overflow-x: auto;
   margin: 0 0 18px;
-  border: 1px solid #dfe7da;
+  border: 1px solid var(--border-2);
   border-radius: 12px;
-  background: #fff;
+  background: var(--surface);
 }
 .help-table table {
   border-collapse: collapse;
@@ -79,14 +79,14 @@ pre code {
   text-align: start;
   vertical-align: top;
   padding: 10px 14px;
-  border-bottom: 1px solid #e6ece2;
+  border-bottom: 1px solid var(--border-7);
 }
 .help-table tr:last-child td {
   border-bottom: none;
 }
 .help-table th {
-  background: #f3f7f0;
-  color: #3d5f4e;
+  background: var(--surface-muted-21);
+  color: var(--text-muted-26);
   font-size: 12px;
   font-weight: 700;
 }

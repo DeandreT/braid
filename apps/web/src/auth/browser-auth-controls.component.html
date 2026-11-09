@@ -137,6 +137,20 @@
     @if (actionMessage()) {
       <p class="session-notice" role="status">{{ actionMessage() }}</p>
     }
+    <fieldset class="theme-choice">
+      <legend>Appearance</legend>
+      @for (option of themes; track option.value) {
+        <label
+          ><input
+            type="radio"
+            name="weft-theme"
+            [value]="option.value"
+            [checked]="theme.choice() === option.value"
+            (change)="theme.set(option.value)"
+          />{{ option.label }}</label
+        >
+      }
+    </fieldset>
     @if (showForget()) {
       <section
         id="forget-local-review"

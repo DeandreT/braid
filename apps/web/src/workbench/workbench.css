@@ -3,27 +3,27 @@
 .app-workbench #workspace-chat-toggle {
   min-height: 32px;
   padding: 6px 8px;
-  border: 1px solid #7b8c78;
+  border: 1px solid var(--wb-control-border);
   border-radius: 4px;
-  background: #f7faf3;
-  color: #213b34;
+  background: var(--surface-subtle);
+  color: var(--text);
   font: inherit;
 }
 .app-workbench .workspace-menu {
-  border: 1px solid #7b8c78;
+  border: 1px solid var(--wb-control-border);
   border-radius: 4px;
-  background: #f7faf3;
-  color: #213b34;
+  background: var(--surface-subtle);
+  color: var(--text);
   font: inherit;
   font-size: 0.8125rem;
   padding: 0 10px;
 }
 :where(.app-workbench main) :is(input, select, textarea) {
-  border: 1px solid #7b8c78;
+  border: 1px solid var(--wb-control-border);
   border-radius: 4px;
   padding: 6px 8px;
-  background: #fff;
-  color: #213b34;
+  background: var(--surface);
+  color: var(--text);
   font: inherit;
   max-width: 100%;
 }
@@ -75,13 +75,13 @@
 }
 .app-workbench weft-operations-page .catalog-page > form {
   padding: 8px 10px;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #f7faf3;
+  background: var(--surface-subtle);
 }
 .app-workbench weft-operations-page .ops-table {
   margin: 12px 0;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 .app-workbench weft-operations-page .ops-table td {
@@ -90,9 +90,9 @@
 .app-workbench weft-operations-page .ops-change {
   margin: 16px 0;
   padding: 14px 16px;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fafdf6;
+  background: var(--surface-subtle-2);
 }
 .app-workbench weft-operations-page .ops-change h2 {
   margin: 0 0 6px;
@@ -105,7 +105,7 @@
 .ops-hint {
   flex-basis: 100%;
   margin: 0;
-  color: #526b5e;
+  color: var(--text-muted);
   font-size: 0.75rem;
 }
 .ops-sr-only {
@@ -129,7 +129,7 @@
   width: 100%;
   height: 100dvh;
   margin: 0;
-  background: #fff;
+  background: var(--surface);
 }
 .app-workbench .app-header {
   display: flex;
@@ -139,8 +139,8 @@
   padding: 6px 12px;
   gap: 8px 12px;
   flex-shrink: 0;
-  background: #f2f6eb;
-  border-bottom: 1px solid #d7e2d1;
+  background: var(--surface-muted-29);
+  border-bottom: 1px solid var(--border);
 }
 .app-workbench .brand {
   font-size: 22px;
@@ -161,7 +161,7 @@
   font-size: 0.75rem;
 }
 .workspace-organization span {
-  color: #526b5e;
+  color: var(--text-muted);
   font-size: 0.6875rem;
 }
 .workspace-body {
@@ -189,20 +189,20 @@
   flex-direction: column;
   gap: 8px;
   padding: 8px 4px;
-  background: #153f33;
+  background: var(--accent-5);
 }
 .app-workbench .workspace-nav a {
   position: relative;
   display: grid;
   place-items: center;
   min-height: 36px;
-  color: #c4d7be;
+  color: var(--text-on-accent-4);
   padding: 4px;
   border-radius: 4px;
 }
 .app-workbench .workspace-nav a.active {
-  background: #325a42;
-  color: #f0f7e8;
+  background: var(--accent-8);
+  color: var(--text-on-accent-2);
 }
 .rail-icon {
   width: 20px;
@@ -226,13 +226,13 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #213b34;
+  color: var(--text);
   cursor: pointer;
 }
 .header-icon-button:hover,
 .header-icon-button[aria-expanded="true"] {
   background: var(--wb-selection-tint);
-  border-color: #d7e2d1;
+  border-color: var(--border);
 }
 .header-icon-button svg {
   width: 18px;
@@ -257,7 +257,7 @@
   right: 5px;
   width: 8px;
   height: 8px;
-  border: 2px solid #f2f6eb;
+  border: 2px solid var(--border-19);
   border-radius: 50%;
   background: var(--wb-attention-text);
 }
@@ -271,8 +271,8 @@ main:focus {
 .app-workbench .rail-label {
   position: absolute;
   left: 40px;
-  background: #153f33;
-  color: #f0f7e8;
+  background: var(--accent-5);
+  color: var(--text-on-accent-2);
   padding: 8px;
   border-radius: 4px;
   white-space: nowrap;
@@ -309,10 +309,10 @@ main:focus {
   margin: 0;
   padding: 6px 12px;
   border: 0;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   border-radius: 0;
   min-height: 32px;
-  background: #f7faf3;
+  background: var(--surface-subtle);
   font-size: 0.75rem;
   gap: 8px;
 }
@@ -365,7 +365,7 @@ main:focus {
 .app-workbench .catalog-summary {
   padding: 12px 16px;
   border: 0;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   border-radius: 0;
   margin: 0;
   box-shadow: none;
@@ -373,7 +373,7 @@ main:focus {
 .app-workbench .catalog-breadcrumb {
   margin: 0;
   padding: 8px 16px;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   font-size: 0.8125rem;
 }
 .app-workbench :is(.catalog-section-heading, .catalog-pagination) {
@@ -388,7 +388,7 @@ main:focus {
   margin: 0;
   padding: 12px 16px;
   border: 0;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   border-radius: 0;
 }
 .app-workbench .catalog-item-heading h3 {
@@ -442,11 +442,11 @@ main:focus {
   margin-top: 12px;
 }
 .app-workbench :is(button, a, input, select, summary, textarea):focus-visible {
-  outline: 2px solid #287a60;
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 .app-workbench .workspace-nav a:focus-visible {
-  outline-color: #d4eec0;
+  outline-color: var(--focus-ring-light);
 }
 .app-workbench :is(table, pre) {
   max-width: 100%;
@@ -458,8 +458,8 @@ main:focus {
   .workspace-mobile-context {
     display: block;
     padding: 8px 12px;
-    border-bottom: 1px solid #d7e2d1;
-    background: #f7faf3;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-subtle);
     font-size: 0.75rem;
     overflow-wrap: anywhere;
   }

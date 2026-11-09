@@ -23,7 +23,7 @@
   margin-left: auto;
 }
 .wb-role {
-  color: #526b5e;
+  color: var(--text-muted);
   font-size: 0.75rem;
   white-space: nowrap;
 }
@@ -37,11 +37,11 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #526b5e;
+  color: var(--text-muted);
 }
 .wb-context-path .wb-icon-button:hover {
   background: var(--wb-selection-tint);
-  color: #213b34;
+  color: var(--text);
 }
 .wb-icon-button svg {
   width: 16px;
@@ -63,7 +63,7 @@
   margin: 0;
 }
 .wb-context-path > span {
-  color: #607456;
+  color: var(--text-muted-6);
 }
 .wb-context-path .wb-badge {
   border: 1px solid color-mix(in srgb, var(--wb-source-text) 40%, transparent);
@@ -96,14 +96,14 @@ button,
   border: 1px solid var(--wb-control-border);
   border-radius: 3px;
   padding: 3px 6px;
-  color: #244c36;
-  background: #fff;
+  color: var(--text-accent-3);
+  background: var(--surface);
   cursor: pointer;
   font-size: 0.75rem;
 }
 button:disabled {
   cursor: default;
-  color: #697b62;
+  color: var(--text-muted-25);
 }
 .wb-action {
   display: inline-block;
@@ -133,7 +133,7 @@ button:disabled {
   flex-wrap: wrap;
   gap: 4px;
   padding: 4px 6px;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   background: var(--wb-evidence-tint);
 }
 .wb-trail button {
@@ -150,7 +150,7 @@ button:disabled {
   align-items: center;
   gap: 6px;
   padding: 5px 6px;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
 }
 .wb-command-bar h2,
 .wb-command-bar h3 {
@@ -174,14 +174,14 @@ button:disabled {
 .wb-data-table td {
   text-align: left;
   padding: 4px 6px;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   height: var(--wb-row-height, 28px);
   overflow-wrap: anywhere;
 }
 .wb-data-table th {
   font-size: 0.75rem;
-  color: #607456;
-  background: #f1f6e9;
+  color: var(--text-muted-6);
+  background: var(--surface-muted-5);
   font-weight: 500;
 }
 .wb-history {
@@ -198,24 +198,24 @@ button:disabled {
 .wb-tile {
   min-width: 0;
   padding: 12px 14px;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--surface);
 }
 .wb-tile h3 {
   margin: 0 0 4px;
-  color: #526b5e;
+  color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 600;
 }
 .wb-tile p {
   margin: 4px 0 0;
-  color: #526b5e;
+  color: var(--text-muted);
   font-size: 0.75rem;
 }
 .wb-tile .wb-tile-value {
   margin: 0 0 6px;
-  color: #213b34;
+  color: var(--text);
   font:
     600 1rem "Manrope",
     system-ui,
@@ -231,7 +231,7 @@ dl {
   margin: 6px 0;
 }
 dt {
-  color: #63765b;
+  color: var(--text-muted-16);
 }
 dd {
   margin: 0;
@@ -257,7 +257,7 @@ summary {
   cursor: pointer;
 }
 .wb-muted {
-  color: #63765b;
+  color: var(--text-muted-16);
 }
 pre {
   margin: 4px 0;
@@ -274,7 +274,7 @@ pre {
 }
 .wb-diff > section {
   min-width: 0;
-  border-right: 1px solid #d7e2d1;
+  border-right: 1px solid var(--border);
   padding-right: 6px;
 }
 .wb-diff-changed > section:first-child h3 {
@@ -290,7 +290,7 @@ pre {
   color: var(--wb-attention-text);
 }
 .wb-diagnostic-group article {
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   padding: 4px;
 }
 @media (max-width: 600px) {

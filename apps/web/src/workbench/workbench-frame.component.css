@@ -8,8 +8,8 @@
   flex-direction: column;
   height: 100%;
   min-height: 320px;
-  background: #fff;
-  color: #213b34;
+  background: var(--surface);
+  color: var(--text);
   font-size: 0.8125rem;
 }
 button {
@@ -31,7 +31,7 @@ button:focus-visible {
   gap: 8px;
   padding: 4px 12px;
   min-height: 40px;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
 }
 .wb-context > * {
   flex: 1;
@@ -40,8 +40,8 @@ button:focus-visible {
 .wb-workflow-bar {
   display: flex;
   min-width: 0;
-  border-bottom: 1px solid #d7e2d1;
-  background: #f7faf3;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-subtle);
 }
 .wb-workflow-bar nav {
   display: flex;
@@ -57,7 +57,7 @@ button:focus-visible {
   background: none;
   padding: 6px 8px;
   font-size: 0.75rem;
-  color: #526b5e;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 [aria-selected="true"] {
@@ -83,8 +83,8 @@ button:focus-visible {
   flex-direction: column;
   flex-shrink: 0;
   min-height: 0;
-  border-top: 1px solid #d7e2d1;
-  background: #f7faf2;
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted-11);
 }
 .wb-dock-collapsed {
   height: auto;
@@ -95,7 +95,7 @@ button:focus-visible {
   flex-shrink: 0;
   min-width: 0;
   overflow: auto;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
   scrollbar-width: thin;
 }
 .wb-dock-body {
@@ -109,7 +109,7 @@ button:focus-visible {
 }
 .wb-inspector-tabs {
   display: flex;
-  border-bottom: 1px solid #d7e2d1;
+  border-bottom: 1px solid var(--border);
 }
 .wb-inspector-body {
   padding: 8px 0;
@@ -118,7 +118,7 @@ button:focus-visible {
   position: relative;
   height: 8px;
   flex-shrink: 0;
-  background: #eff3ec;
+  background: var(--surface-muted-27);
 }
 .wb-status {
   display: flex;
@@ -128,8 +128,8 @@ button:focus-visible {
   white-space: nowrap;
   scrollbar-width: none;
   padding: 4px 8px;
-  background: #eff5e7;
-  border-top: 1px solid #d7e2d1;
+  background: var(--surface-muted-28);
+  border-top: 1px solid var(--border);
   color: var(--wb-evidence-text);
   font-size: 0.6875rem;
 }

@@ -19,7 +19,7 @@
   flex: 1 1 300px;
 }
 .reports-heading h2 {
-  color: #284c3c;
+  color: var(--text-accent);
   font:
     600 24px "Manrope",
     system-ui,
@@ -29,7 +29,7 @@
 }
 .reports-heading p,
 .report-panel p {
-  color: #536e5e;
+  color: var(--text-muted-3);
   font-size: 13px;
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -39,7 +39,7 @@
   max-width: 70ch;
 }
 .reports-heading .reports-eyebrow {
-  color: #64806b;
+  color: var(--text-muted-4);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -47,7 +47,7 @@
   margin-bottom: 7px;
 }
 .reports-availability {
-  color: #657967;
+  color: var(--text-muted-2);
   font-size: 13px;
   line-height: 1.7;
   margin: 0 0 18px;
@@ -62,13 +62,13 @@
 .report-panel {
   min-width: 0;
   padding: 20px;
-  border: 1px solid #dfe7da;
+  border: 1px solid var(--border-2);
   border-radius: 14px;
-  background: #fff;
+  background: var(--surface);
 }
 .report-heading h3,
 .report-notices h3 {
-  color: #284c3c;
+  color: var(--text-accent);
   font:
     600 18px "Manrope",
     system-ui,
@@ -78,12 +78,12 @@
 }
 .report-selection {
   display: block;
-  color: #657967;
+  color: var(--text-muted-2);
   font-size: 12px;
   line-height: 1.6;
 }
 .report-panel .report-progress {
-  color: #4c6d52;
+  color: var(--text-muted-7);
   margin: 12px 0;
 }
 .report-facts {
@@ -126,8 +126,8 @@
   padding: 10px 14px;
   border: 1px solid var(--wb-control-border);
   border-radius: 9px;
-  background: #f5f8f1;
-  color: #345d45;
+  background: var(--surface-muted);
+  color: var(--text-2);
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -138,18 +138,18 @@
   cursor: pointer;
 }
 .reports-button:hover {
-  background: #e9f0e3;
+  background: var(--surface-muted-7);
 }
 .reports-button:disabled {
   opacity: 0.6;
   cursor: default;
 }
 .reports-primary {
-  background: #e1edd8;
-  border-color: #b8d1ac;
+  background: var(--surface-muted-9);
+  border-color: var(--border-strong-4);
 }
 .reports-link {
-  color: #345d45;
+  color: var(--text-2);
   font-size: 13px;
   line-height: 1.6;
   text-underline-offset: 4px;
@@ -158,24 +158,24 @@
 .report-panel .report-error,
 .report-panel .report-notice {
   padding: 12px 14px;
-  border-left: 3px solid #b38848;
-  background: #faf4e9;
-  color: #775b36;
+  border-left: 3px solid var(--border-warn);
+  background: var(--surface-warn);
+  color: var(--text-warn);
   margin: 12px 0;
 }
 .report-panel .report-note,
 .report-panel .report-link-status {
   font-size: 12px;
-  color: #657967;
+  color: var(--text-muted-2);
   margin: 12px 0 0;
 }
 .report-evidence {
-  border-top: 1px solid #e6ebdf;
+  border-top: 1px solid var(--border-5);
   margin-top: 16px;
   padding-top: 12px;
 }
 .report-evidence summary {
-  color: #4c6d52;
+  color: var(--text-muted-7);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -183,7 +183,7 @@
 }
 .validation-title {
   margin: 18px 0 0;
-  color: #345d45;
+  color: var(--text-2);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -197,13 +197,13 @@
 }
 .report-notice-list li {
   padding: 14px 0;
-  border-top: 1px solid #e6ebdf;
+  border-top: 1px solid var(--border-5);
 }
 .report-notice-list li > p {
   white-space: pre-wrap;
 }
 .report-severity {
-  color: #775b36;
+  color: var(--text-warn);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -256,8 +256,8 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 4px 6px;
-  border-bottom: 1px solid #d7e2d1;
-  background: #f7faf2;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted-11);
   font-size: 0.75rem;
 }
 .wb-report-bar h3 {
@@ -269,8 +269,8 @@
 }
 .wb-report-controls {
   padding: 6px;
-  background: #fff;
-  border: 1px solid #d7e2d1;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 .wb-report-controls section {
   margin-bottom: 6px;
@@ -289,7 +289,7 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 6px;
-  background: #eef5e6;
+  background: var(--surface-muted-18);
 }
 .report-generation p {
   margin: 0;
@@ -297,10 +297,10 @@
 .report-cta {
   margin: 12px 6px;
   padding: 16px 18px;
-  border: 2px solid #b38848;
+  border: 2px solid var(--border-warn);
   border-radius: 8px;
-  background: #faf4e9;
-  color: #5c4527;
+  background: var(--surface-warn);
+  color: var(--text-warn-3);
 }
 .report-cta h3 {
   margin: 0 0 6px;

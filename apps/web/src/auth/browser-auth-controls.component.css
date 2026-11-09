@@ -10,10 +10,10 @@
   gap: 8px;
   max-width: 180px;
   min-height: 32px;
-  border: 1px solid #d7e2d1;
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: #fff;
-  color: #213b34;
+  background: var(--surface);
+  color: var(--text);
   padding: 2px 10px 2px 2px;
   font-size: 0.75rem;
   font-weight: 600;
@@ -34,7 +34,7 @@
 }
 .account-trigger:hover,
 .account-trigger[aria-expanded="true"] {
-  background: #eaf1e5;
+  background: var(--surface-muted-8);
 }
 .account-label {
   overflow: hidden;
@@ -47,7 +47,7 @@
   bottom: 3px;
   width: 9px;
   height: 9px;
-  border: 2px solid #fff;
+  border: 2px solid var(--border-9);
   border-radius: 50%;
   background: var(--wb-evidence-text);
 }
@@ -75,10 +75,10 @@
   gap: 14px;
   width: min(380px, calc(100vw - 32px));
   padding: 18px;
-  border: 1px solid #e0e7de;
+  border: 1px solid var(--border-3);
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 12px 32px rgb(23 77 63 / 14%);
+  background: var(--surface);
+  box-shadow: 0 12px 32px var(--shadow-3);
 }
 
 /* The account stays anchored to the common top header on every workspace route. */
@@ -110,7 +110,7 @@
 
 .session-copy h2 {
   margin: 0 0 4px;
-  color: #69786f;
+  color: var(--text-muted-8);
   font-size: 0.6875rem;
   font-weight: 500;
 }
@@ -151,7 +151,7 @@
 .session-notice,
 .forget-review p {
   margin: 6px 0 0;
-  color: #69786f;
+  color: var(--text-muted-8);
   font-size: 0.75rem;
   line-height: 1.65;
   overflow-wrap: anywhere;
@@ -194,7 +194,7 @@
 .session-notice {
   flex-basis: 100%;
   margin: 0;
-  color: #45614c;
+  color: var(--text-muted-9);
 }
 
 .forget-review {
@@ -202,11 +202,11 @@
   min-width: 0;
   border-radius: 12px;
   padding: 18px;
-  background: #faf1e6;
+  background: var(--surface-warn-4);
 }
 
 .forget-review:focus-visible {
-  outline: 3px solid #287a60;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -217,4 +217,38 @@
 
 .forget-review .session-actions {
   margin-top: 14px;
+}
+
+.theme-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-3);
+  font-size: 0.8125rem;
+}
+.theme-choice legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--text-muted-8);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+.theme-choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.theme-choice input {
+  margin: 0;
+  accent-color: var(--wb-selection-text);
+}
+.theme-choice input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }

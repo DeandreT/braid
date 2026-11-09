@@ -16,6 +16,7 @@
             "index": "index.html",
             "tsConfig": "tsconfig.app.json",
             "styles": ["src/style.css"],
+            "assets": [{ "glob": "**/*", "input": "public" }],
             "outputPath": "dist/weft"
           },
           "configurations": {

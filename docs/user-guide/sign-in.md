@@ -37,6 +37,12 @@ Microsoft services.
 **Sign in again** repeats the Microsoft sign-in while you are signed in. It
 replaces your current Weft session with a new one.
 
+## Light and dark appearance
+
+The account menu also has **Appearance**: **Light**, **Dark** or **System**.
+System, the default, follows your device's setting and changes with it. Your
+choice is saved in this browser only.
+
 ## When something goes wrong
 
 - **Sign-in could not be completed**: Microsoft signed you in, but Weft didn't
