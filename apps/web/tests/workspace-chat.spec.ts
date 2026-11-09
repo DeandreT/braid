@@ -166,7 +166,7 @@ test("standalone chat lists both kinds, searches mappings, pins focus and links 
     `/catalog/organizations/${f.data.revision.scope.organizationId}/projects/${otherProject}/mappings/${otherMapping}`,
   );
   const guide = panel(page).getByRole("link", {
-    name: "Open guideSection chat",
+    name: "Open help chat",
     exact: true,
   });
   await expect(guide).toHaveAttribute("href", "/help/chat");
@@ -243,7 +243,7 @@ test("existing revision-pinned conversations continue through the original route
   expect(f.posts).toHaveLength(1);
   await expect(
     panel(page).getByRole("link", {
-      name: "Open saved projectionReport report",
+      name: "Open saved explanation report",
     }),
   ).toHaveAttribute(
     "href",

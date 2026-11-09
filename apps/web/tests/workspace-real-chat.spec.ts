@@ -82,7 +82,7 @@ test("workspace page and exact-focused workbench use real authority, persistence
   ).toBeVisible();
   await expect(
     panel(page).getByRole("link", {
-      name: "Open guideSection chat",
+      name: "Open help chat",
       exact: true,
     }),
   ).toHaveAttribute("href", "/help/chat");
@@ -104,7 +104,7 @@ test("workspace page and exact-focused workbench use real authority, persistence
   ).toHaveCount(0);
   await expect(
     panel(page).getByRole("link", {
-      name: "Open guideSection chat",
+      name: "Open help chat",
       exact: true,
     }),
   ).toBeVisible();

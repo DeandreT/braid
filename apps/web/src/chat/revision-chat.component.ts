@@ -44,6 +44,7 @@ import {
 import { HelpLinkComponent } from "../help/help-link.component";
 import {
   citationLink,
+  citationName,
   conversationScope,
   isWorkspace,
   type AnyConversation,
@@ -79,6 +80,7 @@ export class RevisionChatComponent {
   readonly workspaceCitation = output<WorkspaceCitationEvent>();
   readonly selectedConversation = output<AnyConversation>();
   readonly isWorkspace = isWorkspace;
+  readonly citationName = citationName;
   readonly citationLink = (citation: WorkspaceCitation): string => {
     const link = citationLink(citation),
       current = this.current();

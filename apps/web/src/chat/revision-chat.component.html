@@ -425,7 +425,7 @@
                             [attr.data-role]="chipRole(item.target.kind)"
                             (click)="follow(item)"
                           >
-                            Show {{ item.target.kind }}
+                            Show {{ citationName(item.target.kind) }}
                             {{
                               item.target.resourceId ??
                                 item.target.diagnosticOrdinal ??
@@ -439,7 +439,8 @@
                             [href]="legacyCitationLink(item)"
                             target="_blank"
                             rel="noopener"
-                            >Open saved {{ item.target.kind }} report</a
+                            >Open saved
+                            {{ citationName(item.target.kind) }} report</a
                           >
                         }
                       </li>
@@ -467,7 +468,7 @@
                             "
                             (click)="workspaceCitation.emit(item)"
                           >
-                            Show {{ item.citation.target?.kind }}
+                            Show {{ citationName(item.citation.target?.kind) }}
                             {{
                               item.citation.target?.resourceId ??
                                 item.citation.target?.diagnosticOrdinal ??
@@ -485,7 +486,7 @@
                             [href]="citationLink(item.citation)"
                             target="_blank"
                             rel="noopener"
-                            >Open {{ item.citation.kind }}
+                            >Open {{ citationName(item.citation.kind) }}
                             {{ item.citation.sectionId ?? "" }}</a
                           >
                         }

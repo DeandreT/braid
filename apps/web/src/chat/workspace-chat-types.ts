@@ -274,6 +274,24 @@ export function conversationScope(
     ? { organizationId }
     : conversation.revision!;
 }
+const citationNames: Record<string, string> = {
+  revision: "version",
+  previewRun: "preview run",
+  regressionCase: "test case",
+  regressionRun: "test run",
+  buildRun: "build",
+  buildApproval: "build approval",
+  buildEnvironment: "build environment",
+  guideSection: "help",
+  projectionDiagnostic: "explanation issue",
+  validationDiagnostic: "validation issue",
+  projectionReport: "explanation",
+  validationReport: "validation",
+};
+/** Reader-facing name for a citation or selector kind. */
+export function citationName(kind: string | null | undefined): string {
+  return kind ? (citationNames[kind] ?? kind) : "";
+}
 export function citationLink(c: WorkspaceCitation): string {
   if (c.kind === "guideSection") return "/help/" + c.sectionId;
   if (
