@@ -76,9 +76,6 @@ function revisionPath(): string {
 async function open(page: Page): Promise<void> {
   await page.goto(revisionPath());
   await page.getByRole("tab", { name: "Tests", exact: true }).click();
-  await region(page)
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
   await expect(
     region(page).getByRole("button", { name: "Refresh cases", exact: true }),
   ).toBeEnabled();
@@ -240,9 +237,6 @@ test("actual saved cases execute independently, survive restart and respect acce
   await owner.control("restart");
   await open(page);
   await region(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
-  await region(page)
     .getByRole("button", { name: "Open run " + malformed, exact: true })
     .click();
   await expect(region(page)).toContainText(
@@ -282,9 +276,6 @@ test("actual saved cases execute independently, survive restart and respect acce
   ).toHaveCount(0);
   await owner.control("restart-profile", { profile: "publisher" });
   await open(page);
-  await region(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
   await region(page)
     .getByRole("button", { name: "Open run " + last, exact: true })
     .click();

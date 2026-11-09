@@ -1,8 +1,9 @@
 # Regression browser
 
 The revision page loads its regression panel separately from preview execution.
-Use **Load regression cases** to read the server's current capabilities and saved
-case metadata. The panel does not infer enablement or sample access from a local
+Showing the **Tests** view reads the server's current capabilities, saved case
+metadata and your run history once per admitted context; a hidden view sends
+nothing. The panel does not infer enablement or sample access from a local
 role label.
 
 ## Fixtures and versions
@@ -61,9 +62,9 @@ The open editor and any uncertain publication or run request belong to the
 mode, principal, organization and Session identity context that loaded the
 panel, and to the displayed revision. A failed, timed-out or negative session
 check, or a refresh that replaces the panel, only suspends that work in a
-page-scoped provider. The panel then states that work is kept, and the next
-**Load regression cases** by the same owner on the same revision restores it
-without sending anything. A fresh context for another owner, another revision,
+page-scoped provider. The panel then states that work is kept, and its next
+load by the same owner on the same revision restores it without sending
+anything. A fresh context for another owner, another revision,
 leaving the page or an explicit replacement or abandonment discards it. A
 restored editor requires current publication permission. An explicit denial of
 sample access also removes previously displayed samples, results, drafts and

@@ -46,9 +46,6 @@ test("readable saved timestamps retain their exact value through a keyboard disc
 }) => {
   await workbench(page);
   await page.getByRole("tab", { name: "Tests", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
   const metadata = page.locator(".wb-case-table weft-metadata-value");
   const summary = metadata.locator("summary");
   await expect(summary).toContainText("UTC");
@@ -501,13 +498,7 @@ test("selected saved case and run survive workflow changes without writes or num
   const fixture = await workbench(page);
   await page.getByRole("tab", { name: "Tests", exact: true }).click();
   await page
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
-  await page
     .getByRole("button", { name: "Open Exact number sample", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Load run history", exact: true })
     .click();
   await page
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
@@ -571,9 +562,6 @@ test("selected saved case and run survive workflow changes without writes or num
 test("revoked sample access clears dock and table values", async ({ page }) => {
   const fixture = await workbench(page);
   await page.getByRole("tab", { name: "Tests", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
   await page
     .getByRole("button", { name: "Open Exact number sample", exact: true })
     .click();

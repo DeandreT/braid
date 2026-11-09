@@ -109,6 +109,8 @@ export class RevisionReportState {
   private linking = true;
   private attemptedLink: string | null = null;
   private unlinkedValidationId: string | null = null;
+  /** Operations generated automatically for this selection; each is attempted once. */
+  private readonly autoEnsured = new Set<RevisionReportOperation>();
   private destroyed = false;
 
   readonly refreshingAdmission = this.refreshing.asReadonly();
@@ -135,6 +137,13 @@ export class RevisionReportState {
       admitted.mapping.access.actions.deriveReports &&
       !this.working()
     );
+  });
+  /** Why a missing report cannot be generated from this view, if it cannot. */
+  readonly ensureBlocked = computed<"disabled" | "permission" | null>(() => {
+    const admitted = this.admitted();
+    if (!admitted || !this.canRead()) return null;
+    if (!admitted.context.features.deriveReports) return "disabled";
+    return admitted.mapping.access.actions.deriveReports ? null : "permission";
   });
   readonly projection = computed(() =>
     this.present(this.projectionPane.value()),
@@ -231,6 +240,7 @@ export class RevisionReportState {
     if (!sameSelection) {
       this.linking = true;
       this.unlinkedValidationId = null;
+      this.autoEnsured.clear();
     }
     this.attemptedLink = null;
     this.resetPanes();
@@ -559,6 +569,28 @@ export class RevisionReportState {
       if (response.body.state === "pending")
         controller.value.update((value) => ({ ...value, checkAgain: true }));
       this.maybeLinkValidation();
+      this.maybeAutoEnsure();
+    }
+  }
+
+  /**
+   * A report read as never generated is requested once, when this view may request it, so
+   * opening a revision is enough. A failed attempt waits for an explicit retry.
+   */
+  private maybeAutoEnsure(): void {
+    if (!this.canEnsure()) return;
+    for (const operation of ["projection", "validation"] as const) {
+      const value = this.value(operation);
+      if (
+        value.pinned ||
+        value.phase !== "ready" ||
+        value.response?.body.state !== "notDerived" ||
+        this.autoEnsured.has(operation)
+      )
+        continue;
+      this.autoEnsured.add(operation);
+      this.ensure(operation);
+      return;
     }
   }
 
@@ -725,6 +757,7 @@ export class RevisionReportState {
     this.refreshing.set(false);
     this.working.set(false);
     this.maybeLinkValidation();
+    this.maybeAutoEnsure();
   }
 
   private cancelPane<T extends RevisionReport>(controller: Pane<T>): void {

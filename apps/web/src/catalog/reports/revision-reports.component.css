@@ -283,3 +283,29 @@
   padding: 4px 6px;
   margin: 0;
 }
+.report-generation:not(:empty) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  background: #eef5e6;
+}
+.report-generation p {
+  margin: 0;
+}
+.report-cta {
+  margin: 12px 6px;
+  padding: 16px 18px;
+  border: 2px solid #b38848;
+  border-radius: 8px;
+  background: #faf4e9;
+  color: #5c4527;
+}
+.report-cta h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+.report-cta p {
+  margin: 0 0 10px;
+}

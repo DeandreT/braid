@@ -31,11 +31,11 @@ If any of these is missing, Weft refuses the approval or the build.
 
 ## Prepare a build
 
-1. In the workbench, open the **Prepare** view and choose
-   **Load preparation controls**.
+1. In the workbench, open the **Prepare** view. Weft loads its environments,
+   your approvals, your preparation history and saved test runs.
 2. Under **Environment version**, choose an active environment.
-3. Under **Required test result**, choose **Load saved regression runs**, then
-   **Verify this evidence** next to a finished run. Weft checks that its result
+3. Under **Required test result**, choose **Verify this evidence** next to a
+   finished run. Weft checks that its result
    matches the saved expectation.
 4. Choose **Approve preparation**. This records your approval of this
    revision, environment and test result.

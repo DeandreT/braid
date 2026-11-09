@@ -107,18 +107,23 @@ class RegressionFixture {
     );
     await page.goto(revisionPath(scope));
     await page.getByRole("tab", { name: "Tests", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Load regression cases", exact: true })
-      .click();
     await expect(
       page.getByRole("button", { name: "Refresh cases", exact: true }),
     ).toBeVisible();
   }
+  capabilityReads = 0;
+  caseReads = 0;
+  historyReads = 0;
   private async route(route: Route) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    if (path.endsWith("/capabilities"))
+    if (path.endsWith("/capabilities")) {
+      this.capabilityReads++;
       return route.fulfill({ json: this.capabilities });
+    }
+    if (request.method() === "GET" && path.endsWith("/regression-cases"))
+      this.caseReads++;
+    if (path.endsWith("/regression-runs")) this.historyReads++;
     if (request.method() === "GET" && path.endsWith("/regression-cases"))
       return route.fulfill({
         json: {
@@ -286,6 +291,39 @@ test("document regression saves explicit media and comparison options without fi
 const panel = (page: Page) =>
   page.getByRole("region", { name: "Regression tests", exact: true });
 
+test("the Tests tab loads cases and run history once when shown, and not while hidden", async ({
+  page,
+}) => {
+  const fixture = new RegressionFixture();
+  await syntheticCatalog(page);
+  await page.route(new RegExp(root + "/regression-"), (route) =>
+    fixture["route"](route),
+  );
+  await page.goto(revisionPath(scope));
+  await expect(
+    page.getByRole("tab", { name: "Tests", exact: true }),
+  ).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(fixture.capabilityReads).toBe(0);
+  await page.getByRole("tab", { name: "Tests", exact: true }).click();
+  await expect(
+    panel(page).getByRole("button", { name: "Open Order fixture" }),
+  ).toBeVisible();
+  await expect(
+    panel(page).getByRole("button", { name: `Open run ${RUN}`, exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Data mapping", exact: true }).click();
+  await page.getByRole("tab", { name: "Tests", exact: true }).click();
+  await expect(
+    panel(page).getByRole("button", { name: "Refresh cases", exact: true }),
+  ).toBeVisible();
+  expect([
+    fixture.capabilityReads,
+    fixture.caseReads,
+    fixture.historyReads,
+  ]).toEqual([1, 1, 1]);
+});
+
 test("document comparison choices survive same-owner draft recovery", async ({
   page,
 }) => {
@@ -329,9 +367,9 @@ test("document comparison choices survive same-owner draft recovery", async ({
     );
   await failSessionCheck(page, "unavailable");
   await recoverAccess(page);
-  await panel(page)
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
+  await expect(
+    panel(page).getByRole("button", { name: "Refresh cases", exact: true }),
+  ).toBeVisible();
   await expect(
     panel(page).getByLabel("Comparison policy", { exact: true }),
   ).toHaveValue("weft.regression.edi-segments.v1");
@@ -367,9 +405,6 @@ test("document regression renders bounded segment locations and invalid-document
     component: 1,
   };
   await fixture.install(page);
-  await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
   await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
@@ -455,9 +490,6 @@ test("another revision's run cannot replace the selected case or expose its outp
   };
   await fixture.install(page);
   await openCase(page);
-  await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
   await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
@@ -564,9 +596,6 @@ test("recovering a new fixture clears a previously selected run from another cas
   await fixture.install(page);
   await openCase(page);
   await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
-  await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
   await expect(
@@ -624,7 +653,7 @@ test("viewer loads metadata without touching samples or run history", async ({
     panel(page).getByRole("button", { name: "New test case" }),
   ).toHaveCount(0);
   await expect(
-    panel(page).getByRole("button", { name: "Load run history" }),
+    panel(page).getByRole("button", { name: "Refresh run history" }),
   ).toHaveCount(0);
   expect(fixture.reads).toBe(0);
 });
@@ -721,9 +750,6 @@ test("failed comparison displays a byte offset rather than a passing result", as
   fixture.response = run("completed", "failed");
   await fixture.install(page);
   await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
-  await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
   await expect(panel(page)).toContainText("Result differs from expected");
@@ -740,9 +766,6 @@ test("running case can be canceled without fabricating a comparison", async ({
   fixture.response = run("running");
   await fixture.install(page);
   await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
-  await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
   await panel(page)
@@ -758,9 +781,6 @@ test("a malformed passing response is rejected", async ({ page }) => {
   fixture.response.comparison!.totalDifferences = 1;
   await fixture.install(page);
   await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
-  await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
   await expect(panel(page).getByRole("alert")).toContainText(
@@ -775,9 +795,6 @@ test("output text is never interpreted as HTML", async ({ page }) => {
     '<img src=x onerror="window.injected=true">',
   ).toString("base64url");
   await fixture.install(page);
-  await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
   await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
@@ -798,9 +815,6 @@ test("same-session authority refusal clears cached samples and download controls
   const fixture = new RegressionFixture();
   await fixture.install(page);
   await openCase(page);
-  await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
   await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
@@ -950,9 +964,6 @@ for (const defect of [
     if (defect === "arrayState") response.run.state = ["completed"];
     if (defect === "arrayOutcome") response.comparison.outcome = ["passed"];
     await fixture.install(page);
-    await panel(page)
-      .getByRole("button", { name: "Load run history", exact: true })
-      .click();
     if (defect !== "arrayState")
       await panel(page)
         .getByRole("button", { name: `Open run ${RUN}`, exact: true })
@@ -1055,7 +1066,7 @@ async function failSessionCheck(
   await expect(panel(page)).toHaveCount(0);
 }
 
-/** The shell Retry restores status and context only; the revision read and panel load stay explicit. */
+/** The shell Retry restores status and context only; the revision read stays explicit. The shown panel then loads itself. */
 async function recoverAccess(page: Page) {
   await workspaceAccess(page)
     .getByRole("button", { name: "Retry", exact: true })
@@ -1066,10 +1077,7 @@ async function recoverAccess(page: Page) {
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await page.getByRole("tab", { name: "Tests", exact: true }).click();
   await expect(
-    panel(page).getByRole("button", {
-      name: "Load regression cases",
-      exact: true,
-    }),
+    panel(page).getByRole("button", { name: "Refresh cases", exact: true }),
   ).toBeVisible();
 }
 
@@ -1126,17 +1134,9 @@ for (const failure of ["unavailable", "timeout"] as const) {
     await enterDraft(page);
     await failSessionCheck(page, failure);
     await recoverAccess(page);
-    // The kept draft is announced but stays hidden until the panel's own fresh admission.
-    await expect(panel(page)).toContainText(
-      "An unsaved test case draft is kept in this tab",
-    );
-    await expect(
-      panel(page).getByLabel("Test name", { exact: true }),
-    ).toHaveCount(0);
-    await panel(page)
-      .getByRole("button", { name: "Load regression cases", exact: true })
-      .click();
+    // The panel's own fresh admission loads cases and restores the kept draft unsent.
     await expectDraft(page);
+    expect(fixture.publications).toEqual([]);
     await panel(page)
       .getByRole("button", { name: "Save test version", exact: true })
       .click();
@@ -1278,10 +1278,9 @@ test("result polling waits out a routine check without taking keyboard focus", a
   fixture.response = run("running");
   await fixture.install(page);
   const history = panel(page).getByRole("button", {
-    name: "Load run history",
+    name: "Refresh run history",
     exact: true,
   });
-  await history.click();
   await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
@@ -1337,9 +1336,6 @@ test("an uncertain publication keeps its original request across a failed sessio
   ).toBeVisible();
   await failSessionCheck(page, "unavailable");
   await recoverAccess(page);
-  await panel(page)
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
   await expect(
     panel(page).getByRole("heading", { name: "Check previous save" }),
   ).toBeVisible();
@@ -1368,12 +1364,6 @@ test("a confirmed owner change clears the unsent draft", async ({ page }) => {
   );
   await recoverAccess(page);
   await expect(panel(page)).not.toContainText("draft is kept");
-  await panel(page)
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
-  await expect(
-    panel(page).getByRole("button", { name: "Refresh cases", exact: true }),
-  ).toBeVisible();
   await expect(
     panel(page).getByLabel("Test name", { exact: true }),
   ).toHaveCount(0);
@@ -1394,9 +1384,6 @@ test("active result polling resumes after a slower history request", async ({
   fixture.response = run("running");
   await fixture.install(page);
   await panel(page)
-    .getByRole("button", { name: "Load run history", exact: true })
-    .click();
-  await panel(page)
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
     .click();
   let release!: () => void;
@@ -1411,7 +1398,7 @@ test("active result polling resumes after a slower history request", async ({
   });
   try {
     await panel(page)
-      .getByRole("button", { name: "Load run history", exact: true })
+      .getByRole("button", { name: "Refresh run history", exact: true })
       .click();
     await expect.poll(() => entered).toBe(true);
     await page.clock.fastForward(2500);
@@ -1419,7 +1406,7 @@ test("active result polling resumes after a slower history request", async ({
     release();
     await expect(
       panel(page).getByRole("button", {
-        name: "Load run history",
+        name: "Refresh run history",
         exact: true,
       }),
     ).toBeEnabled();

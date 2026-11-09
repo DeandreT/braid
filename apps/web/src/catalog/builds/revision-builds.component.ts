@@ -99,6 +99,8 @@ export class RevisionBuildsComponent {
   readonly mapping = input.required<CatalogMapping>();
   readonly revision = input.required<CatalogRevision>();
   readonly workbench = input(false);
+  /** Records load once the panel is shown; a hidden workbench tab sends nothing. */
+  readonly active = input(true);
   private readonly api = inject(BuildApi);
   private readonly regression = inject(RegressionApi);
   private readonly catalog = inject(CatalogApi);
@@ -155,6 +157,20 @@ export class RevisionBuildsComponent {
         this.clear(false);
       });
     });
+    // One automatic read per admitted context; a failed or invalidated one waits for a fresh context.
+    let autoContext: CatalogContext | null = null;
+    effect(() => {
+      const context = this.context();
+      if (
+        !this.active() ||
+        this.capabilities() ||
+        this.busy() ||
+        context === autoContext
+      )
+        return;
+      autoContext = context;
+      untracked(() => this.load());
+    });
     // A failed or negative check is not a new owner: hide build metadata but keep the frame.
     const invalidation = this.sessions.invalidated.subscribe(() =>
       this.clear(false),
@@ -179,11 +195,16 @@ export class RevisionBuildsComponent {
         }
         this.capabilities.set(cap);
         this.blocked.set(false);
-        this.loadEnvironments();
+        // send runs one read at a time; regression runs go last because they may be disabled.
+        this.loadEnvironments(false, () =>
+          this.loadApprovals(false, () =>
+            this.loadHistory(false, () => this.loadEvidence()),
+          ),
+        );
       },
     );
   }
-  loadEnvironments(next = false): void {
+  loadEnvironments(next = false, then?: () => void): void {
     if (!this.capabilities()?.readOwnMetadata) return;
     const page = this.environments();
     const after =
@@ -212,6 +233,7 @@ export class RevisionBuildsComponent {
                     ))),
             ) || null,
           );
+        then?.();
       },
     );
   }
@@ -282,7 +304,7 @@ export class RevisionBuildsComponent {
       ),
     );
   }
-  loadEvidence(next = false): void {
+  loadEvidence(next = false, then?: () => void): void {
     const after = next ? this.evidencePage()?.nextRunId : undefined;
     this.send(
       this.regression.runs(
@@ -290,7 +312,10 @@ export class RevisionBuildsComponent {
         this.mapping().scope,
         after || undefined,
       ),
-      (value) => this.evidencePage.set(value),
+      (value) => {
+        this.evidencePage.set(value);
+        then?.();
+      },
       "evidence",
     );
   }
@@ -345,7 +370,7 @@ export class RevisionBuildsComponent {
       captureApproval(this.owner(), environment, evidence.runId),
     );
   }
-  loadApprovals(next = false): void {
+  loadApprovals(next = false, then?: () => void): void {
     const after = next ? this.approvals()?.nextApprovalId : undefined;
     this.send(
       this.api.approvals(
@@ -353,7 +378,10 @@ export class RevisionBuildsComponent {
         this.mapping().scope,
         after || undefined,
       ),
-      (value) => this.approvals.set(value),
+      (value) => {
+        this.approvals.set(value);
+        then?.();
+      },
     );
   }
   openApproval(id: string): void {
@@ -380,11 +408,14 @@ export class RevisionBuildsComponent {
         value.environment,
       );
   }
-  loadHistory(next = false): void {
+  loadHistory(next = false, then?: () => void): void {
     const after = next ? this.history()?.nextBuildId : undefined;
     this.send(
       this.api.runs(this.admitted(), this.mapping().scope, after || undefined),
-      (value) => this.history.set(value),
+      (value) => {
+        this.history.set(value);
+        then?.();
+      },
     );
   }
   openRun(id: string): void {

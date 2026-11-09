@@ -108,6 +108,7 @@
             [mapping]="view.mapping"
             [revision]="view.revision"
             [workbench]="true"
+            [active]="workbench.selection().view === 'tests'"
             (documentSelected)="showRegressionDocument($event)"
           />
         </div>
@@ -120,6 +121,7 @@
             [mapping]="view.mapping"
             [revision]="view.revision"
             [workbench]="true"
+            [active]="workbench.selection().view === 'builds'"
           />
         </div>
         <div
@@ -152,8 +154,9 @@
             type="button"
             (click)="loadRevisions()"
             [disabled]="historyBusy()"
+            [attr.aria-busy]="historyBusy() ? 'true' : null"
           >
-            {{ historyBusy() ? "Reading…" : "Read version history" }}</button
+            {{ historyBusy() ? "Reading…" : "Refresh version history" }}</button
           ><button type="button" (click)="viewCurrentHead(view.mapping.scope)">
             View latest version
           </button>

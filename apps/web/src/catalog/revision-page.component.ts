@@ -492,6 +492,17 @@ export class RevisionPageComponent extends CatalogRoutePage<
         this.switcherPaths.clear();
       });
     });
+    effect(() => {
+      if (
+        this.workbench.selection().view === "revisions" &&
+        this.data() &&
+        this.context() &&
+        !this.revisionHistory() &&
+        !this.historyBusy() &&
+        !this.historyError()
+      )
+        untracked(() => this.loadRevisions());
+    });
     // Recovery providers keep unsent work across boundaries and clear it on a confirmed new owner.
     const invalidation = this.contexts.invalidated.subscribe(() =>
       this.reports.unbind(),

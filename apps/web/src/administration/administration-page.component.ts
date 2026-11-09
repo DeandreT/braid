@@ -235,6 +235,11 @@ export class AdministrationPageComponent {
       this.retainedOwner = identity;
       this.owner = context;
       this.admitted.set(context);
+      if (!this.adminProjects()) {
+        // A read started under the previous generation would be discarded.
+        this.adminProjectsRead?.unsubscribe();
+        this.loadAdminProjects();
+      }
       await this.load(context, generation);
     } catch {
       if (generation === this.generation)
@@ -245,7 +250,7 @@ export class AdministrationPageComponent {
       if (generation === this.generation) this.busy.set(false);
     }
   }
-  /** An explicit read of the first catalog page; the page never lists projects on its own. */
+  /** Reads the first catalog page with each admitted access read until a list is shown. */
   loadAdminProjects(): void {
     const context = this.admitted();
     if (!context || !this.presented() || this.adminProjectsRead) return;

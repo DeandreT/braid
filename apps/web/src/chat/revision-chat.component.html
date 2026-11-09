@@ -221,30 +221,24 @@
         >Find mapping<input
           data-chat-focus-start
           [value]="focusQuery()"
-          (input)="focusQuery.set($any($event.target).value)"
+          (input)="typeFocus($any($event.target).value)"
           [disabled]="busy() || hasPending()"
           maxlength="128"
       /></label>
-      <button
-        type="button"
-        (click)="searchFocus()"
-        [disabled]="busy() || hasPending()"
-      >
-        Search mappings
-      </button>
       <p role="status" class="chat-muted">{{ focusNotice() }}</p>
       @if (moreFocus()) {
         <button
           type="button"
           (click)="searchFocus(true)"
-          [disabled]="busy() || hasPending()"
+          [disabled]="busy() || hasPending() || focusBusy()"
         >
-          Search more mappings
+          Show more mappings
         </button>
       }
       <label
         >Mapping focus<select
           aria-label="Mapping focus"
+          [attr.aria-busy]="focusBusy() ? 'true' : null"
           [value]="newFocus()?.mappingId ?? ''"
           (change)="chooseFocus($any($event.target).value)"
           [disabled]="busy() || hasPending()"

@@ -653,16 +653,10 @@ test("workbench regression test", async ({ page }, testInfo) => {
   await workbench(page);
   await page.getByRole("tab", { name: "Tests", exact: true }).click();
   await page
-    .getByRole("button", { name: "Load regression cases", exact: true })
-    .click();
-  await page
     .getByRole("button", {
       name: "Open Single-line purchase order",
       exact: true,
     })
-    .click();
-  await page
-    .getByRole("button", { name: "Load run history", exact: true })
     .click();
   await page
     .getByRole("button", { name: `Open run ${RUN}`, exact: true })
@@ -689,12 +683,6 @@ test("workbench build preparation", async ({ page }, testInfo) => {
     name: "Prepare this version",
     exact: true,
   });
-  await panel
-    .getByRole("button", { name: "Load preparation controls", exact: true })
-    .click();
-  await panel
-    .getByRole("button", { name: "Load saved regression runs", exact: true })
-    .click();
   await panel
     .getByRole("button", { name: "Verify this evidence", exact: true })
     .click();

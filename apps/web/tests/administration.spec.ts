@@ -296,7 +296,7 @@ test("account warning includes an in-flight administration mutation but not a co
   }
 });
 
-test("a projects read that settles after an owner change never shows the old owner's projects", async ({
+test("projects you administer load without a click, and a read that settles after an owner change never shows the old owner's projects", async ({
   page,
 }) => {
   const fixture = await install(page, true);
@@ -309,28 +309,33 @@ test("a projects read that settles after an owner change never shows the old own
     scope: { organizationId: org, projectId: project },
   };
   oldProject.access.role = "administrator";
+  const newProject = {
+    ...structuredClone(oldProject),
+    name: "Current owner project",
+  };
   await page.route(
     `**/api/v1/organizations/${org}/projects*`,
     async (route) => {
-      reads += 1;
+      const read = ++reads;
       await held;
-      await route.fulfill({
-        json: { projects: [oldProject], nextCursor: null },
-      });
+      await route
+        .fulfill({
+          json: {
+            projects: [read === 1 ? oldProject : newProject],
+            nextCursor: null,
+          },
+        })
+        .catch(() => {});
     },
   );
   await page.goto("/administration");
   await expect(
     page.getByRole("heading", { name: "Organization members", exact: true }),
   ).toBeVisible();
-  const show = page.getByRole("button", {
-    name: "Show projects you administer",
-    exact: true,
-  });
-  await show.click();
   await expect.poll(() => reads).toBe(1);
-  // A second click while the read is in flight is ignored.
-  await show.click();
+  await expect(
+    page.getByText("Loading projects you administer…"),
+  ).toBeVisible();
   // Another owner is admitted before the first read settles.
   fixture.identityContext = `v1.${"C".repeat(42)}A`;
   fixture.actor = otherProject;
@@ -345,14 +350,15 @@ test("a projects read that settles after an owner change never shows the old own
   await expect(
     page.getByRole("heading", { name: "Organization members", exact: true }),
   ).toBeVisible();
+  await expect.poll(() => reads).toBe(2);
   release();
-  await page.waitForTimeout(500);
-  await expect(page.getByText("Previous owner project")).toHaveCount(0);
   await expect(
-    page.getByRole("list", { name: "Projects you administer" }),
-  ).toHaveCount(0);
-  await expect(show).toBeVisible();
-  expect(reads).toBe(1);
+    page
+      .getByRole("list", { name: "Projects you administer" })
+      .getByText("Current owner project", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Previous owner project")).toHaveCount(0);
+  expect(reads).toBe(2);
 });
 
 test("unavailable session checks hide administration drafts and restore only the same owner", async ({
@@ -506,9 +512,11 @@ test("a concurrent edit is not retried and requires an explicit fresh read", asy
   fixture.fail = 412;
   await page.goto("/administration");
   await page.getByRole("button", { name: "Suspend", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "Administration changed since you opened it",
-  );
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Administration changed since you opened it" }),
+  ).toBeVisible();
   expect(fixture.writes).toHaveLength(1);
   await expect(
     page.getByRole("button", { name: "Suspend", exact: true }),

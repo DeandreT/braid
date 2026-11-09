@@ -2,24 +2,28 @@
   class="catalog-summary regression-panel"
   [class.regression-intro]="!capabilities()"
   aria-labelledby="regression-title"
+  [attr.aria-busy]="busy() ? 'true' : null"
 >
   <h2 id="regression-title">Regression tests</h2>
   @if (!capabilities()) {
     <p>
       Save test cases and compare their results, including exact formatting.
-      These are not production payloads. Cases load only when you ask.
+      These are not production payloads.
     </p>
     @if (kept(); as message) {
       <p role="status">{{ message }}</p>
     }
-    <button
-      class="catalog-button catalog-button-primary"
-      type="button"
-      (click)="load()"
-      [disabled]="busy()"
-    >
-      Load regression cases
-    </button>
+    @if (busy()) {
+      <p role="status">Loading regression cases…</p>
+    } @else {
+      <button
+        class="catalog-button catalog-button-primary"
+        type="button"
+        (click)="load()"
+      >
+        Load regression cases
+      </button>
+    }
   }
   <weft-help-link [section]="'regression-tests'"
     >About regression tests</weft-help-link
@@ -91,7 +95,7 @@
           (click)="loadHistory()"
           [disabled]="busy()"
         >
-          Load run history
+          Refresh run history
         </button>
       }
       <p class="regression-policy">

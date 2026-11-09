@@ -187,9 +187,6 @@ test("focus choice distinguishes pinned from following, can be removed before cr
   await openFocus(chat(page));
   await chat(page).getByLabel("Find mapping").fill("Partner");
   await chat(page)
-    .getByRole("button", { name: "Search mappings", exact: true })
-    .click();
-  await chat(page)
     .getByLabel("Mapping focus", { exact: true })
     .selectOption(otherMapping);
   await chat(page).getByRole("button", { name: "Done", exact: true }).click();

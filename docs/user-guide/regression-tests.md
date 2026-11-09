@@ -17,8 +17,8 @@ byte, including formatting. Use test data, not production data.
 
 ## Open the tests
 
-In the workbench, open the **Tests** view and choose **Load regression cases**.
-Weft shows the saved test cases and the comparison it uses (exact bytes). Use
+In the workbench, open the **Tests** view. Weft loads the saved test cases
+and your run history, and shows and the comparison it uses (exact bytes). Use
 **Filter cases** to find a case, and choose **Open** next to it to see its
 inputs, parameters, test date and time, and expected outputs.
 
@@ -70,8 +70,8 @@ output side by side. **Changed output locations** lists the result fields that
 differ; choose one to see it in the mapping. Reviewing a difference never
 changes the expected result.
 
-**Load run history** lists your own runs. Only you can see the results of your
-runs.
+**Your run history** lists your own runs. Only you can see the results of your
+runs. **Refresh run history** reads it again.
 
 ## If a save or run isn't confirmed
 

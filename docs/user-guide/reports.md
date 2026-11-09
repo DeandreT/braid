@@ -20,17 +20,19 @@ headings at the top show each report's state, for example
 
 ## Generate a report
 
-Opening a revision only reads the reports that are already saved. It never
-creates one. If a report says **Not generated**:
+You don't normally need to. The first time anyone who can generate reports
+opens a revision, Weft generates any report that isn't saved yet. While it
+works, the **Data mapping** view says it's generating this version's reports
+and checks their progress for you. Checking never starts another attempt.
 
-1. Open **Report controls and evidence** at the top of the **Data mapping** view.
-2. Choose **Generate explanation** or **Generate validation**.
+If you can't generate reports, or generation is turned off in your workspace,
+the **Data mapping** view says so and who to ask.
 
-While Weft works, the report says **In progress** and the page checks its
-progress for you. Checking never starts another attempt.
-
-If an attempt fails, the report says **Attempt failed** with the reason. Choose
-**Try derivation again** to make another attempt. If a saved result exists but
+If an attempt fails, the view says so and offers **Try generating again**; the
+report also says **Attempt failed** with the reason. A failed attempt is never
+repeated automatically. The same choices, **Generate explanation**,
+**Generate validation** and **Try derivation again**, are under
+**Report controls and evidence**. If a saved result exists but
 can't be read, because it is missing or failed its integrity check, choose
 **Repair saved result**.
 
