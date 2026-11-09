@@ -1,6 +1,10 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Weft.Api;
+using Weft.Api.Catalog;
 using Weft.Application;
 using Weft.Deployment;
 using Weft.Deployment.Sandbox;
@@ -16,6 +20,34 @@ public sealed class LocalSandboxTests : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public async Task Disabled_routes_are_opaque_without_resolving_any_sandbox_or_catalog_credentials()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.AddWeftApi();
+        await using var app = builder.Build();
+        app.MapWeftLocalSandbox();
+        await app.StartAsync();
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { BaseAddress = new(app.Urls.Single()) };
+        var mapping = $"/api/v1/organizations/{Guid.NewGuid():D}/projects/{Guid.NewGuid():D}/mappings/{Guid.NewGuid():D}/sandbox";
+        foreach (var (method, suffix) in new[]
+        {
+            (HttpMethod.Get, ""), (HttpMethod.Post, "/deployments/" + Guid.NewGuid()),
+            (HttpMethod.Get, "/" + Guid.NewGuid() + "/messages"),
+            (HttpMethod.Get, "/" + Guid.NewGuid() + "/messages/" + Guid.NewGuid()),
+            (HttpMethod.Post, "/" + Guid.NewGuid() + "/messages/" + Guid.NewGuid())
+        })
+        {
+            using var request = new HttpRequestMessage(method, mapping + suffix);
+            using var response = await client.SendAsync(request);
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
+        }
+        await app.StopAsync();
     }
 
     [Fact]
