@@ -322,6 +322,7 @@ test("header search, literal safe highlights and query-bound paging", async ({
   ).toHaveText("1 result on this page for “Order”");
   const result = page.locator(".catalog-search-results li");
   await expect(result.locator("mark").first()).toHaveText("Order");
+  await expect(result.locator("p")).toHaveText("Orders:/Order/Id");
   await expect(result.locator("script")).toHaveCount(0);
   await expect(result).toContainText("<script>alert(1)</script>");
   expect(source.requests[0]!.searchParams.get("q")).toBe("Order");

@@ -72,7 +72,7 @@ import {
                     @if (part.highlight) {
                       <mark>{{ part.text }}</mark>
                     } @else {
-                      {{ part.text }}
+                      <span>{{ part.text }}</span>
                     }
                   }
                 </a>
@@ -81,7 +81,7 @@ import {
                     @if (part.highlight) {
                       <mark>{{ part.text }}</mark>
                     } @else {
-                      {{ part.text }}
+                      <span>{{ part.text }}</span>
                     }
                   }
                 </p>
