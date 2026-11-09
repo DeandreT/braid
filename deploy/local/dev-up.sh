@@ -393,6 +393,12 @@ EOF
   chmod 0700 "$dev_home/${action%%:*}.sh"
 done
 
+# ---- Optional demo data, added through the product API like any user; a rerun replays it.
+if [[ ${WEFT_DEV_SEED:-0} == 1 ]]; then
+  step 'Seeding demo data'
+  "$script_dir/dev-seed.sh" || printf 'dev-up: some demo data could not be seeded; see the list above.\n' >&2
+fi
+
 cat <<EOF
 
 Weft is running at $dev_origin/catalog (Development identity, loopback only).
