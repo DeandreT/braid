@@ -41,11 +41,11 @@ public sealed class RemoteInspectionWorkerOptions
 
     /// <summary>Worker admission, the inspection wall deadline and its cleanup, plus transport margin.</summary>
     internal TimeSpan ResponseBound { get; init; } = InspectionTransport.AdmissionWait + DockerWorkerProfile.Inspection.MaximumWallTimeout
-        + DockerInspectionWorkerOptions.CleanupTimeout + DockerInspectionWorkerOptions.KillTimeout + TimeSpan.FromSeconds(5);
+        + DockerInspectionWorkerOptions.DefaultCleanupTimeout + DockerInspectionWorkerOptions.KillTimeout + TimeSpan.FromSeconds(5);
 
     /// <summary>After a cancellation request: creation settlement within the wall budget, cleanup, and margin.</summary>
     internal TimeSpan SettlementBound { get; init; } = DockerWorkerProfile.Inspection.MaximumWallTimeout
-        + DockerInspectionWorkerOptions.CleanupTimeout + TimeSpan.FromSeconds(3);
+        + DockerInspectionWorkerOptions.DefaultCleanupTimeout + TimeSpan.FromSeconds(3);
 
     internal TimeSpan CancelRequestBound { get; init; } = TimeSpan.FromSeconds(5);
 }

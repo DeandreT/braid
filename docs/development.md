@@ -219,6 +219,65 @@ stopping it so a shared Ollama keeps serving the other. Chat on CPU can exceed t
 provider deadlines described in [Local model check](chat-http.md#local-model-check);
 the smaller model answers faster.
 
+### Busy Docker hosts
+
+The local Docker runner gives `docker container create` the operation's wall
+budget (10 s for inspection) and its ownership check and removal two seconds. On a
+loaded machine either can take longer. A removal it cannot confirm pauses that
+runner: operations answer "backend unavailable" while a background reaper retries
+the exact container, and the runner reopens by itself once the removal is confirmed
+([Ferrule worker](ferrule-worker.md#reaping-unconfirmed-containers)). To avoid the
+pauses, raise the budgets before `dev-up.sh`, which passes them to the server and
+worker units:
+
+| Variable | Default | Bound | Purpose |
+| --- | --- | --- | --- |
+| `WEFT_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS` | the wall budget | 1–120 | Separate budget for creating each container; the wall budget then starts after creation |
+| `WEFT_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS` | `2` | 1–120 | Ownership check and removal of each container, and each reaper attempt |
+
+```sh
+WEFT_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS=30 WEFT_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS=20 deploy/local/dev-up.sh
+```
+
+Local server and worker units have a separate 300-second graceful-stop allowance:
+up to 120 seconds of create settlement plus 120 seconds of independent cleanup,
+with 60 seconds for host cancellation/draining and bounded CLI-exit overhead.
+This does not raise worker execution or cleanup limits. The unit stamp includes
+the complete generated invocation, including this stop grace, plus hashes of the
+private environment file and host binary. Policy changes are detected even when
+the environment and binary are unchanged; identical reruns leave the unit running.
+Before stopping a changed active unit, the launcher reads its live numeric
+`TimeoutStopUSec` property through the user bus. It refuses automatic stop or
+replacement if the active grace is below 300 seconds or cannot be confirmed.
+It does not assume a loaded transient service supports changing its timeout at
+runtime. For an older unit, its owner must let original work and container recovery
+settle and arrange an explicitly safe manual stop before rerunning the launcher.
+If settlement cannot be confirmed, leave the unit in place rather than force-stop
+it. Private environment values are never logged.
+
+The maintained unit-composition tests use stub services and synthetic private
+settings, without Docker, systemd or waits. Run them with an existing Bash (Git
+Bash on Windows; `WEFT_TEST_BASH` can select another executable):
+
+```powershell
+py -3.12 -m unittest discover -s deploy/local -p test_dev_units.py -v
+```
+
+An opt-in Linux fixture verifies live property support, refusal before stopping an
+under-budget active unit, settled replacement of an adequately budgeted unit and
+identical-rerun behavior. It uses uniquely named transient user services, synthetic
+Python hosts and short cleanup delays, never Docker or existing instance units.
+It requires the existing user manager and verified Btrfs mount; failures retain
+their private fixture directory rather than force-stop unconfirmed work:
+
+```sh
+python3 deploy/local/test_dev_units_systemd.py --run-owned-user-units \
+  --work-root "$WEFT_TEST_WORK_ROOT" --expected-filesystem-uuid "$WEFT_TEST_FILESYSTEM_UUID"
+```
+
+Set those variables to the owned, verified Btrfs work directory and its expected
+filesystem UUID. There is no fallback to an unspecified temporary filesystem.
+
 ### Demo data
 
 `deploy/local/dev-seed.sh` fills a running instance with invented demo data, or
@@ -251,9 +310,9 @@ Every create uses an idempotency key or resource ID derived from
 `WEFT_DEV_SEED_NAMESPACE` (default `weft-demo-v1`) and the item's name, so a rerun
 replays instead of duplicating. A step that fails is listed at the end, the rest
 still runs, and the script exits non-zero. On a busy host the server's Docker
-runner can stop answering; the seed then stops early, since each upload has a
-limited number of attempts. Restart the server unit
-(`systemctl --user restart weft-dev-server`) and run the seed again. The catalog
+runner can pause while it retries an unconfirmed container cleanup; the seed then
+stops early, since each upload has a limited number of attempts. Run it again once
+the runner has reopened ([Busy Docker hosts](#busy-docker-hosts)). The catalog
 lives in `deploy/local/demo-data/catalog.mjs`;
 `node --test deploy/local/demo-data/seed.test.mjs` checks it without an instance.
 

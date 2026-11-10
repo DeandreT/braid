@@ -23,7 +23,7 @@ public sealed class FerruleWorkerCleanupStabilityTests(ITestOutputHelper output)
         Exception? primary = null, cleanup = null;
         try
         {
-            Assert.Equal(TimeSpan.FromSeconds(2), DockerInspectionWorkerOptions.CleanupTimeout);
+            Assert.Equal(TimeSpan.FromSeconds(2), DockerInspectionWorkerOptions.DefaultCleanupTimeout);
             for (var iteration = 0; iteration < 20; iteration++)
             {
                 var inspected = await backend.InspectAsync(artifact);

@@ -40,7 +40,7 @@ public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunn
             throw new ArgumentException("The request frame exceeds the fixed transport limit.", nameof(requestFrame));
         }
 
-        if (!OperatingSystem.IsLinux() || Volatile.Read(ref unavailable) != 0)
+        if (!OperatingSystem.IsLinux() || Closed)
         {
             return Failed(WorkerProcessFailure.SandboxUnavailable);
         }
@@ -56,7 +56,7 @@ public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunn
 
         try
         {
-            if (Volatile.Read(ref unavailable) != 0)
+            if (Closed)
             {
                 return Failed(WorkerProcessFailure.SandboxUnavailable);
             }
@@ -103,7 +103,11 @@ public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunn
                     // The daemon may create the named container even when the CLI loses its response.
                     // Settle this side effect within the original wall budget even if the caller leaves.
                     cleanupRequired = true;
-                    var create = await CommandAsync(configDirectory, CreateArguments(containerName, operationOwner), ReadOnlyMemory<byte>.Empty, ControlOutputLimit, wallDeadline.Token).ConfigureAwait(false);
+                    // A configured create budget replaces the wall budget for creation only; the wall restarts after it.
+                    using var createDeadline = options.CreateTimeout is { } createTimeout ? new CancellationTokenSource(createTimeout) : null;
+                    if (createDeadline is not null) wallDeadline.CancelAfter(Timeout.InfiniteTimeSpan);
+                    var create = await CommandAsync(configDirectory, CreateArguments(containerName, operationOwner), ReadOnlyMemory<byte>.Empty, ControlOutputLimit, createDeadline?.Token ?? wallDeadline.Token).ConfigureAwait(false);
+                    if (createDeadline is not null) wallDeadline.CancelAfter(options.WallTimeout);
                     cleanupRequired = create.Started;
                     result = Failed(create.Failure == WorkerProcessFailure.None ? WorkerProcessFailure.WorkerFailed : create.Failure);
                     createdContainerId = create.Failure == WorkerProcessFailure.None && create.ExitCode == 0
@@ -140,10 +144,10 @@ public sealed partial class DockerInspectionWorkerRunner : IInspectionWorkerRunn
         {
             if (cleanupRequired && configDirectory is not null)
             {
-                using var cleanupDeadline = new CancellationTokenSource(DockerInspectionWorkerOptions.CleanupTimeout);
+                using var cleanupDeadline = new CancellationTokenSource(options.CleanupTimeout);
                 if (!await RemoveOwnedContainerAsync(configDirectory, containerName, operationOwner, createdContainerId, cleanupDeadline.Token).ConfigureAwait(false))
                 {
-                    Interlocked.Exchange(ref unavailable, 1);
+                    Reap(new(containerName, operationOwner, createdContainerId));
                     result = Failed(WorkerProcessFailure.CleanupFailed);
                 }
             }

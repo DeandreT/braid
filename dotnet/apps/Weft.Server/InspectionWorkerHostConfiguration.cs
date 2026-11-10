@@ -23,9 +23,9 @@ public static class InspectionWorkerHostConfiguration
         services.AddKeyedSingleton<IInspectionWorkerRunner>("interchange", (_, _) =>
             launcher is null
                 ? new DockerInspectionWorkerRunner(new(options.DockerExecutable, options.ImageId,
-                    dockerSocketPath: options.DockerSocketPath, profile: DockerWorkerProfile.Interchange))
+                    dockerSocketPath: options.DockerSocketPath, profile: DockerWorkerProfile.Interchange, budgets: options.Budgets))
                 : new DockerInspectionWorkerRunner(new(options.DockerExecutable, options.ImageId,
-                    dockerSocketPath: options.DockerSocketPath, profile: DockerWorkerProfile.Interchange), launcher));
+                    dockerSocketPath: options.DockerSocketPath, profile: DockerWorkerProfile.Interchange, budgets: options.Budgets), launcher));
         services.AddSingleton<IHostedService>(provider => new InspectionWorkerHostLifetime(
             ((DockerInspectionWorkerRunner)provider.GetRequiredKeyedService<IInspectionWorkerRunner>("interchange")).StopAsync));
         AddInterchange(services);

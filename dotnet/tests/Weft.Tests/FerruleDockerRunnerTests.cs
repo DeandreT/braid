@@ -485,7 +485,7 @@ public sealed partial class FerruleDockerRunnerTests
     }
 
     [Fact]
-    public async Task InterruptedCreateAndUnconfirmedAbsencePermanentlyBlockAdmission()
+    public async Task InterruptedCreateAndUnconfirmedAbsenceBlockAdmission()
     {
         var launcher = new FakeLauncher { Create = FakeProcess.Hanging(), RemovalReportsMissing = true };
         var runner = Runner(launcher, TimeSpan.FromMilliseconds(100));
@@ -607,7 +607,7 @@ public sealed partial class FerruleDockerRunnerTests
     }
 
     [Fact]
-    public async Task FailedRemovalDiscardsSuccessAndPermanentlyBlocksNewAdmission()
+    public async Task FailedRemovalDiscardsSuccessAndBlocksNewAdmission()
     {
         var launcher = new FakeLauncher { Remove = new FakeProcess([], exitCode: 1) };
         var runner = Runner(launcher);
@@ -619,7 +619,7 @@ public sealed partial class FerruleDockerRunnerTests
     }
 
     [Fact]
-    public async Task HungRemovalHasIndependentBoundAndPermanentlyBlocksNewAdmission()
+    public async Task HungRemovalHasIndependentBoundAndBlocksNewAdmission()
     {
         var removal = FakeProcess.Hanging();
         var launcher = new FakeLauncher { Remove = removal };
@@ -662,7 +662,7 @@ public sealed partial class FerruleDockerRunnerTests
         public FakeProcess? Container { get; init; }
         public FakeProcess? Create { get; set; }
         public FakeProcess Worker { get; set; } = new([]);
-        public FakeProcess? Remove { get; init; }
+        public FakeProcess? Remove { get; set; }
         public bool RemovalReportsMissing { get; init; }
         public Func<string, string, string, FakeProcess>? OwnershipInspection { get; init; }
         public Func<string, string, string, FakeProcess>? PolicyInspection { get; init; }

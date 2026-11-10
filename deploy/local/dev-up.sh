@@ -10,6 +10,7 @@ umask 077
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$script_dir/dev-common.sh"
+source "$script_dir/dev-units.sh"
 source_root=$(cd "${WEFT_DEV_SOURCE:-$script_dir/../..}" && pwd)
 read -r -a chat_models <<<"${WEFT_DEV_CHAT_MODELS:-qwen2.5:3b qwen2.5:1.5b}"
 ollama_image=${WEFT_DEV_OLLAMA_IMAGE:-docker.io/ollama/ollama:latest}
@@ -19,7 +20,7 @@ build_log=$dev_logs/build.log
 step() { printf '==> %s\n' "$*"; }
 fail() { printf 'dev-up: %s\n' "$*" >&2; exit 1; }
 
-for tool in docker git node npm curl systemd-run systemctl ss sha256sum; do
+for tool in docker git node npm curl systemd-run systemctl busctl ss sha256sum; do
   command -v "$tool" >/dev/null || fail "$tool is required."
 done
 dotnet=$(command -v dotnet) || fail 'The pinned .NET SDK (global.json) must be on PATH.'
@@ -234,6 +235,8 @@ MODELS=${chat_models[*]} ENDPOINT=$dev_ollama_url/api/chat node -e '
 chmod 0600 "$chat_profiles"
 
 # ---- Host settings: one private environment file per unit, each with only its own logins.
+# Optional Docker CLI budgets for busy hosts reach both units unchanged; the hosts validate them.
+docker_budgets=$(dev_docker_budgets)
 server_env=$dev_config/server.env
 cat >"$server_env" <<EOF
 DOTNET_ENVIRONMENT=Development
@@ -283,6 +286,7 @@ WEFT_RELEASE_OPERATIONS_ENABLED=true
 WEFT_RELEASE_READER_CONNECTION_STRING=$(connection weft_release_reader RELEASE_READER)
 WEFT_RELEASE_WRITER_CONNECTION_STRING=$(connection weft_release_writer RELEASE_WRITER)
 WEFT_QUALIFICATION_READER_CONNECTION_STRING=$(connection weft_qualification_reader QUALIFICATION_READER)
+$docker_budgets
 EOF
 worker_env=$dev_config/worker.env
 cat >"$worker_env" <<EOF
@@ -305,35 +309,12 @@ WEFT_BUILD_ACCESS_CONNECTION_STRING=$(connection weft_runtime RUNTIME)
 WEFT_BUILD_REPORT_READER_CONNECTION_STRING=$(connection weft_report_reader REPORT)
 WEFT_BUILD_REGRESSION_RUN_READER_CONNECTION_STRING=$(connection weft_run_reader RUN_READER)
 WEFT_BUILD_CASE_READER_CONNECTION_STRING=$(connection weft_case_reader CASE_READER)
+$docker_budgets
 EOF
 chmod 0600 "$server_env" "$worker_env"
 
-# ---- Units: transient user services that outlive this shell. A unit restarts only when its build
-# or settings changed. KillMode=mixed stops the host first so it settles its own Docker children.
-start_unit() { # unit host-name environment-file
-  local unit=$1 host=$2 environment=$3 stamp
-  stamp=$(cat "$environment" "$app/$host/$host.dll" | sha256sum | cut -d' ' -f1)
-  if systemctl --user is-active --quiet "$unit"; then
-    [[ $(cat "$dev_home/run/$unit.stamp" 2>/dev/null) != "$stamp" ]] || return 0
-    step "Restarting $unit"
-    systemctl --user stop "$unit"
-  fi
-  systemctl --user reset-failed "$unit" >/dev/null 2>&1 || true
-  [[ $host != Weft.Server || -z $(ss -ltnH "sport = :$dev_port") ]] || fail "Port $dev_port is in use; set WEFT_DEV_PORT."
-  install -d -m 0700 "$dev_home/tmp/$unit"
-  step "Starting $unit (log: $dev_logs/$unit.log)"
-  printf '\n==== %s %s %s\n' "$(date -u +%FT%TZ)" "$unit" "$build_key" >>"$dev_logs/$unit.log"
-  log_offset[$unit]=$(stat -c %s "$dev_logs/$unit.log")
-  systemd-run --user --quiet --unit "$unit" --description "Weft local $host ($dev_name)" \
-    --property "EnvironmentFile=$environment" --property "WorkingDirectory=$app/$host" \
-    --property "StandardOutput=append:$dev_logs/$unit.log" --property "StandardError=append:$dev_logs/$unit.log" \
-    --property KillMode=mixed --property TimeoutStopSec=120 \
-    --setenv "DOTNET_ROOT=$dotnet_root" --setenv "PATH=$dotnet_root:/usr/local/bin:/usr/bin:/bin" \
-    --setenv "TMPDIR=$dev_home/tmp/$unit" --setenv DOTNET_CLI_TELEMETRY_OPTOUT=1 --setenv DOTNET_NOLOGO=1 \
-    --setenv DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false \
-    "$dotnet" "$app/$host/$host.dll"
-  printf '%s\n' "$stamp" >"$dev_home/run/$unit.stamp"
-}
+# ---- Units: the generated invocation, private settings and binary determine the unit stamp.
+# KillMode=mixed lets the host settle Docker children within the independent stop grace.
 declare -A log_offset
 start_unit "$dev_server_unit" Weft.Server "$server_env"
 start_unit "$dev_worker_unit" Weft.Worker "$worker_env"

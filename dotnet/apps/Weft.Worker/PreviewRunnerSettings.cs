@@ -16,13 +16,15 @@ internal sealed class PreviewRunnerSettings
     private readonly FerruleServiceEndpoint? service;
     private readonly X509Certificate2? clientCertificate;
     private readonly AzureSessionsRunnerSettings? sessions;
+    private readonly DockerRunnerBudgets? dockerBudgets;
 
     private PreviewRunnerSettings(FerruleServiceEndpoint? service = null, X509Certificate2? clientCertificate = null,
-        AzureSessionsRunnerSettings? sessions = null)
+        AzureSessionsRunnerSettings? sessions = null, DockerRunnerBudgets? dockerBudgets = null)
     {
         this.service = service;
         this.clientCertificate = clientCertificate;
         this.sessions = sessions;
+        this.dockerBudgets = dockerBudgets;
     }
 
     internal FerruleRunnerKind Kind => service is not null ? FerruleRunnerKind.Service
@@ -48,7 +50,7 @@ internal sealed class PreviewRunnerSettings
             if ((runner != FerruleRunnerKind.Service && FerruleServiceEndpoint.Configured(environment)) ||
                 (runner != FerruleRunnerKind.AzureContainerAppsSessions && AzureSessionsRunnerSettings.Configured(environment)))
                 throw Failure();
-            if (runner == FerruleRunnerKind.Docker) return new();
+            if (runner == FerruleRunnerKind.Docker) return new(dockerBudgets: DockerRunnerBudgets.Read(environment));
             if (runner == FerruleRunnerKind.AzureContainerAppsSessions) return new(sessions: AzureSessionsRunnerSettings.Read(environment));
             string Required(string name) => environment(name) is { Length: > 0 } value ? value : throw Failure();
             var endpoint = FerruleServiceEndpoint.Read(environment);
@@ -81,7 +83,7 @@ internal sealed class PreviewRunnerSettings
                 connector);
         }
         return new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions(settings.DockerExecutable, settings.WorkerImage,
-            profile: compile ? DockerWorkerProfile.Build : DockerWorkerProfile.Preview));
+            profile: compile ? DockerWorkerProfile.Build : DockerWorkerProfile.Preview, budgets: dockerBudgets));
     }
 
 
