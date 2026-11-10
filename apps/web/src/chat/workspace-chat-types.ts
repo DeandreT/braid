@@ -171,6 +171,43 @@ export function workspaceEvent(
   );
 }
 export type MappingWriteEvent = Extract<ChatEvent, { type: "mapping.write" }>;
+export interface MappingWriteReceipt {
+  requestId: string;
+  status: "pending" | "saved" | "notSaved";
+  write: MappingWriteEvent | null;
+}
+export function mappingWriteReceipts(
+  value: unknown,
+  organizationId: string,
+): MappingWriteReceipt[] | null {
+  if (
+    !object(value) ||
+    !Array.isArray(value.receipts) ||
+    value.receipts.length > 8
+  )
+    return null;
+  const ids = new Set<string>();
+  for (const receipt of value.receipts) {
+    if (
+      !object(receipt) ||
+      !isCatalogId(receipt.requestId) ||
+      ids.has(receipt.requestId) ||
+      !["pending", "saved", "notSaved"].includes(String(receipt.status))
+    )
+      return null;
+    ids.add(receipt.requestId);
+    if (
+      receipt.status === "saved"
+        ? !object(receipt.write) ||
+          receipt.write.type !== "mapping.write" ||
+          receipt.write.outcome !== "saved" ||
+          !workspaceEvent(receipt.write, organizationId)
+        : receipt.write !== null
+    )
+      return null;
+  }
+  return value.receipts as MappingWriteReceipt[];
+}
 function mappingWrite(
   value: Record<string, unknown>,
   organizationId: string,

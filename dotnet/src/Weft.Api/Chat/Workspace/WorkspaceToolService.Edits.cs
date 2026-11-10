@@ -18,7 +18,7 @@ public sealed partial class WorkspaceToolService
     /// </summary>
     private async Task<ChatReadOnlyToolResult> SaveEditAsync(CallScope scope, WorkspaceToolCall call, CancellationToken token)
     {
-        if (!features.Edits || services.GetService<MappingDirectEditService>() is not { } editor || scope.Turn is null || scope.CallId is null)
+        if (!features.Edits || services.GetService<MappingDirectEditService>() is not { } editor || scope.Turn is null || scope.CallId is null || scope.RoundId is null)
             throw new WorkspaceToolRefusal(WorkspaceToolOutcome.Unavailable);
         var mapping = await LocateMappingAsync(scope, call.Id("mappingId"), token);
         var baseRevision = new RevisionScope(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, call.Id("baseRevisionId"));
@@ -29,10 +29,32 @@ public sealed partial class WorkspaceToolService
             return Outcome(call.Name, scope.Budget, WorkspaceToolOutcome.InvalidCall, new { problem = "The edit has no operations." });
         var read = await CatalogEndpoints.ReadableMappingAsync(services, scope.Actor, mapping, token) ?? throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
         var revision = await CatalogEndpoints.ReadableRevisionAsync(services, scope.Actor, baseRevision, token) ?? throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
+        var key = WriteKey(scope.Turn.TurnId, scope.CallId);
+        var journal = services.GetService<IChatMappingWriteJournal>();
+        if (journal is not null && (await journal.ReadAsync(scope.Actor, scope.Conversation.Key, scope.Turn.TurnId, token))
+            .SingleOrDefault(item => item.Key == key) is { } prior)
+        {
+            if (prior.Proposal.Base != baseRevision || prior.Proposal.EditDigest != operations.Digest || prior.Proposal.OperationCount != operations.Count)
+                throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
+            // A prior commit is still a success if a later edit moved the head. Never replay it as another append.
+            if (prior.Saved is { } saved) return WriteReply(scope, call, saved);
+            return Outcome(call.Name, scope.Budget, WorkspaceToolOutcome.Unavailable,
+                new { problem = "The save has a durable receipt. Refresh its save status; don't repeat the edit.", requestId = Id(key), status = prior.Status });
+        }
         // Permission is observed now, at write time; the database and ingestion check the same authority again.
-        var write = services.GetService<CatalogMappingEditOptions>()?.Enabled == true && read.Access.Can(ProjectAction.EditMapping) &&
+        var write = journal is not null && services.GetService<CatalogMappingEditOptions>()?.Enabled == true && read.Access.Can(ProjectAction.EditMapping) &&
             read.Summary.BackendId == "ferrule";
-        var result = await editor.ApplyAsync(scope.Actor, baseRevision, operations, WriteKey(scope.Turn.TurnId, scope.CallId), write, token);
+        var result = await editor.ApplyAsync(scope.Actor, baseRevision, operations, key, write, token, async (changeSet, native, ct) =>
+        {
+            scope.SaveKey = key;
+            return await journal!.PrepareAsync(scope.Actor, new(scope.Conversation.Key, scope.Turn.TurnId, scope.RoundId.Value,
+                scope.CallId, key, Proposal(changeSet), native), ct);
+        });
+
+        ChatMappingWriteFact Proposal(IReadOnlyList<MappingEditChange> sourceChanges) => new ChatMappingWriteFact(ChatMappingWriteOutcome.Proposed,
+            ChatMappingWriteReason.NotPermitted, baseRevision, revision.Summary.Sequence, null, null, null, null, operations.Count,
+            operations.Digest, sourceChanges.Take(ChatMappingWriteFact.MaximumChanges).Select(change => new ChatMappingChange(change.Field, change.Before, change.After)).ToArray(),
+            sourceChanges.Count > ChatMappingWriteFact.MaximumChanges).Fitted();
         switch (result.Outcome)
         {
             case MappingDirectEditOutcome.NotAuthorizedOrNotFound: throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
@@ -48,8 +70,7 @@ public sealed partial class WorkspaceToolService
                     message = failure.Message.Length > 256 ? failure.Message[..256] : failure.Message
                 });
             case MappingDirectEditOutcome.Pending:
-                // shortcut: a save still in progress after the bounded wait has no receipt card; the version list shows it once committed.
-                return Outcome(call.Name, scope.Budget, WorkspaceToolOutcome.Unavailable, new { problem = "Saving is still in progress; check the mapping's versions." });
+                return Outcome(call.Name, scope.Budget, WorkspaceToolOutcome.Unavailable, new { problem = "Saving is pending. Its durable save status can be refreshed without repeating the edit.", requestId = Id(key), status = "pending" });
         }
         var changes = result.Changes.Take(ChatMappingWriteFact.MaximumChanges).Select(change => new ChatMappingChange(change.Field, change.Before, change.After)).ToArray();
         var truncated = result.Changes.Count > changes.Length;
@@ -69,7 +90,13 @@ public sealed partial class WorkspaceToolService
         else
             fact = new(ChatMappingWriteOutcome.Proposed, ChatMappingWriteReason.NotPermitted, baseRevision, revision.Summary.Sequence, null, null,
                 null, null, operations.Count, operations.Digest, changes, truncated);
-        fact = fact.Fitted();
+        return WriteReply(scope, call, fact.Fitted());
+    }
+
+    private static ChatReadOnlyToolResult WriteReply(CallScope scope, WorkspaceToolCall call, ChatMappingWriteFact fact)
+    {
+        var baseRevision = fact.Base;
+        var mapping = new MappingScope(baseRevision.OrganizationId, baseRevision.ProjectId, baseRevision.MappingId);
         scope.Written = fact;
         var cited = fact.RevisionId is { } saved ? new RevisionScope(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, saved) : baseRevision;
         var data = new
@@ -98,7 +125,12 @@ public sealed partial class WorkspaceToolService
     }
 
     /// <summary>A write that happened is reported whatever the call returns afterwards.</summary>
-    private static ChatReadOnlyToolResult WithWrite(ChatReadOnlyToolResult result, CallScope? scope) =>
-        scope?.Written is not { } fact || result.MappingWrite is not null ? result
-            : new(result.Result, result.RetrievedNodes, result.Citations, result.WorkspaceCitations, result.DataShared, fact);
+    private static ChatReadOnlyToolResult WithWrite(ChatReadOnlyToolResult result, CallScope? scope)
+    {
+        if (scope?.Written is { } fact)
+            return result.MappingWrite is not null ? result
+                : new(result.Result, result.RetrievedNodes, result.Citations, result.WorkspaceCitations, result.DataShared, fact);
+        return scope?.SaveKey is not { } key ? result : Outcome(WorkspaceToolRegistry.SaveEdit, scope.Budget, WorkspaceToolOutcome.Unavailable,
+            new { problem = "Save status is unconfirmed. Read the durable save receipt before repeating any edit.", requestId = Id(key), status = "unconfirmed" });
+    }
 }

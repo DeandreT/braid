@@ -31,7 +31,7 @@
       (mouseenter)="allowTip('scope')"
       (focus)="allowTip('scope')"
       type="button"
-      aria-label="Read-only"
+      aria-label="Access checked"
       aria-controls="chat-scope-menu"
       aria-describedby="chat-scope-menu"
       [attr.aria-expanded]="menu() === 'scope'"
@@ -40,10 +40,11 @@
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <rect x="5" y="11" width="14" height="10" rx="2" />
         <path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg
-      >Read-only
+      >Access checked
       <span class="chat-tip" role="tooltip"
-        >Read-only tools can read authorized projects, reports, runs and the
-        guide. Chat cannot edit mappings or start runs. Questions:
+        >Tools use your current permissions. When asked, chat can save mapping
+        edits as new versions when editing is configured and permitted. It
+        cannot activate versions or start runs. Questions:
         {{ availability()?.limits?.maxTextBytes ?? 32768 }} UTF-8 bytes.
         Answers: {{ availability()?.limits?.turnSeconds ?? 180 }} seconds.</span
       >
@@ -158,13 +159,15 @@
     <p>
       Ask about any project you can read, saved reports, runs or the user guide.
       Focus guides context; it never limits access to other authorized projects.
-      Chat cannot edit mappings or start runs. Check citations and coverage.
+      When asked, chat can save mapping edits as new versions if you have edit
+      permission. It cannot activate versions or start runs. Check citations and
+      coverage.
     </p>
     @if (availability(); as available) {
       <p>
         {{
           available.toolsEnabled
-            ? "Read-only mapping tools available."
+            ? "Mapping tools available."
             : "Mapping tools are not configured."
         }}
         Questions up to {{ available.limits.maxTextBytes }} UTF-8 bytes; answers
@@ -375,7 +378,7 @@
                   <ul
                     [id]="'chat-tool-activity-' + turn.turnId"
                     class="chat-steplist"
-                    aria-label="Read-only tool activity"
+                    aria-label="Tool activity"
                     [hidden]="!expandedTools().has(turn.turnId)"
                   >
                     @for (tool of view.tools; track tool.key) {
@@ -494,7 +497,51 @@
                     }
                   </ul>
                 }
-                @for (write of view.writes; track write.sequence) {
+                @if (view.saveProblem) {
+                  <p role="status">{{ view.saveProblem }}</p>
+                  <button
+                    type="button"
+                    [disabled]="readingSaves().has(turn.turnId)"
+                    (click)="refreshSaves(turn)"
+                  >
+                    Refresh save status
+                  </button>
+                }
+                @for (receipt of view.saveReceipts; track receipt.requestId) {
+                  <section class="chat-write" aria-label="Mapping save status">
+                    <h3>
+                      {{
+                        receipt.status === "pending"
+                          ? "Save pending"
+                          : "Save not completed"
+                      }}
+                    </h3>
+                    <p>
+                      No saved version is confirmed by this receipt. Don't
+                      repeat the edit.
+                    </p>
+                    <button
+                      type="button"
+                      [disabled]="readingSaves().has(turn.turnId)"
+                      (click)="refreshSaves(turn)"
+                    >
+                      Refresh save status
+                    </button>
+                    @if (receipt.status === "pending") {
+                      <button
+                        type="button"
+                        [disabled]="readingSaves().has(turn.turnId)"
+                        (click)="refreshSaves(turn, true)"
+                      >
+                        Continue pending save
+                      </button>
+                    }
+                  </section>
+                }
+                @for (
+                  write of view.writes;
+                  track write.revisionId ?? write.sequence
+                ) {
                   @let mapping = writeMapping(write);
                   @let key = writeKey(turn, write);
                   <section
@@ -573,7 +620,7 @@
                         <button
                           type="button"
                           [disabled]="!canUpdate()"
-                          (click)="updateWrite(write)"
+                          (click)="updateWrite(turn, write)"
                         >
                           Update for version {{ write.headSequence }}
                         </button>

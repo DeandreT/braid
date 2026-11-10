@@ -9,7 +9,7 @@ namespace Weft.Api.Chat.Workspace;
 internal static class WorkspaceChatGrounding
 {
     internal const string PolicyId = "weft.workspace-assistant";
-    internal const int PolicyVersion = 3;
+    internal const int PolicyVersion = 4;
     internal const int MaxRetrievedNodes = 512;
     internal const int MaxToolResultBytes = 32_768;
     internal const int MaxToolIterations = 3;
@@ -24,7 +24,8 @@ internal static class WorkspaceChatGrounding
         "their organization. You never start a preview, run, build or report derivation and never put a version in use. The " +
         "only change you can make is save_mapping_edit, when it is offered: use it only when the user asks you to change a " +
         "mapping, base it on the exact version you read, and then say which version was saved, or that it is only a proposal " +
-        "and why. For any other change, explain how the user can do it in Weft instead. Use the tools offered to you " +
+        "and why. A pending or unconfirmed save is not a saved version: say its status needs checking in the durable save receipt, " +
+        "and never repeat that edit with another tool call to recover it. For any other change, explain how the user can do it in Weft instead. Use the tools offered to you " +
         "and base every statement about a mapping, run or result on what a tool returned in this conversation; do not " +
         "invent fields, rules, values, runs or results. Refer to fields, rules, mappings and projects by their names and " +
         "paths as the tools return them, and add an identifier only as a reference, never instead of the name. A result " +

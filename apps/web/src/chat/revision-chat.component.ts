@@ -53,6 +53,7 @@ import {
   type ChatScope,
   type ChatFocus,
   type MappingWriteEvent,
+  type MappingWriteReceipt,
   type UiAvailability,
   type WorkspaceCitationEvent,
   type WorkspaceCitation,
@@ -66,6 +67,7 @@ import { RegressionStatusComponent } from "../catalog/automation/regression-stat
 import { DraftApi } from "../edit/draft-api";
 import { UnsentWork } from "../workbench/unsent-work";
 import { hasChatUnsentWork } from "./chat-unsent-work";
+import { mappingUpdateQuestion } from "./mapping-update-question";
 
 @Component({
   selector: "weft-revision-chat",
@@ -272,7 +274,7 @@ export class RevisionChatComponent {
       return {
         label: "Whole workspace",
         detail:
-          "No mapping focus. Read-only tools can use any project you are authorized to read.",
+          "No mapping focus. Tools can use any project you are authorized to read; editing requires current edit permission.",
       };
     const name =
       this.focusMappings().find(
@@ -461,20 +463,106 @@ export class RevisionChatComponent {
         (e): e is WorkspaceCitationEvent => e.type === "workspace.citation",
       ),
       sharedData: (events ?? []).some((e) => e.type === "data.shared"),
-      writes: (events ?? []).filter(
-        (e): e is MappingWriteEvent => e.type === "mapping.write",
+      writes: this.mergeWrites(
+        (events ?? []).filter(
+          (e): e is MappingWriteEvent => e.type === "mapping.write",
+        ),
+        this.saveReceipts()[turn.turnId] ?? [],
       ),
+      saveReceipts: (this.saveReceipts()[turn.turnId] ?? []).filter(
+        (r) => r.status !== "saved",
+      ),
+      saveProblem: this.saveProblems()[turn.turnId] ?? "",
       problem: this.answerProblems()[turn.turnId] ?? "",
     };
   }
 
   private readonly drafts = inject(DraftApi);
+  readonly saveReceipts = signal<Record<string, MappingWriteReceipt[]>>({});
+  readonly saveProblems = signal<Record<string, string>>({});
+  readonly readingSaves = signal<ReadonlySet<string>>(new Set());
+  private readonly saveFlights = new Map<string, Promise<void>>();
+  private saveEpoch = 0;
+  private resetSaveReads(): void {
+    ++this.saveEpoch;
+    this.saveFlights.clear();
+    this.readingSaves.set(new Set());
+  }
+  private mergeWrites(
+    events: MappingWriteEvent[],
+    receipts: MappingWriteReceipt[],
+  ): MappingWriteEvent[] {
+    const writes = [...events];
+    for (const receipt of receipts)
+      if (
+        receipt.write &&
+        !writes.some((w) => w.revisionId === receipt.write!.revisionId)
+      )
+        writes.push(receipt.write);
+    return writes;
+  }
+  async refreshSaves(turn: ChatTurn, recover = false): Promise<void> {
+    const conversation = this.current(),
+      scope = this.activeScope(),
+      generation = this.generation,
+      epoch = this.saveEpoch;
+    if (!conversation || "revisionId" in scope) return;
+    const stale = () =>
+      generation !== this.generation ||
+      epoch !== this.saveEpoch ||
+      this.current()?.conversationId !== conversation.conversationId;
+    const key = `${epoch}:${conversation.conversationId}:${turn.turnId}`;
+    const previous = this.saveFlights.get(key) ?? Promise.resolve();
+    // Serialize a turn's reads without dropping a later refresh. Other turns read independently.
+    const flight = previous.then(async () => {
+      if (stale()) return;
+      try {
+        const receipts = await this.admitted((context, signal) =>
+          this.api.mappingWrites(
+            scope,
+            context,
+            signal,
+            conversation.conversationId,
+            turn.turnId,
+            recover,
+          ),
+        );
+        if (stale()) return;
+        this.saveReceipts.update((all) => ({
+          ...all,
+          [turn.turnId]: receipts,
+        }));
+        this.saveProblems.update((all) => ({ ...all, [turn.turnId]: "" }));
+      } catch {
+        if (!stale())
+          this.saveProblems.update((all) => ({
+            ...all,
+            [turn.turnId]:
+              "Couldn't check durable save status. Refresh before repeating an edit.",
+          }));
+      }
+    });
+    this.saveFlights.set(key, flight);
+    this.readingSaves.update((all) => new Set([...all, turn.turnId]));
+    try {
+      await flight;
+    } finally {
+      if (!stale() && this.saveFlights.get(key) === flight) {
+        this.saveFlights.delete(key);
+        this.readingSaves.update((all) => {
+          const next = new Set(all);
+          next.delete(turn.turnId);
+          return next;
+        });
+      }
+    }
+  }
   /** Per receipt: the Undo request key, retained until its outcome is known so a retry never saves twice. */
   readonly writeStates = signal<
     Record<string, { key: string; busy: boolean; message: string }>
   >({});
   writeKey(turn: ChatTurn, write: MappingWriteEvent): string {
-    return `${turn.turnId}:${write.sequence}`;
+    return `${turn.turnId}:${write.revisionId ?? write.sequence}`;
   }
   writeMapping(write: MappingWriteEvent): CatalogMappingScope {
     const { organizationId, projectId, mappingId } = write.baseRevision;
@@ -548,12 +636,27 @@ export class RevisionChatComponent {
       !this.turns().some((t) => t.phase === "active") &&
       !this.draft().trim(),
   );
-  async updateWrite(write: MappingWriteEvent): Promise<void> {
+  async updateWrite(turn: ChatTurn, write: MappingWriteEvent): Promise<void> {
     if (!this.canUpdate() || this.hasPending() || write.headSequence === null)
       return;
-    this.draft.set(
-      `Update the proposed edit for version ${write.headSequence} and save it.`,
+    const question = mappingUpdateQuestion(
+      turn,
+      write,
+      this.availability()?.limits.maxTextBytes ?? 0,
     );
+    if (question === null) {
+      this.writeStates.update((states) => ({
+        ...states,
+        [this.writeKey(turn, write)]: {
+          key: "",
+          busy: false,
+          message:
+            "The complete intended edit can't be included in one update question. Send a new question specifying the mapping and intended change; nothing was sent or saved.",
+        },
+      }));
+      return;
+    }
+    this.draft.set(question);
     await this.send();
   }
   readonly transcript = computed(() =>
@@ -906,6 +1009,9 @@ export class RevisionChatComponent {
     this.problemAtComposer.set(false);
     this.followBottom = true;
     this.savedEvents.set({});
+    this.saveReceipts.set({});
+    this.saveProblems.set({});
+    this.resetSaveReads();
     this.answerProblems.set({});
     this.expandedTools.set(new Set());
     this.expandedDetails.set(new Set());
@@ -1092,6 +1198,9 @@ export class RevisionChatComponent {
       this.selectedConversation.emit(result);
       this.turns.set([]);
       this.savedEvents.set({});
+      this.saveReceipts.set({});
+      this.saveProblems.set({});
+      this.resetSaveReads();
       this.answerProblems.set({});
       this.selected.set(null);
       this.events.set([]);
@@ -1141,6 +1250,9 @@ export class RevisionChatComponent {
     this.current.set(null);
     this.turns.set([]);
     this.savedEvents.set({});
+    this.saveReceipts.set({});
+    this.saveProblems.set({});
+    this.resetSaveReads();
     this.answerProblems.set({});
     this.selected.set(null);
     this.events.set([]);
@@ -1248,6 +1360,7 @@ export class RevisionChatComponent {
             ...saved,
             [turn.turnId]: events,
           }));
+          await this.refreshSaves(turn);
         }
       });
     } catch {
@@ -1469,6 +1582,8 @@ export class RevisionChatComponent {
         this.streaming.set(false);
         this.disconnected.set(!this.events().some(terminal));
       }
+      if (generation === this.generation && !controller.signal.aborted)
+        await this.refreshSaves(selected);
     }
   }
   async cancel(): Promise<void> {

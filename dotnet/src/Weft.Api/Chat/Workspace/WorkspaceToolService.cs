@@ -155,7 +155,7 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         try
         {
             var call = WorkspaceToolRegistry.Parse(intent.Name, intent.Arguments.Json, manifest.Tools);
-            scope = new CallScope(context.Actor, context.Conversation, context.Turn, budget, manifest.Payloads, intent.CallId);
+            scope = new CallScope(context.Actor, context.Conversation, context.Turn, budget, manifest.Payloads, intent.CallId, context.RoundId);
             await AdmitAsync(scope, token);
             if (!capacity.Wait(0)) return Failure(call.Name, WorkspaceToolOutcome.Busy, budget);
             admitted = true;
@@ -280,11 +280,12 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
     private readonly record struct Budget(int Bytes, int Nodes);
 
     private sealed record CallScope(ActorContext Actor, ChatConversationIntent Conversation, ChatTurnIntent? Turn, Budget Budget,
-        bool Payloads = false, string? CallId = null)
+        bool Payloads = false, string? CallId = null, Guid? RoundId = null)
     {
         internal Guid Organization => Conversation.Key.OrganizationId;
         /// <summary>The mapping write or proposal this call made, kept so no later refusal can hide it.</summary>
         internal ChatMappingWriteFact? Written { get; set; }
+        internal Guid? SaveKey { get; set; }
         public override string ToString() => nameof(CallScope);
     }
 

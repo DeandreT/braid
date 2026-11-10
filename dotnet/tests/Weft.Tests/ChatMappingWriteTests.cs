@@ -6,6 +6,7 @@ using Weft.Api.Catalog;
 using Weft.Api.Chat;
 using Weft.Api.Chat.Workspace;
 using Weft.Application;
+using Weft.Contracts.Chat;
 using Weft.Contracts.Projections;
 using Weft.Domain;
 using static Weft.Tests.ChatOrchestrationFixture;
@@ -39,6 +40,18 @@ public sealed class ChatMappingWriteTests
         Assert.Throws<ArgumentException>(() => new ChatMappingWriteFact(ChatMappingWriteOutcome.Proposed, ChatMappingWriteReason.NotPermitted, Base, 2, Guid.NewGuid(), 3, null, null, 1, Digest, [], false));
         Assert.Throws<ArgumentException>(() => new ChatMappingWriteFact(ChatMappingWriteOutcome.Proposed, ChatMappingWriteReason.OutOfDate, Base, 2, null, null, null, null, 1, Digest, [], false));
         Assert.Throws<ArgumentException>(() => ChatMetadataCodec.ReadMappingWrite(json.Replace("\"v\":1", "\"v\":2", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void A_recovered_receipt_keeps_the_mapping_write_discriminator_without_claiming_to_be_a_ledger_append()
+    {
+        var fact = Saved();
+        var item = ChatPublicMapper.Event(new(1, Guid.NewGuid(), ChatEventKind.MappingWrite, "", Guid.NewGuid(), ChatMetadataCodec.MappingWrite(fact)));
+        var page = new ChatMappingWriteReceiptPageV1([new(Guid.NewGuid().ToString("D"), "saved", item)]);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(page, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var write = json.RootElement.GetProperty("receipts")[0].GetProperty("write");
+        Assert.Equal("mapping.write", write.GetProperty("type").GetString());
+        Assert.Equal("saved", write.GetProperty("outcome").GetString());
     }
 
     [Fact]
@@ -141,6 +154,111 @@ public sealed class ChatMappingWriteTests
         Assert.Empty(MappingDirectEditService.Changes(before, before));
     }
 
+    public static TheoryData<PathSegment[], PathSegment[]> DistinctPaths => new()
+    {
+        { [new FieldPathSegment("a/b")], [new FieldPathSegment("a"), new FieldPathSegment("b")] },
+        { [new FieldPathSegment("@code")], [new AttributePathSegment("code")] },
+        { [new FieldPathSegment("[0]")], [new IndexPathSegment("0")] },
+        { [new FieldPathSegment("*")], [new AnyItemPathSegment()] },
+        { [new FieldPathSegment("code", "urn:first")], [new FieldPathSegment("code", "urn:second")] },
+        { [new FieldPathSegment("code", "urn:first")], [new AttributePathSegment("code", "urn:first")] },
+        { [new AttributePathSegment("code", "urn:first")], [new AttributePathSegment("code", "urn:second")] },
+        { [new FieldPathSegment("code")], [new FieldPathSegment("code", "urn:first")] },
+        { [new FieldPathSegment("code")], [new FieldPathSegment("code", "")] },
+        { [new AttributePathSegment("code")], [new AttributePathSegment("code", "urn:first")] },
+        { [new IndexPathSegment("9007199254740992")], [new IndexPathSegment("9007199254740993")] },
+        { [new FieldPathSegment("{urn:first}code")], [new FieldPathSegment("code", "urn:first")] },
+        { [new FieldPathSegment("parent", "urn:first"), new FieldPathSegment("code")],
+          [new FieldPathSegment("parent", "urn:second"), new FieldPathSegment("code")] }
+    };
+
+    [Theory]
+    [MemberData(nameof(DistinctPaths))]
+    public void Changes_keep_both_typed_paths_and_match_them_when_projection_field_ids_change(PathSegment[] first, PathSegment[] second)
+    {
+        var before = ChangeProjection(("before-first", "out", first, "First before"), ("before-second", "out", second, "Second before"));
+        // IDs, field order and rule order are not stable between independently projected revisions.
+        var unchanged = ChangeProjection(("after-second", "out", second, "Second before"), ("after-first", "out", first, "First before"));
+        Assert.Empty(MappingDirectEditService.Changes(before, unchanged));
+        var after = ChangeProjection(("after-second", "out", second, "Second after"), ("after-first", "out", first, "First after"));
+        var changes = MappingDirectEditService.Changes(before, after);
+        Assert.Equal(2, changes.Count);
+        Assert.Contains(changes, change => change.Before == "First before" && change.After == "First after");
+        Assert.Contains(changes, change => change.Before == "Second before" && change.After == "Second after");
+        Assert.Equal(2, changes.Select(change => change.Field).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Changes_include_namespace_uris_in_the_readable_receipt()
+    {
+        PathSegment[] path = [new FieldPathSegment("item", "urn:items"), new AttributePathSegment("code", "urn:codes")];
+        var change = Assert.Single(MappingDirectEditService.Changes(
+            ChangeProjection(("before", "out", path, "Before")), ChangeProjection(("after", "out", path, "After"))));
+        Assert.Equal("{urn:items}item/@{urn:codes}code", change.Field);
+    }
+
+    [Fact]
+    public void Changes_keep_boundaries_and_empty_paths_distinct_from_display_names()
+    {
+        PathSegment[] path = [new FieldPathSegment("code")];
+        var before = ChangeProjection(("one", "out", path, "One before"), ("two", "other", path, "Two before"),
+            ("root", "out", [], "Root before"), ("named-root", "out", [new FieldPathSegment("Root")], "Named before"));
+        var after = ChangeProjection(("new-two", "other", path, "Two after"), ("new-one", "out", path, "One after"),
+            ("new-named-root", "out", [new FieldPathSegment("Root")], "Named after"), ("new-root", "out", [], "Root after"));
+        var changes = MappingDirectEditService.Changes(before, after);
+        Assert.Equal(4, changes.Count);
+        foreach (var label in new[] { "One", "Two", "Root", "Named" })
+            Assert.Contains(changes, change => change.Before == label + " before" && change.After == label + " after");
+    }
+
+    [Fact]
+    public void Changes_retain_rules_for_multiple_field_ids_at_the_same_typed_location()
+    {
+        PathSegment[] path = [new FieldPathSegment("code")];
+        var before = ChangeProjection(("first", "out", path, "First before"), ("second", "out", path, "Second before"));
+        var unchanged = ChangeProjection(("new-second", "out", path, "Second before"), ("new-first", "out", path, "First before"));
+        Assert.Empty(MappingDirectEditService.Changes(before, unchanged));
+        var after = ChangeProjection(("new-second", "out", path, "Second after"), ("new-first", "out", path, "First after"));
+        var change = Assert.Single(MappingDirectEditService.Changes(before, after));
+        Assert.Equal("First before; Second before", change.Before);
+        Assert.Equal("First after; Second after", change.After);
+    }
+
+    [Fact]
+    public void Changes_bound_receipt_text_without_using_truncated_labels_as_identity()
+    {
+        var prefix = new string('x', ChatMappingChange.MaximumText) + "😀\n";
+        PathSegment[] first = [new FieldPathSegment("code", prefix + "first")];
+        PathSegment[] second = [new FieldPathSegment("code", prefix + "second")];
+        var before = ChangeProjection(("first", "out", first, "Before"), ("second", "out", second, "Before"));
+        var after = ChangeProjection(("new-first", "out", first, prefix + "First after"), ("new-second", "out", second, prefix + "Second after"));
+        var changes = MappingDirectEditService.Changes(before, after);
+        Assert.Equal(2, changes.Count);
+        foreach (var change in changes)
+            foreach (var text in new[] { change.Field, change.Before, change.After })
+            {
+                Assert.InRange(text.Length, 1, ChatMappingChange.MaximumText);
+                Assert.DoesNotContain(text, char.IsControl);
+                Assert.DoesNotContain(text.EnumerateRunes(), rune => rune.Value == 0xFFFD);
+            }
+    }
+
+    private static ProjectionReportV1 ChangeProjection(params (string Id, string Boundary, PathSegment[] Path, string Rule)[] entries)
+    {
+        var report = new MappingToolFixture().Projection.Report;
+        var document = report.Document!;
+        var field = document.Fields[0];
+        var rule = document.Rules[0];
+        return report with
+        {
+            Document = document with
+            {
+                Fields = entries.Select(entry => field with { Id = entry.Id, BoundaryId = entry.Boundary, Path = entry.Path, Name = "Root" }).ToArray(),
+                Rules = entries.Select(entry => rule with { Id = "rule-" + entry.Id, OutputFieldId = entry.Id, Summary = entry.Rule }).ToArray()
+            }
+        };
+    }
+
     [Fact]
     public async Task Injected_text_can_trigger_the_tool_but_a_viewer_only_gets_a_recorded_read_only_proposal()
     {
@@ -228,6 +346,7 @@ public sealed class ChatMappingWriteTests
         var provider = new Extra(tools.Services, new Dictionary<Type, object>
         {
             [typeof(MappingDirectEditService)] = editor,
+            [typeof(IChatMappingWriteJournal)] = new Journal(),
             [typeof(CatalogMappingEditOptions)] = new CatalogMappingEditOptions(true)
         });
         return new(provider, new ChatApiOptions(), new WorkspaceToolFeatures(false, false, false, false, Edits: true));
@@ -236,6 +355,29 @@ public sealed class ChatMappingWriteTests
     private sealed class Extra(IServiceProvider inner, IReadOnlyDictionary<Type, object> extra) : IServiceProvider
     {
         public object? GetService(Type serviceType) => extra.TryGetValue(serviceType, out var value) ? value : inner.GetService(serviceType);
+    }
+
+    private sealed class Journal : IChatMappingWriteJournal
+    {
+        public Task<bool> PrepareAsync(ActorContext actor, ChatMappingWriteIntent intent, CancellationToken ct) => Task.FromResult(true);
+        public Task<IReadOnlyList<ChatMappingWriteReceipt>> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, CancellationToken ct) => Task.FromResult<IReadOnlyList<ChatMappingWriteReceipt>>([]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_refused_or_lost_journal_ack_never_starts_ingestion(bool lost)
+    {
+        var fakes = new EditFakes(); fakes.Select = (_, _) => fakes.BaseRow();
+        using var service = fakes.Service();
+        Task<bool> Prepare(IReadOnlyList<MappingEditChange> changes, NativeArtifact native, CancellationToken ct)
+        {
+            Assert.Empty(fakes.Appends);
+            return lost ? Task.FromException<bool>(new InvalidOperationException("Journal acknowledgement lost")) : Task.FromResult(false);
+        }
+        if (lost) await Assert.ThrowsAsync<InvalidOperationException>(() => service.ApplyAsync(WorkspaceToolFixture.Actor, Base, Script, Guid.NewGuid(), true, prepare: Prepare));
+        else Assert.Equal(MappingDirectEditOutcome.Unavailable, (await service.ApplyAsync(WorkspaceToolFixture.Actor, Base, Script, Guid.NewGuid(), true, prepare: Prepare)).Outcome);
+        Assert.Empty(fakes.Appends);
     }
 
     /// <summary>Recording draft-store, object, worker and ingestion fakes; only the write path's members are reachable.</summary>

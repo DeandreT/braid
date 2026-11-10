@@ -102,7 +102,8 @@ public sealed partial class ChatTurnOrchestrator
             await RecheckAsync(s).ConfigureAwait(false);
             var context = ToolContext(s, i + 1);
             var result = await _toolPort.ExecuteAsync(context, call, s.Execution.Token).ConfigureAwait(false);
-            // A saved edit already happened: record it before any recheck can end the turn, so it stays visible and audited.
+            // Publish the immediate card while the normal fence permits it. Saved edits already have a durable
+            // pre-write journal identity, recoverable independently of this turn if publication fails or is cancelled.
             if (result?.MappingWrite is { } write)
             {
                 if (s.Conversation.Key.Kind != ChatConversationKind.Workspace) throw Stop(ChatOrchestrationOutcome.Denied);

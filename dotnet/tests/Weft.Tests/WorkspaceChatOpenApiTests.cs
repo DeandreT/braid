@@ -43,6 +43,14 @@ public sealed class WorkspaceChatOpenApiTests
         Assert.True(events.GetProperty("responses").GetProperty("200").GetProperty("content").TryGetProperty("text/event-stream", out _));
         Assert.True(events.GetProperty("responses").GetProperty("200").GetProperty("headers").TryGetProperty("X-Accel-Buffering", out _));
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        const string receiptPath = root + "/conversations/{conversationId}/turns/{turnId}/mapping-writes";
+        Assert.True(paths.GetProperty(receiptPath).TryGetProperty("get", out _));
+        Assert.True(paths.GetProperty(receiptPath + "/recover").TryGetProperty("post", out _));
+        var receipt = schemas.GetProperty("ChatMappingWriteReceiptV1").GetProperty("properties");
+        Assert.Equal(new[] { "pending", "saved", "notSaved" }, receipt.GetProperty("status").GetProperty("enum").EnumerateArray().Select(item => item.GetString()));
+        Assert.Contains(receipt.GetProperty("write").GetProperty("oneOf").EnumerateArray(), item => item.TryGetProperty("type", out var type) && type.GetString() == "null");
+        var savedReference = Assert.Single(receipt.GetProperty("write").GetProperty("oneOf").EnumerateArray(), item => item.TryGetProperty("$ref", out _)).GetProperty("$ref").GetString()!;
+        Assert.True(schemas.TryGetProperty(savedReference.Split('/')[^1], out _));
         Assert.False(schemas.GetProperty("ChatWorkspaceConversationCreateV1").GetProperty("additionalProperties").GetBoolean());
         Assert.False(schemas.GetProperty("ChatFocusV1").GetProperty("additionalProperties").GetBoolean());
         Assert.DoesNotContain(schemas.GetProperty("ChatWorkspaceConversationCreateV1").GetProperty("required").EnumerateArray(), field => field.GetString() == "focus");

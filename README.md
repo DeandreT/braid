@@ -26,7 +26,7 @@ adapters and their own capability checks.
 
 ![Workspace chat panel answering a question with citations](docs/images/chat.png)
 
-*Workspace chat: read-only questions answered with links to their sources.*
+*Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits when requested.*
 
 Screenshots use demo data; see [docs/images](docs/images/README.md) for how they are produced.
 
@@ -35,7 +35,7 @@ Screenshots use demo data; see [docs/images](docs/images/README.md) for how they
 - A mapping catalog with immutable revisions, native-file uploads and project ownership.
 - A compact source-to-rule-to-target workbench with a contextual inspector and investigation dock.
 - Revision-pinned AI chat with permission-controlled mapping tools and verified citations.
-- An organization-wide, read-only workspace assistant whose every tool call is freshly authorized as the user.
+- An organization-wide workspace assistant whose every tool call is freshly authorized as the user, with exact-head mapping saves when requested and permitted.
 - Bounded sample previews, revision comparison and saved regression cases.
 - Immutable build preparation, qualification, and local release activation, audit and rollback.
 - A machine-facing mapping endpoint that serves the active qualified release to callers

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Weft.Contracts.Projections;
 using Weft.Domain;
 
@@ -27,7 +28,8 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
     private readonly SemaphoreSlim _gate = new(2, 2);
 
     public async Task<MappingDirectEditResult> ApplyAsync(ActorContext actor, RevisionScope baseRevision, MappingEditScript operations,
-        Guid key, bool write, CancellationToken cancellationToken = default)
+        Guid key, bool write, CancellationToken cancellationToken = default,
+        Func<IReadOnlyList<MappingEditChange>, NativeArtifact, CancellationToken, Task<bool>>? prepare = null)
     {
         ArgumentNullException.ThrowIfNull(actor); ArgumentNullException.ThrowIfNull(baseRevision); ArgumentNullException.ThrowIfNull(operations);
         if (key == Guid.Empty || operations.Count == 0) throw new ArgumentException("A nonempty edit and request identity are required.");
@@ -49,14 +51,13 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
             if (await drafts.SelectBaseAsync(actor, mapping, baseRevision.RevisionId, true, cancellationToken).ConfigureAwait(false) is null)
                 return new(await drafts.SelectBaseAsync(actor, mapping, baseRevision.RevisionId, false, cancellationToken).ConfigureAwait(false) is null
                     ? MappingDirectEditOutcome.NotPermitted : MappingDirectEditOutcome.OutOfDate, changes);
+            // Chat persists the exact result and its audit identity BEFORE ingestion can reserve or commit anything.
+            // A missing/ambiguous journal acknowledgement grants no permission to append.
+            if (prepare is not null && !await prepare(changes, edited.Artifact, cancellationToken).ConfigureAwait(false))
+                return new(MappingDirectEditOutcome.Unavailable, changes);
             using var stream = new MemoryStream(edited.Artifact.CopyBytes(), false);
             var result = await ingestion.AppendAsync(actor, mapping, key, new AppendRevisionRequest(new EqualHead(baseRevision.RevisionId)),
                 stream, cancellationToken).ConfigureAwait(false);
-            for (var attempt = 1; result.Outcome == RevisionIngestionOutcome.InProgress && result.Receipt is { } receipt && attempt <= 3; attempt++)
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), cancellationToken).ConfigureAwait(false);
-                result = await ingestion.ResumeAsync(actor, new(mapping.OrganizationId, mapping.ProjectId), receipt.OperationId, cancellationToken).ConfigureAwait(false);
-            }
             return new(result.Outcome switch
             {
                 RevisionIngestionOutcome.CommittedValid or RevisionIngestionOutcome.CommittedDecodedInvalid => MappingDirectEditOutcome.Saved,
@@ -105,19 +106,33 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
         if (document is null) return result;
         var rules = document.Rules.GroupBy(rule => rule.OutputFieldId)
             .ToDictionary(group => group.Key, group => string.Join("; ", group.Select(rule => rule.Summary).Order(StringComparer.Ordinal)));
-        foreach (var field in document.Fields)
+        // Projection IDs are local to each report. Match the complete boundary and typed path instead,
+        // without using a flattened or bounded display label as identity. JSON retains segment kinds,
+        // namespace URIs and string boundaries, including names containing path punctuation.
+        foreach (var fields in document.Fields.GroupBy(field => JsonSerializer.Serialize(new { field.BoundaryId, field.Path })))
         {
+            var field = fields.First();
             var path = string.Join('/', field.Path.Select(segment => segment switch
             {
-                FieldPathSegment named => named.Name,
-                AttributePathSegment attribute => "@" + attribute.Name,
+                FieldPathSegment named => DisplayName(named.Name, named.NamespaceUri),
+                AttributePathSegment attribute => "@" + DisplayName(attribute.Name, attribute.NamespaceUri),
                 IndexPathSegment index => "[" + index.Index + "]",
-                _ => "*"
+                AnyItemPathSegment => "*",
+                _ => throw new InvalidOperationException("Unknown projection path segment.")
             }));
             var display = path.Length > 0 ? path : field.Name;
-            result.TryAdd(field.BoundaryId + "\n" + display, (display, rules.GetValueOrDefault(field.Id)));
+            // If a projection contains multiple field IDs for the same location, retain all their rules.
+            var summaries = fields.Select(item => rules.GetValueOrDefault(item.Id)).OfType<string>().Order(StringComparer.Ordinal).ToArray();
+            result.Add(fields.Key, (display, summaries.Length > 0 ? string.Join("; ", summaries) : null));
         }
         return result;
+    }
+
+    private static string DisplayName(string name, string? namespaceUri)
+    {
+        var readable = name.Length > 0 && name.All(c => char.IsLetterOrDigit(c) || c is '_' or '-' or '.')
+            ? name : JsonSerializer.Serialize(name);
+        return namespaceUri is null ? readable : "{" + namespaceUri + "}" + readable;
     }
 
     private static string Bound(string text)

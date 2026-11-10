@@ -108,6 +108,19 @@ public static partial class ChatEndpoints
     {
         if (document.Components?.Schemas is not { } schemas)
             return;
+        if (schemas.TryGetValue(nameof(ChatMappingWriteReceiptV1), out var receiptSchema) && receiptSchema is OpenApiSchema { Properties: { } receipt })
+        {
+            receipt["status"] = new OpenApiSchema
+            {
+                Type = JsonSchemaType.String,
+                Enum = [JsonValue.Create("pending")!, JsonValue.Create("saved")!, JsonValue.Create("notSaved")!]
+            };
+            receipt["write"] = new OpenApiSchema
+            {
+                OneOf = [new OpenApiSchema { Type = JsonSchemaType.Null },
+                new OpenApiSchemaReference(nameof(ChatTurnEventV1) + nameof(ChatMappingWriteEventV1), document)]
+            };
+        }
         foreach (var name in new[] { nameof(ChatAvailabilityV1), nameof(ChatWorkspaceAvailabilityV1) })
         {
             if (schemas.TryGetValue(name, out var availabilitySchema) &&

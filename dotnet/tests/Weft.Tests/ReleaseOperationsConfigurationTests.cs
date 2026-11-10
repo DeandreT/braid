@@ -9,8 +9,8 @@ public sealed class ReleaseOperationsConfigurationTests
     public void Operations_follow_the_exact_preceding_migration_prefix()
     {
         var migrations = MigrationRunner.EmbeddedMigrations;
-        Assert.Equal(39, migrations.Count);
-        Assert.Equal(Enumerable.Range(1, 39), migrations.Select(migration => migration.Version));
+        Assert.Equal(40, migrations.Count);
+        Assert.Equal(Enumerable.Range(1, 40), migrations.Select(migration => migration.Version));
         Assert.Equal(RegressionSchemaTestContract.AccountDisplayChecksum, migrations[25].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, migrations[26].Checksum);
         Assert.Equal(InterchangeSchemaTestContract.MigrationChecksum, migrations[27].Checksum);
