@@ -33,10 +33,23 @@ Names/children are ordered, literal identities. Scalars are `string|int|float|bo
 Schema nodes optionally carry `repeating` (false), `nullable` (false), `required`
 (empty list of declared group children) and `xml`. Nullability is JSON-only;
 repeated nullable nodes are refused rather than conflating item/container nulls.
-XML metadata has required `namespace` (empty means explicitly unqualified), and
-optional booleans `attribute`, `text`, `optional`, `nillable`. Omitted XML metadata
-retains Ferrule's inherited-namespace behavior. XML local names are ASCII NCName
-subset only. Required XML attributes and advanced XML semantics are not represented.
+XML metadata has optional booleans `attribute`, `text`, `optional`, `nillable`.
+For elements/attributes this metadata requires an explicit `namespace` string
+(empty means explicitly unqualified). Text instead requires `name: "#text"`,
+`xml: {"text": true}` and an absent or null `namespace`; even an empty namespace
+string is refused for text. Assembly leaves text `xml_namespace` unset, as required
+by pinned Ferrule's structured XML input predicate. Text must be a non-root scalar
+without attribute, repetition, optionality or nillability flags. Other XML local
+names retain the ASCII NCName subset. Omitted XML metadata on ordinary nodes
+retains Ferrule's inherited-namespace behavior. Required XML attributes and
+advanced XML semantics are not represented.
+
+Compiler→preview fixtures exercise both accepted text namespace spellings in
+JSON→XML and XML→JSON execution, simple text with a namespaced attribute, and
+ordinary namespaced elements/attributes. The pinned source checked for this
+contract is `dddc4dce:crates/ir/src/xml_structured_input.rs`: text requires
+`XML_TEXT_FIELD` and `xml_namespace.is_none()`. Simple content may coexist with
+attributes, but not sibling child elements in that structured runtime profile.
 
 Options are exactly one of:
 
