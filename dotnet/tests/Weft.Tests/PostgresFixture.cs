@@ -59,6 +59,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string chatReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string chatWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string chatLifecyclePassword = Guid.NewGuid().ToString("N");
+    private readonly string chatApproverPassword = Guid.NewGuid().ToString("N");
     private readonly string previewReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string previewWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string caseReaderPassword = Guid.NewGuid().ToString("N");
@@ -95,6 +96,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly bool provisionChatReader;
     private readonly bool provisionChatWriter;
     private readonly bool provisionChatLifecycle;
+    private readonly bool provisionChatApprover;
     private readonly bool provisionPreviewProfiles;
     private readonly bool provisionRegressionProfiles;
     private readonly bool provisionBuildProfiles;
@@ -129,7 +131,8 @@ public sealed class PostgresFixture : IAsyncLifetime
         bool provisionChatReader = true, bool provisionChatWriter = true, bool provisionChatLifecycle = true,
         bool provisionPreviewProfiles = true, bool provisionRegressionProfiles = true, bool provisionBuildProfiles = true,
         bool provisionBuildRunProfiles = true, bool provisionBuildMetadata = true, bool provisionQualifications = true, bool provisionLocalReleases = true,
-        bool provisionMachineInvocations = true, bool provisionApiAudit = true, bool provisionAccountDisplay = true)
+        bool provisionMachineInvocations = true, bool provisionApiAudit = true, bool provisionAccountDisplay = true,
+        bool provisionChatApprover = true)
     {
         this.provisionMetadataEditor = provisionMetadataEditor;
         this.provisionProjectCreator = provisionProjectCreator;
@@ -144,6 +147,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         this.provisionChatReader = provisionChatReader;
         this.provisionChatWriter = provisionChatWriter;
         this.provisionChatLifecycle = provisionChatLifecycle;
+        this.provisionChatApprover = provisionChatApprover;
         this.provisionPreviewProfiles = provisionPreviewProfiles;
         this.provisionRegressionProfiles = provisionRegressionProfiles;
         this.provisionBuildProfiles = provisionBuildProfiles;
@@ -345,6 +349,14 @@ public sealed class PostgresFixture : IAsyncLifetime
                     """, bootstrap);
                 await role.ExecuteNonQueryAsync();
             }
+            if (provisionChatApprover)
+            {
+                await using var role = new NpgsqlCommand($"""
+                    CREATE ROLE weft_chat_approver LOGIN PASSWORD '{chatApproverPassword}'
+                      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+                    """, bootstrap);
+                await role.ExecuteNonQueryAsync();
+            }
             if (provisionRegressionProfiles)
             {
                 foreach (var (name, password) in RegressionRoles())
@@ -387,6 +399,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             if (provisionChatReader) connectRoles.Add("weft_chat_reader");
             if (provisionChatWriter) connectRoles.Add("weft_chat_writer");
             if (provisionChatLifecycle) connectRoles.Add("weft_chat_lifecycle");
+            if (provisionChatApprover) connectRoles.Add("weft_chat_approver");
             if (provisionPreviewProfiles) connectRoles.AddRange(["weft_preview_reader", "weft_preview_writer"]);
             if (provisionRegressionProfiles) connectRoles.AddRange(RegressionRoles().Select(item => item.Name));
             await using (var grants = new NpgsqlCommand($"REVOKE ALL ON DATABASE {database} FROM PUBLIC; GRANT CONNECT ON DATABASE {database} TO {string.Join(", ", connectRoles)}", bootstrap))
@@ -436,6 +449,12 @@ public sealed class PostgresFixture : IAsyncLifetime
             }
             throw;
         }
+    }
+
+    internal string ChatApproverConnectionString(PostgresCase test)
+    {
+        if (!caseDatabases.ContainsKey(test.Name)) throw new ArgumentException("A current fixture-owned database is required.");
+        return ConnectionString(test.Name, "weft_chat_approver", chatApproverPassword);
     }
 
     private (string Name, string Password)[] RegressionRoles() =>

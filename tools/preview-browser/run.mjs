@@ -89,6 +89,7 @@ const roles = [
   ["weft_session_writer", "SESSION_WRITER"],
   ["weft_chat_reader", "CHAT_READER"],
   ["weft_chat_writer", "CHAT_WRITER"],
+  ["weft_chat_approver", "CHAT_APPROVER"],
   ["weft_chat_lifecycle", "CHAT_LIFECYCLE"],
   ["weft_preview_reader", "PREVIEW_READER"],
   ["weft_preview_writer", "PREVIEW_WRITER"],

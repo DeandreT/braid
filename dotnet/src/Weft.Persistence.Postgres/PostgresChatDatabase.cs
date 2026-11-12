@@ -5,7 +5,7 @@ using Weft.Domain;
 
 namespace Weft.Persistence.Postgres;
 
-public enum ChatDatabaseProfile { Reader, Writer, Lifecycle }
+public enum ChatDatabaseProfile { Reader, Writer, Lifecycle, Approver }
 
 /// <summary>Owns a separate, resetting, lazily opened chat-only credential pool.</summary>
 public sealed class PostgresChatDatabase : IAsyncDisposable
@@ -16,7 +16,7 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
 
     public PostgresChatDatabase(string connectionString, ChatDatabaseProfile profile)
     {
-        if (profile is not (ChatDatabaseProfile.Reader or ChatDatabaseProfile.Writer)) throw new ArgumentOutOfRangeException(nameof(profile));
+        if (profile is not (ChatDatabaseProfile.Reader or ChatDatabaseProfile.Writer or ChatDatabaseProfile.Approver)) throw new ArgumentOutOfRangeException(nameof(profile));
         Profile = profile;
         var normalized = PostgresConfiguration.Normalize(connectionString);
         _source = new(() => NpgsqlDataSource.Create(normalized));
@@ -33,7 +33,7 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
 
     internal async Task<PostgresTransaction> BeginAsync(ActorContext actor, Guid organizationId, bool write, CancellationToken ct)
     {
-        if (write && Profile != ChatDatabaseProfile.Writer) throw new InvalidOperationException("Chat mutation requires its separate writer profile.");
+        if (write && Profile is not (ChatDatabaseProfile.Writer or ChatDatabaseProfile.Approver)) throw new InvalidOperationException("Chat mutation requires its separate mutation profile.");
         var connection = await Source.OpenConnectionAsync(ct);
         NpgsqlTransaction? transaction = null;
         try
@@ -61,7 +61,7 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
                 FROM pg_catalog.pg_roles r WHERE r.rolname=current_user
                 """, connection, transaction))
             {
-                inspect.Parameters.AddWithValue("profile", Profile == ChatDatabaseProfile.Reader ? "weft_chat_reader" : "weft_chat_writer");
+                inspect.Parameters.AddWithValue("profile", ChatRoleGuard.RoleName(Profile));
                 if (await inspect.ExecuteScalarAsync(ct) is not true) throw new InvalidOperationException("Chat database profile is invalid.");
             }
             await using (var settings = new NpgsqlCommand("""

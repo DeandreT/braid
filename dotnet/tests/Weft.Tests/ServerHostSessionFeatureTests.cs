@@ -126,7 +126,7 @@ public sealed class ServerHostSessionFeatureTests(PostgresFixture postgres)
             }
         });
 
-    private static Dictionary<string, string?> FeatureEnvironment(ServerHostSessionCase test)
+    private Dictionary<string, string?> FeatureEnvironment(ServerHostSessionCase test)
     {
         var environment = test.Environment();
         string Delivered(string label, string connection)
@@ -149,6 +149,7 @@ public sealed class ServerHostSessionFeatureTests(PostgresFixture postgres)
         environment["WEFT_CHAT_PROFILES_FILE"] = profiles;
         environment["WEFT_CHAT_READER_CONNECTION_STRING_FILE"] = Delivered("chat-reader.txt", test.Data.Case.ChatReaderConnectionString);
         environment["WEFT_CHAT_WRITER_CONNECTION_STRING_FILE"] = Delivered("chat-writer.txt", test.Data.Case.ChatWriterConnectionString);
+        environment["WEFT_CHAT_APPROVER_CONNECTION_STRING_FILE"] = Delivered("chat-approver.txt", postgres.ChatApproverConnectionString(test.Data.Case));
         environment["WEFT_PREVIEWS_ENABLED"] = "true";
         environment["WEFT_POSTGRES_PREVIEW_WRITER_CONNECTION_STRING_FILE"] = Delivered("preview-writer.txt", test.Data.Case.PreviewWriterConnectionString);
         environment["WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING_FILE"] = Delivered("preview-reader.txt", test.Data.Case.PreviewReaderConnectionString);

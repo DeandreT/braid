@@ -64,7 +64,24 @@ public sealed class MappingEditProposal
     /// <summary>Bounded display summaries, not a complete diff or the identity of this proposal.</summary>
     public ImmutableArray<MappingEditChange> Changes { get; }
     public bool ChangesTruncated { get; }
+    /// <summary>Present only on freshly verified generation. Storage restoration never mints admission.</summary>
+    public VerifiedMappingEditGeneration? VerifiedGeneration { get; internal init; }
     public override string ToString() => nameof(MappingEditProposal);
+}
+
+/// <summary>An application capability, not a serialized claim. Only verified replay mints this token.
+/// Persistence retains these facts separately; neither a digest nor a restored proposal recreates it.</summary>
+public sealed class VerifiedMappingEditGeneration
+{
+    internal VerifiedMappingEditGeneration(PrincipalId creator, IngestionProvenance provenance)
+    {
+        if (!provenance.Confirmed) throw new ArgumentException("Confirmed generation is required.");
+        Creator = creator; Provenance = provenance; GenerationId = Guid.NewGuid();
+    }
+    public Guid GenerationId { get; }
+    public PrincipalId Creator { get; }
+    public IngestionProvenance Provenance { get; }
+    public override string ToString() => nameof(VerifiedMappingEditGeneration);
 }
 
 public sealed record MappingEditProposalResult(MappingDirectEditOutcome Outcome, MappingEditProposal? Proposal = null,

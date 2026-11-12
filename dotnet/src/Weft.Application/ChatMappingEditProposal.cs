@@ -83,7 +83,7 @@ public sealed record ChatMappingEditState(ChatMappingEditProposal Proposal, Chat
 /// Restricted persistence boundary; implementations must enforce creator/organization/project authority and retention.
 /// Creation is immutable and idempotent by call identity, conflicting on changed fingerprint. It never prepares ingestion.
 /// Only verified generation may populate new content; trusted storage restoration verifies integrity, not worker authenticity.
-/// Reads never approve, prepare or reserve. No implementation is supplied by this application slice.
+/// Reads never approve, prepare or reserve.
 /// </summary>
 public interface IChatMappingEditProposalStore
 {

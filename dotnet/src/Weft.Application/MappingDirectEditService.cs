@@ -40,7 +40,8 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
         {
             var generated = await ReadEditAsync(baseRevision, source.Source.NativeObject, operations, cancellationToken).ConfigureAwait(false);
             return generated.Checkpoint is { } checkpoint
-                ? new(generated.Outcome, new(checkpoint, operations, generated.Changes!))
+                ? new(generated.Outcome, new(checkpoint, operations, generated.Changes!)
+                { VerifiedGeneration = new(actor.PrincipalId, generated.Provenance!) })
                 : new(generated.Outcome, Failure: generated.Failure);
         }
         finally { _gate.Release(); }
@@ -167,7 +168,7 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
     }
 
     private sealed record GeneratedEdit(MappingDirectEditOutcome Outcome, NativeArtifact? Checkpoint = null,
-        IReadOnlyList<MappingEditChange>? Changes = null, MappingEditFailure? Failure = null);
+        IReadOnlyList<MappingEditChange>? Changes = null, MappingEditFailure? Failure = null, IngestionProvenance? Provenance = null);
 
     private async Task<GeneratedEdit> ReadEditAsync(RevisionScope baseRevision, PrivateObjectReference reference,
         MappingEditScript operations, CancellationToken token)
@@ -178,7 +179,8 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
         if (before.Checkpoint is not { } original) return new(MappingDirectEditOutcome.Unavailable, Failure: before.Failure);
         var after = await ReplayAsync(native, operations, token).ConfigureAwait(false);
         if (after.Checkpoint is not { } edited) return new(MappingDirectEditOutcome.Rejected, Failure: after.Failure);
-        return new(MappingDirectEditOutcome.Proposed, edited.Artifact, Changes(original.Projection, edited.Projection));
+        return new(MappingDirectEditOutcome.Proposed, edited.Artifact, Changes(original.Projection, edited.Projection),
+            Provenance: edited.Evidence.Facts.Provenance);
     }
 
     private async Task<MappingEditResult> ReplayAsync(NativeArtifact native, MappingEditScript operations, CancellationToken token)
@@ -187,6 +189,7 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
         if ((result.Checkpoint is null) == (result.Failure is null)) throw new InvalidOperationException("Edit replay requires exactly one checkpoint or failure.");
         if (result.Checkpoint is { } checkpoint && (checkpoint.Artifact.Scope != native.Scope
             || checkpoint.Artifact.ByteCount > MappingEditPolicy.MaximumNativeBytes
+            || !checkpoint.Evidence.Facts.Provenance.Confirmed || checkpoint.Evidence.Facts.Provenance.Scope != native.Scope
             || checkpoint.Evidence.Facts.Provenance.NativeDigest != checkpoint.Artifact.Digest))
             throw new InvalidOperationException("The edit worker returned inconsistent checkpoint provenance.");
         return result;

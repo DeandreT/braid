@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Npgsql;
 using Weft.Application;
 using Weft.Persistence.Postgres;
+using Weft.Server;
 
 namespace Weft.Tests;
 
@@ -14,10 +15,10 @@ public sealed class RegressionDeploymentProvisioningTests
     [
         "MIGRATOR", "RUNTIME", "INGEST", "CATALOG", "METADATA", "CREATOR", "REPORT", "DERIVATION",
         "MAINTENANCE", "IDENTITY", "PAYLOAD_PERMISSION", "SESSION_READER", "SESSION_WRITER", "CHAT_READER", "CHAT_WRITER",
-        "CHAT_LIFECYCLE", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "COMPARISON",
+        "CHAT_LIFECYCLE", "CHAT_APPROVER", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "COMPARISON",
         "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA",
         "QUALIFICATION_READER", "QUALIFICATION_WRITER", "RELEASE_READER", "RELEASE_WRITER", "INVOCATION_GRANT_WRITER", "INVOCATION_WRITER",
-        "API_AUDIT_WRITER", "ADMINISTRATION"
+        "API_AUDIT_WRITER", "ADMINISTRATION", "DRAFT_READER", "DRAFT_WRITER"
     ];
 
     [Theory]
@@ -35,6 +36,123 @@ public sealed class RegressionDeploymentProvisioningTests
     {
         Assert.Equal(["NEW_READER"], MissingPasswordRoles("\\getenv new_password WEFT_LOCAL_NEW_READER_PASSWORD\n"));
         Assert.Equal(["NEW_READER"], MissingPasswordRoles("\\getenv new_password WEFT_NEW_READER_PASSWORD\n"));
+    }
+
+    [Fact]
+    public void Every_local_init_consumer_is_in_the_credential_propagation_audit()
+    {
+        var root = Repository();
+        var consumers = new[] { "deploy", "tools" }.SelectMany(folder => Directory.EnumerateFiles(Path.Combine(root, folder), "*", SearchOption.AllDirectories))
+            .Where(path => Path.GetExtension(path) is ".sh" or ".mjs" or ".yml")
+            .Where(path => File.ReadAllText(path).Contains("postgres-init.sh", StringComparison.Ordinal))
+            .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/')).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(new[] { "deploy/compose/compose.yml", "deploy/local/dev-up.sh", "deploy/local/postgres.compose.yml",
+            "tools/browser-fixture/runtime.mjs", "tools/preview-browser/run.mjs" }, consumers);
+    }
+
+    [Theory]
+    [InlineData("deploy/local/postgres.compose.yml")]
+    [InlineData("deploy/compose/compose.yml")]
+    public void Both_compose_init_mounts_require_and_deliver_every_mandatory_password(string path)
+    {
+        var text = File.ReadAllText(Path.Combine(Repository(), path));
+        var environment = ServiceEnvironment(text, "postgres");
+        foreach (var role in MandatoryLocalPasswords())
+        {
+            var name = "WEFT_LOCAL_" + role + "_PASSWORD";
+            Assert.True(environment.TryGetValue(name, out var delivery), $"Missing required database environment setting: {name}");
+            Assert.StartsWith("${" + name + ":?", delivery, StringComparison.Ordinal);
+        }
+        var example = File.ReadAllText(Path.Combine(Repository(), "deploy/local/.env.example"));
+        foreach (var role in MandatoryLocalPasswords())
+            Assert.Matches(@"(?m)^WEFT_LOCAL_" + role + @"_PASSWORD=replace-[^\r\n]+", example);
+    }
+
+    [Theory]
+    [InlineData("deploy/compose/smoke-test.sh")]
+    [InlineData("deploy/compose/acceptance-test.sh")]
+    public void Compose_generators_cover_all_init_requirements_not_only_chat(string path)
+    {
+        var text = File.ReadAllText(Path.Combine(Repository(), path));
+        var loop = Regex.Match(text, @"for role in (?<roles>[^;]+); do\r?\n  export ""WEFT_LOCAL_\$\{role\}_PASSWORD=\$\(openssl rand -hex 24\)""",
+            RegexOptions.CultureInvariant);
+        Assert.True(loop.Success, "The independent per-role password generation loop must be explicit.");
+        var roles = Regex.Matches(loop.Groups["roles"].Value, @"[A-Z][A-Z_]+", RegexOptions.CultureInvariant).Select(match => match.Value).ToArray();
+        Assert.Equal(roles.Length, roles.Distinct(StringComparer.Ordinal).Count());
+        Assert.Empty(MandatoryLocalPasswords().Except(roles, StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("tools/browser-fixture/runtime.mjs")]
+    [InlineData("tools/preview-browser/run.mjs")]
+    public void Browser_init_consumers_generate_every_required_role_credential(string path)
+    {
+        var text = File.ReadAllText(Path.Combine(Repository(), path));
+        var roles = Regex.Matches(text, "\\[\"weft_[a-z_]+\", \"(?<role>[A-Z_]+)\"\\]", RegexOptions.CultureInvariant)
+            .Select(match => match.Groups["role"].Value).ToArray();
+        Assert.NotEmpty(roles);
+        Assert.Empty(MandatoryLocalPasswords().Except(roles, StringComparer.Ordinal));
+        Assert.Contains("[\"weft_chat_approver\", \"CHAT_APPROVER\"]", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Local_dev_credential_discovery_and_server_delivery_include_approver()
+    {
+        var text = File.ReadAllText(Path.Combine(Repository(), "deploy/local/dev-up.sh"));
+        Assert.Contains("mapfile -t roles < <(sed -n", text, StringComparison.Ordinal);
+        Assert.Contains("\"$source_root/deploy/local/postgres-init.sh\")", text, StringComparison.Ordinal);
+        Assert.Contains("WEFT_CHAT_APPROVER_CONNECTION_STRING=$(connection weft_chat_approver CHAT_APPROVER)", text, StringComparison.Ordinal);
+        Assert.Contains("CHAT_APPROVER", MandatoryLocalPasswords());
+    }
+
+    [Fact]
+    public void Session_compose_file_delivery_paths_roles_and_host_admission_agree()
+    {
+        var environment = ServiceEnvironment(File.ReadAllText(Path.Combine(Repository(), "deploy/compose/compose.features.yml")), "server");
+        Assert.Equal("\"true\"", environment["WEFT_CHAT_ENABLED"]);
+        var delivered = new Dictionary<string, string>();
+        foreach (var role in new[] { "READER", "WRITER", "APPROVER" })
+        {
+            var name = "WEFT_CHAT_" + role + "_CONNECTION_STRING";
+            Assert.False(environment.ContainsKey(name));
+            var deliveryName = "WEFT_DELIVER_FILE_CHAT_" + role;
+            // The entrypoint maps the generic delivery suffix to the protected file basename.
+            var basename = deliveryName["WEFT_DELIVER_FILE_".Length..].ToLowerInvariant().Replace('_', '-');
+            Assert.Equal("/run/weft/secrets/" + basename, environment[name + "_FILE"]);
+            var value = environment[deliveryName];
+            var placeholder = "${WEFT_LOCAL_CHAT_" + role + "_PASSWORD:?}";
+            Assert.Contains(placeholder, value, StringComparison.Ordinal);
+            var connection = value.Replace(placeholder, "synthetic-never-connected-" + role, StringComparison.Ordinal);
+            Assert.DoesNotContain("${", connection, StringComparison.Ordinal);
+            Assert.Equal("weft_chat_" + role.ToLowerInvariant(), new NpgsqlConnectionStringBuilder(connection).Username);
+            delivered[role] = connection;
+        }
+        // Exercise the real admission routine against Compose's parsed connection values, without files or sockets.
+        var admitted = ChatProposalHostConfiguration.Admit(delivered["READER"], delivered["WRITER"], delivered["APPROVER"]);
+        Assert.Equal(delivered["APPROVER"], admitted.Approver);
+        Assert.Throws<InvalidOperationException>(() => ChatProposalHostConfiguration.Admit(delivered["READER"], delivered["WRITER"], delivered["WRITER"]));
+        var entrypoint = File.ReadAllText(Path.Combine(Repository(), "deploy/container/weft-entrypoint.sh"));
+        Assert.Contains("file=${file,,}", entrypoint, StringComparison.Ordinal);
+        Assert.Contains("file=${file//_/-}", entrypoint, StringComparison.Ordinal);
+        Assert.Contains("write_private \"$file\" \"${!name}\"\n  unset \"$name\"", entrypoint.Replace("\r\n", "\n", StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    private static string[] MandatoryLocalPasswords()
+    {
+        var init = File.ReadAllText(Path.Combine(Repository(), "deploy/local/postgres-init.sh"));
+        // Administration remains deliberately opt-in; the init script supplies its empty default itself.
+        Assert.Contains("export WEFT_LOCAL_ADMINISTRATION_PASSWORD=${WEFT_LOCAL_ADMINISTRATION_PASSWORD:-}", init, StringComparison.Ordinal);
+        return RequiredPasswordRoles(init).Where(role => role != "ADMINISTRATION").ToArray();
+    }
+
+    private static Dictionary<string, string> ServiceEnvironment(string yaml, string service)
+    {
+        // Only the shipped explicit scalar environment maps are accepted; no YAML evaluation or secret interpolation.
+        var block = Regex.Match(yaml, @"^  " + Regex.Escape(service) + @":\r?\n(?<body>.*?)(?=^  [a-z][a-z0-9_-]*:|\z)",
+            RegexOptions.Multiline | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+        Assert.True(block.Success, "Expected an explicit Compose service.");
+        return Regex.Matches(block.Groups["body"].Value, @"^      (?<key>[A-Z][A-Z0-9_]+): (?<value>[^\r\n]+)", RegexOptions.Multiline | RegexOptions.CultureInvariant)
+            .ToDictionary(match => match.Groups["key"].Value, match => match.Groups["value"].Value, StringComparer.Ordinal);
     }
 
     [RegressionNativeTheory]

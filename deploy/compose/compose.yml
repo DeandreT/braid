@@ -35,6 +35,7 @@ services:
       WEFT_LOCAL_SESSION_WRITER_PASSWORD: ${WEFT_LOCAL_SESSION_WRITER_PASSWORD:?}
       WEFT_LOCAL_CHAT_READER_PASSWORD: ${WEFT_LOCAL_CHAT_READER_PASSWORD:?}
       WEFT_LOCAL_CHAT_WRITER_PASSWORD: ${WEFT_LOCAL_CHAT_WRITER_PASSWORD:?}
+      WEFT_LOCAL_CHAT_APPROVER_PASSWORD: ${WEFT_LOCAL_CHAT_APPROVER_PASSWORD:?}
       WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD: ${WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD:?}
       WEFT_LOCAL_PREVIEW_READER_PASSWORD: ${WEFT_LOCAL_PREVIEW_READER_PASSWORD:?}
       WEFT_LOCAL_PREVIEW_WRITER_PASSWORD: ${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?}
@@ -79,7 +80,7 @@ services:
       WEFT_MIGRATION_CONNECTION_STRING: Host=postgres;Database=weft;Username=weft_migrator;Password=${WEFT_LOCAL_MIGRATOR_PASSWORD:?};GSS Encryption Mode=Disable
     networks: [database]
     depends_on:
-      postgres: {condition: service_healthy}
+      postgres: { condition: service_healthy }
 
   storage-init:
     <<: *hardened
@@ -141,9 +142,9 @@ services:
       - 127.0.0.1:${WEFT_COMPOSE_PORT:-8480}:8080
     networks: [database, egress]
     depends_on:
-      migrate: {condition: service_completed_successfully}
-      storage-init: {condition: service_completed_successfully}
-      session-keys: {condition: service_completed_successfully}
+      migrate: { condition: service_completed_successfully }
+      storage-init: { condition: service_completed_successfully }
+      session-keys: { condition: service_completed_successfully }
 
   edge:
     image: ${WEFT_EDGE_IMAGE:-weft-edge:local}
@@ -159,7 +160,14 @@ services:
       WEFT_EDGE_TRUSTED_PROXIES: ${WEFT_EDGE_TRUSTED_PROXIES:-}
     depends_on: [server]
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/api/v1/health/ready"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--spider",
+          "http://127.0.0.1:8080/api/v1/health/ready",
+        ]
       interval: 2s
       timeout: 2s
       retries: 30

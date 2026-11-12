@@ -46,12 +46,14 @@ internal static class ChatRoleGuard
         await ValidateProfileAsync(connection, transaction, ChatDatabaseProfile.Reader, ct);
         await ValidateProfileAsync(connection, transaction, ChatDatabaseProfile.Writer, ct);
         await ValidateProfileAsync(connection, transaction, ChatDatabaseProfile.Lifecycle, ct);
+        await ValidateProfileAsync(connection, transaction, ChatDatabaseProfile.Approver, ct);
         await ChatSchemaContract.ValidateAsync(connection, transaction, profile, ct);
         // Relation acquisition may have waited. Do not reuse a pre-wait ACL
         // observation for the operation admitted after that wait.
         await ValidateProfileAsync(connection, transaction, ChatDatabaseProfile.Reader, ct);
         await ValidateProfileAsync(connection, transaction, ChatDatabaseProfile.Writer, ct);
         await ValidateProfileAsync(connection, transaction, ChatDatabaseProfile.Lifecycle, ct);
+        await ValidateProfileAsync(connection, transaction, ChatDatabaseProfile.Approver, ct);
     }
 
     private static async Task ValidateProfileAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
@@ -150,6 +152,7 @@ internal static class ChatRoleGuard
         ChatDatabaseProfile.Reader => "weft_chat_reader",
         ChatDatabaseProfile.Writer => "weft_chat_writer",
         ChatDatabaseProfile.Lifecycle => "weft_chat_lifecycle",
+        ChatDatabaseProfile.Approver => "weft_chat_approver",
         _ => throw new ArgumentOutOfRangeException(nameof(profile))
     };
     private static InvalidOperationException Refusal() => new("Private chat requires its exact restricted profiles and accepted transaction environment.");

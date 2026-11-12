@@ -445,6 +445,10 @@ public sealed class ChatMappingWriteTests
         var result = await service.ProposeAsync(WorkspaceToolFixture.Actor, Base, script);
         Assert.Equal(MappingDirectEditOutcome.Proposed, result.Outcome);
         var proposal = Assert.IsType<MappingEditProposal>(result.Proposal);
+        var generation = Assert.IsType<VerifiedMappingEditGeneration>(proposal.VerifiedGeneration);
+        Assert.Equal(WorkspaceToolFixture.Actor.PrincipalId, generation.Creator);
+        Assert.NotEqual(Guid.Empty, generation.GenerationId);
+        Assert.Equal(checkpoint.Evidence.Facts.Provenance, generation.Provenance);
         Assert.Equal(Base, proposal.Base);
         Assert.Equal(checkpoint.Artifact.CopyBytes(), proposal.Checkpoint.CopyBytes());
         Assert.Equal(checkpoint.Artifact.Digest, proposal.Checkpoint.Digest);
@@ -458,6 +462,7 @@ public sealed class ChatMappingWriteTests
         var restored = ChatMappingEditProposalStorage.RestoreFromTrustedStorage(ChatMappingEditProposalStorage.Encode(chat),
             ChatMappingEditStorageIdentity.FromProposal(chat));
         Assert.Equal(proposal.CopyChangesUtf8(), restored.Content.CopyChangesUtf8());
+        Assert.Null(restored.Content.VerifiedGeneration);
         Assert.Equal(proposal.Checkpoint.CopyBytes(), restored.Content.Checkpoint.CopyBytes());
         // Copies cannot mutate retained content or identity.
         Array.Fill(proposal.Checkpoint.CopyBytes(), (byte)0);
