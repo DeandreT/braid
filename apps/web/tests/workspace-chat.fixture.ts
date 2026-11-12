@@ -294,6 +294,8 @@ export async function workspaceFixture(
       });
     }
     const id = path.slice(chatRoot.length).split("/")[2];
+    if (workspace && path.endsWith("/mapping-edit-proposals"))
+      return route.fulfill({ json: { proposals: [] } });
     if (
       workspace &&
       (path.endsWith("/mapping-writes") ||

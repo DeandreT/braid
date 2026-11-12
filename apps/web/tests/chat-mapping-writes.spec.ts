@@ -268,7 +268,7 @@ test("pending save status survives an interrupted answer and resolves without re
   const status = panel(page).getByRole("region", {
     name: "Mapping save status",
   });
-  await expect(status).toContainText("Save pending");
+  await expect(status).toContainText("reports pending");
   await expect(
     panel(page).getByRole("region", { name: "Saved mapping edit" }),
   ).toHaveCount(0);
@@ -295,7 +295,7 @@ test("pending save status survives an interrupted answer and resolves without re
   expect(f.posts.filter((p) => p.path.endsWith("/turns"))).toHaveLength(1);
 });
 
-test("a lost mapping.write event is recovered once, with explicit pending-save continuation only", async ({
+test("an unidentified receipt is read-only and a lost saved event is recovered by refresh", async ({
   page,
 }) => {
   const f = await workspaceFixture(page);
@@ -317,16 +317,25 @@ test("a lost mapping.write event is recovered once, with explicit pending-save c
   const status = panel(page).getByRole("region", {
     name: "Mapping save status",
   });
-  await expect(status).toContainText("Save pending");
+  await expect(status).toContainText("reports pending");
+  await expect(
+    status.getByRole("button", { name: "Continue pending save" }),
+  ).toHaveCount(0);
   expect(resumes).toEqual([]);
+  f.state.receipts = [
+    {
+      requestId,
+      status: "saved",
+      write: write(f.data.revision.scope, "saved", null) as MappingWriteEvent,
+    },
+  ];
   await status
-    .getByRole("button", { name: "Continue pending save", exact: true })
+    .getByRole("button", { name: "Refresh save status", exact: true })
     .click();
   await expect(
     panel(page).getByRole("region", { name: "Saved mapping edit" }),
   ).toHaveCount(1);
-  expect(resumes).toHaveLength(1);
-  expect(resumes[0]).not.toBe("missing");
+  expect(resumes).toHaveLength(0);
   // The same receipt also arriving in the ledger must not create a second card or Undo state.
   f.state.write = write(f.data.revision.scope, "saved", null);
   await page.reload();

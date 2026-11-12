@@ -680,3 +680,30 @@ p {
     opacity: 1;
   }
 }
+.chat-proposal-identity,
+.chat-write-proposal code {
+  overflow-wrap: anywhere;
+}
+.chat-proposal-identity {
+  font-size: 0.8rem;
+}
+.chat-proposal-operations {
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0.75rem;
+  background: var(--chat-paper);
+  border-radius: 0.4rem;
+  font-size: 0.8rem;
+}
+.chat-proposal-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-block: 0.75rem;
+}
+.chat-proposal-operations:focus-visible {
+  outline: 2px solid var(--wb-focus);
+  outline-offset: 2px;
+}
