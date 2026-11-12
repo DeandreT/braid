@@ -22,6 +22,27 @@ public sealed class ChatMappingEditApprovalService(IChatMappingEditProposalStore
         return result;
     }
 
+    public async Task<IReadOnlyList<ChatMappingEditState>> ListAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId,
+        CancellationToken ct = default)
+    {
+        RequireOwner(actor, conversation);
+        var states = await store.ListAsync(actor, conversation, turnId, ct).ConfigureAwait(false);
+        if (states is null || states.Count > 8 || states.Select(s => s.Proposal.ProposalId).Distinct().Count() != states.Count)
+            throw new InvalidOperationException("Proposal store returned an inconsistent listing.");
+        foreach (var state in states)
+            Validate(state, conversation, turnId, state.Proposal.ProposalId, state.Proposal.Fingerprint);
+        return states;
+    }
+
+    /// <summary>Authorized discovery of one immutable proposal. Never approves or reserves ingestion.</summary>
+    public async Task<ChatMappingEditState?> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId,
+        Guid proposalId, CancellationToken ct = default)
+    {
+        RequireOwner(actor, conversation);
+        var state = await store.ReadAsync(actor, conversation, turnId, proposalId, ct).ConfigureAwait(false);
+        return state is null ? null : Validate(state, conversation, turnId, proposalId, state.Proposal.Fingerprint);
+    }
+
     public async Task<ChatMappingEditState?> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId,
         Guid proposalId, Sha256Digest fingerprint, CancellationToken ct = default)
     {

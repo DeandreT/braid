@@ -46,7 +46,8 @@ public static partial class ChatEndpoints
         Describe<ChatMappingWriteReceiptPageV1>(routes.MapGet(turn + "/mapping-writes", MappingWriteReceipts), "GetChatMappingWriteReceipts",
             "Read durable save receipts independently of turn streaming, with fresh creator and project access.");
         Describe<ChatMappingWriteReceiptPageV1>(routes.MapPost(turn + "/mapping-writes/recover", MappingWriteReceipts), "RecoverChatMappingWriteReceipts",
-            "Resume already reserved saves using their original exact bytes and keys, with current edit permission. Never rerun a turn.");
+            "Resume already reserved saves with current edit permission. Never reserve, resupply source, approve or rerun a turn.");
+        MapMappingEditProposals(routes, turn);
     }
 
     /// <summary>Profiles that can run a workspace turn: selectable, with function tools and permission to receive mapping metadata.</summary>

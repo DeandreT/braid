@@ -425,6 +425,91 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/mapping-edit-proposals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read at most eight retained proposals with fresh creator and project authority, independently of stream delivery. */
+    get: operations["GetChatMappingEditProposals"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/mapping-edit-proposals/{proposalId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one retained proposal with fresh creator and project authority. Does not approve or save. */
+    get: operations["GetChatMappingEditProposal"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/mapping-edit-proposals/{proposalId}/approve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Explicitly approve exactly the stored proposal and fingerprint, including after its turn ends. */
+    post: operations["ApproveChatMappingEditProposal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/mapping-edit-proposals/{proposalId}/operations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the complete canonical edit script for exact review. Requires expectedFingerprint query; never returns native bytes. */
+    get: operations["GetChatMappingEditOperations"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/mapping-edit-proposals/{proposalId}/recover": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Resume only an existing reservation for this exact proposal. Never approves, first-reserves or supplies source. */
+    post: operations["RecoverChatMappingEditProposal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/chat/conversations/{conversationId}/turns/{turnId}/mapping-writes": {
     parameters: {
       query?: never;
@@ -451,7 +536,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Resume already reserved saves using their original exact bytes and keys, with current edit permission. Never rerun a turn. */
+    /** Resume already reserved saves with current edit permission. Never reserve, resupply source, approve or rerun a turn. */
     post: operations["RecoverChatMappingWriteReceipts"];
     delete?: never;
     options?: never;
@@ -2884,6 +2969,44 @@ export interface components {
       after: string;
       before: string;
       field: string;
+    };
+    ChatMappingEditApprovalV1: {
+      expectedFingerprint: string;
+    };
+    ChatMappingEditOperationsV1: {
+      canonicalScript: string;
+      fingerprint: string;
+      /** Format: int32 */
+      operationCount: number;
+      operationsDigest: string;
+      proposalId: string;
+    };
+    ChatMappingEditProposalPageV1: {
+      proposals: components["schemas"]["ChatMappingEditProposalV1"][];
+    };
+    ChatMappingEditProposalV1: {
+      baseRevision: components["schemas"]["CatalogRevisionScopeV1"];
+      /** Format: int64 */
+      baseSequence: number;
+      changes: components["schemas"]["ChatMappingChangeV1"][];
+      changesTruncated: boolean;
+      fingerprint: string;
+      /** Format: int32 */
+      operationCount: number;
+      operationsDigest: string;
+      proposalId: string;
+      revisionId: null | string;
+      /** Format: int64 */
+      revisionSequence: null | number;
+      /** @enum {string} */
+      status:
+        | "awaitingApproval"
+        | "approved"
+        | "pending"
+        | "saved"
+        | "notSaved"
+        | "notPermitted"
+        | "outOfDate";
     };
     /** @enum {unknown} */
     ChatMappingWriteOutcomeV1: "saved" | "proposed";
@@ -7381,6 +7504,686 @@ export interface operations {
         };
         content: {
           "text/event-stream": components["schemas"]["ChatTurnEventV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetChatMappingEditProposals: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversationId: string;
+        organizationId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatMappingEditProposalPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetChatMappingEditProposal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversationId: string;
+        organizationId: string;
+        proposalId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatMappingEditProposalV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  ApproveChatMappingEditProposal: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        conversationId: string;
+        organizationId: string;
+        proposalId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatMappingEditApprovalV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatMappingEditProposalV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  GetChatMappingEditOperations: {
+    parameters: {
+      query: {
+        /** @description The exact immutable proposal fingerprint being reviewed. */
+        expectedFingerprint: string;
+      };
+      header?: never;
+      path: {
+        conversationId: string;
+        organizationId: string;
+        proposalId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatMappingEditOperationsV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Unsupported Media Type */
+      415: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatErrorV1"];
+        };
+      };
+    };
+  };
+  RecoverChatMappingEditProposal: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Required with weftSession; omitted with entraBearer. The exact configured origin for this browser request. */
+        Origin?: string;
+        /** @description Required with weftSession; omitted with entraBearer. The antiforgery request token issued by the catalog context; session tokens bind to the session epoch. */
+        "X-XSRF-TOKEN"?: string;
+      };
+      path: {
+        conversationId: string;
+        organizationId: string;
+        proposalId: string;
+        turnId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChatMappingEditApprovalV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          "Cache-Control"?: "no-store";
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ChatMappingEditProposalV1"];
         };
       };
       /** @description Bad Request */
