@@ -68,6 +68,19 @@ import { DraftApi } from "../edit/draft-api";
 import { UnsentWork } from "../workbench/unsent-work";
 import { hasChatUnsentWork } from "./chat-unsent-work";
 import { mappingUpdateQuestion } from "./mapping-update-question";
+import {
+  sameProposal,
+  type MappingProposal,
+  type MappingProposalOperations,
+} from "./mapping-proposal-types";
+
+interface ProposalReviewState {
+  busy?: boolean;
+  details?: MappingProposalOperations;
+  reviewed?: boolean;
+  uncertain?: boolean;
+  message?: string;
+}
 
 @Component({
   selector: "weft-revision-chat",
@@ -468,6 +481,17 @@ export class RevisionChatComponent {
           (e): e is MappingWriteEvent => e.type === "mapping.write",
         ),
         this.saveReceipts()[turn.turnId] ?? [],
+      ).filter(
+        (write) =>
+          !(this.proposals()[turn.turnId] ?? []).some(
+            (p) =>
+              p.status === "saved" &&
+              p.revisionId === write.revisionId &&
+              p.baseRevision.organizationId ===
+                write.baseRevision.organizationId &&
+              p.baseRevision.projectId === write.baseRevision.projectId &&
+              p.baseRevision.mappingId === write.baseRevision.mappingId,
+          ),
       ),
       saveReceipts: (this.saveReceipts()[turn.turnId] ?? []).filter(
         (r) => r.status !== "saved",
@@ -484,6 +508,13 @@ export class RevisionChatComponent {
   private readonly saveFlights = new Map<string, Promise<void>>();
   private saveEpoch = 0;
   private resetSaveReads(): void {
+    this.proposalEpoch++;
+    this.proposalFlights.clear();
+    this.proposalVersions.clear();
+    this.proposals.set({});
+    this.proposalReviews.set({});
+    this.proposalProblems.set({});
+    this.readingProposals.set(new Set());
     ++this.saveEpoch;
     this.saveFlights.clear();
     this.readingSaves.set(new Set());
@@ -501,7 +532,8 @@ export class RevisionChatComponent {
         writes.push(receipt.write);
     return writes;
   }
-  async refreshSaves(turn: ChatTurn, recover = false): Promise<void> {
+  async refreshSaves(turn: ChatTurn): Promise<void> {
+    void this.refreshProposals(turn);
     const conversation = this.current(),
       scope = this.activeScope(),
       generation = this.generation,
@@ -516,6 +548,7 @@ export class RevisionChatComponent {
     // Serialize a turn's reads without dropping a later refresh. Other turns read independently.
     const flight = previous.then(async () => {
       if (stale()) return;
+      const version = this.proposalVersions.get(turn.turnId) ?? 0;
       try {
         const receipts = await this.admitted((context, signal) =>
           this.api.mappingWrites(
@@ -524,17 +557,24 @@ export class RevisionChatComponent {
             signal,
             conversation.conversationId,
             turn.turnId,
-            recover,
+            false,
           ),
         );
-        if (stale()) return;
+        if (
+          stale() ||
+          version !== (this.proposalVersions.get(turn.turnId) ?? 0)
+        )
+          return;
         this.saveReceipts.update((all) => ({
           ...all,
           [turn.turnId]: receipts,
         }));
         this.saveProblems.update((all) => ({ ...all, [turn.turnId]: "" }));
       } catch {
-        if (!stale())
+        if (
+          !stale() &&
+          version === (this.proposalVersions.get(turn.turnId) ?? 0)
+        )
           this.saveProblems.update((all) => ({
             ...all,
             [turn.turnId]:
@@ -557,6 +597,278 @@ export class RevisionChatComponent {
       }
     }
   }
+  readonly proposals = signal<Record<string, MappingProposal[]>>({});
+  readonly proposalReviews = signal<Record<string, ProposalReviewState>>({});
+  readonly proposalProblems = signal<Record<string, string>>({});
+  readonly readingProposals = signal<ReadonlySet<string>>(new Set());
+  private proposalEpoch = 0;
+  private readonly proposalFlights = new Map<string, Promise<void>>();
+  private readonly proposalVersions = new Map<string, number>();
+  proposalKey(turn: ChatTurn, proposal: MappingProposal): string {
+    return `${turn.turnId}:${proposal.proposalId}`;
+  }
+  private proposalGuard(
+    turn: ChatTurn,
+    proposal?: MappingProposal,
+  ): (() => boolean) | null {
+    const current = this.current(),
+      epoch = this.proposalEpoch,
+      generation = this.generation,
+      owner = catalogOwner(this.context());
+    if (
+      !current ||
+      !isWorkspace(current) ||
+      !this.turns().some((t) => t.turnId === turn.turnId)
+    )
+      return null;
+    return () =>
+      epoch !== this.proposalEpoch ||
+      generation !== this.generation ||
+      owner !== catalogOwner(this.context()) ||
+      this.current()?.conversationId !== current.conversationId ||
+      (proposal !== undefined &&
+        !this.proposals()[turn.turnId]?.some((p) => sameProposal(p, proposal)));
+  }
+  private setProposalReview(
+    key: string,
+    change: Partial<ProposalReviewState>,
+  ): void {
+    this.proposalReviews.update((all) => ({
+      ...all,
+      [key]: { ...all[key], ...change },
+    }));
+  }
+  async refreshProposals(turn: ChatTurn): Promise<void> {
+    const stale = this.proposalGuard(turn),
+      current = this.current(),
+      scope = this.activeScope();
+    if (
+      !stale ||
+      !current ||
+      "revisionId" in scope ||
+      this.proposals()[turn.turnId]?.some(
+        (p) => this.proposalReviews()[this.proposalKey(turn, p)]?.busy,
+      )
+    )
+      return;
+    const epoch = this.proposalEpoch,
+      key = `${epoch}:${turn.turnId}`;
+    const previous = this.proposalFlights.get(key) ?? Promise.resolve();
+    const flight = previous.then(async () => {
+      if (stale()) return;
+      const version = this.proposalVersions.get(turn.turnId) ?? 0;
+      try {
+        const result = await this.admitted((c, s) =>
+          this.api.proposals(scope, c, s, current.conversationId, turn.turnId),
+        );
+        if (
+          stale() ||
+          version !== (this.proposalVersions.get(turn.turnId) ?? 0)
+        )
+          return;
+        this.proposalReviews.update((all) => {
+          const next = { ...all };
+          for (const old of this.proposals()[turn.turnId] ?? []) {
+            const id = this.proposalKey(turn, old),
+              replacement = result.find((p) => sameProposal(old, p));
+            if (!replacement) delete next[id];
+            else next[id] = { ...next[id], uncertain: false, message: "" };
+          }
+          return next;
+        });
+        this.proposals.update((all) => ({ ...all, [turn.turnId]: result }));
+        this.proposalProblems.update((all) => ({ ...all, [turn.turnId]: "" }));
+      } catch {
+        if (
+          stale() ||
+          version !== (this.proposalVersions.get(turn.turnId) ?? 0)
+        )
+          return;
+        this.proposalProblems.update((all) => ({
+          ...all,
+          [turn.turnId]:
+            "Couldn't read proposal status. Refresh before approving or retrying.",
+        }));
+        for (const p of this.proposals()[turn.turnId] ?? [])
+          this.setProposalReview(this.proposalKey(turn, p), {
+            details: undefined,
+            reviewed: false,
+            uncertain: true,
+          });
+      }
+    });
+    this.proposalFlights.set(key, flight);
+    this.readingProposals.update((all) => new Set([...all, turn.turnId]));
+    await flight;
+    if (!stale() && this.proposalFlights.get(key) === flight) {
+      this.proposalFlights.delete(key);
+      this.readingProposals.update((all) => {
+        const next = new Set(all);
+        next.delete(turn.turnId);
+        return next;
+      });
+    }
+  }
+  async readProposalOperations(
+    turn: ChatTurn,
+    proposal: MappingProposal,
+  ): Promise<void> {
+    const stale = this.proposalGuard(turn, proposal),
+      current = this.current(),
+      scope = this.activeScope(),
+      key = this.proposalKey(turn, proposal);
+    if (!stale || !current || this.proposalReviews()[key]?.busy) return;
+    this.setProposalReview(key, { busy: true, reviewed: false, message: "" });
+    try {
+      const details = await this.admitted((c, s) =>
+        this.api.proposalDetails(
+          scope,
+          c,
+          s,
+          current.conversationId,
+          turn.turnId,
+          proposal,
+        ),
+      );
+      if (!stale()) this.setProposalReview(key, { details });
+    } catch {
+      if (!stale())
+        this.setProposalReview(key, {
+          details: undefined,
+          message:
+            "Couldn't verify the complete operations. Refresh the proposal and try again.",
+        });
+    } finally {
+      if (!stale()) this.setProposalReview(key, { busy: false });
+    }
+  }
+  markProposalReviewed(
+    turn: ChatTurn,
+    proposal: MappingProposal,
+    event: Event,
+  ): void {
+    const key = this.proposalKey(turn, proposal);
+    if (
+      this.proposalReviews()[key]?.details?.fingerprint === proposal.fingerprint
+    )
+      this.setProposalReview(key, {
+        reviewed: (event.target as HTMLInputElement).checked,
+      });
+  }
+  canApproveProposal(turn: ChatTurn, proposal: MappingProposal): boolean {
+    const review = this.proposalReviews()[this.proposalKey(turn, proposal)];
+    return (
+      ["awaitingApproval", "approved", "pending", "notSaved"].includes(
+        proposal.status,
+      ) &&
+      !this.proposalProblems()[turn.turnId] &&
+      !this.readingProposals().has(turn.turnId) &&
+      !review?.busy &&
+      !review?.uncertain &&
+      review?.reviewed === true &&
+      review.details?.fingerprint === proposal.fingerprint
+    );
+  }
+  async actOnProposal(
+    turn: ChatTurn,
+    proposal: MappingProposal,
+    action: "approve" | "recover",
+  ): Promise<void> {
+    const stale = this.proposalGuard(turn, proposal),
+      current = this.current(),
+      scope = this.activeScope(),
+      key = this.proposalKey(turn, proposal);
+    if (
+      !stale ||
+      !current ||
+      this.proposalReviews()[key]?.busy ||
+      this.proposalReviews()[key]?.uncertain ||
+      this.proposalProblems()[turn.turnId] ||
+      (action === "approve"
+        ? !this.canApproveProposal(turn, proposal)
+        : proposal.status !== "pending")
+    )
+      return;
+    this.proposalVersions.set(
+      turn.turnId,
+      (this.proposalVersions.get(turn.turnId) ?? 0) + 1,
+    );
+    this.setProposalReview(key, { busy: true, message: "" });
+    let confirmed = false;
+    try {
+      const result = await this.admitted((c, s) =>
+        this.api.actOnProposal(
+          scope,
+          c,
+          s,
+          current.conversationId,
+          turn.turnId,
+          proposal,
+          action,
+        ),
+      );
+      if (stale()) return;
+      confirmed = true;
+      this.proposals.update((all) => ({
+        ...all,
+        [turn.turnId]: all[turn.turnId]!.map((p) =>
+          p.proposalId === proposal.proposalId ? result : p,
+        ),
+      }));
+      this.setProposalReview(key, {
+        reviewed: false,
+        uncertain: false,
+        message:
+          result.status === "pending"
+            ? "Still pending. Recovery never supplies missing source. Review and explicitly approve this same proposal again if it needs source."
+            : "",
+      });
+    } catch {
+      if (!stale())
+        this.setProposalReview(key, {
+          uncertain: true,
+          reviewed: false,
+          message:
+            "The request outcome is unknown. No saved version is confirmed. Refresh status before retrying this exact proposal.",
+        });
+    } finally {
+      if (!stale()) {
+        this.proposalVersions.set(
+          turn.turnId,
+          (this.proposalVersions.get(turn.turnId) ?? 0) + 1,
+        );
+        this.setProposalReview(key, { busy: false });
+        if (confirmed) await this.refreshSaves(turn);
+      }
+    }
+  }
+  proposalVersionLink(proposal: MappingProposal): string {
+    return catalogRoutes.revision({
+      ...proposal.baseRevision,
+      revisionId: proposal.revisionId!,
+    });
+  }
+  prepareProposalQuestion(turn: ChatTurn, proposal: MappingProposal): void {
+    if (
+      !this.canUpdate() ||
+      this.hasPending() ||
+      proposal.status !== "outOfDate"
+    )
+      return;
+    const question = `Prepare a new proposal for mapping ${proposal.baseRevision.mappingId} after reading its current head. The previous proposal ${proposal.proposalId} (fingerprint ${proposal.fingerprint}) is out of date. Do not save or approve anything; I will review the new exact proposal separately. Original request: ${JSON.stringify(turn.text)}`;
+    if (
+      new TextEncoder().encode(question).length >
+      (this.availability()?.limits.maxTextBytes ?? 0)
+    ) {
+      this.setProposalReview(this.proposalKey(turn, proposal), {
+        message:
+          "Write a new question naming this mapping and the intended change; the original request exceeds the question limit.",
+      });
+      return;
+    }
+    this.draft.set(question);
+  }
+
   /** Per receipt: the Undo request key, retained until its outcome is known so a retry never saves twice. */
   readonly writeStates = signal<
     Record<string, { key: string; busy: boolean; message: string }>
@@ -1554,6 +1866,8 @@ export class RevisionChatComponent {
                 throw new ChatError("bodyLimit");
               this.lastSequence = value.sequence;
               this.events.update((events) => [...events, value]);
+              if (value.type === "tool.completed" || terminal(value))
+                void this.refreshProposals(selected);
               if (terminal(value)) {
                 const phase =
                   value.type === "turn.completed"
