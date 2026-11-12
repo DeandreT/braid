@@ -44,6 +44,7 @@ internal static class XmlPreviewSchemaAdmission
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken token)
     {
         if (!await InstalledAsync(connection, transaction, token)) return;
+        await DocumentJsonSchemaAdmission.ValidateAsync(connection, transaction, token);
         await BuildRoleGuard.ValidateFunctionsAsync(connection, transaction, Functions, Definitions.Value, token);
         var grants = Functions.Select(name => (name, "weft_migrator")).ToHashSet();
         foreach (var name in new[] { "preview_submit_xml", "preview_complete_xml", "preview_xml_inputs", "preview_xml_documents" }) grants.Add((name, "weft_preview_writer"));

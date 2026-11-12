@@ -34,6 +34,10 @@ public sealed class XmlPreviewDatabaseTests(PostgresFixture fixture)
         Assert.Equal(before, await SnapshotAsync());
         Assert.Equal(functions, await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(proname,prosrc,proacl::text,proowner,proconfig) ORDER BY proname,oid)::text FROM pg_proc WHERE pronamespace='weft'::regnamespace AND NOT proname=ANY($1)", (object)XmlPreviewSchemaAdmission.Functions));
         Assert.Equal(grants, await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(relname,relacl::text,(SELECT jsonb_agg(jsonb_build_array(attname,attacl::text) ORDER BY attnum) FROM pg_attribute WHERE attrelid=c.oid AND attnum>0)) ORDER BY relname)::text FROM pg_class c WHERE relnamespace='weft'::regnamespace AND relname NOT IN ('xml_preview_documents','xml_preview_documents_pkey')"));
+        // 0042 conservation is independent of the corrective helper supplied in
+        // 0047. Current admission refuses that incomplete historical XML suffix.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SubmitAsync(catalog.Actor, XmlSubmission(revision)));
+        await catalog.Case.MigrateAsync();
         var submission = XmlSubmission(revision);
         var run = (await service.SubmitAsync(catalog.Actor, submission)).RunId!.Value;
         Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, run), await service.SubmitAsync(catalog.Actor, submission));
@@ -46,7 +50,7 @@ public sealed class XmlPreviewDatabaseTests(PostgresFixture fixture)
         Assert.Equal(XmlDocumentMetadata.WithoutHints, (await reader.ReadInputAsync(catalog.Actor, revision.OrganizationId, run, 0))!.XmlMetadata);
         Assert.Null(await reader.ReadOutputAsync(new(new PrincipalId(catalog.Seed.Bob)), revision.OrganizationId, run, 0));
         var populated = await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal)::text FROM weft.xml_preview_documents d");
-        await MigrateXmlAsync();
+        await catalog.Case.MigrateAsync();
         Assert.Equal(populated, await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal)::text FROM weft.xml_preview_documents d"));
         await catalog.Case.ExecuteAsync("UPDATE weft.project_memberships SET role='viewer',version=version+1 WHERE principal_id=$1 AND project_id=$2", catalog.Actor.PrincipalId.Value, revision.ProjectId);
         Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound, (await service.SubmitAsync(catalog.Actor, submission)).Outcome);
