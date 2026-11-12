@@ -1,5 +1,7 @@
 # Specification object storage foundation
 
+**Follow-up:** [Durable bundle registry](spec-bundle-registry.md) adds the PostgreSQL implementation and lifecycle service behind these hooks. The original foundation description below records its initial scope. Production remains unregistered; 0044 waits for the real 0042/0043 predecessors and database qualification.
+
 This unit adds project/bundle-owned storage contracts without introducing a mapping or revision scope.
 No server composition, API, database role, registry implementation or migration enables the capability.
 
@@ -34,6 +36,8 @@ Tests exercise the real adapter through SDK client subclasses with no HTTP trans
 `FileSystemSpecObjectStore` is intentionally **unavailable on every platform** and does no filesystem I/O, even when a registry is supplied. Canonical configuration validation reuses `FileSystemStorageOptions`. It never falls back to ordinary path-based I/O, follows a junction/reparse point/symlink, or fabricates a revision identity.
 
 The existing descriptor-relative Linux implementation is suitable low-level infrastructure, but its v2 owner records, temporary-file identity binding, publication seals and retirement records are revision-specific. Enabling bundle storage requires a new bundle-owned durable protocol on those primitives, crash/restart and cross-process qualification, and an equivalent permanent no-resurrection fence. Windows remains unavailable until an independently qualified handle-relative implementation exists. Passing these offline tests is not filesystem qualification.
+
+See [filesystem protocol prerequisites](spec-filesystem-protocol-prerequisites.md) for the inspected native primitives, missing bundle ownership/recovery contracts, and exact supported-platform qualification cases. The follow-up capability tests preserve this unavailable boundary; they do not enable a filesystem protocol.
 
 ## Required registry/lifecycle integration
 

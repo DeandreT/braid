@@ -73,6 +73,7 @@ public sealed class SpecEvidenceChunk
 /// <summary>Failure is atomic: no partial evidence. Diagnostics are fixed codes, never document content.</summary>
 public sealed class SpecExtractionResult
 {
+    private readonly byte[] canonicalEvidence;
     internal SpecExtractionResult(SpecCapturedSource source, SpecExtractionLimits limits, SpecExtractionOutcome outcome,
         string code, IReadOnlyList<SpecEvidenceChunk> chunks)
     {
@@ -98,14 +99,17 @@ public sealed class SpecExtractionResult
             }
             writer.WriteEndArray();
         }
+        canonicalEvidence = stream.ToArray();
         Identity = new(source.Identity, source.Digest, source.Format, SpecSourceExtractor.Version, limits.Digest, outcome,
-            Sha256Digest.FromBytes(stream.ToArray()));
+            Sha256Digest.FromBytes(canonicalEvidence));
     }
 
     public SpecExtractionIdentity Identity { get; }
     public SpecExtractionOutcome Outcome => Identity.Outcome;
     public string Code { get; }
     public IReadOnlyList<SpecEvidenceChunk> Chunks { get; }
+    /// <summary>Exact immutable evidence serialization whose digest is pinned by Identity; not a prompt or authority.</summary>
+    public byte[] CopyEvidenceBytes() => (byte[])canonicalEvidence.Clone();
 
     /// <summary>Constructs a citation only to an existing chunk of this exact extraction; conveys no read authority.</summary>
     public SpecEvidenceCitation Cite(int ordinal)

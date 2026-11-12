@@ -29,7 +29,8 @@ public interface ISpecObjectRetirementStore
 public interface ISpecObjectStore : ISpecObjectPublisher, ISpecObjectReader, ISpecObjectRetirementStore { }
 
 /// <summary>
-/// Trusted, authoritative lifecycle port, NOT user authorization. No production implementation exists yet.
+/// Trusted, authoritative lifecycle port, NOT user authorization. The PostgreSQL session supplies the durable implementation;
+/// production activation still requires its installed schema and qualified physical backend.
 /// Admission must match store, scope, source version, kind, object, digest, length and actual owner/attempt.
 /// Publication admission precedes reading caller bytes. ExecutePublication rechecks tombstones and owns a cross-process
 /// fence through physical publication AND durable acknowledgement. A bool check followed by an unfenced write is invalid.

@@ -1,5 +1,21 @@
 namespace Weft.Domain;
 
+public enum SpecStoreKind { Blob = 1, FileSystem = 2 }
+
+/// <summary>Owner-provisioned physical location fingerprint; not a caller access grant.</summary>
+public sealed record SpecStoreBinding
+{
+    public SpecStoreBinding(Guid storeId, SpecStoreKind kind, Sha256Digest locationDigest)
+    {
+        if (storeId == Guid.Empty || !Enum.IsDefined(kind)) throw new ArgumentException("A physical store binding is required.");
+        ArgumentNullException.ThrowIfNull(locationDigest);
+        StoreId = storeId; Kind = kind; LocationDigest = locationDigest;
+    }
+    public Guid StoreId { get; }
+    public SpecStoreKind Kind { get; }
+    public Sha256Digest LocationDigest { get; }
+}
+
 public enum SpecObjectKind { Original = 1, Extraction = 2 }
 
 /// <summary>Opaque project/bundle-owned identity. Never a revision, filename, physical path or authority.</summary>
