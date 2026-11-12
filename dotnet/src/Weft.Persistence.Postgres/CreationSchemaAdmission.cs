@@ -11,11 +11,11 @@ internal static class CreationSchemaAdmission
         MigrationRunner.EmbeddedMigrations.Single(m => m.Version == 45).Sql,
         @"CREATE FUNCTION weft\.creation_ingestion_guard\(\).*?AS \$body\$(.*?)\$body\$;", System.Text.RegularExpressions.RegexOptions.Singleline).Groups[1].Value;
     // Catalog shape captured from the actual complete migration, independent of its journal claim.
-    internal const string ShapeDigest = "c83fdfddbf19280f0d273ce79dd5be826583d7f0644a0a8ed91f783962503a79";
+    internal const string ShapeDigest = "77c8a1b6c7e14bad1f7efe2ee636b2248e0ba6c37d1f4fc8d50af7010dc35371";
     internal static readonly string[] Tables = ["creation_proposals", "creation_sources", "creation_approvals"];
     internal static readonly string[] Functions = System.Text.RegularExpressions.Regex.Matches(
-        MigrationRunner.EmbeddedMigrations.Single(m => m.Version == 45).Sql, @"CREATE FUNCTION weft\.(creation_\w+)\(")
-        .Select(m => m.Groups[1].Value).ToArray();
+        MigrationRunner.EmbeddedMigrations.Single(m => m.Version == 45).Sql + DocumentEvidenceSchemaAdmission.MigrationSql, @"CREATE (?:OR REPLACE )?FUNCTION weft\.((?:creation_|document_evidence_)\w+)\(")
+        .Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal).ToArray();
     internal static readonly string[] Roles = ["weft_creation_reader", "weft_creation_writer", "weft_creation_approver"];
 
     internal static async Task<string> ShapeAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
@@ -49,7 +49,7 @@ internal static class CreationSchemaAdmission
                 UNION ALL
                 SELECT 'function/'||p.oid::regprocedure::text,jsonb_build_array(pg_get_function_result(p.oid),p.prosrc,p.prosecdef,pg_get_userbyid(p.proowner),p.proconfig,p.provolatile,p.proisstrict,p.proparallel,p.proacl::text,
                     p.proargnames,p.prokind,p.proleakproof,p.proargmodes,pg_get_expr(p.proargdefaults,0),p.prosupport::regproc::text)::text
-                FROM pg_proc p WHERE p.pronamespace='weft'::regnamespace AND (p.proname LIKE 'creation\_%' ESCAPE '\' OR p.proname LIKE 'spec\_%' ESCAPE '\'
+                FROM pg_proc p WHERE p.pronamespace='weft'::regnamespace AND (p.proname LIKE 'creation\_%' ESCAPE '\' OR p.proname LIKE 'spec\_%' ESCAPE '\' OR p.proname='document_evidence_schema_version'
                     OR EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgfoid=p.oid AND c.relnamespace='weft'::regnamespace AND c.relname=ANY($1)))
                 UNION ALL
                 SELECT 'inherit/'||c.relname,jsonb_build_array(i.inhparent::regclass::text,i.inhseqno)::text FROM pg_class c JOIN pg_inherits i ON i.inhrelid=c.oid
@@ -80,9 +80,9 @@ internal static class CreationSchemaAdmission
     {
         var allowed = profile switch
         {
-            CreationDatabaseProfile.Reader => new[] { "creation_read", "creation_schema_version" },
-            CreationDatabaseProfile.Writer => ["creation_read", "creation_schema_version", "creation_select", "creation_retain"],
-            _ => ["creation_read", "creation_schema_version", "creation_approve", "creation_fence"]
+            CreationDatabaseProfile.Reader => new[] { "creation_read", "creation_schema_version", "document_evidence_schema_version" },
+            CreationDatabaseProfile.Writer => ["creation_read", "creation_schema_version", "creation_select", "creation_retain", "document_evidence_schema_version"],
+            _ => ["creation_read", "creation_schema_version", "creation_approve", "creation_fence", "document_evidence_schema_version"]
         };
         await using var guard = new NpgsqlCommand("""
             SELECT current_user=session_user AND current_user=$1 AND r.rolcanlogin AND NOT r.rolinherit AND NOT r.rolsuper
@@ -117,5 +117,6 @@ internal static class CreationSchemaAdmission
         await using var history = new NpgsqlCommand("SELECT weft.creation_schema_version()", connection, transaction);
         if (await history.ExecuteScalarAsync(ct).ConfigureAwait(false) is not string checksum || checksum != MigrationChecksum)
             throw new InvalidOperationException("Creation migration history mismatch.");
+        await DocumentEvidenceSchemaAdmission.ValidateAsync(connection, transaction, ct).ConfigureAwait(false);
     }
 }

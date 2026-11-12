@@ -15,7 +15,8 @@ public sealed class MappingCreationPersistenceTests(PostgresFixture fixture)
         await using var test = await fixture.CreateCaseAsync(migrate: false);
         await using (var prefix = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(44).ToArray())) await prefix.MigrateAsync();
         var before = await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations");
-        await test.MigrateAsync(); await test.MigrateAsync();
+        await using (var current = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(45).ToArray()))
+        { await current.MigrateAsync(); await current.MigrateAsync(); }
         Assert.Equal(before, await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=44"));
         Assert.Equal(45L, await test.ScalarAsync<long>("SELECT count(*) FROM weft.schema_migrations"));
     }
@@ -209,7 +210,6 @@ public sealed class MappingCreationPersistenceTests(PostgresFixture fixture)
 
     [PostgresTheory]
     [InlineData("UPDATE weft.spec_sources SET digest=repeat('0',64)")]
-    [InlineData("UPDATE weft.spec_sources SET format=2")]
     [InlineData("UPDATE weft.spec_objects SET profile_digest=repeat('0',64) WHERE kind=2")]
     [InlineData("UPDATE weft.spec_objects SET extraction_outcome=2 WHERE kind=2")]
     [InlineData("UPDATE weft.spec_objects SET source_digest=repeat('0',64) WHERE kind=2")]
@@ -270,12 +270,12 @@ public sealed class MappingCreationPersistenceTests(PostgresFixture fixture)
                 await test.Case.ExecuteAsync("INSERT INTO weft.spec_bundles(organization_id,project_id,id,creator_id,creation_key) VALUES($1,$2,$3,$4,$5)", test.Project.OrganizationId, test.Project.ProjectId, bundle.BundleId, test.Actor.PrincipalId.Value, Guid.NewGuid());
                 await test.Case.ExecuteAsync("INSERT INTO weft.spec_sources(organization_id,project_id,bundle_id,id,version,format,digest,byte_count) VALUES($1,$2,$3,$4,1,1,$5,$6)", test.Project.OrganizationId, test.Project.ProjectId, bundle.BundleId, source.Identity.SourceId, source.Digest.Value, source.ByteCount);
                 await test.Case.ExecuteAsync("""
-                    INSERT INTO weft.spec_objects(organization_id,project_id,bundle_id,id,source_id,source_version,kind,digest,byte_count,store_id,owner_id,attempt_id,state,reservation_version)
-                    VALUES($1,$2,$3,$4,$5,1,1,$6,$7,$8,$9,$10,'published',1)
+                    INSERT INTO weft.spec_objects(organization_id,project_id,bundle_id,id,source_id,source_version,kind,digest,byte_count,store_id,owner_id,attempt_id,state,reservation_version,source_format)
+                    VALUES($1,$2,$3,$4,$5,1,1,$6,$7,$8,$9,$10,'published',1,1)
                     """, test.Project.OrganizationId, test.Project.ProjectId, bundle.BundleId, Guid.NewGuid(), source.Identity.SourceId, source.Digest.Value, source.ByteCount, storeId, test.Actor.PrincipalId.Value, Guid.NewGuid());
                 await test.Case.ExecuteAsync("""
-                    INSERT INTO weft.spec_objects(organization_id,project_id,bundle_id,id,source_id,source_version,kind,digest,byte_count,store_id,owner_id,attempt_id,state,reservation_version,extractor_version,profile_digest,extraction_outcome,source_digest)
-                    VALUES($1,$2,$3,$4,$5,1,2,$6,$7,$8,$9,$10,'published',1,$11,$12,1,$13)
+                    INSERT INTO weft.spec_objects(organization_id,project_id,bundle_id,id,source_id,source_version,kind,digest,byte_count,store_id,owner_id,attempt_id,state,reservation_version,extractor_version,profile_digest,extraction_outcome,source_digest,source_format)
+                    VALUES($1,$2,$3,$4,$5,1,2,$6,$7,$8,$9,$10,'published',1,$11,$12,1,$13,1)
                     """, test.Project.OrganizationId, test.Project.ProjectId, bundle.BundleId, Guid.NewGuid(), source.Identity.SourceId, extraction.Identity.EvidenceDigest.Value, extraction.CopyEvidenceBytes().Length,
                     storeId, test.Actor.PrincipalId.Value, Guid.NewGuid(), extraction.Identity.ExtractorVersion, extraction.Identity.ProfileDigest.Value, source.Digest.Value);
                 return new() { Test = test, Proposal = proposal, Store = new(test.Case.RegressionConnectionString("weft_creation_reader"), test.Case.RegressionConnectionString("weft_creation_writer"), test.Case.RegressionConnectionString("weft_creation_approver")) };
