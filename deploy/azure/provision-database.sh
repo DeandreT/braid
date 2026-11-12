@@ -40,6 +40,19 @@ export WEFT_ADMINISTRATION_PASSWORD=${WEFT_ADMINISTRATION_PASSWORD:-}
 export WEFT_SPEC_READER_PASSWORD=${WEFT_SPEC_READER_PASSWORD:-}
 export WEFT_SPEC_WRITER_PASSWORD=${WEFT_SPEC_WRITER_PASSWORD:-}
 export WEFT_SPEC_MAINTENANCE_PASSWORD=${WEFT_SPEC_MAINTENANCE_PASSWORD:-}
+export WEFT_CREATION_READER_PASSWORD=${WEFT_CREATION_READER_PASSWORD:-}
+export WEFT_CREATION_WRITER_PASSWORD=${WEFT_CREATION_WRITER_PASSWORD:-}
+export WEFT_CREATION_APPROVER_PASSWORD=${WEFT_CREATION_APPROVER_PASSWORD:-}
+creation_passwords=()
+for role in READER WRITER APPROVER; do
+  variable=WEFT_CREATION_${role}_PASSWORD
+  [[ -n ${!variable} ]] || continue
+  for previous in "${creation_passwords[@]}"; do
+    [[ ${!variable} != "$previous" ]] || { echo 'Creation profile passwords must be independent.' >&2; exit 2; }
+  done
+  creation_passwords+=("${!variable}")
+done
+unset creation_passwords previous
 # The role is required by the schema even without administration enabled. An
 # absent opt-in credential leaves its password login unusable.
 
@@ -93,6 +106,9 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=weft --quiet <<'SQL'
 \getenv spec_reader_password WEFT_SPEC_READER_PASSWORD
 \getenv spec_writer_password WEFT_SPEC_WRITER_PASSWORD
 \getenv spec_maintenance_password WEFT_SPEC_MAINTENANCE_PASSWORD
+\getenv creation_reader_password WEFT_CREATION_READER_PASSWORD
+\getenv creation_writer_password WEFT_CREATION_WRITER_PASSWORD
+\getenv creation_approver_password WEFT_CREATION_APPROVER_PASSWORD
 BEGIN;
 -- PostgreSQL 16 records a non-superuser creator as an ADMIN member of every role it creates,
 -- and the migrations refuse any membership on the restricted profiles. A temporary creator
@@ -184,6 +200,10 @@ CREATE ROLE weft_draft_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERI
 CREATE ROLE weft_spec_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_reader_password';
 CREATE ROLE weft_spec_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_writer_password';
 CREATE ROLE weft_spec_maintenance LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_maintenance_password';
+CREATE ROLE weft_creation_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_reader_password';
+CREATE ROLE weft_creation_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_writer_password';
+CREATE ROLE weft_creation_approver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'creation_approver_password';
+GRANT CONNECT ON DATABASE weft TO weft_creation_reader,weft_creation_writer,weft_creation_approver;
 GRANT CONNECT ON DATABASE weft TO weft_chat_approver,weft_spec_reader,weft_spec_writer,weft_spec_maintenance;
 GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer, weft_case_reader, weft_case_writer, weft_run_reader, weft_run_writer, weft_build_reader, weft_build_writer, weft_build_run_reader, weft_build_run_writer, weft_build_dispatcher, weft_build_metadata_reader;
 GRANT CONNECT ON DATABASE weft TO weft_qualification_reader,weft_qualification_writer,weft_comparison_settler;

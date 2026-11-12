@@ -9,7 +9,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
 {
     internal static string[] TriggerNames(string table) => MaintenanceSchemaContract.Triggers
         .Where(trigger => trigger.Table == table).Select(trigger => trigger.Name).Concat(AutomationSchemaAdmission.TriggerNames(table))
-        .Concat(table == "revision_ingestions" ? new[] { "chat_mapping_write_commit" } : []).ToArray();
+        .Concat(table == "revision_ingestions" ? new[] { "chat_mapping_write_commit", "revision_ingestions_creation_guard" } : []).ToArray();
 
     internal static string[] IndexNames(IEnumerable<string> tables) => MaintenanceSchemaContract.Indexes
         .Where(index => tables.Contains(index.Table, StringComparer.Ordinal)).Select(index => index.Name).ToArray();
@@ -42,6 +42,8 @@ internal static class SupplementalMaintenanceSchemaAdmission
         await ValidatePoliciesAsync(connection, transaction, tables.Keys.ToArray(), cancellationToken);
         await ValidateFunctionsAsync(connection, transaction, cancellationToken);
         await ValidateTriggersAsync(connection, transaction, tables, cancellationToken);
+        if (await CreationSchemaAdmission.ShapeAsync(connection, transaction, cancellationToken) != CreationSchemaAdmission.ShapeDigest)
+            throw Refusal("Creation publication guards and their authority dependencies must match the admitted schema.");
         await ValidateIndexesAsync(connection, transaction, cancellationToken);
         await ValidateGrantsAsync(connection, transaction, cancellationToken);
     }
@@ -147,6 +149,8 @@ internal static class SupplementalMaintenanceSchemaAdmission
             MaintenanceSchemaContract.Functions[trigger.Function].Body, "pg_catalog, weft, pg_temp")).ToList();
         expected.Add(new("chat_mapping_write_commit", "revision_ingestions", "audit_chat_mapping_write_commit", 17,
             true, ChatSchemaContract.MappingCommitTriggerBody, "pg_catalog, weft, pg_temp"));
+        expected.Add(new("revision_ingestions_creation_guard", "revision_ingestions", "creation_ingestion_guard", 23,
+            true, CreationSchemaAdmission.IngestionGuardBody, "pg_catalog, weft, pg_temp"));
         // Validate the retained older guard as well: this admits the complete set,
         // never an arbitrary extra trigger or a count relaxed to at least one.
         foreach (var table in tables.Values.Where(table => table.FunctionBody is not null &&

@@ -123,7 +123,7 @@ internal static class HistoricalPreviewAccess
             foreach (Match match in Regex.Matches(script.Sql, pattern, RegexOptions.Singleline | RegexOptions.CultureInvariant))
                 definitions[match.Groups["name"].Value] = match;
         }
-        await BuildRoleGuard.ValidateFunctionsAsync(owner, admission, definitions.Keys.ToArray(), definitions, default);
+        await ValidateFunctionsAsync(owner, admission, definitions);
         var role = writer ? "weft_preview_writer" : "weft_preview_reader";
         await using var connection = PostgresServerSessionTestSupport.Unpooled(writer ? test.PreviewWriterConnectionString : test.PreviewReaderConnectionString);
         await connection.OpenAsync();
@@ -149,6 +149,44 @@ internal static class HistoricalPreviewAccess
         await transaction.CommitAsync();
         return result;
     }
+
+    private static async Task ValidateFunctionsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        Dictionary<string, Match> definitions)
+    {
+        // This parser has named tag/body captures. BuildRoleGuard's unrelated
+        // numeric capture layout cannot describe historical preview routines.
+        await using var command = new NpgsqlCommand("""
+            SELECT p.proname,p.prosrc,p.prosecdef,p.provolatile,l.lanname,pg_catalog.oidvectortypes(p.proargtypes),p.proargnames[1:p.pronargs],
+                p.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='weft_migrator')
+                AND NOT p.proleakproof AND NOT p.proisstrict AND p.prokind='f' AND p.proparallel='u' AND p.pronargdefaults=0
+                AND p.proconfig=ARRAY['search_path=pg_catalog, weft, pg_temp']::text[]
+                AND NOT EXISTS(SELECT 1 FROM pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f',p.proowner))) a WHERE a.grantee=0),
+                pg_catalog.pg_get_function_result(p.oid)
+            FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+            JOIN pg_catalog.pg_language l ON l.oid=p.prolang WHERE n.nspname='weft' AND p.proname=ANY($1)
+            """, connection, transaction);
+        command.Parameters.AddWithValue(definitions.Keys.ToArray());
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        await using var rows = await command.ExecuteReaderAsync();
+        while (await rows.ReadAsync())
+        {
+            var name = rows.GetString(0);
+            var definition = definitions[name];
+            var args = definition.Groups["arguments"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(value => Regex.Split(value, @"\s+", RegexOptions.CultureInvariant)).ToArray();
+            Require(seen.Add(name) && rows.GetString(1) == definition.Groups["body"].Value &&
+                rows.GetBoolean(2) == (definition.Groups["security"].Value == "DEFINER") &&
+                rows.GetChar(3) == (definition.Groups["volatility"].Value switch { "IMMUTABLE" => 'i', "STABLE" => 's', _ => 'v' }) &&
+                rows.GetString(4) == definition.Groups["language"].Value &&
+                rows.GetString(5) == string.Join(", ", args.Select(arg => string.Join(" ", arg.Skip(1)))) &&
+                (rows.IsDBNull(6) ? Array.Empty<string>() : rows.GetFieldValue<string[]>(6)).SequenceEqual(args.Select(arg => arg[0])) &&
+                rows.GetBoolean(7) && NormalizeResult(rows.GetString(8)) == NormalizeResult(definition.Groups["returns"].Value));
+        }
+        Require(seen.Count == definitions.Count && seen.Count > 0);
+    }
+
+    private static string NormalizeResult(string result) => Regex.Replace(
+        Regex.Replace(Regex.Replace(result.Trim(), @"\btimestamptz\b", "timestamp with time zone"), @"\s+", " "), @",\s*", ", ");
 
     private static void Require(bool accepted) { if (!accepted) throw Refused(); }
     private static InvalidOperationException Refused() => new("Historical preview fixture requires its exact restricted prefix.");
