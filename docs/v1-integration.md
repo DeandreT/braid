@@ -16,7 +16,7 @@ the subsequent reviewed authoring/preview units extend it as recorded below.
 The existing conditional resource rule activates 0044 only with real 0042/0043.
 No migration was renumbered, replaced, or fabricated.
 
-Current inventories and checksums cover 44 migrations. XML-only conservation
+The original inventories and checksums cover 44 migrations. XML-only conservation
 tests explicitly stop at 42; later chat-function changes are not attributed to
 XML. Full-upgrade conservation admits the specification suffix before excluding
 its objects, and accounts for the exact approver column grants and role.
@@ -128,6 +128,48 @@ Fixture corrections are under qualification. The helper restoration is reserved
 for additive 0047 after the real creation 0045 and document 0046 dependencies.
 Migrations 0001–0044 retain their original bytes.
 
+### Typed plans, PDF evidence and durable creation
+
+- Typed multi-format plans `5b513fb5` preserve legacy v1 bytes and add bounded v2
+  authoring. Review corrections cover explicit collection frames, nullable-group
+  shadowing and unsupported XML root iteration. All 36 format pairs execute with
+  the actual compiler and preview processes.
+- Native PDF worker `142095c4`, closed Office decoding `50ae3fd1`, and PDF creation
+  evidence `59b9b461` are integrated. Page order, blank pages and missing-text facts
+  remain exact; selected Partial PDFs require explicit coverage acknowledgement.
+- Historical fixture correction `d0ad2545` passed six actual PostgreSQL 16.15
+  cases, closing the three original mapping-draft upgrade failures and verifying
+  prefixes 36/40/41 against body, overload, ACL and journal drift.
+- Durable creation `d1105cd0`, merged as `93a2a53d`, adds the real migration 0045.
+  Its owner qualified 96 cases across runs/retries, including 20 PostgreSQL
+  persistence cases. Approval commits before lease acquisition; ingestion has an
+  independent transactional guard against lease-connection loss. See
+  `mapping-creation-persistence.md` for receipts and admission details.
+- Chat review `0b7121a6`, merged as `9124058f`, admits Specification disclosure and
+  exact creation citations. Both return-path validators preserve the fingerprint.
+  Fourteen parser tests, 153 .NET cases and one actual Chromium journey passed;
+  two Linux-only session-flow cases were skipped. Browser TypeScript and the
+  development build passed. See `creation-chat-review.md`.
+
+Exact `996f2cd4` passed 309 combined creation/Office/PDF/service tests, zero skips.
+The first PDF integration check selected an older shared-cache executable and
+failed argument refusal. The owner-built executable, independently checked against
+SHA-256 `378ed6314442771937a02966346e58971a028a1ddb00e59f458ad2512ff1db50`,
+passed all 11 process tests and the subsequent combined selection.
+
+Exact `93a2a53d` passed locked restore, the full Release solution build with zero
+warnings/errors, and 137 creation/authoring/evidence/preview tests with native
+PostgreSQL enabled, zero failed or skipped. This includes the 20 creation
+persistence cases. The retained receipt is
+`Temp/opencode/weft-creation-integration-results/creation-93a2a53d.trx` under the
+local application-data directory.
+
+Current migration inventory is 0001–0045. The first 44 retain their original bytes.
+The structural restoration codec, authenticated runtime discovery, document intake
+and migration 0046 are being integrated next. The approved 0047 helper correction
+depends on that real 0046 migration. Production worker activation still requires
+Linux containment qualification.
+
 ## Runtime qualification still required
 
 - Corrected populated-prefix PostgreSQL XML/upgrade checks and subsequent
@@ -139,6 +181,5 @@ Migrations 0001–0044 retain their original bytes.
 
 Specification intake remains opt-in, and filesystem specification publication
 remains unavailable. Browser fixture success does not qualify these backends.
-Published integration `0d9f8705` is assigned to the remote Linux qualification
-lane. The newer local checkpoints above await publication. `C:/example/checkout` main
-remains preserved.
+The remote Linux qualification lane receives exact published integration heads
+through issue #155. `C:/example/checkout` main remains preserved.
