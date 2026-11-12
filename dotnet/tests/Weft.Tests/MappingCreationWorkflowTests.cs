@@ -266,7 +266,7 @@ public sealed class MappingCreationWorkflowTests
             AfterPreview?.Invoke();
             var subject = new CreationPreviewSubject(proposal.Project, proposal.Id, proposal.Fingerprint,
                 WrongPreviewNative ? Sha256Digest.FromBytes("wrong"u8) : proposal.Compilation.NativeDigest, Sha256Digest.FromBytes(sample.Span));
-            return Task.FromResult(new CreationPreviewEvidence(subject, CreationPreviewOutcome.Succeeded, "preview only"u8));
+            return Task.FromResult(new CreationPreviewEvidence(subject, CreationPreviewOutcome.Succeeded, "preview only"u8, "csv", "text/csv"));
         }
         public Task<MappingCreationState?> RetainAsync(ActorContext actor, MappingCreationProposal proposal, CancellationToken ct)
         {
