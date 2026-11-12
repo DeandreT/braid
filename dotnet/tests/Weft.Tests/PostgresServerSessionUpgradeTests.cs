@@ -452,7 +452,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
     private static async Task AssertCurrentHistoryAsync(PostgresCase test)
     {
         var scripts = MigrationRunner.EmbeddedMigrations;
-        Assert.True(scripts.Count == PrefixVersion + 37
+        Assert.True(scripts.Count == PrefixVersion + 38
             && scripts.Take(PrefixVersion).Select(script => script.Checksum)
                 .SequenceEqual(PostgresServerSessionUpgradeConservation.PrefixChecksums, StringComparer.Ordinal)
             && scripts[PrefixVersion].Checksum == ServerSessionSchemaContract.MigrationChecksum
@@ -492,6 +492,7 @@ public sealed class PostgresServerSessionUpgradeTests(PostgresFixture fixture)
             && scripts[PrefixVersion + 34].Version == 44 && scripts[PrefixVersion + 34].Checksum == SpecSchemaTestContract.Checksum
             && scripts[PrefixVersion + 35].Version == 45 && scripts[PrefixVersion + 35].Checksum == CreationSchemaAdmission.MigrationChecksum
             && scripts[PrefixVersion + 36].Version == 46 && scripts[PrefixVersion + 36].Checksum == DocumentEvidenceSchemaAdmission.MigrationChecksum
+            && scripts[PrefixVersion + 37].Version == 47 && scripts[PrefixVersion + 37].Checksum == DocumentJsonSchemaAdmission.MigrationChecksum
             && typeof(MigrationRunner).Assembly.GetManifestResourceNames().Contains(
                 "Weft.Persistence.Postgres.Migrations." + ServerSessionSchemaContract.MigrationName + ".sql", StringComparer.Ordinal),
             "The embedded source is not the trusted prefix, exact session migration and exact suffix through mapping creation.");

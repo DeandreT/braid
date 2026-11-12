@@ -26,6 +26,7 @@ public sealed class XmlPreviewPersistenceTests(PostgresFixture fixture)
         Assert.Equal(history, await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m WHERE version<=41"));
         Assert.Equal(functions, await test.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(proname,prosrc,proacl::text,proowner,proconfig) ORDER BY proname,oid)::text FROM pg_proc WHERE pronamespace='weft'::regnamespace AND NOT proname=ANY($1)", (object)XmlPreviewSchemaAdmission.Functions));
         Assert.Equal(XmlPreviewSchemaAdmission.MigrationChecksum, await test.Case.ScalarAsync<string>("SELECT checksum FROM weft.schema_migrations WHERE version=42"));
+        await test.Case.MigrateAsync();
         var service = test.Service(new() { XmlEnabled = true });
         var submission = new PreviewRunSubmission(test.Revision, Guid.NewGuid(), PreviewTargetSelection.All,
             new(null, XmlPreviewWorkflowTests.Input, xmlMetadata: XmlDocumentMetadata.WithoutHints), [], [])
@@ -33,7 +34,7 @@ public sealed class XmlPreviewPersistenceTests(PostgresFixture fixture)
         var run = (await service.SubmitAsync(test.Alice, submission)).RunId!.Value;
         Assert.Equal(PreviewExecutionOutcome.Completed, await test.Executor(new Backend(), new() { XmlEnabled = true }).ExecuteAsync(test.Revision.OrganizationId, run, Guid.NewGuid()));
         var populated = await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal)::text FROM weft.xml_preview_documents d");
-        await MigrateXmlAsync();
+        await test.Case.MigrateAsync();
         Assert.Equal(populated, await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal)::text FROM weft.xml_preview_documents d"));
         Assert.Equal(XmlPreviewWorkflowTests.Input, (await service.ReadOutputAsync(test.Alice, test.Revision.OrganizationId, run, 0))!.Content);
         await test.Case.ExecuteAsync("UPDATE weft.project_memberships SET role='viewer',version=version+1 WHERE principal_id=$1 AND project_id=$2", test.Alice.PrincipalId.Value, test.Revision.ProjectId);

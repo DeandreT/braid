@@ -228,7 +228,7 @@ public sealed partial class ChatTurnOrchestrator
                 s.Round.Intent.RoundId, s.Execution.Token).ConfigureAwait(false);
             if (round != s.Round) throw Stop(ChatOrchestrationOutcome.Interrupted);
         }
-        await CheckPayloadAuthorityAsync(s, s.PayloadSources).ConfigureAwait(false);
+        await CheckPayloadAuthorityAsync(s, s.PayloadSources, s.RetainedProposals).ConfigureAwait(false);
         CheckTime(s.Execution, s.Facts.Intent);
     }
 
@@ -239,10 +239,14 @@ public sealed partial class ChatTurnOrchestrator
         if (Now >= intent.DeadlineUtc) throw Stop(ChatOrchestrationOutcome.BudgetExceeded);
     }
 
-    private async Task CheckPayloadAuthorityAsync(State s, IReadOnlyList<ChatPayloadDisclosureFact> sources)
+    private async Task CheckPayloadAuthorityAsync(State s, IReadOnlyList<ChatPayloadDisclosureFact> sources,
+        IReadOnlyList<ChatRetainedProposalRead> proposals)
     {
-        if (sources.Count == 0) return;
-        if (_payloadAuthorization is null || !await _payloadAuthorization.AllowsAsync(s.Actor, s.Conversation,
+        if (sources.Count == 0 && proposals.Count == 0) return;
+        if (_payloadAuthorization is null || proposals.Count > 0 &&
+            !await _payloadAuthorization.AllowsRetainedProposalsAsync(s.Actor, s.Conversation,
+                s.Facts.Intent, _profile, proposals, s.Execution.Token).ConfigureAwait(false) ||
+            !await _payloadAuthorization.AllowsAsync(s.Actor, s.Conversation,
             s.Facts.Intent, _profile, sources, s.Execution.Token).ConfigureAwait(false))
             throw Stop(ChatOrchestrationOutcome.Denied);
         CheckTime(s.Execution, s.Facts.Intent);
@@ -356,6 +360,7 @@ public sealed partial class ChatTurnOrchestrator
         internal AiTurnLease? Lease { get; set; }
         internal List<AiMessage> Messages { get; } = [];
         internal List<ChatPayloadDisclosureFact> PayloadSources { get; } = [];
+        internal List<ChatRetainedProposalRead> RetainedProposals { get; } = [];
         internal HashSet<string> CallIds { get; } = new(StringComparer.Ordinal);
         internal HashSet<ChatCitationTarget> Cited { get; } = [];
         internal HashSet<ChatWorkspaceCitationFact> CitedWorkspace { get; } = [];

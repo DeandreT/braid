@@ -8,6 +8,9 @@ internal static class CreationOpenApi
     {
         foreach (var (path, item) in document.Paths)
         {
+            if (path.EndsWith("/creation-capabilities", StringComparison.Ordinal) && item.Operations is { } capabilities)
+                foreach (var operation in capabilities.Values)
+                    operation.Description = "Report current server creation-runtime availability under authenticated current project metadata access. Returns available=false when runtime ports are absent or disabled.";
             if (!path.Contains("/creation-proposals", StringComparison.Ordinal) || item.Operations is null) continue;
             foreach (var operation in item.Operations.Values)
             {

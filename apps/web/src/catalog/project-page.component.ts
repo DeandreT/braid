@@ -1,6 +1,7 @@
 import { DatePipe } from "@angular/common";
 import { Component, DestroyRef, effect, inject } from "@angular/core";
 import { WorkspaceConversation } from "../workbench/workspace-conversation";
+import { CreationEntryComponent } from "./creation/creation-entry.component";
 import { RouterLink } from "@angular/router";
 import { forkJoin } from "rxjs";
 import { RegressionStatusComponent } from "./automation/regression-status.component";
@@ -26,6 +27,7 @@ interface ProjectScreen {
     RouterLink,
     CatalogStatusComponent,
     RegressionStatusComponent,
+    CreationEntryComponent,
   ],
   templateUrl: "./project-page.component.html",
 })

@@ -28,6 +28,8 @@
     "playwright.native-revision-append.config.ts",
     "playwright.browser-session.config.ts",
     "playwright.chat.config.ts",
+    "playwright.creation-library.config.ts",
+    "tests/creation-library.spec.ts",
     "playwright.chat-real.config.ts",
     "playwright.workspace-chat-node.config.ts",
     "tests/workspace-chat*.ts",

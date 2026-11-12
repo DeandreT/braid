@@ -5,10 +5,18 @@ import {
   inject,
   signal,
   untracked,
+  DestroyRef,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router } from "@angular/router";
 import { of } from "rxjs";
+import { DOCUMENT } from "@angular/common";
+import { CatalogContextStore } from "../catalog/catalog-context";
+import { digest } from "../catalog/creation/creation-model";
+import {
+  feedbackQuestion,
+  type CreationFeedback,
+} from "../catalog/creation/creation-library-model";
 import { createCatalogRead } from "../catalog/catalog-state";
 import { CatalogStatusComponent } from "../catalog/catalog-shell.component";
 import {
@@ -42,6 +50,33 @@ import { isWorkspace, type AnyConversation } from "./workspace-chat-types";
           @if (!state.context.features.chat) {
             <p role="status">Chat is not configured for this workspace.</p>
           } @else {
+            @if (creationFeedback(); as feedback) {
+              <section aria-label="Feedback on exact mapping proposal">
+                <h2>Revise a new mapping proposal</h2>
+                <p>
+                  Proposal <code>{{ feedback.proposalId }}</code
+                  >, exact fingerprint <code>{{ feedback.fingerprint }}</code
+                  >.
+                </p>
+                <p>
+                  Prepare an editable question, add your requested changes, then
+                  send it explicitly. No sample input or output is transferred.
+                </p>
+                <button
+                  class="catalog-button"
+                  type="button"
+                  [disabled]="
+                    !workspace.panel() ||
+                    workspace.streaming() ||
+                    preparingFeedback()
+                  "
+                  (click)="prepareFeedback()"
+                >
+                  Prepare feedback question
+                </button>
+                <p role="status">{{ feedbackStatus() }}</p>
+              </section>
+            }
             <p>
               Use the shared panel to continue a conversation without leaving
               your work.
@@ -115,6 +150,12 @@ export class ChatPageComponent {
   readonly isWorkspace = isWorkspace;
   readonly conversationId = signal<string | null>(null);
   readonly invalidLink = signal(false);
+  readonly creationFeedback = signal<CreationFeedback | null>(null);
+  readonly feedbackStatus = signal("");
+  private readonly document = inject(DOCUMENT);
+  private readonly contexts = inject(CatalogContextStore);
+  private alive = true;
+  readonly preparingFeedback = signal(false);
   private readonly legacyIds = signal<{
     projectId: string;
     mappingId: string;
@@ -130,6 +171,9 @@ export class ChatPageComponent {
   private readonly router = inject(Router);
   private lastRouteSelection: string | null = null;
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      this.alive = false;
+    });
     inject(ActivatedRoute)
       .queryParamMap.pipe(takeUntilDestroyed())
       .subscribe((query) => {
@@ -147,13 +191,33 @@ export class ChatPageComponent {
                 "projectId",
                 "mappingId",
                 "revisionId",
+                "creationProjectId",
+                "creationProposalId",
+                "creationFingerprint",
               ].includes(key) && query.getAll(key).length === 1,
           ) &&
           (conversationId === null || isCatalogId(conversationId)) &&
           (ids.every((id) => id === null) ||
-            (!!conversationId && ids.every(isCatalogId)));
+            (!!conversationId && ids.every(isCatalogId))) &&
+          ((query.get("creationProjectId") === null &&
+            query.get("creationProposalId") === null &&
+            query.get("creationFingerprint") === null) ||
+            (isCatalogId(query.get("creationProjectId")) &&
+              isCatalogId(query.get("creationProposalId")) &&
+              digest(query.get("creationFingerprint")) &&
+              ids.every((id) => id === null)));
         this.invalidLink.set(!valid);
         this.conversationId.set(valid ? conversationId : null);
+        this.creationFeedback.set(
+          valid && query.get("creationProjectId") !== null
+            ? {
+                projectId: query.get("creationProjectId")!,
+                proposalId: query.get("creationProposalId")!,
+                fingerprint: query.get("creationFingerprint")!,
+              }
+            : null,
+        );
+        this.feedbackStatus.set("");
         this.legacyIds.set(
           valid && ids.every(isCatalogId)
             ? { projectId: ids[0]!, mappingId: ids[1]!, revisionId: ids[2]! }
@@ -192,10 +256,62 @@ export class ChatPageComponent {
     this.workspace.open();
     void this.workspace.panel()?.open(conversation.conversationId);
   }
+  async prepareFeedback(): Promise<void> {
+    const value = this.creationFeedback(),
+      state = this.read.state();
+    if (
+      !value ||
+      state.kind !== "ready" ||
+      this.invalidLink() ||
+      this.workspace.streaming() ||
+      this.preparingFeedback()
+    )
+      return;
+    if (
+      this.workspace.unsent() &&
+      !(
+        this.document.defaultView?.confirm(
+          "Replace the current unsent question with feedback on this exact proposal? No question will be sent automatically.",
+        ) ?? false
+      )
+    )
+      return;
+    const key = JSON.stringify(value),
+      context = state.context;
+    const current = () =>
+      this.alive &&
+      !this.invalidLink() &&
+      JSON.stringify(this.creationFeedback()) === key &&
+      this.contexts.isCurrent(context);
+    this.preparingFeedback.set(true);
+    let ready = false;
+    try {
+      ready = await this.workspace.prepareQuestion(
+        feedbackQuestion(value),
+        current,
+      );
+    } finally {
+      this.preparingFeedback.set(false);
+    }
+    if (current())
+      this.feedbackStatus.set(
+        ready
+          ? "Feedback question prepared. Add your requested changes and send it when ready."
+          : "Wait for the current request to settle, then prepare feedback again.",
+      );
+  }
   selected(conversation: AnyConversation | null): void {
     void this.router.navigate([], {
       queryParams: {
         conversationId: conversation?.conversationId ?? null,
+        ...(this.creationFeedback() &&
+        (!conversation || isWorkspace(conversation))
+          ? {
+              creationProjectId: this.creationFeedback()!.projectId,
+              creationProposalId: this.creationFeedback()!.proposalId,
+              creationFingerprint: this.creationFeedback()!.fingerprint,
+            }
+          : {}),
         ...(conversation && !isWorkspace(conversation) && conversation.revision
           ? {
               projectId: conversation.revision.projectId,

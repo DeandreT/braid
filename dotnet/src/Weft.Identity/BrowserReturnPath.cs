@@ -54,6 +54,11 @@ public static class BrowserReturnPath
     {
         if (path is ["chat"])
         {
+            if (values.ContainsKey("creationProjectId") || values.ContainsKey("creationProposalId") || values.ContainsKey("creationFingerprint"))
+                return (values.Count == 3 || values.Count == 4 && values.TryGetValue("conversationId", out var feedbackConversation) && Id(feedbackConversation)) &&
+                    Keys(values, "creationProjectId", "creationProposalId", "creationFingerprint", "conversationId") &&
+                    values.TryGetValue("creationProjectId", out var feedbackProject) && Id(feedbackProject) && values.TryGetValue("creationProposalId", out var feedbackProposal) && Id(feedbackProposal) &&
+                    values.TryGetValue("creationFingerprint", out var feedbackFingerprint) && feedbackFingerprint.Length == 64 && feedbackFingerprint.All(c => char.IsAsciiDigit(c) || c is >= 'a' and <= 'f');
             if (!Keys(values, "conversationId", "projectId", "mappingId", "revisionId") || !values.Values.All(Id)) return false;
             if (values.Count == 0) return true;
             var scoped = new[] { "projectId", "mappingId", "revisionId" }.Count(values.ContainsKey);

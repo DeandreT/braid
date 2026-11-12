@@ -164,7 +164,7 @@ persistence cases. The retained receipt is
 `Temp/opencode/weft-creation-integration-results/creation-93a2a53d.trx` under the
 local application-data directory.
 
-Current migration inventory is 0001–0045. The first 44 retain their original bytes.
+At that checkpoint the migration inventory was 0001–0045. The first 44 retained their original bytes.
 The structural restoration codec, authenticated runtime discovery, document intake
 and migration 0046 are being integrated next. The approved 0047 helper correction
 depends on that real 0046 migration. Production worker activation still requires
@@ -186,7 +186,7 @@ zero failures or skips. Receipt:
 Structural database admission and runtime loading still depend on the coordinated
 0046 integration.
 
-## Runtime qualification still required
+## Subsequent runtime qualification
 
 ### Authenticated runtime and structural intake checkpoint
 
@@ -211,10 +211,75 @@ Its actual PostgreSQL regression and the typed five-round/citation/disclosure
 contracts require the pending real 0046 migration. Production admission remains
 closed until database and qualified-worker composition checks pass.
 
+### Migration 0046 integration verification
+
+Committed document persistence `8c4504a4` was merged at `01b6a4a1`. That exact
+integration passed locked restore, full Release solution build with zero
+warnings/errors, and 123 selected creation/document/discovery/migration tests
+with native PostgreSQL 16.15 enabled, zero failures or skips. The selection
+includes typed creation-citation/disclosure persistence, five rounds, inactive/
+relocated-store discovery, current-content revocation and real Office/PDF
+restoration. Its receipt is
+`Temp/opencode/weft-creation-integration-results/document-runtime-01b6a4a1.trx`.
+The Rust core passed 31 unit and three host-dispatch cases, and the PDF worker
+passed 14 cases; both locked offline Clippy checks passed with warnings denied.
+
+The broader chat browser run exposed two failures outside the focused creation
+journey: a timing-sensitive second-question/receipt test and a stale expectation
+for the exact-approval help text. Their corrective work remains separate from
+the passing focused browser selections recorded above.
+
+Source completion also requires concrete qualified server composition, provider
+instructions for the typed six-format grammar, and a discoverable proposal/
+feedback library. These source units are being completed before considering
+environment activation. Production worker and live-provider qualification remain
+separate gates.
+
+### Migration 0047 integration verification
+
+The independently reviewed exact helper restoration `74ca32fd` passed 35 actual
+PostgreSQL 16.15 tests, zero failures or skips, and was merged at `05d4a383`.
+Migrations 0001–0046 remain byte-identical to their committed predecessors.
+The browser fixture inventory was updated at `d62f4962`; all six schema tests
+passed. See `document-json-contract.md` for the exact helper and coverage.
+
+Exact `d62f4962` then passed locked restore, the full Release solution build
+with zero warnings/errors and 135 combined creation/document/discovery/migration
+tests on native PostgreSQL, zero failures or skips. Receipt:
+`Temp/opencode/weft-creation-integration-results/integrated-d62f4962.trx`.
+The current ordered migration inventory is 0001–0047. XML filesystem-prefix
+conservation remains assigned to the actual Linux lane.
+
+### Reviewed library and document host
+
+Proposal library `d2940d24`, merged at `d97cc8fc`, uses the real `afterProposal`
+wire contract, exact review links and bounded pagination. Feedback requires an
+explicit preparation action and an explicitly sent question. Independent review
+closed the response-shape, legacy-conversation and stale-draft findings. The
+development build, maintained browser TypeScript check, 15 focused cases (14
+actual Chromium and one parser) and shared browser return-path vectors passed.
+The paired .NET return-path selection passed 159 cases. See
+`creation-proposal-library.md`.
+
+Document host `25f6e0dc`, merged at `7e00ff3a`, adds optional real Office/PDF
+startup, pinned installation/schema admission, shared specification binding and
+owned shutdown. Review corrections reject writable aliases on a protected
+filesystem and retain cleanup failures, including probes before runner
+registration. Repeated shutdown cannot report clean after failed cleanup. The
+owner's final regression selection passed 233 cases with nine skips; the focused
+selection passed 30 cases with two Linux skips. See `spec-document-host.md`.
+
+Exact integrated `7e00ff3a` passed the full Release solution build with zero
+warnings/errors and 189 document-host/return-path tests, with two explicit Linux
+skips and zero failures. Receipt:
+`Temp/opencode/weft-creation-integration-results/document-host-7e00ff3a.trx`.
+These checks do not establish actual Linux startup or containment.
+
 ### Remaining gates
 
-- Corrected populated-prefix PostgreSQL XML/upgrade checks and subsequent
-  migration admission, including the changed conservation assertions.
+- Reviewed concrete creation-host composition and exact feedback API, followed
+  by final combined qualification and the full corrected chat browser selection.
+- XML filesystem-prefix conservation on Linux.
 - Linux private-file/session configuration, native workers and sandbox execution.
 - Real PostgreSQL/Blob-backed specification intake and publication recovery.
 - Full hosted approval/receipt flows and provider-backed end-to-end execution.

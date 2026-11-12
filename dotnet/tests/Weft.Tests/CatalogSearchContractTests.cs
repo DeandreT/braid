@@ -10,7 +10,7 @@ public sealed class CatalogSearchContractTests
     public void EmbeddedHistoryKeepsDisplayAndSearchAsSeparateAdditiveMigrations()
     {
         var migrations = MigrationRunner.EmbeddedMigrations;
-        Assert.Equal(Enumerable.Range(1, 46), migrations.Select(migration => migration.Version));
+        Assert.Equal(Enumerable.Range(1, 47), migrations.Select(migration => migration.Version));
         Assert.Equal(PostgresMigrationTests.CurrentChecksums, migrations.Select(migration => migration.Checksum));
         Assert.Equal(XmlPreviewSchemaAdmission.MigrationChecksum, migrations[41].Checksum);
         Assert.Equal(AccountDisplayMetadataTestContract.MigrationChecksum, migrations[25].Checksum);

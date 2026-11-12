@@ -9,7 +9,7 @@ namespace Weft.MappingBackends.Workers;
 public sealed class FerruleServiceRunnerOptions
 {
     public FerruleServiceRunnerOptions(IFerruleServiceConnector connector, string profile, string buildIdentity,
-        string? compileToolchainIdentity = null, string? compiledRuntimeIdentity = null)
+        string? compileToolchainIdentity = null, string? compiledRuntimeIdentity = null, string? requiredCreationEngineRevision = null)
     {
         ArgumentNullException.ThrowIfNull(connector);
         Profile = FerruleServiceProtocol.Profile(profile) ??
@@ -17,6 +17,11 @@ public sealed class FerruleServiceRunnerOptions
         Connector = connector;
         ProfileName = profile;
         BuildIdentity = InspectionTransport.RequireImage(buildIdentity);
+        if (requiredCreationEngineRevision is not null &&
+            (string.IsNullOrWhiteSpace(requiredCreationEngineRevision) ||
+             profile is not (FerruleServiceProtocol.AuthoringProfile or FerruleServiceProtocol.AuthoredPreviewProfile)))
+            throw new ArgumentException("Creation capability admission requires an authoring or authored-preview profile and engine revision.", nameof(requiredCreationEngineRevision));
+        RequiredCreationEngineRevision = requiredCreationEngineRevision;
         if (compileToolchainIdentity is not null)
         {
             CompileToolchainIdentity = InspectionTransport.RequireImage(compileToolchainIdentity);
@@ -48,6 +53,8 @@ public sealed class FerruleServiceRunnerOptions
     public DockerWorkerProfile Profile { get; }
     /// <summary>The exact worker build every answering instance must report.</summary>
     public string BuildIdentity { get; }
+    /// <summary>When set, readiness and exact creation capabilities are verified on every execution channel, including retries.</summary>
+    public string? RequiredCreationEngineRevision { get; }
     public string? CompileToolchainIdentity { get; }
     public string? CompilationBuildIdentity { get; }
     public string? CompiledRuntimeIdentity { get; }
@@ -341,8 +348,10 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
 
     private async Task<(bool Ready, bool Retryable)> ReadyAsync(IFerruleServiceChannel channel, CancellationToken abort)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(abort);
+        if (options.RequiredCreationEngineRevision is not null) deadline.CancelAfter(TimeSpan.FromSeconds(10));
         using (var ready = new HttpRequestMessage(HttpMethod.Get, new Uri(FerruleServiceProtocol.ReadyPath, UriKind.Relative)))
-        using (var admitted = await channel.SendAsync(ready, abort).ConfigureAwait(false))
+        using (var admitted = await channel.SendAsync(ready, deadline.Token).ConfigureAwait(false))
         {
             if (admitted.StatusCode == HttpStatusCode.ServiceUnavailable)
                 return (false, true);
@@ -354,6 +363,10 @@ public sealed class FerruleServiceRunner : IInspectionWorkerRunner, ICompilation
                 return (false, false);
             if (options.CompiledRuntimeIdentity is { } runtime &&
                 (!Single(admitted.Headers, FerruleServiceProtocol.CompiledRuntimeHeader, out var receivedRuntime) || receivedRuntime != runtime))
+                return (false, false);
+            if (options.RequiredCreationEngineRevision is { } engine &&
+                (!Single(admitted.Headers, FerruleServiceProtocol.ReplicaHeader, out var replica) || string.IsNullOrWhiteSpace(replica) ||
+                 !await FerruleServiceCapabilities.VerifyAsync(channel, options.ProfileName, options.BuildIdentity, engine, replica, deadline.Token).ConfigureAwait(false)))
                 return (false, false);
         }
         return (true, false);

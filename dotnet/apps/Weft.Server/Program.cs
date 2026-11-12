@@ -27,6 +27,7 @@ builder.Services.AddWeftApi();
 builder.Services.SuppressRequestDiagnostics();
 CatalogHostConfiguration.Configure(builder, address);
 SpecHostConfiguration.Configure(builder.Services, Environment.GetEnvironmentVariable, session: false);
+CreationHostConfiguration.Configure(builder.Services, Environment.GetEnvironmentVariable, session: false);
 builder.Services.AddWeftAuthenticationHttp(new(hostOptions.Mode, hostOptions.Origin), builder.Environment);
 if (builder.Environment.IsDevelopment())
     DevelopmentFerruleRunner.Configure(builder.Services, Environment.GetEnvironmentVariable);

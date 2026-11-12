@@ -385,6 +385,56 @@ export class RevisionChatComponent {
     this.restoreFocus("[data-chat-composer]");
   }
 
+  /** Explicitly confirmed feedback is workspace-only and may never replace newer work. */
+  async prepareWorkspaceQuestion(
+    text: string,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    if (
+      !isCurrent() ||
+      this.busy() ||
+      this.hasPending() ||
+      this.pendingConversation
+    )
+      return false;
+    const owner = this.owner(),
+      context = this.context(),
+      draft = this.draft();
+    let conversation = this.current();
+    if (!conversation || !isWorkspace(conversation)) {
+      const requested = this.requestedConversation();
+      let adopted = false;
+      await this.newConversation(
+        draft,
+        () =>
+          (adopted =
+            isCurrent() &&
+            owner === this.owner() &&
+            this.contexts.isCurrent(context) &&
+            this.requestedConversation() === requested &&
+            this.draft() === draft),
+      );
+      if (!adopted) return false;
+      conversation = this.current();
+    }
+    if (
+      !isCurrent() ||
+      owner !== this.owner() ||
+      !this.contexts.isCurrent(context) ||
+      !this.contexts.canSend(this.context()) ||
+      !conversation ||
+      !isWorkspace(conversation) ||
+      this.current() !== conversation ||
+      this.hasPending() ||
+      this.busy() ||
+      this.draft() !== draft
+    )
+      return false;
+    this.draft.set(text);
+    this.restoreFocus("[data-chat-composer]");
+    return true;
+  }
+
   editDraft(event: Event): void {
     const textarea = event.target as HTMLTextAreaElement;
     this.draft.set(textarea.value);
@@ -1469,9 +1519,17 @@ export class RevisionChatComponent {
         await this.show(this.requestedConversation()!);
     }
   }
-  async newConversation(): Promise<void> {
+  async newConversation(
+    confirmedDraft?: string,
+    isCurrent: () => boolean = () => true,
+  ): Promise<void> {
     if (this.busy() || this.pending || !this.canCreate()) return;
-    if (!this.pendingConversation && !this.allowConversationSwitch()) return;
+    if (
+      !this.pendingConversation &&
+      !(confirmedDraft !== undefined && this.draft() === confirmedDraft) &&
+      !this.allowConversationSwitch()
+    )
+      return;
     await this.perform(async () => {
       if (!this.pendingConversation) {
         this.pendingConversation = crypto.randomUUID();
@@ -1495,6 +1553,7 @@ export class RevisionChatComponent {
       );
       this.pendingConversation = null;
       this.pendingFocus = null;
+      if (!isCurrent()) return;
       this.stopStream();
       this.followBottom = true;
       this.current.set(result);

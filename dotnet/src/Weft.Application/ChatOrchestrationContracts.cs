@@ -29,6 +29,26 @@ public interface IChatPayloadAuthorizationPort
 {
     Task<bool> AllowsAsync(ActorContext actor, ChatConversationIntent conversation, ChatTurnIntent turn,
         AiProfileSpec profile, IReadOnlyList<ChatPayloadDisclosureFact> sources, CancellationToken ct);
+
+    /// <summary>Re-authorizes exact retained proposal content independently of optional citation publication.
+    /// Ports without retained-read support refuse such content. Pins live only in the active turn.</summary>
+    Task<bool> AllowsRetainedProposalsAsync(ActorContext actor, ChatConversationIntent conversation, ChatTurnIntent turn,
+        AiProfileSpec profile, IReadOnlyList<ChatRetainedProposalRead> proposals, CancellationToken ct) =>
+        Task.FromResult(proposals.Count == 0);
+}
+
+/// <summary>A trusted tool's exact retained-content identity, carried through every subsequent provider boundary.</summary>
+public sealed record ChatRetainedProposalRead
+{
+    public ChatRetainedProposalRead(ProjectScope project, Guid proposalId, Sha256Digest fingerprint)
+    {
+        ArgumentNullException.ThrowIfNull(project); ArgumentNullException.ThrowIfNull(fingerprint); ChatBounds.Id(proposalId);
+        Project = project; ProposalId = proposalId; Fingerprint = fingerprint;
+    }
+    public ProjectScope Project { get; }
+    public Guid ProposalId { get; }
+    public Sha256Digest Fingerprint { get; }
+    public override string ToString() => nameof(ChatRetainedProposalRead);
 }
 
 public sealed record ChatReadOnlyToolContext
@@ -63,7 +83,7 @@ public sealed record ChatReadOnlyToolResult
 
     public ChatReadOnlyToolResult(AiJsonObject result, int retrievedNodes, IEnumerable<ChatCitationTarget>? citations = null,
         IEnumerable<ChatWorkspaceCitationFact>? workspaceCitations = null, ChatPayloadDisclosureFact? dataShared = null,
-        ChatMappingWriteFact? mappingWrite = null)
+        ChatMappingWriteFact? mappingWrite = null, ChatRetainedProposalRead? retainedProposal = null)
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.ByteCount > 32768 || retrievedNodes is < 0 or > 1024) throw ChatBounds.Invalid();
@@ -72,7 +92,11 @@ public sealed record ChatReadOnlyToolResult
         if (owned.Length + workspace.Length > MaxCitationCandidates || owned.Any(candidate => candidate is null) ||
             workspace.Any(candidate => candidate is null) || dataShared is not null && dataShared.ByteCount > result.ByteCount)
             throw ChatBounds.Invalid();
+        if (retainedProposal is not null && (dataShared is null || dataShared.Source != ChatPayloadSource.Specification ||
+            dataShared.ProjectId != retainedProposal.Project.ProjectId || dataShared.SubjectId != retainedProposal.ProposalId))
+            throw ChatBounds.Invalid();
         Result = result; RetrievedNodes = retrievedNodes; Citations = owned; WorkspaceCitations = workspace; DataShared = dataShared; MappingWrite = mappingWrite;
+        RetainedProposal = retainedProposal;
     }
     public AiJsonObject Result { get; }
     public int RetrievedNodes { get; }
@@ -81,6 +105,8 @@ public sealed record ChatReadOnlyToolResult
     public ImmutableArray<ChatWorkspaceCitationFact> WorkspaceCitations { get; }
     /// <summary>Payload bytes the result carries to the model; recorded and audited before the next provider round.</summary>
     public ChatPayloadDisclosureFact? DataShared { get; }
+    /// <summary>Exact content authority required while this result remains in provider context, independent of citations.</summary>
+    public ChatRetainedProposalRead? RetainedProposal { get; }
     /// <summary>A mapping edit this call saved or proposed; recorded, and audited by the ledger, as soon as the call returns.</summary>
     public ChatMappingWriteFact? MappingWrite { get; }
     public override string ToString() => nameof(ChatReadOnlyToolResult);
