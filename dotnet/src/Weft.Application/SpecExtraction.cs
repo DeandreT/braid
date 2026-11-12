@@ -67,6 +67,7 @@ public sealed class SpecEvidenceChunk
     public int ByteLength { get; }
     public int StartLine { get; }
     public int EndLine { get; }
+    public SpecEvidenceLocator.ByteRange Locator => new(ByteOffset, ByteLength, StartLine, EndLine, JsonPointer);
     public override string ToString() => nameof(SpecEvidenceChunk);
 }
 
@@ -166,6 +167,7 @@ public sealed class SpecEvidenceCitation
     }
 
     public SpecExtractionIdentity Extraction { get; }
+    public SpecEvidenceLocator.ByteRange Locator => new(ByteOffset, ByteLength, StartLine, EndLine, JsonPointer);
     public int Ordinal { get; }
     public string? JsonPointer { get; }
     public int ByteOffset { get; }
