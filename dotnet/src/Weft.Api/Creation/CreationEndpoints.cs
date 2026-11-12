@@ -13,7 +13,7 @@ using Weft.Domain;
 
 namespace Weft.Api.Creation;
 
-public static class CreationEndpoints
+public static partial class CreationEndpoints
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -30,6 +30,9 @@ public static class CreationEndpoints
         foreach (var status in new[] { 400, 401, 403, 404, 409, 413, 503 })
             routes.WithMetadata(new Microsoft.AspNetCore.Mvc.ProducesResponseTypeAttribute(typeof(CreationErrorV1), status, "application/json"));
         const string root = "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}";
+        routes.MapGet("/api/v1/organizations/{organizationId}/projects/{projectId}/creation-capabilities",
+            (HttpContext c, string organizationId, string projectId) => Capabilities(c, organizationId, projectId))
+            .WithName("GetCreationCapabilities").WithTags("Mapping creation").Produces<CreationCapabilitiesV1>();
         routes.MapGet("/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals",
             (HttpContext c, string organizationId, string projectId) => Run(c, organizationId, projectId, "", "list"))
             .WithName("ListCreationProposals").WithTags("Mapping creation").Produces<CreationProposalPageV1>();
