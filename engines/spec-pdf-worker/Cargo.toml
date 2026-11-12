@@ -1,0 +1,13 @@
+[package]
+name = "weft-spec-pdf-worker"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ferrule-pdf = { package = "format-pdf", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
+ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
+ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+sha2 = "=0.10.9"
