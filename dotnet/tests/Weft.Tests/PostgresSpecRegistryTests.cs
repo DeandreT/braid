@@ -6,12 +6,13 @@ using Weft.Persistence.Postgres;
 namespace Weft.Tests;
 
 /// <summary>Actual PostgreSQL transaction/role tests. Require a disposable database with the REAL ordered 0044 installed.</summary>
-public sealed class PostgresSpecRegistryTests
+[Collection(PostgresCollection.Name)]
+public sealed class PostgresSpecRegistryTests(PostgresFixture fixture)
 {
-    [SpecPostgresFact]
+    [PostgresFact]
     public async Task Inventory_is_bounded_scope_locked_and_requires_current_content_authority()
     {
-        await using var f = await Fixture.Create();
+        await using var f = await Fixture.Create(fixture);
         await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
         Assert.Empty((await f.Reader.InventoryAsync(f.Scope, default)).Objects);
         var reservation = await f.Writer.ReserveAsync(f.Reference(), SpecSourceFormat.Text, Guid.NewGuid(), 1, null, default);
@@ -26,10 +27,10 @@ public sealed class PostgresSpecRegistryTests
         await Error(SpecStorageError.NotAdmitted, () => f.Reader.InventoryAsync(f.Scope, default));
     }
 
-    [SpecPostgresFact]
+    [PostgresFact]
     public async Task Create_and_reserve_are_exact_idempotent_and_metadata_membership_is_not_content_access()
     {
-        await using var f = await Fixture.Create();
+        await using var f = await Fixture.Create(fixture);
         var key = Guid.NewGuid();
         Assert.Equal(await f.Writer.CreateAsync(f.Scope, key, default), await f.Writer.CreateAsync(f.Scope, key, default));
         var reference = f.Reference(); var attempt = Guid.NewGuid();
@@ -41,10 +42,10 @@ public sealed class PostgresSpecRegistryTests
         await Error(SpecStorageError.NotAdmitted, () => f.Writer.AdmitPublicationAsync(first.Claim, default));
     }
 
-    [SpecPostgresFact]
+    [PostgresFact]
     public async Task Competing_source_reservations_have_one_cas_winner()
     {
-        await using var f = await Fixture.Create();
+        await using var f = await Fixture.Create(fixture);
         await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
         async Task<SpecStorageError?> Reserve()
         {
@@ -56,10 +57,10 @@ public sealed class PostgresSpecRegistryTests
         Assert.Single(results, result => result == SpecStorageError.Conflict);
     }
 
-    [SpecPostgresFact]
+    [PostgresFact]
     public async Task Publication_holds_database_fence_and_stale_worker_is_refused_after_tombstone()
     {
-        await using var f = await Fixture.Create();
+        await using var f = await Fixture.Create(fixture);
         await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
         var reservation = await f.Writer.ReserveAsync(f.Reference(), SpecSourceFormat.Text, Guid.NewGuid(), 1, null, default);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -82,10 +83,10 @@ public sealed class PostgresSpecRegistryTests
         Assert.Empty(await f.Maintenance.RetirementsAsync(f.Scope, default));
     }
 
-    [SpecPostgresFact]
+    [PostgresFact]
     public async Task Failed_callback_rolls_back_acknowledgement_and_same_claim_is_recoverable()
     {
-        await using var f = await Fixture.Create();
+        await using var f = await Fixture.Create(fixture);
         await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
         var reservation = await f.Writer.ReserveAsync(f.Reference(), SpecSourceFormat.Text, Guid.NewGuid(), 1, null, default);
         await Error(SpecStorageError.Unavailable, () => f.Writer.ExecutePublicationAsync(reservation.Claim, _ => throw new IOException("uncertain physical result"), default));
@@ -94,10 +95,10 @@ public sealed class PostgresSpecRegistryTests
         Assert.Equal(reservation.Claim.Reference, await f.Reader.FindAsync(f.Scope, reservation.Claim.Reference.Id.ObjectId, default));
     }
 
-    [SpecPostgresFact]
+    [PostgresFact]
     public async Task Content_grant_revocation_waits_for_admitted_read_then_denies_the_next_read()
     {
-        await using var f = await Fixture.Create();
+        await using var f = await Fixture.Create(fixture);
         await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
         var reservation = await f.Writer.ReserveAsync(f.Reference(), SpecSourceFormat.Text, Guid.NewGuid(), 1, null, default);
         await f.Writer.ExecutePublicationAsync(reservation.Claim, _ => Task.FromResult(SpecPublishResult.Created), default);
@@ -117,10 +118,10 @@ public sealed class PostgresSpecRegistryTests
         await Error(SpecStorageError.NotAdmitted, () => f.Reader.FindAsync(f.Scope, reservation.Claim.Reference.Id.ObjectId, default));
     }
 
-    [SpecPostgresFact]
+    [PostgresFact]
     public async Task Temporary_inode_binding_is_cas_recoverable_and_cleanup_uses_issued_exact_claim()
     {
-        await using var f = await Fixture.Create(SpecStoreKind.FileSystem);
+        await using var f = await Fixture.Create(fixture, SpecStoreKind.FileSystem);
         await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
         var reservation = await f.Writer.ReserveAsync(f.Reference(), SpecSourceFormat.Text, Guid.NewGuid(), 1, null, default);
         var temp = Guid.NewGuid();
@@ -143,13 +144,13 @@ public sealed class PostgresSpecRegistryTests
         Assert.True(Assert.Single(await f.Maintenance.RetiringTemporariesAsync(retirement)).Retired);
     }
 
-    [SpecPostgresFact]
+    [PostgresFact]
     public async Task Restricted_login_cannot_read_tables_or_mutate_through_reader_gate()
     {
-        await using var f = await Fixture.Create();
+        await using var f = await Fixture.Create(fixture);
         await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
         var reservation = await f.Writer.ReserveAsync(f.Reference(), SpecSourceFormat.Text, Guid.NewGuid(), 1, null, default);
-        await using var connection = new NpgsqlConnection(Environment.GetEnvironmentVariable("WEFT_SPEC_TEST_READER"));
+        await using var connection = new NpgsqlConnection(f.ReaderConnectionString);
         await connection.OpenAsync();
         await using var table = new NpgsqlCommand("SELECT * FROM weft.spec_objects", connection);
         Assert.Equal("42501", (await Assert.ThrowsAsync<PostgresException>(() => table.ExecuteNonQueryAsync())).SqlState);
@@ -160,9 +161,10 @@ public sealed class PostgresSpecRegistryTests
 
     private static async Task Error(SpecStorageError expected, Func<Task> action) => Assert.Equal(expected, (await Assert.ThrowsAsync<SpecStorageException>(action)).Error);
 
-    private sealed class Fixture : IAsyncDisposable
+    private sealed class Fixture(PostgresCase test, string readerConnectionString) : IAsyncDisposable
     {
         private readonly List<PostgresSpecBundleDatabase> databases = [];
+        internal string ReaderConnectionString { get; } = new NpgsqlConnectionStringBuilder(readerConnectionString) { Pooling = false }.ConnectionString;
         internal Guid Actor { get; } = Guid.NewGuid();
         internal Guid Store { get; } = Guid.NewGuid();
         internal SpecBundleScope Scope { get; } = new(new(Guid.NewGuid(), Guid.NewGuid()), Guid.NewGuid());
@@ -171,10 +173,26 @@ public sealed class PostgresSpecRegistryTests
         internal PostgresSpecBundleSession Reader { get; private set; } = null!;
         internal PostgresSpecBundleSession Maintenance { get; private set; } = null!;
         internal SpecObjectReference Reference() => new(new(new(Scope, Guid.NewGuid(), 1), SpecObjectKind.Original, Guid.NewGuid()), Sha256Digest.FromBytes([1]), 1);
-        internal static async Task<Fixture> Create(SpecStoreKind kind = SpecStoreKind.Blob)
+        internal static async Task<Fixture> Create(PostgresFixture fixture, SpecStoreKind kind = SpecStoreKind.Blob)
         {
-            var f = new Fixture();
-            // No schema bootstrap, role creation, migration renumbering or placeholder predecessors in this suite.
+            var test = await fixture.CreateCaseAsync();
+            var f = new Fixture(test, fixture.RegressionConnectionString(test, "weft_spec_reader"));
+            try
+            {
+                await f.InitializeAsync(fixture, kind);
+                return f;
+            }
+            catch (Exception initialization)
+            {
+                try { await f.DisposeAsync(); }
+                catch (Exception cleanup) { throw new AggregateException("Spec case setup and cleanup failed.", initialization, cleanup); }
+                throw;
+            }
+        }
+        private async Task InitializeAsync(PostgresFixture fixture, SpecStoreKind kind)
+        {
+            var f = this;
+            // The standard owned case applies the real ordered migration inventory.
             await f.Owner("""
                 DO $check$ BEGIN
                     IF current_user<>'weft_migrator' OR (SELECT count(*) FROM weft.schema_migrations WHERE version IN (42,43,44))<>3 THEN
@@ -190,19 +208,18 @@ public sealed class PostgresSpecRegistryTests
             await f.Owner("INSERT INTO weft.project_payload_read_grants(organization_id,project_id,principal_id) VALUES($1,$2,$3)", f.Scope.Project.OrganizationId, f.Scope.Project.ProjectId, f.Actor);
             var binding = new SpecStoreBinding(f.Store, kind, Sha256Digest.FromBytes(f.Store.ToByteArray()));
             await f.Owner("INSERT INTO weft.spec_stores(id,kind,location_digest,active) VALUES($1,$2,$3,true)", f.Store, kind == SpecStoreKind.Blob ? "blob" : "filesystem", binding.LocationDigest.Value);
-            PostgresSpecBundleDatabase Open(string name, SpecDatabaseProfile profile)
+            PostgresSpecBundleDatabase Open(string role, SpecDatabaseProfile profile)
             {
-                var builder = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(name)) { ApplicationName = f.ApplicationName };
+                var builder = new NpgsqlConnectionStringBuilder(fixture.RegressionConnectionString(test, role)) { ApplicationName = f.ApplicationName };
                 var database = new PostgresSpecBundleDatabase(builder.ConnectionString, profile); f.databases.Add(database); return database;
             }
-            f.Writer = Open("WEFT_SPEC_TEST_WRITER", SpecDatabaseProfile.Writer).ForActor(new(new(f.Actor)), binding);
-            f.Reader = Open("WEFT_SPEC_TEST_READER", SpecDatabaseProfile.Reader).ForActor(new(new(f.Actor)), binding);
-            f.Maintenance = Open("WEFT_SPEC_TEST_MAINTENANCE", SpecDatabaseProfile.Maintenance).ForMaintenance(binding);
-            return f;
+            f.Writer = Open("weft_spec_writer", SpecDatabaseProfile.Writer).ForActor(new(new(f.Actor)), binding);
+            f.Reader = Open("weft_spec_reader", SpecDatabaseProfile.Reader).ForActor(new(new(f.Actor)), binding);
+            f.Maintenance = Open("weft_spec_maintenance", SpecDatabaseProfile.Maintenance).ForMaintenance(binding);
         }
         internal async Task Owner(string sql, params object[] parameters)
         {
-            var builder = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("WEFT_SPEC_TEST_OWNER")) { ApplicationName = ApplicationName };
+            var builder = new NpgsqlConnectionStringBuilder(test.MigrationConnectionString) { ApplicationName = ApplicationName, Pooling = false };
             await using var connection = new NpgsqlConnection(builder.ConnectionString);
             await connection.OpenAsync(); await using var command = new NpgsqlCommand(sql, connection);
             foreach (var parameter in parameters) command.Parameters.AddWithValue(parameter);
@@ -211,7 +228,7 @@ public sealed class PostgresSpecRegistryTests
         internal async Task WaitForDatabaseBlock()
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await using var connection = new NpgsqlConnection(Environment.GetEnvironmentVariable("WEFT_SPEC_TEST_OWNER"));
+            await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(test.MigrationConnectionString) { Pooling = false }.ConnectionString);
             await connection.OpenAsync(timeout.Token);
             while (true)
             {
@@ -223,18 +240,11 @@ public sealed class PostgresSpecRegistryTests
         }
         public async ValueTask DisposeAsync()
         {
-            foreach (var database in databases) await database.DisposeAsync();
-            // Intentionally retain append-only fixture evidence. Run only against an explicitly disposable test database.
+            var failures = new List<Exception>();
+            foreach (var database in databases)
+                try { await database.DisposeAsync(); } catch (Exception error) { failures.Add(error); }
+            try { await test.DisposeAsync(); } catch (Exception error) { failures.Add(error); }
+            if (failures.Count > 0) throw new AggregateException("Spec case cleanup failed.", failures);
         }
-    }
-}
-
-public sealed class SpecPostgresFactAttribute : FactAttribute
-{
-    public SpecPostgresFactAttribute()
-    {
-        if (new[] { "WEFT_SPEC_TEST_OWNER", "WEFT_SPEC_TEST_READER", "WEFT_SPEC_TEST_WRITER", "WEFT_SPEC_TEST_MAINTENANCE" }
-            .Any(name => string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(name))))
-            Skip = "Requires actual disposable PostgreSQL with real 0042/0043/0044, provisioned spec roles and four explicit test connections.";
     }
 }
