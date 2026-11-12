@@ -73,18 +73,33 @@ public sealed class SpecEvidenceChunk
 /// <summary>Failure is atomic: no partial evidence. Diagnostics are fixed codes, never document content.</summary>
 public sealed class SpecExtractionResult
 {
+    private readonly byte[] canonicalEvidence;
     internal SpecExtractionResult(SpecCapturedSource source, SpecExtractionLimits limits, SpecExtractionOutcome outcome,
         string code, IReadOnlyList<SpecEvidenceChunk> chunks)
     {
+        try { canonicalEvidence = Serialize(code, chunks); }
+        catch (EvidenceLimitException)
+        {
+            outcome = SpecExtractionOutcome.LimitExceeded;
+            code = "serialized-evidence-bytes";
+            chunks = [];
+            canonicalEvidence = Serialize(code, chunks);
+        }
         Code = code;
         Chunks = Array.AsReadOnly(chunks.ToArray());
-        using var stream = new MemoryStream();
+        Identity = new(source.Identity, source.Digest, source.Format, SpecSourceExtractor.Version, limits.Digest, outcome,
+            Sha256Digest.FromBytes(canonicalEvidence));
+    }
+
+    private static byte[] Serialize(string code, IReadOnlyList<SpecEvidenceChunk> chunks)
+    {
+        using var stream = new EvidenceStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartArray();
             writer.WriteStringValue("weft.spec-evidence.v1");
             writer.WriteStringValue(code);
-            foreach (var chunk in Chunks)
+            foreach (var chunk in chunks)
             {
                 writer.WriteStartArray();
                 writer.WriteNumberValue(chunk.Ordinal);
@@ -98,14 +113,33 @@ public sealed class SpecExtractionResult
             }
             writer.WriteEndArray();
         }
-        Identity = new(source.Identity, source.Digest, source.Format, SpecSourceExtractor.Version, limits.Digest, outcome,
-            Sha256Digest.FromBytes(stream.ToArray()));
+        return stream.ToArray();
+    }
+
+    private sealed class EvidenceLimitException : Exception;
+
+    // Enforce the physical ceiling on actual encoded bytes, including escaping and JSON framing.
+    // A refusal discards every chunk; it never publishes truncated evidence as a complete extraction.
+    private sealed class EvidenceStream : MemoryStream
+    {
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            if (Length + buffer.Length > SpecCapturedSource.MaximumBytes) throw new EvidenceLimitException();
+            base.Write(buffer.ToArray(), 0, buffer.Length);
+        }
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            if (Length + count > SpecCapturedSource.MaximumBytes) throw new EvidenceLimitException();
+            base.Write(buffer, offset, count);
+        }
     }
 
     public SpecExtractionIdentity Identity { get; }
     public SpecExtractionOutcome Outcome => Identity.Outcome;
     public string Code { get; }
     public IReadOnlyList<SpecEvidenceChunk> Chunks { get; }
+    /// <summary>Exact immutable evidence serialization whose digest is pinned by Identity; not a prompt or authority.</summary>
+    public byte[] CopyEvidenceBytes() => (byte[])canonicalEvidence.Clone();
 
     /// <summary>Constructs a citation only to an existing chunk of this exact extraction; conveys no read authority.</summary>
     public SpecEvidenceCitation Cite(int ordinal)

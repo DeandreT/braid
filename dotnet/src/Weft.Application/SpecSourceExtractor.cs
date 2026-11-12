@@ -12,7 +12,7 @@ namespace Weft.Application;
 /// </summary>
 public static class SpecSourceExtractor
 {
-    public const int Version = 1;
+    public const int Version = 2;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public static SpecExtractionResult Extract(SpecCapturedSource source, SpecExtractionLimits? limits = null,
