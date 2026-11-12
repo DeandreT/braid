@@ -1,5 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import type { CreationProposal } from "../src/catalog/creation/creation-model";
 import { expectSignedInAccount } from "./hosted-account.fixture";
 import {
   chooseSavedConversation,
@@ -129,6 +131,170 @@ async function ask(
     .getByRole("button", { name: "Send question", exact: true })
     .click();
 }
+
+test("creation citation streams, opens an authenticated exact review, and replays without approval", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const hash = (text: string) =>
+    createHash("sha256").update(text).digest("hex");
+  const proposalId = "50000000-0000-4000-8000-000000000001";
+  const extractionId = "50000000-0000-4000-8000-000000000002";
+  const fingerprint = hash("workspace creation proposal");
+  const f = await workspaceFixture(page, {
+    payloadsAllowed: true,
+    grant: true,
+    creationProposal: {
+      projectId: otherProject,
+      proposalId,
+      fingerprint,
+      extractionId,
+    },
+  });
+  const identityContext = `v1.${"A".repeat(43)}`;
+  const requestToken = "ZXBvY2gtYQ";
+  await context.addCookies([
+    {
+      name: "weft-creation-fixture",
+      value: "synthetic-session",
+      url: baseURL!,
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  await context.route("**/api/auth/session", (route) =>
+    route.fulfill({
+      json: {
+        version: 1,
+        mode: "session",
+        state: "authenticated",
+        authActionRequestToken: "YXV0aC1h",
+        requestToken,
+        identityContext,
+        displayName: "Fixture account",
+      },
+    }),
+  );
+  await context.route("**/api/v1/catalog/context", (route) =>
+    route.fulfill({
+      json: {
+        ...f.data.context,
+        mode: "session",
+        identityContext,
+        requestToken,
+      },
+    }),
+  );
+  const planJson = JSON.stringify({
+    schema: "weft.creation-plan.v1",
+    format: "json-record",
+    source: [{ Name: "code", Type: 1, Required: true }],
+    target: [{ Name: "item", Type: 1, Required: true }],
+    bindings: [{ Source: "code", Target: "item" }],
+  });
+  const proposal: CreationProposal = {
+    projectId: otherProject,
+    proposalId,
+    fingerprint,
+    snapshotDigest: hash("snapshot"),
+    planDigest: hash(planJson),
+    nativeDigest: hash("native"),
+    name: "Workspace-created mapping",
+    description: "Retained specification proposal",
+    planJson,
+    approved: false,
+    evidence: [
+      {
+        bundleId: extractionId,
+        sourceId: proposalId,
+        sourceVersion: 1,
+        chunkOrdinal: 0,
+      },
+    ],
+    assumptions: [
+      { id: "A1", text: "Use the supplied item code.", critical: true },
+    ],
+    questions: [],
+    receipt: null,
+  };
+  const org = f.data.revision.scope.organizationId;
+  const reviewPath = `/catalog/organizations/${org}/projects/${otherProject}/creation/${proposalId}?fingerprint=${fingerprint}`;
+  const apiPath = `/api/v1/organizations/${org}/projects/${otherProject}/creation-proposals/${proposalId}?expectedFingerprint=${fingerprint}`;
+  const proposalRequests: { method: string; path: string; cookie: string }[] =
+    [];
+  await context.route("**/creation-proposals/**", async (route) => {
+    const request = route.request(),
+      url = new URL(request.url());
+    const cookie = (await request.allHeaders())["cookie"] ?? "";
+    proposalRequests.push({
+      method: request.method(),
+      path: url.pathname + url.search,
+      cookie,
+    });
+    if (
+      request.method() !== "GET" ||
+      url.pathname + url.search !== apiPath ||
+      !cookie.includes("weft-creation-fixture=synthetic-session")
+    )
+      return route.fulfill({ status: 403, json: { code: "NotFound" } });
+    return route.fulfill({ json: proposal });
+  });
+  await page.goto("/chat");
+  await expectSignedInAccount(page);
+  await create(page);
+  await ask(page, "Create a mapping from the selected specification.");
+  await expectComplete(page);
+  await expect(panel(page)).toContainText("Data shared with fixture-model");
+  expect(f.offered.at(-1)).toEqual([
+    "read_specification",
+    "propose_mapping_creation",
+  ]);
+  const link = panel(page).getByRole("link", {
+    name: "Open new mapping proposal",
+    exact: true,
+  });
+  await expect(link).toHaveAttribute("href", reviewPath);
+  const opened = page.waitForEvent("popup");
+  await link.click();
+  const review = await opened;
+  await expect(review).toHaveURL(new URL(reviewPath, page.url()).href);
+  await expectSignedInAccount(review);
+  await expect(
+    review.getByRole("heading", { name: proposal.name, exact: true }),
+  ).toBeVisible();
+  await expect(
+    review.getByRole("button", {
+      name: "Approve and save this mapping",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  expect(proposalRequests).toEqual([
+    {
+      method: "GET",
+      path: apiPath,
+      cookie: expect.stringContaining(
+        "weft-creation-fixture=synthetic-session",
+      ),
+    },
+  ]);
+  const postCount = f.posts.length;
+  const readCount = f.reads.length;
+  await page.reload();
+  await expectComplete(page);
+  await expect(link).toHaveAttribute("href", reviewPath);
+  await expect(panel(page)).toContainText("Data shared with fixture-model");
+  expect(
+    f.reads.slice(readCount).some((path) => path.includes("/events?after=0")),
+  ).toBe(true);
+  expect(f.posts).toHaveLength(postCount);
+  expect(proposalRequests.every((request) => request.method === "GET")).toBe(
+    true,
+  );
+  expect(f.posts.some((post) => /\/(approve|recover)$/.test(post.path))).toBe(
+    false,
+  );
+});
 
 test("standalone chat lists both kinds, searches mappings, pins focus and links cross-project/help sources", async ({
   page,

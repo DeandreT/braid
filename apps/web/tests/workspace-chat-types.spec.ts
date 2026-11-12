@@ -239,6 +239,13 @@ test("every citation kind has a closed, same-organization shape and a concrete a
       version: "1",
     },
     { ...base, kind: "guideSection", sectionId: "chat" },
+    {
+      ...base,
+      kind: "creationProposal",
+      projectId: id,
+      subjectId: id,
+      proposalFingerprint: "a".repeat(64),
+    },
   ];
   for (const c of values) {
     expect(workspaceCitation(c, org), c.kind).toBe(true);
@@ -291,6 +298,77 @@ test("retained field and rule citations preserve exact report and UTF-8 resource
     expect(link).toContain(`#${kind}:field%2F%C3%A9%231`);
     expect(isReturnPath(link)).toBe(true);
   }
+});
+
+test("creation citations link only exact project-owned proposals with a canonical fingerprint", () => {
+  const citation = {
+    ...base,
+    kind: "creationProposal",
+    projectId: id,
+    subjectId: id,
+    proposalFingerprint: "ab".repeat(32),
+  };
+  expect(workspaceCitation(citation, org)).toBe(true);
+  if (!workspaceCitation(citation, org))
+    throw new Error("Invalid authored citation");
+  expect(citationLink(citation)).toBe(
+    `/catalog/organizations/${org}/projects/${id}/creation/${id}?fingerprint=${"ab".repeat(32)}`,
+  );
+  expect(
+    workspaceEvent(
+      { sequence: 1, roundId: id, type: "workspace.citation", citation },
+      org,
+    ),
+  ).toBe(true);
+  for (const change of [
+    { proposalFingerprint: null },
+    { proposalFingerprint: undefined },
+    { proposalFingerprint: "A".repeat(64) },
+    { proposalFingerprint: "a".repeat(63) },
+    { proposalFingerprint: "a".repeat(64) + "&approve=true" },
+    { projectId: null },
+    { subjectId: null },
+    { mappingId: id },
+    { revisionId: id },
+    { version: "1" },
+    { sectionId: "chat" },
+    { reportDerivationId: id },
+    { target: { kind: "field", resourceId: "f", diagnosticOrdinal: null } },
+  ])
+    expect(workspaceCitation({ ...citation, ...change }, org)).toBe(false);
+  expect(
+    workspaceCitation({ ...citation, kind: "project", subjectId: null }, org),
+  ).toBe(false);
+});
+
+test("specification disclosure admits the bounded tool payload without widening other disclosure kinds", () => {
+  const shared = {
+    sequence: 1,
+    roundId: id,
+    type: "data.shared",
+    projectId: id,
+    subjectId: id,
+    source: "specification",
+    version: null,
+    bytes: 12288,
+  };
+  expect(workspaceEvent(shared, org)).toBe(true);
+  expect(workspaceEvent({ ...shared, bytes: 8193 }, org)).toBe(true);
+  for (const change of [
+    { bytes: 12289 },
+    { bytes: 0 },
+    { bytes: -1 },
+    { bytes: 1.5 },
+    { bytes: "12" },
+    { projectId: null },
+    { subjectId: null },
+    { version: "1" },
+    { source: "unknown" },
+  ])
+    expect(workspaceEvent({ ...shared, ...change }, org)).toBe(false);
+  expect(workspaceEvent({ ...shared, source: "previewOutput" }, org)).toBe(
+    false,
+  );
 });
 
 test("workspace streams reject legacy report frames, invalid disclosure sizes and forged citations", () => {
