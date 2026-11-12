@@ -72,7 +72,7 @@ public sealed class PostgresSpecRegistryTests(PostgresFixture fixture)
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
         var tombstone = f.Writer.TombstoneAsync(f.Scope, null, 2, Guid.NewGuid(), default);
         try { await f.WaitForDatabaseBlock(); Assert.False(tombstone.IsCompleted); }
-        finally { release.TrySetResult(); }
+        finally { release.TrySetResult(); await Task.WhenAll(publication, tombstone); }
         await publication; Assert.True((await tombstone).Tombstoned);
         var invoked = false;
         await Error(SpecStorageError.NotAdmitted, () => f.Writer.ExecutePublicationAsync(reservation.Claim, _ =>
@@ -112,7 +112,7 @@ public sealed class PostgresSpecRegistryTests(PostgresFixture fixture)
         var revoke = f.Owner("UPDATE weft.project_payload_read_grants SET active=false,version=version+1 WHERE organization_id=$1 AND project_id=$2 AND principal_id=$3",
             f.Scope.Project.OrganizationId, f.Scope.Project.ProjectId, f.Actor);
         try { await f.WaitForDatabaseBlock(); Assert.False(revoke.IsCompleted); }
-        finally { release.TrySetResult(); }
+        finally { release.TrySetResult(); await Task.WhenAll(read, revoke); }
         Assert.Equal(new byte[] { 1 }, await read);
         await revoke;
         await Error(SpecStorageError.NotAdmitted, () => f.Reader.FindAsync(f.Scope, reservation.Claim.Reference.Id.ObjectId, default));
@@ -210,7 +210,8 @@ public sealed class PostgresSpecRegistryTests(PostgresFixture fixture)
             await f.Owner("INSERT INTO weft.spec_stores(id,kind,location_digest,active) VALUES($1,$2,$3,true)", f.Store, kind == SpecStoreKind.Blob ? "blob" : "filesystem", binding.LocationDigest.Value);
             PostgresSpecBundleDatabase Open(string role, SpecDatabaseProfile profile)
             {
-                var builder = new NpgsqlConnectionStringBuilder(fixture.RegressionConnectionString(test, role)) { ApplicationName = f.ApplicationName };
+                // Publication and tombstoning must reach PostgreSQL concurrently, not queue in the fixture's one-slot pool.
+                var builder = new NpgsqlConnectionStringBuilder(fixture.RegressionConnectionString(test, role)) { ApplicationName = f.ApplicationName, MaxPoolSize = 2 };
                 var database = new PostgresSpecBundleDatabase(builder.ConnectionString, profile); f.databases.Add(database); return database;
             }
             f.Writer = Open("weft_spec_writer", SpecDatabaseProfile.Writer).ForActor(new(new(f.Actor)), binding);
