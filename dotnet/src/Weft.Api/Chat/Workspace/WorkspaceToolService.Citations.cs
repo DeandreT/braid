@@ -77,6 +77,14 @@ public sealed partial class WorkspaceToolService
     {
         switch (fact.Kind)
         {
+            case ChatWorkspaceCitationKind.CreationProposal:
+                if (!features.Creation || !await Creation.CreationRuntime.AvailableAsync(services, token)) return false;
+                var retained = await Required<IMappingCreationProposalStore>().ReadAsync(actor, fact.ProjectScope!, fact.SubjectId!.Value, token);
+                return retained is not null && retained.Proposal.Author == actor.PrincipalId && retained.Proposal.Project == fact.ProjectScope &&
+                    retained.Proposal.Id == fact.SubjectId && retained.Proposal.Fingerprint == fact.ProposalFingerprint &&
+                    await Catalog.GetProjectAsync(actor, fact.ProjectScope!, token) is { } creationProject &&
+                    creationProject.Summary.Scope == fact.ProjectScope && creationProject.Access.PrincipalId == actor.PrincipalId &&
+                    creationProject.Access.Can(ProjectAction.ReadMetadata);
             case ChatWorkspaceCitationKind.Project:
                 return await Catalog.GetProjectAsync(actor, fact.ProjectScope!, token) is { } project && project.Summary.Scope == fact.ProjectScope;
             case ChatWorkspaceCitationKind.Mapping:

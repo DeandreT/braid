@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using Weft.Deployment;
+using Weft.Application;
 
 namespace Weft.MappingBackends.Workers;
 
@@ -41,8 +42,12 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
     }
 
     /// <summary>The runtime host's fixed line for a frame it cannot decode.</summary>
-    private ReadOnlySpan<byte> ProbeRefusal => options.Operation == CompiledRuntimeOperation.XmlCanonicalComparison
-        ? "WeftXmlComparisonFailed:decode\n"u8 : "WeftCompiledRuntimeFailed:decode\n"u8;
+    private ReadOnlySpan<byte> ProbeRefusal => options.Operation switch
+    {
+        CompiledRuntimeOperation.XmlCanonicalComparison => "WeftXmlComparisonFailed:decode\n"u8,
+        CompiledRuntimeOperation.OfficeExtraction => "WeftDocumentWorkerFailed:decode\n"u8,
+        _ => "WeftCompiledRuntimeFailed:decode\n"u8
+    };
 
     /// <summary>The native identity shared by the service's transport profiles.</summary>
     public string BuildIdentity => options.NativeIdentity;
@@ -58,8 +63,12 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
 
     public Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> requestFrame, CancellationToken token)
     {
-        var maximum = options.Operation == CompiledRuntimeOperation.XmlCanonicalComparison
-            ? XmlComparisonProtocol.MaximumRequestBytes : ProcessCompiledRuntimeOptions.Profile.MaximumRequestBytes;
+        var maximum = options.Operation switch
+        {
+            CompiledRuntimeOperation.XmlCanonicalComparison => XmlComparisonProtocol.MaximumRequestBytes,
+            CompiledRuntimeOperation.OfficeExtraction => SpecOfficeProcessProtocol.MaximumRequestBytes,
+            _ => ProcessCompiledRuntimeOptions.Profile.MaximumRequestBytes
+        };
         if (requestFrame.Length is < 1 || requestFrame.Length > maximum)
             throw new ArgumentException("The compiled request exceeds its fixed transport bound.", nameof(requestFrame));
         return ExecuteAsync(requestFrame, probe: false, token);
@@ -139,8 +148,12 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
             var admission = Verify(child.Id);
             if (admission != ChildAdmissionFailure.None) return ChildAdmissionDiagnostics.Refused(admission);
             token.ThrowIfCancellationRequested();
-            var maximumOutput = options.Operation == CompiledRuntimeOperation.XmlCanonicalComparison
-                ? XmlComparisonProtocol.MaximumResponseBytes : ProcessCompiledRuntimeOptions.Profile.MaximumOutputBytes;
+            var maximumOutput = options.Operation switch
+            {
+                CompiledRuntimeOperation.XmlCanonicalComparison => XmlComparisonProtocol.MaximumResponseBytes,
+                CompiledRuntimeOperation.OfficeExtraction => SpecOfficeProcessProtocol.MaximumResponseBytes,
+                _ => ProcessCompiledRuntimeOptions.Profile.MaximumOutputBytes
+            };
             var output = operation.CreateOriginal<byte[]>(CompiledRuntimeIoKind.StandardOutput,
                 () => DrainAsync(child.StandardOutput.BaseStream, maximumOutput, io.Token));
             _ = operation.Track(CompiledRuntimeIoKind.StandardOutput, output);
@@ -439,6 +452,9 @@ public sealed class ProcessCompiledRuntimeRunner : IInspectionWorkerRunner, IAsy
             manifest.Append("operation=").Append(XmlComparisonProtocol.ModeArgument).Append('\n')
                 .Append("protocol=").Append(XmlComparisonProtocol.Version).Append('\n')
                 .Append("comparer=").Append(XmlComparisonProtocol.Comparer).Append('\n');
+        if (options.Operation == CompiledRuntimeOperation.OfficeExtraction)
+            manifest.Append("operation=office-extraction\nprotocol=").Append(SpecOfficeProcessProtocol.Version).Append('\n')
+                .Append("extractor=").Append(SpecOfficeExtractionResult.ExtractorVersion).Append('\n');
         void Add(string name, string path)
         {
             using var stream = File.OpenRead(path);

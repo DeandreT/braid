@@ -12,3 +12,7 @@ serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.150"
 sha2 = "=0.10.9"
 lopdf = { version = "=0.42.0", default-features = false }
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+libc = "=0.2.186"
+rustix = { version = "=1.1.4", features = ["process", "thread"] }
+seccompiler = "=0.5.0"

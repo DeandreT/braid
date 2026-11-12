@@ -21,16 +21,16 @@ internal static class SpecSchemaAdmission
     }
     private static readonly string Sql = MigrationSql;
     private static readonly string Checksum = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Sql)));
-    private static readonly IReadOnlyDictionary<string, string> Bodies = Regex.Matches(Sql,
-        @"CREATE FUNCTION weft\.(spec_\w+)\(.*?AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)
-        .ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value, StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, string> Bodies = Regex.Matches(Sql + "\n" + DocumentEvidenceSchemaAdmission.MigrationSql,
+        @"CREATE (?:OR REPLACE )?FUNCTION weft\.(spec_\w+)\(.*?AS \$body\$(.*?)\$body\$;", RegexOptions.Singleline | RegexOptions.CultureInvariant)
+        .GroupBy(m => m.Groups[1].Value, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Last().Groups[2].Value, StringComparer.Ordinal);
     private static readonly string[] Tables = ["spec_stores", "spec_bundles", "spec_sources", "spec_objects", "spec_temporaries", "spec_temporary_seals"];
 
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, SpecDatabaseProfile profile, CancellationToken token)
     {
         var allowed = profile switch
         {
-            SpecDatabaseProfile.Reader => new[] { "spec_schema_version", "spec_store_admit", "spec_bundle_authorize", "spec_object_gate", "spec_inventory" },
+            SpecDatabaseProfile.Reader => new[] { "spec_schema_version", "spec_store_admit", "spec_bundle_authorize", "spec_object_gate", "spec_inventory", "spec_selection_discover_v1", "creation_proposals_discover_v1" },
             SpecDatabaseProfile.Maintenance => ["spec_schema_version", "spec_store_admit", "spec_object_gate", "spec_object_complete", "spec_retirements", "spec_temp_read", "spec_temp_complete"],
             _ => Bodies.Keys.Where(n => n != "spec_authorize").ToArray()
         };
@@ -69,11 +69,12 @@ internal static class SpecSchemaAdmission
             """, connection, transaction))
         {
             guard.Parameters.AddWithValue(profile switch { SpecDatabaseProfile.Reader => "weft_spec_reader", SpecDatabaseProfile.Writer => "weft_spec_writer", _ => "weft_spec_maintenance" });
-            guard.Parameters.AddWithValue(allowed);
+            guard.Parameters.AddWithValue(allowed.Append("document_evidence_schema_version").ToArray());
             guard.Parameters.AddWithValue(Tables);
             if (await guard.ExecuteScalarAsync(token).ConfigureAwait(false) is not true) throw new SpecStorageException(SpecStorageError.Unavailable);
         }
         await ValidateTables(connection, transaction, token).ConfigureAwait(false);
+        await DocumentEvidenceSchemaAdmission.ValidateAsync(connection, transaction, token).ConfigureAwait(false);
         await using (var functions = new NpgsqlCommand("""
             SELECT proname,prosrc,prosecdef,proowner='weft_migrator'::regrole,proconfig,provolatile::text,proisstrict,proparallel::text
             FROM pg_proc WHERE pronamespace='weft'::regnamespace AND proname=ANY($1)
@@ -102,7 +103,7 @@ internal static class SpecSchemaAdmission
         ["spec_stores"] = "id:uuid!,kind:text!,location_digest:text!,active:boolean!",
         ["spec_bundles"] = "organization_id:uuid!,project_id:uuid!,id:uuid!,creator_id:uuid!,creation_key:uuid!,version:bigint!,tombstoned:boolean!,tombstone_key:uuid,tombstone_version:bigint",
         ["spec_sources"] = "organization_id:uuid!,project_id:uuid!,bundle_id:uuid!,id:uuid!,version:bigint!,format:integer!,digest:text!,byte_count:integer!,tombstoned:boolean!,tombstone_key:uuid,tombstone_version:bigint",
-        ["spec_objects"] = "organization_id:uuid!,project_id:uuid!,bundle_id:uuid!,id:uuid!,source_id:uuid!,source_version:bigint!,kind:integer!,digest:text!,byte_count:integer!,store_id:uuid!,owner_id:uuid!,attempt_id:uuid!,state:text!,retirement_id:uuid,extractor_version:integer,profile_digest:text,extraction_outcome:integer,source_digest:text,reservation_version:bigint!",
+        ["spec_objects"] = "organization_id:uuid!,project_id:uuid!,bundle_id:uuid!,id:uuid!,source_id:uuid!,source_version:bigint!,kind:integer!,digest:text!,byte_count:integer!,store_id:uuid!,owner_id:uuid!,attempt_id:uuid!,state:text!,retirement_id:uuid,extractor_version:integer,profile_digest:text,extraction_outcome:integer,source_digest:text,reservation_version:bigint!,source_format:integer!",
         ["spec_temporaries"] = "organization_id:uuid!,project_id:uuid!,bundle_id:uuid!,object_id:uuid!,id:uuid!,attempt_id:uuid!,phase:integer!,evidence:bytea!,seal_digest:text!,previous_digest:text,retirement_id:uuid,retired:boolean!",
         ["spec_temporary_seals"] = "organization_id:uuid!,project_id:uuid!,bundle_id:uuid!,object_id:uuid!,temporary_id:uuid!,phase:integer!,evidence:bytea!,seal_digest:text!,previous_digest:text"
     };
@@ -110,7 +111,7 @@ internal static class SpecSchemaAdmission
     {
         ["spec_stores"] = ["id", "location_digest"],
         ["spec_bundles"] = ["organization_id,project_id,id", "organization_id,project_id,creator_id,creation_key"],
-        ["spec_sources"] = ["organization_id,project_id,bundle_id,id,version"],
+        ["spec_sources"] = ["organization_id,project_id,bundle_id,id,version", "organization_id,project_id,bundle_id,id,version,format"],
         ["spec_objects"] = ["organization_id,project_id,bundle_id,id", "store_id,attempt_id", "store_id,retirement_id", "organization_id,project_id,bundle_id,source_id,source_version|(kind = 1)"],
         ["spec_temporaries"] = ["organization_id,project_id,bundle_id,object_id,id"],
         ["spec_temporary_seals"] = ["organization_id,project_id,bundle_id,object_id,temporary_id,phase"]

@@ -193,3 +193,167 @@ fn refuses_limits_before_native_assembly_and_reports_failed_operation() {
     assert_eq!(error.code, "operationRejected");
     assert_eq!(error.operation_index.as_deref(), Some("0"));
 }
+
+fn xml_text_plan(namespace: Option<Value>) -> Value {
+    let mut p = plan();
+    p["target"]["options"] = json!({"kind":"xml"});
+    p["target"]["schema"]["xml"] = json!({"namespace":"urn:document"});
+    let mut text = scalar("#text");
+    text["xml"] = json!({"text":true});
+    if let Some(namespace) = namespace {
+        text["xml"]["namespace"] = namespace;
+    }
+    p["target"]["schema"]["shape"]["children"] = json!([text]);
+    p["edit"]["operations"][0]["binding"]["field"] = json!("#text");
+    p
+}
+
+#[test]
+fn compiles_and_executes_xml_text_with_absent_or_null_namespace() {
+    for namespace in [None, Some(Value::Null)] {
+        let p = xml_text_plan(namespace);
+        let checkpoint = run(&p).unwrap();
+        let native = ferrule_mapping::project_file::decode_bytes(&checkpoint.native).unwrap();
+        let SchemaKind::Group { children, .. } = &native.target.kind else {
+            panic!()
+        };
+        assert_eq!(children[0].name, ferrule_ir::XML_TEXT_FIELD);
+        assert!(children[0].text);
+        assert_eq!(children[0].xml_namespace, None);
+        assert!(ferrule_ir::xml_structured_document_input_is_supported(
+            &native.target
+        ));
+        let result = crate::authored_document::execute(
+            &checkpoint.native,
+            br#"{"code":"A<&\"B"}"#,
+            Default::default(),
+        )
+        .unwrap();
+        assert_eq!(result.output_format, crate::authored_document::Format::Xml);
+        let parsed = ferrule_format_xml::from_str_structured(
+            std::str::from_utf8(&result.bytes).unwrap(),
+            &native.target,
+        )
+        .unwrap();
+        assert_eq!(
+            parsed.field("#text"),
+            Some(&ferrule_ir::Instance::Scalar(ferrule_ir::Value::String(
+                "A<&\"B".into()
+            )))
+        );
+
+        // The same authored simple-content schema is executable on the input side.
+        let mut reverse = plan();
+        reverse["source"] = p["target"].clone();
+        reverse["edit"]["operations"][0]["expression"]["path"] = json!(["#text"]);
+        let checkpoint = run(&reverse).unwrap();
+        let back = crate::authored_document::execute(
+            &checkpoint.native,
+            &result.bytes,
+            Default::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&back.bytes).unwrap(),
+            json!({"code":"A<&\"B"})
+        );
+    }
+}
+
+#[test]
+fn compiler_preview_preserves_namespaced_attributes_and_elements_with_text() {
+    // Simple content can coexist with attributes, but not sibling child elements.
+    // Exercise both simple-content and ordinary-element documents through execution.
+    for simple_content in [true, false] {
+        let mut p = xml_text_plan(None);
+        if !simple_content {
+            p["target"]["schema"]["shape"]["children"][0] = scalar("body");
+            p["target"]["schema"]["shape"]["children"][0]["xml"] = json!({"namespace":"urn:body"});
+            p["edit"]["operations"][0]["binding"]["field"] = json!("body");
+        }
+        let mut attribute = scalar("label");
+        attribute["xml"] = json!({"namespace":"urn:attribute","attribute":true});
+        p["target"]["schema"]["shape"]["children"]
+            .as_array_mut()
+            .unwrap()
+            .push(attribute);
+        let mut binding = p["edit"]["operations"][0].clone();
+        binding["binding"]["field"] = json!("label");
+        binding["expression"]["id"] = json!("2");
+        p["edit"]["operations"]
+            .as_array_mut()
+            .unwrap()
+            .push(binding);
+        let checkpoint = run(&p).unwrap();
+        let native = ferrule_mapping::project_file::decode_bytes(&checkpoint.native).unwrap();
+        let output = crate::authored_document::execute(
+            &checkpoint.native,
+            br#"{"code":"value & \"quoted\""}"#,
+            Default::default(),
+        )
+        .unwrap();
+        let xml = std::str::from_utf8(&output.bytes).unwrap();
+        assert!(xml.contains("urn:document"));
+        assert!(xml.contains("urn:attribute"));
+        if !simple_content {
+            assert!(xml.contains("urn:body"));
+        }
+        let parsed = ferrule_format_xml::from_str_structured(xml, &native.target).unwrap();
+        let expected =
+            ferrule_ir::Instance::Scalar(ferrule_ir::Value::String("value & \"quoted\"".into()));
+        assert_eq!(parsed.field("label"), Some(&expected));
+        assert_eq!(
+            parsed.field(if simple_content { "#text" } else { "body" }),
+            Some(&expected)
+        );
+    }
+}
+
+#[test]
+fn xml_text_role_and_namespace_grammar_remains_closed() {
+    for namespace in [json!(""), json!("urn:forbidden")] {
+        rejected(&xml_text_plan(Some(namespace)), "unsupportedSemantics");
+    }
+    for xml in [
+        json!({"namespace":""}),
+        json!({"namespace":"","attribute":true}),
+        json!({"text":false}),
+    ] {
+        let mut p = xml_text_plan(None);
+        p["target"]["schema"]["shape"]["children"][0]["xml"] = xml;
+        rejected(&p, "unsupportedSemantics");
+    }
+    let mut p = xml_text_plan(None);
+    p["target"]["schema"]["shape"]["children"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("xml");
+    rejected(&p, "unsupportedSemantics");
+    for flag in ["attribute", "optional", "nillable"] {
+        let mut p = xml_text_plan(None);
+        p["target"]["schema"]["shape"]["children"][0]["xml"][flag] = json!(true);
+        rejected(&p, "unsupportedSemantics");
+    }
+    let mut p = xml_text_plan(None);
+    p["target"]["schema"]["shape"]["children"][0]["repeating"] = json!(true);
+    rejected(&p, "unsupportedSemantics");
+    let mut p = xml_text_plan(None);
+    p["target"]["schema"]["shape"]["children"][0]["name"] = json!("ordinaryName");
+    rejected(&p, "unsupportedSemantics");
+    for attribute in [false, true] {
+        for namespace in [None, Some(Value::Null)] {
+            let mut p = xml_text_plan(None);
+            let child = &mut p["target"]["schema"]["shape"]["children"][0];
+            child["name"] = json!("element");
+            child["xml"] = json!({"attribute":attribute});
+            if let Some(namespace) = namespace {
+                child["xml"]["namespace"] = namespace;
+            }
+            rejected(&p, "unsupportedSemantics");
+        }
+    }
+    let mut p = xml_text_plan(None);
+    p["target"]["schema"]["shape"]["children"][0]["xml"]["unknown"] = json!(true);
+    rejected(&p, "invalidAuthoring");
+    rejected(&xml_text_plan(Some(json!(42))), "invalidAuthoring");
+}

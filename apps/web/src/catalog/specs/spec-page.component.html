@@ -192,6 +192,7 @@
           <h2>Extraction evidence</h2>
           <p>{{ outcome(selected()?.outcome ?? null) }}</p>
           <p>Diagnostic: {{ evidence.code }}</p>
+          <p>Evidence format v{{ evidence.version }}</p>
           <p class="bundle-id">
             Extraction <code>{{ selected()?.objectId }}</code> · digest
             <code>{{ selected()?.digest }}</code>
@@ -207,17 +208,89 @@
               <h3>Chunk {{ chunk.ordinal }}</h3>
               <p>
                 Source {{ selected()?.sourceId }} · version
-                {{ selected()?.sourceVersion }} · lines {{ chunk.start }}–{{
-                  chunk.end
-                }}
-                · byte offset {{ chunk.offset }}, length {{ chunk.length }}
+                {{ selected()?.sourceVersion }}
               </p>
-              @if (chunk.pointer !== null) {
-                <p>
-                  JSON pointer: <code>{{ chunk.pointer || "(root)" }}</code>
-                </p>
+              @let location = chunk.locator;
+              @switch (location.kind) {
+                @case ("byte-range") {
+                  <p>
+                    lines {{ location.start }}–{{ location.end }} · byte offset
+                    {{ location.offset }}, length {{ location.length }}
+                  </p>
+                  @if (location.pointer !== null) {
+                    <p>
+                      JSON pointer:
+                      <code>{{ location.pointer || "(root)" }}</code>
+                    </p>
+                  }
+                }
+                @case ("docx-paragraph") {
+                  <p>
+                    Package part: <code>{{ location.part }}</code>
+                  </p>
+                  @if (location.table !== null) {
+                    <p>
+                      Table {{ location.table }} · row {{ location.row }} · cell
+                      {{ location.cell }} · paragraph {{ location.paragraph }}
+                    </p>
+                    <p>
+                      One-based XML positions; merged cells and rendered layout
+                      are not expanded.
+                    </p>
+                  } @else {
+                    <p>
+                      Body paragraph {{ location.paragraph }} (one-based direct
+                      paragraph)
+                    </p>
+                  }
+                }
+                @case ("xlsx-cell") {
+                  <p>
+                    Package part: <code>{{ location.part }}</code>
+                  </p>
+                  <p>Sheet {{ location.sheet }} · cell {{ location.cell }}</p>
+                  <p>
+                    Stored value kind: {{ location.valueKind }}. Values are not
+                    formatted displays.
+                  </p>
+                  @if (chunk.formula !== null) {
+                    <p>Literal formula (not evaluated)</p>
+                    <pre class="formula">{{ chunk.formula }}</pre>
+                    <p>
+                      {{
+                        location.hasCachedValue
+                          ? "Stored formula cache present; may be stale."
+                          : "No stored formula cache; no calculated result is available."
+                      }}
+                    </p>
+                    @if (location.hasCachedValue && chunk.text === "") {
+                      <p>Stored cache is an empty string.</p>
+                    }
+                  } @else if (chunk.text === "") {
+                    <p>
+                      {{
+                        location.valueKind === "Blank"
+                          ? "Blank stored cell."
+                          : "Empty stored value."
+                      }}
+                    </p>
+                  }
+                }
+                @case ("pdf-page") {
+                  <p>PDF page {{ location.page }} (one-based physical page)</p>
+                  <p>
+                    Page text only; reading order and coverage are not
+                    established.
+                  </p>
+                  @if (!chunk.text.trim()) {
+                    <p>
+                      No non-whitespace text in this evidence chunk. OCR status
+                      is not supplied.
+                    </p>
+                  }
+                }
               }
-              <pre>{{ chunk.text }}</pre>
+              <pre class="evidence-text">{{ chunk.text }}</pre>
             </article>
           }
         </section>

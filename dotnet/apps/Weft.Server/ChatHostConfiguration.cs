@@ -33,6 +33,7 @@ internal static class ChatHostConfiguration
             services.AddWeftChat(new ChatApiOptions());
             return;
         }
+        services.TryAddSingleton(new Weft.Api.Creation.CreationRuntimeOptions(ServerHostOptions.Flag(read, "WEFT_CREATION_ENABLED")));
         // Conversations pin verified reports; chat without catalog and report reads is an invalid profile.
         if (!catalogEnabled || !reports.Enabled) throw ServerHostOptions.Failure();
         var configuration = Parse(HostPrivateFiles.ReadText(ServerHostOptions.Required(read, "WEFT_CHAT_PROFILES_FILE"), ProfileFileBytes));
@@ -76,7 +77,8 @@ internal static class ChatHostConfiguration
                     provider.GetService<IChatMappingEditProposalStore>() is not null &&
                     provider.GetService<IProjectReader>() is not null && provider.GetService<IRevisionIngestionService>() is not null,
                 provider.GetRequiredService<ChatMappingEditRuntimeOptions>().LegacyDirectSaveEnabled &&
-                    provider.GetService<MappingDirectEditService>() is not null), guide);
+                    provider.GetService<MappingDirectEditService>() is not null,
+                Creation: Weft.Api.Creation.CreationRuntime.Configured(provider)), guide);
         });
         services.AddWeftChat(configuration.Options);
 

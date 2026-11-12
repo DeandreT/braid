@@ -15,8 +15,8 @@ namespace Weft.Api.Chat.Workspace;
 /// The trusted tool, citation and turn-context port for workspace conversations. Every call is bound to the
 /// conversation's creator and organization, freshly re-authorized as that user through the same read ports and read
 /// sequences the HTTP API uses, and returns a complete bounded result; lists that would not fit are truncated
-/// explicitly. Its only write saves a typed mapping edit as the next version through the user's own edit authority;
-/// it has no derivation, run, build, activation or provider port. Share one instance per host.
+/// explicitly. Creation retains compiler-backed proposals for authenticated review; legacy direct editing is separately gated.
+/// Share one instance per host.
 /// </summary>
 public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatWorkspaceCitationPort, IChatTurnContextPort, IChatPayloadAuthorizationPort
 {
@@ -43,6 +43,7 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         if (features.Guide != guide is not null) throw new ArgumentException("The guide feature requires its reader.", nameof(guide));
         this.services = services;
         this.options = options;
+        features = features with { Creation = features.Creation && Creation.CreationRuntime.Configured(services) };
         this.features = features;
         this.guide = guide;
         Manifest = WorkspaceToolRegistry.Definitions(features);
@@ -50,7 +51,7 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         reports = new MappingToolService(services.GetRequiredService<IRevisionReportMetadataReader>(),
             services.GetRequiredService<IRevisionReportReader>(), new MappingToolLimits(outputBytes: WorkspaceChatGrounding.CallResultBytes));
         // Payload data needs the restricted grant reader; without it the payload manifest does not exist.
-        if ((features.Previews || features.Regressions) && services.GetService<IProjectPayloadPermissionReader>() is not null &&
+        if ((features.Previews || features.Regressions || features.Creation) && services.GetService<IProjectPayloadPermissionReader>() is not null &&
             services.GetService<IProjectPayloadGrantPresence>() is not null)
         {
             PayloadManifest = WorkspaceToolRegistry.Definitions(features, payloads: true);
@@ -150,7 +151,7 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         var admitted = false;
         CallScope? scope = null;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(intent.Name is WorkspaceToolRegistry.SaveEdit or WorkspaceToolRegistry.ProposeEdit ? EditDuration : CallDuration);
+        deadline.CancelAfter(intent.Name is WorkspaceToolRegistry.SaveEdit or WorkspaceToolRegistry.ProposeEdit or WorkspaceToolRegistry.ProposeCreation ? EditDuration : CallDuration);
         var token = deadline.Token;
         try
         {
@@ -190,6 +191,7 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         "search_user_guide" => SearchGuideAsync(scope, call, token),
         "get_user_guide_section" => GetGuideSectionAsync(scope, call, token),
         WorkspaceToolRegistry.ProposeEdit when features.Edits => ProposeEditAsync(scope, call, token),
+        WorkspaceToolRegistry.ReadSpecification or WorkspaceToolRegistry.ProposeCreation when features.Creation && scope.Payloads => CreationAsync(scope, call, token),
         WorkspaceToolRegistry.SaveEdit when features.LegacyDirectSave &&
             services.GetService<ChatMappingEditRuntimeOptions>()?.LegacyDirectSaveEnabled == true => SaveEditAsync(scope, call, token),
         _ when WorkspaceToolRegistry.IsReportTool(call.Name) => ReportAsync(scope, call, token),

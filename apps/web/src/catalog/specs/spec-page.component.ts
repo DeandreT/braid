@@ -14,7 +14,7 @@ import {
 } from "../catalog-types";
 import { UnsentWork } from "../../workbench/unsent-work";
 import {
-  evidence,
+  readEvidence,
   inventory,
   outcome,
   recovery,
@@ -532,20 +532,19 @@ export class SpecPageComponent {
     this.busy.set(true);
     this.reading.set(true);
     this.chunks.set(null);
+    this.selected.set(null);
     const generation = this.generation;
     try {
       const context = await this.admit();
       if (!this.current(generation, context)) return;
-      const text = await firstValueFrom(
+      const bytes = await firstValueFrom(
         this.http
           .get(`${this.path}/extractions/${object.objectId}`, {
-            responseType: "text",
+            responseType: "arraybuffer",
           })
           .pipe(timeout(30000)),
       );
-      if (new TextEncoder().encode(text).length > 10485760)
-        throw new Error("Evidence limit");
-      const value = evidence(JSON.parse(text));
+      const value = await readEvidence(bytes, object);
       if (this.current(generation, context)) {
         this.selected.set(object);
         this.chunks.set(value);

@@ -15558,6 +15558,879 @@
         ]
       }
     },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals": {
+      "get": {
+        "tags": [
+          "Mapping creation"
+        ],
+        "description": "Discover creator-private retained proposals under current project content access, independent of chat history and source freshness. Exclusive ascending UUID cursor.",
+        "operationId": "ListCreationProposals",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterProposal",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationProposalPageV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}": {
+      "get": {
+        "tags": [
+          "Mapping creation"
+        ],
+        "description": "Creator-private exact retained proposal. Requires current project content and creation authority. Approval requires the exact fingerprint and every critical assumption ID; critical questions block ingestion. Recovery resumes an existing approved operation. Sample preview returns ephemeral verified output.",
+        "operationId": "ReadCreationProposal",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "proposalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expectedFingerprint",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationProposalV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}/approve": {
+      "post": {
+        "tags": [
+          "Mapping creation"
+        ],
+        "description": "Creator-private exact retained proposal. Requires current project content and creation authority. Approval requires the exact fingerprint and every critical assumption ID; critical questions block ingestion. Recovery resumes an existing approved operation. Sample preview returns ephemeral verified output.",
+        "operationId": "ApproveCreationProposal",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "proposalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreationApprovalV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationProposalV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}/recover": {
+      "post": {
+        "tags": [
+          "Mapping creation"
+        ],
+        "description": "Creator-private exact retained proposal. Requires current project content and creation authority. Approval requires the exact fingerprint and every critical assumption ID; critical questions block ingestion. Recovery resumes an existing approved operation. Sample preview returns ephemeral verified output.",
+        "operationId": "RecoverCreationProposal",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "proposalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreationRecoveryV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationProposalV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}/preview": {
+      "post": {
+        "tags": [
+          "Mapping creation"
+        ],
+        "description": "Creator-private exact retained proposal. Requires current project content and creation authority. Approval requires the exact fingerprint and every critical assumption ID; critical questions block ingestion. Recovery resumes an existing approved operation. Sample preview returns ephemeral verified output.",
+        "operationId": "PreviewCreationProposal",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "proposalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreationPreviewRequestV1"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationPreviewV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreationErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ],
+            "weftAntiforgery": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/regression-cases/capabilities": {
       "get": {
         "tags": [
@@ -34687,7 +35560,8 @@
           "previewInput",
           "previewOutput",
           "regressionCase",
-          "regressionRunOutput"
+          "regressionRunOutput",
+          "specification"
         ]
       },
       "ChatProfileV1": {
@@ -35516,7 +36390,8 @@
           "buildRun",
           "buildApproval",
           "buildEnvironment",
-          "guideSection"
+          "guideSection",
+          "creationProposal"
         ]
       },
       "ChatWorkspaceCitationV1": {
@@ -35587,6 +36462,12 @@
             ]
           },
           "sectionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "proposalFingerprint": {
             "type": [
               "null",
               "string"
@@ -36043,6 +36924,342 @@
           "partial",
           "unavailable"
         ]
+      },
+      "CreationApprovalV1": {
+        "required": [
+          "fingerprint",
+          "acceptedCriticalAssumptions"
+        ],
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "acceptedCriticalAssumptions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationAssumptionV1": {
+        "required": [
+          "id",
+          "text",
+          "critical"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "critical": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationCitationV1": {
+        "required": [
+          "bundleId",
+          "sourceId",
+          "sourceVersion",
+          "chunkOrdinal"
+        ],
+        "type": "object",
+        "properties": {
+          "bundleId": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "chunkOrdinal": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationErrorV1": {
+        "required": [
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationPreviewRequestV1": {
+        "required": [
+          "fingerprint",
+          "sampleBase64",
+          "sampleDigest"
+        ],
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "sampleBase64": {
+            "type": "string"
+          },
+          "sampleDigest": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationPreviewV1": {
+        "required": [
+          "proposalId",
+          "fingerprint",
+          "nativeDigest",
+          "sampleDigest",
+          "outcome",
+          "format",
+          "mediaType",
+          "outputDigest",
+          "outputBase64"
+        ],
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "nativeDigest": {
+            "type": "string"
+          },
+          "sampleDigest": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "format": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mediaType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "outputDigest": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "outputBase64": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationProposalLinkV1": {
+        "required": [
+          "proposalId",
+          "fingerprint",
+          "reviewPath"
+        ],
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "reviewPath": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationProposalPageV1": {
+        "required": [
+          "proposals",
+          "afterProposal"
+        ],
+        "type": "object",
+        "properties": {
+          "proposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreationProposalLinkV1"
+            }
+          },
+          "afterProposal": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationProposalV1": {
+        "required": [
+          "projectId",
+          "proposalId",
+          "fingerprint",
+          "snapshotDigest",
+          "planDigest",
+          "nativeDigest",
+          "name",
+          "description",
+          "planJson",
+          "approved",
+          "evidence",
+          "assumptions",
+          "questions",
+          "receipt"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "proposalId": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "snapshotDigest": {
+            "type": "string"
+          },
+          "planDigest": {
+            "type": "string"
+          },
+          "nativeDigest": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "planJson": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreationCitationV1"
+            }
+          },
+          "assumptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreationAssumptionV1"
+            }
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreationQuestionV1"
+            }
+          },
+          "receipt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreationReceiptV1"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationQuestionV1": {
+        "required": [
+          "text",
+          "critical"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "critical": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationReceiptV1": {
+        "required": [
+          "operationId",
+          "phase",
+          "mappingId",
+          "revisionId"
+        ],
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "mappingId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "revisionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreationRecoveryV1": {
+        "required": [
+          "fingerprint"
+        ],
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "CsvDocumentDialectV1": {
         "required": [
@@ -42924,6 +44141,9 @@
     },
     {
       "name": "Specifications"
+    },
+    {
+      "name": "Mapping creation"
     },
     {
       "name": "Regression cases"

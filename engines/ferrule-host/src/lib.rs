@@ -5,6 +5,7 @@ use std::io::{self, Read, Write};
 use ferrule_mapping::FileCodecError;
 use sha2::{Digest, Sha256};
 
+mod authored_preview;
 pub mod build;
 pub mod csv_document;
 pub mod document_format;
@@ -32,7 +33,10 @@ use protocol::{
 use serde::Deserialize;
 
 pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
-    let header_bytes = match framing::read_frame(reader, MAX_HEADER_BYTES) {
+    let header_bytes = match framing::read_frame(
+        reader,
+        MAX_HEADER_BYTES.max(authored_preview::MAX_HEADER_BYTES),
+    ) {
         Ok(bytes) => bytes,
         Err(message) => {
             return framing::write_response(
@@ -41,6 +45,21 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
             );
         }
     };
+    if let Some(result) = authored_preview::try_handle(&header_bytes, reader, writer) {
+        return result;
+    }
+    // Keep legacy header admission unchanged if the independent route's cap
+    // ever grows. Its native/sample frames are read only by its own handler.
+    if header_bytes.len() > MAX_HEADER_BYTES {
+        return framing::write_response(
+            writer,
+            &Response::failure(
+                None,
+                "invalidFrame",
+                "A frame length exceeds its admitted range.",
+            ),
+        );
+    }
     // Select independent bounded request shapes before native inspection.
     #[derive(Deserialize)]
     struct ProtocolProbe {

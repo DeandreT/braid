@@ -89,15 +89,33 @@ public sealed class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjec
             }
             using var list = Command("spec_inventory", scope, c, t);
             Id(list, StoreId); Finish(list);
-            await using var rows = await list.ExecuteReaderAsync(token).ConfigureAwait(false);
             var items = new List<SpecInventoryItem>();
-            while (await rows.ReadAsync(token).ConfigureAwait(false))
+            await using (var rows = await list.ExecuteReaderAsync(token).ConfigureAwait(false))
             {
-                if (items.Count >= 128) throw Denied();
-                var reference = new SpecObjectReference(new(new(scope, rows.GetGuid(1), rows.GetInt64(2)),
-                    (SpecObjectKind)rows.GetInt32(3), rows.GetGuid(0)), Sha256Digest.Parse(rows.GetString(4)), rows.GetInt32(5));
-                items.Add(new(reference, (SpecSourceFormat)rows.GetInt32(6), rows.GetString(7),
-                    rows.IsDBNull(8) ? null : (SpecExtractionOutcome)rows.GetInt32(8)));
+                while (await rows.ReadAsync(token).ConfigureAwait(false))
+                {
+                    if (items.Count >= 128) throw Denied();
+                    var reference = new SpecObjectReference(new(new(scope, rows.GetGuid(1), rows.GetInt64(2)),
+                        (SpecObjectKind)rows.GetInt32(3), rows.GetGuid(0)), Sha256Digest.Parse(rows.GetString(4)), rows.GetInt32(5));
+                    items.Add(new(reference, (SpecSourceFormat)rows.GetInt32(6), rows.GetString(7),
+                        rows.IsDBNull(8) ? null : (SpecExtractionOutcome)rows.GetInt32(8)));
+                }
+            }
+            // The existing admitted object gate returns the stored extraction pins; do not synthesize today's profile.
+            // Pending/retired items retain their inventory status but cannot supply executable evidence.
+            for (var i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                if (item.State != "published" || item.Reference.Id.Kind != SpecObjectKind.Extraction) continue;
+                var row = await Gate(c, t, scope, item.Reference.Id.ObjectId, null, "read", token).ConfigureAwait(false);
+                Require(item.Reference, row.Reference);
+                var pin = row.Extraction ?? throw new SpecStorageException(SpecStorageError.Integrity);
+                if (pin.Outcome != item.Outcome) throw new SpecStorageException(SpecStorageError.Integrity);
+                items[i] = item with
+                {
+                    Extraction = new(item.Reference.Id.Source, pin.SourceDigest, item.Format,
+                    pin.Version, pin.ProfileDigest, pin.Outcome, item.Reference.Digest)
+                };
             }
             return new SpecBundleInventory(status, items.AsReadOnly());
         }, token);
@@ -297,7 +315,8 @@ public sealed class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjec
         Id(command, reference.Id.ObjectId); Id(command, claim); command.Parameters.AddWithValue(mode); Finish(command);
         await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
     }
-    private sealed record ObjectRow(SpecObjectReference Reference, Guid StoreId, Guid AttemptId, Guid? RetirementId);
+    private sealed record StoredExtraction(int Version, Sha256Digest ProfileDigest, SpecExtractionOutcome Outcome, Sha256Digest SourceDigest);
+    private sealed record ObjectRow(SpecObjectReference Reference, Guid StoreId, Guid AttemptId, Guid? RetirementId, StoredExtraction? Extraction);
     private static ObjectRow ReadObject(NpgsqlDataReader reader)
     {
         int At(string name) => reader.GetOrdinal(name);
@@ -305,7 +324,10 @@ public sealed class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjec
         var source = new SpecSourceIdentity(scope, reader.GetGuid(At("source_id")), reader.GetInt64(At("source_version")));
         var reference = new SpecObjectReference(new(source, (SpecObjectKind)reader.GetInt32(At("kind")), reader.GetGuid(At("id"))),
             Sha256Digest.Parse(reader.GetString(At("digest"))), reader.GetInt32(At("byte_count")));
-        return new(reference, reader.GetGuid(At("store_id")), reader.GetGuid(At("attempt_id")), reader.IsDBNull(At("retirement_id")) ? null : reader.GetGuid(At("retirement_id")));
+        var extraction = reference.Id.Kind == SpecObjectKind.Extraction ? new StoredExtraction(reader.GetInt32(At("extractor_version")),
+            Sha256Digest.Parse(reader.GetString(At("profile_digest"))), (SpecExtractionOutcome)reader.GetInt32(At("extraction_outcome")),
+            Sha256Digest.Parse(reader.GetString(At("source_digest")))) : null;
+        return new(reference, reader.GetGuid(At("store_id")), reader.GetGuid(At("attempt_id")), reader.IsDBNull(At("retirement_id")) ? null : reader.GetGuid(At("retirement_id")), extraction);
     }
     private NpgsqlCommand Command(string function, SpecBundleScope scope, NpgsqlConnection c, NpgsqlTransaction t)
     {

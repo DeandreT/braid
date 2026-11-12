@@ -149,7 +149,7 @@ internal static class ChatPublicMapper
         Id(fact.OrganizationId), fact.ProjectId is { } project ? Id(project) : null, fact.MappingId is { } mapping ? Id(mapping) : null,
         fact.RevisionId is { } revision ? Id(revision) : null, fact.Target is { } target ? Selector(target) : null,
         fact.Report is { } report ? Id(report.DerivationId) : null, fact.SubjectId is { } subject ? Id(subject) : null,
-        fact.Version?.ToString(System.Globalization.CultureInfo.InvariantCulture), fact.SectionId);
+        fact.Version?.ToString(System.Globalization.CultureInfo.InvariantCulture), fact.SectionId, fact.ProposalFingerprint?.Value);
 
     private static ChatUsageEventV1 Usage(int sequence, ChatUsageFact usage) => new(sequence, Id(usage.RoundId), usage.Origin switch
     {

@@ -177,7 +177,7 @@ public sealed record ChatTurnBudget
 {
     public ChatTurnBudget(int maxEvents, int maxEventBytes, int maxRounds)
     {
-        if (maxEvents is < 2 or > 4096 || maxEventBytes is < 1 or > 4194304 || maxRounds is < 1 or > 4)
+        if (maxEvents is < 2 or > 4096 || maxEventBytes is < 1 or > 4194304 || maxRounds is < 1 or > 5)
             throw ChatBounds.Invalid();
         MaxEvents = maxEvents;
         MaxEventBytes = maxEventBytes;

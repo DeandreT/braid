@@ -64,6 +64,7 @@ public sealed class PostgresMappingCreationStore : IMappingCreationProposalStore
             sourceDigest = e.SourceDigest.Value,
             sourceCount = specification?.Sources.Single(s => s.Identity == e.Source).ByteCount,
             format = (int)e.Format,
+            outcome = (int)e.Outcome,
             extractor = e.ExtractorVersion,
             profile = e.ProfileDigest.Value,
             evidence = e.EvidenceDigest.Value,
@@ -151,7 +152,8 @@ public sealed class PostgresMappingCreationStore : IMappingCreationProposalStore
 
     public async Task<CreationAuthority> CheckAsync(ActorContext actor, SpecBundleSnapshot snapshot, CancellationToken ct)
     {
-        if (snapshot.Extractions.Any(e => e.Outcome != SpecExtractionOutcome.Complete)) return CreationAuthority.Stale;
+        if (snapshot.Extractions.Any(e => e.Outcome != SpecExtractionOutcome.Complete &&
+            !(e.Outcome == SpecExtractionOutcome.Partial && (((int)e.Format is 4 or 5 && e.ExtractorVersion == 3) || ((int)e.Format == 6 && e.ExtractorVersion == 4))))) return CreationAuthority.Stale;
         try
         {
             await using var session = await Open(CreationDatabaseProfile.Writer, snapshot.Bundle.Project.OrganizationId, ct).ConfigureAwait(false);
