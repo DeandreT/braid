@@ -13,6 +13,7 @@ import {
   recovery,
   type Inventory,
   type Upload,
+  type SpecObject,
 } from "../src/catalog/specs/spec-model";
 const id = "50000000-0000-4000-8000-000000000001";
 
@@ -284,7 +285,7 @@ async function setup(page: Page) {
       const extractionBytes = Buffer.from(extractionBody);
       state.evidence.set(upload.extractionObjectId, extraction);
       state.evidenceBodies.set(upload.extractionObjectId, extractionBody);
-      const original = {
+      const original: SpecObject = {
         objectId: upload.originalObjectId,
         sourceId: upload.sourceId,
         sourceVersion: 1,
@@ -335,6 +336,266 @@ async function create(page: Page) {
     page.getByText("No source objects have been reserved yet."),
   ).toBeVisible();
 }
+
+// Synthetic future publication, not an upload-capability or backend qualification.
+async function structural(
+  page: Page,
+  format: "Docx" | "Xlsx",
+  value: unknown[],
+) {
+  const state = await setup(page);
+  await create(page);
+  const body = JSON.stringify(value);
+  const objectId = randomUUID();
+  state.data!.objects.push({
+    objectId,
+    sourceId: randomUUID(),
+    sourceVersion: 1,
+    kind: "Extraction",
+    format,
+    digest: createHash("sha256")
+      .update(Buffer.from(body, "utf8"))
+      .digest("hex"),
+    byteCount: Buffer.byteLength(body, "utf8"),
+    state: "published",
+    outcome: "Partial",
+  });
+  state.evidenceBodies.set(objectId, body);
+  await page
+    .getByRole("button", { name: "Refresh inventory and access" })
+    .click();
+  await expect(
+    page.getByText(
+      "Partial structural extraction — document content and layout may be missing",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  return { state, objectId, body };
+}
+
+test("v2 DOCX body and table citations stay inert, accessible and upload admission stays server-aligned", async ({
+  page,
+}) => {
+  const source = "<img src=x onerror=alert(1)> café 東京 https://inert.invalid";
+  const { state } = await structural(page, "Docx", [
+    "weft.spec-evidence.v2",
+    "office-body-text-only",
+    [
+      0,
+      source,
+      ["docx-paragraph", "word/document.xml", 2, null, null, null],
+      null,
+    ],
+    [
+      1,
+      "table text",
+      ["docx-paragraph", "word/document.xml", 3, 1, 2, 4],
+      null,
+    ],
+  ]);
+  await page
+    .getByRole("button", { name: "Read extraction", exact: true })
+    .click();
+  await expect(page.locator(".citation .evidence-text")).toHaveText([
+    source,
+    "table text",
+  ]);
+  await expect(page.locator(".citation").first()).toContainText(
+    "Body paragraph 2",
+  );
+  await expect(page.locator(".citation").nth(1)).toContainText(
+    "Table 1 · row 2 · cell 4 · paragraph 3",
+  );
+  await expect(page.locator(".citation").first()).toContainText(
+    "word/document.xml",
+  );
+  await expect(page.locator(".citation img, .citation a")).toHaveCount(0);
+  await expect(page.getByText(/byte offset/)).toHaveCount(0);
+  await expect(page.getByText("Evidence format v2")).toBeVisible();
+  await expect(page.locator("#spec-format option")).toHaveText([
+    "Plain text",
+    "JSON",
+    "OpenAPI JSON (structural extraction)",
+  ]);
+  await page.getByLabel("Text or JSON file (10 MiB maximum)").setInputFiles({
+    name: "guide.docx",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("PK"),
+  });
+  await expect(
+    page.getByText(/this file was not sent or retained/),
+  ).toBeVisible();
+  expect(state.writes).toHaveLength(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    (await new AxeBuilder({ page }).include(".catalog-page").analyze())
+      .violations,
+  ).toEqual([]);
+});
+
+test("v2 XLSX displays literal formulas, missing caches, empty caches and raw stored cells distinctly", async ({
+  page,
+}) => {
+  const location = (address: string, kind: string, cache = false) => [
+    "xlsx-cell",
+    "xl/worksheets/sheet1.xml",
+    "Données",
+    address,
+    kind,
+    cache,
+  ];
+  const formula =
+    'HYPERLINK("https://inert.invalid","<img src=x onerror=alert(1)>")';
+  await structural(page, "Xlsx", [
+    "weft.spec-evidence.v2",
+    "office-stored-cells-only",
+    [0, "3", location("A1", "Number", true), "SUM(1,2)"],
+    [1, "", location("B1", "Blank"), formula],
+    [2, "", location("C1", "String", true), '""'],
+    [3, "", location("D1", "Blank"), null],
+    [4, "東京", location("E1", "SharedString"), null],
+  ]);
+  await page
+    .getByRole("button", { name: "Read extraction", exact: true })
+    .click();
+  await expect(page.locator(".citation .evidence-text")).toHaveText([
+    "3",
+    "",
+    "",
+    "",
+    "東京",
+  ]);
+  await expect(page.locator(".citation .formula")).toHaveText([
+    "SUM(1,2)",
+    formula,
+    '""',
+  ]);
+  await expect(page.locator(".citation").nth(1)).toContainText(
+    "No stored formula cache; no calculated result is available.",
+  );
+  await expect(page.locator(".citation").nth(2)).toContainText(
+    "Stored cache is an empty string.",
+  );
+  await expect(page.locator(".citation").nth(3)).toContainText(
+    "Blank stored cell.",
+  );
+  await expect(page.locator(".citation").nth(4)).toContainText(
+    "Sheet Données · cell E1",
+  );
+  await expect(page.locator(".citation").nth(0)).toContainText(
+    "Stored formula cache present; may be stale.",
+  );
+  await expect(page.locator(".citation img, .citation a")).toHaveCount(0);
+  await expect(page.getByText(/byte offset/)).toHaveCount(0);
+});
+
+test("v2 reads reject mismatched exact bytes and invalid coordinates without displaying earlier content", async ({
+  page,
+}) => {
+  const value = [
+    "weft.spec-evidence.v2",
+    "office-body-text-only",
+    [
+      0,
+      "private café",
+      ["docx-paragraph", "word/document.xml", 1, null, null, null],
+      null,
+    ],
+  ];
+  const { state, objectId } = await structural(page, "Docx", value);
+  const read = page.getByRole("button", {
+    name: "Read extraction",
+    exact: true,
+  });
+  await read.click();
+  await expect(page.locator(".citation .evidence-text")).toHaveText(
+    "private café",
+  );
+  state.evidenceBodies.set(
+    objectId,
+    JSON.stringify(value).replace("private café", "tampered café"),
+  );
+  await read.click();
+  await expect(page.getByText(/Request could not be confirmed/)).toBeVisible();
+  await expect(page.locator(".citation")).toHaveCount(0);
+  const invalid = JSON.stringify([
+    "weft.spec-evidence.v2",
+    "office-body-text-only",
+    [
+      0,
+      "must not show",
+      ["docx-paragraph", "../private.xml", 1, null, null, null],
+      null,
+    ],
+  ]);
+  state.evidenceBodies.set(objectId, invalid);
+  state.data!.objects[0]!.byteCount = Buffer.byteLength(invalid);
+  state.data!.objects[0]!.digest = createHash("sha256")
+    .update(invalid)
+    .digest("hex");
+  await page
+    .getByRole("button", { name: "Refresh inventory and access" })
+    .click();
+  await read.click();
+  await expect(page.getByText(/Request could not be confirmed/)).toBeVisible();
+  await expect(page.locator(".citation")).toHaveCount(0);
+});
+
+test("revoked project scope fences an otherwise valid late v2 response", async ({
+  page,
+}) => {
+  const { body } = await structural(page, "Docx", [
+    "weft.spec-evidence.v2",
+    "office-body-text-only",
+    [
+      0,
+      "late private structural source",
+      ["docx-paragraph", "word/document.xml", 1, null, null, null],
+      null,
+    ],
+  ]);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/extractions/**", async (route) => {
+    await gate;
+    await route.fulfill({ contentType: "application/json", body });
+  });
+  const request = page.waitForRequest("**/extractions/**");
+  await page
+    .getByRole("button", { name: "Read extraction", exact: true })
+    .click();
+  await request;
+  await page.route(
+    `**${catalogApi(projectPath(synthetic.project.scope))}`,
+    (route) => route.fulfill({ status: 404, json: { code: "NotFound" } }),
+  );
+  await page
+    .getByRole("button", { name: "Refresh inventory and access" })
+    .click();
+  await expect(
+    page.getByText(/Bundle unavailable or content access denied/),
+  ).toBeVisible();
+  const response = page.waitForResponse("**/extractions/**");
+  release();
+  await (await response).finished();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await expect(
+    page.getByRole("region", { name: "Extraction evidence" }),
+  ).toHaveCount(0);
+  await expect(page.getByText("late private structural source")).toHaveCount(0);
+});
 test("project entry, real Chromium upload/paste/citation/delete and reload", async ({
   page,
 }) => {
@@ -364,15 +625,23 @@ test("project entry, real Chromium upload/paste/citation/delete and reload", asy
     state.evidence.get(state.writes[0]!.extractionObjectId),
   );
   const chunks = evidence(JSON.parse(body)).chunks;
-  expect(chunks.map((c) => [c.offset, c.length])).toEqual([
+  expect(
+    chunks.map((c) =>
+      c.locator.kind === "byte-range"
+        ? [c.locator.offset, c.locator.length]
+        : null,
+    ),
+  ).toEqual([
     [0, 5],
     [6, 6],
   ]);
   for (const chunk of chunks) {
+    if (chunk.locator.kind !== "byte-range")
+      throw new Error("Expected v1 bytes");
     expect(
       Buffer.from("café\n東京", "utf8").subarray(
-        chunk.offset,
-        chunk.offset + chunk.length,
+        chunk.locator.offset,
+        chunk.locator.offset + chunk.locator.length,
       ),
     ).toEqual(Buffer.from(chunk.text, "utf8"));
   }
