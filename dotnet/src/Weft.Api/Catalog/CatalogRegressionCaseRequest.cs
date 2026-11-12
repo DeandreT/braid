@@ -90,6 +90,7 @@ internal static class CatalogRegressionCaseRequest
         var identity = new RegressionRuntimeIdentity(Text(runtime, "backendId"), Text(runtime, "engineRevision"), Text(runtime, "backendBuild"),
             Text(runtime, "adapterBuild"), Text(runtime, "profile"));
         var documents = identity.Profile == DocumentPreviewPolicy.Profile;
+        var csv = identity.Profile == CsvDocumentPolicy.Profile;
         if (hasOptions && !documents) throw Invalid();
         EdiComparisonOptions? options = null;
         if (hasOptions && optionsElement.ValueKind != JsonValueKind.Null)
@@ -145,15 +146,18 @@ internal static class CatalogRegressionCaseRequest
         foreach (var output in expected.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
-            Shape(output, documents ? ["name", "bytesBase64Url", "mediaType"] : ["name", "bytesBase64Url"]);
+            Shape(output, csv ? ["name", "bytesBase64Url", "mediaType", "csvDialect"] :
+                documents ? ["name", "bytesBase64Url", "mediaType"] : ["name", "bytesBase64Url"]);
             var name = NullableText(output, "name");
             var bytes = Bytes(Text(output, "bytesBase64Url"), outputRemaining);
             outputRemaining -= bytes.Length;
             outputs.Add(RegressionOutput.Capture(name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(name), bytes, token,
-                documents ? Text(output, "mediaType") : PreviewPolicy.MediaType));
+                documents || csv ? Text(output, "mediaType") : PreviewPolicy.MediaType,
+                csv ? CsvDialectJson.Read(output.GetProperty("csvDialect")) : null));
         }
         return new(Text(root, "name"), Id(Text(root, "revisionId")), identity,
-            new(target, Text(root, "currentDateTime"), limits, primary, inputs, values, token),
+            new(target, Text(root, "currentDateTime"), limits, primary, inputs, values, token,
+                csv ? PreviewExecutionProfile.CsvDocument : PreviewExecutionProfile.LegacyJson),
             Text(root, "comparisonPolicy"), RegressionOutputSet.Capture(outputs, token), options);
     }
 

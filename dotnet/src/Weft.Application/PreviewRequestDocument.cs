@@ -5,7 +5,10 @@ using Weft.Domain;
 
 namespace Weft.Application;
 
-public sealed record PreviewDeclaredInput(string? Name, long ByteLength, Sha256Digest Digest);
+public sealed record PreviewDeclaredInput(string? Name, long ByteLength, Sha256Digest Digest)
+{
+    public CsvDocumentDialect? CsvDialect { get; init; }
+}
 
 /// <summary>The decoded canonical request a run was admitted with.</summary>
 public sealed record PreviewRequestDescription(
@@ -29,12 +32,16 @@ public static class PreviewRequestDocument
     public const string DraftSchema = "weft.draft-preview-request.v1";
     public const string DocumentSchema = "weft.document-preview-request.v1";
     public const string DraftDocumentSchema = "weft.draft-document-preview-request.v1";
+    public const string CsvSchema = "weft.csv-preview-request.v1";
     public const int MaximumBytes = 64 * 1024;
 
     public static string Encode(PreviewRunSubmission submission, PreviewLimits limits)
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(limits);
+        if (submission.Profile == PreviewExecutionProfile.CsvDocument && (submission.Subject is not RevisionPreviewSubject || submission.Target.Kind == PreviewTargetKind.Named ||
+            submission.NamedInputs.Count != 0 || submission.Primary.Name is not null || submission.Primary.CsvDialect is null))
+            throw new PreviewRunException("CSV requests require a present primary input and its saved native dialect.");
         using var buffer = new MemoryStream();
         using (var json = new Utf8JsonWriter(buffer))
         {
@@ -44,7 +51,7 @@ public static class PreviewRequestDocument
             var document = submission.Profile == PreviewExecutionProfile.Document;
             json.WriteString("schema", submission.Subject is DraftPreviewSubject
                 ? document ? DraftDocumentSchema : DraftSchema
-                : document ? DocumentSchema : Schema);
+                : document ? DocumentSchema : submission.Profile == PreviewExecutionProfile.CsvDocument ? CsvSchema : Schema);
             json.WriteString("organizationId", revision.OrganizationId.ToString("D"));
             json.WriteString("projectId", revision.ProjectId.ToString("D"));
             json.WriteString("mappingId", revision.MappingId.ToString("D"));
@@ -85,8 +92,14 @@ public static class PreviewRequestDocument
                     json.WriteNull("name");
                 else
                     json.WriteString("name", input.Name);
+                if (submission.Profile == PreviewExecutionProfile.CsvDocument) json.WriteBoolean("present", true);
                 json.WriteNumber("byteLength", input.ByteCount);
                 json.WriteString("sha256", input.Digest.Value);
+                if (submission.Profile == PreviewExecutionProfile.CsvDocument)
+                {
+                    json.WritePropertyName("csvDialect");
+                    CsvDialectJson.Write(json, input.CsvDialect ?? throw new PreviewRunException("CSV input requires its saved native dialect."));
+                }
                 json.WriteEndObject();
             }
             json.WriteEndArray();
@@ -114,7 +127,7 @@ public static class PreviewRequestDocument
             using var parsed = JsonDocument.Parse(document, new JsonDocumentOptions { MaxDepth = 8 });
             var root = parsed.RootElement;
             var schema = Text(root, "schema");
-            Require(schema is Schema or DraftSchema or DocumentSchema or DraftDocumentSchema);
+            Require(schema is Schema or DraftSchema or DocumentSchema or DraftDocumentSchema or CsvSchema);
             var isDraft = schema is DraftSchema or DraftDocumentSchema;
             var revision = new RevisionScope(Guid.ParseExact(Text(root, "organizationId"), "D"), Guid.ParseExact(Text(root, "projectId"), "D"),
                 Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, isDraft ? "baseRevisionId" : "revisionId"), "D"));
@@ -140,13 +153,46 @@ public static class PreviewRequestDocument
                 }, Text(item, "value"))).ToArray();
             var inputs = root.GetProperty("inputs").EnumerateArray().Select(item => new PreviewDeclaredInput(
                 item.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(item, "name"),
-                item.GetProperty("byteLength").GetInt64(), Sha256Digest.Parse(Text(item, "sha256")))).ToArray();
+                item.GetProperty("byteLength").GetInt64(), Sha256Digest.Parse(Text(item, "sha256")))
+            { CsvDialect = schema == CsvSchema ? CsvDialectJson.Read(item.GetProperty("csvDialect")) : null }).ToArray();
+            if (schema == CsvSchema)
+            {
+                Require(root.EnumerateObject().Select(property => property.Name).SequenceEqual(new[]
+                    { "schema", "organizationId", "projectId", "mappingId", "revisionId", "target", "parameters", "inputs", "limits" }));
+                Require(root.GetProperty("inputs").EnumerateArray().All(item => item.GetProperty("present").GetBoolean()
+                    && item.EnumerateObject().Select(property => property.Name).SequenceEqual(new[] { "name", "present", "byteLength", "sha256", "csvDialect" }))
+                    && inputs.Length == 1 && selection.Kind != PreviewTargetKind.Named);
+                Require(target.EnumerateObject().Select(property => property.Name).SequenceEqual(new[] { "kind" })
+                    && root.GetProperty("parameters").EnumerateArray().All(item => item.EnumerateObject().Select(property => property.Name)
+                        .SequenceEqual(new[] { "name", "kind", "value" }))
+                    && root.GetProperty("limits").EnumerateObject().Select(property => property.Name).SequenceEqual(new[]
+                        { "maximumInputBytes", "maximumOutputBytes", "maximumArtifacts", "maximumTextBytes" }));
+                var input = root.GetProperty("inputs")[0];
+                Require(input.GetProperty("csvDialect").GetRawText() == CsvDialectJson.Encode(inputs[0].CsvDialect!)
+                    && Text(input, "sha256") == inputs[0].Digest.Value
+                    && input.GetProperty("byteLength").GetRawText() == inputs[0].ByteLength.ToString(CultureInfo.InvariantCulture)
+                    && Text(root, "organizationId") == revision.OrganizationId.ToString("D")
+                    && Text(root, "projectId") == revision.ProjectId.ToString("D")
+                    && Text(root, "mappingId") == revision.MappingId.ToString("D")
+                    && Text(root, "revisionId") == revision.RevisionId.ToString("D"));
+                using var canonical = new MemoryStream();
+                using (var writer = new Utf8JsonWriter(canonical)) root.WriteTo(writer);
+                Require(Encoding.UTF8.GetString(canonical.ToArray()) == document);
+            }
             var limits = root.GetProperty("limits");
             var description = new PreviewRequestDescription(subject, selection, parameters, inputs, new PreviewLimits(
                 limits.GetProperty("maximumInputBytes").GetInt32(), limits.GetProperty("maximumOutputBytes").GetInt32(),
                 limits.GetProperty("maximumArtifacts").GetInt32(), limits.GetProperty("maximumTextBytes").GetInt32()))
-            { Profile = schema is DocumentSchema or DraftDocumentSchema ? PreviewExecutionProfile.Document : PreviewExecutionProfile.LegacyJson };
+            {
+                Profile = schema switch
+                {
+                    DocumentSchema or DraftDocumentSchema => PreviewExecutionProfile.Document,
+                    CsvSchema => PreviewExecutionProfile.CsvDocument,
+                    _ => PreviewExecutionProfile.LegacyJson
+                }
+            };
             Require(inputs.Length > 0 && inputs[0].Name is null && inputs.Skip(1).All(input => input.Name is not null));
+            Require(inputs.All(input => input.ByteLength >= (schema == CsvSchema ? 0 : 1)));
             return description;
         }
         catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException

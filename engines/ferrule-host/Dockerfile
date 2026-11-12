@@ -105,7 +105,7 @@ cp -R /work/third-party /runtime/usr/share/weft-ferrule-host/third-party
 EOF
 
 FROM build AS qualification
-RUN cargo test --release --locked --package weft-ferrule-host --test build_qualification --test protocol_qualification --test preview_qualification --test edit_qualification --test sandbox_qualification --test interchange_qualification
+RUN cargo test --release --locked --package weft-ferrule-host --lib --test build_qualification --test protocol_qualification --test preview_qualification --test edit_qualification --test sandbox_qualification --test interchange_qualification --test csv_documents
 
 FROM scratch
 ARG WEFT_REVISION=""

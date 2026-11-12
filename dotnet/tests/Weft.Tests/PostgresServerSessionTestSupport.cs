@@ -225,12 +225,24 @@ internal sealed class PostgresServerSessionTestSupport : IAsyncDisposable
         var elapsed = Stopwatch.StartNew();
         while (true)
         {
-            if (operations.Any(operation => operation.IsCompleted)) throw new InvalidOperationException("An owned session operation settled before blocking was observed.");
+            await RequirePendingAsync(operations, "An owned session operation settled before blocking was observed.");
             var blocked = Assert.IsType<bool>(await command.ExecuteScalarAsync(deadline.Token));
-            if (operations.Any(operation => operation.IsCompleted)) throw new InvalidOperationException("An owned session operation settled during blocking observation.");
+            await RequirePendingAsync(operations, "An owned session operation settled during blocking observation.");
             if (blocked) return;
             if (elapsed.Elapsed >= TimeSpan.FromSeconds(5)) throw new TimeoutException("The owned session blocking edge was not observed.");
             await Task.Delay(TimeSpan.FromMilliseconds(5), deadline.Token);
+        }
+    }
+
+    private static async Task RequirePendingAsync(Task[] operations, string message)
+    {
+        foreach (var operation in operations)
+        {
+            if (!operation.IsCompleted) continue;
+            // Preserve the original port's categorical failure/cancellation instead
+            // of replacing an expired lock timeout with an observer assertion.
+            await operation;
+            throw new InvalidOperationException(message);
         }
     }
 

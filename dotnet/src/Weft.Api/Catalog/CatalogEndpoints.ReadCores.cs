@@ -48,7 +48,12 @@ public static partial class CatalogEndpoints
             RegressionComparisonService.ExactBytesPolicy, CanReadCase(fresh.Access),
             CanPublishCase(fresh.Access) && fresh.Summary.BackendId == options.Runtime!.BackendId,
             options.DocumentRuntime is { } documentRuntime ? Runtime(documentRuntime) : null,
-            options.DocumentRuntime is not null ? [RegressionComparisonService.ExactBytesPolicy, RegressionComparisonService.EdiSegmentsPolicy] : null);
+            options.DocumentRuntime is not null || options.CsvRuntime is not null
+                ? new[] { RegressionComparisonService.ExactBytesPolicy }
+                    .Concat(options.DocumentRuntime is null ? [] : new[] { RegressionComparisonService.EdiSegmentsPolicy })
+                    .Concat(options.CsvRuntime is null ? [] : new[] { RegressionComparisonService.CsvRowsPolicy }).ToArray()
+                : null,
+            options.CsvRuntime is { } csvRuntime ? Runtime(csvRuntime) : null);
     }
 
     internal static async Task<RegressionCasePage?> RegressionCasePageAsync(IServiceProvider services, ActorContext actor, MappingScope mapping,
@@ -123,7 +128,9 @@ public static partial class CatalogEndpoints
         var response = new BuildCapabilitiesV1(CatalogBuildMapping.Backend(options.Backend), CatalogBuildMapping.Profile(options.Profile!), true, supported, supported,
             options.DocumentBackend is { } documentBackend ? CatalogBuildMapping.Backend(documentBackend) : null,
             options.DocumentProfile is { } documentProfile ? CatalogBuildMapping.Profile(documentProfile) : null,
-            options.InterchangeProfile is { } interchangeProfile ? CatalogBuildMapping.Profile(interchangeProfile) : null);
+            options.InterchangeProfile is { } interchangeProfile ? CatalogBuildMapping.Profile(interchangeProfile) : null,
+            options.CsvBackend is { } csvBackend ? CatalogBuildMapping.Backend(csvBackend) : null,
+            options.CsvProfile is { } csvProfile ? CatalogBuildMapping.Profile(csvProfile) : null);
         return await BuildMappingAccessAsync(services, actor, mapping, ct) ? response : null;
     }
 

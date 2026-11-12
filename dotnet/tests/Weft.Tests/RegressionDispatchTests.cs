@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Jobs;
+using Weft.MappingBackends;
 
 namespace Weft.Tests;
 
@@ -62,6 +63,20 @@ public sealed class RegressionDispatchTests
         Assert.Empty(services);
     }
 
+    [Theory]
+    [InlineData("TRUE")]
+    [InlineData("1")]
+    [InlineData("")]
+    public void Malformed_csv_enablement_does_not_read_credentials(string flag)
+    {
+        Assert.Throws<ArgumentException>(() => new ServiceCollection().AddWeftRegressionWorker(name => name switch
+        {
+            "WEFT_REGRESSION_WORKER_ENABLED" => "true",
+            CsvDocumentPolicy.RegressionEnabledSetting => flag,
+            _ => throw new InvalidOperationException("Unexpected private configuration.")
+        }, () => throw new InvalidOperationException("Unexpected runtime creation.")));
+    }
+
     [Fact]
     public void Enabled_worker_requires_all_four_explicit_connection_profiles()
     {
@@ -71,6 +86,7 @@ public sealed class RegressionDispatchTests
             Assert.Throws<ArgumentException>(() => services.AddWeftRegressionWorker(name => name switch
             {
                 "WEFT_REGRESSION_WORKER_ENABLED" => "true",
+                CsvDocumentPolicy.RegressionEnabledSetting => null,
                 _ when name == missing => null,
                 _ => "private-synthetic"
             }, () => throw new InvalidOperationException()));
@@ -95,6 +111,44 @@ public sealed class RegressionDispatchTests
 
     private static readonly string[] Variables = ["WEFT_REGRESSION_RUN_WRITER_CONNECTION_STRING", "WEFT_REGRESSION_CASE_READER_CONNECTION_STRING",
         "WEFT_REGRESSION_ACCESS_CONNECTION_STRING", "WEFT_REGRESSION_REPORT_READER_CONNECTION_STRING", "WEFT_AUTOMATION_COMPARISON_CONNECTION_STRING"];
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    public void Actual_worker_registration_selects_the_same_csv_preview_producer(string? flag, bool enabled)
+    {
+        var services = new ServiceCollection();
+        var image = "sha256:" + new string('a', 64);
+        services.AddWeftRegressionWorker(name => name switch
+        {
+            "WEFT_REGRESSION_WORKER_ENABLED" => "true",
+            CsvDocumentPolicy.RegressionEnabledSetting => flag,
+            _ => Variables.Contains(name) ? "private-synthetic" : null
+        }, () => new("ferrule", FerruleInspectionBackend.EngineRevision, image, FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile));
+        using var provider = services.BuildServiceProvider();
+        var selected = provider.GetRequiredService<RegressionWorkerRuntimes>();
+        Assert.Equal(enabled, selected.Csv is not null);
+        if (enabled) Assert.Equal(new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
+            FerrulePreviewBackend.CsvAdapterBuild, CsvDocumentPolicy.Profile), selected.Csv);
+    }
+
+    [Theory]
+    [InlineData("engine")]
+    [InlineData("adapter")]
+    [InlineData("producer")]
+    public void Csv_worker_refuses_an_unmatched_or_unpinned_producer(string changed)
+    {
+        var services = new ServiceCollection();
+        Assert.Throws<ArgumentException>(() => services.AddWeftRegressionWorker(name => name switch
+        {
+            "WEFT_REGRESSION_WORKER_ENABLED" or CsvDocumentPolicy.RegressionEnabledSetting => "true",
+            _ => Variables.Contains(name) ? "private-synthetic" : null
+        }, () => new("ferrule", changed == "engine" ? "other" : FerruleInspectionBackend.EngineRevision,
+            changed == "producer" ? "unversioned" : "sha256:" + new string('a', 64),
+            changed == "adapter" ? "other" : FerrulePreviewBackend.AdapterBuild, PreviewPolicy.Profile)));
+        Assert.Empty(services);
+    }
 
     private sealed class Queue(IReadOnlyList<RegressionRunReady> items) : IRegressionRunQueue
     {

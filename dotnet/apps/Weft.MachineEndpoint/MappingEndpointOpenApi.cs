@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
+using Weft.Application;
 
 namespace Weft.MachineEndpoint;
 
@@ -51,7 +52,13 @@ internal static class MappingEndpointOpenApi
                     {
                         if (context.JsonTypeInfo.Type == typeof(MappingDocumentInvocationInputV1) ||
                             context.JsonTypeInfo.Type == typeof(MappingDocumentInvocationOutputV1))
-                            schema.Properties!["mediaType"] = Text("application/json", "application/edi-x12", "application/edifact");
+                            schema.Properties!["mediaType"] = Text("application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values");
+                        if (context.JsonTypeInfo.Type == typeof(CsvDocumentDialect))
+                        {
+                            schema.Properties!["schema"] = Text(CsvDocumentPolicy.DialectSchema);
+                            schema.Description = "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required.";
+                            schema.Required = new HashSet<string>(["schema", "delimiter", "quote", "quoteDisabled", "hasHeaderRow", "utf8Bom", "preserveEmptyStrings"]);
+                        }
                         return Task.CompletedTask;
                     });
                     options.AddDocumentTransformer((document, _, _) =>
@@ -158,7 +165,8 @@ internal static class MappingEndpointOpenApi
                     Description = "At most " + MappingEndpointRoutes.MaximumBodyBytes + " bytes as `application/json` " +
                         "(optionally `; charset=utf-8`) without a content encoding. Inputs total at most 1 MiB, outputs at most 1 MiB, " +
                         "and the preview bounds on counts, names and parameters apply. Legacy bodies omit schema and media. " +
-                        "Document bodies require weft.document-invocation-request.v1 and a mediaType per input matching the qualified boundary; no filename inference.",
+                        "Document bodies require weft.document-invocation-request.v1 and a mediaType per input matching the qualified boundary; no filename inference. " +
+                        "CSV/TSV requires matching csvDialect metadata and a primary-only CSV build. An explicit empty base64 string is a valid empty CSV document; missing content is not. JSON/EDI inputs remain nonempty.",
                     Content = new Dictionary<string, OpenApiMediaType>
                     {
                         [MappingEndpointContract.MediaType] = new()

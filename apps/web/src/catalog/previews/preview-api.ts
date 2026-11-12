@@ -19,6 +19,12 @@ import {
 import { BrowserSessionState } from "../../auth/browser-session-state";
 import { isCatalogId, type CatalogRevisionScope } from "../catalog-types";
 import {
+  csvMaximumRecords,
+  csvMedia,
+  csvMetadata,
+  csvPreviewProfile,
+} from "./csv-contract";
+import {
   PreviewError,
   previewLimits,
   previewOutcomes,
@@ -331,6 +337,13 @@ function run(value: unknown, scope: CatalogRevisionScope): boolean {
     Array.isArray(outputs) &&
     outputs.length <= previewLimits.outputs &&
     (outcome === "succeeded" || outputs.length === 0) &&
+    (!outputs.some((output) => csvMedia(object(output)?.["mediaType"])) ||
+      (outputs.length === 1 &&
+        object(body["provenance"])?.["profile"] === csvPreviewProfile &&
+        body["recordsWritten"] !== null &&
+        decimal(body["recordsWritten"]) &&
+        BigInt(body["recordsWritten"] as string) <=
+          BigInt(csvMaximumRecords))) &&
     outputs.every(
       (output: unknown, index: number) =>
         outputDescriptor(output) && (output as PreviewOutput).ordinal === index,
@@ -341,16 +354,27 @@ function run(value: unknown, scope: CatalogRevisionScope): boolean {
 function outputDescriptor(value: unknown): value is PreviewOutput {
   const output = object(value);
   return (
-    exactKeys(output, outputKeys) &&
+    exactKeys(output, [
+      ...outputKeys,
+      ...(output && Object.hasOwn(output, "csvDialect") ? ["csvDialect"] : []),
+    ]) &&
     integer(output["ordinal"], 0, previewLimits.outputs - 1) &&
     text(output["boundaryId"], 2048, true) &&
     typeof output["targetName"] === "string" &&
     (output["targetName"] as string).length <= 2048 &&
     typeof output["targetNameTruncated"] === "boolean" &&
-    ["application/json", "application/edi-x12", "application/edifact"].includes(
-      output["mediaType"] as string,
-    ) &&
+    [
+      "application/json",
+      "application/edi-x12",
+      "application/edifact",
+      "text/csv",
+      "text/tab-separated-values",
+    ].includes(output["mediaType"] as string) &&
+    csvMetadata(output["mediaType"], output["csvDialect"]) &&
     decimal(output["recordsWritten"]) &&
+    (!csvMedia(output["mediaType"]) ||
+      BigInt(output["recordsWritten"] as string) <=
+        BigInt(csvMaximumRecords)) &&
     hexDigest(output["sha256"]) &&
     integer(output["byteCount"], 0, 8 * 1024 * 1024)
   );
@@ -423,7 +447,11 @@ function integer(value: unknown, minimum: number, maximum: number): boolean {
 }
 
 function decimal(value: unknown): boolean {
-  return typeof value === "string" && /^(0|[1-9][0-9]{0,18})$/.test(value);
+  return (
+    typeof value === "string" &&
+    /^(0|[1-9][0-9]{0,19})$/.test(value) &&
+    BigInt(value) <= 18446744073709551615n
+  );
 }
 
 function hexDigest(value: unknown): boolean {

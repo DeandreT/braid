@@ -8,6 +8,8 @@ pub enum DocumentFormat {
     Json,
     X12,
     Edifact,
+    Csv,
+    Tsv,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,6 +26,8 @@ impl DocumentFormat {
             Self::Json => "json",
             Self::X12 => "x12",
             Self::Edifact => "edifact",
+            Self::Csv => "csv",
+            Self::Tsv => "tsv",
         }
     }
 
@@ -32,6 +36,8 @@ impl DocumentFormat {
             Self::Json => "json",
             Self::X12 => "x12",
             Self::Edifact => "edi",
+            Self::Csv => "csv",
+            Self::Tsv => "tsv",
         }
     }
 
@@ -40,6 +46,8 @@ impl DocumentFormat {
             Self::Json => "application/json",
             Self::X12 => "application/edi-x12",
             Self::Edifact => "application/edifact",
+            Self::Csv => "text/csv",
+            Self::Tsv => "text/tab-separated-values",
         }
     }
 
@@ -47,6 +55,17 @@ impl DocumentFormat {
     /// closed allowlist before invoking Ferrule. In particular, a file extension
     /// cannot turn a network, database, XML or spreadsheet boundary into EDI.
     pub fn from_options(options: &FormatOptions) -> Result<Self, FormatRefusal> {
+        if options.tabular_kind == Some(ferrule_mapping::TabularBoundaryKind::Csv) {
+            return crate::csv_document::CsvDialect::from_options(options)
+                .map(|dialect| {
+                    if dialect.delimiter == '\t' {
+                        Self::Tsv
+                    } else {
+                        Self::Csv
+                    }
+                })
+                .map_err(|_| FormatRefusal::ConflictingOptions);
+        }
         if options.edi_config_reference.is_some() {
             return Err(FormatRefusal::UnresolvedConfiguration);
         }
@@ -89,6 +108,7 @@ impl DocumentFormat {
                     admitted.x12_interchange_version = options.x12_interchange_version.clone();
                 }
             }
+            Self::Csv | Self::Tsv => unreachable!("CSV returned after its closed option admission"),
         }
         if *options != admitted {
             return Err(FormatRefusal::ConflictingOptions);

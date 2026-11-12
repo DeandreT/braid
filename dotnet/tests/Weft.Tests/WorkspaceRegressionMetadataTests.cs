@@ -1,16 +1,53 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Weft.Api.Catalog;
 using Weft.Api.Chat;
 using Weft.Api.Chat.Workspace;
 using Weft.Application;
 using Weft.Application.Regression;
+using Weft.Deployment;
 using Weft.Domain;
+using Weft.MappingBackends;
+using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
 
 namespace Weft.Tests;
 
 public sealed class WorkspaceRegressionMetadataTests
 {
+    [Fact]
+    public async Task Shared_csv_capabilities_use_only_fresh_catalog_authority()
+    {
+        var fixture = new WorkspaceToolFixture { Role = ProjectRole.Publisher };
+        var services = new CapabilityServices(fixture.Services);
+        var json = new RegressionRuntimeIdentity("ferrule", "engine", "build", "json", PreviewPolicy.Profile);
+        var csv = new RegressionRuntimeIdentity("ferrule", "engine", "build", "csv", CsvDocumentPolicy.Profile);
+        var regression = await CatalogEndpoints.RegressionCapabilitiesAsync(services, WorkspaceToolFixture.Actor,
+            WorkspaceToolFixture.Mapping, new(true, json, csvRuntime: csv), default);
+        Assert.Equal(CsvDocumentPolicy.Profile, regression!.CsvRuntime!.Profile);
+        Assert.Equal(new[] { RegressionComparisonService.ExactBytesPolicy, RegressionComparisonService.CsvRowsPolicy }, regression.ComparisonPolicies);
+        var backend = new BuildBackendIdentity("ferrule", "engine", "build", "json");
+        var csvBackend = new BuildBackendIdentity("ferrule", "engine", "build", "csv");
+        var build = await CatalogEndpoints.BuildCapabilitiesAsync(services, WorkspaceToolFixture.Actor, WorkspaceToolFixture.Mapping,
+            new(true, backend, FerruleBuildCompiler.Profile, csvBackend: csvBackend, csvProfile: FerruleBuildCompiler.CsvProfile), default);
+        Assert.Equal(BuildWorkerProtocol.CsvProfile, build!.CsvProfile!.Id);
+        Assert.Equal("csv", build.CsvBackend!.AdapterVersion);
+        fixture.OnCatalogRead = _ => { fixture.Active = false; return Task.CompletedTask; };
+        Assert.Null(await CatalogEndpoints.RegressionCapabilitiesAsync(services, WorkspaceToolFixture.Actor,
+            WorkspaceToolFixture.Mapping, new(true, json, csvRuntime: csv), default));
+    }
+
+    private sealed class CapabilityServices(IServiceProvider other) : IServiceProvider
+    {
+        public object? GetService(Type serviceType)
+        {
+            if (serviceType == typeof(IPrivateObjectStore) || serviceType == typeof(IRevisionReportMetadataReader) ||
+                serviceType == typeof(IInspectionWorkerRunner) || serviceType == typeof(ICsvBuildBoundaryReader))
+                throw new InvalidOperationException("A capability read resolved private content or a worker.");
+            return other.GetService(serviceType);
+        }
+    }
+
     [Fact]
     public void The_embedded_metadata_definition_is_not_swallowed_by_preview_dollar_quotes()
     {

@@ -5,6 +5,12 @@ import {
 import type { ProjectionView } from "./projection-view";
 import { ObservedJson } from "./observed-json";
 import { ediSegments } from "../catalog/previews/edi-segments";
+import { parseCsvDocument, type CsvDocumentResult } from "./csv-document";
+
+/** Dialect metadata belongs to this exact artifact, never its filename or a sibling output. */
+export type WorkbenchDocument = RegressionDocument & {
+  authoritativeCsvDocumentDialect?: unknown;
+};
 
 export interface DocumentRepresentation {
   name: string | null;
@@ -14,9 +20,10 @@ export interface DocumentRepresentation {
   format: "utf8" | "hex";
   mediaType: string | null;
   segments: readonly string[] | null;
+  csvDocument?: CsvDocumentResult | null;
 }
 export interface DocumentDisplay extends DocumentRepresentation {
-  document: RegressionDocument;
+  document: WorkbenchDocument;
 }
 export interface DocumentDifference {
   key: string;
@@ -32,12 +39,13 @@ export function documentKey(name: string | null): string {
 }
 
 /** Only display representation is bounded. Download continues to use the original exact bytes. */
-export function displayDocument(document: RegressionDocument): DocumentDisplay {
+export function displayDocument(document: WorkbenchDocument): DocumentDisplay {
   return {
     ...displayBytes(
       decodeBytes(document.bytesBase64Url),
       document.name,
       document.mediaType,
+      document.authoritativeCsvDocumentDialect ?? document.csvDialect,
     ),
     document,
   };
@@ -48,6 +56,7 @@ export function displayBytes(
   bytes: Uint8Array,
   name: string | null,
   mediaType?: string | null,
+  authoritativeCsvDocumentDialect?: unknown,
 ): DocumentRepresentation {
   const bounded = bytes.subarray(0, 65536);
   let text: string,
@@ -61,6 +70,16 @@ export function displayBytes(
       .map((value) => value.toString(16).padStart(2, "0"))
       .join(" ");
   }
+  let csvDocument: CsvDocumentResult | null = null;
+  if (mediaType === "text/csv" || mediaType === "text/tab-separated-values") {
+    csvDocument = parseCsvDocument(bytes, authoritativeCsvDocumentDialect);
+    if (
+      csvDocument.kind === "table" &&
+      (csvDocument.dialect.delimiter === "\t") !==
+        (mediaType === "text/tab-separated-values")
+    )
+      csvDocument = { kind: "unavailable", reason: "invalidDialect" };
+  }
   return {
     name,
     byteCount: bytes.length,
@@ -70,12 +89,13 @@ export function displayBytes(
     mediaType: mediaType ?? null,
     segments:
       format === "utf8" && mediaType ? ediSegments(text, mediaType) : null,
+    csvDocument,
   };
 }
 
 export function compareDocuments(
-  expected: readonly RegressionDocument[],
-  actual: readonly RegressionDocument[],
+  expected: readonly WorkbenchDocument[],
+  actual: readonly WorkbenchDocument[],
 ): readonly DocumentDifference[] {
   const before = new Map(expected.map((value) => [value.name, value]));
   const after = new Map(actual.map((value) => [value.name, value]));

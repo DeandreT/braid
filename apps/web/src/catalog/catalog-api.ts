@@ -303,6 +303,10 @@ function isContext(value: unknown): value is CatalogContext {
     isCatalogId(value["allowedOrganizationId"]) &&
     text(value["organizationName"], 200, true) &&
     booleanFields(value["features"], featureKeys) &&
+    (value["features"]["csvPreview"] === undefined ||
+      (typeof value["features"]["csvPreview"] === "boolean" &&
+        (!value["features"]["csvPreview"] ||
+          value["features"]["preview"] === true))) &&
     value["features"]["readCatalog"] === true &&
     (!value["features"]["deriveReports"] ||
       value["features"]["readReports"] === true) &&

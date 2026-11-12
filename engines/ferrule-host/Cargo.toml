@@ -15,6 +15,7 @@ ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev 
 ferrule-cli = { package = "cli", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
 ferrule-codegen = { package = "codegen", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
 ferrule-codegen-csharp = { package = "codegen-csharp", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
+ferrule-format-csv = { package = "format-csv", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
 ferrule-mfd = { package = "mfd", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
 anyhow = "=1.0.103"
 serde = { version = "=1.0.228", features = ["derive"] }

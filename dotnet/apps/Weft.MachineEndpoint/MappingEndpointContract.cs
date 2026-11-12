@@ -68,6 +68,9 @@ internal sealed record MappingDocumentInvocationRequestV1(
 internal sealed record MappingDocumentInvocationInputV1(byte[] Content, string MediaType)
 {
     public string? Name { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [Description("Required for CSV/TSV, and must match the qualified input boundary. Omitted for JSON/EDI.")]
+    public CsvDocumentDialect? CsvDialect { get; init; }
 }
 
 /// <summary>One typed parameter; numbers and booleans keep their exact lexical form.</summary>
@@ -106,7 +109,8 @@ internal sealed record MappingDocumentInvocationResponseV1(
     string CurrentDateTime, IReadOnlyList<MappingDocumentInvocationOutputV1> Outputs);
 
 internal sealed record MappingDocumentInvocationOutputV1(string? Name,
-    [property: RegularExpression("^[0-9a-f]{64}$")] string Sha256, string MediaType, byte[] Content);
+    [property: RegularExpression("^[0-9a-f]{64}$")] string Sha256, string MediaType, [property: JsonPropertyOrder(1)] byte[] Content,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null);
 
 /// <summary>Every answer other than a completed call. The request ID is present once the endpoint admitted it.</summary>
 internal sealed record MappingInvocationErrorV1(

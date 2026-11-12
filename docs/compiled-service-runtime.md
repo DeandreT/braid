@@ -1,7 +1,8 @@
 # Compiled execution through the Ferrule service
 
-The optional `execute` profile carries the existing
-`weft.ferrule-compiled-json.v1` frame. It runs only the installed
+The optional `execute` profile carries the
+`weft.ferrule-compiled-json.v1`, `weft.ferrule-compiled-document.v1` and
+`weft.ferrule-compiled-csv.v1` frames. It runs only the installed
 `Weft.CompiledRuntime` host in a fresh child. Mapping assemblies remain outside
 the service and endpoint processes; the child loads the already verified bytes
 through the same generated-library ABI used by the Docker runtime.
@@ -28,6 +29,20 @@ The service reports its execution identity in `Weft-Compiled-Runtime` and the
 the client verifies it before sending a frame and on the answer. A missing or
 changed pin refuses admission. An inconsistent answer after delivery is uncertain
 and closes client admission rather than being retried automatically.
+
+The CSV frame is restricted to a primary flat CSV-to-CSV build. It invokes
+`ExecuteCsvDocumentBytes(byte[], FerruleExecutionContext)` from the pinned
+generated library. Both replay and output descriptors carry the exact dialect
+bound into the build intent. Explicit zero-byte CSV frames are valid; missing
+frames are not. JSON/EDI retain their nonempty input rules and original wire
+representations. Media comes from the admitted boundary, not a filename.
+
+The generated parser enforces native CSV input limits. Output retains Weft's
+smaller requested byte limit and is checked for the native 1 MiB cell,
+100,000-record (including header), 256-column and 1,000,000-node ceilings before
+publication. Typed CSV size failures return a resource-limit outcome without
+exposing raw parser diagnostics. Build qualification still requires exact bytes
+for every output; it does not substitute row comparison for the release proof.
 
 Run the trusted service image's `runtime-identity` command to measure its native
 and runtime pins and prove the execution sandbox before configuring an endpoint.

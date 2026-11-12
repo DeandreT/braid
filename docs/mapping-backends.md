@@ -156,6 +156,10 @@ formats only through explicit capability and qualification increments. Stateful
 SQLite and update-existing XLSX remain outside the initial preview contract.
 Inherited design-time HTTP paths do not authorize worker network access.
 
+The [flat CSV document core](csv-documents.md) has a separate direct-preview and
+source-emission contract. Its bounded route, dialect metadata and empty-document
+semantics do not expand the existing persisted preview or deployment profiles.
+
 Bound every native document before decoding, including legacy unmarked project
 files. Ferrule's logical path acceptance is broader than Weft's storage policy;
 the host validates traversal-free input identities and remaps output identities

@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Weft.Api.Catalog;
 using Weft.Application;
 using Weft.Application.Regression;
 using Weft.Deployment;
+using Weft.Domain;
 using Weft.MappingBackends;
 using Weft.MappingBackends.Workers;
 using Weft.Persistence.Postgres;
@@ -13,9 +15,9 @@ using Weft.Storage.Hosting;
 namespace Weft.Server;
 
 internal sealed record BuildHostRuntime(bool Enabled, string? Image = null, PrivateStorageSettings? Storage = null,
-    int DerivedReadLimit = Weft.Domain.RevisionReportPolicy.MaximumStoredObjectByteLimit);
+    int DerivedReadLimit = Weft.Domain.RevisionReportPolicy.MaximumStoredObjectByteLimit, CsvBuildHostSettings? Csv = null);
 
-/// <summary>Explicit control/query composition. It registers no compiler, dispatcher, publication or derivation service.</summary>
+/// <summary>Explicit control/query composition, with optional read-only CSV boundary inspection. No compiler execution queue or publication is registered.</summary>
 public static class CatalogBuildHostConfiguration
 {
     private const string Key = "build-http";
@@ -35,10 +37,17 @@ public static class CatalogBuildHostConfiguration
             throw new ArgumentException("Build API requires the exact configured immutable image.");
         image = FerruleRunnerSelection.ProfileIdentity(environment, environment("WEFT_CATALOG_AUTH_MODE") == "session"
             ? FerruleRunnerKind.InspectionWorker : FerruleRunnerKind.Docker);
+        var csvEnabled = environment(CsvBuildHostSettings.EnabledSetting) switch
+        {
+            null or "false" => false,
+            "true" => true,
+            _ => throw new ArgumentException("CSV build enablement must be true or false.")
+        };
+        var csv = csvEnabled ? CsvBuildHostSettings.Read(environment, environment("WEFT_CATALOG_AUTH_MODE") == "session", image) : null;
         PrivateStorageSettings storage;
         try { storage = PrivateStorageSettings.Read(environment); }
         catch (InvalidOperationException) { throw new ArgumentException("Build API requires its private report storage."); }
-        return new(true, image, storage, CatalogRevisionReportHostConfiguration.DerivedReadLimit(environment("WEFT_DERIVED_READ_BYTE_LIMIT")));
+        return new(true, image, storage, CatalogRevisionReportHostConfiguration.DerivedReadLimit(environment("WEFT_DERIVED_READ_BYTE_LIMIT")), csv);
     }
 
     internal static void Configure(IServiceCollection services, IWebHostEnvironment environment, Func<string, string?> read,
@@ -61,7 +70,10 @@ public static class CatalogBuildHostConfiguration
         var documentBackend = new BuildBackendIdentity("ferrule", FerruleInspectionBackend.EngineRevision, runtime.Image!, FerrulePreviewBackend.DocumentAdapterBuild);
         var documentProfile = FerruleBuildCompiler.DocumentProfile;
         var interchangeProfile = FerruleBuildCompiler.X12InterchangesProfile;
-        services.AddWeftBuildApi(new(true, backend, profile, documentBackend, documentProfile, interchangeProfile));
+        var csvBackend = runtime.Csv is null ? null : new BuildBackendIdentity("ferrule", FerruleInspectionBackend.EngineRevision,
+            runtime.Image!, FerrulePreviewBackend.CsvAdapterBuild);
+        var csvProfile = runtime.Csv is null ? null : FerruleBuildCompiler.CsvProfile;
+        services.AddWeftBuildApi(new(true, backend, profile, documentBackend, documentProfile, interchangeProfile, csvBackend, csvProfile));
         services.AddKeyedSingleton<PostgresBuildMetadataReader>(Key, (_, _) => new(metadata));
         services.AddSingleton<IBuildMetadataReader>(provider => provider.GetRequiredKeyedService<PostgresBuildMetadataReader>(Key));
         services.AddKeyedSingleton<PostgresBuildStore>(Key, (_, _) => new(controls, writer: true));
@@ -93,9 +105,25 @@ public static class CatalogBuildHostConfiguration
         services.AddKeyedSingleton<LazyPrivateObjectStore>(Key, (_, _) => new(runtime.Storage!.Bind(
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(environment.ContentRootPath))),
             () => throw new InvalidOperationException("Build HTTP does not publish private objects.")));
+        if (runtime.Csv is { } csv)
+        {
+            // A CSV build-only host already has qualified native metadata and private storage.
+            // Reuse those read ports for admitted CSV preview/case requests without replacing
+            // reporting/ingestion ports or resolving storage, transport, or credentials here.
+            services.TryAddSingleton<IRevisionReportMetadataReader>(provider =>
+                provider.GetRequiredKeyedService<IRevisionReportMetadataReader>(Key));
+            services.TryAddSingleton<IPrivateObjectStore>(provider =>
+                provider.GetRequiredKeyedService<LazyPrivateObjectStore>(Key));
+            CsvBuildHostConfiguration.Register(services, csv);
+            services.AddKeyedSingleton<FerruleCsvBuildBoundaryReader>(Key, (provider, _) => new(
+                provider.GetRequiredService<CsvBuildHostRunner>(), provider.GetRequiredKeyedService<IRevisionReportMetadataReader>(Key),
+                provider.GetRequiredKeyedService<IProjectReader>(Key), provider.GetRequiredKeyedService<LazyPrivateObjectStore>(Key)));
+            services.AddSingleton<ICsvBuildBoundaryReader>(provider => new LazyCsvBoundaryReader(() => provider.GetRequiredKeyedService<FerruleCsvBuildBoundaryReader>(Key)));
+        }
         services.AddKeyedSingleton<PersistedBuildIntentFactory>(Key, (provider, _) => new(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredKeyedService<IRevisionReportMetadataReader>(Key), provider.GetRequiredKeyedService<IRevisionReportReader>(Key),
-            provider.GetRequiredKeyedService<RegressionRunReadService>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile));
+            provider.GetRequiredKeyedService<RegressionRunReadService>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile,
+            csvBackend, csvProfile, provider.GetService<ICsvBuildBoundaryReader>()));
         services.AddSingleton<IBuildIntentFactory>(provider => new LazyIntentFactory(() => provider.GetRequiredKeyedService<PersistedBuildIntentFactory>(Key)));
         services.AddSingleton<IBuildApprovalWriter>(provider => new LazyApprovalWriter(() => provider.GetRequiredKeyedService<BuildControlService>(Key)));
         services.AddSingleton<IBuildAdmissionReader>(provider => new LazyAdmission(() => provider.GetRequiredKeyedService<BuildControlService>(Key)));
@@ -103,13 +131,19 @@ public static class CatalogBuildHostConfiguration
             provider.GetRequiredService<IBuildIntentFactory>(), provider.GetRequiredService<IBuildApprovalWriter>(), provider.GetRequiredKeyedService<IProjectReader>(Key)));
         services.AddSingleton(provider => new BuildSubmissionService(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredService<IBuildRunReader>(), provider.GetRequiredService<IBuildRunCommands>(), provider.GetRequiredService<IBuildAdmissionReader>(),
-            provider.GetRequiredKeyedService<IProjectReader>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile));
+            provider.GetRequiredKeyedService<IProjectReader>(Key), backend, profile, documentBackend, documentProfile, interchangeProfile, csvBackend, csvProfile));
         services.AddSingleton(provider => new LazyAdministration(() => provider.GetRequiredKeyedService<PostgresBuildStore>(Key)));
         services.AddSingleton<IBuildEnvironmentCommands>(provider => provider.GetRequiredService<LazyAdministration>());
         services.AddSingleton<IBuildApprovalRevocation>(provider => provider.GetRequiredService<LazyAdministration>());
         services.AddSingleton(provider => new BuildAdministrationService(provider.GetRequiredService<IBuildMetadataReader>(),
             provider.GetRequiredService<IBuildEnvironmentCommands>(), provider.GetRequiredService<IBuildApprovalRevocation>(),
-            provider.GetRequiredKeyedService<IProjectReader>(Key), profile, documentProfile, interchangeProfile));
+            provider.GetRequiredKeyedService<IProjectReader>(Key), profile, documentProfile, interchangeProfile, csvProfile));
+    }
+
+    private sealed class LazyCsvBoundaryReader(Func<ICsvBuildBoundaryReader> factory) : ICsvBuildBoundaryReader
+    {
+        public Task<CsvBuildBoundaryObservation?> ReadAsync(ActorContext actor, RevisionReportSource source, CancellationToken token = default) =>
+            factory().ReadAsync(actor, source, token);
     }
 
     private sealed class LazyIntentFactory(Func<IBuildIntentFactory> factory) : IBuildIntentFactory

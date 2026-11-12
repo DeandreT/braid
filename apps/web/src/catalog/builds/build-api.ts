@@ -31,6 +31,7 @@ import {
   matchesApproval,
   nullableId,
   profile,
+  csvProfile,
   run,
   shape,
   version,
@@ -81,7 +82,13 @@ export class BuildApi {
               "approveBuilds",
               "submitBuilds",
             ],
-            ["documentBackend", "documentProfile", "interchangeProfile"],
+            [
+              "documentBackend",
+              "documentProfile",
+              "interchangeProfile",
+              "csvBackend",
+              "csvProfile",
+            ],
           ) ||
           !backend(v.backend) ||
           !profile(v.profile) ||
@@ -92,6 +99,15 @@ export class BuildApi {
               v.documentProfile === undefined)) ||
           (v.documentBackend === undefined) !==
             (v.documentProfile === undefined) ||
+          (v.csvBackend === undefined) !== (v.csvProfile === undefined) ||
+          (v.csvBackend !== undefined && !backend(v.csvBackend)) ||
+          (v.csvBackend !== undefined &&
+            !["backendId", "engineRevision", "engineBuild"].every(
+              (key) =>
+                (v.csvBackend as Record<string, unknown>)[key] ===
+                (v.backend as Record<string, unknown>)[key],
+            )) ||
+          (v.csvProfile !== undefined && !csvProfile(v.csvProfile)) ||
           ![v.readOwnMetadata, v.approveBuilds, v.submitBuilds].every(
             (x) => typeof x === "boolean",
           ) ||
@@ -119,10 +135,11 @@ export class BuildApi {
           !shape(
             v,
             ["profile", "canCreateVersions"],
-            ["documentProfile", "interchangeProfile"],
+            ["documentProfile", "interchangeProfile", "csvProfile"],
           ) ||
           !profile(v.profile) ||
           (v.documentProfile !== undefined && !profile(v.documentProfile)) ||
+          (v.csvProfile !== undefined && !csvProfile(v.csvProfile)) ||
           (v.interchangeProfile !== undefined &&
             (!profile(v.interchangeProfile) ||
               v.documentProfile === undefined)) ||

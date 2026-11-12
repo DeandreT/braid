@@ -6,6 +6,7 @@ use ferrule_mapping::FileCodecError;
 use sha2::{Digest, Sha256};
 
 pub mod build;
+pub mod csv_document;
 pub mod document_format;
 pub mod document_limits;
 pub mod edi_envelope;
@@ -19,7 +20,9 @@ pub use weft_ferrule_core::{
     canonical_nonzero_guid, decode, inspect, projection, protocol, valid_context_parts, validation,
 };
 
-use preview::protocol::{DOCUMENT_PREVIEW_PROTOCOL_VERSION, PREVIEW_PROTOCOL_VERSION};
+use preview::protocol::{
+    CSV_PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION, PREVIEW_PROTOCOL_VERSION,
+};
 use protocol::{
     Failure, MAX_DIAGNOSTICS, MAX_HEADER_BYTES, MAX_ITEMS, MAX_NATIVE_BYTES, MAX_TEXT_BYTES,
     NativeLocator, PROTOCOL_VERSION, RequestHeader, Response, WorkerResult, bounded_text,
@@ -60,7 +63,11 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes).is_ok_and(|probe| {
         matches!(
             probe.protocol_version.as_deref(),
-            Some(PREVIEW_PROTOCOL_VERSION | DOCUMENT_PREVIEW_PROTOCOL_VERSION)
+            Some(
+                PREVIEW_PROTOCOL_VERSION
+                    | DOCUMENT_PREVIEW_PROTOCOL_VERSION
+                    | CSV_PREVIEW_PROTOCOL_VERSION
+            )
         )
     }) {
         return preview::handle_preview(&header_bytes, reader, writer);

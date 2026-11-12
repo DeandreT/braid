@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json.Serialization;
+using Weft.Application;
 using Weft.Domain;
 
 namespace Weft.Deployment;
@@ -66,7 +68,7 @@ public enum BuildBoundaryKind { PrimaryInput, NamedInput, PrimaryOutput, NamedOu
 /// <summary>A physical-format requirement at an exact logical boundary. Names are not filesystem paths.</summary>
 public sealed record BuildBoundary
 {
-    public BuildBoundary(BuildBoundaryKind kind, string? name, string format)
+    public BuildBoundary(BuildBoundaryKind kind, string? name, string format, CsvDocumentDialect? csvDialect = null)
     {
         if (!Enum.IsDefined(kind)) throw new BuildContractException(BuildContractFailure.InvalidInput);
         var named = kind is BuildBoundaryKind.NamedInput or BuildBoundaryKind.NamedOutput;
@@ -74,11 +76,16 @@ public sealed record BuildBoundary
         Kind = kind;
         Name = named ? BuildValues.Text(name!, 256) : null;
         Format = BuildValues.Text(format, 128);
+        if (format is "csv" or "tsv" ? named || !CsvDocumentPolicy.Admits(csvDialect, BuildWorkerProtocol.MediaType(format)) : csvDialect is not null)
+            throw new BuildContractException(BuildContractFailure.InvalidInput);
+        CsvDialect = csvDialect;
     }
 
     public BuildBoundaryKind Kind { get; }
     public string? Name { get; }
     public string Format { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CsvDocumentDialect? CsvDialect { get; }
     public override string ToString() => nameof(BuildBoundary);
 }
 

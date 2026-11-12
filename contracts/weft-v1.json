@@ -7383,7 +7383,7 @@
         "tags": [
           "Catalog"
         ],
-        "summary": "Submit an idempotent bounded sample preview of this exact revision with explicit legacy JSON or document admission.",
+        "summary": "Submit an idempotent bounded sample preview of this exact revision with explicit JSON, document or primary CSV/TSV admission.",
         "operationId": "SubmitCatalogPreview",
         "parameters": [
           {
@@ -7833,6 +7833,18 @@
                 }
               },
               "application/edifact": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/tab-separated-values": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -28819,6 +28831,16 @@
           },
           "format": {
             "type": "string"
+          },
+          "csvDialect": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildCsvDialectV1"
+              }
+            ]
           }
         }
       },
@@ -28876,6 +28898,64 @@
                 "$ref": "#/components/schemas/BuildRuntimeV1"
               }
             ]
+          },
+          "csvBackend": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildBackendV1"
+              }
+            ]
+          },
+          "csvProfile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRuntimeV1"
+              }
+            ]
+          }
+        }
+      },
+      "BuildCsvDialectV1": {
+        "required": [
+          "schema",
+          "delimiter",
+          "quote",
+          "quoteDisabled",
+          "hasHeaderRow",
+          "utf8Bom",
+          "preserveEmptyStrings"
+        ],
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "string"
+          },
+          "delimiter": {
+            "type": "string"
+          },
+          "quote": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "quoteDisabled": {
+            "type": "boolean"
+          },
+          "hasHeaderRow": {
+            "type": "boolean"
+          },
+          "utf8Bom": {
+            "type": "boolean"
+          },
+          "preserveEmptyStrings": {
+            "type": "boolean"
           }
         }
       },
@@ -28903,6 +28983,16 @@
             ]
           },
           "interchangeProfile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BuildRuntimeV1"
+              }
+            ]
+          },
+          "csvProfile": {
             "oneOf": [
               {
                 "type": "null"
@@ -29465,6 +29555,12 @@
           "edit": {
             "type": "boolean",
             "default": false
+          },
+          "csvPreview": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -29877,6 +29973,16 @@
           "byteCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "csvDialect": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CsvDocumentDialectV1"
+              }
+            ]
           }
         }
       },
@@ -30114,13 +30220,14 @@
             "enum": [
               "weft.ferrule-json-preview.v1",
               "weft.ferrule-document-preview.v1",
+              "weft.ferrule-csv-preview.v1",
               null
             ],
             "type": [
               "null",
               "string"
             ],
-            "description": "Omitted or null preserves legacy JSON admission. Document admission requires explicit native boundary formats; filenames never select them."
+            "description": "Omitted or null preserves legacy JSON admission. CSV/TSV is a separately enabled primary-only profile requiring native-source ports; an explicit empty content string is present input. Formats and dialects come from saved native boundaries, never filenames or caller overrides."
           }
         },
         "additionalProperties": false
@@ -32756,6 +32863,44 @@
           "partial",
           "unavailable"
         ]
+      },
+      "CsvDocumentDialectV1": {
+        "required": [
+          "schema",
+          "delimiter",
+          "quote",
+          "quoteDisabled",
+          "hasHeaderRow",
+          "utf8Bom",
+          "preserveEmptyStrings"
+        ],
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "string"
+          },
+          "delimiter": {
+            "type": "string"
+          },
+          "quote": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "quoteDisabled": {
+            "type": "boolean"
+          },
+          "hasHeaderRow": {
+            "type": "boolean"
+          },
+          "utf8Bom": {
+            "type": "boolean"
+          },
+          "preserveEmptyStrings": {
+            "type": "boolean"
+          }
+        }
       },
       "DependencyRole": {
         "enum": [
@@ -37206,6 +37351,16 @@
             "items": {
               "type": "string"
             }
+          },
+          "csvRuntime": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionRuntimeV1"
+              }
+            ]
           }
         }
       },
@@ -37425,6 +37580,55 @@
                 "$ref": "#/components/schemas/RegressionDocumentDiagnosticV1"
               }
             ]
+          },
+          "csvDiagnostic": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionCsvDiagnosticV1"
+              }
+            ]
+          }
+        }
+      },
+      "RegressionCsvDiagnosticV1": {
+        "required": [
+          "name",
+          "side",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "side": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/RegressionCsvLocationV1"
+          }
+        }
+      },
+      "RegressionCsvLocationV1": {
+        "required": [
+          "row",
+          "column"
+        ],
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "column": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -37489,6 +37693,16 @@
               },
               {
                 "$ref": "#/components/schemas/RegressionDocumentLocationV1"
+              }
+            ]
+          },
+          "csvLocation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionCsvLocationV1"
               }
             ]
           }
@@ -37572,6 +37786,16 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "csvDialect": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CsvDocumentDialectV1"
+              }
             ]
           }
         }

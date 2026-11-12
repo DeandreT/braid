@@ -33,7 +33,9 @@ public static partial class CatalogEndpoints
             var administrator = await BuildProjectAccess(context, admission, project, administrator: true);
             var bytes = PrepareBuild(new BuildEnvironmentCapabilitiesV1(CatalogBuildMapping.Profile(options.Profile!), administrator,
                 options.DocumentProfile is { } documentProfile ? CatalogBuildMapping.Profile(documentProfile) : null,
-                options.InterchangeProfile is { } interchangeProfile ? CatalogBuildMapping.Profile(interchangeProfile) : null), context.RequestAborted);
+                options.InterchangeProfile is { } interchangeProfile ? CatalogBuildMapping.Profile(interchangeProfile) : null,
+                context.RequestServices.GetService<ICsvBuildBoundaryReader>() is not null && options.CsvProfile is { } csvProfile
+                    ? CatalogBuildMapping.Profile(csvProfile) : null), context.RequestAborted);
             return await BuildProjectAccess(context, admission, project, administrator) ? CaseResponse(bytes) : NotFound();
         });
 

@@ -88,6 +88,29 @@ public sealed class CatalogPreviewHostConfigurationTests
         Assert.DoesNotContain(builder.Services, item => item.ServiceType == typeof(PreviewRunExecutor));
     }
 
+    [Fact]
+    public void Csv_preview_configuration_requires_sources_before_preview_credentials()
+    {
+        var configuration = CatalogConfiguration();
+        configuration[Flag] = "true";
+        configuration[CatalogPreviewOptions.CsvEnabledSetting] = "true";
+        var reads = new List<string>();
+        var absent = Builder();
+        var error = Assert.Throws<InvalidOperationException>(() => Configure(absent, configuration, reads));
+        Assert.Contains("IPrivateObjectStore and IRevisionReportMetadataReader", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(reads, PreviewDependencies.Contains);
+
+        configuration[WriterCredential] = Connection;
+        configuration[ReaderCredential] = Connection;
+        var present = Builder();
+        var resolved = 0;
+        CsvSourceTestServices.Register(present.Services, () => resolved++);
+        Configure(present, configuration);
+        var options = (CatalogPreviewOptions)present.Services.Single(item => item.ServiceType == typeof(CatalogPreviewOptions)).ImplementationInstance!;
+        Assert.True(options.Enabled && options.CsvEnabled);
+        Assert.Equal(0, resolved);
+    }
+
     private static WebApplicationBuilder Builder() => WebApplication.CreateBuilder(new WebApplicationOptions
     { EnvironmentName = "Development", Args = [] });
 

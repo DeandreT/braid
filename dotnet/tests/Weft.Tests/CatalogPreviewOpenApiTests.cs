@@ -32,10 +32,10 @@ public sealed class CatalogPreviewOpenApiTests
         using var document = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync());
         var schema = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("CatalogPreviewSubmissionV1");
         Assert.Equal(new[] { "target", "parameters", "inputs" }, schema.GetProperty("required").EnumerateArray().Select(item => item.GetString()));
-        Assert.Equal(new string?[] { PreviewPolicy.Profile, DocumentPreviewPolicy.Profile, null },
+        Assert.Equal(new string?[] { PreviewPolicy.Profile, DocumentPreviewPolicy.Profile, CsvDocumentPolicy.Profile, null },
             schema.GetProperty("properties").GetProperty("profile").GetProperty("enum").EnumerateArray().Select(item => item.GetString()));
         var output = document.RootElement.GetProperty("paths").EnumerateObject().Single(path => path.Name.EndsWith("/previews/{runId}/outputs/{ordinal}", StringComparison.Ordinal)).Value;
-        Assert.Equal(new[] { "application/edi-x12", "application/edifact", "application/json" },
+        Assert.Equal(new[] { "application/edi-x12", "application/edifact", "application/json", "text/csv", "text/tab-separated-values" },
             output.GetProperty("get").GetProperty("responses").GetProperty("200").GetProperty("content").EnumerateObject()
                 .Select(item => item.Name).Order(StringComparer.Ordinal));
         var success = output.GetProperty("get").GetProperty("responses").GetProperty("200");

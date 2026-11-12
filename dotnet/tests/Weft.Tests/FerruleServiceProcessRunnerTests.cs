@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using Weft.Application;
 using Weft.Contracts.Projections;
 using Weft.Domain;
@@ -18,6 +19,48 @@ namespace Weft.Tests;
 [Collection(FerruleServiceProcessCollection.Name)]
 public sealed class FerruleServiceProcessRunnerTests
 {
+    [ServiceEquivalenceFact]
+    public async Task Csv_and_tsv_use_the_same_bounded_bytes_and_dialect_in_Docker_and_service_children()
+    {
+        var root = TemporaryRoot();
+        var workers = new List<IAsyncDisposable>();
+        Exception? primary = null;
+        try
+        {
+            var docker = Own(workers, new DockerInspectionWorkerRunner(new DockerInspectionWorkerOptions("/usr/bin/docker",
+                Environment.GetEnvironmentVariable("WEFT_FERRULE_WORKER_IMAGE")!, profile: DockerWorkerProfile.Preview)));
+            var child = Own(workers, new ProcessWorkerRunner(Options(root, DockerWorkerProfile.Preview)));
+            var comparing = new ComparingRunner(docker, child);
+            var backend = new FerrulePreviewBackend(comparing, PreviewExecutionProfile.CsvDocument);
+            foreach (var delimiter in new[] { ",", "\t" })
+            {
+                var native = JsonNode.Parse(await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "csv-flat.native.json")))!;
+                foreach (var side in new[] { "source_options", "target_options" })
+                {
+                    native[side]!["delimiter"] = delimiter;
+                    native[side]!["has_header_row"] = false;
+                }
+                var artifact = NativeArtifact.Admit(Scope, Encoding.UTF8.GetBytes(native.ToJsonString()), PreviewPolicy.MaximumNativeBytes);
+                foreach (var input in new[] { Array.Empty<byte>(), Encoding.UTF8.GetBytes($"A{delimiter}\"first\r\nsecond\"\n"), new byte[] { 0xff } })
+                {
+                    var result = await backend.PreviewAsync(new(artifact, PreviewTargetSelection.All, new(null, input), [], [],
+                        "2026-10-30T12:00:00Z", PreviewLimits.Default));
+                    if (input.Length == 1) Assert.Equal(MappingPreviewStatus.InvalidInput, result.Status);
+                    else
+                    {
+                        Assert.True(result.Status == MappingPreviewStatus.Succeeded, result.Failure?.Message);
+                        var output = Assert.Single(result.Artifacts);
+                        Assert.Equal(input, output.CopyBytes());
+                        Assert.Equal(delimiter, output.CsvDialect!.Delimiter);
+                    }
+                }
+            }
+            Assert.Equal(6, comparing.Compared);
+        }
+        catch (Exception error) { primary = error; }
+        finally { await CompleteCleanupAsync(workers, root, primary); }
+    }
+
     [ServiceEquivalenceFact]
     public async Task AuthoredEnvelopesHaveExactDockerAndServiceChildEquivalence()
     {

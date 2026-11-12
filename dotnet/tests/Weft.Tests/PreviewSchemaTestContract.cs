@@ -14,7 +14,8 @@ internal static class PreviewSchemaTestContract
     [
         "preview_authorized", "preview_cancel", "preview_claim", "preview_complete", "preview_history", "preview_input",
         "preview_input_documents", "preview_inputs", "preview_observe", "preview_output", "preview_outputs", "preview_read",
-        "preview_release", "preview_submit"
+        "preview_release", "preview_submit", "preview_complete_csv", "preview_csv_outputs", "preview_csv_input", "guard_csv_preview_document",
+        "csv_dialect_valid", "csv_dialect_char_canonical", "csv_dialect_canonical"
     ];
     internal static readonly string[] Roles = ["weft_preview_reader", "weft_preview_writer"];
     // Child FKs whose internal RI triggers land on older parent relations.

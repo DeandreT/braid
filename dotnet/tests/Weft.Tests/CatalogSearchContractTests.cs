@@ -10,7 +10,7 @@ public sealed class CatalogSearchContractTests
     public void EmbeddedHistoryKeepsDisplayAndSearchAsSeparateAdditiveMigrations()
     {
         var migrations = MigrationRunner.EmbeddedMigrations;
-        Assert.Equal(Enumerable.Range(1, 40), migrations.Select(migration => migration.Version));
+        Assert.Equal(Enumerable.Range(1, 41), migrations.Select(migration => migration.Version));
         Assert.Equal(AccountDisplayMetadataTestContract.MigrationChecksum, migrations[25].Checksum);
         Assert.Equal(RegressionSchemaTestContract.AdministrationChecksum, migrations[26].Checksum);
         Assert.Equal(InterchangeSchemaTestContract.MigrationChecksum, migrations[27].Checksum);
@@ -26,6 +26,7 @@ public sealed class CatalogSearchContractTests
         Assert.Equal(MappingDraftSchemaTestContract.PreviewChecksum, migrations[37].Checksum);
         Assert.Equal(ChatSchemaContract.MappingWriteMigrationChecksum, migrations[38].Checksum);
         Assert.Equal(ChatSchemaContract.WriteJournalMigrationChecksum, migrations[39].Checksum);
+        Assert.Equal(RegressionSchemaTestContract.CsvDocumentsChecksum, migrations[40].Checksum);
     }
 
     [Fact]

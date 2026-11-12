@@ -29,6 +29,45 @@ public sealed class CatalogPreviewHttpTests(PostgresFixture fixture)
 {
     private static readonly byte[] Output = "{\"orders\":[{\"id\":\"SO-1\",\"qty\":9007199254740993}]}"u8.ToArray();
 
+    [PostgresFact]
+    public async Task Csv_profile_is_not_admitted_when_only_legacy_previews_are_enabled()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, CsvPreviewTestData.Native);
+        await using var host = await PreviewHost.StartAsync(test);
+        var body = new CatalogPreviewSubmissionV1(new("all"), [], [new("")], CsvDocumentPolicy.Profile);
+        using var response = await host.SubmitAsync(await host.TokenAsync(), Guid.NewGuid(),
+            JsonSerializer.SerializeToUtf8Bytes(body, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        await ErrorAsync(response, HttpStatusCode.BadRequest, "invalidRequest");
+        Assert.Equal(0L, await test.Case.ScalarAsync<long>("SELECT count(*) FROM weft.preview_runs"));
+    }
+
+    [PostgresFact]
+    public async Task Csv_http_profile_admits_explicit_empty_content_but_not_absence_or_caller_dialects()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, CsvPreviewTestData.Native);
+        await using var host = await PreviewHost.StartAsync(test, csvEnabled: true);
+        var token = await host.TokenAsync();
+        var body = new CatalogPreviewSubmissionV1(new("all"), [], [new("")], CsvDocumentPolicy.Profile);
+        byte[] Encode(CatalogPreviewSubmissionV1 value) => JsonSerializer.SerializeToUtf8Bytes(value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var created = await host.SubmitAsync(token, Guid.NewGuid(), Encode(body));
+        var json = await CatalogHttpTestSupport.JsonAsync(created, HttpStatusCode.Created);
+        var run = Guid.Parse(json.GetProperty("run").GetProperty("runId").GetString()!);
+        await test.Executor(new CsvPreviewTestData.Backend()).ExecuteAsync(test.Revision.OrganizationId, run, Guid.NewGuid());
+        using var download = await host.Client.GetAsync(host.RunPath(run) + "/outputs/0");
+        Assert.Equal(HttpStatusCode.OK, download.StatusCode);
+        Assert.Equal("text/tab-separated-values", download.Content.Headers.ContentType!.MediaType);
+        Assert.Empty(await download.Content.ReadAsByteArrayAsync());
+        foreach (var invalid in new[] { body with { Inputs = [] }, body with { Profile = null }, body with { Profile = DocumentPreviewPolicy.Profile },
+            body with { Target = new("named", "value") } })
+        {
+            using var refused = await host.SubmitAsync(token, Guid.NewGuid(), Encode(invalid));
+            await ErrorAsync(refused, HttpStatusCode.BadRequest, "invalidRequest");
+        }
+        var injected = Encoding.UTF8.GetString(Encode(body)).Replace("\"content\":\"\"", "\"content\":\"\",\"csvDialect\":{}", StringComparison.Ordinal);
+        using var reconfigured = await host.SubmitAsync(token, Guid.NewGuid(), Encoding.UTF8.GetBytes(injected));
+        await ErrorAsync(reconfigured, HttpStatusCode.BadRequest, "invalidRequest");
+    }
+
     [DocumentPreviewFact]
     public async Task DocumentPreviewsPersistExplicitAdmissionExecuteRealEnvelopesAndStreamTheirMedia()
     {
@@ -288,7 +327,7 @@ public sealed class CatalogPreviewHttpTests(PostgresFixture fixture)
         internal string RunPath(Guid run) => $"/api/v1/organizations/{revision.OrganizationId:D}/previews/{run:D}";
 
         internal static async Task<PreviewHost> StartAsync(PreviewRunTestSupport test, bool enabled = true,
-            int bodyLimit = CatalogPreviewOptions.MaximumBodyBytes)
+            int bodyLimit = CatalogPreviewOptions.MaximumBodyBytes, bool csvEnabled = false)
         {
             var reservation = new TcpListener(IPAddress.Loopback, 0);
             reservation.Start();
@@ -306,10 +345,13 @@ public sealed class CatalogPreviewHttpTests(PostgresFixture fixture)
                 builder.Services.AddWeftCatalog(new(true, true, test.Alice.PrincipalId.Value, test.Revision.OrganizationId,
                     origin.GetLeftPart(UriPartial.Authority)), builder.Environment, new CatalogMetadataEditOptions(),
                     new CatalogRevisionIngestionOptions(), new CatalogProjectCreationOptions(), new CatalogRevisionReportOptions());
-                builder.Services.AddWeftPreviews(new CatalogPreviewOptions(enabled, bodyLimit));
                 database = new(test.Case.CatalogConnectionString);
                 builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(database));
                 builder.Services.AddSingleton(test.Service());
+                builder.Services.AddSingleton<IPrivateObjectStore>(test.Objects);
+                builder.Services.AddSingleton(_ => new PostgresRevisionReportDatabase(test.Case.ReportConnectionString));
+                builder.Services.AddSingleton<IRevisionReportMetadataReader, PostgresRevisionReportMetadataReader>();
+                builder.Services.AddWeftPreviews(new CatalogPreviewOptions(enabled, bodyLimit, csvEnabled));
                 app = builder.Build();
                 app.MapWeftCatalog();
                 reservation.Stop();

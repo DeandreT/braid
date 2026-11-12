@@ -5,6 +5,7 @@ export function hasUnsentPreview(work: {
   targetKind: string;
   targetName: string;
   documentProfile: boolean;
+  csvProfile?: boolean;
   busy: string | null;
   pendingKey: boolean;
 }): boolean {
@@ -18,6 +19,7 @@ export function hasUnsentPreview(work: {
     work.targetKind !== "all" ||
     work.targetName.length > 0 ||
     work.documentProfile ||
+    work.csvProfile ||
     work.busy === "submitting" ||
     work.busy === "canceling" ||
     work.pendingKey

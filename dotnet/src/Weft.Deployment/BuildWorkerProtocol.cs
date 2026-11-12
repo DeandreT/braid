@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Weft.Application;
 using Weft.Domain;
 
 namespace Weft.Deployment;
@@ -13,7 +14,10 @@ public static class BuildWorkerProtocol
     public const string Profile = "weft.ferrule-csharp-json.v1";
     public const string DocumentProfile = "weft.ferrule-csharp-document.v1";
     public const string X12InterchangesProfile = "weft.ferrule-csharp-x12-interchanges.v1";
-    public static bool IsDocumentProfile(string profile) => profile is DocumentProfile or X12InterchangesProfile;
+    public const string CsvProfile = "weft.ferrule-csharp-csv.v1";
+    public static bool IsDocumentProfile(string profile) => profile is DocumentProfile or X12InterchangesProfile or CsvProfile;
+    public static string PreviewProfileFor(string profile) => profile == CsvProfile ? CsvDocumentPolicy.Profile :
+        IsDocumentProfile(profile) ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
     public const string SdkVersion = "10.0.112";
     public const string RuntimeVersion = "10.0.12";
     public const string Engine = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b";
@@ -30,7 +34,8 @@ public static class BuildWorkerProtocol
     };
     public sealed record Request(string ProtocolVersion, string RequestId, RevisionScope Revision,
         string NativeDigest, string IntentDigest, string Operation, string Profile);
-    public sealed record Boundary(string Kind, string? Name, string Format);
+    public sealed record Boundary(string Kind, string? Name, string Format,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null);
     public sealed record File(string Path, int ByteCount, string Sha256);
     public sealed record Response(string ProtocolVersion, string? RequestId, RevisionScope? Revision,
         string? NativeDigest, string? IntentDigest, string EngineRevision, string Profile, string Status,
@@ -59,7 +64,7 @@ public static class BuildWorkerProtocol
         var header = ReadJson<Response>(ReadFrame(bytes, ref offset, MaximumHeaderBytes));
         if (header.ProtocolVersion != Protocol || header.RequestId != expected.RequestId || header.Revision != expected.Revision ||
             header.NativeDigest != expected.NativeDigest || header.IntentDigest != expected.IntentDigest || header.EngineRevision != Engine || header.Profile != expected.Profile ||
-            header.Status is not ("supported" or "unsupported" or "invalidRequest" or "invalidMapping" or "sourceLimit" or "compileFailed") ||
+            header.Status is not ("supported" or "unsupported" or "unsupportedCsvPlan" or "invalidRequest" or "invalidMapping" or "sourceLimit" or "compileFailed") ||
             header.Files.Length > 128 || header.Boundaries.Length > 128) throw Invalid();
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var contents = new List<byte[]>(); var remaining = MaximumSourceBytes;
@@ -75,11 +80,12 @@ public static class BuildWorkerProtocol
         {
             var identities = new HashSet<(string, string?)>();
             foreach (var boundary in header.Boundaries)
-                if (boundary is null || boundary.Kind is not ("primaryInput" or "namedInput" or "primaryOutput" or "namedOutput") || !AdmitsFormat(expected.Profile, boundary.Format) ||
+                if (boundary is null || boundary.Kind is not ("primaryInput" or "namedInput" or "primaryOutput" or "namedOutput") || !AdmitsBoundary(expected.Profile, boundary.Format, boundary.CsvDialect) ||
                     (boundary.Kind is "namedInput" or "namedOutput") != (boundary.Name is not null) ||
                     boundary.Name is { } name && (string.IsNullOrWhiteSpace(name) || Encoding.UTF8.GetByteCount(name) > 256 || name.Any(char.IsControl)) ||
                     !identities.Add((boundary.Kind, boundary.Name))) throw Invalid();
             if (!identities.Contains(("primaryInput", null)) || !identities.Contains(("primaryOutput", null))) throw Invalid();
+            if (expected.Profile == CsvProfile && identities.Count != 2) throw Invalid();
         }
         return new(header, contents.AsReadOnly());
     }
@@ -101,13 +107,22 @@ public static class BuildWorkerProtocol
     {
         Profile => format == "json",
         DocumentProfile or X12InterchangesProfile => format is "json" or "x12" or "edifact",
+        CsvProfile => format is "csv" or "tsv",
         _ => false
     };
+    public static bool AdmitsBoundary(string profile, string format, CsvDocumentDialect? dialect) =>
+        AdmitsFormat(profile, format) && (profile == CsvProfile ? CsvDocumentPolicy.Admits(dialect, MediaType(format)) : dialect is null);
+    public static bool AdmitsCsvPlan(IReadOnlyList<BuildBoundary> boundaries) => boundaries.Count == 2 &&
+        boundaries.Count(boundary => boundary.Kind == BuildBoundaryKind.PrimaryInput && boundary.Name is null) == 1 &&
+        boundaries.Count(boundary => boundary.Kind == BuildBoundaryKind.PrimaryOutput && boundary.Name is null) == 1 &&
+        boundaries.All(boundary => AdmitsBoundary(CsvProfile, boundary.Format, boundary.CsvDialect));
     public static string MediaType(string format) => format switch
     {
         "json" => "application/json",
         "x12" => "application/edi-x12",
         "edifact" => "application/edifact",
+        "csv" => "text/csv",
+        "tsv" => "text/tab-separated-values",
         _ => throw Invalid()
     };
     public static BuildBoundary ToBoundary(Boundary boundary) => new(boundary.Kind switch
@@ -117,10 +132,10 @@ public static class BuildWorkerProtocol
         "primaryOutput" => BuildBoundaryKind.PrimaryOutput,
         "namedOutput" => BuildBoundaryKind.NamedOutput,
         _ => throw Invalid()
-    }, boundary.Name, boundary.Format);
+    }, boundary.Name, boundary.Format, boundary.CsvDialect);
     private static void ValidateRequest(Request request)
     {
-        if (request.ProtocolVersion != Protocol || request.Profile is not (Profile or DocumentProfile or X12InterchangesProfile) || request.Operation is not ("inspect" or "compile") ||
+        if (request.ProtocolVersion != Protocol || request.Profile is not (Profile or DocumentProfile or X12InterchangesProfile or CsvProfile) || request.Operation is not ("inspect" or "compile") ||
             !Guid.TryParseExact(request.RequestId, "D", out var id) || id == Guid.Empty || id.ToString("D") != request.RequestId ||
             Sha256Digest.Parse(request.NativeDigest).Value != request.NativeDigest || Sha256Digest.Parse(request.IntentDigest).Value != request.IntentDigest) throw Invalid();
     }

@@ -92,6 +92,13 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
                     outputs.Add(new(reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetBoolean(3), reader.GetString(4),
                         reader.GetInt64(5), Sha256Digest.Parse(reader.GetString(6)), reader.GetInt32(7)));
             }
+            for (var index = 0; index < outputs.Count; index++)
+                if (CsvDocumentPolicy.AdmitsMediaType(outputs[index].MediaType))
+                    outputs[index] = outputs[index] with
+                    {
+                        CsvDialect = await ReadCsvDialectAsync(connection, transaction,
+                        actor, organizationId, runId, outputs[index].Ordinal, outputs[index].MediaType, cancellationToken)
+                    };
             if (outputs.Select((output, index) => output.Ordinal != index).Any(mismatch => mismatch)
                 || (snapshot.Outcome == PreviewRunOutcome.Succeeded) != (outputs.Count > 0))
                 throw PostgresPreviewRunStore.Inconsistent();
@@ -176,7 +183,7 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
         {
             var sql = function == "preview_output"
                 ? "SELECT b.digest,b.content,m.media_type FROM weft.preview_output($1,$2,$3,$4) b JOIN weft.preview_outputs($1,$2,$3) m ON m.ordinal=$4"
-                : $"SELECT digest,content FROM weft.{function}($1,$2,$3,$4)";
+                : "SELECT digest,content,'application/json'::text FROM weft.preview_input($1,$2,$3,$4)";
             await using var command = new NpgsqlCommand(sql, connection, transaction);
             command.Parameters.AddWithValue(organizationId);
             command.Parameters.AddWithValue(runId);
@@ -187,9 +194,59 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
             var digest = Sha256Digest.Parse(reader.GetString(0));
             var content = reader.GetFieldValue<byte[]>(1);
             if (Sha256Digest.FromBytes(content) != digest) throw PostgresPreviewRunStore.Inconsistent();
-            var mediaType = function == "preview_output" ? reader.GetString(2) : PreviewPolicy.MediaType;
-            if (!DocumentPreviewPolicy.AdmitsMediaType(mediaType)) throw PostgresPreviewRunStore.Inconsistent();
-            return (PreviewOutputContent?)new PreviewOutputContent(digest, content) { MediaType = mediaType };
+            var mediaType = reader.GetString(2);
+            await reader.DisposeAsync();
+            CsvDocumentDialect? dialect = null;
+            if (function == "preview_output" && CsvDocumentPolicy.AdmitsMediaType(mediaType))
+                dialect = await ReadCsvDialectAsync(connection, transaction, actor, organizationId, runId, ordinal, mediaType, cancellationToken);
+            else if (function == "preview_input")
+            {
+                // Prefix-33 input reads predate CSV metadata. Admit only this exact additive
+                // reader when installed; a missing or faulty CSV output reader never falls back.
+                await using var installed = new NpgsqlCommand("""
+                    SELECT (SELECT count(*) FROM pg_catalog.pg_attribute
+                            WHERE attrelid=to_regclass('weft.preview_documents') AND attnum>0 AND NOT attisdropped
+                            AND ((attname='csv_input' AND atttypid='boolean'::regtype AND attnotnull)
+                                OR (attname='csv_dialect' AND atttypid='jsonb'::regtype AND NOT attnotnull))),
+                        to_regprocedure('weft.preview_csv_input(uuid,uuid,uuid,integer)') IS NOT NULL
+                    """, connection, transaction);
+                bool csvInstalled;
+                await using (var admission = await installed.ExecuteReaderAsync(cancellationToken))
+                {
+                    if (!await admission.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
+                    var columns = admission.GetInt64(0);
+                    csvInstalled = admission.GetBoolean(1);
+                    if (columns != (csvInstalled ? 2 : 0))
+                        throw PostgresPreviewRunStore.Inconsistent();
+                }
+                if (csvInstalled)
+                {
+                    await using var metadata = new NpgsqlCommand("SELECT media_type,csv_dialect::text FROM weft.preview_csv_input($1,$2,$3,$4)", connection, transaction);
+                    metadata.Parameters.AddWithValue(organizationId); metadata.Parameters.AddWithValue(runId);
+                    metadata.Parameters.AddWithValue(actor.PrincipalId.Value); metadata.Parameters.AddWithValue(ordinal);
+                    await using var values = await metadata.ExecuteReaderAsync(cancellationToken);
+                    if (!await values.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
+                    mediaType = values.GetString(0);
+                    dialect = values.IsDBNull(1) ? null : CsvDialectJson.Decode(values.GetString(1));
+                    if (await values.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
+                }
+            }
+            if (CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(dialect, mediaType)
+                : !DocumentPreviewPolicy.AdmitsMediaType(mediaType) || dialect is not null) throw PostgresPreviewRunStore.Inconsistent();
+            return (PreviewOutputContent?)new PreviewOutputContent(digest, content) { MediaType = mediaType, CsvDialect = dialect };
         }, cancellationToken);
+    }
+
+    private static async Task<CsvDocumentDialect> ReadCsvDialectAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        ActorContext actor, Guid organizationId, Guid runId, int ordinal, string mediaType, CancellationToken token)
+    {
+        await using var command = new NpgsqlCommand("SELECT csv_dialect::text FROM weft.preview_csv_outputs($1,$2,$3) WHERE ordinal=$4", connection, transaction);
+        command.Parameters.AddWithValue(organizationId); command.Parameters.AddWithValue(runId);
+        command.Parameters.AddWithValue(actor.PrincipalId.Value); command.Parameters.AddWithValue(ordinal);
+        await using var reader = await command.ExecuteReaderAsync(token);
+        if (!await reader.ReadAsync(token) || reader.IsDBNull(0)) throw PostgresPreviewRunStore.Inconsistent();
+        var dialect = CsvDialectJson.Decode(reader.GetString(0));
+        if (!CsvDocumentPolicy.Admits(dialect, mediaType) || await reader.ReadAsync(token)) throw PostgresPreviewRunStore.Inconsistent();
+        return dialect;
     }
 }

@@ -1,0 +1,19 @@
+{
+  "source": {"name":"Row","kind":{"kind":"group","children":[
+    {"name":"code","kind":{"kind":"scalar","ty":"string"}},
+    {"name":"description","kind":{"kind":"scalar","ty":"string"}}
+  ]}},
+  "target": {"name":"Row","kind":{"kind":"group","children":[
+    {"name":"code","kind":{"kind":"scalar","ty":"string"}},
+    {"name":"description","kind":{"kind":"scalar","ty":"string"}}
+  ]}},
+  "source_path":"not-a-csv.json",
+  "target_path":"not-a-csv.xml",
+  "source_options":{"tabular_kind":"csv","has_header_row":true},
+  "target_options":{"tabular_kind":"csv","has_header_row":true},
+  "graph":{"nodes":{
+    "1":{"kind":"source_field","path":["code"]},
+    "2":{"kind":"source_field","path":["description"]}
+  }},
+  "root":{"target_field":"","source":[],"bindings":[{"target_field":"code","node":1},{"target_field":"description","node":2}],"children":[]}
+}

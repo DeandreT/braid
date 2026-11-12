@@ -27,6 +27,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
 {
     public const string Schema = "weft.regression-case.v1";
     public const string DocumentSchema = "weft.document-regression-case.v1";
+    public const string CsvSchema = "weft.csv-regression-case.v1";
     public const int MaximumHeaderBytes = 256 * 1024;
     public const int MaximumEnvelopeBytes = 4 + MaximumHeaderBytes +
         4 * (PreviewPolicy.MaximumInputDocuments + PreviewPolicy.MaximumArtifacts) +
@@ -73,6 +74,8 @@ public sealed partial class RegressionCaseEnvelopeCodec
             if (offset != owned.Length || result.CaseId != expected.CaseId || result.Version != expected.Version ||
                 result.Owner != expected.Owner || result.Revision != expected.Revision || result.NativeDigest != expected.NativeDigest)
                 throw Integrity();
+            if (result.Runtime.Profile == CsvDocumentPolicy.Profile && !Encode(result, cancellationToken).CopyBytes().AsSpan().SequenceEqual(owned))
+                throw Integrity();
             cancellationToken.ThrowIfCancellationRequested();
             return result;
         }
@@ -89,7 +92,8 @@ public sealed partial class RegressionCaseEnvelopeCodec
         var replay = value.Replay;
         json.WriteStartObject();
         var documents = value.Runtime.Profile == DocumentPreviewPolicy.Profile;
-        json.WriteString("schema", documents ? DocumentSchema : Schema);
+        var csv = value.Runtime.Profile == CsvDocumentPolicy.Profile;
+        json.WriteString("schema", csv ? CsvSchema : documents ? DocumentSchema : Schema);
         json.WriteString("caseId", value.CaseId.ToString("D"));
         json.WriteNumber("version", value.Version);
         json.WriteString("owner", value.Owner.Value.ToString("D"));
@@ -158,7 +162,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
         }
         json.WriteEndArray();
         json.WriteStartArray("inputs");
-        WriteFrameHeader(json, null, replay.Primary.ByteCount, replay.Primary.Digest);
+        WriteFrameHeader(json, null, replay.Primary.ByteCount, replay.Primary.Digest, csvDialect: csv ? replay.Primary.CsvDialect : null, present: csv);
         foreach (var input in replay.NamedInputs)
         {
             token.ThrowIfCancellationRequested();
@@ -169,19 +173,22 @@ public sealed partial class RegressionCaseEnvelopeCodec
         foreach (var output in value.Expected.Outputs)
         {
             token.ThrowIfCancellationRequested();
-            WriteFrameHeader(json, output.Key.Name, output.ByteCount, output.Digest, documents ? output.MediaType : null);
+            WriteFrameHeader(json, output.Key.Name, output.ByteCount, output.Digest, documents || csv ? output.MediaType : null, output.CsvDialect);
         }
         json.WriteEndArray();
         json.WriteEndObject();
     }
 
-    private static void WriteFrameHeader(Utf8JsonWriter json, string? name, int length, Sha256Digest digest, string? mediaType = null)
+    private static void WriteFrameHeader(Utf8JsonWriter json, string? name, int length, Sha256Digest digest, string? mediaType = null,
+        CsvDocumentDialect? csvDialect = null, bool present = false)
     {
         json.WriteStartObject();
         json.WriteString("name", name);
+        if (present) json.WriteBoolean("present", true);
         json.WriteNumber("byteCount", length);
         json.WriteString("sha256", digest.Value);
         if (mediaType is not null) json.WriteString("mediaType", mediaType);
+        if (csvDialect is not null) { json.WritePropertyName("csvDialect"); CsvDialectJson.Write(json, csvDialect); }
         json.WriteEndObject();
     }
 

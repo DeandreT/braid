@@ -8,13 +8,15 @@ public sealed class BuildCapabilitySnapshot
 {
     public BuildCapabilitySnapshot(RevisionScope revision, Sha256Digest nativeDigest, BuildBackendIdentity backend,
         BuildRuntimeProfile profile, IReadOnlyList<BuildBoundary> boundaries, CapabilityStatus status,
-        IReadOnlyList<string>? conditions = null)
+        IReadOnlyList<string>? conditions = null, BuildPreflightReason refusalReason = BuildPreflightReason.None)
     {
         ArgumentNullException.ThrowIfNull(revision);
         ArgumentNullException.ThrowIfNull(nativeDigest);
         ArgumentNullException.ThrowIfNull(backend);
         ArgumentNullException.ThrowIfNull(profile);
         if (!Enum.IsDefined(status)) throw new BuildContractException(BuildContractFailure.InvalidInput);
+        if (refusalReason != BuildPreflightReason.None && (status != CapabilityStatus.Unsupported || refusalReason != BuildPreflightReason.UnsupportedCsvPlan))
+            throw new BuildContractException(BuildContractFailure.InvalidInput);
         var count = conditions?.Count ?? 0;
         if (count is < 0 or > 32 || (status == CapabilityStatus.Conditional) != (count > 0))
             throw new BuildContractException(BuildContractFailure.InvalidInput);
@@ -27,6 +29,7 @@ public sealed class BuildCapabilitySnapshot
         Boundaries = BuildValues.Boundaries(boundaries);
         Status = status;
         Conditions = Array.AsReadOnly(ownedConditions);
+        RefusalReason = refusalReason;
     }
 
     public RevisionScope Revision { get; }
@@ -36,11 +39,12 @@ public sealed class BuildCapabilitySnapshot
     public IReadOnlyList<BuildBoundary> Boundaries { get; }
     public CapabilityStatus Status { get; }
     public IReadOnlyList<string> Conditions { get; }
+    public BuildPreflightReason RefusalReason { get; }
     public override string ToString() => nameof(BuildCapabilitySnapshot);
 }
 
 public enum BuildPreflightOutcome { Supported, Unsupported, NotQualified, ConditionsRequired, MismatchedEvidence }
-public enum BuildPreflightReason { None, RevisionMismatch, NativeDigestMismatch, BackendMismatch, ProfileMismatch, BoundaryMismatch }
+public enum BuildPreflightReason { None, RevisionMismatch, NativeDigestMismatch, BackendMismatch, ProfileMismatch, BoundaryMismatch, UnsupportedCsvPlan }
 
 public sealed record BuildPreflightResult(BuildPreflightOutcome Outcome, BuildPreflightReason Reason)
 {
@@ -74,7 +78,7 @@ public sealed class BuildPreflightService
             CapabilityStatus.NotQualified => BuildPreflightOutcome.NotQualified,
             CapabilityStatus.Conditional => BuildPreflightOutcome.ConditionsRequired,
             _ => throw new BuildContractException(BuildContractFailure.InvalidInput)
-        }, BuildPreflightReason.None);
+        }, capability.RefusalReason);
     }
 
     private static BuildPreflightResult Mismatch(BuildPreflightReason reason) => new(BuildPreflightOutcome.MismatchedEvidence, reason);

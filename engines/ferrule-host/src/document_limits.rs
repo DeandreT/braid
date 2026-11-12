@@ -44,6 +44,11 @@ pub fn within_limits(
     bytes: &[u8],
     configured_segment: Option<char>,
 ) -> bool {
+    if matches!(format, DocumentFormat::Csv | DocumentFormat::Tsv) {
+        // Native CSV parsing supplies cell/record/column/node limits. The outer
+        // per-run limit is still enforced by preview before publication.
+        return bytes.len() <= crate::preview::protocol::MAX_PREVIEW_OUTPUT_BYTES;
+    }
     if format == DocumentFormat::Json {
         let mut quoted = false;
         let mut escaped = false;

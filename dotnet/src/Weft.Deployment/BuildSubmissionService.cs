@@ -9,7 +9,8 @@ public sealed record BuildSubmissionRequestResult(BuildSubmissionRequestOutcome 
 /// <summary>Recover an existing run before active approval/current configuration checks; new work uses the stored exact intent.</summary>
 public sealed class BuildSubmissionService(IBuildMetadataReader metadata, IBuildRunReader reader, IBuildRunCommands commands,
     IBuildAdmissionReader admissions, IProjectReader projects, BuildBackendIdentity backend, BuildRuntimeProfile profile,
-    BuildBackendIdentity? documentBackend = null, BuildRuntimeProfile? documentProfile = null, BuildRuntimeProfile? interchangeProfile = null)
+    BuildBackendIdentity? documentBackend = null, BuildRuntimeProfile? documentProfile = null, BuildRuntimeProfile? interchangeProfile = null,
+    BuildBackendIdentity? csvBackend = null, BuildRuntimeProfile? csvProfile = null)
 {
     public async Task<BuildSubmissionRequestResult> PutAsync(ActorContext actor, MappingScope mapping, Guid buildId, Guid approvalId,
         CancellationToken token = default)
@@ -33,7 +34,9 @@ public sealed class BuildSubmissionService(IBuildMetadataReader metadata, IBuild
         if (intent.BuildId != buildId) return new(BuildSubmissionRequestOutcome.Conflict);
         if (approval.Revoked || !approval.EnvironmentActive ||
             !(intent.Backend == backend && intent.Profile == profile || documentBackend is not null &&
-                intent.Backend == documentBackend && (intent.Profile == documentProfile || intent.Profile == interchangeProfile)))
+                intent.Backend == documentBackend && (intent.Profile == documentProfile || intent.Profile == interchangeProfile) ||
+                csvBackend is not null && csvProfile is not null && intent.Backend == csvBackend && intent.Profile == csvProfile &&
+                    intent.Profile.Id == BuildWorkerProtocol.CsvProfile && BuildWorkerProtocol.AdmitsCsvPlan(intent.Boundaries)))
             return new(BuildSubmissionRequestOutcome.PreconditionFailed);
         var admitted = await admissions.ReadAsync(actor, intent, token).ConfigureAwait(false);
         if (admitted is null) return new(BuildSubmissionRequestOutcome.Refused);

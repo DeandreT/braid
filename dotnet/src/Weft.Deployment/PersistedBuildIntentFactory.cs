@@ -6,10 +6,19 @@ using Weft.Domain;
 
 namespace Weft.Deployment;
 
+/// <summary>Authoritative native boundary inspection for CSV; projection recognition is not compiler admission.</summary>
+public interface ICsvBuildBoundaryReader
+{
+    Task<CsvBuildBoundaryObservation?> ReadAsync(ActorContext actor, RevisionReportSource source, CancellationToken token = default);
+}
+public sealed record CsvBuildBoundaryObservation(RevisionScope Revision, Sha256Digest NativeDigest,
+    BuildBackendIdentity Backend, IReadOnlyList<BuildBoundary> Boundaries);
+
 /// <summary>Uses stored verified report facts as requirements, never as compiler capability evidence.</summary>
 public sealed class PersistedBuildIntentFactory(IBuildMetadataReader metadata, IRevisionReportMetadataReader sources,
     IRevisionReportReader reports, RegressionRunReadService evidence, BuildBackendIdentity backend, BuildRuntimeProfile profile,
-    BuildBackendIdentity? documentBackend = null, BuildRuntimeProfile? documentProfile = null, BuildRuntimeProfile? interchangeProfile = null) : IBuildIntentFactory
+    BuildBackendIdentity? documentBackend = null, BuildRuntimeProfile? documentProfile = null, BuildRuntimeProfile? interchangeProfile = null,
+    BuildBackendIdentity? csvBackend = null, BuildRuntimeProfile? csvProfile = null, ICsvBuildBoundaryReader? csvBoundaries = null) : IBuildIntentFactory
 {
     public async Task<BuildIntent?> CreateAsync(ActorContext actor, MappingScope mapping, Guid approvalId,
         BuildApprovalSelection selection, CancellationToken token = default)
@@ -26,8 +35,9 @@ public sealed class PersistedBuildIntentFactory(IBuildMetadataReader metadata, I
         if (retained is null) return null;
         if (retained.Environment.Reference != environment) throw Inconsistent();
         var selectedProfile = retained.Environment.Profile;
+        var csv = csvProfile is not null && selectedProfile == csvProfile && selectedProfile.Id == BuildWorkerProtocol.CsvProfile;
         var document = selectedProfile == documentProfile || selectedProfile == interchangeProfile;
-        var selectedBackend = selectedProfile == profile ? backend : document ? documentBackend : null;
+        var selectedBackend = selectedProfile == profile ? backend : csv && csvBoundaries is not null ? csvBackend : document ? documentBackend : null;
         if (!retained.Environment.Active || selectedBackend is null) return null;
         var source = await sources.GetSourceAsync(actor, scope, token).ConfigureAwait(false);
         if (source is null) return null;
@@ -38,7 +48,7 @@ public sealed class PersistedBuildIntentFactory(IBuildMetadataReader metadata, I
             run.Run.Case.NativeDigest != source.Source.NativeObject.Digest || run.Runtime is null ||
             run.Runtime.BackendId != selectedBackend.BackendId || run.Runtime.EngineRevision != selectedBackend.EngineRevision ||
             run.Runtime.BackendBuild != selectedBackend.EngineBuild || run.Runtime.AdapterBuild != selectedBackend.AdapterVersion ||
-            run.Runtime.Profile != (document ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile)) return null;
+            run.Runtime.Profile != BuildWorkerProtocol.PreviewProfileFor(selectedProfile.Id)) return null;
         var observed = await reports.GetCurrentAsync(actor, scope, RevisionReportOperation.Projection, cancellationToken: token).ConfigureAwait(false);
         if (observed.Report is not VerifiedProjectionReport verified || observed.Outcome != RevisionReportReadOutcome.Observed) return null;
         if (observed.Source?.Actor != actor.PrincipalId || observed.Source.Source != source.Source ||
@@ -51,21 +61,29 @@ public sealed class PersistedBuildIntentFactory(IBuildMetadataReader metadata, I
             return null;
         if (projection.Boundaries.Count is < 1 or > 128) return null;
         var boundaries = new List<BuildBoundary>(projection.Boundaries.Count);
-        foreach (var boundary in projection.Boundaries)
-        {
-            token.ThrowIfCancellationRequested();
-            if (!(document ? BuildWorkerProtocol.AdmitsFormat(selectedProfile.Id, boundary.Format) : boundary.Format == "json") ||
-                !Enum.IsDefined(boundary.Role) || boundary.Shape is BoundaryShape.Unknown or BoundaryShape.DocumentSet)
-                return null;
-            var kind = boundary.Role switch
+        if (!csv) foreach (var boundary in projection.Boundaries)
             {
-                BoundaryRole.PrimaryInput => BuildBoundaryKind.PrimaryInput,
-                BoundaryRole.NamedInput => BuildBoundaryKind.NamedInput,
-                BoundaryRole.PrimaryOutput => BuildBoundaryKind.PrimaryOutput,
-                BoundaryRole.NamedOutput => BuildBoundaryKind.NamedOutput,
-                _ => throw Inconsistent()
-            };
-            boundaries.Add(new(kind, kind is BuildBoundaryKind.PrimaryInput or BuildBoundaryKind.PrimaryOutput ? null : boundary.Name, boundary.Format));
+                token.ThrowIfCancellationRequested();
+                if (!(document ? BuildWorkerProtocol.AdmitsFormat(selectedProfile.Id, boundary.Format) : boundary.Format == "json") ||
+                    !Enum.IsDefined(boundary.Role) || boundary.Shape is BoundaryShape.Unknown or BoundaryShape.DocumentSet)
+                    return null;
+                var kind = boundary.Role switch
+                {
+                    BoundaryRole.PrimaryInput => BuildBoundaryKind.PrimaryInput,
+                    BoundaryRole.NamedInput => BuildBoundaryKind.NamedInput,
+                    BoundaryRole.PrimaryOutput => BuildBoundaryKind.PrimaryOutput,
+                    BoundaryRole.NamedOutput => BuildBoundaryKind.NamedOutput,
+                    _ => throw Inconsistent()
+                };
+                boundaries.Add(new(kind, kind is BuildBoundaryKind.PrimaryInput or BuildBoundaryKind.PrimaryOutput ? null : boundary.Name, boundary.Format));
+            }
+        if (csv)
+        {
+            var native = await csvBoundaries!.ReadAsync(actor, source.Source, token).ConfigureAwait(false);
+            if (native is null) return null;
+            if (native.Revision != scope || native.NativeDigest != source.Source.NativeObject.Digest || native.Backend != selectedBackend) throw Inconsistent();
+            if (!BuildWorkerProtocol.AdmitsCsvPlan(native.Boundaries)) return null;
+            boundaries.AddRange(native.Boundaries);
         }
         if (boundaries.Distinct().Count() != boundaries.Count ||
             selectedProfile == interchangeProfile && !boundaries.Any(value => value.Format == "x12") ||

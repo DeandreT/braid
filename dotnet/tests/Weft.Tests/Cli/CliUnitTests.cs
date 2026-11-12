@@ -250,7 +250,10 @@ public sealed class CliUnitTests : IDisposable
     [Fact]
     public async Task TheProfileSelectionPrefersTheOptionThenTheVariableThenTheDefault()
     {
-        var store = new CliConfigurationStore(directory);
+        // Let the real owner-only helper create this missing child with its
+        // private ACL; the general temporary directory can inherit wider access.
+        var configurationDirectory = Path.Combine(directory, "profile-selection");
+        var store = new CliConfigurationStore(configurationDirectory);
         var profiles = new SortedDictionary<string, CliProfile>(StringComparer.Ordinal) { ["a"] = Profile("a"), ["b"] = Profile("b"), ["c"] = Profile("c") };
         store.Save(new CliConfiguration("a", profiles));
         async Task<string> Selected(string? variable, params string[] args)
@@ -262,7 +265,7 @@ public sealed class CliUnitTests : IDisposable
                 Error = new StringWriter(),
                 OpenStandardInput = () => new MemoryStream(),
                 OpenStandardOutput = () => new MemoryStream(),
-                ConfigurationDirectory = directory,
+                ConfigurationDirectory = configurationDirectory,
                 TokenCaches = new CliMemoryTokenCaches(),
                 ProfileVariable = variable
             };

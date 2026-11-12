@@ -31,30 +31,33 @@ public sealed class RegressionOutput
     public const int MaximumByteCount = 16 * 1024 * 1024;
     private readonly byte[] bytes;
 
-    private RegressionOutput(RegressionOutputKey key, byte[] bytes, string mediaType)
+    private RegressionOutput(RegressionOutputKey key, byte[] bytes, string mediaType, CsvDocumentDialect? csvDialect)
     {
         Key = key;
         MediaType = mediaType;
+        CsvDialect = csvDialect;
         this.bytes = bytes;
         Digest = Sha256Digest.FromBytes(bytes);
     }
 
     public RegressionOutputKey Key { get; }
     public string MediaType { get; }
+    public CsvDocumentDialect? CsvDialect { get; }
     public int ByteCount => bytes.Length;
     public Sha256Digest Digest { get; }
     internal ReadOnlySpan<byte> Span => bytes;
 
     public static RegressionOutput Capture(RegressionOutputKey key, ReadOnlySpan<byte> bytes,
-        CancellationToken cancellationToken = default, string mediaType = PreviewPolicy.MediaType)
+        CancellationToken cancellationToken = default, string mediaType = PreviewPolicy.MediaType, CsvDocumentDialect? csvDialect = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(key);
-        if (!DocumentPreviewPolicy.AdmitsMediaType(mediaType))
+        if (CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(csvDialect, mediaType)
+            : !DocumentPreviewPolicy.AdmitsMediaType(mediaType) || csvDialect is not null)
             throw new RegressionComparisonException(RegressionComparisonFailure.InvalidInput);
         if (bytes.Length > MaximumByteCount)
             throw new RegressionComparisonException(RegressionComparisonFailure.ResourceLimit);
-        var output = new RegressionOutput(key, bytes.ToArray(), mediaType);
+        var output = new RegressionOutput(key, bytes.ToArray(), mediaType, csvDialect);
         cancellationToken.ThrowIfCancellationRequested();
         return output;
     }

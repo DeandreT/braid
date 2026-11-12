@@ -87,6 +87,26 @@ public sealed class CatalogContractTests
     }
 
     [Fact]
+    public void Csv_preview_feature_is_optional_and_preserves_legacy_constructor_invariants()
+    {
+        var legacy = new CatalogFeaturesV1(true, false, false, false, false, false, false, true, false, false);
+        var disabled = new CatalogFeaturesV1(true, false, false, false, false, false, false, true, false, false, csvPreview: false);
+        var missing = new CatalogFeaturesV1(true, false, false, false, false, false, false, true, false, false, csvPreview: null);
+        var text = JsonSerializer.Serialize(legacy, Options);
+        Assert.Equal("{\"readCatalog\":true,\"createProjects\":false,\"createMappings\":false,\"editMetadata\":false,\"uploadRevisions\":false,\"readReports\":false,\"chat\":false,\"preview\":true,\"manageMembership\":false,\"deriveReports\":false,\"edit\":false}", text);
+        Assert.Equal(text, JsonSerializer.Serialize(disabled, Options));
+        Assert.Equal(text, JsonSerializer.Serialize(missing, Options));
+        Assert.DoesNotContain("csvPreview", text, StringComparison.Ordinal);
+        Assert.Null(JsonSerializer.Deserialize<CatalogFeaturesV1>(text, Options)!.CsvPreview);
+        var enabled = new CatalogFeaturesV1(true, false, false, false, false, false, false, true, false, false, csvPreview: true);
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(enabled, Options));
+        Assert.Equal(JsonValueKind.True, json.RootElement.GetProperty("csvPreview").ValueKind);
+        Assert.True(JsonSerializer.Deserialize<CatalogFeaturesV1>(json.RootElement.GetRawText(), Options)!.CsvPreview);
+        Rejects(() => new CatalogFeaturesV1(true, false, false, false, false, false, false, false, false, false, csvPreview: true));
+        Rejects(() => new CatalogFeaturesV1(true, false, false, false, false, false, false, true, false, true, csvPreview: true));
+    }
+
+    [Fact]
     public void KnownStringRolesAdmissionAndErrorsAreClosedWithoutNumericFallback()
     {
         Assert.Equal("\"decodedInvalid\"", JsonSerializer.Serialize(CatalogAdmissionV1.DecodedInvalid));

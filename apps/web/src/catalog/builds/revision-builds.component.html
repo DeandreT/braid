@@ -178,7 +178,7 @@
             Administrators register only a server-offered profile. A new version
             supersedes the old one.
           </p>
-          @if (administration.documentProfile) {
+          @if (administration.documentProfile || administration.csvProfile) {
             <label
               >Compiler profile<select
                 aria-label="Compiler profile"
@@ -186,7 +186,12 @@
                 (ngModelChange)="documentEnvironment.set($event)"
               >
                 <option ngValue="json">Legacy JSON</option>
-                <option ngValue="document">Declared document formats</option>
+                @if (administration.documentProfile) {
+                  <option ngValue="document">Declared document formats</option>
+                }
+                @if (administration.csvProfile) {
+                  <option ngValue="csv">CSV / TSV with native dialect</option>
+                }
                 @if (administration.interchangeProfile) {
                   <option ngValue="interchanges">
                     X12 MapForce interchanges
@@ -224,7 +229,8 @@
       <h3 id="builds-evidence-title">Required test result</h3>
       <p>
         Select a completed run to check whether its result matches the saved
-        expectation for this version.
+        expectation for this version. Build qualification requires exact bytes;
+        a CSV row-comparison pass does not qualify a build.
       </p>
       <button
         class="catalog-button"

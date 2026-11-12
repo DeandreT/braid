@@ -17,6 +17,8 @@ export default defineConfig({
     "revision-preview.spec.ts",
     "revision-chat.spec.ts",
     "revision-comparison.spec.ts",
+    "csv-workflow.spec.ts",
+    "csv-regression-build.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

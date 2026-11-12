@@ -22,6 +22,37 @@ public sealed class RegressionDocumentRequestTests
         Assert.Null(options.SelectRuntime(new("ferrule", "engine", "build", "other-adapter", DocumentPreviewPolicy.Profile)));
     }
 
+    [Fact]
+    public async Task Csv_request_requires_explicit_dialect_and_accepts_a_present_empty_primary()
+    {
+        var body = Body();
+        body["runtime"]!["profile"] = CsvDocumentPolicy.Profile;
+        body["runtime"]!["adapterBuild"] = "csv-adapter";
+        body["primaryBase64Url"] = "";
+        body["comparisonPolicy"] = RegressionComparisonService.CsvRowsPolicy;
+        body.Remove("comparisonOptions");
+        body["expected"]![0]!["mediaType"] = "text/tab-separated-values";
+        body["expected"]![0]!["bytesBase64Url"] = "";
+        body["expected"]![0]!["csvDialect"] = JsonNode.Parse(CsvDialectJson.Encode(CsvPreviewTestData.Dialect));
+        var value = await Read(body);
+        Assert.Equal(0, value.Replay.Primary.ByteCount);
+        Assert.Equal(PreviewExecutionProfile.CsvDocument, value.Replay.Profile);
+        Assert.Equal(CsvPreviewTestData.Dialect, Assert.Single(value.Expected.Outputs).CsvDialect);
+        body["expected"]![0]!.AsObject().Remove("csvDialect");
+        await Assert.ThrowsAsync<CatalogRegressionCaseRequestException>(() => Read(body));
+    }
+
+    [Fact]
+    public void Csv_runtime_is_a_separate_exact_server_selection()
+    {
+        var json = new RegressionRuntimeIdentity("ferrule", "engine", "build", "json-adapter", PreviewPolicy.Profile);
+        var csv = new RegressionRuntimeIdentity("ferrule", "engine", "build", "csv-adapter", CsvDocumentPolicy.Profile);
+        var options = new CatalogRegressionCaseOptions(true, json, csvRuntime: csv);
+        Assert.Same(csv, options.SelectRuntime(csv));
+        Assert.Null(new CatalogRegressionCaseOptions(true, json).SelectRuntime(csv));
+        Assert.Null(options.SelectRuntime(new("ferrule", "engine", "other-build", "csv-adapter", CsvDocumentPolicy.Profile)));
+    }
+
     private static JsonObject Body() => new()
     {
         ["name"] = "EDI fixture",

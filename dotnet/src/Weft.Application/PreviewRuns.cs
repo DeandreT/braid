@@ -71,7 +71,10 @@ public sealed record PreviewOutputDescriptor(
     string MediaType,
     long RecordsWritten,
     Sha256Digest Digest,
-    int ByteCount);
+    int ByteCount)
+{
+    public CsvDocumentDialect? CsvDialect { get; init; }
+}
 
 /// <summary>The submitter's view of one run; outputs are present only for a succeeded run.</summary>
 public sealed record PreviewRunSnapshot(
@@ -142,6 +145,7 @@ public enum PreviewCancelOutcome
 public sealed record PreviewOutputContent(Sha256Digest Digest, byte[] Content)
 {
     public string MediaType { get; init; } = PreviewPolicy.MediaType;
+    public CsvDocumentDialect? CsvDialect { get; init; }
 }
 
 /// <summary>Writer port. Each call is one short transaction; none spans worker or storage I/O.</summary>

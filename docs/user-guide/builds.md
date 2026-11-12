@@ -18,16 +18,26 @@ A build needs:
 
 - a **build environment**: the runtime the compiled mapping will run in,
   registered by an administrator;
-- a **passing regression run** of the same revision: a finished run whose
-  result matches its expected output, made with the mapping engine version the
-  server uses now. See [Regression tests](regression-tests.md);
+- a **passing exact-byte regression run** of the same revision: a finished run
+  whose result matches its expected output, made with the matching runtime and
+  mapping engine version the server uses now. For compiled qualification, the
+  case must select **All outputs** and include every declared output in its
+  expected baseline. See [Regression tests](regression-tests.md);
 - the revision's **current explanation**, saved and successful with
   **complete** [coverage](reports.md#coverage). If it hasn't been generated,
   [generate it](reports.md#generate-a-report) first;
-- a mapping that reads and writes JSON documents, with one primary input and one
-  primary output.
+- a mapping admitted by the selected compiler profile. The legacy profile
+  accepts JSON; separate profiles cover declared document formats and flat
+  CSV/TSV mappings. CSV/TSV requires one primary input and one primary output,
+  with the dialect saved in the native revision.
 
 If any of these is missing, Weft refuses the approval or the build.
+
+CSV builds are separately opt-in: an administrator must enable
+`WEFT_BUILDS_CSV_ENABLED=true` and configure the matching compiler and runtime.
+Offering CSV previews or regression tests alone does not enable CSV builds.
+A passing **Ordered CSV rows and cells** test is not exact-byte evidence and
+cannot support build approval or compiled qualification.
 
 ## Prepare a build
 
@@ -35,8 +45,8 @@ If any of these is missing, Weft refuses the approval or the build.
    your approvals, your preparation history and saved test runs.
 2. Under **Environment version**, choose an active environment.
 3. Under **Required test result**, choose **Verify this evidence** next to a
-   finished run. Weft checks that its result
-   matches the saved expectation.
+   finished run. Weft checks that its result matches the saved expectation using
+   exact-byte comparison.
 4. Choose **Approve preparation**. This records your approval of this
    revision, environment and test result.
 5. Under **Your approvals**, open the approval and choose
@@ -68,6 +78,12 @@ version. A release built for the older version stops answering calls, because
 the mapping endpoint checks the environment on every call, so coordinate a new
 version with the people who run the endpoint.
 
+For CSV/TSV, choose **CSV / TSV with native dialect** under **Compiler profile**
+when the server offers it. This registers the separate
+`weft.ferrule-csharp-csv.v1` profile. Its native boundary and compiler identity
+checks are independent of the preview's success; a JSON environment does not
+become a CSV environment automatically.
+
 ## The mapping endpoint
 
 The mapping endpoint lets other systems send documents to a mapping and receive
@@ -75,7 +91,10 @@ its output, without using the browser. Putting a build in use happens outside
 the browser, through your Weft operators:
 
 1. They **qualify** a completed build: Weft runs the build's saved regression
-   test against the compiled file and records the result.
+   test against the compiled file and records the result. Qualification requires
+   exact-byte agreement for **All outputs**, with every declared output in the
+   baseline and matching media types and, for CSV/TSV, native dialects. A
+   row/cell comparison pass cannot replace this proof.
 2. They register a **release target** for the mapping and environment, and
    **activate** a qualified build as its release. Only one release is active at
    a time, and an earlier release can be reactivated to roll back.

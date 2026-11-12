@@ -47,17 +47,24 @@
           <select
             id="preview-admission"
             class="preview-text"
-            [value]="preview.documentProfile() ? 'document' : 'json'"
-            (change)="
-              preview.documentProfile.set(
-                $any($event.target).value === 'document'
-              )
+            [value]="
+              preview.csvProfile()
+                ? 'csv'
+                : preview.documentProfile()
+                  ? 'document'
+                  : 'json'
             "
+            (change)="setProfile($any($event.target).value)"
           >
             <option value="json">Legacy JSON</option>
             <option value="document">
               Explicit document boundaries (JSON, X12, EDIFACT)
             </option>
+            @if (context().features.csvPreview === true) {
+              <option value="csv">
+                Explicit CSV / TSV (saved native dialect)
+              </option>
+            }
           </select>
           <span class="preview-spacer"></span>
           @if (preview.active()) {
@@ -82,6 +89,13 @@
             }}
           </button>
         </div>
+        @if (preview.csvProfile()) {
+          <p class="preview-hint">
+            CSV/TSV uses one primary input and the saved native dialect. An
+            empty file is allowed. Filenames never select the format. This
+            preview does not qualify a build.
+          </p>
+        }
         @if (preview.documentProfile()) {
           <p class="preview-hint">
             The mapping must explicitly select each boundary format and embed
@@ -104,7 +118,11 @@
               @if (first) {
                 <label [for]="'preview-input-' + item.id"
                   >Primary input ({{
-                    preview.documentProfile() ? "document" : "JSON"
+                    preview.csvProfile()
+                      ? "CSV/TSV"
+                      : preview.documentProfile()
+                        ? "document"
+                        : "JSON"
                   }})</label
                 >
               } @else {
@@ -125,7 +143,11 @@
                 />
                 <label [for]="'preview-input-' + item.id"
                   >Named input {{ index }} ({{
-                    preview.documentProfile() ? "document" : "JSON"
+                    preview.csvProfile()
+                      ? "CSV/TSV"
+                      : preview.documentProfile()
+                        ? "document"
+                        : "JSON"
                   }})</label
                 >
               }
@@ -154,9 +176,11 @@
                     #fileInput
                     type="file"
                     [attr.accept]="
-                      preview.documentProfile()
-                        ? null
-                        : 'application/json,.json'
+                      preview.csvProfile()
+                        ? '.csv,.tsv,text/csv,text/tab-separated-values'
+                        : preview.documentProfile()
+                          ? null
+                          : 'application/json,.json'
                     "
                     (change)="chooseFile(item.id, $event)"
                   />
@@ -186,7 +210,10 @@
             class="catalog-button preview-add"
             type="button"
             (click)="preview.addInput()"
-            [disabled]="preview.inputs().length >= limits.inputDocuments"
+            [disabled]="
+              preview.csvProfile() ||
+              preview.inputs().length >= limits.inputDocuments
+            "
           >
             Add named input
           </button>
@@ -266,7 +293,9 @@
             >
               <option value="all">All outputs</option>
               <option value="primary">Primary output only</option>
-              <option value="named">One named output</option>
+              <option value="named" [disabled]="preview.csvProfile()">
+                One named output
+              </option>
             </select>
           </label>
           @if (preview.targetKind() === "named") {
@@ -442,6 +471,39 @@
                 {{ errorText(kind) }}
               </p>
             }
+            @if (canSaveCase() && !casePending()) {
+              <fieldset class="preview-group" [disabled]="caseBusy()">
+                <legend>Save this CSV preview as a test case</legend>
+                <p class="preview-hint">
+                  Review the exact output before accepting it as the baseline.
+                  The saved test uses the returned native dialect and exact-byte
+                  comparison. It does not approve a build.
+                </p>
+                <label
+                  >Test name<input
+                    class="preview-text"
+                    [value]="caseName()"
+                    (input)="caseName.set($any($event.target).value)"
+                    maxlength="256"
+                /></label>
+                <label
+                  ><input
+                    type="checkbox"
+                    [checked]="baselineApproved()"
+                    (change)="baselineApproved.set($any($event.target).checked)"
+                  />I reviewed this output and accept its exact bytes as the
+                  expected baseline.</label
+                >
+                <button
+                  class="catalog-button"
+                  type="button"
+                  (click)="savePreviewCase()"
+                  [disabled]="!baselineApproved() || !caseName().trim()"
+                >
+                  Save preview as test case
+                </button>
+              </fieldset>
+            }
             @if (!workbench()) {
               @if (shown(); as view) {
                 <figure class="preview-output">
@@ -460,6 +522,33 @@
               </button>
             }
           </section>
+        }
+        @if (casePending(); as pending) {
+          <div class="preview-note" role="status">
+            <p>
+              The test save is unconfirmed. Original case {{ pending.id }},
+              version {{ pending.version }}.
+            </p>
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="checkPreviewCase()"
+              [disabled]="caseBusy()"
+            >
+              Check saved preview case
+            </button>
+            <button
+              class="catalog-button"
+              type="button"
+              (click)="retryPreviewCase()"
+              [disabled]="caseBusy() || !capabilities()?.publishCases"
+            >
+              Retry unchanged preview case
+            </button>
+          </div>
+        }
+        @if (caseNotice(); as message) {
+          <p class="preview-note" role="status">{{ message }}</p>
         }
       </div>
     </div>
