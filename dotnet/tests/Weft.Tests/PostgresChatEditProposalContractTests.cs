@@ -22,8 +22,12 @@ public sealed class PostgresChatEditProposalContractTests
         var encoding = ChatMappingEditProposalStorage.Encode(p);
         return new()
         {
-            ["facts"] = PostgresChatStore.ProposalFacts(p, encoding), ["encoding"] = Convert.ToBase64String(encoding),
-            ["status"] = status, ["operation"] = null, ["revision"] = null, ["sequence"] = null
+            ["facts"] = PostgresChatStore.ProposalFacts(p, encoding),
+            ["encoding"] = Convert.ToBase64String(encoding),
+            ["status"] = status,
+            ["operation"] = null,
+            ["revision"] = null,
+            ["sequence"] = null
         };
     }
 

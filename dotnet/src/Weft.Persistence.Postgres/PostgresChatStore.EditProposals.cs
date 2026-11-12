@@ -86,13 +86,29 @@ public sealed partial class PostgresChatStore : IChatMappingEditProposalStore
         var f = ChatMappingEditStorageIdentity.FromProposal(p);
         return JsonSerializer.Serialize(new
         {
-            organization = f.Conversation.OrganizationId, creator = f.Conversation.Creator.Value, conversation = f.Conversation.ConversationId,
-            turn = f.TurnId, round = f.RoundId, call = f.CallId, proposal = f.ProposalId, key = f.RequestKey, fingerprint = f.Fingerprint.Value,
+            organization = f.Conversation.OrganizationId,
+            creator = f.Conversation.Creator.Value,
+            conversation = f.Conversation.ConversationId,
+            turn = f.TurnId,
+            round = f.RoundId,
+            call = f.CallId,
+            proposal = f.ProposalId,
+            key = f.RequestKey,
+            fingerprint = f.Fingerprint.Value,
             canonicalIdentity = p.CanonicalIdentity,
-            project = f.Base.ProjectId, mapping = f.Base.MappingId, @base = f.Base.RevisionId, baseSequence = f.BaseSequence,
-            operationsDigest = f.OperationsDigest.Value, operationsBytes = f.OperationsByteCount, operationCount = f.OperationCount,
-            nativeDigest = f.NativeDigest.Value, nativeBytes = f.NativeByteCount, changesDigest = f.ChangesDigest.Value,
-            changesBytes = f.ChangesByteCount, changeCount = f.ChangeCount, changesTruncated = f.ChangesTruncated,
+            project = f.Base.ProjectId,
+            mapping = f.Base.MappingId,
+            @base = f.Base.RevisionId,
+            baseSequence = f.BaseSequence,
+            operationsDigest = f.OperationsDigest.Value,
+            operationsBytes = f.OperationsByteCount,
+            operationCount = f.OperationCount,
+            nativeDigest = f.NativeDigest.Value,
+            nativeBytes = f.NativeByteCount,
+            changesDigest = f.ChangesDigest.Value,
+            changesBytes = f.ChangesByteCount,
+            changeCount = f.ChangeCount,
+            changesTruncated = f.ChangesTruncated,
             encodingDigest = Sha256Digest.FromBytes(encoding).Value
         });
     }
