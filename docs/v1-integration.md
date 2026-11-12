@@ -275,13 +275,58 @@ skips and zero failures. Receipt:
 `Temp/opencode/weft-creation-integration-results/document-host-7e00ff3a.trx`.
 These checks do not establish actual Linux startup or containment.
 
+### Final production-source composition and portable verification
+
+Provider grammar `374ea6a5` and feedback API `a8426c2d` were integrated together
+at `cad86681`. The actual proposal-mode handler enforces exact retained identity,
+current content/model-sharing authority, whole-response bounds and Specification
+audit ordering. Exact retained authorization is checked again before subsequent
+provider dispatch, including after intervening rounds or citation omission.
+Late denial or fingerprint substitution prevents another provider request.
+The owner qualified 101 creation/native cases with five Linux-only skips, 145
+orchestration cases and 57 native format/preview cases, zero failures. See
+`creation-feedback-qualification.md` for individual overlapping selections.
+
+Creation host `1752397a`, integrated at `85c483e0`, supplies the concrete stores,
+discovery, compiler and preview adapters with protected-role admission. Each
+actual execution channel, including retries, verifies its own exact capability
+contract before frame bytes are sent. The independently reviewed split-replica
+tests refuse incompatible channels. Durable review/list remains independent of
+physical-store and worker availability. See `creation-host-composition.md`.
+
+The CLI operation inventory correction `c1d8ce6c` explicitly classifies seven
+browser intake/creation operations while preserving every called-operation and
+contract-drift assertion. The complete CLI contract selection passed 119 tests,
+zero skips. The missing inventory entries were reproduced before correction.
+
+Exact integrated production source `85c483e0f473f407d1a1dc071daeef3126c84621`
+passed locked restore, the full Release solution build with zero warnings/errors,
+and a combined selection of **864 passed, eight Linux-only skips, zero failures
+(872 total)**.
+Actual PostgreSQL 16.15 and pinned authoring, authored-preview and PDF executables
+were enabled. The selection covers creation, feedback, document hosts/evidence,
+native formats/preview, database discovery/upgrades, CLI contracts, paired return
+paths and chat orchestration. Executable hashes were stable across execution.
+The supplementary local receipt is
+`Temp/opencode/weft-final-results/85c483e0f473/attempt-1794517022716/combined.trx`.
+
+An initial launcher attempt failed before PostgreSQL fixture initialization
+because its new work directory did not exist. The corrected run created that
+directory and selected explicit test classes rather than unrelated method-name
+matches; the same production source was retained throughout. The failed attempt
+is not counted as qualification.
+
+Exact `cad86681` passed full `npm run check`, the production build and all 15
+proposal-library tests. The production initial bundle warning is 674.36 kB
+against the existing 500 kB warning budget. Subsequent production changes are
+server/CLI-only; frontend production source remains identical.
+
 ### Remaining gates
 
-- Reviewed concrete creation-host composition and exact feedback API, followed
-  by final combined qualification and the full corrected chat browser selection.
+- Final combined corrected chat/intake/review browser selection.
 - XML filesystem-prefix conservation on Linux.
 - Linux private-file/session configuration, native workers and sandbox execution.
-- Real PostgreSQL/Blob-backed specification intake and publication recovery.
+- Hosted Blob-backed specification intake and publication recovery.
 - Full hosted approval/receipt flows and provider-backed end-to-end execution.
 - Azure provisioning/deployment and protected credential delivery in that lane.
 
