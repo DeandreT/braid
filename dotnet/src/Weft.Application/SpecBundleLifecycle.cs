@@ -112,6 +112,32 @@ public sealed class SpecBundleService(ISpecBundleLifecycle lifecycle, ISpecObjec
         return await PublishExtractionAsync(extraction.Identity, objectId, attemptId, expectedBundleVersion, evidence, token).ConfigureAwait(false);
     }
 
+    /// <summary>Explicit Office path for future admitted composition. Reads an already published original under current
+    /// authority, executes the worker, then publishes the exact v2 bytes. Existing text/JSON intake is unchanged.</summary>
+    public async Task<(SpecExtractionIdentity Extraction, SpecObjectReservation Publication)> ExtractOfficeAndPublishAsync(
+        SpecSourceIdentity source, SpecSourceFormat format, Guid originalId, Guid extractionId, Guid extractionKey,
+        long expectedBundleVersion, ISpecOfficeExtractionWorker worker, SpecOfficeExtractionLimits limits, CancellationToken token = default)
+    {
+        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(worker); ArgumentNullException.ThrowIfNull(limits);
+        if (format is not (SpecSourceFormat.Docx or SpecSourceFormat.Xlsx) || originalId == extractionId || originalId == Guid.Empty ||
+            extractionId == Guid.Empty || extractionKey == Guid.Empty || expectedBundleVersion < 1) throw new ArgumentException("Distinct Office publication identities are required.");
+        await lifecycle.AuthorizeAsync(source.Bundle, true, token).ConfigureAwait(false);
+        var original = await lifecycle.FindAsync(source.Bundle, originalId, token).ConfigureAwait(false);
+        if (original.Id.Kind != SpecObjectKind.Original || original.Id.Source != source) throw new SpecStorageException(SpecStorageError.Integrity);
+        var bytes = await objects.ReadAsync(source.Bundle, original, token).ConfigureAwait(false);
+        var captured = new SpecCapturedSource(source, format, bytes);
+        if (captured.Digest != original.Digest || captured.ByteCount != original.ByteCount) throw new SpecStorageException(SpecStorageError.Integrity);
+        var result = await worker.ExtractAsync(captured, limits, token).ConfigureAwait(false);
+        token.ThrowIfCancellationRequested();
+        if (result.Code is "office-worker-unavailable" or "office-worker-required") throw new SpecOfficeWorkerUnavailableException();
+        if (result.Identity.Source != source || result.Identity.SourceDigest != captured.Digest || result.Identity.Format != format ||
+            result.Identity.ProfileDigest != limits.Digest || result.Identity.ExtractorVersion != SpecOfficeExtractionResult.ExtractorVersion)
+            throw new SpecStorageException(SpecStorageError.Integrity);
+        using var evidence = new MemoryStream(result.CopyEvidenceBytes(), false);
+        var reservation = await PublishExtractionAsync(result.Identity, extractionId, extractionKey, expectedBundleVersion, evidence, token).ConfigureAwait(false);
+        return (result.Identity, reservation);
+    }
+
     public async Task<byte[]> ReadAsync(SpecBundleScope scope, Guid objectId, CancellationToken token = default)
     {
         var reference = await lifecycle.FindAsync(scope, objectId, token).ConfigureAwait(false);
