@@ -9,6 +9,15 @@ namespace Weft.Tests;
 
 public sealed class SpecDocumentWorkerTests
 {
+    [Fact]
+    public void Office_protocol_exposes_no_public_canonical_response_factory()
+    {
+        var methods = typeof(SpecOfficeProcessProtocol).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        Assert.DoesNotContain(methods, method => method.Name == "DecodeResponse" || method.ReturnType == typeof(SpecOfficeExtractionResult));
+        Assert.Empty(typeof(SpecOfficeExtractionResult).GetConstructors());
+        Assert.Empty(typeof(SpecOfficeExtractionResult).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static));
+    }
+
     private static readonly SpecSourceIdentity Identity = new(new(new ProjectScope(Guid.NewGuid(), Guid.NewGuid()), Guid.NewGuid()), Guid.NewGuid(), 1);
     private static SpecCapturedSource Source(SpecSourceFormat format = SpecSourceFormat.Docx) => new(Identity, format,
         SpecOfficeExtractionTests.Zip(format == SpecSourceFormat.Docx ? SpecOfficeExtractionTests.Word() : SpecOfficeExtractionTests.Excel()));

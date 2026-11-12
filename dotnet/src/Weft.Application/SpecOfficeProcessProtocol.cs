@@ -57,7 +57,7 @@ public static class SpecOfficeProcessProtocol
         if (stream.Length > MaximumResponseBytes) throw new SpecOfficeProtocolException();
         return stream.ToArray();
     }
-    public static SpecOfficeExtractionResult DecodeResponse(ReadOnlyMemory<byte> frame, SpecCapturedSource source, SpecOfficeExtractionLimits limits)
+    internal static SpecOfficeExtractionResult DecodeResponse(ReadOnlyMemory<byte> frame, SpecCapturedSource source, SpecOfficeExtractionLimits limits)
     {
         ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(limits);
         if (frame.Length is 0 or > MaximumResponseBytes || source.Format is not (SpecSourceFormat.Docx or SpecSourceFormat.Xlsx)) throw new SpecOfficeProtocolException();
