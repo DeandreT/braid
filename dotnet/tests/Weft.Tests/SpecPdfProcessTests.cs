@@ -25,7 +25,7 @@ public sealed class SpecPdfProcessTests
     private static SpecCapturedSource Source(params string[] pages) => new(Identity, SpecSourceFormat.Pdf, Pdf(pages));
 
     // Real minimal PDFs with byte-accurate xref tables, including explicit empty page streams.
-    private static byte[] Pdf(string[] pages)
+    internal static byte[] Pdf(string[] pages)
     {
         var objects = new List<string> { "<< /Type /Catalog /Pages 2 0 R >>", "", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>" };
         for (var i = 0; i < pages.Length; i++)
@@ -48,7 +48,7 @@ public sealed class SpecPdfProcessTests
     }
 
     // Portable actual-process harness only. Production uses the native sandbox runner and stays gated.
-    private sealed class Child
+    internal sealed class Child
     {
         public bool Reaped { get; private set; }
         public bool Joined { get; private set; }

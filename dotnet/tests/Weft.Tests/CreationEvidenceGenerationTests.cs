@@ -214,6 +214,80 @@ public sealed class CreationEvidenceGenerationTests
         Assert.Throws<ArgumentException>(() => new CreationSpecification(Bundle, escaped, results));
     }
 
+    private static async Task<SpecPdfExtractionResult> ExtractPdf(SpecCapturedSource source, int cap = 8 * 1024 * 1024)
+    {
+        var child = new SpecPdfProcessTests.Child();
+        var wire = await child.Run(source.CopyBytes());
+        Assert.True(child.Reaped && child.Joined);
+        var executable = Environment.GetEnvironmentVariable("WEFT_TEST_PDF_EXECUTABLE")!;
+        return SpecPdfExtractionResult.Decode(wire.Output, wire.Exit, source,
+            new(Sha256Digest.FromBytes(File.ReadAllBytes(executable)), cap));
+    }
+
+    [Fact]
+    public async Task Real_pdf_mixed_generation_preserves_every_page_and_requires_exact_coverage_acknowledgement()
+    {
+        var (office, _, _) = Mixed();
+        var source = Source(7, SpecSourceFormat.Pdf, SpecPdfProcessTests.Pdf(["First page", "", "Third page"]));
+        var result = await ExtractPdf(source); var document = CreationEvidenceDocument.From(result);
+        var spec = new CreationSpecification(Bundle, office.Sources.Append(source), office.Extractions.Append(document));
+        Assert.Equal(result.Identity, document.Identity); Assert.Equal(result.Code, document.Code);
+        Assert.Equal(result.CopyEvidenceBytes(), document.CopyEvidenceBytes());
+        Assert.Equal(new[] { 0, 1, 2 }, document.Chunks.Select(c => c.Ordinal));
+        Assert.Equal(new[] { 1, 2, 3 }, document.Chunks.Select(c => Assert.IsType<SpecEvidenceLocator.PdfPage>(c.Locator).Page));
+        Assert.Equal(new[] { false, true, false }, document.Chunks.Select(c => c.MissingText));
+        Assert.Equal("", document.Chunks[1].Text); Assert.All(document.Chunks, c => Assert.Null(c.Formula));
+        var f = new Fixture();
+        // The PDF is selected but uncited, so its coverage acknowledgement cannot be avoided.
+        var proposal = await f.Generate(spec, Notes());
+        var coverage = proposal.Notes.Assumptions.Last();
+        Assert.True(coverage.Critical);
+        Assert.Equal("This PDF extraction contains only page text. Text or page content may be missing, including pages without usable text. OCR was not performed. It does not establish complete document coverage or rendered layout.", coverage.Text);
+        Assert.Equal(3, proposal.Notes.Assumptions.Count(a => a.Critical));
+        Assert.Equal(proposal.Fingerprint, (await f.Generate(spec, proposal.Notes)).Fingerprint);
+        f.State = new(proposal);
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Approval.ApproveAsync(f.Actor, proposal.Project, proposal.Id, proposal.Fingerprint,
+            new(proposal.Fingerprint, proposal.Notes.Assumptions.Where(a => a.Critical && a.Id != coverage.Id).Select(a => a.Id))));
+        Assert.Equal(0, f.Acquires);
+        await f.Approval.ApproveAsync(f.Actor, proposal.Project, proposal.Id, proposal.Fingerprint,
+            new(proposal.Fingerprint, proposal.Notes.Assumptions.Where(a => a.Critical).Select(a => a.Id)));
+        Assert.Equal(1, f.Acquires);
+        // Empty pages remain valid exact citations rather than disappearing during adaptation.
+        await f.Generate(spec, new([new(source.Identity, 1)], [], []));
+        var changed = CreationEvidenceDocument.From(await ExtractPdf(source, 1024 * 1024));
+        var changedSpec = new CreationSpecification(Bundle, spec.Sources, office.Extractions.Append(changed));
+        var changedProposal = await f.Generate(changedSpec, Notes());
+        Assert.NotEqual(coverage.Id, changedProposal.Notes.Assumptions.Last().Id);
+        Assert.NotEqual(proposal.Fingerprint, changedProposal.Fingerprint);
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Generate(spec, new(Notes().Evidence, [coverage with { Critical = false }], [])));
+        document.CopyEvidenceBytes()[0] ^= 1;
+        Assert.Equal(result.CopyEvidenceBytes(), document.CopyEvidenceBytes());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Real_unreadable_pdf_refusals_never_dispatch_creation(bool encrypted)
+    {
+        var bytes = encrypted ? Convert.FromBase64String(EncryptedPdfFixture) : SpecPdfProcessTests.Pdf(["", ""]);
+        var source = Source(7, SpecSourceFormat.Pdf, bytes); var result = await ExtractPdf(source);
+        Assert.Equal(SpecExtractionOutcome.Unsupported, result.Outcome);
+        Assert.Equal(encrypted ? "pdf-encrypted" : "pdf-needs-ocr", result.Code);
+        var document = CreationEvidenceDocument.From(result);
+        Assert.Equal(result.CopyEvidenceBytes(), document.CopyEvidenceBytes());
+        if (encrypted) Assert.Empty(document.Chunks);
+        else { Assert.Equal(2, document.Chunks.Count); Assert.All(document.Chunks, c => Assert.True(c.MissingText)); }
+        var text = Text();
+        var spec = new CreationSpecification(Bundle, [text, source], new[] { CreationEvidenceDocument.From(SpecSourceExtractor.Extract(text)), document });
+        var f = new Fixture();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Generate(spec, Notes()));
+        Assert.Equal(0, f.Compiles);
+    }
+
+    // Password-protected PDF generated with lopdf 0.42 EncryptionVersion.V2,
+    // fixture-only owner/reader passwords, one blank page and a fixed document ID.
+    private const string EncryptedPdfFixture = "JVBERi0xLjQKJbutwN4KMSAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMiAwIG9iago8PC9MZW5ndGggMD4+c3RyZWFtCgplbmRzdHJlYW0gCmVuZG9iagozIDAgb2JqCjw8L1R5cGUvUGFnZS9QYXJlbnQgMSAwIFIvTWVkaWFCb3hbMCAwIDYxMiA3OTJdL0NvbnRlbnRzIDIgMCBSPj4KZW5kb2JqCjQgMCBvYmoKPDwvVHlwZS9DYXRhbG9nL1BhZ2VzIDEgMCBSPj4KZW5kb2JqCjUgMCBvYmoKPDwvRmlsdGVyL1N0YW5kYXJkL1YgMi9SIDMvTGVuZ3RoIDEyOC9PKEFO6Z8VHqjqKhePEckx1T8dUcd5pQL3RxVcXPBqM3VFKikvVSh0NN5yn8cjkpe05nZrbXMk4csPzUkvXeliIIgStSIifSkvUCAtMzkwMD4+CmVuZG9iago2IDAgb2JqCjw8L1Jvb3QgNCAwIFIvSURbKHRlc3QtZG9jdW1lbnQtaWQpKHRlc3QtZG9jdW1lbnQtaWQpXS9FbmNyeXB0IDUgMCBSL1R5cGUvWFJlZi9TaXplIDcvV1sxIDQgMl0vSW5kZXhbMSA2XS9MZW5ndGggNDI+PnN0cmVhbQoBAAAADwAAAQAAAEIAAAEAAABxAAABAAAAwQAAAQAAAO4AAAEAAAF2AAAKZW5kc3RyZWFtIAplbmRvYmoKCnN0YXJ0eHJlZgozNzQKJSVFT0Y=";
+
     private sealed class Fixture : IMappingCreationCompiler, IMappingCreationAuthority, IMappingCreationProposalStore,
         IMappingCreationApprovalStore, IIngestionWorkflowReader
     {
