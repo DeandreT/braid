@@ -380,6 +380,89 @@ public sealed class ChatMappingWriteTests
         Assert.Empty(fakes.Appends);
     }
 
+    [Fact]
+    public async Task Proposal_retains_exact_checkpoint_base_and_canonical_edit_without_save_preparation()
+    {
+        var fakes = new EditFakes();
+        var checkpoint = MappingDraftPersistenceTests.Checkpoint(Base) with { Projection = new MappingToolFixture().Projection.Report };
+        var projection = checkpoint.Projection;
+        var rule = projection.Document!.Rules[0];
+        fakes.Replay = (_, operations) => new(operations.Count == 0 ? checkpoint : checkpoint with
+        {
+            Projection = projection with { Document = projection.Document with { Rules = [rule with { Summary = "Changed rule" }, .. projection.Document.Rules.Skip(1)] } }
+        }, null);
+        using var service = fakes.Service();
+        var script = Script;
+        var result = await service.ProposeAsync(WorkspaceToolFixture.Actor, Base, script);
+        Assert.Equal(MappingDirectEditOutcome.Proposed, result.Outcome);
+        var proposal = Assert.IsType<MappingEditProposal>(result.Proposal);
+        Assert.Equal(Base, proposal.Base);
+        Assert.Equal(checkpoint.Artifact.CopyBytes(), proposal.Checkpoint.CopyBytes());
+        Assert.Equal(checkpoint.Artifact.Digest, proposal.Checkpoint.Digest);
+        Assert.Equal(script.CopyUtf8(), proposal.Operations.CopyUtf8());
+        Assert.Equal(script.Digest, proposal.Operations.Digest);
+        Assert.Equal(script.Count, proposal.Operations.Count);
+        Assert.Contains(proposal.Changes, change => change.After.Contains("Changed rule", StringComparison.Ordinal));
+        // Copies cannot mutate retained content or identity.
+        Array.Fill(proposal.Checkpoint.CopyBytes(), (byte)0);
+        Array.Fill(proposal.Operations.CopyUtf8(), (byte)0);
+        Assert.Equal(checkpoint.Artifact.CopyBytes(), proposal.Checkpoint.CopyBytes());
+        Assert.Equal(script.Digest, MappingEditScript.Parse(proposal.Operations.CopyUtf8()).Digest);
+        Assert.Empty(fakes.Selections);
+        Assert.Empty(fakes.Appends);
+        // The existing read-only Apply path also must never invoke its journal callback.
+        var applied = await service.ApplyAsync(WorkspaceToolFixture.Actor, Base, script, Guid.NewGuid(), false,
+            prepare: (_, _, _) => throw new InvalidOperationException("Save preparation is forbidden."));
+        Assert.Equal(proposal.Changes, applied.Changes);
+        Assert.Empty(fakes.Appends);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Proposal_worker_failure_never_returns_partial_content(bool edited)
+    {
+        var failure = new MappingEditFailure("rejected", "Worker refused.", false, null, IngestionBackendStatus.InvalidMapping);
+        var fakes = new EditFakes();
+        fakes.Replay = (native, operations) => !edited || operations.Count > 0
+            ? new(null, failure) : new(MappingDraftPersistenceTests.Checkpoint(native.Scope), null);
+        using var service = fakes.Service();
+        var result = await service.ProposeAsync(WorkspaceToolFixture.Actor, Base, Script);
+        Assert.Equal(edited ? MappingDirectEditOutcome.Rejected : MappingDirectEditOutcome.Unavailable, result.Outcome);
+        Assert.Null(result.Proposal);
+        Assert.Equal(failure, result.Failure);
+        Assert.Empty(fakes.Selections);
+        Assert.Empty(fakes.Appends);
+    }
+
+    [Theory]
+    [InlineData("digest")]
+    [InlineData("scope")]
+    [InlineData("missing")]
+    [InlineData("both")]
+    [InlineData("oversized")]
+    public async Task Proposal_rejects_inconsistent_worker_provenance(string fault)
+    {
+        var fakes = new EditFakes();
+        fakes.Replay = (native, operations) =>
+        {
+            var checkpoint = MappingDraftPersistenceTests.Checkpoint(native.Scope);
+            if (operations.Count == 0) return new(checkpoint, null);
+            return fault switch
+            {
+                "digest" => new(checkpoint with { Artifact = NativeArtifact.Admit(Base, "different"u8, 100) }, null),
+                "scope" => new(MappingDraftPersistenceTests.Checkpoint(new(Base.OrganizationId, Base.ProjectId, Base.MappingId, Guid.NewGuid())), null),
+                "missing" => new(null, null),
+                "both" => new(checkpoint, new("rejected", "Worker refused.", false, null, IngestionBackendStatus.InvalidMapping)),
+                _ => new(checkpoint with { Artifact = NativeArtifact.Admit(Base, new byte[MappingEditPolicy.MaximumNativeBytes + 1], MappingEditPolicy.MaximumNativeBytes + 1) }, null)
+            };
+        };
+        using var service = fakes.Service();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ProposeAsync(WorkspaceToolFixture.Actor, Base, Script));
+        Assert.Empty(fakes.Selections);
+        Assert.Empty(fakes.Appends);
+    }
+
     /// <summary>Recording draft-store, object, worker and ingestion fakes; only the write path's members are reachable.</summary>
     private sealed class EditFakes : IMappingDraftStore, IPrivateObjectStore, IMappingEditBackend, IRevisionIngestionService
     {
@@ -387,6 +470,7 @@ public sealed class ChatMappingWriteTests
         private readonly WorkspaceToolFixture metadata = new();
         internal Func<Guid, bool, MappingDraftBase?> Select = (_, _) => null;
         internal MappingEditFailure? Failure;
+        internal Func<NativeArtifact, MappingEditScript, MappingEditResult>? Replay;
         internal readonly List<(Guid Revision, bool Head)> Selections = [];
         internal readonly List<(Guid Key, AppendRevisionRequest Request, byte[] Bytes)> Appends = [];
         internal MappingDirectEditService Service() => new(this, metadata, this, this, this);
@@ -401,7 +485,7 @@ public sealed class ChatMappingWriteTests
         public Task<byte[]> ReadVerifiedAsync(RevisionScope expectedScope, PrivateObjectReference reference, CancellationToken cancellationToken = default) => Task.FromResult(Native.ToArray());
         public Task<PrivateObjectPublishResult> PublishCreateOnlyAsync(RevisionScope expectedScope, PrivateObjectReference reference, Stream source, CancellationToken cancellationToken = default) => throw new InvalidOperationException();
         public Task<MappingEditResult> ReplayAsync(NativeArtifact immutableBase, MappingEditScript operations, CancellationToken cancellationToken = default) =>
-            Task.FromResult(operations.Count > 0 && Failure is { } failure ? new MappingEditResult(null, failure)
+            Task.FromResult(Replay is not null ? Replay(immutableBase, operations) : operations.Count > 0 && Failure is { } failure ? new MappingEditResult(null, failure)
                 : new MappingEditResult(MappingDraftPersistenceTests.Checkpoint(immutableBase.Scope), null));
         public async Task<RevisionIngestionResult> AppendAsync(ActorContext actor, MappingScope target, Guid idempotencyKey, AppendRevisionRequest request, Stream nativeSource, CancellationToken cancellationToken = default)
         {
