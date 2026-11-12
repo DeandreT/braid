@@ -350,6 +350,15 @@ test("overlapping historical and selected-turn receipt reads both retain their c
 }) => {
   const f = await workspaceFixture(page);
   await askForEdit(page);
+  // An enabled composer does not mean the first answer stream has finished.
+  // Establish two retained terminal turns before racing their receipt reads.
+  const selectedAnswer = panel(page).getByRole("region", {
+    name: "Selected answer",
+    exact: true,
+  });
+  await expect(
+    selectedAnswer.getByText("Answer complete.", { exact: true }),
+  ).toBeVisible();
   await expect(
     panel(page).getByLabel("Question", { exact: true }),
   ).toBeEnabled();
@@ -362,11 +371,16 @@ test("overlapping historical and selected-turn receipt reads both retain their c
   await expect
     .poll(() => f.posts.filter((p) => p.path.endsWith("/turns")).length)
     .toBe(2);
-  for (const turns of f.turns.values())
-    for (const turn of turns) {
-      turn.phase = "completed";
-      turn.finishedAtUtc = "2026-10-24T10:01:00Z";
-    }
+  await expect(
+    panel(page).getByText("Change another field.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    selectedAnswer.getByText("Answer complete.", { exact: true }),
+  ).toBeVisible();
+  expect([...f.turns.values()].flat().map((turn) => turn.phase)).toEqual([
+    "completed",
+    "completed",
+  ]);
   const requested = new Set<string>();
   let release!: () => void;
   const overlap = new Promise<void>((resolve) => {

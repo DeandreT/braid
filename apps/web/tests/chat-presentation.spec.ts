@@ -402,7 +402,7 @@ test("starters fill an editable question without sending and header actions retu
   const scope = chat(page).getByRole("button", { name: /Access checked/ });
   await scope.click();
   await expect(chat(page).locator("#chat-scope-menu")).toContainText(
-    "chat can save mapping edits as new versions if you have edit permission",
+    "Chat can propose mapping edits. Review the complete operations and approve that exact proposal to save a new version with current edit permission.",
   );
   await expect(chat(page).locator("#chat-scope-menu")).toContainText(
     "It cannot activate versions or start runs",

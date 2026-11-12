@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import type { CreationProposal } from "../src/catalog/creation/creation-model";
+import type { ChatTurn } from "../src/chat/chat-types";
 import { expectSignedInAccount } from "./hosted-account.fixture";
 import {
   chooseSavedConversation,
@@ -615,18 +616,62 @@ test("each send observes fresh authority and rotated tokens; grant loss cannot r
     payloadsAllowed: true,
     grant: true,
   });
+  const completedReads = new Map<string, number>();
+  page.on("response", async (response) => {
+    const path = new URL(response.url()).pathname;
+    if (
+      response.ok() &&
+      /\/turns\/[^/]+\/(mapping-writes|mapping-edit-proposals)$/.test(path)
+    ) {
+      await response.finished();
+      completedReads.set(path, (completedReads.get(path) ?? 0) + 1);
+    }
+  });
+  async function askAndSettle(text: string) {
+    const accepted = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/turns") &&
+        response.request().postDataJSON().text === text,
+    );
+    await ask(page, text);
+    const response = await accepted;
+    expect(response.status()).toBe(201);
+    const turn = (await response.json()) as ChatTurn;
+    const path = `${new URL(response.url()).pathname}/${turn.turnId}`;
+    await expect(panel(page).getByText(text, { exact: true })).toBeVisible();
+    await expectComplete(page);
+    expect(
+      f.turns.get(turn.conversationId)?.find((t) => t.turnId === turn.turnId)
+        ?.phase,
+    ).toBe("completed");
+    // Terminal text can precede these reads. Drain this exact turn's tool,
+    // terminal-event and post-stream proposal refreshes before replacing owner.
+    const proposalReads =
+      f.events
+        .get(turn.turnId)!
+        .filter(
+          (event) =>
+            event.type === "tool.completed" || event.type === "turn.completed",
+        ).length + 1;
+    await expect
+      .poll(() => completedReads.get(`${path}/mapping-writes`) ?? 0)
+      .toBe(1);
+    await expect
+      .poll(() => completedReads.get(`${path}/mapping-edit-proposals`) ?? 0)
+      .toBe(proposalReads);
+    return turn;
+  }
   await page.goto("/chat");
   await create(page);
-  await ask(page);
+  const first = await askAndSettle(
+    "Explain the partner mapping and how to inspect it.",
+  );
   await expect(panel(page)).toContainText("Data shared with fixture-model");
   f.state.grant = false;
   f.data.context.requestToken = "fresh-catalog-request-token";
-  const receiptRead = page.waitForResponse((response) =>
-    response.url().endsWith("/mapping-writes"),
-  );
-  await ask(page, "Read again after my grant changed.");
-  await receiptRead;
-  await expectComplete(page);
+  const second = await askAndSettle("Read again after my grant changed.");
+  expect(second.turnId).not.toBe(first.turnId);
   await expect(
     panel(page)
       .getByRole("region", { name: "Selected answer" })
