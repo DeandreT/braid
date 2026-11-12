@@ -131,6 +131,7 @@ internal sealed class SessionHostResources
             options.Reports.DerivationEnabled, session: true);
         SessionHostDataProtectionPolicy.Apply(services);
         SpecHostConfiguration.Configure(services, read, session: true);
+        CreationHostConfiguration.Configure(services, read, session: true);
     }
 
     /// <summary>

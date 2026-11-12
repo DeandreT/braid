@@ -38,7 +38,16 @@ public sealed class PostgresMappingCreationStore : IMappingCreationProposalStore
         }
     }
 
-    private async Task<Session> Open(CreationDatabaseProfile profile, Guid organization, CancellationToken ct)
+    /// <summary>Fresh installation/role admission for each concrete pool, without issuing actor-scoped business reads.</summary>
+    public async Task VerifyContractsAsync(CancellationToken ct)
+    {
+        foreach (var profile in Enum.GetValues<CreationDatabaseProfile>())
+        {
+            await using var session = await Open(profile, null, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<Session> Open(CreationDatabaseProfile profile, Guid? organization, CancellationToken ct)
     {
         var connection = await (profile switch { CreationDatabaseProfile.Reader => reader, CreationDatabaseProfile.Writer => writer, _ => approver }).OpenConnectionAsync(ct).ConfigureAwait(false);
         try
@@ -48,8 +57,11 @@ public sealed class PostgresMappingCreationStore : IMappingCreationProposalStore
             // Lease may span bounded native work. Database publication guards remain authoritative if this connection dies.
             await using var setup = session.Command("SET LOCAL search_path=pg_catalog; SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL idle_in_transaction_session_timeout='300s'");
             await setup.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            await using var scope = session.Command("SELECT set_config('weft.organization_id',$1,true)", organization.ToString("D"));
-            await scope.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            if (organization is { } org)
+            {
+                await using var scope = session.Command("SELECT set_config('weft.organization_id',$1,true)", org.ToString("D"));
+                await scope.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }
             await CreationSchemaAdmission.ValidateAsync(connection, transaction, profile, ct).ConfigureAwait(false);
             return session;
         }

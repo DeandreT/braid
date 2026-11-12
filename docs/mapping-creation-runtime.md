@@ -16,7 +16,7 @@ The 0046 owner's current source now declares both discovery signatures and restr
 
 ## Activation and integration ports
 
-`WEFT_CREATION_ENABLED` defaults false. `CreationRuntime.Configured` requires the specification factory, compiler, preview, current authority, proposal store, approval store, ingestion service/reader, `ICreationDiscovery` and `ICreationRuntimeAdmission`. The last port must verify concrete durable creation fencing, Specification disclosure storage and fixed compiler/authored-preview profiles. The composition owner supplies production admission after those contracts are admitted. Enabling the flag alone leaves tools and endpoints unavailable.
+`WEFT_CREATION_ENABLED` defaults false. `CreationRuntime.Configured` requires the specification factory, compiler, preview, current authority, proposal store, approval store, ingestion service/reader, `ICreationDiscovery` and `ICreationRuntimeAdmission`. Concrete server wiring is described in [Creation server composition](creation-host-composition.md). Shared admission verifies durable contracts; compiler/preview runners separately verify their actual service profile on every execution channel before sending frames, preserving authorized retained review during worker/source-store unavailability.
 
 Compiler registration is `IMappingCreationCompiler` -> `FerruleMappingCreationCompiler` with its authoring backend. Preview registration is `IMappingCreationPreview` -> `FerruleMappingCreationPreview` with a separate backend using `DockerWorkerProfile.AuthoredPreview` or `FerruleServiceProtocol.AuthoredPreviewProfile`. The normal preview profile is incompatible. Durable store/authority implementations remain the persistence owner's integration.
 

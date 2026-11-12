@@ -62,4 +62,7 @@ public sealed class PostgresSpecBundleDatabase : IAsyncDisposable
         catch { throw new SpecStorageException(SpecStorageError.Unavailable); }
     }
     public ValueTask DisposeAsync() => source.DisposeAsync();
+
+    /// <summary>Fresh role/schema admission without selecting or admitting a physical source store.</summary>
+    public Task VerifyContractsAsync(CancellationToken ct) => RunAsync(false, (_, _) => Task.FromResult(true), ct);
 }
