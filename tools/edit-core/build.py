@@ -40,6 +40,21 @@ def install() -> None:
         run("cargo", "+" + TOOLCHAIN, "install", "wasm-bindgen-cli", "--version", "0.2.129", "--locked", "--force")
 
 
+def remap_build_paths() -> None:
+    """Replace the builder's directories in panic locations, so the shipped module and its integrity are host-independent."""
+    home = Path.home()
+    prefixes = {
+        Path(os.environ.get("CARGO_HOME", home / ".cargo")).resolve(): "/cargo",
+        Path(os.environ.get("RUSTUP_HOME", home / ".rustup")).resolve(): "/rustup",
+        ROOT: "/weft",
+    }
+    flags = [f"--remap-path-prefix={source}={replacement}" for source, replacement in prefixes.items()]
+    existing = os.environ.pop("CARGO_ENCODED_RUSTFLAGS", "")
+    legacy = os.environ.pop("RUSTFLAGS", "")
+    inherited = existing.split("\x1f") if existing else legacy.split()
+    os.environ["CARGO_ENCODED_RUSTFLAGS"] = "\x1f".join([*inherited, *flags])
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--install", action="store_true", help="Install the pinned toolchain into the caller's explicit CARGO_HOME/RUSTUP_HOME")
@@ -54,6 +69,7 @@ if __name__ == "__main__":
     target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target/edit-wasm")).resolve()
     os.environ["CARGO_TARGET_DIR"] = str(target)
     os.environ["CARGO_BUILD_JOBS"] = "2"
+    remap_build_paths()
     run("cargo", "+" + TOOLCHAIN, "build", "--manifest-path", "engines/ferrule-edit-wasm/Cargo.toml", "--release", "--target", "wasm32-unknown-unknown", "--locked")
     with tempfile.TemporaryDirectory(prefix="weft-edit-bindgen-") as temporary:
         run("wasm-bindgen", "--target", "web", "--out-dir", temporary, str(target / "wasm32-unknown-unknown/release/weft_ferrule_edit_wasm.wasm"))
