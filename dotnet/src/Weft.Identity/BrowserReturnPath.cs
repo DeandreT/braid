@@ -82,6 +82,10 @@ public static class BrowserReturnPath
             return !values.TryGetValue("cursor", out var cursor) ||
                 query is not null && query.Trim().Length > 0 && Cursor(cursor, MaximumSearchCursorLength, false);
         }
+        if (path is ["catalog", "organizations", var creationOrganization, "projects", var creationProject, "creation", var proposal] &&
+            Id(creationOrganization) && Id(creationProject) && Id(proposal))
+            return values.Count == 1 && values.TryGetValue("fingerprint", out var fingerprint) && fingerprint.Length == 64 &&
+                fingerprint.All(c => char.IsAsciiDigit(c) || c is >= 'a' and <= 'f');
         if (Revision(path))
             return Keys(values, "projectionDerivationId", "validationDerivationId") && values.Values.All(Id);
         if (Mapping(path, "comparisons"))

@@ -25,8 +25,15 @@ export type OrganizationConversation = Omit<
   revision: CatalogRevisionScope | null;
 };
 export type AnyConversation = ChatConversation | OrganizationConversation;
-export type WorkspaceCitation =
-  components["schemas"]["ChatWorkspaceCitationV1"];
+export type WorkspaceCitation = Omit<
+  components["schemas"]["ChatWorkspaceCitationV1"],
+  "kind"
+> & {
+  kind:
+    | components["schemas"]["ChatWorkspaceCitationV1"]["kind"]
+    | "creationProposal";
+  proposalFingerprint?: string | null;
+};
 export type WorkspaceCitationEvent = Extract<
   ChatEvent,
   { type: "workspace.citation" }
@@ -158,9 +165,12 @@ export function workspaceEvent(
         "previewOutput",
         "regressionCase",
         "regressionRunOutput",
+        "specification",
       ].includes(String(value.source)) &&
-      (value.version === null || decimal(value.version)) &&
-      integer(value.bytes, 8192) &&
+      (value.source === "specification"
+        ? value.version === null
+        : value.version === null || decimal(value.version)) &&
+      integer(value.bytes, value.source === "specification" ? 12288 : 8192) &&
       value.bytes > 0
     );
   if (value.type === "mapping.write")
@@ -266,6 +276,8 @@ export function workspaceCitation(
     revision = mapping && isCatalogId(value.revisionId);
   const noReport = value.target === null && value.reportDerivationId === null;
   const noSubject = value.subjectId === null && value.version === null;
+  if (value.kind !== "creationProposal" && value.proposalFingerprint != null)
+    return false;
   if (value.kind === "guideSection")
     return (
       !project &&
@@ -279,6 +291,16 @@ export function workspaceCitation(
     );
   if (value.sectionId !== null || !project) return false;
   switch (value.kind) {
+    case "creationProposal":
+      return (
+        value.mappingId === null &&
+        value.revisionId === null &&
+        noReport &&
+        isCatalogId(value.subjectId) &&
+        value.version === null &&
+        typeof value.proposalFingerprint === "string" &&
+        /^[0-9a-f]{64}$/.test(value.proposalFingerprint)
+      );
     case "project":
       return (
         value.mappingId === null &&
@@ -358,6 +380,7 @@ const citationNames: Record<string, string> = {
   buildRun: "build",
   buildApproval: "build approval",
   buildEnvironment: "build environment",
+  creationProposal: "new mapping proposal",
   guideSection: "help",
   projectionDiagnostic: "explanation issue",
   validationDiagnostic: "validation issue",
@@ -370,6 +393,8 @@ export function citationName(kind: string | null | undefined): string {
 }
 export function citationLink(c: WorkspaceCitation): string {
   if (c.kind === "guideSection") return "/help/" + c.sectionId;
+  if (c.kind === "creationProposal")
+    return `/catalog/organizations/${c.organizationId}/projects/${c.projectId}/creation/${c.subjectId}?fingerprint=${c.proposalFingerprint}`;
   if (
     [
       "previewRun",

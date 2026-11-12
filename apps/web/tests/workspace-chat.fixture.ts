@@ -8,12 +8,23 @@ import type {
 } from "../src/chat/chat-types";
 import type { OrganizationConversation } from "../src/chat/workspace-chat-types";
 import type { MappingWriteReceipt } from "../src/chat/workspace-chat-types";
+import type { WorkspaceCitation } from "../src/chat/workspace-chat-types";
+
+// The runtime's generated creation-event unions land separately from this UI unit.
+type FixtureEvent =
+  | ChatEvent
+  | (Omit<Extract<ChatEvent, { type: "workspace.citation" }>, "citation"> & {
+      citation: WorkspaceCitation;
+    })
+  | (Omit<Extract<ChatEvent, { type: "data.shared" }>, "source"> & {
+      source: "specification";
+    });
 
 export const round = "a0000000-0000-4000-8000-000000000001";
 export const legacyId = "80000000-0000-4000-8000-000000000001";
 export const otherProject = "20000000-0000-4000-8000-000000000002";
 export const otherMapping = "30000000-0000-4000-8000-000000000002";
-export const frame = (event: ChatEvent) =>
+export const frame = (event: FixtureEvent) =>
   `id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 
 /** Synthetic UI fixture only. Real authorization/tool offering is qualified by the PostgreSQL and provider-wire suites. */
@@ -23,6 +34,12 @@ export async function workspaceFixture(
     payloadsAllowed?: boolean;
     grant?: boolean;
     secondProfile?: boolean;
+    creationProposal?: {
+      projectId: string;
+      proposalId: string;
+      fingerprint: string;
+      extractionId: string;
+    };
   } = {},
 ) {
   const data = controlledData();
@@ -70,7 +87,7 @@ export async function workspaceFixture(
     turnCount: 0,
   });
   const turns = new Map<string, ChatTurn[]>();
-  const events = new Map<string, ChatEvent[]>();
+  const events = new Map<string, FixtureEvent[]>();
   const posts: { path: string; body: any; token: string | undefined }[] = [];
   const reads: string[] = [];
   const offered: string[][] = [];
@@ -341,69 +358,148 @@ export async function workspaceFixture(
       };
       if (!(turns.get(id!) ?? []).some((t) => t.turnId === body.turnId))
         turns.set(id!, [...(turns.get(id!) ?? []), turn]);
-      const tools = [
-        "get_mapping",
-        "search_user_guide",
-        ...(state.payloadsAllowed && state.grant ? ["get_preview_output"] : []),
-      ];
+      const creation =
+        workspace && state.payloadsAllowed && state.grant
+          ? options.creationProposal
+          : undefined;
+      const tools = creation
+        ? ["read_specification", "propose_mapping_creation"]
+        : [
+            "get_mapping",
+            "search_user_guide",
+            ...(state.payloadsAllowed && state.grant
+              ? ["get_preview_output"]
+              : []),
+          ];
       offered.push(tools);
-      const response: ChatEvent[] = [
-        { type: "turn.started", sequence: 1 },
-        {
-          type: "tool.started",
-          sequence: 2,
-          roundId: round,
-          ordinal: 1,
-          name: "get_mapping",
-        },
-        {
-          type: "tool.completed",
-          sequence: 3,
-          roundId: round,
-          ordinal: 1,
-          name: "get_mapping",
-          resultBytes: 100,
-          retrievedNodes: 1,
-        },
-        ...(workspace
-          ? [citation("mapping", 4), citation("guideSection", 5)]
-          : [
-              {
-                type: "citation" as const,
-                sequence: 4,
-                roundId: round,
-                reportDerivationId: P,
-                target: {
-                  kind: "projectionReport" as const,
-                  resourceId: null,
-                  diagnosticOrdinal: null,
-                },
-              },
-            ]),
-        {
-          type: "text.delta",
-          sequence: 6,
-          roundId: round,
-          text: "Partner orders maps the order fields. The user guide explains how to inspect retained reports.",
-        },
-        ...(workspace && state.payloadsAllowed && state.grant
-          ? [
-              {
-                type: "data.shared" as const,
-                sequence: 7,
-                roundId: round,
-                projectId: otherProject,
-                source: "previewOutput" as const,
-                subjectId: legacyId,
+      const response: FixtureEvent[] = creation
+        ? [
+            { type: "turn.started", sequence: 1 },
+            {
+              type: "tool.started",
+              sequence: 2,
+              roundId: round,
+              ordinal: 1,
+              name: "read_specification",
+            },
+            {
+              type: "tool.completed",
+              sequence: 3,
+              roundId: round,
+              ordinal: 1,
+              name: "read_specification",
+              resultBytes: 10000,
+              retrievedNodes: 2,
+            },
+            {
+              type: "data.shared",
+              sequence: 4,
+              roundId: round,
+              projectId: creation.projectId,
+              source: "specification",
+              subjectId: creation.extractionId,
+              version: null,
+              bytes: 9000,
+            },
+            {
+              type: "tool.started",
+              sequence: 5,
+              roundId: round,
+              ordinal: 2,
+              name: "propose_mapping_creation",
+            },
+            {
+              type: "tool.completed",
+              sequence: 6,
+              roundId: round,
+              ordinal: 2,
+              name: "propose_mapping_creation",
+              resultBytes: 1024,
+              retrievedNodes: 1,
+            },
+            {
+              type: "workspace.citation",
+              sequence: 7,
+              roundId: round,
+              citation: {
+                kind: "creationProposal",
+                organizationId: org,
+                projectId: creation.projectId,
+                mappingId: null,
+                revisionId: null,
+                target: null,
+                reportDerivationId: null,
+                subjectId: creation.proposalId,
                 version: null,
-                bytes: 32,
+                sectionId: null,
+                proposalFingerprint: creation.fingerprint,
               },
-            ]
-          : workspace && state.write
-            ? [state.write]
-            : []),
-        { type: "turn.completed", sequence: 8 },
-      ];
+            },
+            {
+              type: "text.delta",
+              sequence: 8,
+              roundId: round,
+              text: "Review the exact new mapping proposal before approving it.",
+            },
+            { type: "turn.completed", sequence: 9 },
+          ]
+        : [
+            { type: "turn.started", sequence: 1 },
+            {
+              type: "tool.started",
+              sequence: 2,
+              roundId: round,
+              ordinal: 1,
+              name: "get_mapping",
+            },
+            {
+              type: "tool.completed",
+              sequence: 3,
+              roundId: round,
+              ordinal: 1,
+              name: "get_mapping",
+              resultBytes: 100,
+              retrievedNodes: 1,
+            },
+            ...(workspace
+              ? [citation("mapping", 4), citation("guideSection", 5)]
+              : [
+                  {
+                    type: "citation" as const,
+                    sequence: 4,
+                    roundId: round,
+                    reportDerivationId: P,
+                    target: {
+                      kind: "projectionReport" as const,
+                      resourceId: null,
+                      diagnosticOrdinal: null,
+                    },
+                  },
+                ]),
+            {
+              type: "text.delta",
+              sequence: 6,
+              roundId: round,
+              text: "Partner orders maps the order fields. The user guide explains how to inspect retained reports.",
+            },
+            ...(workspace && state.payloadsAllowed && state.grant
+              ? [
+                  {
+                    type: "data.shared" as const,
+                    sequence: 7,
+                    roundId: round,
+                    projectId: otherProject,
+                    source: "previewOutput" as const,
+                    subjectId: legacyId,
+                    version: null,
+                    bytes: 32,
+                  },
+                ]
+              : workspace && state.write
+                ? [state.write]
+                : []),
+            { type: "turn.completed", sequence: 8 },
+          ];
       events.set(body.turnId, response);
       if (state.loseSend) {
         state.loseSend = false;
