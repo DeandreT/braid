@@ -130,7 +130,7 @@ public sealed partial class WorkspaceToolService
     {
         if (scope?.Written is { } fact)
             return result.MappingWrite is not null ? result
-                : new(result.Result, result.RetrievedNodes, result.Citations, result.WorkspaceCitations, result.DataShared, fact);
+                : new(result.Result, result.RetrievedNodes, result.Citations, result.WorkspaceCitations, result.DataShared, fact, result.RetainedProposal);
         return scope?.SaveKey is not { } key ? result : Outcome(WorkspaceToolRegistry.SaveEdit, scope.Budget, WorkspaceToolOutcome.Unavailable,
             new { problem = "Save status is unconfirmed. Read the durable save receipt before repeating any edit.", requestId = Id(key), status = "unconfirmed" });
     }

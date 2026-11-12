@@ -43,8 +43,15 @@ The complete response must fit the call's remaining byte and node budgets, cappe
 at 12,288 bytes per call. Every JSON data value counts toward the node budget.
 An oversized response is refused whole with `resourceLimit`. Feedback is audited
 as `Specification` (kind 5), using the proposal ID as subject and the full serialized
-tool-response byte count. The existing orchestrator records disclosure before the
-next provider round and rechecks payload authorization.
+tool-response byte count. The orchestrator records disclosure before the next
+provider round and rechecks payload authorization. The trusted result also carries
+a turn-scoped `ChatRetainedProposalRead` pin with the exact project, proposal ID,
+and fingerprint. Every subsequent provider/tool boundary rereads that proposal
+through the current creator/content-authorized store, then rechecks project and
+payload permission. A denied, missing, or substituted proposal blocks dispatch
+even if optional citation verification omits its citation. This check uses retained
+content authority independently of physical source availability. The pin is kept
+with active-turn context; the Specification audit retains its existing wire shape.
 
 The existing proposal and approval remain immutable. A replacement requires fresh
 source reads, generation of a new proposal, and its own explicit approval.
@@ -62,6 +69,9 @@ the user sends the prepared question under the authorized payload policy.
 provider fixture with recording compiler/store ports. It covers retained approved
 content after source retirement, identity and authorization refusals, whole-response
 bounds, disclosure ordering, and revocation before the next provider request.
+SSE regressions revoke retained-content access or substitute the fingerprint after
+disclosure acknowledgement and again after an authorized provider round; both stop
+the next request while preserving the audit of prior disclosures.
 These are orchestration tests with fake backend ports; durable storage and live
 provider qualification are separate host responsibilities.
 

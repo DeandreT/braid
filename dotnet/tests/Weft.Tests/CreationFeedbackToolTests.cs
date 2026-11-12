@@ -55,6 +55,7 @@ public sealed class CreationFeedbackToolTests
         Assert.Equal(ChatPayloadSource.Specification, result.DataShared!.Source);
         Assert.Equal(p.Id, result.DataShared.SubjectId); Assert.Null(result.DataShared.Version);
         Assert.Equal(result.Result.ByteCount, result.DataShared.ByteCount);
+        Assert.Equal(new ChatRetainedProposalRead(p.Project, p.Id, p.Fingerprint), result.RetainedProposal);
         Assert.InRange(result.Result.ByteCount, 1, 12_288); Assert.InRange(result.RetrievedNodes, 2, 512);
         Assert.DoesNotContain("native-fixture", result.Result.Json); Assert.DoesNotContain("Private customer evidence", result.Result.Json);
         Assert.Same(before, f.State); Assert.Equal(1, f.Compiles); Assert.Equal(0, f.Reads);
@@ -128,9 +129,15 @@ public sealed class CreationFeedbackToolTests
     [InlineData("grant")]
     [InlineData("membership")]
     [InlineData("profile-policy")]
+    [InlineData("retained-content")]
+    [InlineData("retained-fingerprint")]
     public async Task Provider_wire_receives_feedback_only_after_audit_and_current_authorization(string revoke)
     {
         var f = new CreationRuntimeFixture(); var p = await f.Generate(criticalQuestion: true);
+        var replacement = await new MappingCreationGenerationService(f, f).GenerateAsync(WorkspaceToolFixture.Actor,
+            p.Id, p.RequestKey, f.Specification, f.Plan, p.Notes, new("Changed retained content", ""));
+        Assert.NotEqual(p.Fingerprint, replacement.Fingerprint);
+        f.Stale = true;
         using var provider = Provider(f, sourceUnavailable: true); var service = CreationRuntimeToolTests.Service(provider);
         ChatOrchestrationFixture? capture = null; Guid turnId = Guid.NewGuid();
         await using var wire = new ChatOrchestrationFixture(async (exchange, ct) =>
@@ -166,6 +173,8 @@ public sealed class CreationFeedbackToolTests
                 if (revoke == "grant") f.Catalog.Payloads!.Grants.Clear();
                 if (revoke == "membership") f.Catalog.RevokedProjects.Add(WorkspaceToolFixture.Project);
                 if (revoke == "profile-policy") wire.ProfilePolicy.Check = (_, _, _, _, _) => Task.FromResult(false);
+                if (revoke == "retained-content") f.Denied = true;
+                if (revoke == "retained-fingerprint") f.State = new(replacement);
             }
             return Task.CompletedTask;
         };
@@ -178,7 +187,55 @@ public sealed class CreationFeedbackToolTests
             (await ChatOrchestrationFixture.FinishExecution(wire.Begin(turn))).Outcome);
         Assert.Equal(revoke == "none" ? 2 : 1, wire.Server.RequestCount);
         Assert.Single(wire.Store.Events(turnId), e => e.Kind == ChatEventKind.DataShared);
-        Assert.Equal(1, f.Compiles); Assert.Equal(0, f.Creates); Assert.Equal(0, f.Leases);
+        Assert.Equal(2, f.Compiles); Assert.Equal(0, f.Reads); Assert.Equal(0, f.Creates); Assert.Equal(0, f.Leases);
+    }
+
+    [Theory]
+    [InlineData("none")]
+    [InlineData("content")]
+    [InlineData("fingerprint")]
+    public async Task Retained_content_is_reauthorized_again_after_an_already_authorized_provider_round(string revoke)
+    {
+        var f = new CreationRuntimeFixture(); var p = await f.Generate(criticalQuestion: true);
+        var replacement = await new MappingCreationGenerationService(f, f).GenerateAsync(WorkspaceToolFixture.Actor,
+            p.Id, p.RequestKey, f.Specification, f.Plan, p.Notes, new("Changed retained content", ""));
+        f.Stale = true;
+        using var provider = Provider(f, sourceUnavailable: true); var service = CreationRuntimeToolTests.Service(provider);
+        await using var wire = new ChatOrchestrationFixture(async (exchange, ct) =>
+        {
+            string response;
+            if (exchange.Ordinal == 1)
+                response = ChatOrchestrationFixture.Call(0, "feedback", Intent(p).Arguments.Json, "read_specification") +
+                    ChatOrchestrationFixture.Finish("tool_calls") + ChatOrchestrationFixture.Done;
+            else if (exchange.Ordinal == 2)
+            {
+                Assert.True(exchange.Request.ContainsUtf8("Confirm output"));
+                if (revoke == "content") f.Denied = true;
+                if (revoke == "fingerprint") f.State = new(replacement);
+                response = ChatOrchestrationFixture.Call(0, "projects", "{}", "list_projects") +
+                    ChatOrchestrationFixture.Finish("tool_calls") + ChatOrchestrationFixture.Done;
+            }
+            else
+            {
+                Assert.Equal(3, exchange.Ordinal); Assert.Equal("none", revoke);
+                Assert.True(exchange.Request.ContainsUtf8("Confirm output"));
+                response = ChatOrchestrationFixture.Text("The retained proposal remains authorized.") +
+                    ChatOrchestrationFixture.Finish("stop") + ChatOrchestrationFixture.Done;
+            }
+            await exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(response), ct);
+        }, actor: WorkspaceToolFixture.Actor, conversation: f.Catalog.Conversation(), tools: service.PayloadManifest!.Value,
+            toolPort: service, instructions: WorkspaceChatGrounding.Instructions, workspaceCitationPort: service, contextPort: service, payloadsAllowed: true);
+        var budget = ChatGrounding.ProviderBudget(new ChatApiOptions([new("Fixture", "fixture", wire.Profile)],
+            TimeSpan.FromDays(1), TimeSpan.FromSeconds(60), 512), service.PayloadGrounding!);
+        var turn = new ChatTurnIntent(Guid.NewGuid(), new(Guid.NewGuid(), "Discuss the retained proposal and list my projects.", [], budget,
+            service.PayloadGrounding!, ChatTurnFocus.None), ChatAiBridge.PinProfile("fixture", wire.Profile),
+            ChatGrounding.TurnBudgetFor(service.PayloadGrounding!), ChatOrchestrationFixture.Now.AddTicks(budget.DurationTicks));
+        var result = await ChatOrchestrationFixture.FinishExecution(wire.Begin(turn));
+        Assert.Equal(revoke == "none" ? ChatOrchestrationOutcome.Completed : ChatOrchestrationOutcome.Denied, result.Outcome);
+        Assert.Equal(revoke == "none" ? 3 : 2, wire.Server.RequestCount);
+        var fact = ChatMetadataCodec.ReadDisclosure(Assert.Single(wire.Store.Events(turn.TurnId), e => e.Kind == ChatEventKind.DataShared).MetadataJson!);
+        Assert.Equal(p.Id, fact.SubjectId); Assert.Equal(ChatPayloadSource.Specification, fact.Source);
+        Assert.Equal(0, f.Reads); Assert.Equal(0, f.Creates); Assert.Equal(0, f.Leases);
     }
 
     private static AiToolIntent Intent(MappingCreationProposal p, string? fingerprint = null, Guid? project = null) =>

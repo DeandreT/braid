@@ -9,6 +9,26 @@ namespace Weft.Api.Chat.Workspace;
 
 public sealed partial class WorkspaceToolService
 {
+    public async Task<bool> AllowsRetainedProposalsAsync(ActorContext actor, ChatConversationIntent conversation, ChatTurnIntent turn,
+        AiProfileSpec profile, IReadOnlyList<ChatRetainedProposalRead> proposals, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (!features.Creation || conversation.Key.Kind != ChatConversationKind.Workspace || conversation.Key.Creator != actor.PrincipalId ||
+            !profile.PayloadsAllowed || !profile.MappingMetadataAllowed || ManifestOf(turn) is not { Payloads: true } || proposals.Count > 8)
+            return false;
+        var store = services.GetRequiredService<IMappingCreationProposalStore>();
+        foreach (var pin in proposals.Distinct())
+        {
+            if (pin.Project.OrganizationId != conversation.Key.OrganizationId) return false;
+            // The authorized reader checks current creator/content access without reopening physical sources.
+            var state = await store.ReadAsync(actor, pin.Project, pin.ProposalId, ct);
+            ct.ThrowIfCancellationRequested();
+            if (state is null || state.Proposal.Author != actor.PrincipalId || state.Proposal.Project != pin.Project ||
+                state.Proposal.Id != pin.ProposalId || state.Proposal.Fingerprint != pin.Fingerprint) return false;
+        }
+        return true;
+    }
+
     private async Task<ChatReadOnlyToolResult> ReadCreationFeedbackAsync(CallScope scope, WorkspaceToolCall call,
         ProjectScope project, CancellationToken ct)
     {
@@ -70,7 +90,8 @@ public sealed partial class WorkspaceToolService
         ct.ThrowIfCancellationRequested();
         return new(AiJsonObject.CopyFrom(Encoding.UTF8.GetString(bytes)), nodes,
             workspaceCitations: [ChatWorkspaceCitationFact.CreationProposal(project, id, fingerprint)],
-            dataShared: new(project.ProjectId, ChatPayloadSource.Specification, id, null, bytes.Length));
+            dataShared: new(project.ProjectId, ChatPayloadSource.Specification, id, null, bytes.Length),
+            retainedProposal: new(project, id, fingerprint));
     }
 
     private static int CountFeedbackNodes(JsonElement value) => 1 + (value.ValueKind switch

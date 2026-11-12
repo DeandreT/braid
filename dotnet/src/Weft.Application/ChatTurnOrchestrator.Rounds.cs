@@ -119,8 +119,10 @@ public sealed partial class ChatTurnOrchestrator
                 throw Stop(ChatOrchestrationOutcome.Denied);
             if (result.DataShared is { } source)
             {
-                await CheckPayloadAuthorityAsync(s, [.. s.PayloadSources, source]).ConfigureAwait(false);
+                var proposals = result.RetainedProposal is { } proposal ? new List<ChatRetainedProposalRead>(s.RetainedProposals) { proposal } : s.RetainedProposals;
+                await CheckPayloadAuthorityAsync(s, [.. s.PayloadSources, source], proposals).ConfigureAwait(false);
                 s.PayloadSources.Add(source);
+                if (result.RetainedProposal is { } retained) s.RetainedProposals.Add(retained);
             }
             s.ResultBytes += result.Result.ByteCount; s.RetrievedNodes += result.RetrievedNodes; s.ToolCalls++;
             var message = AiToolMessage.Create(call.CallId, call.Name, result.Result);
