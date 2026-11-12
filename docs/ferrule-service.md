@@ -1,7 +1,7 @@
 # Ferrule service
 
 The Ferrule service answers questions about mapping revisions for hosted Weft:
-inspection, validation, projection and JSON sample preview. When compilation is
+inspection, validation, projection, typed edit checkpoints and JSON sample preview. When compilation is
 enabled it also compiles deployable mapping libraries. Weft users never see it;
 Weft hosts call it on their behalf. It is one stateless, long-running HTTP service
 image that any container platform can run and scale by adding replicas. The
@@ -9,7 +9,7 @@ per-operation Docker runners remain the local development and test runners.
 
 The service keeps the restricted workers' semantics: the same `ferrule-host`
 binary, the same framed protocols (`weft.ferrule-host.v1`,
-`weft.ferrule-preview.v1`, `weft.ferrule-build.v1`) and the same fixed limits. Its
+`weft.ferrule-preview.v1`, `weft.ferrule-edit.v1`, `weft.ferrule-build.v1`) and the same fixed limits. Its
 answers are byte for byte what the Docker runner, or for compilation the Docker
 compiler worker, returns for the same frame.
 
@@ -65,7 +65,8 @@ statuses and the mutual-TLS security scheme.
 | `POST /v1/operations/{profile}/{operation}/cancel` | Cancels that operation, or refuses it when it arrives later. |
 | `GET /v1/health/live`, `GET /v1/health/ready` | Platform probes; readiness fails while stopping or after an unconfirmed cleanup. |
 
-Profiles are `inspection` (inspect, validate and project frames), `preview` and
+Profiles are `inspection` (inspect, validate and project frames), `edit` (exact-base
+typed replay, encoding, validation and projection), `preview` and
 `compile` (`weft.ferrule-build.v1` capability inspection and compilation). A service
 serves `compile` only when compilation is enabled; otherwise the profile is reserved
 and answers `501`. With it, the capability route reports the compile toolchain: the
@@ -149,6 +150,7 @@ shutdown faults.
 | Profile | CPU and wall deadline | Address space | Open files | Request / response |
 | --- | --- | --- | --- | --- |
 | `inspection` | 10 s | 256 MiB | 64 | 8 MiB + 4 bytes / 8 MiB + 4 bytes |
+| `edit` | 10 s | 256 MiB | 64 | 5 MiB + 16396 bytes / 20 MiB + 8 bytes |
 | `preview` | 30 s | 512 MiB | 64 | the preview policy's request and response bounds |
 | `compile` | 120 s per child; one 120 s wall deadline for the operation | 2 GiB (generation); 6 GiB with a 2 GiB managed heap (compiler) | 256 | 4 MiB + 16388 bytes / the build protocol's reply bound |
 
@@ -226,7 +228,7 @@ children settle.
 
 ## Weft service runner
 
-`FerruleServiceRunner` implements the inspection and preview runner seam
+`FerruleServiceRunner` implements the inspection, edit and preview runner seam
 (`IInspectionWorkerRunner`) against the service, one runner per profile. The Ferrule
 adapters above it are unchanged: they build the exact frames and verify the exact
 answers, digests, echoed revision context and typed owners.

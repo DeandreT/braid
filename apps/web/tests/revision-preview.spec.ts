@@ -24,6 +24,8 @@ function run(state: Run["state"], change: Partial<Run> = {}): Run {
   return {
     runId: RUN,
     revision: scope,
+    subjectKind: "revision",
+    draft: null,
     requestFingerprint: "b".repeat(64),
     currentDateTime: "2026-10-20T08:30:00Z",
     state,

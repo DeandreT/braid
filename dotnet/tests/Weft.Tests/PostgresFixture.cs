@@ -71,6 +71,8 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string invocationWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string apiAuditWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string administrationPassword = Guid.NewGuid().ToString("N");
+    private readonly string draftReaderPassword = Guid.NewGuid().ToString("N");
+    private readonly string draftWriterPassword = Guid.NewGuid().ToString("N");
     private readonly bool provisionMetadataEditor;
     private readonly bool provisionProjectCreator;
     private readonly bool provisionReportReader;
@@ -440,7 +442,8 @@ public sealed class PostgresFixture : IAsyncLifetime
              ("weft_release_writer", releaseWriterPassword) } : []),
          .. (provisionMachineInvocations ? new (string Name, string Password)[] { ("weft_invocation_grant_writer", invocationGrantWriterPassword),
              ("weft_invocation_writer", invocationWriterPassword) } : []),
-         .. (provisionApiAudit ? new (string Name, string Password)[] { ("weft_api_audit_writer", apiAuditWriterPassword) } : [])];
+          .. (provisionApiAudit ? new (string Name, string Password)[] { ("weft_api_audit_writer", apiAuditWriterPassword) } : []),
+          ("weft_draft_reader", draftReaderPassword), ("weft_draft_writer", draftWriterPassword)];
 
     internal string RegressionConnectionString(PostgresCase test, string role)
     {

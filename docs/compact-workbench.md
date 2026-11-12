@@ -14,6 +14,12 @@ The head marker describes the metadata read, not a continuously refreshed claim.
 
 ## Navigation and inspection
 
+When editing is enabled and the caller can edit, **Edit mapping** opens an
+author-private draft in the same table/inspector/dock layout. Enter on a field
+opens its mapping controls; named Undo/Redo buttons and Ctrl+Z/Ctrl+Shift+Z work
+on Ferrule command history. The toolbar distinguishes local edits, autosaved
+drafts, unresolved saves and conflicts. See [Mapping editing](mapping-editing.md).
+
 - **Ctrl+K** opens the command palette. It includes workflow tabs and freshly
   read project/current-project mapping choices and recently opened mappings.
   Recent history retains only six mapping identifiers in tab memory; names and

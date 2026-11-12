@@ -228,6 +228,65 @@ public sealed record ChatDataSharedEventV1 : ChatTurnEventV1
     public int Bytes { get; }
 }
 
+[JsonConverter(typeof(ChatMappingWriteOutcomeConverterV1))]
+public enum ChatMappingWriteOutcomeV1 { Saved = 1, Proposed }
+
+[JsonConverter(typeof(ChatMappingWriteReasonConverterV1))]
+public enum ChatMappingWriteReasonV1 { NotPermitted = 1, OutOfDate }
+
+/// <summary>One field's plain-language rule before and after the edit, derived from verified projections.</summary>
+public sealed record ChatMappingChangeV1(string Field, string Before, string After);
+
+/// <summary>
+/// A mapping edit this turn saved as the next version of its exact base, or showed read-only because the user may
+/// not edit or the base is no longer the latest. Saving never puts a version in use or starts a build or run.
+/// </summary>
+public sealed record ChatMappingWriteEventV1 : ChatTurnEventV1
+{
+    public ChatMappingWriteEventV1(int sequence, string roundId, ChatMappingWriteOutcomeV1 outcome, ChatMappingWriteReasonV1? reason,
+        CatalogRevisionScopeV1 baseRevision, string baseSequence, string? revisionId, string? revisionSequence, string? headRevisionId,
+        string? headSequence, int operationCount, IReadOnlyList<ChatMappingChangeV1> changes, bool changesTruncated) : base(sequence)
+    {
+        if (!Enum.IsDefined(outcome) || reason is { } r && !Enum.IsDefined(r) || operationCount < 1) throw new ArgumentOutOfRangeException(nameof(outcome));
+        RoundId = CatalogValueV1.RequireId(roundId, nameof(roundId));
+        Outcome = outcome; Reason = reason;
+        BaseRevision = baseRevision ?? throw new ArgumentNullException(nameof(baseRevision));
+        BaseSequence = CatalogValueV1.RequireText(baseSequence, 20, nameof(baseSequence));
+        RevisionId = revisionId is null ? null : CatalogValueV1.RequireId(revisionId, nameof(revisionId));
+        RevisionSequence = revisionSequence is null ? null : CatalogValueV1.RequireText(revisionSequence, 20, nameof(revisionSequence));
+        HeadRevisionId = headRevisionId is null ? null : CatalogValueV1.RequireId(headRevisionId, nameof(headRevisionId));
+        HeadSequence = headSequence is null ? null : CatalogValueV1.RequireText(headSequence, 20, nameof(headSequence));
+        OperationCount = operationCount;
+        Changes = changes ?? throw new ArgumentNullException(nameof(changes));
+        ChangesTruncated = changesTruncated;
+    }
+
+    public string RoundId { get; }
+    public ChatMappingWriteOutcomeV1 Outcome { get; }
+    public ChatMappingWriteReasonV1? Reason { get; }
+    public CatalogRevisionScopeV1 BaseRevision { get; }
+    public string BaseSequence { get; }
+    /// <summary>The saved version; null for a proposal.</summary>
+    public string? RevisionId { get; }
+    public string? RevisionSequence { get; }
+    /// <summary>The newer version an out-of-date proposal observed.</summary>
+    public string? HeadRevisionId { get; }
+    public string? HeadSequence { get; }
+    public int OperationCount { get; }
+    public IReadOnlyList<ChatMappingChangeV1> Changes { get; }
+    public bool ChangesTruncated { get; }
+}
+
+internal sealed class ChatMappingWriteOutcomeConverterV1 : JsonStringEnumConverter<ChatMappingWriteOutcomeV1>
+{
+    public ChatMappingWriteOutcomeConverterV1() : base(JsonNamingPolicy.CamelCase, allowIntegerValues: false) { }
+}
+
+internal sealed class ChatMappingWriteReasonConverterV1 : JsonStringEnumConverter<ChatMappingWriteReasonV1>
+{
+    public ChatMappingWriteReasonConverterV1() : base(JsonNamingPolicy.CamelCase, allowIntegerValues: false) { }
+}
+
 internal sealed class ChatConversationKindConverterV1 : JsonStringEnumConverter<ChatConversationKindV1>
 {
     public ChatConversationKindConverterV1() : base(JsonNamingPolicy.CamelCase, allowIntegerValues: false) { }

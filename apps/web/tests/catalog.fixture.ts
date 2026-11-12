@@ -613,6 +613,7 @@ export const synthetic = (() => {
     createProjects: false,
     deriveReports: false,
     editMetadata: false,
+    edit: false,
     manageMembership: false,
     preview: false,
     readReports: false,

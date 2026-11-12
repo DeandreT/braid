@@ -124,6 +124,8 @@ internal sealed class ChatHttpTestSupport : IAsyncDisposable
             var readerStore = new PostgresChatStore(reader);
             var writerStore = new PostgresChatStore(writer);
             builder.Services.AddSingleton(new ChatPersistencePorts(readerStore, readerStore, writerStore, writerStore));
+            builder.Services.AddSingleton<IChatMappingWriteJournal>(writerStore);
+            builder.Services.AddSingleton<ChatMappingWriteRecovery>();
             builder.Services.AddSingleton<IAiCredentialResolver>(new Credentials());
             builder.Services.AddWeftChat(options);
             if (browserWebRoot is not null)

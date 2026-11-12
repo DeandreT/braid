@@ -7,7 +7,7 @@ using Weft.Contracts.Help;
 namespace Weft.Tests.Cli;
 
 /// <summary>Catalog, upload and metadata commands end to end against the OpenAPI stub, signed in through the owned issuer.</summary>
-public sealed class CliCatalogCommandTests : IAsyncLifetime
+public sealed partial class CliCatalogCommandTests : IAsyncLifetime
 {
     private CliTestIssuer issuer = null!;
     private CliApiStub stub = null!;

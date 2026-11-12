@@ -1,11 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { isReturnPath } from "../src/auth/return-path";
+import { mappingUpdateQuestion } from "../src/chat/mapping-update-question";
 import {
   citationLink,
   organizationConversation,
   workspaceAvailability,
   workspaceCitation,
   workspaceEvent,
+  mappingWriteReceipts,
+  type MappingWriteEvent,
 } from "../src/chat/workspace-chat-types";
 
 const org = "10000000-0000-4000-8000-000000000001";
@@ -27,6 +30,75 @@ const base = {
   version: null,
   sectionId: null,
 };
+
+test("Update carries the actual selected edit without depending on retained model history", () => {
+  const turn = { turnId: id, text: "Set the selected code to 🧵." };
+  const proposal: MappingWriteEvent = {
+    type: "mapping.write",
+    sequence: 7,
+    roundId: id,
+    outcome: "proposed",
+    reason: "outOfDate",
+    baseRevision: scope,
+    baseSequence: "2",
+    revisionId: null,
+    revisionSequence: null,
+    headRevisionId: id,
+    headSequence: "4",
+    operationCount: 1,
+    changes: [{ field: "code", before: "Not mapped", after: 'Constant "🧵"' }],
+    changesTruncated: false,
+  };
+  const question = mappingUpdateQuestion(turn, proposal, 32768)!;
+  const data = JSON.parse(question.slice(question.indexOf("\n") + 1));
+  expect(data.originalQuestion).toBe(turn.text);
+  expect(data.selectedChanges).toEqual(proposal.changes);
+  expect(data.baseRevision).toEqual(scope);
+  expect(data.sourceTurnId).toBe(turn.turnId);
+  expect(data.eventSequence).toBe(7);
+  const bytes = new TextEncoder().encode(question).byteLength;
+  expect(mappingUpdateQuestion(turn, proposal, bytes)).toBe(question);
+  expect(mappingUpdateQuestion(turn, proposal, bytes - 1)).toBeNull();
+  expect(
+    mappingUpdateQuestion(
+      { ...turn, text: "x".repeat(32768) },
+      proposal,
+      32768,
+    ),
+  ).toBeNull();
+  expect(
+    mappingUpdateQuestion(turn, { ...proposal, headRevisionId: null }, 32768),
+  ).toBeNull();
+  expect(
+    mappingUpdateQuestion(turn, { ...proposal, reason: "notPermitted" }, 32768),
+  ).toBeNull();
+  expect(
+    mappingUpdateQuestion(turn, { ...proposal, changesTruncated: true }, 32768),
+  ).toBeNull();
+  expect(
+    mappingUpdateQuestion(turn, { ...proposal, changes: [] }, 32768),
+  ).toBeNull();
+});
+
+test("durable save statuses never infer a success from a pending, malformed or foreign receipt", () => {
+  const pending = { requestId: id, status: "pending", write: null };
+  expect(mappingWriteReceipts({ receipts: [pending] }, org)).toEqual([pending]);
+  expect(
+    mappingWriteReceipts({ receipts: [{ ...pending, status: "saved" }] }, org),
+  ).toBeNull();
+  expect(
+    mappingWriteReceipts(
+      { receipts: [{ ...pending, status: "complete" }] },
+      org,
+    ),
+  ).toBeNull();
+  expect(
+    mappingWriteReceipts({ receipts: [pending, pending] }, org),
+  ).toBeNull();
+  expect(
+    mappingWriteReceipts({ receipts: Array(9).fill(pending) }, org),
+  ).toBeNull();
+});
 
 test("workspace conversation guards distinguish legacy pins from optional focus and bind the organization", () => {
   const c = {

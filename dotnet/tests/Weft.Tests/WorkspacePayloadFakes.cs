@@ -71,7 +71,8 @@ internal sealed class WorkspacePayloadFakes(WorkspaceToolFixture catalog) : IPro
         };
     }
     private bool Own(ActorContext actor, Guid organizationId, Guid runId) => Run(runId) is { } run &&
-        organizationId == run.Revision.OrganizationId && Readable(actor, new(run.Revision.OrganizationId, run.Revision.ProjectId));
+        organizationId == run.Subject.ExecutionScope.OrganizationId &&
+        Readable(actor, new(run.Subject.ExecutionScope.OrganizationId, run.Subject.ExecutionScope.ProjectId));
 
     public Task<PreviewRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken cancellationToken = default) =>
         Task.FromResult(Own(actor, organizationId, runId) ? Run(runId) : null);

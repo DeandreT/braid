@@ -85,7 +85,7 @@ public sealed partial class WorkspaceToolService
                 return await CatalogEndpoints.ReadableRevisionAsync(services, actor, fact.RevisionScope!, token) is not null;
             case ChatWorkspaceCitationKind.PreviewRun:
                 return features.Previews && Optional<PreviewRunService>() is { } previews &&
-                    await previews.ReadAsync(actor, fact.OrganizationId, fact.SubjectId!.Value, token) is { } preview && preview.Revision == fact.RevisionScope;
+                    await previews.ReadAsync(actor, fact.OrganizationId, fact.SubjectId!.Value, token) is { Subject: RevisionPreviewSubject preview } && preview.Revision == fact.RevisionScope;
             case ChatWorkspaceCitationKind.RegressionCase:
                 return features.Regressions && Optional<IRegressionCaseMetadataReader>() is { } cases &&
                     await CatalogEndpoints.ReadableMappingAsync(services, actor, fact.MappingScope!, token) is not null &&

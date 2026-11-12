@@ -1,818 +1,850 @@
 @if (data(); as view) {
-  <weft-workbench-frame
-    [attr.aria-busy]="refreshing() ? 'true' : null"
-    [inspector]="inspector"
-    [dock]="dock"
-    [commands]="commands()"
-    [dockContext]="dockContext()"
-    (command)="command($event)"
-    (paletteOpened)="loadSwitcher()"
-  >
-    <div workbench-context class="wb-context-path">
-      <a [routerLink]="routes.project(view.project.scope)">{{
-        view.project.name
-      }}</a
-      ><span>/</span>
-      <a [routerLink]="routes.mapping(view.mapping.scope)">{{
-        view.mapping.name
-      }}</a
-      ><span>/</span>
-      <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
-        Version {{ view.revision.sequence }}
-      </h1>
-      @if (context(); as admission) {
-        <weft-regression-status
-          [scope]="view.mapping.scope"
-          [context]="admission"
-          [revisionId]="view.revision.scope.revisionId"
-          [manage]="true"
-          [admin]="view.mapping.access.role === 'administrator'"
-          [canRun]="view.mapping.access.actions.preview"
-        />
-      }
-      <span
-        class="wb-badge"
-        [class.wb-badge-newer]="
-          view.mapping.head.scope.revisionId !== view.revision.scope.revisionId
-        "
-        title="Checked when this view loaded"
-        >{{
-          view.mapping.head.scope.revisionId === view.revision.scope.revisionId
-            ? "Latest version"
-            : "Newer version available"
-        }}</span
-      >
-      <span class="wb-context-end">
-        <span class="wb-role"
+  @if (editMode() && context(); as current) {
+    <weft-mapping-editor
+      [context]="context()!"
+      [mapping]="view.mapping"
+      [revision]="view.revision"
+      (closed)="editMode.set(false)"
+      (saved)="editedRevision($event)"
+    />
+  } @else {
+    <weft-workbench-frame
+      [attr.aria-busy]="refreshing() ? 'true' : null"
+      [inspector]="inspector"
+      [dock]="dock"
+      [commands]="commands()"
+      [dockContext]="dockContext()"
+      (command)="command($event)"
+      (paletteOpened)="loadSwitcher()"
+    >
+      <div workbench-context class="wb-context-path">
+        <a [routerLink]="routes.project(view.project.scope)">{{
+          view.project.name
+        }}</a
+        ><span>/</span>
+        <a [routerLink]="routes.mapping(view.mapping.scope)">{{
+          view.mapping.name
+        }}</a
+        ><span>/</span>
+        <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">
+          Version {{ view.revision.sequence }}
+        </h1>
+        @if (context(); as admission) {
+          <weft-regression-status
+            [scope]="view.mapping.scope"
+            [context]="admission"
+            [revisionId]="view.revision.scope.revisionId"
+            [manage]="true"
+            [admin]="view.mapping.access.role === 'administrator'"
+            [canRun]="view.mapping.access.actions.preview"
+          />
+        }
+        <span
+          class="wb-badge"
+          [class.wb-badge-newer]="
+            view.mapping.head.scope.revisionId !==
+            view.revision.scope.revisionId
+          "
+          title="Checked when this view loaded"
           >{{
-            context()?.mode === "development" ? "Development" : "Workspace"
-          }}
-          · {{ roleLabel(view.mapping.access.role) }}</span
+            view.mapping.head.scope.revisionId ===
+            view.revision.scope.revisionId
+              ? "Latest version"
+              : "Newer version available"
+          }}</span
         >
-        <button
-          class="wb-icon-button"
-          type="button"
-          aria-label="Refresh catalog"
-          (click)="retry()"
-          title="Refresh current catalog access and metadata"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
-          </svg>
-        </button>
-      </span>
-    </div>
-    <div workbench-content class="wb-workflows">
-      @if (investigation(); as trail) {
-        <nav class="wb-trail" aria-label="Investigation trail">
-          <button
-            type="button"
-            (click)="returnToTest()"
-            [title]="'Run ' + trail.runId"
+        <span class="wb-context-end">
+          <span class="wb-role"
+            >{{
+              context()?.mode === "development" ? "Development" : "Workspace"
+            }}
+            · {{ roleLabel(view.mapping.access.role) }}</span
           >
-            Return to {{ trail.name }}
+          <button
+            class="wb-icon-button"
+            type="button"
+            aria-label="Refresh catalog"
+            (click)="retry()"
+            title="Refresh current catalog access and metadata"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+            </svg>
           </button>
-          @for (step of trail.path; track $index) {
-            <span aria-hidden="true">→</span>
-            <button type="button" (click)="inspect(step.reference)">
-              {{ step.label }}
+          @if (context()?.features?.edit && view.mapping.access.actions.edit) {
+            <button type="button" (click)="editMode.set(true)">
+              Edit mapping
             </button>
           }
-        </nav>
-      }
-      <div
-        class="wb-workflow wb-mapping"
-        [hidden]="workbench.selection().view !== 'mapping'"
-      >
-        <weft-revision-reports
-          #savedReports
-          [reports]="reports"
-          [revision]="view.revision"
-          [workbench]="true"
-          [sample]="sample()"
-          [sampleMode]="workbench.selection().sampleMode"
-          (sampleModeChange)="sampleMode($event)"
-          [selectedEntity]="workbench.selection().entity"
-          (entitySelected)="inspect($event)"
-          (diagnosticSelected)="showDiagnostic($event)"
-        />
-        <weft-mfd-export [scope]="view.revision.scope" />
+        </span>
       </div>
-      @if (context(); as current) {
+      <div workbench-content class="wb-workflows">
+        @if (investigation(); as trail) {
+          <nav class="wb-trail" aria-label="Investigation trail">
+            <button
+              type="button"
+              (click)="returnToTest()"
+              [title]="'Run ' + trail.runId"
+            >
+              Return to {{ trail.name }}
+            </button>
+            @for (step of trail.path; track $index) {
+              <span aria-hidden="true">→</span>
+              <button type="button" (click)="inspect(step.reference)">
+                {{ step.label }}
+              </button>
+            }
+          </nav>
+        }
         <div
-          class="wb-workflow"
-          [hidden]="workbench.selection().view !== 'tests'"
+          class="wb-workflow wb-mapping"
+          [hidden]="workbench.selection().view !== 'mapping'"
         >
-          <weft-revision-regression
-            [context]="current"
-            [mapping]="view.mapping"
+          <weft-revision-reports
+            #savedReports
+            [reports]="reports"
             [revision]="view.revision"
             [workbench]="true"
-            [active]="workbench.selection().view === 'tests'"
-            (documentSelected)="showRegressionDocument($event)"
+            [sample]="sample()"
+            [sampleMode]="workbench.selection().sampleMode"
+            (sampleModeChange)="sampleMode($event)"
+            [selectedEntity]="workbench.selection().entity"
+            (entitySelected)="inspect($event)"
+            (diagnosticSelected)="showDiagnostic($event)"
           />
+          <weft-mfd-export [scope]="view.revision.scope" />
         </div>
-        <div
-          class="wb-workflow"
-          [hidden]="workbench.selection().view !== 'builds'"
-        >
-          <weft-revision-builds
-            [context]="current"
-            [mapping]="view.mapping"
-            [revision]="view.revision"
-            [workbench]="true"
-            [active]="workbench.selection().view === 'builds'"
-          />
-        </div>
-        <div
-          class="wb-workflow"
-          [hidden]="workbench.selection().view !== 'preview'"
-        >
-          @if (current.features.preview) {
-            <weft-revision-preview
+        @if (context(); as current) {
+          <div
+            class="wb-workflow"
+            [hidden]="workbench.selection().view !== 'tests'"
+          >
+            <weft-revision-regression
               [context]="current"
               [mapping]="view.mapping"
               [revision]="view.revision"
               [workbench]="true"
-              (outputSelected)="openDock('output')"
+              [active]="workbench.selection().view === 'tests'"
+              (documentSelected)="showRegressionDocument($event)"
             />
-          } @else {
-            <p class="wb-empty">
-              Trying samples is not available in this workspace.
-            </p>
-          }
-        </div>
-      }
-      <section
-        class="wb-workflow wb-history"
-        [hidden]="workbench.selection().view !== 'revisions'"
-        aria-label="Version history"
-      >
-        <div class="wb-command-bar">
-          <h2>Saved versions</h2>
-          <button
-            type="button"
-            (click)="loadRevisions()"
-            [disabled]="historyBusy()"
-            [attr.aria-busy]="historyBusy() ? 'true' : null"
+          </div>
+          <div
+            class="wb-workflow"
+            [hidden]="workbench.selection().view !== 'builds'"
           >
-            {{ historyBusy() ? "Reading…" : "Refresh version history" }}</button
-          ><button type="button" (click)="viewCurrentHead(view.mapping.scope)">
-            View latest version
-          </button>
-        </div>
-        @if (historyError()) {
-          <p role="alert">{{ historyError() }}</p>
-        }
-        <table class="wb-data-table">
-          <thead>
-            <tr>
-              <th>Version</th>
-              <th>File status</th>
-              <th>Source file</th>
-              <th>Committed (UTC)</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (
-              item of revisionHistory()?.revisions ?? [view.revision];
-              track item.scope.revisionId
-            ) {
-              <tr>
-                <td>
-                  {{ item.sequence
-                  }}{{
-                    item.scope.revisionId === view.revision.scope.revisionId
-                      ? " · viewing"
-                      : ""
-                  }}
-                </td>
-                <td>{{ admissionLabel(item.admission) }}</td>
-                <td>{{ item.originalFilename }}</td>
-                <td>
-                  <weft-metadata-value
-                    kind="time"
-                    label="Saved time"
-                    [value]="item.committedAtUtc"
-                  />
-                </td>
-                <td>
-                  <a [routerLink]="routes.revision(item.scope)">Open version</a>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-        @if (revisionHistory()?.nextCursor) {
-          <button
-            type="button"
-            (click)="loadRevisions(true)"
-            [disabled]="historyBusy()"
+            <weft-revision-builds
+              [context]="current"
+              [mapping]="view.mapping"
+              [revision]="view.revision"
+              [workbench]="true"
+              [active]="workbench.selection().view === 'builds'"
+            />
+          </div>
+          <div
+            class="wb-workflow"
+            [hidden]="workbench.selection().view !== 'preview'"
           >
-            Next versions
-          </button>
-        }
-        <details class="wb-details">
-          <summary>Technical details for this version</summary>
-          <dl>
-            <dt>Revision ID</dt>
-            <dd>
-              <code>{{ view.revision.scope.revisionId }}</code>
-            </dd>
-            <dt>Native digest</dt>
-            <dd>
-              <code>{{ view.revision.nativeDigest.value }}</code>
-            </dd>
-            <dt>Native bytes</dt>
-            <dd>{{ view.revision.nativeByteCount }}</dd>
-            <dt>Backend</dt>
-            <dd>{{ view.revision.backendId }}</dd>
-            <dt>Logical document</dt>
-            <dd>{{ view.revision.logicalDocument }}</dd>
-            <dt>Creator</dt>
-            <dd>
-              <code>{{ view.revision.creatorPrincipalId }}</code>
-            </dd>
-          </dl>
-        </details>
-      </section>
-      <section
-        class="wb-workflow"
-        [hidden]="workbench.selection().view !== 'compare'"
-        aria-label="Version comparison"
-      >
-        <div class="wb-command-bar"><h2>Compare versions</h2></div>
-        <p class="wb-empty">
-          Compare saved mapping details and checks for two versions. Results
-          stay tied to the exact versions you select.
-        </p>
-        @if (
-          context()?.features?.readReports &&
-          view.mapping.access.actions.readReports
-        ) {
-          <a
-            class="wb-action"
-            [routerLink]="routes.mapping(view.mapping.scope) + '/comparisons'"
-            [queryParams]="{ right: view.revision.scope.revisionId }"
-            >Compare with another version</a
-          >
-        } @else {
-          <p class="wb-empty">
-            Saved report reading is unavailable for this mapping.
-          </p>
-        }
-      </section>
-      <section
-        class="wb-workflow"
-        [hidden]="workbench.selection().view !== 'releases'"
-        aria-label="Version in use"
-      >
-        <div class="wb-command-bar">
-          <h2>Version in use</h2>
-          <button
-            type="button"
-            (click)="workbench.dispatch({ kind: 'view', view: 'builds' })"
-          >
-            Review preparation
-          </button>
-        </div>
-        <ul class="wb-tiles" aria-label="Release status">
-          <li class="wb-tile">
-            <h3>Version currently in use</h3>
-            <p class="wb-tile-value">Unknown</p>
-            <p>This workspace can't show which version is in use.</p>
-            <p>Preparing a version does not put it in use.</p>
-          </li>
-          <li class="wb-tile">
-            <h3>Prepared candidate</h3>
-            <div class="wb-tile-value">
-              @if (buildView()?.selectedRun(); as run) {
-                <weft-status-chip [status]="buildStatus(run.state)" />
-              } @else {
-                No preparation selected
-              }
-            </div>
-            <p>Review the selected preparation and its saved file details.</p>
-          </li>
-          <li class="wb-tile">
-            <h3>Verification</h3>
-            <p class="wb-tile-value">Not available in this workspace</p>
-            <p>
-              Verification must cover the exact prepared version, file, runtime
-              and regression test result.
-            </p>
-          </li>
-        </ul>
-        <p class="wb-empty wb-tile-note">
-          <strong>Change the version in use:</strong> not available in this
-          workspace. It requires permission and current verification. Nothing is
-          put in use from this screen.
-        </p>
-        <details class="wb-empty">
-          <summary>Why this is unavailable</summary>
-          The connected browser API does not provide release status,
-          qualification or activation. A successful build does not establish the
-          active release.
-        </details>
-      </section>
-      <section
-        class="wb-workflow"
-        [hidden]="workbench.selection().view !== 'audit'"
-        aria-label="Change history"
-      >
-        <div class="wb-command-bar"><h2>Change history</h2></div>
-        <p class="wb-empty">
-          This workspace can't show the history of versions put in use. Activity
-          only shows information read on this page; it isn't a record of changes
-          to the version in use.
-        </p>
-      </section>
-    </div>
-    <span workbench-status
-      >{{ admissionLabel(view.revision.admission) }} ·
-      {{ view.revision.backendId }} ·
-      {{
-        reports.projectionDocument()?.coverage?.status ??
-          "No verified explanation"
-      }}</span
-    >
-  </weft-workbench-frame>
-  <ng-template #inspector>
-    @switch (workbench.selection().view) {
-      @case ("tests") {
-        @if (regressionView(); as tests) {
-          @if (workbench.selection().inspectorTab === 0) {
-            <h3>Selected result</h3>
-            <p>
-              @if (selectedRun(); as run) {
-                <weft-status-chip
-                  [status]="
-                    run.comparison
-                      ? comparisonStatus(
-                          run.comparison.outcome,
-                          run.comparison.notEvaluatedReason
-                        )
-                      : operationStatus(run.run.state)
-                  "
-                />
-              } @else {
-                Select a run to investigate.
-              }
-            </p>
-            @if (tests.pendingRun()) {
-              <p>
-                <weft-status-chip [status]="uncertainStatus" />
-              </p>
-              <button
-                type="button"
-                (click)="tests.recoverRun()"
-                [disabled]="tests.busy()"
-              >
-                Check previous result
-              </button>
-            }
-            @if (selectedRun()) {
-              <button type="button" (click)="openDock('diff')">
-                Inspect exact difference
-              </button>
-            }
-            @if (selectedCase()) {
-              <button
-                type="button"
-                (click)="tests.submit()"
-                [disabled]="tests.busy() || !!tests.pendingRun()"
-              >
-                Run selected case
-              </button>
-            }
-          } @else if (workbench.selection().inspectorTab === 1) {
-            @if (selectedCase(); as item) {
-              <h3>{{ item.definition.name }}</h3>
-              <dl>
-                <dt>Version</dt>
-                <dd>{{ item.version }}</dd>
-                <dt>Clock</dt>
-                <dd>{{ item.definition.currentDateTime }}</dd>
-                <dt>Runtime</dt>
-                <dd>{{ item.definition.runtime.backendId }}</dd>
-                <dt>Target</dt>
-                <dd>
-                  {{ item.definition.target.kind }}
-                  {{ item.definition.target.name }}
-                </dd>
-              </dl>
-              <button type="button" (click)="openDock('input')">
-                Inspect saved inputs
-              </button>
-              <details>
-                <summary>Case and run identifiers</summary>
-                <p>
-                  <code>{{ item.caseId }}</code>
-                </p>
-                <p>
-                  <code>{{ selectedRun()?.run?.runId }}</code>
-                </p>
-              </details>
+            @if (current.features.preview) {
+              <weft-revision-preview
+                [context]="current"
+                [mapping]="view.mapping"
+                [revision]="view.revision"
+                [workbench]="true"
+                (outputSelected)="openDock('output')"
+              />
             } @else {
-              <p>Select an authorized case for this revision.</p>
+              <p class="wb-empty">
+                Trying samples is not available in this workspace.
+              </p>
             }
-          } @else {
-            <h3>Observed outputs</h3>
-            <p>
-              {{ outputDocuments().length }} output documents available for the
-              selected run.
-            </p>
-            <button type="button" (click)="openDock('output')">
-              Inspect output bytes
+          </div>
+        }
+        <section
+          class="wb-workflow wb-history"
+          [hidden]="workbench.selection().view !== 'revisions'"
+          aria-label="Version history"
+        >
+          <div class="wb-command-bar">
+            <h2>Saved versions</h2>
+            <button
+              type="button"
+              (click)="loadRevisions()"
+              [disabled]="historyBusy()"
+              [attr.aria-busy]="historyBusy() ? 'true' : null"
+            >
+              {{
+                historyBusy() ? "Reading…" : "Refresh version history"
+              }}</button
+            ><button
+              type="button"
+              (click)="viewCurrentHead(view.mapping.scope)"
+            >
+              View latest version
+            </button>
+          </div>
+          @if (historyError()) {
+            <p role="alert">{{ historyError() }}</p>
+          }
+          <table class="wb-data-table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>File status</th>
+                <th>Source file</th>
+                <th>Committed (UTC)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (
+                item of revisionHistory()?.revisions ?? [view.revision];
+                track item.scope.revisionId
+              ) {
+                <tr>
+                  <td>
+                    {{ item.sequence
+                    }}{{
+                      item.scope.revisionId === view.revision.scope.revisionId
+                        ? " · viewing"
+                        : ""
+                    }}
+                  </td>
+                  <td>{{ admissionLabel(item.admission) }}</td>
+                  <td>{{ item.originalFilename }}</td>
+                  <td>
+                    <weft-metadata-value
+                      kind="time"
+                      label="Saved time"
+                      [value]="item.committedAtUtc"
+                    />
+                  </td>
+                  <td>
+                    <a [routerLink]="routes.revision(item.scope)"
+                      >Open version</a
+                    >
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (revisionHistory()?.nextCursor) {
+            <button
+              type="button"
+              (click)="loadRevisions(true)"
+              [disabled]="historyBusy()"
+            >
+              Next versions
             </button>
           }
-        }
-      }
-      @case ("builds") {
-        @if (buildView(); as builds) {
-          @if (workbench.selection().inspectorTab === 0) {
-            <h3>Preparation checks</h3>
+          <details class="wb-details">
+            <summary>Technical details for this version</summary>
             <dl>
-              <dt>Test result</dt>
+              <dt>Revision ID</dt>
               <dd>
-                {{
-                  builds.evidence()
-                    ? "Selected passing run"
-                    : "Select a passing test result"
-                }}
+                <code>{{ view.revision.scope.revisionId }}</code>
               </dd>
-              <dt>Environment</dt>
+              <dt>Native digest</dt>
               <dd>
-                {{
-                  builds.selectedEnvironment()?.active
-                    ? "Active environment configuration"
-                    : "Select an active environment configuration"
-                }}
+                <code>{{ view.revision.nativeDigest.value }}</code>
               </dd>
-              <dt>Approval</dt>
+              <dt>Native bytes</dt>
+              <dd>{{ view.revision.nativeByteCount }}</dd>
+              <dt>Backend</dt>
+              <dd>{{ view.revision.backendId }}</dd>
+              <dt>Logical document</dt>
+              <dd>{{ view.revision.logicalDocument }}</dd>
+              <dt>Creator</dt>
               <dd>
-                {{
-                  builds.selectedApproval()
-                    ? "Selected approval; server rechecks eligibility"
-                    : "Review approval prerequisites"
-                }}
+                <code>{{ view.revision.creatorPrincipalId }}</code>
               </dd>
             </dl>
-            @if (builds.pending()) {
+          </details>
+        </section>
+        <section
+          class="wb-workflow"
+          [hidden]="workbench.selection().view !== 'compare'"
+          aria-label="Version comparison"
+        >
+          <div class="wb-command-bar"><h2>Compare versions</h2></div>
+          <p class="wb-empty">
+            Compare saved mapping details and checks for two versions. Results
+            stay tied to the exact versions you select.
+          </p>
+          @if (
+            context()?.features?.readReports &&
+            view.mapping.access.actions.readReports
+          ) {
+            <a
+              class="wb-action"
+              [routerLink]="routes.mapping(view.mapping.scope) + '/comparisons'"
+              [queryParams]="{ right: view.revision.scope.revisionId }"
+              >Compare with another version</a
+            >
+          } @else {
+            <p class="wb-empty">
+              Saved report reading is unavailable for this mapping.
+            </p>
+          }
+        </section>
+        <section
+          class="wb-workflow"
+          [hidden]="workbench.selection().view !== 'releases'"
+          aria-label="Version in use"
+        >
+          <div class="wb-command-bar">
+            <h2>Version in use</h2>
+            <button
+              type="button"
+              (click)="workbench.dispatch({ kind: 'view', view: 'builds' })"
+            >
+              Review preparation
+            </button>
+          </div>
+          <ul class="wb-tiles" aria-label="Release status">
+            <li class="wb-tile">
+              <h3>Version currently in use</h3>
+              <p class="wb-tile-value">Unknown</p>
+              <p>This workspace can't show which version is in use.</p>
+              <p>Preparing a version does not put it in use.</p>
+            </li>
+            <li class="wb-tile">
+              <h3>Prepared candidate</h3>
+              <div class="wb-tile-value">
+                @if (buildView()?.selectedRun(); as run) {
+                  <weft-status-chip [status]="buildStatus(run.state)" />
+                } @else {
+                  No preparation selected
+                }
+              </div>
+              <p>Review the selected preparation and its saved file details.</p>
+            </li>
+            <li class="wb-tile">
+              <h3>Verification</h3>
+              <p class="wb-tile-value">Not available in this workspace</p>
               <p>
-                Original request retained. Use its recovery controls in Prepare;
-                do not create a replacement.
+                Verification must cover the exact prepared version, file,
+                runtime and regression test result.
               </p>
+            </li>
+          </ul>
+          <p class="wb-empty wb-tile-note">
+            <strong>Change the version in use:</strong> not available in this
+            workspace. It requires permission and current verification. Nothing
+            is put in use from this screen.
+          </p>
+          <details class="wb-empty">
+            <summary>Why this is unavailable</summary>
+            The connected browser API does not provide release status,
+            qualification or activation. A successful build does not establish
+            the active release.
+          </details>
+        </section>
+        <section
+          class="wb-workflow"
+          [hidden]="workbench.selection().view !== 'audit'"
+          aria-label="Change history"
+        >
+          <div class="wb-command-bar"><h2>Change history</h2></div>
+          <p class="wb-empty">
+            This workspace can't show the history of versions put in use.
+            Activity only shows information read on this page; it isn't a record
+            of changes to the version in use.
+          </p>
+        </section>
+      </div>
+      <span workbench-status
+        >{{ admissionLabel(view.revision.admission) }} ·
+        {{ view.revision.backendId }} ·
+        {{
+          reports.projectionDocument()?.coverage?.status ??
+            "No verified explanation"
+        }}</span
+      >
+    </weft-workbench-frame>
+    <ng-template #inspector>
+      @switch (workbench.selection().view) {
+        @case ("tests") {
+          @if (regressionView(); as tests) {
+            @if (workbench.selection().inspectorTab === 0) {
+              <h3>Selected result</h3>
+              <p>
+                @if (selectedRun(); as run) {
+                  <weft-status-chip
+                    [status]="
+                      run.comparison
+                        ? comparisonStatus(
+                            run.comparison.outcome,
+                            run.comparison.notEvaluatedReason
+                          )
+                        : operationStatus(run.run.state)
+                    "
+                  />
+                } @else {
+                  Select a run to investigate.
+                }
+              </p>
+              @if (tests.pendingRun()) {
+                <p>
+                  <weft-status-chip [status]="uncertainStatus" />
+                </p>
+                <button
+                  type="button"
+                  (click)="tests.recoverRun()"
+                  [disabled]="tests.busy()"
+                >
+                  Check previous result
+                </button>
+              }
+              @if (selectedRun()) {
+                <button type="button" (click)="openDock('diff')">
+                  Inspect exact difference
+                </button>
+              }
+              @if (selectedCase()) {
+                <button
+                  type="button"
+                  (click)="tests.submit()"
+                  [disabled]="tests.busy() || !!tests.pendingRun()"
+                >
+                  Run selected case
+                </button>
+              }
+            } @else if (workbench.selection().inspectorTab === 1) {
+              @if (selectedCase(); as item) {
+                <h3>{{ item.definition.name }}</h3>
+                <dl>
+                  <dt>Version</dt>
+                  <dd>{{ item.version }}</dd>
+                  <dt>Clock</dt>
+                  <dd>{{ item.definition.currentDateTime }}</dd>
+                  <dt>Runtime</dt>
+                  <dd>{{ item.definition.runtime.backendId }}</dd>
+                  <dt>Target</dt>
+                  <dd>
+                    {{ item.definition.target.kind }}
+                    {{ item.definition.target.name }}
+                  </dd>
+                </dl>
+                <button type="button" (click)="openDock('input')">
+                  Inspect saved inputs
+                </button>
+                <details>
+                  <summary>Case and run identifiers</summary>
+                  <p>
+                    <code>{{ item.caseId }}</code>
+                  </p>
+                  <p>
+                    <code>{{ selectedRun()?.run?.runId }}</code>
+                  </p>
+                </details>
+              } @else {
+                <p>Select an authorized case for this revision.</p>
+              }
+            } @else {
+              <h3>Observed outputs</h3>
+              <p>
+                {{ outputDocuments().length }} output documents available for
+                the selected run.
+              </p>
+              <button type="button" (click)="openDock('output')">
+                Inspect output bytes
+              </button>
             }
-          } @else if (workbench.selection().inspectorTab === 1) {
-            <h3>Approval</h3>
-            @if (builds.selectedApproval(); as approval) {
+          }
+        }
+        @case ("builds") {
+          @if (buildView(); as builds) {
+            @if (workbench.selection().inspectorTab === 0) {
+              <h3>Preparation checks</h3>
               <dl>
-                <dt>Revoked</dt>
-                <dd>{{ approval.revoked ? "Yes" : "No at last read" }}</dd>
+                <dt>Test result</dt>
+                <dd>
+                  {{
+                    builds.evidence()
+                      ? "Selected passing run"
+                      : "Select a passing test result"
+                  }}
+                </dd>
                 <dt>Environment</dt>
                 <dd>
                   {{
-                    approval.environmentActive
-                      ? "Active at last read"
-                      : "Inactive"
+                    builds.selectedEnvironment()?.active
+                      ? "Active environment configuration"
+                      : "Select an active environment configuration"
                   }}
                 </dd>
-                <dt>Created</dt>
+                <dt>Approval</dt>
                 <dd>
-                  <weft-metadata-value
-                    kind="time"
-                    label="Approval time"
-                    [value]="approval.createdAtUtc"
-                  />
+                  {{
+                    builds.selectedApproval()
+                      ? "Selected approval; server rechecks eligibility"
+                      : "Review approval prerequisites"
+                  }}
                 </dd>
               </dl>
-              <details>
-                <summary>Approval identity</summary>
-                <code>{{ approval.approvalId }}</code>
-              </details>
+              @if (builds.pending()) {
+                <p>
+                  Original request retained. Use its recovery controls in
+                  Prepare; do not create a replacement.
+                </p>
+              }
+            } @else if (workbench.selection().inspectorTab === 1) {
+              <h3>Approval</h3>
+              @if (builds.selectedApproval(); as approval) {
+                <dl>
+                  <dt>Revoked</dt>
+                  <dd>{{ approval.revoked ? "Yes" : "No at last read" }}</dd>
+                  <dt>Environment</dt>
+                  <dd>
+                    {{
+                      approval.environmentActive
+                        ? "Active at last read"
+                        : "Inactive"
+                    }}
+                  </dd>
+                  <dt>Created</dt>
+                  <dd>
+                    <weft-metadata-value
+                      kind="time"
+                      label="Approval time"
+                      [value]="approval.createdAtUtc"
+                    />
+                  </dd>
+                </dl>
+                <details>
+                  <summary>Approval identity</summary>
+                  <code>{{ approval.approvalId }}</code>
+                </details>
+              } @else {
+                <p>Select an approval in Prepare.</p>
+              }
             } @else {
-              <p>Select an approval in Prepare.</p>
-            }
-          } @else {
-            <h3>Prepared version</h3>
-            @if (builds.selectedRun()?.artifact; as artifact) {
-              <dl>
-                <dt>Format</dt>
-                <dd>{{ artifact.format }}</dd>
-                <dt>Bytes</dt>
-                <dd>
-                  <weft-metadata-value
-                    kind="bytes"
-                    label="Prepared file size"
-                    [value]="artifact.byteCount"
-                  />
-                </dd>
-              </dl>
-              <details>
-                <summary>Artifact digest</summary>
-                <code>{{ artifact.sha256 }}</code>
-              </details>
-            } @else {
-              <p>
-                No prepared file is selected. Queued or failed preparation is
-                not proof that a version can be put in use.
-              </p>
+              <h3>Prepared version</h3>
+              @if (builds.selectedRun()?.artifact; as artifact) {
+                <dl>
+                  <dt>Format</dt>
+                  <dd>{{ artifact.format }}</dd>
+                  <dt>Bytes</dt>
+                  <dd>
+                    <weft-metadata-value
+                      kind="bytes"
+                      label="Prepared file size"
+                      [value]="artifact.byteCount"
+                    />
+                  </dd>
+                </dl>
+                <details>
+                  <summary>Artifact digest</summary>
+                  <code>{{ artifact.sha256 }}</code>
+                </details>
+              } @else {
+                <p>
+                  No prepared file is selected. Queued or failed preparation is
+                  not proof that a version can be put in use.
+                </p>
+              }
             }
           }
         }
-      }
-      @case ("releases") {
-        <h3>
-          {{ workbench.inspectorLabels()[workbench.selection().inspectorTab] }}
-        </h3>
-        <p>
-          This workspace can't show which version is in use. Preparing or
-          testing a version does not prove it is in use.
-        </p>
-      }
-      @case ("audit") {
-        <h3>Change history</h3>
-        <p>This workspace can't read the history of versions put in use.</p>
-      }
-      @default {
-        @if (projection(); as projection) {
-          <weft-workbench-entity-inspector
-            [view]="projection"
-            [reference]="workbench.selection().entity"
-            [tab]="workbench.selection().inspectorTab"
-            (navigate)="inspect($event)"
-          />
-        } @else {
+        @case ("releases") {
+          <h3>
+            {{
+              workbench.inspectorLabels()[workbench.selection().inspectorTab]
+            }}
+          </h3>
           <p>
-            A verified saved explanation is needed before inspecting fields and
-            rules.
+            This workspace can't show which version is in use. Preparing or
+            testing a version does not prove it is in use.
           </p>
         }
-      }
-    }
-  </ng-template>
-  <ng-template #dock>
-    @switch (workbench.selection().dock) {
-      @case ("diagnostics") {
-        @for (group of diagnostics(); track group.kind) {
-          <section class="wb-diagnostic-group">
-            <h3>{{ group.label }}</h3>
-            <p class="wb-muted">
-              {{ group.items.length }} of {{ group.total }} issues shown{{
-                group.truncated ? " · Truncated report" : ""
-              }}.
-            </p>
-            @for (item of group.items; track $index) {
-              <article
-                tabindex="-1"
-                [id]="'wb-diagnostic-' + group.kind + '-' + $index"
-                [attr.data-chat-projection-diagnostic]="
-                  group.kind === 'projection' ? $index : null
-                "
-                [attr.data-chat-validation-diagnostic]="
-                  group.kind === 'validation' ? $index : null
-                "
-              >
-                <strong [attr.data-severity]="item.severity">{{
-                  item.severity
-                }}</strong>
-                {{ item.message
-                }}<weft-native-evidence [locator]="item.nativeLocator" />
-                @if (item.reference; as reference) {
-                  <button type="button" (click)="inspect(reference)">
-                    Inspect linked {{ reference.kind }}
-                  </button>
-                }
-              </article>
-            } @empty {
-              <p>No diagnostics in this verified report.</p>
-            }
-          </section>
-        } @empty {
-          <p>No verified diagnostics are loaded.</p>
+        @case ("audit") {
+          <h3>Change history</h3>
+          <p>This workspace can't read the history of versions put in use.</p>
         }
-      }
-      @case ("input") {
-        @if (displayedInput(); as item) {
-          <div class="wb-command-bar">
-            <label
-              >Saved input
-              <select
-                [value]="documentKey(item.name)"
-                (change)="selectedDocument.set($any($event.target).value)"
-              >
-                @for (document of inputDocuments(); track document.name) {
-                  <option [value]="documentKey(document.name)">
-                    {{ document.name ?? "Primary input" }}
-                  </option>
-                }
-              </select></label
-            ><span>{{ item.byteCount }} bytes · {{ item.format }}</span
-            ><button
-              type="button"
-              (click)="regressionView()?.download(item.document)"
-            >
-              Download exact bytes
-            </button>
-          </div>
-          <weft-document-view [data]="item" />
-        } @else {
-          <p>
-            Select an authorized saved case for this pinned revision in Tests.
-            Draft inputs are not treated as saved evidence.
-          </p>
-        }
-      }
-      @case ("output") {
-        @if (workbench.selection().view === "preview") {
-          @if (selectedPreview(); as item) {
-            <div class="wb-command-bar">
-              <strong
-                >Preview output ·
-                {{ item.output.targetName || "Primary output" }}</strong
-              >
-              <span
-                >Run <code>{{ item.runId }}</code></span
-              >
-              <button
-                type="button"
-                (click)="previewView()?.download(item.output)"
-              >
-                Download exact bytes
-              </button>
-            </div>
-            <weft-document-view [data]="item.display" />
+        @default {
+          @if (projection(); as projection) {
+            <weft-workbench-entity-inspector
+              [view]="projection"
+              [reference]="workbench.selection().entity"
+              [tab]="workbench.selection().inspectorTab"
+              (navigate)="inspect($event)"
+            />
           } @else {
             <p>
-              Choose Show beside an output in Try sample. Preview evidence stays
-              tied to its own run.
+              A verified saved explanation is needed before inspecting fields
+              and rules.
             </p>
           }
-        } @else {
-          <div class="wb-command-bar">
-            <label
-              >Document evidence
-              <select
-                [value]="regressionDocumentKind()"
-                (change)="regressionDocumentKind.set($any($event.target).value)"
-              >
-                <option value="observed">Observed · selected run</option>
-                <option value="expected">Expected · saved case</option>
-              </select>
-            </label>
-            @if (displayedOutput(); as item) {
+        }
+      }
+    </ng-template>
+    <ng-template #dock>
+      @switch (workbench.selection().dock) {
+        @case ("diagnostics") {
+          @for (group of diagnostics(); track group.kind) {
+            <section class="wb-diagnostic-group">
+              <h3>{{ group.label }}</h3>
+              <p class="wb-muted">
+                {{ group.items.length }} of {{ group.total }} issues shown{{
+                  group.truncated ? " · Truncated report" : ""
+                }}.
+              </p>
+              @for (item of group.items; track $index) {
+                <article
+                  tabindex="-1"
+                  [id]="'wb-diagnostic-' + group.kind + '-' + $index"
+                  [attr.data-chat-projection-diagnostic]="
+                    group.kind === 'projection' ? $index : null
+                  "
+                  [attr.data-chat-validation-diagnostic]="
+                    group.kind === 'validation' ? $index : null
+                  "
+                >
+                  <strong [attr.data-severity]="item.severity">{{
+                    item.severity
+                  }}</strong>
+                  {{ item.message
+                  }}<weft-native-evidence [locator]="item.nativeLocator" />
+                  @if (item.reference; as reference) {
+                    <button type="button" (click)="inspect(reference)">
+                      Inspect linked {{ reference.kind }}
+                    </button>
+                  }
+                </article>
+              } @empty {
+                <p>No diagnostics in this verified report.</p>
+              }
+            </section>
+          } @empty {
+            <p>No verified diagnostics are loaded.</p>
+          }
+        }
+        @case ("input") {
+          @if (displayedInput(); as item) {
+            <div class="wb-command-bar">
               <label
-                >{{
-                  regressionDocumentKind() === "expected"
-                    ? "Expected output"
-                    : "Observed output"
-                }}
+                >Saved input
                 <select
                   [value]="documentKey(item.name)"
                   (change)="selectedDocument.set($any($event.target).value)"
                 >
-                  @for (document of displayedOutputs(); track document.name) {
+                  @for (document of inputDocuments(); track document.name) {
                     <option [value]="documentKey(document.name)">
-                      {{ document.name ?? "Primary output" }}
+                      {{ document.name ?? "Primary input" }}
                     </option>
                   }
                 </select></label
-              >
-              <button
+              ><span>{{ item.byteCount }} bytes · {{ item.format }}</span
+              ><button
                 type="button"
                 (click)="regressionView()?.download(item.document)"
               >
                 Download exact bytes
               </button>
-            }
-          </div>
-          @if (displayedOutput(); as item) {
+            </div>
             <weft-document-view [data]="item" />
           } @else {
             <p>
-              No {{ regressionDocumentKind() }} regression output is available
-              for this selection. Use Try sample for preview evidence.
+              Select an authorized saved case for this pinned revision in Tests.
+              Draft inputs are not treated as saved evidence.
             </p>
           }
         }
-      }
-      @case ("diff") {
-        @if (displayedDifference(); as diff) {
-          <div class="wb-command-bar">
-            <select
-              aria-label="Compare output document"
-              [value]="diff.key"
-              (change)="selectedDocument.set($any($event.target).value)"
-            >
-              @for (item of differences(); track item.key) {
-                <option [value]="item.key">{{ item.name }}</option>
-              }</select
-            ><span>{{
-              diff.equal
-                ? "Exact bytes match"
-                : diff.firstByte !== null
-                  ? "First different byte: " + diff.firstByte
-                  : "Missing document"
-            }}</span
-            ><button
-              type="button"
-              (click)="workbench.dispatch({ kind: 'view', view: 'mapping' })"
-            >
-              Inspect mapping
-            </button>
-          </div>
-          <div class="wb-diff" [class.wb-diff-changed]="!diff.equal">
-            <section>
-              <h3><span aria-hidden="true">− </span>Expected · saved result</h3>
-              @if (diff.expected; as expected) {
-                <weft-document-view [data]="expected" />
-              } @else {
-                <p>No expected document</p>
-              }
-            </section>
-            <section>
-              <h3><span aria-hidden="true">+ </span>Actual · selected run</h3>
-              @if (diff.actual; as actual) {
-                <weft-document-view [data]="actual" />
-              } @else {
-                <p>No observed document</p>
-              }
-            </section>
-          </div>
-          <p class="wb-muted">
-            Byte-level comparison, including formatting. Red and green identify
-            the two sides, not a test pass. No expected result is changed. Saved
-            policy: {{ selectedCase()?.definition?.comparisonPolicy }}.
-          </p>
-          @if (
-            diff.expected &&
-            diff.actual &&
-            (diff.expected.mediaType ?? "application/json") !==
-              (diff.actual.mediaType ?? "application/json")
-          ) {
-            <p class="wb-muted">
-              Declared media types differ, independently of the byte comparison.
-            </p>
-          }
-        } @else {
-          <p>
-            Select a completed run and its saved case for this pinned revision.
-            No baseline is accepted automatically.
-          </p>
-        }
-        @if (affectedFields().length) {
-          <nav class="wb-command-bar" aria-label="Affected mapping fields">
-            <span>Changed output locations:</span>
-            @for (field of affectedFields(); track field.fieldId) {
-              <button type="button" (click)="investigateField(field.fieldId)">
-                {{ field.label }}
-              </button>
+        @case ("output") {
+          @if (workbench.selection().view === "preview") {
+            @if (selectedPreview(); as item) {
+              <div class="wb-command-bar">
+                <strong
+                  >Preview output ·
+                  {{ item.output.targetName || "Primary output" }}</strong
+                >
+                <span
+                  >Run <code>{{ item.runId }}</code></span
+                >
+                <button
+                  type="button"
+                  (click)="previewView()?.download(item.output)"
+                >
+                  Download exact bytes
+                </button>
+              </div>
+              <weft-document-view [data]="item.display" />
+            } @else {
+              <p>
+                Choose Show beside an output in Try sample. Preview evidence
+                stays tied to its own run.
+              </p>
             }
-          </nav>
+          } @else {
+            <div class="wb-command-bar">
+              <label
+                >Document evidence
+                <select
+                  [value]="regressionDocumentKind()"
+                  (change)="
+                    regressionDocumentKind.set($any($event.target).value)
+                  "
+                >
+                  <option value="observed">Observed · selected run</option>
+                  <option value="expected">Expected · saved case</option>
+                </select>
+              </label>
+              @if (displayedOutput(); as item) {
+                <label
+                  >{{
+                    regressionDocumentKind() === "expected"
+                      ? "Expected output"
+                      : "Observed output"
+                  }}
+                  <select
+                    [value]="documentKey(item.name)"
+                    (change)="selectedDocument.set($any($event.target).value)"
+                  >
+                    @for (document of displayedOutputs(); track document.name) {
+                      <option [value]="documentKey(document.name)">
+                        {{ document.name ?? "Primary output" }}
+                      </option>
+                    }
+                  </select></label
+                >
+                <button
+                  type="button"
+                  (click)="regressionView()?.download(item.document)"
+                >
+                  Download exact bytes
+                </button>
+              }
+            </div>
+            @if (displayedOutput(); as item) {
+              <weft-document-view [data]="item" />
+            } @else {
+              <p>
+                No {{ regressionDocumentKind() }} regression output is available
+                for this selection. Use Try sample for preview evidence.
+              </p>
+            }
+          }
         }
-      }
-      @case ("activity") {
-        <table class="wb-data-table">
-          <thead>
-            <tr>
-              <th>Evidence in this view</th>
-              <th>State</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Revision {{ view.revision.sequence }}</td>
-              <td>Pinned · {{ admissionLabel(view.revision.admission) }}</td>
-            </tr>
-            <tr>
-              <td>Explanation / validation</td>
-              <td>
-                {{ reports.projection().phase }} /
-                {{ reports.validation().phase }}
-              </td>
-            </tr>
-            @if (selectedRun(); as run) {
+        @case ("diff") {
+          @if (displayedDifference(); as diff) {
+            <div class="wb-command-bar">
+              <select
+                aria-label="Compare output document"
+                [value]="diff.key"
+                (change)="selectedDocument.set($any($event.target).value)"
+              >
+                @for (item of differences(); track item.key) {
+                  <option [value]="item.key">{{ item.name }}</option>
+                }</select
+              ><span>{{
+                diff.equal
+                  ? "Exact bytes match"
+                  : diff.firstByte !== null
+                    ? "First different byte: " + diff.firstByte
+                    : "Missing document"
+              }}</span
+              ><button
+                type="button"
+                (click)="workbench.dispatch({ kind: 'view', view: 'mapping' })"
+              >
+                Inspect mapping
+              </button>
+            </div>
+            <div class="wb-diff" [class.wb-diff-changed]="!diff.equal">
+              <section>
+                <h3>
+                  <span aria-hidden="true">− </span>Expected · saved result
+                </h3>
+                @if (diff.expected; as expected) {
+                  <weft-document-view [data]="expected" />
+                } @else {
+                  <p>No expected document</p>
+                }
+              </section>
+              <section>
+                <h3><span aria-hidden="true">+ </span>Actual · selected run</h3>
+                @if (diff.actual; as actual) {
+                  <weft-document-view [data]="actual" />
+                } @else {
+                  <p>No observed document</p>
+                }
+              </section>
+            </div>
+            <p class="wb-muted">
+              Byte-level comparison, including formatting. Red and green
+              identify the two sides, not a test pass. No expected result is
+              changed. Saved policy:
+              {{ selectedCase()?.definition?.comparisonPolicy }}.
+            </p>
+            @if (
+              diff.expected &&
+              diff.actual &&
+              (diff.expected.mediaType ?? "application/json") !==
+                (diff.actual.mediaType ?? "application/json")
+            ) {
+              <p class="wb-muted">
+                Declared media types differ, independently of the byte
+                comparison.
+              </p>
+            }
+          } @else {
+            <p>
+              Select a completed run and its saved case for this pinned
+              revision. No baseline is accepted automatically.
+            </p>
+          }
+          @if (affectedFields().length) {
+            <nav class="wb-command-bar" aria-label="Affected mapping fields">
+              <span>Changed output locations:</span>
+              @for (field of affectedFields(); track field.fieldId) {
+                <button type="button" (click)="investigateField(field.fieldId)">
+                  {{ field.label }}
+                </button>
+              }
+            </nav>
+          }
+        }
+        @case ("activity") {
+          <table class="wb-data-table">
+            <thead>
               <tr>
-                <td>Selected regression run</td>
+                <th>Evidence in this view</th>
+                <th>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Revision {{ view.revision.sequence }}</td>
+                <td>Pinned · {{ admissionLabel(view.revision.admission) }}</td>
+              </tr>
+              <tr>
+                <td>Explanation / validation</td>
                 <td>
-                  {{ run.run.state }} ·
-                  {{ run.comparison?.outcome ?? run.executionOutcome }}
+                  {{ reports.projection().phase }} /
+                  {{ reports.validation().phase }}
                 </td>
               </tr>
-            }
-            @if (buildView()?.selectedRun(); as build) {
-              <tr>
-                <td>Selected build</td>
-                <td>{{ build.state }} · {{ build.outcome }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+              @if (selectedRun(); as run) {
+                <tr>
+                  <td>Selected regression run</td>
+                  <td>
+                    {{ run.run.state }} ·
+                    {{ run.comparison?.outcome ?? run.executionOutcome }}
+                  </td>
+                </tr>
+              }
+              @if (buildView()?.selectedRun(); as build) {
+                <tr>
+                  <td>Selected build</td>
+                  <td>{{ build.state }} · {{ build.outcome }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
       }
-    }
-  </ng-template>
+    </ng-template>
+  }
 } @else {
   <section class="catalog-page" aria-labelledby="catalog-page-title">
     <h1 id="catalog-page-title" data-catalog-page-title tabindex="-1">

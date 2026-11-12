@@ -43,6 +43,10 @@ public static partial class ChatEndpoints
         Describe<ChatTurnEventV1>(routes.MapGet(turn + "/events", StreamWorkspaceTurn), "StreamWorkspaceChatTurnEvents",
             "Stream the workspace turn's durable events after a sequence number using SSE framing.", contentType: "text/event-stream")
             .DescribeWorkspaceQueries(listing: false);
+        Describe<ChatMappingWriteReceiptPageV1>(routes.MapGet(turn + "/mapping-writes", MappingWriteReceipts), "GetChatMappingWriteReceipts",
+            "Read durable save receipts independently of turn streaming, with fresh creator and project access.");
+        Describe<ChatMappingWriteReceiptPageV1>(routes.MapPost(turn + "/mapping-writes/recover", MappingWriteReceipts), "RecoverChatMappingWriteReceipts",
+            "Resume already reserved saves using their original exact bytes and keys, with current edit permission. Never rerun a turn.");
     }
 
     /// <summary>Profiles that can run a workspace turn: selectable, with function tools and permission to receive mapping metadata.</summary>

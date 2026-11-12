@@ -29,6 +29,7 @@ builder.Services.AddWeftAuthenticationHttp(new(hostOptions.Mode, hostOptions.Ori
 if (builder.Environment.IsDevelopment())
     DevelopmentFerruleRunner.Configure(builder.Services, Environment.GetEnvironmentVariable);
 var app = builder.Build();
+BrowserContentPolicy.Use(app, hostOptions.Origin);
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapWeftHealth();

@@ -5,8 +5,10 @@ edition = "2024"
 publish = false
 
 [workspace]
+members = ["core"]
 
 [dependencies]
+weft-ferrule-core = { path = "core" }
 ferrule-mapping = { package = "mapping", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
 ferrule-engine = { package = "engine", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }
 ferrule-ir = { package = "ir", git = "https://github.com/DeandreT/ferrule", rev = "dddc4dce6c93f4137fb2aa2a011360d089e0a51b" }

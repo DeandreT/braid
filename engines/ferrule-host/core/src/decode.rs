@@ -17,6 +17,14 @@ pub fn decode_native(bytes: &[u8]) -> Result<DecodedProject, FileCodecError> {
         });
     }
     let project = ferrule_mapping::project_file::decode_bytes(bytes)?;
+    Ok(DecodedProject {
+        project,
+        document_prefix: document_prefix(bytes).into(),
+    })
+}
+
+/// Probe only after authoritative codec admission or encoding.
+pub(crate) fn document_prefix(bytes: &[u8]) -> &'static str {
     // Probe only the envelope marker after authoritative admission. IgnoredAny
     // preserves legacy acceptance of ignored overflow numbers and deep metadata.
     #[derive(Deserialize)]
@@ -24,12 +32,8 @@ pub fn decode_native(bytes: &[u8]) -> Result<DecodedProject, FileCodecError> {
         #[serde(rename = "__ferrule_file")]
         marker: Option<IgnoredAny>,
     }
-    let prefix = match serde_json::from_slice::<EnvelopeProbe>(bytes) {
+    match serde_json::from_slice::<EnvelopeProbe>(bytes) {
         Ok(EnvelopeProbe { marker: Some(_) }) => "/document",
         _ => "",
-    };
-    Ok(DecodedProject {
-        project,
-        document_prefix: prefix.into(),
-    })
+    }
 }

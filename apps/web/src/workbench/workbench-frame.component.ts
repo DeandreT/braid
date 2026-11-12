@@ -48,7 +48,7 @@ export class WorkbenchFrameComponent {
   readonly paletteOpened = output<void>();
   readonly dockContext = input("");
   readonly viewLabels = workbenchLabels;
-  readonly views = workbenchViews;
+  readonly viewOptions = input<readonly WorkbenchView[]>(workbenchViews);
   readonly docks: readonly { id: DockView; label: string }[] = [
     ...(
       [
@@ -64,7 +64,7 @@ export class WorkbenchFrameComponent {
   readonly rowHeight = computed(() => rowHeights[this.state.layout().density]);
   readonly paletteItems = computed(() => {
     const items = [
-      ...this.views.map((view) => ({
+      ...this.viewOptions().map((view) => ({
         id: `view:${view}`,
         label: workbenchLabels[view],
         detail: "This saved version",
@@ -186,7 +186,7 @@ export class WorkbenchFrameComponent {
     event.preventDefault();
     const values =
       area === "view"
-        ? this.views
+        ? this.viewOptions()
         : area === "dock"
           ? this.docks.map((v) => v.id)
           : [0, 1, 2];

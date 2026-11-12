@@ -20,7 +20,7 @@ namespace Weft.Tests.Cli;
 /// </summary>
 [Collection(PostgresCollection.Name)]
 [SupportedOSPlatform("linux")]
-public sealed class CliSessionHostTests(PostgresFixture postgres)
+public sealed partial class CliSessionHostTests(PostgresFixture postgres)
 {
     [PostgresFact]
     public Task Administration_uses_the_same_bearer_identity_with_atomic_membership_audit_and_last_admin_refusal() => AuthHttpFixture.RunAsync(postgres, async test =>

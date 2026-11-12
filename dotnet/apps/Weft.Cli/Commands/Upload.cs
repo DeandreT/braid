@@ -137,7 +137,7 @@ internal sealed class Upload
     }
 
     /// <summary>The ingestion outcome document, which also accompanies conflict, rejection and retryable statuses.</summary>
-    private static async Task<CatalogRevisionIngestionResultV1> SendAsync(CliInvocation invocation, ApiRequest request)
+    internal static async Task<CatalogRevisionIngestionResultV1> SendAsync(CliInvocation invocation, ApiRequest request)
     {
         using var response = await invocation.Api.SendAsync(request, invocation.Cancellation);
         var content = response.Message.Content;

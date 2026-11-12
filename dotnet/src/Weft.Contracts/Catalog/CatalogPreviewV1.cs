@@ -32,7 +32,7 @@ public sealed record CatalogPreviewInputV1(string Content, string? Name = null);
 /// </summary>
 public sealed record CatalogPreviewRunV1(
     string RunId,
-    CatalogRevisionScopeV1 Revision,
+    CatalogRevisionScopeV1? Revision,
     string RequestFingerprint,
     string CurrentDateTime,
     string State,
@@ -47,7 +47,14 @@ public sealed record CatalogPreviewRunV1(
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset? StartedAtUtc,
     DateTimeOffset? FinishedAtUtc,
-    DateTimeOffset ExpiresAtUtc);
+    DateTimeOffset ExpiresAtUtc,
+    CatalogPreviewDraftSubjectV1? Draft = null)
+{
+    public string SubjectKind => Draft is null ? "revision" : "draft";
+}
+
+public sealed record CatalogPreviewDraftSubjectV1(CatalogMappingScopeV1 Mapping, string DraftId, string Version,
+    CatalogRevisionScopeV1 BaseRevision, string NativeDigest, int NativeByteCount);
 
 public sealed record CatalogPreviewFailureV1(string Code, string Message, bool MessageTruncated, string? Subject, bool SubjectTruncated);
 

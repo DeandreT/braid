@@ -21,7 +21,7 @@ public sealed class WorkspacePayloadReauthorizationTests
         data.AdditionalRuns.Add(runB, WorkspacePayloadFakes.Snapshot with
         {
             RunId = runB,
-            Revision = new(projectB.OrganizationId, projectB.ProjectId, Guid.NewGuid(), Guid.NewGuid())
+            Subject = new RevisionScope(projectB.OrganizationId, projectB.ProjectId, Guid.NewGuid(), Guid.NewGuid())
         });
         data.Grants.UnionWith([WorkspaceToolFixture.Project, projectB]);
         var service = catalog.Service(previews: true);

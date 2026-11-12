@@ -20,6 +20,12 @@ exact project, including reads of an actor's own operation receipts.
 
 ## Exact native submission
 
+[Mapping draft saves](mapping-editing.md) use this same ingestion workflow with
+server-generated checkpoint bytes, the original actor and an exact-base
+equal-head condition. The browser sends only typed operations. Normal receipt,
+conflict and recovery semantics apply; draft provenance is reconciled from the
+committed receipt.
+
 Create and append accept the original bytes as `application/octet-stream`, with
 no media parameters and no request compression. Supply exactly one
 `Idempotency-Key` header containing a canonical UUID. HTTP header whitespace

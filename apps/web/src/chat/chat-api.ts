@@ -28,6 +28,8 @@ import {
   workspaceAvailability,
   workspaceEvent,
   revisionScope,
+  mappingWriteReceipts,
+  type MappingWriteReceipt,
   type ChatScope,
   type ChatFocus,
   type OrganizationConversation,
@@ -270,6 +272,30 @@ export class ChatApi {
       throw new ChatError("incompatible");
     return value;
   }
+  async mappingWrites(
+    scope: ChatScope,
+    context: CatalogContext,
+    signal: AbortSignal,
+    id: string,
+    turnId: string,
+    recover = false,
+  ): Promise<MappingWriteReceipt[]> {
+    this.id(id);
+    this.id(turnId);
+    if ("revisionId" in scope) return [];
+    const value = mappingWriteReceipts(
+      await this.json(
+        scope,
+        `/conversations/${id}/turns/${turnId}/mapping-writes${recover ? "/recover" : ""}`,
+        context,
+        signal,
+        recover ? null : undefined,
+      ),
+      scope.organizationId,
+    );
+    if (!value) throw new ChatError("incompatible");
+    return value;
+  }
   async stream(
     scope: ChatScope,
     context: CatalogContext,
@@ -379,7 +405,13 @@ export class ChatApi {
     }
     const boundedSignal = AbortSignal.any([
       signal,
-      AbortSignal.timeout(suffix.includes("/events?") ? 210000 : 10000),
+      AbortSignal.timeout(
+        suffix.includes("/events?")
+          ? 210000
+          : suffix.endsWith("/mapping-writes/recover")
+            ? 65000
+            : 10000,
+      ),
     ]);
     const generation = this.sessions.generation();
     const response = await fetch(

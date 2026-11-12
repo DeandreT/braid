@@ -39,6 +39,8 @@ jobs:
       - run: npm install --global npm@12.1.0
       - run: npm ci
       - run: npm ci --prefix tools/contracts-generator
+      - name: Build the pinned edit module
+        run: python3 tools/edit-core/build.py --install
       - run: npm run check
       - run: npm run build
       - run: npm run build:browser-session-probe
@@ -50,8 +52,14 @@ jobs:
           cargo +1.98.1 fmt --manifest-path engines/ferrule-host/Cargo.toml --check
           cargo +1.98.1 clippy --manifest-path engines/ferrule-host/Cargo.toml --all-targets --locked -- -D warnings
           cargo +1.98.1 test --manifest-path engines/ferrule-host/Cargo.toml --locked
-          # Later steps use the worker from the image build, so free the runner disk.
-          rm -rf "$CARGO_TARGET_DIR"
+      - name: Verify native and wasm edit equivalence
+        run: |
+          CARGO_TARGET_DIR=target/edit-qualification cargo +1.98.1 build --manifest-path engines/ferrule-edit-wasm/Cargo.toml --release --target wasm32-unknown-unknown --features qualification --locked
+          wasm-bindgen --target web --out-dir artifacts/edit-qualification target/edit-qualification/wasm32-unknown-unknown/release/weft_ferrule_edit_wasm.wasm
+          node tools/edit-core/cross-target.mjs artifacts/edit-qualification/weft_ferrule_edit_wasm.js artifacts/edit-qualification/weft_ferrule_edit_wasm_bg.wasm target/ferrule-host/debug/weft-ferrule-host engines/ferrule-host/tests/fixtures
+          # The browser edit qualification reuses this native host; later steps use the image build, so free the runner disk.
+          install -m 0555 target/ferrule-host/debug/weft-ferrule-host "$RUNNER_TEMP/weft-edit-native-host"
+          rm -rf "$CARGO_TARGET_DIR" target/edit-qualification
       - name: Verify the compile sandbox launcher
         env:
           CARGO_TARGET_DIR: target/compile-sandbox
@@ -110,6 +118,8 @@ jobs:
           unzip -q "$weft_browser_archive" -d "$weft_browser_directory"
           printf 'WEFT_CHROMIUM_EXECUTABLE=%s\n' "$weft_browser_directory/chrome-linux64/chrome" >> "$GITHUB_ENV"
       - run: npm run test:auth-https-source
+      - name: Verify the isolated browser edit core
+        run: env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a node tools/edit-core/browser-qualification.mjs artifacts/edit-qualification "$RUNNER_TEMP/weft-edit-native-host" artifacts/edit-browser.json engines/ferrule-host/tests/fixtures
       - name: Prepare owned HTTPS browser admission
         run: node tools/auth-browser-https/admit.mjs --approved
       - name: Verify the CI test launcher
@@ -124,6 +134,9 @@ jobs:
       - name: Browser verification on a virtual display
         if: matrix.partition == 'browser'
         run: npm run test:browser
+      - name: Browser verification through the actual CSP shell
+        if: matrix.partition == 'browser'
+        run: WEFT_EDIT_SHELL_DLL="$WEFT_HOST_TEST_SERVER_PATH" WEFT_EDIT_SHELL_ALL=1 env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u XDG_SESSION_TYPE -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a npm --workspace @weft/web run test:e2e -- --config playwright.edit-shell.config.ts
 
   # Keep the existing required check name and reject a failed or cancelled shard.
   verify:

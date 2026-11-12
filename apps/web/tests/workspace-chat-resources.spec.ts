@@ -51,6 +51,8 @@ for (const kind of [
         return reply({
           runId: legacyId,
           revision: scope,
+          draft: null,
+          subjectKind: "revision",
           requestFingerprint: "b".repeat(64),
           currentDateTime: "2026-10-20T08:30:00Z",
           state: "queued",

@@ -68,6 +68,7 @@ internal static class ChatPublicMapper
         ChatCitationEventV1 => "citation",
         ChatWorkspaceCitationEventV1 => "workspace.citation",
         ChatDataSharedEventV1 => "data.shared",
+        ChatMappingWriteEventV1 => "mapping.write",
         ChatTurnCompletedEventV1 => "turn.completed",
         ChatTurnFailedEventV1 => "turn.failed",
         ChatTurnCancelledEventV1 => "turn.cancelled",
@@ -131,6 +132,14 @@ internal static class ChatPublicMapper
                 var shared = stored.DataShared!;
                 return new ChatDataSharedEventV1(sequence, Round(stored), Id(shared.ProjectId), (ChatPayloadSourceV1)(int)shared.Source,
                     Id(shared.SubjectId), shared.Version?.ToString(System.Globalization.CultureInfo.InvariantCulture), shared.ByteCount);
+            case ChatEventKind.MappingWrite:
+                var write = stored.MappingWrite!;
+                static string? Number(long? value) => value?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return new ChatMappingWriteEventV1(sequence, Round(stored), (ChatMappingWriteOutcomeV1)(int)write.Outcome,
+                    write.Reason is { } reason ? (ChatMappingWriteReasonV1)(int)reason : null, Catalog.CatalogPublicMapper.RevisionScope(write.Base),
+                    Number(write.BaseSequence)!, write.RevisionId is { } saved ? Id(saved) : null, Number(write.Sequence),
+                    write.HeadRevisionId is { } head ? Id(head) : null, Number(write.HeadSequence), write.OperationCount,
+                    write.Changes.Select(change => new ChatMappingChangeV1(change.Field, change.Before, change.After)).ToArray(), write.ChangesTruncated);
             default:
                 throw new InvalidOperationException("The chat event kind is unknown.");
         }

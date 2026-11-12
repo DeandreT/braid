@@ -12,10 +12,11 @@ using Weft.Domain;
 namespace Weft.Api.Chat.Workspace;
 
 /// <summary>
-/// The trusted read-only tool, citation and turn-context port for workspace conversations. Every call is bound to the
+/// The trusted tool, citation and turn-context port for workspace conversations. Every call is bound to the
 /// conversation's creator and organization, freshly re-authorized as that user through the same read ports and read
 /// sequences the HTTP API uses, and returns a complete bounded result; lists that would not fit are truncated
-/// explicitly. It has no write, derivation, run, build or provider port. Share one instance per host.
+/// explicitly. Its only write saves a typed mapping edit as the next version through the user's own edit authority;
+/// it has no derivation, run, build, activation or provider port. Share one instance per host.
 /// </summary>
 public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatWorkspaceCitationPort, IChatTurnContextPort, IChatPayloadAuthorizationPort
 {
@@ -147,13 +148,14 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         if (!Bound(context) || ManifestOf(context.Turn) is not { } manifest)
             return Failure(intent.Name, WorkspaceToolOutcome.NotFound, budget);
         var admitted = false;
+        CallScope? scope = null;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(CallDuration);
+        deadline.CancelAfter(intent.Name == WorkspaceToolRegistry.SaveEdit ? EditDuration : CallDuration);
         var token = deadline.Token;
         try
         {
             var call = WorkspaceToolRegistry.Parse(intent.Name, intent.Arguments.Json, manifest.Tools);
-            var scope = new CallScope(context.Actor, context.Conversation, context.Turn, budget, manifest.Payloads);
+            scope = new CallScope(context.Actor, context.Conversation, context.Turn, budget, manifest.Payloads, intent.CallId, context.RoundId);
             await AdmitAsync(scope, token);
             if (!capacity.Wait(0)) return Failure(call.Name, WorkspaceToolOutcome.Busy, budget);
             admitted = true;
@@ -161,15 +163,15 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
             // Preparation is not authority: the organization admission is observed again before release.
             await AdmitAsync(scope, token);
             token.ThrowIfCancellationRequested();
-            return reply;
+            return WithWrite(reply, scope);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { ct.ThrowIfCancellationRequested(); throw; }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
-        { ct.ThrowIfCancellationRequested(); return Failure(intent.Name, WorkspaceToolOutcome.TimedOut, budget); }
+        { ct.ThrowIfCancellationRequested(); return WithWrite(Failure(intent.Name, WorkspaceToolOutcome.TimedOut, budget), scope); }
         catch (WorkspaceToolRefusal refusal)
-        { ct.ThrowIfCancellationRequested(); return Failure(intent.Name, refusal.Outcome, budget); }
+        { ct.ThrowIfCancellationRequested(); return WithWrite(Failure(intent.Name, refusal.Outcome, budget), scope); }
         catch (Exception error) when (error is not (OutOfMemoryException or StackOverflowException))
-        { ct.ThrowIfCancellationRequested(); return Failure(intent.Name, WorkspaceToolOutcome.Unavailable, budget); }
+        { ct.ThrowIfCancellationRequested(); return WithWrite(Failure(intent.Name, WorkspaceToolOutcome.Unavailable, budget), scope); }
         finally { if (admitted) capacity.Release(); }
     }
 
@@ -187,6 +189,7 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         "get_capabilities" => GetCapabilitiesAsync(scope, call, token),
         "search_user_guide" => SearchGuideAsync(scope, call, token),
         "get_user_guide_section" => GetGuideSectionAsync(scope, call, token),
+        WorkspaceToolRegistry.SaveEdit => SaveEditAsync(scope, call, token),
         _ when WorkspaceToolRegistry.IsReportTool(call.Name) => ReportAsync(scope, call, token),
         _ when WorkspaceToolRegistry.IsPayloadTool(call.Name) && scope.Payloads => PayloadAsync(scope, call, token),
         _ => throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall)
@@ -277,9 +280,12 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
     private readonly record struct Budget(int Bytes, int Nodes);
 
     private sealed record CallScope(ActorContext Actor, ChatConversationIntent Conversation, ChatTurnIntent? Turn, Budget Budget,
-        bool Payloads = false)
+        bool Payloads = false, string? CallId = null, Guid? RoundId = null)
     {
         internal Guid Organization => Conversation.Key.OrganizationId;
+        /// <summary>The mapping write or proposal this call made, kept so no later refusal can hide it.</summary>
+        internal ChatMappingWriteFact? Written { get; set; }
+        internal Guid? SaveKey { get; set; }
         public override string ToString() => nameof(CallScope);
     }
 

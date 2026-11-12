@@ -9,6 +9,17 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
 {
     private readonly PostgresPreviewDatabase _database = database ?? throw new ArgumentNullException(nameof(database));
 
+    public Task<DraftPreviewSubject?> ReadDraftSubjectAsync(ActorContext actor, MappingScope mapping, Guid requestKey,
+        CancellationToken cancellationToken = default) => _database.RunAsync<DraftPreviewSubject?>(false, async (connection, transaction) =>
+        {
+            await using var command = new NpgsqlCommand("SELECT draft_id,draft_version,base_revision_id,native_digest,native_byte_count FROM weft.preview_draft_subject_by_key($1,$2,$3,$4,$5)", connection, transaction);
+            command.Parameters.AddWithValue(mapping.OrganizationId); command.Parameters.AddWithValue(mapping.ProjectId); command.Parameters.AddWithValue(mapping.MappingId);
+            command.Parameters.AddWithValue(actor.PrincipalId.Value); command.Parameters.AddWithValue(requestKey);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            return await reader.ReadAsync(cancellationToken) ? new(new(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, reader.GetGuid(2)),
+                reader.GetGuid(0), reader.GetInt64(1), Sha256Digest.Parse(reader.GetString(3)), reader.GetInt32(4)) : null;
+        }, cancellationToken);
+
     public Task<PreviewRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -40,12 +51,32 @@ public sealed class PostgresPreviewRunReader(PostgresPreviewDatabase database) :
                     reader.GetBoolean(13), reader.IsDBNull(14) ? null : reader.GetString(14), !reader.IsDBNull(15) && reader.GetBoolean(15));
                 var provenance = reader.IsDBNull(16) ? null : new PreviewRunProvenance(reader.GetBoolean(16), reader.GetString(17),
                     reader.GetString(18), reader.GetString(19), reader.GetString(20));
-                snapshot = new PreviewRunSnapshot(runId, new RevisionScope(organizationId, reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2)),
-                    reader.GetGuid(3), reader.GetString(4), reader.GetString(5), state, reader.GetInt32(7), reader.GetInt32(8),
-                    reader.GetBoolean(9), reader.IsDBNull(10) ? null : PostgresPreviewRunStore.Outcome(reader.GetString(10)), failure,
-                    provenance, reader.IsDBNull(21) ? null : reader.GetInt64(21), [], reader.GetFieldValue<DateTimeOffset>(22),
-                    reader.IsDBNull(23) ? null : reader.GetFieldValue<DateTimeOffset>(23),
-                    reader.IsDBNull(24) ? null : reader.GetFieldValue<DateTimeOffset>(24), reader.GetFieldValue<DateTimeOffset>(25));
+                var project = reader.GetGuid(0); var mapping = reader.GetGuid(1);
+                // The subject query is needed only for a draft, so revision-only deployments
+                // retain their existing read path while the staged migration is integrated.
+                var revision = reader.IsDBNull(2) ? null : new RevisionScope(organizationId, project, mapping, reader.GetGuid(2));
+                var key = reader.GetGuid(3); var fingerprint = reader.GetString(4); var clock = reader.GetString(5);
+                var attempt = reader.GetInt32(7); var maximum = reader.GetInt32(8); var cancel = reader.GetBoolean(9);
+                var outcome = reader.IsDBNull(10) ? (PreviewRunOutcome?)null : PostgresPreviewRunStore.Outcome(reader.GetString(10));
+                var records = reader.IsDBNull(21) ? (long?)null : reader.GetInt64(21);
+                var created = reader.GetFieldValue<DateTimeOffset>(22);
+                var started = reader.IsDBNull(23) ? (DateTimeOffset?)null : reader.GetFieldValue<DateTimeOffset>(23);
+                var finished = reader.IsDBNull(24) ? (DateTimeOffset?)null : reader.GetFieldValue<DateTimeOffset>(24);
+                var expires = reader.GetFieldValue<DateTimeOffset>(25);
+                PreviewSubject subject;
+                if (revision is not null) subject = new RevisionPreviewSubject(revision);
+                else
+                {
+                    await reader.DisposeAsync();
+                    await using var subjectCommand = new NpgsqlCommand("SELECT draft_id,draft_version,base_revision_id,native_digest,native_byte_count FROM weft.preview_draft_subject($1,$2,$3)", connection, transaction);
+                    subjectCommand.Parameters.AddWithValue(organizationId); subjectCommand.Parameters.AddWithValue(runId); subjectCommand.Parameters.AddWithValue(actor.PrincipalId.Value);
+                    await using var draft = await subjectCommand.ExecuteReaderAsync(cancellationToken);
+                    if (!await draft.ReadAsync(cancellationToken)) throw PostgresPreviewRunStore.Inconsistent();
+                    subject = new DraftPreviewSubject(new(organizationId, project, mapping, draft.GetGuid(2)), draft.GetGuid(0), draft.GetInt64(1),
+                        Sha256Digest.Parse(draft.GetString(3)), draft.GetInt32(4));
+                }
+                snapshot = new PreviewRunSnapshot(runId, subject,
+                    key, fingerprint, clock, state, attempt, maximum, cancel, outcome, failure, provenance, records, [], created, started, finished, expires);
             }
             var outputs = new List<PreviewOutputDescriptor>();
             await using (var command = new NpgsqlCommand("""

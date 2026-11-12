@@ -50,6 +50,8 @@ const runKeys = [
   "recordsWritten",
   "requestFingerprint",
   "revision",
+  "draft",
+  "subjectKind",
   "runId",
   "startedAtUtc",
   "state",
@@ -300,6 +302,8 @@ function run(value: unknown, scope: CatalogRevisionScope): boolean {
   const terminal = state === "completed" || state === "canceled";
   const outputs = body["outputs"];
   return (
+    body["draft"] === null &&
+    body["subjectKind"] === "revision" &&
     exactKeys(revision, [...scopeKeys]) &&
     scopeKeys.every((key) => revision[key] === scope[key]) &&
     isCatalogId(body["runId"]) &&

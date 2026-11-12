@@ -16,9 +16,16 @@ internal static partial class ChatSchemaContract
     internal const string WorkspaceMigrationName = "0032_workspace_chat";
     internal const string WorkspaceMigrationChecksum = "a4e8e24cf0a8fd38a23cc604d0077ad7c1345692686a51a952d90c767ff85d80";
     internal static int WorkspaceMigrationVersion => int.Parse(WorkspaceMigrationName[..4], System.Globalization.CultureInfo.InvariantCulture);
-    internal static readonly string[] ChatTables = ["chat_conversations", "chat_turns", "chat_rounds", "chat_events", "chat_identities", "chat_payload_audit"];
+    // The mapping write migration adds the write event and its audit, and replaces exactly the routines it names.
+    internal const string MappingWriteMigrationName = "0039_chat_mapping_writes";
+    internal const string MappingWriteMigrationChecksum = "9f0fa1e0799d540d99d14417be21576b4265bfca77262a7c96b9f04b7dca3b26";
+    internal static int MappingWriteMigrationVersion => int.Parse(MappingWriteMigrationName[..4], System.Globalization.CultureInfo.InvariantCulture);
+    internal const string WriteJournalMigrationName = "0040_chat_mapping_write_journal";
+    internal const string WriteJournalMigrationChecksum = "64dbd178aa7a9d5cd902b4b165cddbf095df13af9178b6d38e5963729e3399ef";
+    internal static int WriteJournalMigrationVersion => int.Parse(WriteJournalMigrationName[..4], System.Globalization.CultureInfo.InvariantCulture);
+    internal static readonly string[] ChatTables = ["chat_conversations", "chat_turns", "chat_rounds", "chat_events", "chat_identities", "chat_payload_audit", "chat_mapping_write_audit", "chat_mapping_write_intents", "chat_mapping_write_content", "chat_mapping_write_commits"];
     private static readonly string[] Dependencies =
-        ["principals", "organization_memberships", "project_memberships", "mapping_revisions", "revision_derivations", "revision_derivation_attempts"];
+        ["principals", "organization_memberships", "project_memberships", "mappings", "mapping_revisions", "revision_ingestions", "revision_derivations", "revision_derivation_attempts"];
     private const string SearchPath = "search_path=pg_catalog, weft, pg_temp";
     private sealed record Column(string Name, string Type, bool NotNull = true, string? Default = null, bool C = false);
     private sealed record Constraint(string Name, char Kind, string[] Columns, string? Target = null,
@@ -116,9 +123,9 @@ internal static partial class ChatSchemaContract
          Foreign("chat_events_turn_fkey", ["organization_id", "creator_id", "conversation_id", "turn_id"], "chat_turns", ["organization_id", "creator_id", "conversation_id", "turn_id"], "c"),
          Foreign("chat_events_round_fkey", ["organization_id", "creator_id", "conversation_id", "turn_id", "round_id"], "chat_rounds", ["organization_id", "creator_id", "conversation_id", "turn_id", "round_id"], "c"),
          Check("chat_events_sequence_check", "((sequence >= 1) AND (sequence <= 4096))"), Check("chat_events_event_id_check", IdCheck("event_id")),
-          Check("chat_events_kind_check", "((kind >= 1) AND (kind <= 14))"),
+          Check("chat_events_kind_check", "((kind >= 1) AND (kind <= 15))"),
           Check("chat_events_metadata_json_check", "((metadata_json IS NULL) OR ((octet_length(metadata_json) >= 1) AND (octet_length(metadata_json) <= 8192)))"),
-          Check("chat_events_check", "(((kind = ANY (ARRAY[2, 3, 4])) AND (round_id IS NOT NULL) AND (dispatch_fence IS NOT NULL) AND (metadata_json IS NULL) AND ((octet_length(private_text) >= 1) AND (octet_length(private_text) <= 8192)) AND (btrim(private_text) <> ''::text)) OR ((kind = ANY (ARRAY[9, 10, 11, 12, 13, 14])) AND (round_id IS NOT NULL) AND (dispatch_fence IS NOT NULL) AND (metadata_json IS NOT NULL) AND (private_text = ''::text)) OR ((kind = 1) AND (round_id IS NULL) AND (dispatch_fence IS NULL) AND (private_text = ''::text) AND (metadata_json IS NULL)) OR ((kind = ANY (ARRAY[5, 6, 7, 8])) AND (round_id IS NULL) AND (dispatch_fence IS NULL) AND (private_text = ''::text) AND ((metadata_json IS NULL) OR (octet_length(metadata_json) <= 2048))))")]);
+          Check("chat_events_check", "(((kind = ANY (ARRAY[2, 3, 4])) AND (round_id IS NOT NULL) AND (dispatch_fence IS NOT NULL) AND (metadata_json IS NULL) AND ((octet_length(private_text) >= 1) AND (octet_length(private_text) <= 8192)) AND (btrim(private_text) <> ''::text)) OR ((kind = ANY (ARRAY[9, 10, 11, 12, 13, 14, 15])) AND (round_id IS NOT NULL) AND (dispatch_fence IS NOT NULL) AND (metadata_json IS NOT NULL) AND (private_text = ''::text)) OR ((kind = 1) AND (round_id IS NULL) AND (dispatch_fence IS NULL) AND (private_text = ''::text) AND (metadata_json IS NULL)) OR ((kind = ANY (ARRAY[5, 6, 7, 8])) AND (round_id IS NULL) AND (dispatch_fence IS NULL) AND (private_text = ''::text) AND ((metadata_json IS NULL) OR (octet_length(metadata_json) <= 2048))))")]);
 
     private static readonly Table PayloadAudit = new("chat_payload_audit",
         [.. Uuids("organization_id", "creator_id", "event_id", "conversation_id", "turn_id", "round_id", "project_id"),
@@ -130,7 +137,31 @@ internal static partial class ChatSchemaContract
          Check("chat_payload_audit_byte_count_check", "((byte_count >= 1) AND (byte_count <= 1048576))"),
          Check("chat_payload_audit_subject_check", "(((source_kind = 3) = (subject_version IS NOT NULL)) AND ((subject_version IS NULL) OR (subject_version > 0)))")]);
 
-    private static readonly Table[] NewTables = [Conversations, Turns, Rounds, Events, Identities, PayloadAudit];
+    private static readonly Table MappingWriteAudit = new("chat_mapping_write_audit",
+        [.. Uuids("organization_id", "creator_id", "event_id", "conversation_id", "turn_id", "round_id", "project_id", "mapping_id", "base_revision_id"),
+         new("base_sequence", "bigint"), new("revision_id", "uuid", NotNull: false), new("revision_sequence", "bigint", NotNull: false),
+         new("outcome", "integer"), new("reason", "integer", NotNull: false), new("operation_count", "integer"), new("edit_digest", "text"),
+         new("profile_id", "text"), new("profile_version", "integer"), new("provider_id", "text"), new("model_id", "text"),
+         new("metadata_policy_id", "text"), new("metadata_policy_version", "integer"), new("recorded_at", "timestamp with time zone")],
+        [Key("chat_mapping_write_audit_pkey", "organization_id", "creator_id", "event_id")]);
+
+    private static readonly Table WriteIntents = new("chat_mapping_write_intents",
+        [.. Uuids("organization_id", "creator_id", "request_key", "conversation_id", "turn_id", "round_id"), new("call_id", "text"),
+         .. Uuids("project_id", "mapping_id", "base_revision_id"), new("base_sequence", "bigint"), new("operation_count", "integer"),
+         new("edit_digest", "text"), new("native_digest", "text"), new("native_byte_count", "bigint"),
+         new("profile_id", "text"), new("profile_version", "integer"), new("provider_id", "text"), new("model_id", "text"),
+         new("metadata_policy_id", "text"), new("metadata_policy_version", "integer"), new("recorded_at", "timestamp with time zone")],
+        [Key("chat_mapping_write_intents_pkey", "organization_id", "creator_id", "request_key"),
+         Unique("chat_mapping_write_intents_call_key", "organization_id", "creator_id", "turn_id", "call_id")]);
+    private static readonly Table WriteContent = new("chat_mapping_write_content",
+        [.. Uuids("organization_id", "creator_id", "request_key", "conversation_id"), new("proposal", "text", C: true), new("native", "bytea")],
+        [Key("chat_mapping_write_content_pkey", "organization_id", "creator_id", "request_key"),
+         Foreign("chat_mapping_write_content_conversation_fkey", ["organization_id", "creator_id", "conversation_id"], "chat_conversations", ["organization_id", "creator_id", "conversation_id"], "c")]);
+    private static readonly Table WriteCommits = new("chat_mapping_write_commits",
+        [.. Uuids("organization_id", "creator_id", "request_key", "operation_id", "project_id", "mapping_id", "revision_id"),
+         new("revision_sequence", "bigint"), new("committed_at", "timestamp with time zone")],
+        [Key("chat_mapping_write_commits_pkey", "organization_id", "creator_id", "request_key")]);
+    private static readonly Table[] NewTables = [Conversations, Turns, Rounds, Events, Identities, PayloadAudit, MappingWriteAudit, WriteIntents, WriteContent, WriteCommits];
     private static readonly Table History = new("schema_migrations",
         [new("version", "integer"), new("checksum", "text"), new("applied_at", "timestamp with time zone", Default: "CURRENT_TIMESTAMP")],
         [Key("schema_migrations_pkey", "version"), Check("schema_migrations_version_check", "(version > 0)"),
@@ -150,6 +181,8 @@ internal static partial class ChatSchemaContract
     ];
     private static readonly Lazy<string> Source = new(() => LoadSource(MigrationName, MigrationChecksum));
     private static readonly Lazy<string> WorkspaceSource = new(() => LoadSource(WorkspaceMigrationName, WorkspaceMigrationChecksum));
+    private static readonly Lazy<string> MappingWriteSource = new(() => LoadSource(MappingWriteMigrationName, MappingWriteMigrationChecksum));
+    private static readonly Lazy<string> WriteJournalSource = new(() => LoadSource(WriteJournalMigrationName, WriteJournalMigrationChecksum));
     private static string LoadSource(string name, string checksum)
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(
@@ -159,8 +192,9 @@ internal static partial class ChatSchemaContract
         if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != checksum) throw Refusal();
         return new UTF8Encoding(false, true).GetString(bytes);
     }
-    // A routine the workspace migration replaces or adds has exactly that body; any other keeps 0011's.
-    private static string Body(string name) => Body(WorkspaceSource.Value, name) ?? Body(Source.Value, name) ?? throw Refusal();
+    // A routine a later migration replaces or adds has exactly its latest body; any other keeps 0011's.
+    private static string Body(string name) =>
+        Body(WriteJournalSource.Value, name) ?? Body(MappingWriteSource.Value, name) ?? Body(WorkspaceSource.Value, name) ?? Body(Source.Value, name) ?? throw Refusal();
     private static string? Body(string source, string name)
     {
         var marker = "$" + name + "$";
@@ -175,7 +209,7 @@ internal static partial class ChatSchemaContract
     {
         var role = ChatRoleGuard.RoleName(profile);
         var result = new List<string>();
-        foreach (Match grant in Regex.Matches(Source.Value + "\n" + WorkspaceSource.Value,
+        foreach (Match grant in Regex.Matches(Source.Value + "\n" + WorkspaceSource.Value + "\n" + MappingWriteSource.Value,
             @"GRANT (?<right>SELECT|INSERT|UPDATE)\((?<columns>[a-z_,\s]+)\)\s+ON weft\.(?<table>[a-z_]+) TO (?<roles>[a-z_,\s]+);",
             RegexOptions.CultureInvariant))
         {
@@ -188,7 +222,7 @@ internal static partial class ChatSchemaContract
     }
     private static IEnumerable<Table> SourceTables() => Dependencies.Select(name =>
     {
-        var table = RevisionDerivationSchemaContract.Tables[name];
+        var table = name == "revision_ingestions" ? CatalogSchemaContract.Tables[name] : RevisionDerivationSchemaContract.Tables[name];
         return new Table(table.Name, table.Columns.Select(c => new Column(c.Name, c.Type, c.NotNull, c.Default)).ToArray(),
             table.Constraints.Select(c => new Constraint(c.Name, c.Kind, c.Columns, c.ReferencedTable, c.ReferencedColumns,
                 Update: name is "revision_derivations" or "revision_derivation_attempts" ? "r" : "a", Deferred: c.Deferred,

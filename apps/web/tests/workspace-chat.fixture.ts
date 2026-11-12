@@ -7,6 +7,7 @@ import type {
   ChatConversation,
 } from "../src/chat/chat-types";
 import type { OrganizationConversation } from "../src/chat/workspace-chat-types";
+import type { MappingWriteReceipt } from "../src/chat/workspace-chat-types";
 
 export const round = "a0000000-0000-4000-8000-000000000001";
 export const legacyId = "80000000-0000-4000-8000-000000000001";
@@ -82,6 +83,9 @@ export async function workspaceFixture(
     reject: false,
     partial: false,
     foreignCitation: false,
+    /** A mapping.write event the next workspace answer carries at sequence 7. */
+    write: null as ChatEvent | null,
+    receipts: [] as MappingWriteReceipt[],
   };
   const secondProject = structuredClone(data.project);
   secondProject.scope = { organizationId: org, projectId: otherProject };
@@ -290,6 +294,12 @@ export async function workspaceFixture(
       });
     }
     const id = path.slice(chatRoot.length).split("/")[2];
+    if (
+      workspace &&
+      (path.endsWith("/mapping-writes") ||
+        path.endsWith("/mapping-writes/recover"))
+    )
+      return route.fulfill({ json: { receipts: state.receipts } });
     if (path.endsWith("/turns") && request.method() === "POST") {
       const body = request.postDataJSON(),
         conversation = conversations.get(id!);
@@ -387,7 +397,9 @@ export async function workspaceFixture(
                 bytes: 32,
               },
             ]
-          : []),
+          : workspace && state.write
+            ? [state.write]
+            : []),
         { type: "turn.completed", sequence: 8 },
       ];
       events.set(body.turnId, response);
@@ -403,6 +415,20 @@ export async function workspaceFixture(
       const response = (events.get(turnId) ?? []).filter(
         (e) => e.sequence > after && (!state.partial || e.sequence <= 6),
       );
+      const terminal = response.find((e) =>
+        ["turn.completed", "turn.cancelled", "turn.failed"].includes(e.type),
+      );
+      const turn = turns.get(id!)?.find((t) => t.turnId === turnId);
+      if (turn && terminal) {
+        turn.phase =
+          terminal.type === "turn.completed"
+            ? "completed"
+            : terminal.type === "turn.cancelled"
+              ? "cancelled"
+              : "failed";
+        turn.finishedAtUtc = "2026-10-24T10:01:00Z";
+        turn.lastSequence = terminal.sequence;
+      }
       return route.fulfill({
         contentType: "text/event-stream",
         body: response.map(frame).join(""),

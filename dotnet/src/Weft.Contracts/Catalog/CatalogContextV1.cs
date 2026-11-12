@@ -48,7 +48,7 @@ public sealed record CatalogFeaturesV1
 
     [JsonConstructor]
     public CatalogFeaturesV1(bool readCatalog, bool createProjects, bool createMappings, bool editMetadata,
-        bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership, bool deriveReports)
+        bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership, bool deriveReports, bool edit = false)
     {
         if (deriveReports && !readReports)
             throw new ArgumentException("Report derivation requires report reads.", nameof(deriveReports));
@@ -62,6 +62,7 @@ public sealed record CatalogFeaturesV1
         Preview = preview;
         ManageMembership = manageMembership;
         DeriveReports = deriveReports;
+        Edit = edit;
     }
 
     public bool ReadCatalog { get; }
@@ -74,6 +75,7 @@ public sealed record CatalogFeaturesV1
     public bool Preview { get; }
     public bool ManageMembership { get; }
     public bool DeriveReports { get; }
+    public bool Edit { get; }
 
     public static CatalogFeaturesV1 ReadOnly { get; } = new(true, false, false, false, false, false, false, false, false);
 }
@@ -89,7 +91,7 @@ public sealed record CatalogActionsV1
 
     [JsonConstructor]
     public CatalogActionsV1(bool view, bool createProjects, bool createMappings, bool editMetadata,
-        bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership, bool deriveReports)
+        bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership, bool deriveReports, bool edit = false)
     {
         if (deriveReports && !readReports)
             throw new ArgumentException("Report derivation requires report reads.", nameof(deriveReports));
@@ -103,6 +105,7 @@ public sealed record CatalogActionsV1
         Preview = preview;
         ManageMembership = manageMembership;
         DeriveReports = deriveReports;
+        Edit = edit;
     }
 
     public bool View { get; }
@@ -115,6 +118,7 @@ public sealed record CatalogActionsV1
     public bool Preview { get; }
     public bool ManageMembership { get; }
     public bool DeriveReports { get; }
+    public bool Edit { get; }
 
     public static CatalogActionsV1 ReadOnly { get; } = new(true, false, false, false, false, false, false, false, false);
 }

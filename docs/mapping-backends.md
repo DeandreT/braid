@@ -24,6 +24,7 @@ mappings are an optional runtime with a separate capability gate.
 | `inspect` | Backend identity, boundaries, revision-specific capabilities, dependencies | Readable artifact under inspection limits |
 | `project` | Deterministic simplified viewer document and coverage diagnostics | Supported projection schema version |
 | `validate` | Structured issues with native and projected locators | Backend validation supported |
+| `edit` | Exact encoded checkpoint, validation and projection | Bounded typed operations replayed on a verified immutable base |
 | `preview` | Ordered output artifacts, counts, bounded trace/diagnostics | Exact formats, inputs, target, limits, and host policy accepted |
 | `build`, later | Immutable runtime artifact and provenance manifest | Exact generator/runtime capability accepted |
 

@@ -26,15 +26,17 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
         var inputs = submission.NamedInputs.Prepend(submission.Primary).ToArray();
         return _database.RunAsync(true, async (connection, transaction) =>
         {
-            await using var command = new NpgsqlCommand("""
-                SELECT outcome, run_id FROM weft.preview_submit($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-                """, connection, transaction);
-            var revision = submission.Revision;
+            var draft = submission.Subject as DraftPreviewSubject;
+            await using var command = new NpgsqlCommand(draft is null
+                ? "SELECT outcome, run_id FROM weft.preview_submit($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+                : "SELECT outcome, run_id FROM weft.preview_submit_draft($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)", connection, transaction);
+            var revision = submission.Subject.ExecutionScope;
             command.Parameters.AddWithValue(revision.OrganizationId);
             command.Parameters.AddWithValue(revision.ProjectId);
             command.Parameters.AddWithValue(revision.MappingId);
-            command.Parameters.AddWithValue(revision.RevisionId);
+            command.Parameters.AddWithValue(draft?.DraftId ?? revision.RevisionId);
             command.Parameters.AddWithValue(actor.PrincipalId.Value);
+            if (draft is not null) command.Parameters.AddWithValue(draft.Version);
             command.Parameters.AddWithValue(submission.RequestKey);
             command.Parameters.AddWithValue(record.RequestDocument);
             command.Parameters.AddWithValue(record.CurrentDateTime);
@@ -85,12 +87,33 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             _ => throw Inconsistent()
         };
         if (outcome != PreviewClaimOutcome.Claimed) return new PreviewClaimResult(outcome, null);
-        var revision = new RevisionScope(organizationId, reader.GetGuid(4), reader.GetGuid(5), reader.GetGuid(6));
-        var native = new PrivateObjectReference(PrivateObjectId.Restore(revision, reader.GetGuid(10), PrivateObjectClass.NativeArtifact),
-            Sha256Digest.Parse(reader.GetString(11)), reader.GetInt64(12));
-        return new PreviewClaimResult(outcome, new PreviewRunClaim(organizationId, runId, reader.GetInt32(1), reader.GetGuid(2),
-            reader.GetFieldValue<DateTimeOffset>(3), revision, new PrincipalId(reader.GetGuid(7)), reader.GetString(8),
-            reader.GetString(9), native));
+        var project = reader.GetGuid(4); var mapping = reader.GetGuid(5);
+        var attempt = reader.GetInt32(1); var token = reader.GetGuid(2); var expires = reader.GetFieldValue<DateTimeOffset>(3);
+        var submitter = new PrincipalId(reader.GetGuid(7)); var document = reader.GetString(8); var clock = reader.GetString(9);
+        var digest = Sha256Digest.Parse(reader.GetString(11)); var byteCount = reader.GetInt64(12);
+        PreviewSubject subject; PreviewNativeSource native;
+        if (!reader.IsDBNull(6))
+        {
+            var revision = new RevisionScope(organizationId, project, mapping, reader.GetGuid(6));
+            subject = new RevisionPreviewSubject(revision);
+            native = new StoredPreviewNative(new(PrivateObjectId.Restore(revision, reader.GetGuid(10), PrivateObjectClass.NativeArtifact), digest, byteCount));
+        }
+        else
+        {
+            if (!reader.IsDBNull(10)) throw Inconsistent();
+            await reader.DisposeAsync();
+            await using var checkpointCommand = new NpgsqlCommand("SELECT draft_id,draft_version,base_revision_id,native_digest,content FROM weft.preview_claim_native($1,$2,$3)", connection, transaction);
+            checkpointCommand.Parameters.AddWithValue(organizationId); checkpointCommand.Parameters.AddWithValue(runId); checkpointCommand.Parameters.AddWithValue(token);
+            await using var checkpoint = await checkpointCommand.ExecuteReaderAsync(cancellationToken);
+            if (!await checkpoint.ReadAsync(cancellationToken)) throw Inconsistent();
+            var revision = new RevisionScope(organizationId, project, mapping, checkpoint.GetGuid(2));
+            var artifact = NativeArtifact.Admit(revision, checkpoint.GetFieldValue<byte[]>(4), MappingEditPolicy.MaximumNativeBytes);
+            if (artifact.Digest != digest || artifact.Digest.Value != checkpoint.GetString(3) || artifact.ByteCount != byteCount) throw Inconsistent();
+            subject = new DraftPreviewSubject(revision, checkpoint.GetGuid(0), checkpoint.GetInt64(1), digest, artifact.ByteCount);
+            native = new CheckpointPreviewNative(artifact);
+        }
+        return new PreviewClaimResult(outcome, new PreviewRunClaim(organizationId, runId, attempt, token, expires,
+            subject, submitter, document, clock, native));
     }, cancellationToken);
 
     public Task<IReadOnlyList<PreviewStoredInput>> ReadInputsAsync(PreviewRunClaim claim, CancellationToken cancellationToken = default)

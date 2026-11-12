@@ -153,7 +153,7 @@ public static partial class CatalogEndpoints
             var snapshot = await PreviewPersistence(context, () => service.ReadAsync(admission.Actor!, scope.OrganizationId, run, context.RequestAborted));
             if (snapshot is null)
                 return NotFound();
-            RequireScope(snapshot.Revision == scope && snapshot.RequestKey == key);
+            RequireScope(snapshot.Subject == new RevisionPreviewSubject(scope) && snapshot.RequestKey == key);
             var created = submitted.Outcome == PreviewSubmitOutcome.Created;
             var result = new CatalogPreviewSubmitResultV1(created ? "created" : "replayed", PreviewRun(snapshot));
             return created
@@ -173,7 +173,7 @@ public static partial class CatalogEndpoints
                 .ReadAsync(admission.Actor!, organization, run, context.RequestAborted));
             if (snapshot is null)
                 return NotFound();
-            RequireScope(snapshot.RunId == run && snapshot.Revision.OrganizationId == organization);
+            RequireScope(snapshot.RunId == run && snapshot.Subject.ExecutionScope.OrganizationId == organization);
             return Results.Ok(PreviewRun(snapshot));
         });
 
@@ -288,7 +288,7 @@ public static partial class CatalogEndpoints
         }
     }
 
-    private static PreviewRunSubmission PreviewSubmission(RevisionScope scope, Guid key, CatalogPreviewSubmissionV1 body)
+    private static PreviewRunSubmission PreviewSubmission(PreviewSubject subject, Guid key, CatalogPreviewSubmissionV1 body)
     {
         if (body.Target is null || body.Parameters is null || body.Inputs is null || body.Inputs.Count == 0
             || body.Inputs.Count > PreviewPolicy.MaximumInputDocuments || body.Parameters.Count > PreviewPolicy.MaximumParameters)
@@ -324,13 +324,12 @@ public static partial class CatalogEndpoints
             DocumentPreviewPolicy.Profile => PreviewExecutionProfile.Document,
             _ => throw new CatalogInvalidRequestException()
         };
-        return new PreviewRunSubmission(scope, key, target, inputs[0], inputs[1..], parameters) { Profile = profile };
+        return new PreviewRunSubmission(subject, key, target, inputs[0], inputs[1..], parameters) { Profile = profile };
     }
 
     private static CatalogPreviewRunV1 PreviewRun(PreviewRunSnapshot run) => new(
         run.RunId.ToString("D"),
-        new CatalogRevisionScopeV1(run.Revision.OrganizationId.ToString("D"), run.Revision.ProjectId.ToString("D"),
-            run.Revision.MappingId.ToString("D"), run.Revision.RevisionId.ToString("D")),
+        run.Subject is RevisionPreviewSubject revision ? CatalogPublicMapper.RevisionScope(revision.Revision) : null,
         run.RequestFingerprint,
         run.CurrentDateTime,
         run.State switch
@@ -358,5 +357,9 @@ public static partial class CatalogEndpoints
         run.CreatedAtUtc,
         run.StartedAtUtc,
         run.FinishedAtUtc,
-        run.ExpiresAtUtc);
+        run.ExpiresAtUtc,
+        run.Subject is DraftPreviewSubject draft ? new CatalogPreviewDraftSubjectV1(
+            CatalogPublicMapper.MappingScope(new(draft.ExecutionScope.OrganizationId, draft.ExecutionScope.ProjectId, draft.ExecutionScope.MappingId)),
+            draft.DraftId.ToString("D"), draft.Version.ToString(CultureInfo.InvariantCulture), CatalogPublicMapper.RevisionScope(draft.ExecutionScope),
+            draft.NativeDigest.Value, draft.NativeByteCount) : null);
 }

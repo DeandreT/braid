@@ -6,6 +6,11 @@ revisions of the same mapping. It is pure: callers supply both sides, built with
 projection and validation reports, and receive a versioned `RevisionComparisonV1`.
 It performs no I/O, authorization, derivation or execution.
 
+A side can also cite an author-private draft checkpoint. Its `kind` is `draft`,
+with a draft/version citation rather than a revision/report-derivation citation.
+The editor comparison route ensures the base reports and supplies checkpoint
+facts to the same comparer, plus readable typed operations. See [Mapping editing](mapping-editing.md).
+
 ## Correspondence
 
 Native and projected node IDs are local to one report, so equal IDs never pair

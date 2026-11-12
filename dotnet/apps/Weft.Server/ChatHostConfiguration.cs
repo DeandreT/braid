@@ -47,6 +47,8 @@ internal static class ChatHostConfiguration
             var writer = new PostgresChatStore(databases.Writer);
             return new ChatPersistencePorts(reader, reader, writer, writer);
         });
+        services.AddSingleton<IChatMappingWriteJournal>(provider => new PostgresChatStore(provider.GetRequiredService<ChatHostDatabases>().Writer));
+        services.AddSingleton<ChatMappingWriteRecovery>();
         // Keyless profiles read the Container Apps managed-identity endpoint, admitted only when a credential uses it, or
         // the fixed Instance Metadata Service address.
         var tokenEndpoint = configuration.ManagedIdentities.Values.Any(identity => identity.Source == ChatIdentitySource.ContainerApps)
@@ -80,7 +82,7 @@ internal static class ChatHostConfiguration
                 provider.GetService<CatalogPreviewOptions>()?.Enabled == true,
                 provider.GetService<CatalogRegressionCaseOptions>()?.Enabled == true,
                 provider.GetService<CatalogBuildOptions>()?.Enabled == true,
-                guide is not null), guide);
+                guide is not null, provider.GetService<MappingDirectEditService>() is not null), guide);
         });
         services.AddWeftChat(configuration.Options);
 

@@ -37,6 +37,10 @@ export const browserFixtureMigrations = Object.freeze([
   "0034_document_previews.sql",
   "0035_x12_interchange_builds.sql",
   "0036_automation_comparison_settlement.sql",
+  "0037_mapping_drafts.sql",
+  "0038_mapping_draft_previews.sql",
+  "0039_chat_mapping_writes.sql",
+  "0040_chat_mapping_write_journal.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
@@ -73,6 +77,9 @@ export const browserFixtureProtectedTables = Object.freeze([
   "import_reviews",
   "export_reviews",
   "revision_import_provenance",
+  "mapping_drafts",
+  "mapping_draft_checkpoints",
+  "revision_edit_provenance",
 ]);
 
 /** Read-side regression hosts may derive the same saved reports that the UI reads. */

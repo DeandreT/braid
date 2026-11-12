@@ -167,6 +167,83 @@ public sealed record ChatPayloadDisclosureFact
     public override string ToString() => nameof(ChatPayloadDisclosureFact);
 }
 
+public enum ChatMappingWriteOutcome { Saved = 1, Proposed }
+public enum ChatMappingWriteReason { NotPermitted = 1, OutOfDate }
+
+/// <summary>One field's plain-language rule before and after an edit, from verified projections, never model text.</summary>
+public sealed record ChatMappingChange
+{
+    public const int MaximumText = 256;
+    public ChatMappingChange(string field, string before, string after)
+    {
+        Field = Bound(field); Before = Bound(before); After = Bound(after);
+    }
+    public string Field { get; }
+    public string Before { get; }
+    public string After { get; }
+    private static string Bound(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > MaximumText || value.Any(char.IsControl)) throw ChatBounds.Invalid();
+        return ChatBounds.Text(value, 1024, false);
+    }
+    public override string ToString() => nameof(ChatMappingChange);
+}
+
+/// <summary>
+/// A mapping edit a workspace tool saved as the next version of its exact base, or showed read-only because the
+/// user may not edit or the base is no longer current. Identities, versions, the edit's size and digest, and at
+/// most <see cref="MaximumChanges"/> changes; never the edit itself or any sample data.
+/// </summary>
+public sealed record ChatMappingWriteFact
+{
+    public const int MaximumChanges = 8;
+    public ChatMappingWriteFact(ChatMappingWriteOutcome outcome, ChatMappingWriteReason? reason, RevisionScope baseRevision, long baseSequence,
+        Guid? revisionId, long? sequence, Guid? headRevisionId, long? headSequence, int operationCount, Sha256Digest editDigest,
+        IReadOnlyList<ChatMappingChange> changes, bool changesTruncated)
+    {
+        ArgumentNullException.ThrowIfNull(baseRevision); ArgumentNullException.ThrowIfNull(editDigest); ArgumentNullException.ThrowIfNull(changes);
+        ChatBounds.Id(baseRevision.OrganizationId); ChatBounds.Id(baseRevision.ProjectId); ChatBounds.Id(baseRevision.MappingId); ChatBounds.Id(baseRevision.RevisionId);
+        if (!Enum.IsDefined(outcome) || reason is { } r && !Enum.IsDefined(r) || baseSequence < 1 || operationCount is < 1 or > 2000 ||
+            changes.Count > MaximumChanges || changes.Any(change => change is null) ||
+            revisionId is null != sequence is null || headRevisionId is null != headSequence is null ||
+            revisionId == Guid.Empty || headRevisionId == Guid.Empty || sequence < 1 || headSequence < 1) throw ChatBounds.Invalid();
+        if (outcome == ChatMappingWriteOutcome.Saved
+                ? reason is not null || revisionId is null || headRevisionId is not null || sequence <= baseSequence
+                : reason is null || revisionId is not null || (reason == ChatMappingWriteReason.OutOfDate) != (headRevisionId is not null))
+            throw ChatBounds.Invalid();
+        Outcome = outcome; Reason = reason; Base = baseRevision; BaseSequence = baseSequence; RevisionId = revisionId; Sequence = sequence;
+        HeadRevisionId = headRevisionId; HeadSequence = headSequence; OperationCount = operationCount; EditDigest = editDigest;
+        Changes = changes.ToArray(); ChangesTruncated = changesTruncated;
+    }
+    public ChatMappingWriteOutcome Outcome { get; }
+    public ChatMappingWriteReason? Reason { get; }
+    public RevisionScope Base { get; }
+    public long BaseSequence { get; }
+    /// <summary>The saved version; null for a proposal.</summary>
+    public Guid? RevisionId { get; }
+    public long? Sequence { get; }
+    /// <summary>The newer version observed for an out-of-date proposal.</summary>
+    public Guid? HeadRevisionId { get; }
+    public long? HeadSequence { get; }
+    public int OperationCount { get; }
+    public Sha256Digest EditDigest { get; }
+    public IReadOnlyList<ChatMappingChange> Changes { get; }
+    public bool ChangesTruncated { get; }
+
+    /// <summary>The same write with the longest prefix of its changes whose record fits the bounded event.</summary>
+    public ChatMappingWriteFact Fitted()
+    {
+        for (var count = Changes.Count; ; count--)
+        {
+            var fact = new ChatMappingWriteFact(Outcome, Reason, Base, BaseSequence, RevisionId, Sequence, HeadRevisionId, HeadSequence,
+                OperationCount, EditDigest, Changes.Take(count).ToArray(), ChangesTruncated || count < Changes.Count);
+            try { _ = ChatMetadataCodec.MappingWrite(fact); return fact; }
+            catch (ArgumentException) when (count > 0) { }
+        }
+    }
+    public override string ToString() => nameof(ChatMappingWriteFact);
+}
+
 public sealed record ChatTerminalMetadata
 {
     public ChatTerminalMetadata(ChatUsageFact? usage = null, ChatProviderFailureFact? failure = null, ChatProviderFinishReason? finishReason = null)
@@ -246,6 +323,30 @@ public static class ChatMetadataCodec
         w.WriteString("subject", value.SubjectId); WriteNumber(w, "version", value.Version); w.WriteNumber("bytes", value.ByteCount);
         w.WriteEndObject();
     });
+    public static string MappingWrite(ChatMappingWriteFact value) => Json(w =>
+    {
+        w.WriteStartObject(); w.WriteNumber("v", 1); w.WriteNumber("outcome", (int)value.Outcome); WriteNumber(w, "reason", (int?)value.Reason);
+        w.WriteString("organization", value.Base.OrganizationId); w.WriteString("project", value.Base.ProjectId);
+        w.WriteString("mapping", value.Base.MappingId); w.WriteString("base", value.Base.RevisionId); w.WriteNumber("baseSequence", value.BaseSequence);
+        WriteId(w, "revision", value.RevisionId); WriteNumber(w, "sequence", value.Sequence);
+        WriteId(w, "head", value.HeadRevisionId); WriteNumber(w, "headSequence", value.HeadSequence);
+        w.WriteNumber("operations", value.OperationCount); w.WriteString("digest", value.EditDigest.Value);
+        w.WriteStartArray("changes");
+        foreach (var change in value.Changes)
+        {
+            w.WriteStartObject(); w.WriteString("field", change.Field); w.WriteString("before", change.Before); w.WriteString("after", change.After); w.WriteEndObject();
+        }
+        w.WriteEndArray(); w.WriteBoolean("truncated", value.ChangesTruncated);
+        w.WriteEndObject();
+    });
+    public static ChatMappingWriteFact ReadMappingWrite(string json) => Parse<ChatMappingWriteFact>(json, e => new(
+        (ChatMappingWriteOutcome)e.GetProperty("outcome").GetInt32(), Number(e, "reason") is { } reason ? (ChatMappingWriteReason)checked((int)reason) : null,
+        new(e.GetProperty("organization").GetGuid(), e.GetProperty("project").GetGuid(), e.GetProperty("mapping").GetGuid(), e.GetProperty("base").GetGuid()),
+        e.GetProperty("baseSequence").GetInt64(), OptionalId(e, "revision"), Number(e, "sequence"), OptionalId(e, "head"), Number(e, "headSequence"),
+        e.GetProperty("operations").GetInt32(), Sha256Digest.Parse(e.GetProperty("digest").GetString()!),
+        e.GetProperty("changes").EnumerateArray().Select(change => new ChatMappingChange(change.GetProperty("field").GetString()!,
+            change.GetProperty("before").GetString()!, change.GetProperty("after").GetString()!)).ToArray(),
+        e.GetProperty("truncated").GetBoolean()), MappingWrite);
     public static ChatWorkspaceCitationFact ReadWorkspaceCitation(string json) => Parse(json, e =>
     {
         var organization = e.GetProperty("organization").GetGuid();
@@ -309,6 +410,7 @@ public static class ChatMetadataCodec
     private static void WriteNumber(Utf8JsonWriter w, string name, long? n) { if (n is { } value) w.WriteNumber(name, value); else w.WriteNull(name); }
     private static void WriteId(Utf8JsonWriter w, string name, Guid? id) { if (id is { } value) w.WriteString(name, value); else w.WriteNull(name); }
     private static long? Number(JsonElement e, string name) => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).GetInt64();
+    private static Guid? OptionalId(JsonElement e, string name) => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).GetGuid();
     private static ChatUsageFact ReadUsage(JsonElement e) => new(e.GetProperty("round").GetGuid(), (ChatUsageOrigin)e.GetProperty("origin").GetInt32(), Number(e, "input"), Number(e, "output"), Number(e, "total"));
     private static ChatProviderFailureFact ReadFailure(JsonElement e) => new(e.GetProperty("round").GetGuid(), (ChatProviderFailureCode)e.GetProperty("code").GetInt32(), (ChatDispatchObservation)e.GetProperty("dispatch").GetInt32());
     private static T Parse<T>(string json, Func<JsonElement, T> read, Func<T, string> write)

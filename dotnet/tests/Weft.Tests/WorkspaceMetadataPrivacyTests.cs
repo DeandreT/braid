@@ -53,4 +53,19 @@ public sealed class WorkspaceMetadataPrivacyTests
         Assert.All(fixture.Server.Requests, request => Assert.False(request.ContainsUtf8("secret-value-9347")));
         Assert.DoesNotContain(fixture.Store.Events(first.TurnId), item => item.Kind == ChatEventKind.DataShared);
     }
+
+    [Fact]
+    public async Task Draft_preview_runs_are_not_visible_to_the_workspace()
+    {
+        var data = new WorkspaceToolFixture(payloads: true);
+        var revision = WorkspacePayloadFakes.Snapshot.Subject.ExecutionScope;
+        data.Payloads!.SnapshotOverride = WorkspacePayloadFakes.Snapshot with
+        {
+            Subject = new DraftPreviewSubject(revision, Guid.NewGuid(), 1, Sha256Digest.FromBytes([1]), 1)
+        };
+        var tools = data.Service(previews: true);
+        var run = $$"""{"kind":"preview","runId":"{{WorkspacePayloadFakes.RunId:D}}"}""";
+        Assert.Equal("notFound", (await data.CallAsync(tools, "get_run", run)).Outcome);
+        Assert.Equal(0, data.Payloads.Observations);
+    }
 }

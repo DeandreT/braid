@@ -2,12 +2,13 @@
 id: chat
 title: Chat about your workspace
 order: 12
-summary: Ask read-only questions about mappings, projects, runs and the user guide.
+summary: Ask about your workspace and save mapping edits when you have edit permission.
 ---
 
 Chat answers questions about projects and mappings you can read, saved reports,
-runs and this user guide. It never generates reports, starts runs or changes
-mappings. Chat must be set up for your workspace; if it isn't, the chat
+runs and this user guide. When asked, it can save mapping edits as new versions if
+you have edit permission. It never generates reports, starts runs or changes the
+version in use. Chat must be set up for your workspace; if it isn't, the chat
 entry is unavailable; the Conversations page explains when chat is not configured.
 
 ## Ask a question
@@ -35,8 +36,28 @@ The answer appears as it is written. **Cancel answer** stops it. If the
 connection drops, choose **Reconnect answer** to continue from where it
 stopped; this doesn't ask the question again.
 
-When the answer uses mapping tools, open **Read-only tool activity** to see
+When the answer uses mapping tools, open tool activity to see
 what it looked up.
+
+## Ask for a mapping change
+
+Name the mapping, exact base version and change you want. Chat saves a new version
+only while that base is still the newest version and you have edit permission.
+Otherwise it shows a read-only proposal. The saved card shows before/after changes,
+**Diff**, **Open version** and **Undo**. Undo saves the earlier content as another
+version and refuses if a newer edit has already moved the head. Nothing is activated
+or tested automatically.
+
+If a newer version caused the proposal, **Update for version** sends a new question
+for that selected mapping and edit. It includes the original question and change
+summaries, then rechecks the current mapping. If the complete context won't fit or
+the summaries are incomplete, nothing is sent; write a new, specific question.
+
+A **Save pending** card is not confirmation that a version was saved. Use **Refresh
+save status** before repeating an edit. **Continue pending save** explicitly resumes
+the original accepted save with current permissions; it does not ask the model again.
+Saved status is recoverable after an interrupted answer or a server restart. Cancelling
+an answer does not undo a mapping version that already committed.
 
 ## Check the answer
 

@@ -350,6 +350,20 @@ internal sealed class ApiResponse(HttpResponseMessage response, ApiOperation ope
                 return administration?.Code is "notFound" or "lastAdministrator" or "conflict" or "preconditionFailed" or "preconditionRequired"
                     or "invalidRequest" or "identityRejected" or "rateLimited" or "unavailable" ? administration.Code : null;
             }
+            if (operation.Path.Contains("/drafts", StringComparison.Ordinal))
+            {
+                using var document = JsonDocument.Parse(bytes);
+                if (document.RootElement.TryGetProperty("outcome", out var outcome))
+                    return outcome.GetString() switch
+                    {
+                        "draftExists" => "draftExists",
+                        "conflict" => "conflict",
+                        "emptyOperations" => "emptyOperations",
+                        "checkpointRequired" => "checkpointRequired",
+                        "replayFailed" => "draftReplayFailed",
+                        _ => null
+                    };
+            }
             return JsonSerializer.Deserialize<CatalogErrorV1>(bytes, WeftApiClient.Json) is { } catalog ? Name(catalog.Code) : null;
         }
         catch (Exception error) when (error is JsonException or ArgumentException or HttpRequestException or IOException)

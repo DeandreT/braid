@@ -90,7 +90,7 @@ test("one transcript keeps each question, answer, tools and details, then replay
     .getByRole("button", { name: "Checked 1 source", exact: true })
     .click();
   await expect(
-    first.getByRole("list", { name: "Read-only tool activity" }),
+    first.getByRole("list", { name: "Tool activity" }),
   ).toContainText("get_mapping · completed");
   await first
     .getByRole("button", { name: "Answer details", exact: true })
@@ -399,10 +399,13 @@ test("starters fill an editable question without sending and header actions retu
   await expect(
     chat(page).getByRole("button", { name: "More chat actions", exact: true }),
   ).toBeFocused();
-  const scope = chat(page).getByRole("button", { name: /Read-only/ });
+  const scope = chat(page).getByRole("button", { name: /Access checked/ });
   await scope.click();
   await expect(chat(page).locator("#chat-scope-menu")).toContainText(
-    "cannot edit mappings or start runs",
+    "chat can save mapping edits as new versions if you have edit permission",
+  );
+  await expect(chat(page).locator("#chat-scope-menu")).toContainText(
+    "It cannot activate versions or start runs",
   );
   await page.keyboard.press("Escape");
   await expect(scope).toBeFocused();

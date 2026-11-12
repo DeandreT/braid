@@ -502,6 +502,8 @@ export async function runBrowserFixture(definition) {
       ["weft_invocation_writer", "INVOCATION_WRITER"],
       ["weft_api_audit_writer", "API_AUDIT_WRITER"],
       ["weft_administration", "ADMINISTRATION"],
+      ["weft_draft_reader", "DRAFT_READER"],
+      ["weft_draft_writer", "DRAFT_WRITER"],
     ];
     const roleEnvironment = { ...process.env };
     for (const key of Object.keys(roleEnvironment))

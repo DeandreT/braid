@@ -54,6 +54,9 @@ public sealed class PreviewRunService
     public Task<PreviewRunSnapshot?> ReadAsync(ActorContext actor, Guid organizationId, Guid runId,
         CancellationToken cancellationToken = default) => _reader.ReadAsync(actor, organizationId, runId, cancellationToken);
 
+    public Task<DraftPreviewSubject?> ReadDraftSubjectAsync(ActorContext actor, MappingScope mapping, Guid requestKey,
+        CancellationToken cancellationToken = default) => _reader.ReadDraftSubjectAsync(actor, mapping, requestKey, cancellationToken);
+
     public Task<PreviewOutputContent?> ReadOutputAsync(ActorContext actor, Guid organizationId, Guid runId, int ordinal,
         CancellationToken cancellationToken = default) => _reader.ReadOutputAsync(actor, organizationId, runId, ordinal, cancellationToken);
 
@@ -71,7 +74,7 @@ public sealed class PreviewRunService
 
     private string? Refusal(PreviewRunSubmission submission)
     {
-        ArgumentNullException.ThrowIfNull(submission.Revision);
+        ArgumentNullException.ThrowIfNull(submission.Subject);
         ArgumentNullException.ThrowIfNull(submission.Target);
         ArgumentNullException.ThrowIfNull(submission.Primary);
         ArgumentNullException.ThrowIfNull(submission.NamedInputs);
@@ -227,7 +230,7 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
     private async Task<MappingPreviewRequest?> PrepareAsync(PreviewRunClaim claim, CancellationToken cancellationToken)
     {
         var description = PreviewRequestDocument.Decode(claim.RequestDocument);
-        if (description.Revision != claim.Revision || claim.NativeObject.Id.Scope != claim.Revision)
+        if (description.Subject != claim.Subject)
             throw new PreviewRunException("The stored preview request does not match its run.");
         var inputs = await _store.ReadInputsAsync(claim, cancellationToken).ConfigureAwait(false);
         if (inputs.Count != description.Inputs.Count)
@@ -240,18 +243,24 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
                 throw new PreviewRunException("The stored preview inputs do not match their declarations.");
         }
 
-        byte[] native;
-        try
+        NativeArtifact artifact;
+        if (claim.Subject is DraftPreviewSubject draft && claim.Native is CheckpointPreviewNative checkpoint)
         {
-            native = await _objects.ReadVerifiedAsync(claim.Revision, claim.NativeObject, cancellationToken).ConfigureAwait(false);
+            artifact = checkpoint.Artifact;
+            if (artifact.Scope != draft.ExecutionScope || artifact.Digest != draft.NativeDigest || artifact.ByteCount != draft.NativeByteCount)
+                throw new PreviewRunException("The native checkpoint does not match the run's subject.");
         }
-        catch (PrivateObjectStorageException)
+        else if (claim.Subject is RevisionPreviewSubject revision && claim.Native is StoredPreviewNative stored)
         {
-            return null;
+            if (stored.Reference.Id.Scope != revision.Revision) throw new PreviewRunException("The native object scope does not match the run.");
+            byte[] native;
+            try { native = await _objects.ReadVerifiedAsync(revision.Revision, stored.Reference, cancellationToken).ConfigureAwait(false); }
+            catch (PrivateObjectStorageException) { return null; }
+            artifact = NativeArtifact.Admit(revision.Revision, native, PreviewPolicy.MaximumNativeBytes);
+            if (artifact.Digest != stored.Reference.Digest || artifact.ByteCount != stored.Reference.ByteCount)
+                throw new PreviewRunException("The native object does not match the run's revision.");
         }
-        var artifact = NativeArtifact.Admit(claim.Revision, native, PreviewPolicy.MaximumNativeBytes);
-        if (artifact.Digest != claim.NativeObject.Digest || artifact.ByteCount != claim.NativeObject.ByteCount)
-            throw new PreviewRunException("The native object does not match the run's revision.");
+        else throw new PreviewRunException("The native source does not match the run's subject kind.");
         return new MappingPreviewRequest(artifact, description.Target, new PreviewInputDocument(null, inputs[0].Content),
             inputs.Skip(1).Select(input => new PreviewInputDocument(input.Name, input.Content)).ToArray(),
             description.Parameters, claim.CurrentDateTime, description.Limits)

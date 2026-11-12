@@ -10,6 +10,10 @@ namespace Weft.Api.Chat.Workspace;
 
 public sealed partial class WorkspaceToolService
 {
+    // Draft runs are author-private and execute against a base that they do not represent, so the workspace never cites them.
+    private static RevisionScope PreviewRevision(PreviewRunSnapshot run) =>
+        run.Subject is RevisionPreviewSubject subject ? subject.Revision : throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
+
     /// <summary>
     /// Run and control listings through the same authorized reads as the GET routes. Previews, regression runs, builds
     /// and approvals are the caller's own; regression cases and build environments are the mapping's or project's.
@@ -97,13 +101,14 @@ public sealed partial class WorkspaceToolService
                     RequireFeature(features.Previews);
                     var run = await Required<PreviewRunService>().ReadAsync(scope.Actor, scope.Organization, runId, token)
                         ?? throw new WorkspaceToolRefusal(WorkspaceToolOutcome.NotFound);
-                    if (run.RunId != runId || run.Revision.OrganizationId != scope.Organization) throw new InvalidOperationException("Preview read scope mismatch.");
+                    var revision = PreviewRevision(run);
+                    if (run.RunId != runId || revision.OrganizationId != scope.Organization) throw new InvalidOperationException("Preview read scope mismatch.");
                     var data = new
                     {
                         kind,
                         runId = Id(run.RunId),
-                        revisionId = Id(run.Revision.RevisionId),
-                        mappingId = Id(run.Revision.MappingId),
+                        revisionId = Id(revision.RevisionId),
+                        mappingId = Id(revision.MappingId),
                         state = Name(run.State),
                         outcome = run.Outcome is { } outcome ? Name(outcome) : null,
                         attempt = run.Attempt,
@@ -124,7 +129,7 @@ public sealed partial class WorkspaceToolService
                         finishedAt = run.FinishedAtUtc,
                         expiresAt = run.ExpiresAtUtc
                     };
-                    return Single(call.Name, scope.Budget, data, [ChatWorkspaceCitationFact.PreviewRun(run.Revision, run.RunId)]);
+                    return Single(call.Name, scope.Budget, data, [ChatWorkspaceCitationFact.PreviewRun(revision, run.RunId)]);
                 }
             case "regressionRun":
                 {

@@ -16,12 +16,18 @@
             "index": "index.html",
             "tsConfig": "tsconfig.app.json",
             "styles": ["src/style.css"],
-            "assets": [{ "glob": "**/*", "input": "public" }],
-            "outputPath": "dist/weft"
+            "outputPath": "dist/weft",
+            "deployUrl": "/",
+            "assets": [{ "glob": "**/*", "input": "public", "output": "/" }]
           },
           "configurations": {
             "production": {
               "deployUrl": "/",
+              "optimization": {
+                "scripts": true,
+                "styles": { "minify": true, "inlineCritical": false },
+                "fonts": { "inline": false }
+              },
               "budgets": [
                 {
                   "type": "initial",
@@ -31,7 +37,12 @@
               ],
               "outputHashing": "all"
             },
-            "development": { "optimization": false, "sourceMap": true }
+            "development": { "optimization": false, "sourceMap": true },
+            "devServer": {
+              "optimization": false,
+              "sourceMap": true,
+              "index": "index.dev.html"
+            }
           },
           "defaultConfiguration": "production"
         },
@@ -70,7 +81,7 @@
           "builder": "@angular/build:dev-server",
           "defaultConfiguration": "development",
           "configurations": {
-            "development": { "buildTarget": "weft:build:development" }
+            "development": { "buildTarget": "weft:build:devServer" }
           }
         }
       }

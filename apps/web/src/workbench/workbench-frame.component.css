@@ -98,6 +98,10 @@ button:focus-visible {
   border-bottom: 1px solid var(--border);
   scrollbar-width: thin;
 }
+.wb-dock-tabs nav {
+  display: flex;
+  flex-shrink: 0;
+}
 .wb-dock-body {
   flex: 1;
   min-height: 0;

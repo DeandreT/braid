@@ -8,7 +8,8 @@ namespace Weft.Persistence.Postgres;
 internal static class SupplementalMaintenanceSchemaAdmission
 {
     internal static string[] TriggerNames(string table) => MaintenanceSchemaContract.Triggers
-        .Where(trigger => trigger.Table == table).Select(trigger => trigger.Name).Concat(AutomationSchemaAdmission.TriggerNames(table)).ToArray();
+        .Where(trigger => trigger.Table == table).Select(trigger => trigger.Name).Concat(AutomationSchemaAdmission.TriggerNames(table))
+        .Concat(table == "revision_ingestions" ? new[] { "chat_mapping_write_commit" } : []).ToArray();
 
     internal static string[] IndexNames(IEnumerable<string> tables) => MaintenanceSchemaContract.Indexes
         .Where(index => tables.Contains(index.Table, StringComparer.Ordinal)).Select(index => index.Name).ToArray();
@@ -27,6 +28,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
         CancellationToken cancellationToken)
     {
         await AutomationSchemaAdmission.ValidateTriggersAsync(connection, transaction, cancellationToken);
+        await ChatSchemaContract.ValidateMappingCommitAuditAsync(connection, transaction, cancellationToken);
         // Loading these descriptors verifies the embedded source digest and all
         // required pristine PostgreSQL captures before inspecting a live schema.
         var tables = RevisionDerivationSchemaContract.Tables.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
@@ -143,6 +145,8 @@ internal static class SupplementalMaintenanceSchemaAdmission
         var expected = MaintenanceSchemaContract.Triggers.Select(trigger => new ExpectedTrigger(
             trigger.Name, trigger.Table, trigger.Function, trigger.Events, true,
             MaintenanceSchemaContract.Functions[trigger.Function].Body, "pg_catalog, weft, pg_temp")).ToList();
+        expected.Add(new("chat_mapping_write_commit", "revision_ingestions", "audit_chat_mapping_write_commit", 17,
+            true, ChatSchemaContract.MappingCommitTriggerBody, "pg_catalog, weft, pg_temp"));
         // Validate the retained older guard as well: this admits the complete set,
         // never an arbitrary extra trigger or a count relaxed to at least one.
         foreach (var table in tables.Values.Where(table => table.FunctionBody is not null &&

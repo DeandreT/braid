@@ -207,7 +207,7 @@ public sealed class PostgresProjectCreationMigrationTests(PostgresFixture fixtur
             .Append(RegressionSchemaTestContract.AutomationChecksum).Append(RegressionSchemaTestContract.ReleaseOperationsChecksum)
             .Append(ChatSchemaContract.WorkspaceMigrationChecksum).Append(PreviewSchemaTestContract.ReadsMigrationChecksum),
             await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=33"));
-        Assert.Equal(new[] { RegressionSchemaTestContract.DocumentPreviewsChecksum, RegressionSchemaTestContract.X12InterchangeBuildsChecksum, RegressionSchemaTestContract.ComparisonSettlementChecksum },
+        Assert.Equal(new[] { RegressionSchemaTestContract.DocumentPreviewsChecksum, RegressionSchemaTestContract.X12InterchangeBuildsChecksum, RegressionSchemaTestContract.ComparisonSettlementChecksum, MappingDraftSchemaTestContract.DraftChecksum, MappingDraftSchemaTestContract.PreviewChecksum, ChatSchemaContract.MappingWriteMigrationChecksum, ChatSchemaContract.WriteJournalMigrationChecksum },
             await test.ScalarAsync<string[]>("SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version>=34"));
     }
 

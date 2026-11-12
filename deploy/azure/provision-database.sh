@@ -9,7 +9,7 @@ set -euo pipefail
 
 roles=(MIGRATOR RUNTIME INGEST CATALOG METADATA CREATOR REPORT DERIVATION MAINTENANCE IDENTITY
   PAYLOAD_PERMISSION SESSION_READER SESSION_WRITER CHAT_READER CHAT_WRITER CHAT_LIFECYCLE
-  PREVIEW_READER PREVIEW_WRITER CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER)
+  PREVIEW_READER PREVIEW_WRITER CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER)
 for role in "${roles[@]}"; do
   variable=WEFT_${role}_PASSWORD
   [[ -n ${!variable:-} ]] || { echo "Set $variable." >&2; exit 2; }
@@ -25,7 +25,7 @@ done
   exit 2
 }
 regression_passwords=()
-for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER; do
+for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READER BUILD_WRITER BUILD_RUN_READER BUILD_RUN_WRITER BUILD_DISPATCHER BUILD_METADATA QUALIFICATION_READER QUALIFICATION_WRITER RELEASE_READER RELEASE_WRITER INVOCATION_GRANT_WRITER INVOCATION_WRITER API_AUDIT_WRITER DRAFT_READER DRAFT_WRITER; do
   variable=WEFT_${role}_PASSWORD
   for previous in "${regression_passwords[@]}"; do
     [[ ${!variable} != "$previous" ]] || { echo 'Regression profile passwords must be independent.' >&2; exit 2; }
@@ -81,6 +81,8 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname=weft --quiet <<'SQL'
 \getenv invocation_writer_password WEFT_INVOCATION_WRITER_PASSWORD
 \getenv api_audit_writer_password WEFT_API_AUDIT_WRITER_PASSWORD
 \getenv administration_password WEFT_ADMINISTRATION_PASSWORD
+\getenv draft_reader_password WEFT_DRAFT_READER_PASSWORD
+\getenv draft_writer_password WEFT_DRAFT_WRITER_PASSWORD
 BEGIN;
 -- PostgreSQL 16 records a non-superuser creator as an ADMIN member of every role it creates,
 -- and the migrations refuse any membership on the restricted profiles. A temporary creator
@@ -165,12 +167,15 @@ CREATE ROLE weft_api_audit_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOIN
   PASSWORD :'api_audit_writer_password';
 CREATE ROLE weft_administration LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'administration_password';
+CREATE ROLE weft_draft_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'draft_reader_password';
+CREATE ROLE weft_draft_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'draft_writer_password';
 GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer, weft_case_reader, weft_case_writer, weft_run_reader, weft_run_writer, weft_build_reader, weft_build_writer, weft_build_run_reader, weft_build_run_writer, weft_build_dispatcher, weft_build_metadata_reader;
 GRANT CONNECT ON DATABASE weft TO weft_qualification_reader,weft_qualification_writer,weft_comparison_settler;
 GRANT CONNECT ON DATABASE weft TO weft_release_reader,weft_release_writer;
 GRANT CONNECT ON DATABASE weft TO weft_invocation_grant_writer,weft_invocation_writer;
 GRANT CONNECT ON DATABASE weft TO weft_api_audit_writer;
 GRANT CONNECT ON DATABASE weft TO weft_administration;
+GRANT CONNECT ON DATABASE weft TO weft_draft_reader,weft_draft_writer;
 GRANT weft_migrator TO weft_provisioner WITH INHERIT FALSE, SET TRUE;
 CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
 -- Install through the database owner, then let the DBA remove the trusted

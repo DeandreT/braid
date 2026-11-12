@@ -20,6 +20,17 @@ USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/usr/bin/caddy", "run", "--config", "/etc/weft/Caddyfile", "--adapter", "caddyfile"]
 
+FROM ubuntu@sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb646106b AS edit-assets
+ENV CARGO_HOME=/opt/cargo RUSTUP_HOME=/opt/rustup CARGO_TARGET_DIR=/opt/weft-target \
+    CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 RUSTUP_USE_CURL=1 PATH=/opt/cargo/bin:$PATH CARGO_NET_GIT_FETCH_WITH_CLI=true
+RUN apt-get update && apt-get install --no-install-recommends -y build-essential ca-certificates curl git python3 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /work
+COPY engines/ferrule-host engines/ferrule-host
+COPY engines/ferrule-edit-wasm engines/ferrule-edit-wasm
+COPY tools/edit-core tools/edit-core
+RUN python3 tools/edit-core/build.py --install --destination /package/edit --manifest /package/edit-assets.generated.ts
+
 FROM ${NODE_IMAGE} AS web
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false NG_BUILD_MAX_WORKERS=2
 RUN npm install --global npm@12.1.0
@@ -28,6 +39,8 @@ COPY package.json package-lock.json .npmrc ./
 COPY apps/web/package.json apps/web/package.json
 RUN npm ci
 COPY apps/web apps/web
+COPY --from=edit-assets /package/edit apps/web/public/edit
+COPY --from=edit-assets /package/edit-assets.generated.ts apps/web/src/edit/edit-assets.generated.ts
 RUN npm run build
 
 FROM ${ASPNET_IMAGE} AS build

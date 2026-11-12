@@ -455,7 +455,11 @@ test("each send observes fresh authority and rotated tokens; grant loss cannot r
   await expect(panel(page)).toContainText("Data shared with fixture-model");
   f.state.grant = false;
   f.data.context.requestToken = "fresh-catalog-request-token";
+  const receiptRead = page.waitForResponse((response) =>
+    response.url().endsWith("/mapping-writes"),
+  );
   await ask(page, "Read again after my grant changed.");
+  await receiptRead;
   await expectComplete(page);
   await expect(
     panel(page)
@@ -465,8 +469,13 @@ test("each send observes fresh authority and rotated tokens; grant loss cannot r
   expect(f.offered.at(-1)).not.toContain("get_preview_output");
   expect(f.posts.at(-1)!.token).toBe("fresh-catalog-request-token");
   const count = f.posts.length;
+  await panel(page)
+    .getByLabel("Question", { exact: true })
+    .fill("This must not be sent as a different owner.");
   f.data.context.actorPrincipalId = "b0000000-0000-4000-8000-000000000099";
-  await ask(page, "This must not be sent as a different owner.");
+  await panel(page)
+    .getByRole("button", { name: "Send question", exact: true })
+    .click();
   await expect(panel(page)).not.toContainText(
     "Partner orders maps the order fields.",
   );

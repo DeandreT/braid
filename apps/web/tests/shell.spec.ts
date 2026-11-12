@@ -9,18 +9,23 @@ const disabledHost = (page: Page) =>
 test("the packaged C# host serves nested Angular navigation and preserves API 404s", async ({
   page,
   request,
+  baseURL,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  const origin = process.env.WEFT_EDIT_SHELL_DLL
+    ? baseURL!
+    : "http://127.0.0.1:4101";
   await page.goto(
-    "http://127.0.0.1:4101/catalog/organizations/10000000-0000-4000-8000-000000000001/projects",
+    origin +
+      "/catalog/organizations/10000000-0000-4000-8000-000000000001/projects",
   );
   await expect(page.getByRole("link", { name: "Weft home" })).toBeVisible();
   await expect(disabledHost(page)).toBeVisible();
-  const missing = await request.get("http://127.0.0.1:4101/api/v1/missing");
+  const missing = await request.get(origin + "/api/v1/missing");
   expect(missing.status()).toBe(404);
   expect(missing.headers()["content-type"] ?? "").not.toContain("text/html");
-  const signIn = await request.get("http://127.0.0.1:4101/sign-in");
+  const signIn = await request.get(origin + "/sign-in");
   expect(signIn.status()).toBe(200);
   expect(signIn.headers()["content-type"] ?? "").toContain("text/html");
   expect(errors).toEqual([]);

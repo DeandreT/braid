@@ -53,6 +53,7 @@ public static class ApiConfiguration
             CatalogEndpoints.TransformRevisionReportSchemas(document);
             CatalogEndpoints.TransformPreviewSchemas(document);
             ChatEndpoints.TransformSchemas(document);
+            CatalogEndpoints.TransformEditSchemas(document);
             AuthenticationOpenApi.Transform(document);
             // Last: every operation, including the authentication routes added above, declares its admitted schemes.
             ApiSecurity.Transform(document, context.DescriptionGroups);

@@ -53,6 +53,7 @@ const comparisonKeys = [
   "emittedItemCount",
   "truncated",
   "items",
+  "operations",
 ];
 const maximumItems = 1024;
 const maximumCandidates = 8;
@@ -185,6 +186,7 @@ function comparison(
   if (
     !object(value) ||
     !keys(value, comparisonKeys) ||
+    value["operations"] !== null ||
     value["schemaVersion"] !== "weft.revision-comparison.v1" ||
     !text(value["policyVersion"], true) ||
     !citation(value["left"], left) ||
@@ -250,7 +252,11 @@ function citation(value: unknown, expected: Expected): boolean {
       "projectionProvenance",
       "projection",
       "validation",
+      "kind",
+      "draft",
     ]) ||
+    value["kind"] !== "revision" ||
+    value["draft"] !== null ||
     !scope(value["revision"], expected.revision) ||
     value["sequence"] !== expected.sequence ||
     !nativeDigest(value["nativeDigest"], expected.digest) ||

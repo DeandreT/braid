@@ -9,7 +9,7 @@ public sealed record PreviewDeclaredInput(string? Name, long ByteLength, Sha256D
 
 /// <summary>The decoded canonical request a run was admitted with.</summary>
 public sealed record PreviewRequestDescription(
-    RevisionScope Revision,
+    PreviewSubject Subject,
     PreviewTargetSelection Target,
     IReadOnlyList<PreviewParameter> Parameters,
     IReadOnlyList<PreviewDeclaredInput> Inputs,
@@ -26,7 +26,9 @@ public sealed record PreviewRequestDescription(
 public static class PreviewRequestDocument
 {
     public const string Schema = "weft.preview-request.v1";
+    public const string DraftSchema = "weft.draft-preview-request.v1";
     public const string DocumentSchema = "weft.document-preview-request.v1";
+    public const string DraftDocumentSchema = "weft.draft-document-preview-request.v1";
     public const int MaximumBytes = 64 * 1024;
 
     public static string Encode(PreviewRunSubmission submission, PreviewLimits limits)
@@ -36,14 +38,25 @@ public static class PreviewRequestDocument
         using var buffer = new MemoryStream();
         using (var json = new Utf8JsonWriter(buffer))
         {
-            var revision = submission.Revision;
+            var revision = submission.Subject.ExecutionScope;
             json.WriteStartObject();
             if (!Enum.IsDefined(submission.Profile)) throw new PreviewRunException("Unknown preview profile.");
-            json.WriteString("schema", submission.Profile == PreviewExecutionProfile.Document ? DocumentSchema : Schema);
+            var document = submission.Profile == PreviewExecutionProfile.Document;
+            json.WriteString("schema", submission.Subject is DraftPreviewSubject
+                ? document ? DraftDocumentSchema : DraftSchema
+                : document ? DocumentSchema : Schema);
             json.WriteString("organizationId", revision.OrganizationId.ToString("D"));
             json.WriteString("projectId", revision.ProjectId.ToString("D"));
             json.WriteString("mappingId", revision.MappingId.ToString("D"));
-            json.WriteString("revisionId", revision.RevisionId.ToString("D"));
+            if (submission.Subject is DraftPreviewSubject draft)
+            {
+                json.WriteString("baseRevisionId", revision.RevisionId.ToString("D"));
+                json.WriteString("draftId", draft.DraftId.ToString("D"));
+                json.WriteString("draftVersion", draft.Version.ToString(CultureInfo.InvariantCulture));
+                json.WriteString("nativeDigest", draft.NativeDigest.Value);
+                json.WriteNumber("nativeByteCount", draft.NativeByteCount);
+            }
+            else json.WriteString("revisionId", revision.RevisionId.ToString("D"));
             json.WriteStartObject("target");
             json.WriteString("kind", submission.Target.Kind switch
             {
@@ -101,9 +114,13 @@ public static class PreviewRequestDocument
             using var parsed = JsonDocument.Parse(document, new JsonDocumentOptions { MaxDepth = 8 });
             var root = parsed.RootElement;
             var schema = Text(root, "schema");
-            Require(schema is Schema or DocumentSchema);
+            Require(schema is Schema or DraftSchema or DocumentSchema or DraftDocumentSchema);
+            var isDraft = schema is DraftSchema or DraftDocumentSchema;
             var revision = new RevisionScope(Guid.ParseExact(Text(root, "organizationId"), "D"), Guid.ParseExact(Text(root, "projectId"), "D"),
-                Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, "revisionId"), "D"));
+                Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, isDraft ? "baseRevisionId" : "revisionId"), "D"));
+            PreviewSubject subject = !isDraft ? new RevisionPreviewSubject(revision) : new DraftPreviewSubject(revision,
+                Guid.ParseExact(Text(root, "draftId"), "D"), long.Parse(Text(root, "draftVersion"), NumberStyles.None, CultureInfo.InvariantCulture),
+                Sha256Digest.Parse(Text(root, "nativeDigest")), root.GetProperty("nativeByteCount").GetInt32());
             var target = root.GetProperty("target");
             var selection = Text(target, "kind") switch
             {
@@ -125,10 +142,10 @@ public static class PreviewRequestDocument
                 item.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(item, "name"),
                 item.GetProperty("byteLength").GetInt64(), Sha256Digest.Parse(Text(item, "sha256")))).ToArray();
             var limits = root.GetProperty("limits");
-            var description = new PreviewRequestDescription(revision, selection, parameters, inputs, new PreviewLimits(
+            var description = new PreviewRequestDescription(subject, selection, parameters, inputs, new PreviewLimits(
                 limits.GetProperty("maximumInputBytes").GetInt32(), limits.GetProperty("maximumOutputBytes").GetInt32(),
                 limits.GetProperty("maximumArtifacts").GetInt32(), limits.GetProperty("maximumTextBytes").GetInt32()))
-            { Profile = schema == DocumentSchema ? PreviewExecutionProfile.Document : PreviewExecutionProfile.LegacyJson };
+            { Profile = schema is DocumentSchema or DraftDocumentSchema ? PreviewExecutionProfile.Document : PreviewExecutionProfile.LegacyJson };
             Require(inputs.Length > 0 && inputs[0].Name is null && inputs.Skip(1).All(input => input.Name is not null));
             return description;
         }
