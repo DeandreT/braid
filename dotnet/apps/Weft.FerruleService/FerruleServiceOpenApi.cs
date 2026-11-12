@@ -34,7 +34,8 @@ internal static class FerruleServiceOpenApi
     internal static readonly string[] Profiles =
     [
         FerruleServiceProtocol.EditProfile, FerruleServiceProtocol.InspectionProfile, FerruleServiceProtocol.PreviewProfile, FerruleServiceProtocol.CompileProfile,
-        FerruleServiceProtocol.CompiledProfile, FerruleServiceProtocol.InterchangeProfile, FerruleServiceProtocol.AuthoringProfile
+        FerruleServiceProtocol.CompiledProfile, FerruleServiceProtocol.InterchangeProfile, FerruleServiceProtocol.AuthoringProfile,
+        FerruleServiceProtocol.AuthoredPreviewProfile
     ];
 
     /// <summary>
