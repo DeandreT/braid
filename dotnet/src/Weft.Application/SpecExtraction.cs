@@ -75,6 +75,29 @@ public sealed class SpecEvidenceChunk
 public sealed class SpecExtractionResult
 {
     private readonly byte[] canonicalEvidence;
+    // Database restoration only; never a model or HTTP admission path.
+    internal SpecExtractionResult(SpecExtractionIdentity identity, byte[] evidence)
+    {
+        if (evidence.Length > SpecCapturedSource.MaximumBytes || Sha256Digest.FromBytes(evidence) != identity.EvidenceDigest ||
+            identity.Outcome != SpecExtractionOutcome.Complete) throw new ArgumentException("Invalid retained extraction.");
+        using var document = JsonDocument.Parse(evidence, new JsonDocumentOptions { MaxDepth = 4 });
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() is < 2 or > 10002 || root[0].GetString() != "weft.spec-evidence.v1")
+            throw new ArgumentException("Invalid retained extraction.");
+        Code = root[1].GetString() ?? throw new ArgumentException("Missing extraction code.");
+        var chunks = new List<SpecEvidenceChunk>();
+        foreach (var item in root.EnumerateArray().Skip(2))
+        {
+            if (item.ValueKind != JsonValueKind.Array || item.GetArrayLength() != 7 || item[0].GetInt32() != chunks.Count)
+                throw new ArgumentException("Invalid retained chunk.");
+            var chunk = new SpecEvidenceChunk(item[0].GetInt32(), item[1].GetString()!, item[2].GetString(), item[3].GetInt32(), item[4].GetInt32(), item[5].GetInt32(), item[6].GetInt32());
+            if (chunk.Text is null || chunk.ByteOffset < 0 || chunk.ByteLength < 0 || chunk.StartLine < 1 || chunk.EndLine < chunk.StartLine)
+                throw new ArgumentException("Invalid retained locator.");
+            chunks.Add(chunk);
+        }
+        if (!Serialize(Code, chunks).AsSpan().SequenceEqual(evidence)) throw new ArgumentException("Noncanonical extraction.");
+        Identity = identity; Chunks = chunks.AsReadOnly(); canonicalEvidence = evidence.ToArray();
+    }
     internal SpecExtractionResult(SpecCapturedSource source, SpecExtractionLimits limits, SpecExtractionOutcome outcome,
         string code, IReadOnlyList<SpecEvidenceChunk> chunks)
     {

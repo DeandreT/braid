@@ -86,6 +86,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly string specReaderPassword = Guid.NewGuid().ToString("N");
     private readonly string specWriterPassword = Guid.NewGuid().ToString("N");
     private readonly string specMaintenancePassword = Guid.NewGuid().ToString("N");
+    private readonly string creationReaderPassword = Guid.NewGuid().ToString("N");
+    private readonly string creationWriterPassword = Guid.NewGuid().ToString("N");
+    private readonly string creationApproverPassword = Guid.NewGuid().ToString("N");
     private readonly bool provisionMetadataEditor;
     private readonly bool provisionProjectCreator;
     private readonly bool provisionReportReader;
@@ -475,7 +478,8 @@ public sealed class PostgresFixture : IAsyncLifetime
              ("weft_invocation_writer", invocationWriterPassword) } : []),
           .. (provisionApiAudit ? new (string Name, string Password)[] { ("weft_api_audit_writer", apiAuditWriterPassword) } : []),
           ("weft_draft_reader", draftReaderPassword), ("weft_draft_writer", draftWriterPassword),
-          ("weft_spec_reader", specReaderPassword), ("weft_spec_writer", specWriterPassword), ("weft_spec_maintenance", specMaintenancePassword)];
+           ("weft_spec_reader", specReaderPassword), ("weft_spec_writer", specWriterPassword), ("weft_spec_maintenance", specMaintenancePassword),
+           ("weft_creation_reader", creationReaderPassword), ("weft_creation_writer", creationWriterPassword), ("weft_creation_approver", creationApproverPassword)];
 
     internal string RegressionConnectionString(PostgresCase test, string role)
     {

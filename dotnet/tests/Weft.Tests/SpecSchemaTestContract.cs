@@ -17,7 +17,7 @@ internal static class SpecSchemaTestContract
         Assert.Equal(Checksum, MigrationRunner.EmbeddedMigrations[43].Checksum);
         foreach (var (role, profile) in new[] { (Roles[0], SpecDatabaseProfile.Reader), (Roles[1], SpecDatabaseProfile.Writer), (Roles[2], SpecDatabaseProfile.Maintenance) })
         {
-            await using var connection = new NpgsqlConnection(test.RegressionConnectionString(role));
+            await using var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(test.RegressionConnectionString(role)) { Pooling = false }.ConnectionString);
             await connection.OpenAsync(token);
             await using var transaction = await connection.BeginTransactionAsync(token);
             await SpecSchemaAdmission.ValidateAsync(connection, transaction, profile, token);

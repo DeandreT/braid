@@ -45,9 +45,13 @@ export const browserFixtureMigrations = Object.freeze([
   "0042_xml_documents.sql",
   "0043_chat_edit_proposals.sql",
   "0044_spec_bundles.sql",
+  "0045_mapping_creation.sql",
 ]);
 
 export const browserFixtureProtectedTables = Object.freeze([
+  "creation_proposals",
+  "creation_sources",
+  "creation_approvals",
   "spec_stores",
   "spec_bundles",
   "spec_sources",
