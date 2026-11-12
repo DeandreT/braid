@@ -1,5 +1,9 @@
 # Project-owned mapping creation foundation
 
+The format-authoring follow-up is documented in [Typed mapping creation plan v2](mapping-creation-formats.md).
+It preserves the v1 canonical plan and adds a separate closed structured model for all six required formats.
+The flat-JSON restrictions below describe the original v1 foundation.
+
 Creation foundation in `C:/example/checkout`, initially based on `014f2f79` and fast-forwarded to the authorized integrated `075cbb36` after preserving the uncommitted unit. The integration includes the reviewed native compiler. The current unit adds Domain/Application code, its real MappingBackends compiler adapter, and tests. Production registration and durable storage are subsequent integration work.
 
 ## Ownership and immutable content
