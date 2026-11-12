@@ -1,11 +1,20 @@
 import { HttpErrorResponse } from "@angular/common/http";
 import { DOCUMENT } from "@angular/common";
-import { Component, DestroyRef, computed, inject, signal } from "@angular/core";
+import {
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import {
   type Observable,
+  EMPTY,
   finalize,
   forkJoin,
   of,
@@ -74,6 +83,7 @@ export class SandboxPageComponent {
   private readonly destroy = inject(DestroyRef);
   private readonly document = inject(DOCUMENT);
   private generation = 0;
+  private retainedOwner: string | null = null;
   private readonly admitted = signal<CatalogContext | null>(null);
   readonly presented = computed(
     () =>
@@ -88,7 +98,16 @@ export class SandboxPageComponent {
   readonly busy = signal(false);
   readonly message = signal("");
   readonly unavailable = signal(false);
-  readonly pending = signal<Pending | null>(null);
+  private readonly retainedPending = signal<Pending | null>(null);
+  readonly pending = computed(() => {
+    const context = this.context.context();
+    const pending = this.retainedPending();
+    return context &&
+      this.context.canPresent(context) &&
+      pending?.owner === catalogOwner(context)
+      ? pending
+      : null;
+  });
   readonly decode = decodeContent;
   target = "";
   build = "";
@@ -102,10 +121,17 @@ export class SandboxPageComponent {
   private scope: CatalogMappingScope | null = null;
 
   constructor() {
-    inject(UnsentWork).track(() => this.pending() !== null, this.destroy);
+    inject(UnsentWork).track(
+      () => this.retainedPending() !== null,
+      this.destroy,
+    );
     this.context.invalidated.pipe(takeUntilDestroyed()).subscribe(() => {
       this.generation++;
       this.reset();
+    });
+    effect(() => {
+      const context = this.context.context();
+      if (context) untracked(() => this.bindOwner(context));
     });
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const organizationId = params.get("organizationId") ?? "";
@@ -116,7 +142,7 @@ export class SandboxPageComponent {
         : null;
       this.generation++;
       this.reset();
-      this.pending.set(null);
+      this.clearDrafts();
       this.load();
     });
   }
@@ -139,9 +165,15 @@ export class SandboxPageComponent {
   load(keepMessage = false): void {
     if (!keepMessage) this.message.set("");
     this.run(
-      (context, scope) =>
-        this.api.state(context, scope).pipe(
+      (context, scope) => {
+        const generation = this.generation;
+        return this.api.state(context, scope).pipe(
           switchMap((state) => {
+            if (
+              generation !== this.generation ||
+              !this.context.isCurrent(context)
+            )
+              return EMPTY;
             this.state.set(state);
             this.unavailable.set(false);
             if (!state.targets.some((value) => value.targetId === this.target))
@@ -163,7 +195,8 @@ export class SandboxPageComponent {
               ),
             ]);
           }),
-        ),
+        );
+      },
       (value) => {
         if (!value) {
           this.history.set([]);
@@ -343,6 +376,9 @@ export class SandboxPageComponent {
   }
 
   async upload(event: Event): Promise<void> {
+    const generation = this.generation;
+    const owner = this.admitted();
+    if (!owner || !this.presented()) return;
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
     if (file.size > 1024 * 1024) {
@@ -350,6 +386,12 @@ export class SandboxPageComponent {
       return;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
+    if (
+      generation !== this.generation ||
+      !this.context.isCurrent(owner) ||
+      !this.context.canPresent(owner)
+    )
+      return;
     this.primary = new TextDecoder().decode(bytes);
     this.uploadedPrimary = { text: this.primary, bytes };
   }
@@ -365,7 +407,7 @@ export class SandboxPageComponent {
 
   requestLeave() {
     return of(
-      this.pending() === null && !this.primary
+      this.retainedPending() === null && !this.primary
         ? true
         : (this.document.defaultView?.confirm(
             "Leave the sandbox? Unsent input and this tab's recovery request will be lost. A sent request may already have committed.",
@@ -392,7 +434,14 @@ export class SandboxPageComponent {
   ): void {
     const scope = this.scope;
     const owner = this.admitted();
-    if (!scope || !owner || this.busy() || this.pending()) return;
+    if (
+      !scope ||
+      !owner ||
+      !this.presented() ||
+      this.busy() ||
+      this.retainedPending()
+    )
+      return;
     const id = crypto.randomUUID();
     this.dispatch({
       kind,
@@ -403,7 +452,8 @@ export class SandboxPageComponent {
   }
 
   private dispatch(pending: Pending): void {
-    this.pending.set(pending);
+    if (this.busy()) return;
+    this.retainedPending.set(pending);
     this.message.set("");
     this.run(
       (context) => {
@@ -412,7 +462,7 @@ export class SandboxPageComponent {
         return pending.run(context);
       },
       (value) => {
-        this.pending.set(null);
+        this.retainedPending.set(null);
         const result = value as {
           outcome?: string;
           status?: string;
@@ -447,14 +497,18 @@ export class SandboxPageComponent {
               : "Operation recorded.",
         );
         // After this request settles and releases the busy state.
-        queueMicrotask(() => this.load(true));
+        const generation = this.generation;
+        queueMicrotask(() => {
+          if (generation === this.generation && this.presented())
+            this.load(true);
+        });
       },
       (error) => {
         if (
           error instanceof HttpErrorResponse &&
           [400, 404, 409, 412, 413, 415, 428].includes(error.status)
         ) {
-          this.pending.set(null);
+          this.retainedPending.set(null);
           return error.status === 412
             ? "The target changed. Refresh and review before trying again."
             : "The request was refused.";
@@ -475,14 +529,21 @@ export class SandboxPageComponent {
   ): void {
     const scope = this.scope;
     if (!scope || this.busy()) return;
+    const owner = this.retainedOwner;
     const generation = ++this.generation;
     this.busy.set(true);
     this.context
       .refresh()
       .pipe(
         switchMap((context) => {
-          if (generation !== this.generation)
-            throw new Error("Sandbox selection changed");
+          if (generation !== this.generation) return EMPTY;
+          this.bindOwner(context);
+          // A selection/action captured under A must never be dispatched as B.
+          if (
+            generation !== this.generation ||
+            (owner !== null && owner !== catalogOwner(context))
+          )
+            return EMPTY;
           this.admitted.set(context);
           return request(context, scope);
         }),
@@ -494,12 +555,38 @@ export class SandboxPageComponent {
       )
       .subscribe({
         next: (value) => {
-          if (generation === this.generation) next(value);
+          if (generation === this.generation && this.presented()) next(value);
         },
         error: (error) => {
-          if (generation === this.generation) this.message.set(failure(error));
+          if (
+            generation === this.generation &&
+            (!this.admitted() || this.presented())
+          )
+            this.message.set(failure(error));
         },
       });
+  }
+
+  private bindOwner(context: CatalogContext): void {
+    const owner = catalogOwner(context);
+    if (this.retainedOwner !== null && this.retainedOwner !== owner) {
+      ++this.generation;
+      this.reset();
+      this.clearDrafts();
+    }
+    this.retainedOwner = owner;
+  }
+
+  private clearDrafts(): void {
+    this.retainedPending.set(null);
+    this.primary = "";
+    this.uploadedPrimary = null;
+    this.named = [];
+    this.source = "case";
+    this.target = "";
+    this.build = "";
+    this.sample = "";
+    this.rollbackSource = "";
   }
 
   private reset(): void {
@@ -510,6 +597,7 @@ export class SandboxPageComponent {
     this.comparison.set(null);
     this.compare.set([]);
     this.message.set("");
+    this.unavailable.set(false);
     this.busy.set(false);
     this.admitted.set(null);
   }
