@@ -7,8 +7,8 @@ public enum CreationScalarType { Text = 1, Number = 2, Boolean = 3 }
 public sealed record CreationField(string Name, CreationScalarType Type, bool Required);
 public sealed record CreationBinding(string Source, string Target);
 
-/// <summary>Version-one flat JSON record authoring language. No native document, expression, URL or executable text slot.</summary>
-public sealed class MappingCreationPlan
+/// <summary>Closed versioned authoring language. V1 retains its original flat JSON canonical encoding.</summary>
+public sealed partial class MappingCreationPlan
 {
     public const int MaximumBytes = 65_536;
     private readonly byte[] bytes;
@@ -90,8 +90,11 @@ public sealed class MappingCreationPlan
     public static MappingCreationPlan Parse(ReadOnlySpan<byte> utf8)
     {
         if (utf8.Length is < 1 or > MaximumBytes) throw new ArgumentException("Authoring plan exceeds its byte budget.");
-        using var document = JsonDocument.Parse(utf8.ToArray(), new JsonDocumentOptions { MaxDepth = 8 });
+        using var document = JsonDocument.Parse(utf8.ToArray(), new JsonDocumentOptions { MaxDepth = 64 });
         var root = document.RootElement;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("schema", out var version) &&
+            version.ValueKind == JsonValueKind.String && version.GetString() == "weft.creation-plan.v2")
+            return new MappingCreationPlan(CreationPlanV2Codec.Parse(root));
         Properties(root, "schema", "format", "source", "target", "bindings");
         if (root.GetProperty("schema").GetString() != "weft.creation-plan.v1" || root.GetProperty("format").GetString() != "json-record")
             throw new ArgumentException("Unsupported authoring schema.");
