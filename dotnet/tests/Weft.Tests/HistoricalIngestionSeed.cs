@@ -43,8 +43,8 @@ internal static class HistoricalIngestionSeed
     internal static Task<IngestionReceipt> CommitCreateAsync(PostgresCase test, ActorContext actor,
         ProjectScope project, string name = "Synthetic catalog mapping",
         string description = "Synthetic C1 admission evidence only", bool valid = true,
-        string? filename = null, CancellationToken cancellationToken = default) =>
-        CommitAsync(test, actor, project, PostgresIngestionTestSupport.CreateIntent(name, description, filename),
+        string? filename = null, CancellationToken cancellationToken = default, byte[]? body = null) =>
+        CommitAsync(test, actor, project, PostgresIngestionTestSupport.CreateIntent(name, description, filename, body),
             valid, cancellationToken);
 
     internal static Task<IngestionReceipt> CommitAppendAsync(PostgresCase test, IngestionReceipt mapping,

@@ -146,7 +146,7 @@ public sealed record ChatTurnFocusV1
 [JsonConverter(typeof(ChatWorkspaceCitationKindConverterV1))]
 public enum ChatWorkspaceCitationKindV1
 {
-    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection
+    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection, CreationProposal
 }
 
 /// <summary>
@@ -156,7 +156,7 @@ public enum ChatWorkspaceCitationKindV1
 public sealed record ChatWorkspaceCitationV1
 {
     public ChatWorkspaceCitationV1(ChatWorkspaceCitationKindV1 kind, string organizationId, string? projectId, string? mappingId,
-        string? revisionId, ChatSelectorV1? target, string? reportDerivationId, string? subjectId, string? version, string? sectionId)
+        string? revisionId, ChatSelectorV1? target, string? reportDerivationId, string? subjectId, string? version, string? sectionId, string? proposalFingerprint = null)
     {
         if (!Enum.IsDefined(kind) || (kind == ChatWorkspaceCitationKindV1.Report) != (target is not null) ||
             (target is null) != (reportDerivationId is null) || (kind == ChatWorkspaceCitationKindV1.GuideSection) != (sectionId is not null))
@@ -171,6 +171,11 @@ public sealed record ChatWorkspaceCitationV1
         SubjectId = subjectId is null ? null : CatalogValueV1.RequireId(subjectId, nameof(subjectId));
         Version = version is null ? null : CatalogValueV1.RequireText(version, 20, nameof(version));
         SectionId = sectionId is null ? null : CatalogValueV1.RequireText(sectionId, 64, nameof(sectionId));
+        if ((kind == ChatWorkspaceCitationKindV1.CreationProposal) != (proposalFingerprint is not null) ||
+            proposalFingerprint is not null && (projectId is null || subjectId is null || mappingId is not null || revisionId is not null || version is not null ||
+                proposalFingerprint.Length != 64 || proposalFingerprint.Any(c => !char.IsAsciiDigit(c) && c is not (>= 'a' and <= 'f'))))
+            throw new ArgumentException("Invalid creation proposal citation.");
+        ProposalFingerprint = proposalFingerprint;
     }
 
     public ChatWorkspaceCitationKindV1 Kind { get; }
@@ -188,6 +193,8 @@ public sealed record ChatWorkspaceCitationV1
     public string? Version { get; }
     /// <summary>The user guide section, for a guide citation.</summary>
     public string? SectionId { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ProposalFingerprint { get; }
 }
 
 public sealed record ChatWorkspaceCitationEventV1 : ChatTurnEventV1
@@ -203,7 +210,7 @@ public sealed record ChatWorkspaceCitationEventV1 : ChatTurnEventV1
 }
 
 [JsonConverter(typeof(ChatPayloadSourceConverterV1))]
-public enum ChatPayloadSourceV1 { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput }
+public enum ChatPayloadSourceV1 { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput, Specification }
 
 /// <summary>Sample payload bytes a tool result shared with the turn's model: identities and the byte count, never content.</summary>
 public sealed record ChatDataSharedEventV1 : ChatTurnEventV1

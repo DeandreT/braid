@@ -1,5 +1,7 @@
 # Bounded Office extraction unit (not activated)
 
+The subsequent executable/host foundation is described in [spec-document-worker.md](spec-document-worker.md). Its live Linux qualification and activation gates remain explicit there; the 141-test foundation evidence below is preserved.
+
 This change adds Domain/Application DOCX and XLSX extraction and in-memory ZIP/XML tests. It does not enable Office uploads or run Office parsing in the API. It uses framework ZIP/XML parsers with no new dependencies.
 
 ## Supported scope and honest outcomes

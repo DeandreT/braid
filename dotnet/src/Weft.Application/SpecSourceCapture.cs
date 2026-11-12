@@ -22,6 +22,7 @@ public static class SpecSourceCapture
         ArgumentNullException.ThrowIfNull(source);
         if (!Enum.IsDefined(format)) throw new ArgumentOutOfRangeException(nameof(format));
         if (maximumBytes is < 1 or > SpecCapturedSource.MaximumBytes) throw new ArgumentOutOfRangeException(nameof(maximumBytes));
+        if (format == SpecSourceFormat.Pdf) maximumBytes = Math.Min(maximumBytes, SpecPdfWorkerResponse.MaximumSourceBytes);
         using var captured = new MemoryStream();
         var buffer = new byte[Math.Min(8192, maximumBytes + 1)];
         while (true)

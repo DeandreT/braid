@@ -7,20 +7,32 @@ namespace Weft.Application;
 public sealed class CreationSpecification
 {
     public CreationSpecification(SpecBundleScope bundle, IEnumerable<SpecCapturedSource> sources, IEnumerable<SpecExtractionResult> extractions)
+        : this(bundle, sources, Adapt(extractions)) { }
+
+    public CreationSpecification(SpecBundleScope bundle, IEnumerable<SpecCapturedSource> sources, IEnumerable<CreationEvidenceDocument> extractions)
     {
+        ArgumentNullException.ThrowIfNull(sources); ArgumentNullException.ThrowIfNull(extractions);
         var captured = sources.Take(SpecBundleSnapshot.MaximumSources + 1).ToArray();
         var extracted = extractions.Take(SpecBundleSnapshot.MaximumSources + 1).ToArray();
+        if (captured.Any(s => s is null) || extracted.Any(e => e is null))
+            throw new ArgumentException("Captured sources and extractions must be present.");
         Snapshot = new(bundle, extracted.Select(e => e.Identity));
         if (captured.Length != extracted.Length || captured.Select(s => s.Identity).Distinct().Count() != captured.Length ||
             captured.Sum(s => (long)s.ByteCount) > 20 * 1024 * 1024 ||
-            extracted.Sum(e => (long)e.CopyEvidenceBytes().Length) > 20 * 1024 * 1024 ||
+            extracted.Sum(e => (long)e.EvidenceByteCount) > 20 * 1024 * 1024 ||
             extracted.Any(e => !captured.Any(s => s.Identity == e.Identity.Source && s.Digest == e.Identity.SourceDigest && s.Format == e.Identity.Format)))
             throw new ArgumentException("Snapshot evidence must match every exact captured source.");
         Sources = Array.AsReadOnly(captured); Extractions = Array.AsReadOnly(extracted);
     }
     public SpecBundleSnapshot Snapshot { get; }
     public IReadOnlyList<SpecCapturedSource> Sources { get; }
-    public IReadOnlyList<SpecExtractionResult> Extractions { get; }
+    public IReadOnlyList<CreationEvidenceDocument> Extractions { get; }
+
+    private static IEnumerable<CreationEvidenceDocument> Adapt(IEnumerable<SpecExtractionResult> extractions)
+    {
+        ArgumentNullException.ThrowIfNull(extractions);
+        return extractions.Select(CreationEvidenceDocument.From);
+    }
 }
 
 /// <summary>Trusted compiler output. Only a registered implementation may provide native bytes; never deserialize this from model output.</summary>
@@ -129,8 +141,9 @@ public sealed class MappingCreationGenerationService(IMappingCreationCompiler co
         foreach (var reference in notes.Evidence)
             if (!specification.Extractions.Any(e => e.Identity.Source == reference.Source && e.Chunks.Any(c => c.Ordinal == reference.ChunkOrdinal)))
                 throw new ArgumentException("Generation evidence must cite the selected extraction.");
-        if (specification.Extractions.Any(e => e.Outcome != SpecExtractionOutcome.Complete))
-            throw new InvalidOperationException("Incomplete extraction cannot support generation.");
+        if (specification.Extractions.Any(e => !e.SupportsGeneration))
+            throw new InvalidOperationException("The selected extraction outcome cannot support generation.");
+        notes = CreationEvidenceCoverage.Include(specification, notes);
         await RequireCurrent(actor, specification.Snapshot, ct);
         var result = await compiler.CompileAsync(specification.Snapshot.Bundle.Project, proposalId, plan, specification.Snapshot, ct).ConfigureAwait(false);
         if (result is null || (result.Checkpoint is null) == (result.Failure is null))

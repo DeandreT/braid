@@ -48,6 +48,7 @@
     <ProjectReference Include="../../apps/Weft.Cli/Weft.Cli.csproj" />
     <ProjectReference Include="../../apps/Weft.Worker/Weft.Worker.csproj" />
     <ProjectReference Include="../../apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../apps/Weft.DocumentWorker/Weft.DocumentWorker.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../tools/Weft.CompiledSandboxProbe/Weft.CompiledSandboxProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../apps/Weft.FerruleService/Weft.FerruleService.csproj" />
     <ProjectReference Include="../../apps/Weft.MachineEndpoint/Weft.MachineEndpoint.csproj" />
@@ -94,6 +95,15 @@
       <FerruleServiceFiles Include="$(FerruleServiceDirectory)**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(FerruleServiceFiles)" DestinationFiles="@(FerruleServiceFiles->'$(OutDir)FerruleService/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyDocumentWorker" AfterTargets="Build">
+    <MSBuild Projects="../../apps/Weft.DocumentWorker/Weft.DocumentWorker.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="DocumentWorkerTarget" />
+    </MSBuild>
+    <Error Condition="!Exists('@(DocumentWorkerTarget)')" Text="The built document worker is missing." />
+    <PropertyGroup><DocumentWorkerDirectory>@(DocumentWorkerTarget->'%(RootDir)%(Directory)')</DocumentWorkerDirectory></PropertyGroup>
+    <ItemGroup><DocumentWorkerFiles Include="$(DocumentWorkerDirectory)**/*" /></ItemGroup>
+    <Copy SourceFiles="@(DocumentWorkerFiles)" DestinationFiles="@(DocumentWorkerFiles->'$(OutDir)DocumentWorker/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopyCompiledRuntime" AfterTargets="Build">
     <MSBuild Projects="../../apps/Weft.CompiledRuntime/Weft.CompiledRuntime.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">

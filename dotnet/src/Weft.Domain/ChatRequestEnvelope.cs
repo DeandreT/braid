@@ -31,7 +31,7 @@ public sealed record ChatProviderBudget
 {
     public ChatProviderBudget(long durationTicks, int rounds, long requestBytes, long wireBytes, long textBytes, int toolCalls, int maxOutputTokens)
     {
-        if (durationTicks is < 1 or > 1_800_000_000 || rounds is < 1 or > 4 || requestBytes is < 1 or > 1048576 ||
+        if (durationTicks is < 1 or > 1_800_000_000 || rounds is < 1 or > 5 || requestBytes is < 1 or > 1048576 ||
             wireBytes is < 1 or > 4194304 || textBytes is < 1 or > 131072 || toolCalls is < 1 or > 8 || maxOutputTokens is < 1 or > 2048) throw ChatBounds.Invalid();
         DurationTicks = durationTicks; MaxRounds = rounds; MaxRequestBytes = requestBytes; MaxWireBytes = wireBytes;
         MaxTextBytes = textBytes; MaxToolCalls = toolCalls; MaxOutputTokens = maxOutputTokens;

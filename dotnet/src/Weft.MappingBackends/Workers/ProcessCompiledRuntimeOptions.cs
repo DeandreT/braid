@@ -74,12 +74,12 @@ public sealed class ProcessCompiledRuntimeOptions
         result.AddRange(["--dotnet-root=" + DotnetRoot, "--profile=runtime", "--runtime-assembly=" + RuntimeAssembly]);
         result.AddRange(grants.Read.Append(Path.GetDirectoryName(RuntimeAssembly)!).Distinct(StringComparer.Ordinal).Select(path => "--read=" + path));
         if (Operation == CompiledRuntimeOperation.XmlCanonicalComparison) result.Add(XmlComparisonProtocol.ModeArgument);
-        else if (Operation != CompiledRuntimeOperation.Mapping) throw new InvalidOperationException("Unknown fixed runtime operation.");
+        else if (Operation is not (CompiledRuntimeOperation.Mapping or CompiledRuntimeOperation.OfficeExtraction)) throw new InvalidOperationException("Unknown fixed runtime operation.");
         return result;
     }
 }
 
-internal enum CompiledRuntimeOperation { Mapping, XmlCanonicalComparison }
+internal enum CompiledRuntimeOperation { Mapping, XmlCanonicalComparison, OfficeExtraction }
 
 internal enum CompiledRuntimeCleanupStage { Process, Callbacks, Pipes, Handles, Directory }
 
