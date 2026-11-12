@@ -151,3 +151,69 @@ fn process_protocol_returns_only_bound_source_and_page_evidence() {
         }
     }
 }
+
+#[test]
+fn malformed_children_are_not_silently_renumbered_as_valid_citations() {
+    for invalid in [
+        lopdf::Object::Null,
+        lopdf::Object::Reference((9999, 0)),
+        lopdf::Object::Reference((4, 0)),
+    ] {
+        let mut doc = lopdf::Document::load_mem(&pdf(&["first", "second"])).unwrap();
+        doc.get_dictionary_mut((2, 0)).unwrap().set(
+            "Kids",
+            vec![
+                lopdf::Object::Reference((4, 0)),
+                invalid,
+                lopdf::Object::Reference((6, 0)),
+            ],
+        );
+        doc.get_dictionary_mut((2, 0)).unwrap().set("Count", 3);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        let result = extract(&bytes);
+        assert_eq!(result.status, Status::Malformed);
+        assert!(result.pages.is_empty());
+    }
+}
+
+#[test]
+fn deeply_nested_page_trees_are_refused_before_traversal_can_omit_pages() {
+    use lopdf::{Object, dictionary};
+    let mut doc = lopdf::Document::load_mem(&pdf(&["last"])).unwrap();
+    let mut child = (4, 0);
+    for _ in 0..257 {
+        let parent = doc.add_object(dictionary! { "Type" => "Pages", "Count" => 1,
+        "Kids" => vec![Object::Reference(child)] });
+        doc.get_dictionary_mut(child).unwrap().set("Parent", parent);
+        child = parent;
+    }
+    doc.get_dictionary_mut((2, 0))
+        .unwrap()
+        .set("Kids", vec![Object::Reference(child)]);
+    doc.get_dictionary_mut(child).unwrap().set("Parent", (2, 0));
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    let result = extract(&bytes);
+    assert_eq!(result.status, Status::LimitExceeded);
+    assert!(result.pages.is_empty());
+}
+
+#[test]
+fn page_reference_alias_cannot_duplicate_a_page_under_a_second_identity() {
+    let mut doc = lopdf::Document::load_mem(&pdf(&["only actual page"])).unwrap();
+    let alias = doc.add_object(lopdf::Object::Reference((4, 0)));
+    doc.get_dictionary_mut((2, 0)).unwrap().set(
+        "Kids",
+        vec![
+            lopdf::Object::Reference((4, 0)),
+            lopdf::Object::Reference(alias),
+        ],
+    );
+    doc.get_dictionary_mut((2, 0)).unwrap().set("Count", 2);
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    let result = extract(&bytes);
+    assert_eq!(result.status, Status::Malformed);
+    assert!(result.pages.is_empty());
+}

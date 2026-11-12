@@ -8,8 +8,13 @@ document on stdout. Its source SHA-256 and byte count bind the complete accepted
 input. Oversized/failed stdin returns exit code 2 without a misleading partial
 source digest; output failures return exit code 3.
 
-The parser's ceilings are 8 MiB input, 256 pages, one million decoding events,
-one MiB decoded text and bounded instance depth/node counts. JSON output is
+The input ceiling is 8 MiB. A separate complete-page-tree check refuses invalid
+children, duplicate references, cycles, mismatched parent/count facts and trees
+over 64 levels or 1,024 nodes before assigning citations. Extraction limits are
+256 pages, one million collection events, one MiB decoded text and bounded output
+instance depth/node counts. These are not parser-wide memory/time ceilings:
+document loading, decompression and font decoding can allocate before collection
+limits apply. External process containment remains mandatory. JSON output is
 bounded to 8 MiB while serializing, not after unbounded allocation. A serialization
 overflow produces an atomic chunk-free `limitExceeded` outcome.
 

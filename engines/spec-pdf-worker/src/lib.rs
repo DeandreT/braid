@@ -55,6 +55,10 @@ pub fn extract(bytes: &[u8]) -> Extraction {
     if bytes.len() > MAX_INPUT_BYTES {
         return Extraction::empty(bytes, Status::LimitExceeded);
     }
+    let expected_pages = match validate_page_tree(bytes) {
+        Ok(count) => count,
+        Err(status) => return Extraction::empty(bytes, status),
+    };
     let layout = PdfLayout::new(
         "Document",
         PdfPageSelection::All,
@@ -95,8 +99,7 @@ pub fn extract(bytes: &[u8]) -> Extraction {
         return Extraction::empty(bytes, Status::Malformed);
     };
     if root.is_empty() {
-        result.status = Status::NeedsOcr;
-        return result;
+        return Extraction::empty(bytes, Status::Malformed);
     }
     if root.len() != 1 || root[0].0 != "Pages" {
         return Extraction::empty(bytes, Status::Malformed);
@@ -104,6 +107,9 @@ pub fn extract(bytes: &[u8]) -> Extraction {
     let Instance::Repeated(pages) = &root[0].1 else {
         return Extraction::empty(bytes, Status::Malformed);
     };
+    if pages.len() != expected_pages {
+        return Extraction::empty(bytes, Status::Malformed);
+    }
     for (index, page) in pages.iter().enumerate() {
         let Instance::Group(fields) = page else {
             return Extraction::empty(bytes, Status::Malformed);
@@ -128,6 +134,90 @@ pub fn extract(bytes: &[u8]) -> Extraction {
     // This deliberately never claims complete document understanding: images, tables,
     // handwriting and reading order have not been semantically qualified.
     result
+}
+
+// lopdf's public page iterator skips malformed children. Before assigning ordinal
+// citations, prove a complete, acyclic tree and compare the returned page count.
+fn validate_page_tree(bytes: &[u8]) -> Result<usize, Status> {
+    let document = std::panic::catch_unwind(|| lopdf::Document::load_mem(bytes))
+        .map_err(|_| Status::Malformed)?
+        .map_err(|_| Status::Malformed)?;
+    if document.is_encrypted() || document.was_encrypted() {
+        return Err(Status::Encrypted);
+    }
+    let root = document
+        .catalog()
+        .and_then(|catalog| catalog.get(b"Pages"))
+        .and_then(lopdf::Object::as_reference)
+        .map_err(|_| Status::Malformed)?;
+    let mut seen = std::collections::BTreeSet::new();
+    fn walk(
+        doc: &lopdf::Document,
+        id: lopdf::ObjectId,
+        parent: Option<lopdf::ObjectId>,
+        depth: usize,
+        seen: &mut std::collections::BTreeSet<lopdf::ObjectId>,
+    ) -> Result<usize, Status> {
+        if depth > 64 || seen.len() >= 1024 {
+            return Err(Status::LimitExceeded);
+        }
+        if !seen.insert(id) {
+            return Err(Status::Malformed);
+        }
+        // Page-tree nodes must be directly owned dictionaries. get_dictionary()
+        // follows reference aliases, which could disguise duplicate page identity.
+        let Some(lopdf::Object::Dictionary(dictionary)) = doc.objects.get(&id) else {
+            return Err(Status::Malformed);
+        };
+        match parent {
+            Some(expected)
+                if dictionary
+                    .get(b"Parent")
+                    .and_then(lopdf::Object::as_reference)
+                    .ok()
+                    != Some(expected) =>
+            {
+                return Err(Status::Malformed);
+            }
+            None if dictionary.has(b"Parent") => return Err(Status::Malformed),
+            _ => (),
+        }
+        match dictionary.get_type().map_err(|_| Status::Malformed)? {
+            b"Page" if parent.is_some() && !dictionary.has(b"Kids") => Ok(1),
+            b"Pages" => {
+                let kids = dictionary
+                    .get_deref(b"Kids", doc)
+                    .and_then(lopdf::Object::as_array)
+                    .map_err(|_| Status::Malformed)?;
+                if kids.len() > 1024 {
+                    return Err(Status::LimitExceeded);
+                }
+                let mut count = 0;
+                for kid in kids {
+                    count += walk(
+                        doc,
+                        kid.as_reference().map_err(|_| Status::Malformed)?,
+                        Some(id),
+                        depth + 1,
+                        seen,
+                    )?;
+                    if count > ferrule_pdf::MAX_PAGES {
+                        return Err(Status::LimitExceeded);
+                    }
+                }
+                let declared = dictionary
+                    .get_deref(b"Count", doc)
+                    .and_then(lopdf::Object::as_i64)
+                    .map_err(|_| Status::Malformed)?;
+                if count == 0 || declared != count as i64 {
+                    return Err(Status::Malformed);
+                }
+                Ok(count)
+            }
+            _ => Err(Status::Malformed),
+        }
+    }
+    walk(&document, root, None, 0, &mut seen)
 }
 
 pub fn encode(result: &Extraction) -> Result<Vec<u8>, serde_json::Error> {
