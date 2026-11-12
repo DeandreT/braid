@@ -332,8 +332,10 @@ channel still attempts to stop its session. Recovery probes create and stop a fr
 session and cannot certify the old session's result. No live Azure access is needed
 for the connector's local protocol tests.
 
-Local Docker runners and the hosted inspection transport remain fail-closed until
-restart. Docker cleanup uncertainty may leave a real container with an independent
+The hosted inspection transport remains fail-closed until restart. Local Docker
+runners reopen only after their reaper confirms removal of the exact container
+([Reaping unconfirmed containers](ferrule-worker.md#reaping-unconfirmed-containers)):
+Docker cleanup uncertainty may leave a real container with an independent
 lifetime, so the service-child lifetime proof does not apply. The inspection
 transport can itself wrap that Docker runner and does not advertise a bounded-child
 service profile; merely receiving its legacy ready response is not such a proof.

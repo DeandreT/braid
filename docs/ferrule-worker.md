@@ -193,21 +193,65 @@ A caller cancellation before creation starts no container. Once creation begins,
 the runner waits for that side effect within the operation's original wall budget,
 then rechecks cancellation before policy inspection, worker startup or native
 input. Running-worker cancellation and wall expiry stop the CLI. Cleanup shares
-one separate two-second bound across ownership inspection and removal. It inspects
+one separate bound (two seconds by default) across ownership inspection and
+removal. It inspects
 the acknowledged ID, or uses the exact name for read-only discovery if the create
 response was lost. Only a matching name, current marker and complete container ID
 authorize removal, and removal addresses that ID, never the mutable name. A
 collision, mismatched marker, malformed metadata or failed ownership observation
-causes no removal and blocks further admission on that singleton runner.
+causes no removal; the operation reports `cleanupFailed` and the singleton runner
+closes admission until the container is reaped.
 
 Forced removal can silently succeed on absence. An unacknowledged create therefore
 still requires the exact verified ID in the removal acknowledgement; finding no
 object by name cannot prove that an in-flight daemon request settled. Exact-ID
-absence is accepted only after creation was acknowledged. Cleanup does not retry,
-adopt other containers, list by label or prune by prefix/image. An unresponsive
+absence is accepted only after creation was acknowledged. Cleanup never adopts
+other containers, lists by label or prunes by prefix/image. An unresponsive
 daemon or abrupt host kill does not produce a fabricated cleanup guarantee. The
 label is local attribution, not authentication against a malicious daemon or an
 actor with Docker control-plane access.
+
+### Reaping unconfirmed containers
+
+A cleanup the runner cannot confirm hands the operation's exact identity (its
+generated name, its marker and, if creation was acknowledged, its full ID) to one
+background reaper per runner. While any identity is pending, every operation
+answers `sandboxUnavailable` at once (a backend-unavailable outcome, nothing ran)
+and the runner's execution admission is closed, so preview, regression and build
+dispatch defer without consuming an attempt. The reaper repeats the same cleanup
+for each identity, first after one second and then with doubling delays up to
+30 seconds, each attempt with a fresh private Docker configuration and the cleanup
+budget. When every identity is confirmed removed (or, for an acknowledged ID,
+confirmed absent), the runner reopens without a restart.
+
+An identity whose create response was lost uses the exact name only for read-only
+discovery. The runner remains closed until the original marked container appears
+and its exact-ID removal is confirmed. Name-only absence cannot settle a daemon
+request still in flight, even if it persists indefinitely. A foreign container
+under the name is never removed and keeps the runner closed.
+
+Unconfirmed termination of a Docker CLI process, a private configuration directory
+that cannot be removed, an unexpected exception and a reaper fault still close the
+runner until restart. Shutdown cancels the reaper and joins it; an identity still
+pending at shutdown faults the stop as before.
+
+The server's Development runner and `Weft.Worker`'s preview and build runners
+read two optional budgets, `WEFT_FERRULE_DOCKER_CREATE_TIMEOUT_SECONDS` and
+`WEFT_FERRULE_DOCKER_CLEANUP_TIMEOUT_SECONDS` (whole seconds, 1–120). Unset, creation
+settles within the operation's wall budget and cleanup has two seconds. A create
+budget gives creation its own deadline and starts the wall budget after creation
+settles. Reaper attempts perform only ownership inspection and removal. The hosted
+inspection service keeps the defaults, because the Session host's response bound
+is derived from them.
+
+Local units allow 300 seconds for graceful host shutdown, covering the maximum
+120-second create and independent 120-second cleanup budgets plus cancellation,
+draining and CLI-exit margin. This service-manager allowance does not extend the
+runner's execution or cleanup deadlines. The local launcher includes unit settings
+in its stamp and checks a changed active unit's live stop grace before stopping it.
+An older or unconfirmed allowance requires owner-confirmed settlement and a safe
+manual stop before replacement; a newly generated policy cannot protect the old
+unit's stop job retroactively. Identical stamped reruns do not stop the unit.
 
 Qualification teardown follows the same marker/name/full-ID rule before removal.
 Legacy probe records that retain only a generated name authorize read-only absence
@@ -294,7 +338,7 @@ A cancellation that reaches the worker before its operation refuses that operati
 when it arrives. A client that disconnects cancels its operation on the worker. A
 cleanup failure, like the local runner's, closes the Session runner's admission
 and faults the host's shutdown: settlement of work it requested is unconfirmed.
-The worker's own runner keeps the local runner's latch for its containers. Restart
+The worker's own runner reaps its containers as the local runner does. Restart
 the Session host only after the worker's state is known.
 
 Shutdown on either side closes admission and cancels outstanding operations

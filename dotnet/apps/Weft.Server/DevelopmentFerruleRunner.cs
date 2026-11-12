@@ -40,6 +40,7 @@ internal static class DevelopmentFerruleRunner
         }
 
         if (read("WEFT_FERRULE_WORKER_IMAGE") is { Length: > 0 } workerImage)
-            InspectionWorkerHostConfiguration.Configure(services, new DockerInspectionWorkerOptions("/usr/bin/docker", workerImage));
+            InspectionWorkerHostConfiguration.Configure(services,
+                new DockerInspectionWorkerOptions("/usr/bin/docker", workerImage, budgets: DockerRunnerBudgets.Read(read)));
     }
 }

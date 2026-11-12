@@ -748,7 +748,7 @@ if (failures.length) {
   for (const failure of failures) log(`  ${failure}`);
   if (backendDown)
     log(
-      "\nThe server's Ferrule backend stopped answering, so the rest of the catalog was skipped. Restart the server unit and run the seed again; it resumes where it stopped.",
+      "\nThe server's Ferrule backend stopped answering, so the rest of the catalog was skipped. It reopens by itself once Docker confirms its cleanup; run the seed again in a minute and it resumes where it stopped.",
     );
   process.exitCode = 1;
 }
