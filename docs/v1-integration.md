@@ -250,10 +250,35 @@ tests on native PostgreSQL, zero failures or skips. Receipt:
 The current ordered migration inventory is 0001–0047. XML filesystem-prefix
 conservation remains assigned to the actual Linux lane.
 
+### Reviewed library and document host
+
+Proposal library `d2940d24`, merged at `d97cc8fc`, uses the real `afterProposal`
+wire contract, exact review links and bounded pagination. Feedback requires an
+explicit preparation action and an explicitly sent question. Independent review
+closed the response-shape, legacy-conversation and stale-draft findings. The
+development build, maintained browser TypeScript check, 15 focused cases (14
+actual Chromium and one parser) and shared browser return-path vectors passed.
+The paired .NET return-path selection passed 159 cases. See
+`creation-proposal-library.md`.
+
+Document host `25f6e0dc`, merged at `7e00ff3a`, adds optional real Office/PDF
+startup, pinned installation/schema admission, shared specification binding and
+owned shutdown. Review corrections reject writable aliases on a protected
+filesystem and retain cleanup failures, including probes before runner
+registration. Repeated shutdown cannot report clean after failed cleanup. The
+owner's final regression selection passed 233 cases with nine skips; the focused
+selection passed 30 cases with two Linux skips. See `spec-document-host.md`.
+
+Exact integrated `7e00ff3a` passed the full Release solution build with zero
+warnings/errors and 189 document-host/return-path tests, with two explicit Linux
+skips and zero failures. Receipt:
+`Temp/opencode/weft-creation-integration-results/document-host-7e00ff3a.trx`.
+These checks do not establish actual Linux startup or containment.
+
 ### Remaining gates
 
-- Reviewed concrete creation/document host composition, proposal library and
-  exact feedback context, followed by final combined qualification.
+- Reviewed concrete creation-host composition and exact feedback API, followed
+  by final combined qualification and the full corrected chat browser selection.
 - XML filesystem-prefix conservation on Linux.
 - Linux private-file/session configuration, native workers and sandbox execution.
 - Real PostgreSQL/Blob-backed specification intake and publication recovery.
