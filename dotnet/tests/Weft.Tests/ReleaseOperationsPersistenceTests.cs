@@ -318,7 +318,7 @@ public sealed class ReleaseOperationsPersistenceTests(PostgresFixture fixture)
         var history = await data.Case.ScalarAsync<string>(
             "SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m");
         await data.Case.MigrateAsync();
-        Assert.Equal(Enumerable.Range(1, 42), await data.Case.ScalarAsync<int[]>(
+        Assert.Equal(Enumerable.Range(1, 44), await data.Case.ScalarAsync<int[]>(
             "SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations"));
         Assert.Equal(history, await data.Case.ScalarAsync<string>(
             "SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m WHERE version<=$1", prefixVersion));

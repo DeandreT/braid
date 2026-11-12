@@ -21,7 +21,7 @@ public sealed class XmlPreviewPersistenceTests(PostgresFixture fixture)
         var rows = await SnapshotAsync();
         var history = await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m");
         var functions = await test.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(proname,prosrc,proacl::text,proowner,proconfig) ORDER BY proname,oid)::text FROM pg_proc WHERE pronamespace='weft'::regnamespace");
-        await test.Case.MigrateAsync();
+        await MigrateXmlAsync();
         Assert.Equal(rows, await SnapshotAsync());
         Assert.Equal(history, await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(m) ORDER BY version)::text FROM weft.schema_migrations m WHERE version<=41"));
         Assert.Equal(functions, await test.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(proname,prosrc,proacl::text,proowner,proconfig) ORDER BY proname,oid)::text FROM pg_proc WHERE pronamespace='weft'::regnamespace AND NOT proname=ANY($1)", (object)XmlPreviewSchemaAdmission.Functions));
@@ -33,7 +33,7 @@ public sealed class XmlPreviewPersistenceTests(PostgresFixture fixture)
         var run = (await service.SubmitAsync(test.Alice, submission)).RunId!.Value;
         Assert.Equal(PreviewExecutionOutcome.Completed, await test.Executor(new Backend(), new() { XmlEnabled = true }).ExecuteAsync(test.Revision.OrganizationId, run, Guid.NewGuid()));
         var populated = await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal)::text FROM weft.xml_preview_documents d");
-        await test.Case.MigrateAsync();
+        await MigrateXmlAsync();
         Assert.Equal(populated, await test.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal)::text FROM weft.xml_preview_documents d"));
         Assert.Equal(XmlPreviewWorkflowTests.Input, (await service.ReadOutputAsync(test.Alice, test.Revision.OrganizationId, run, 0))!.Content);
         await test.Case.ExecuteAsync("UPDATE weft.project_memberships SET role='viewer',version=version+1 WHERE principal_id=$1 AND project_id=$2", test.Alice.PrincipalId.Value, test.Revision.ProjectId);
@@ -41,6 +41,12 @@ public sealed class XmlPreviewPersistenceTests(PostgresFixture fixture)
         Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound, (await service.SubmitAsync(test.Alice, submission with { RequestKey = Guid.NewGuid() })).Outcome);
 
         Task<string> SnapshotAsync() => test.Case.ScalarAsync<string>("SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id) FROM weft.preview_runs r),(SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal) FROM weft.preview_documents d))::text");
+        async Task MigrateXmlAsync()
+        {
+            // Admit only this historical upgrade; 0043 changes chat functions.
+            await using var runner = new MigrationRunner(test.Case.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(42).ToArray());
+            await runner.MigrateAsync();
+        }
     }
 
     [PostgresFact]

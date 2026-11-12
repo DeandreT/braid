@@ -11,7 +11,7 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
     private readonly PostgresPreviewDatabase _database = Writer(database);
 
     public Task RequireSubmissionAdmissionAsync(CancellationToken cancellationToken = default) =>
-        // RunAsync proves the restricted identity, XML schema 43 and lifecycle contract
+        // RunAsync proves the restricted identity and current XML schema contract
         // in a short read-only transaction. No input/run function or outbox hook runs.
         _database.RunAsync(false, (_, _) => Task.FromResult(0), cancellationToken);
 

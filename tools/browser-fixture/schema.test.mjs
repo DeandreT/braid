@@ -58,7 +58,7 @@ test("CSV is an additive migration after the retained draft and chat write contr
 });
 
 test("XML documents retain the base authorization and settlement fences", () => {
-  assert.equal(browserFixtureMigrations.at(-1), "0042_xml_documents.sql");
+  assert.equal(browserFixtureMigrations[41], "0042_xml_documents.sql");
   const sql = readFileSync(
     new URL("0042_xml_documents.sql", migrations),
     "utf8",

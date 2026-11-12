@@ -147,6 +147,13 @@ public sealed class SpecBundleLifecycleTests
         var migrations = MigrationRunner.EmbeddedMigrations;
         Assert.Equal(Enumerable.Range(1, migrations.Count), migrations.Select(m => m.Version));
         if (names.Contains("Weft.Persistence.Postgres.PendingMigrations.0044_spec_bundles.sql")) Assert.DoesNotContain(migrations, m => m.Version == 44);
+        else
+        {
+            Assert.Equal(44, migrations.Count);
+            Assert.Equal(XmlPreviewSchemaAdmission.MigrationChecksum, migrations[41].Checksum);
+            Assert.Equal(ChatSchemaContract.EditProposalMigrationChecksum, migrations[42].Checksum);
+            Assert.Equal(SpecSchemaTestContract.Checksum, migrations[43].Checksum);
+        }
         Assert.Contains("version=42", SpecSchemaAdmission.MigrationSql);
         Assert.Contains("version=43", SpecSchemaAdmission.MigrationSql);
     }

@@ -18,7 +18,7 @@ public sealed class RegressionDeploymentProvisioningTests
         "CHAT_LIFECYCLE", "CHAT_APPROVER", "PREVIEW_READER", "PREVIEW_WRITER", "CASE_READER", "CASE_WRITER", "RUN_READER", "RUN_WRITER", "COMPARISON",
         "BUILD_READER", "BUILD_WRITER", "BUILD_RUN_READER", "BUILD_RUN_WRITER", "BUILD_DISPATCHER", "BUILD_METADATA",
         "QUALIFICATION_READER", "QUALIFICATION_WRITER", "RELEASE_READER", "RELEASE_WRITER", "INVOCATION_GRANT_WRITER", "INVOCATION_WRITER",
-        "API_AUDIT_WRITER", "ADMINISTRATION", "DRAFT_READER", "DRAFT_WRITER"
+        "API_AUDIT_WRITER", "ADMINISTRATION", "DRAFT_READER", "DRAFT_WRITER", "SPEC_READER", "SPEC_WRITER", "SPEC_MAINTENANCE"
     ];
 
     [Theory]
@@ -142,7 +142,33 @@ public sealed class RegressionDeploymentProvisioningTests
         var init = File.ReadAllText(Path.Combine(Repository(), "deploy/local/postgres-init.sh"));
         // Administration remains deliberately opt-in; the init script supplies its empty default itself.
         Assert.Contains("export WEFT_LOCAL_ADMINISTRATION_PASSWORD=${WEFT_LOCAL_ADMINISTRATION_PASSWORD:-}", init, StringComparison.Ordinal);
-        return RequiredPasswordRoles(init).Where(role => role != "ADMINISTRATION").ToArray();
+        string[] optional = ["ADMINISTRATION", "SPEC_READER", "SPEC_WRITER", "SPEC_MAINTENANCE"];
+        foreach (var role in optional)
+            Assert.Contains($"export WEFT_LOCAL_{role}_PASSWORD=${{WEFT_LOCAL_{role}_PASSWORD:-}}", init, StringComparison.Ordinal);
+        return RequiredPasswordRoles(init).Except(optional, StringComparer.Ordinal).ToArray();
+    }
+
+    [Fact]
+    public void Azure_provisioning_declares_every_current_migration_login()
+    {
+        var text = File.ReadAllText(Path.Combine(Repository(), "deploy/azure/provision-database.sh"));
+        Assert.Empty(MissingPasswordRoles(text));
+        foreach (var role in new[] { "reader", "writer", "maintenance" })
+        {
+            Assert.Contains($"CREATE ROLE weft_spec_{role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS", text, StringComparison.Ordinal);
+            Assert.Contains($"export WEFT_SPEC_{role.ToUpperInvariant()}_PASSWORD=${{WEFT_SPEC_{role.ToUpperInvariant()}_PASSWORD:-}}", text, StringComparison.Ordinal);
+        }
+        Assert.Contains("CREATE ROLE weft_chat_approver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("deploy/local/postgres.compose.yml")]
+    [InlineData("deploy/compose/compose.yml")]
+    public void Disabled_intake_roles_accept_empty_credentials_but_compose_delivers_opt_in_values(string path)
+    {
+        var environment = ServiceEnvironment(File.ReadAllText(Path.Combine(Repository(), path)), "postgres");
+        foreach (var role in new[] { "SPEC_READER", "SPEC_WRITER", "SPEC_MAINTENANCE" })
+            Assert.Equal($"${{WEFT_LOCAL_{role}_PASSWORD:-}}", environment[$"WEFT_LOCAL_{role}_PASSWORD"]);
     }
 
     private static Dictionary<string, string> ServiceEnvironment(string yaml, string service)

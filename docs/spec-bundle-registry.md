@@ -6,7 +6,7 @@
 
 This unit adds `0044_spec_bundles.sql`, `PostgresSpecBundleDatabase`, actor-bound `PostgresSpecBundleSession`, and `SpecBundleService`. The existing Blob adapter's real `ISpecObjectRegistry` callbacks can now execute against PostgreSQL. No HTTP/UI/host registration is added. Filesystem publication remains unavailable.
 
-The checkout contains migrations 0001–0041. Those files are unchanged. The real 0042 XML and 0043 proposal migrations are absent. The project embeds 0044 under **PendingMigrations** until both actual predecessor files exist, then includes it in the normal consecutive migration resource namespace. `MigrationRunner`'s no-gaps/checksum rules remain unchanged. 0044 additionally requires journal entries for 42 and 43; there are no placeholder migrations, renumbering, or direct-install test shortcuts.
+The original registry checkout contained migrations 0001–0041 and embedded 0044 under **PendingMigrations**. Integration now includes the real 0042 XML and 0043 proposal files, activating 0044 in the normal consecutive migration resource namespace. All historical migration bytes are preserved. `MigrationRunner`'s no-gaps/checksum rules remain unchanged. 0044 additionally requires journal entries for 42 and 43; there are no placeholder migrations, renumbering, or direct-install test shortcuts. See [integration validation](v1-integration.md).
 
 Portable tests compile/run on the pinned Windows .NET 10.0.112 toolchain. PostgreSQL integration tests require explicit connection settings and an actual prepared database; a skip is not database qualification. No PostgreSQL execution, Linux filesystem qualification or cloud qualification is asserted by these portable checks.
 

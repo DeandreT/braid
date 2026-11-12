@@ -28,7 +28,7 @@ public sealed class XmlPreviewDatabaseTests(PostgresFixture fixture)
         var before = await SnapshotAsync();
         var functions = await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(proname,prosrc,proacl::text,proowner,proconfig) ORDER BY proname,oid)::text FROM pg_proc WHERE pronamespace='weft'::regnamespace");
         var grants = await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(relname,relacl::text,(SELECT jsonb_agg(jsonb_build_array(attname,attacl::text) ORDER BY attnum) FROM pg_attribute WHERE attrelid=c.oid AND attnum>0)) ORDER BY relname)::text FROM pg_class c WHERE relnamespace='weft'::regnamespace");
-        await catalog.Case.MigrateAsync();
+        await MigrateXmlAsync();
         Assert.Equal(before, await SnapshotAsync());
         Assert.Equal(functions, await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(proname,prosrc,proacl::text,proowner,proconfig) ORDER BY proname,oid)::text FROM pg_proc WHERE pronamespace='weft'::regnamespace AND NOT proname=ANY($1)", (object)XmlPreviewSchemaAdmission.Functions));
         Assert.Equal(grants, await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(jsonb_build_array(relname,relacl::text,(SELECT jsonb_agg(jsonb_build_array(attname,attacl::text) ORDER BY attnum) FROM pg_attribute WHERE attrelid=c.oid AND attnum>0)) ORDER BY relname)::text FROM pg_class c WHERE relnamespace='weft'::regnamespace AND relname NOT IN ('xml_preview_documents','xml_preview_documents_pkey')"));
@@ -44,13 +44,20 @@ public sealed class XmlPreviewDatabaseTests(PostgresFixture fixture)
         Assert.Equal(XmlDocumentMetadata.WithoutHints, (await reader.ReadInputAsync(catalog.Actor, revision.OrganizationId, run, 0))!.XmlMetadata);
         Assert.Null(await reader.ReadOutputAsync(new(new PrincipalId(catalog.Seed.Bob)), revision.OrganizationId, run, 0));
         var populated = await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal)::text FROM weft.xml_preview_documents d");
-        await catalog.Case.MigrateAsync();
+        await MigrateXmlAsync();
         Assert.Equal(populated, await catalog.Case.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal)::text FROM weft.xml_preview_documents d"));
         await catalog.Case.ExecuteAsync("UPDATE weft.project_memberships SET role='viewer',version=version+1 WHERE principal_id=$1 AND project_id=$2", catalog.Actor.PrincipalId.Value, revision.ProjectId);
         Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound, (await service.SubmitAsync(catalog.Actor, submission)).Outcome);
         Assert.Equal(PreviewSubmitOutcome.NotAuthorizedOrNotFound, (await service.SubmitAsync(catalog.Actor, submission with { RequestKey = Guid.NewGuid() })).Outcome);
 
         Task<string> SnapshotAsync() => catalog.Case.ScalarAsync<string>("SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id) FROM weft.preview_runs r),(SELECT jsonb_agg(to_jsonb(d) ORDER BY run_id,direction,ordinal) FROM weft.preview_documents d),(SELECT jsonb_agg(to_jsonb(m) ORDER BY version) FROM weft.schema_migrations m WHERE version<=41))::text");
+        async Task MigrateXmlAsync()
+        {
+            // This conservation assertion belongs to 0042 only. Later proposal
+            // migrations intentionally replace chat functions and grants.
+            await using var runner = new MigrationRunner(catalog.Case.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(42).ToArray());
+            await runner.MigrateAsync();
+        }
     }
 
     [PostgresTheory]

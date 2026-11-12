@@ -31,6 +31,9 @@ for role in CASE_READER CASE_WRITER RUN_READER RUN_WRITER COMPARISON BUILD_READE
 done
 unset regression_passwords previous
 export WEFT_LOCAL_ADMINISTRATION_PASSWORD=${WEFT_LOCAL_ADMINISTRATION_PASSWORD:-}
+export WEFT_LOCAL_SPEC_READER_PASSWORD=${WEFT_LOCAL_SPEC_READER_PASSWORD:-}
+export WEFT_LOCAL_SPEC_WRITER_PASSWORD=${WEFT_LOCAL_SPEC_WRITER_PASSWORD:-}
+export WEFT_LOCAL_SPEC_MAINTENANCE_PASSWORD=${WEFT_LOCAL_SPEC_MAINTENANCE_PASSWORD:-}
 # An absent opt-in credential creates an unusable password login. Existing stacks
 # can migrate without enabling administration or delivering another credential.
 
@@ -76,6 +79,9 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv administration_password WEFT_LOCAL_ADMINISTRATION_PASSWORD
 \getenv draft_reader_password WEFT_LOCAL_DRAFT_READER_PASSWORD
 \getenv draft_writer_password WEFT_LOCAL_DRAFT_WRITER_PASSWORD
+\getenv spec_reader_password WEFT_LOCAL_SPEC_READER_PASSWORD
+\getenv spec_writer_password WEFT_LOCAL_SPEC_WRITER_PASSWORD
+\getenv spec_maintenance_password WEFT_LOCAL_SPEC_MAINTENANCE_PASSWORD
 CREATE ROLE weft_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
   PASSWORD :'migrator_password';
 CREATE ROLE weft_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS
@@ -154,6 +160,11 @@ CREATE ROLE weft_administration LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHE
   PASSWORD :'administration_password';
 CREATE ROLE weft_draft_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'draft_reader_password';
 CREATE ROLE weft_draft_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'draft_writer_password';
+-- Disabled intake still needs CONNECT-only roles for migration 0044. Empty
+-- passwords are unusable; enabling intake requires separately delivered secrets.
+CREATE ROLE weft_spec_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_reader_password';
+CREATE ROLE weft_spec_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_writer_password';
+CREATE ROLE weft_spec_maintenance LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD :'spec_maintenance_password';
 ALTER DATABASE weft OWNER TO weft_migrator;
 CREATE SCHEMA weft_search_extensions AUTHORIZATION weft_migrator;
 CREATE EXTENSION pg_trgm WITH SCHEMA weft_search_extensions;
@@ -169,5 +180,6 @@ GRANT CONNECT ON DATABASE weft TO weft_invocation_grant_writer,weft_invocation_w
 GRANT CONNECT ON DATABASE weft TO weft_api_audit_writer;
 GRANT CONNECT ON DATABASE weft TO weft_administration;
 GRANT CONNECT ON DATABASE weft TO weft_draft_reader,weft_draft_writer;
+GRANT CONNECT ON DATABASE weft TO weft_spec_reader,weft_spec_writer,weft_spec_maintenance;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SQL

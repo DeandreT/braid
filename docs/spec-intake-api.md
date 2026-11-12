@@ -1,6 +1,6 @@
 # Specification intake API
 
-The server now maps the authenticated intake slice through `CatalogRequestBoundary`, `SpecBundleService`, actor-bound PostgreSQL sessions and `BlobSpecObjectStore.OpenAsync`. The feature defaults off. It is **not available in this checkout**: 0044 remains pending until the real 0042/0043 predecessors exist. Service composition refuses a pending migration before opening PostgreSQL or Blob. Once packaged in sequence, each request still admits the exact schema, restricted login, active location binding and existing private Blob marker. Configuration is not a readiness assertion.
+The server maps the authenticated intake slice through `CatalogRequestBoundary`, `SpecBundleService`, actor-bound PostgreSQL sessions and `BlobSpecObjectStore.OpenAsync`. The feature defaults off. This integration checkout includes the real 0042/0043 predecessors and activates 0044 in sequence. Service composition still refuses a pending migration before opening PostgreSQL or Blob. Each request admits the exact schema, restricted login, active location binding and existing private Blob marker. Configuration is not a readiness assertion; PostgreSQL/Blob runtime qualification remains outstanding. See [integration validation](v1-integration.md).
 
 ## Routes and bounded inputs
 
@@ -40,7 +40,7 @@ The owner-provisioned location digest must equal SHA-256 of UTF-8 `weft.spec-blo
 
 ## Review and verification scope
 
-This unit **supersedes the registry review of 5e697b1f** for 0044: it adds the restricted `spec_inventory` function and reader grant, updates exact function admission, and pins the new checksum in `SpecBundleLifecycleTests`. Earlier migrations are untouched. Do not rewrite a deployed journal to accept the new bytes; an already-applied earlier 0044 requires a separately reviewed migration strategy. The new source remains pending locally.
+This unit **supersedes the registry review of 5e697b1f** for 0044: it adds the restricted `spec_inventory` function and reader grant, updates exact function admission, and pins the new checksum in `SpecBundleLifecycleTests`. Earlier migrations are untouched. Do not rewrite a deployed journal to accept the new bytes; an already-applied earlier 0044 requires a separately reviewed migration strategy. Integration activates these exact intake-reviewed bytes after the real predecessors.
 
 Portable tests cover service capture limits, revocation before consumption, interleaved extraction CAS/replay, pending-schema composition refusal, migration checksum and development-identity refusal. `SpecHttpTests` additionally defines real catalog bearer/session-bound HTTP tests over recording business ports, including CSRF, strict requests, scope/revocation, uncertain publication and extraction reads. Those HTTP cases require Linux because the existing durable browser key profile refuses other operating systems. They do not qualify PostgreSQL or Azure. `PostgresSpecRegistryTests` has an actual restricted-reader inventory case; it requires the explicit disposable database lane. No database, cloud or Linux runtime qualification is claimed by Windows checks.
 

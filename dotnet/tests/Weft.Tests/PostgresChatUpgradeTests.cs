@@ -257,7 +257,7 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
         await using var schema = new NpgsqlCommand(SnapshotSql, connection);
         schema.Parameters.AddWithValue(PostgresServerSessionUpgradeConservation.PrefixTables.Append("server_sessions").ToArray());
         schema.Parameters.AddWithValue(installed);
-        schema.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle }.SelectMany(p => ChatSchemaContract.ColumnGrants(p)
+        schema.Parameters.AddWithValue(new[] { ChatDatabaseProfile.Reader, ChatDatabaseProfile.Writer, ChatDatabaseProfile.Lifecycle, ChatDatabaseProfile.Approver }.SelectMany(p => ChatSchemaContract.ColumnGrants(p)
             .Select(g => g + "|" + ChatRoleGuard.RoleName(p))).ToArray());
         schema.Parameters.AddWithValue(ChatSchemaContract.FunctionNames);
         schema.Parameters.AddWithValue(PreviewSchemaTestContract.FunctionNames.Concat(RegressionSchemaTestContract.Functions).Concat(InterchangeSchemaTestContract.Functions).Append("index_catalog_report").ToArray());
@@ -286,7 +286,7 @@ public sealed class PostgresChatUpgradeTests(PostgresFixture fixture)
     // those exact objects, so only they are projected out of the conserved prefix.
     private const string SnapshotSql = """
         WITH old_relations AS (SELECT * FROM pg_catalog.pg_class WHERE relnamespace='weft'::regnamespace AND relname=ANY($1::text[])),
-        new_roles AS (SELECT oid,rolname FROM pg_catalog.pg_roles WHERE rolname IN ('weft_chat_reader','weft_chat_writer','weft_chat_lifecycle')),
+        new_roles AS (SELECT oid,rolname FROM pg_catalog.pg_roles WHERE rolname IN ('weft_chat_reader','weft_chat_writer','weft_chat_lifecycle','weft_chat_approver')),
         expected_columns AS (SELECT split_part(x,'|',1) tab,split_part(x,'|',2) col,split_part(x,'|',3) privilege,split_part(x,'|',4) role FROM unnest($3::text[]) x),
         columns AS (SELECT r.relname,a.* FROM old_relations r JOIN pg_catalog.pg_attribute a ON a.attrelid=r.oid AND a.attnum>0
             WHERE NOT ($2 AND r.relname='private_object_publications' AND a.attname='storage_kind')),

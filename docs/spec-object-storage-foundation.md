@@ -1,6 +1,6 @@
 # Specification object storage foundation
 
-**Follow-up:** [Durable bundle registry](spec-bundle-registry.md) adds the PostgreSQL implementation and lifecycle service behind these hooks. The original foundation description below records its initial scope. Production remains unregistered; 0044 waits for the real 0042/0043 predecessors and database qualification.
+**Follow-up:** [Durable bundle registry](spec-bundle-registry.md) adds the PostgreSQL implementation and lifecycle service behind these hooks; [intake API](spec-intake-api.md) adds opt-in host composition. Integration now includes real 0042/0043 and activates 0044. Database/Blob qualification remains outstanding. The original foundation description below records its initial scope.
 
 This unit adds project/bundle-owned storage contracts without introducing a mapping or revision scope.
 No server composition, API, database role, registry implementation or migration enables the capability.
