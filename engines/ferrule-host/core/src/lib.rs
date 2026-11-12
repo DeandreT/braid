@@ -3,6 +3,7 @@
 //! Ferrule's native codec, deterministic edits and Weft's bounded explanation.
 //! This crate has no host, filesystem, transport or browser API.
 
+pub mod authoring;
 pub mod decode;
 pub mod edit;
 pub mod framing_limit;

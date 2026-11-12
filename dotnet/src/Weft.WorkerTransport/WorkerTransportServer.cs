@@ -437,6 +437,12 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
             return;
         }
 
+        if (!AuthoringFrameAdmission.Allows(profile, frame))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, shutdown.Token);
         switch (Admit(operation!, cancellation))
         {
