@@ -164,7 +164,7 @@ persistence cases. The retained receipt is
 `Temp/opencode/weft-creation-integration-results/creation-93a2a53d.trx` under the
 local application-data directory.
 
-Current migration inventory is 0001–0045. The first 44 retain their original bytes.
+At that checkpoint the migration inventory was 0001–0045. The first 44 retained their original bytes.
 The structural restoration codec, authenticated runtime discovery, document intake
 and migration 0046 are being integrated next. The approved 0047 helper correction
 depends on that real 0046 migration. Production worker activation still requires
@@ -186,7 +186,7 @@ zero failures or skips. Receipt:
 Structural database admission and runtime loading still depend on the coordinated
 0046 integration.
 
-## Runtime qualification still required
+## Subsequent runtime qualification
 
 ### Authenticated runtime and structural intake checkpoint
 
@@ -235,10 +235,26 @@ feedback library. These source units are being completed before considering
 environment activation. Production worker and live-provider qualification remain
 separate gates.
 
+### Migration 0047 integration verification
+
+The independently reviewed exact helper restoration `74ca32fd` passed 35 actual
+PostgreSQL 16.15 tests, zero failures or skips, and was merged at `05d4a383`.
+Migrations 0001–0046 remain byte-identical to their committed predecessors.
+The browser fixture inventory was updated at `d62f4962`; all six schema tests
+passed. See `document-json-contract.md` for the exact helper and coverage.
+
+Exact `d62f4962` then passed locked restore, the full Release solution build
+with zero warnings/errors and 135 combined creation/document/discovery/migration
+tests on native PostgreSQL, zero failures or skips. Receipt:
+`Temp/opencode/weft-creation-integration-results/integrated-d62f4962.trx`.
+The current ordered migration inventory is 0001–0047. XML filesystem-prefix
+conservation remains assigned to the actual Linux lane.
+
 ### Remaining gates
 
-- Corrected populated-prefix PostgreSQL XML/upgrade checks and subsequent
-  migration admission, including the changed conservation assertions.
+- Reviewed concrete creation/document host composition, proposal library and
+  exact feedback context, followed by final combined qualification.
+- XML filesystem-prefix conservation on Linux.
 - Linux private-file/session configuration, native workers and sandbox execution.
 - Real PostgreSQL/Blob-backed specification intake and publication recovery.
 - Full hosted approval/receipt flows and provider-backed end-to-end execution.

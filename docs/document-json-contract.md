@@ -42,3 +42,18 @@ authority, cancellation and stale-claim completion fences.
 Native PostgreSQL tests use the owned portable 16.15 fixture. Their authored
 completion facts establish database behavior; Linux private-filesystem tests
 remain in the Linux lane.
+
+Exact source `74ca32fd3eff2722a9fd9779138b886ff233f1ee` passed locked
+restore, Release build and 35 native PostgreSQL 16.15 tests: 35 executed and
+passed, zero failures or skips. The owned cluster and disposable checkout were
+cleaned up after every phase settled. This selection includes 12 new helper
+cases (nine contract drifts), 12 existing XML database cases, six historical/
+draft cases, one actual CSV case, three inventory/source cases and one empty/
+repeated migration case. Migrations 0001–0046 remain unchanged.
+
+After integration, exact `d62f4962` passed the full Release solution build with
+zero warnings/errors and 135 combined creation/document/discovery/migration
+tests on native PostgreSQL, zero failures or skips. Its supplementary local
+receipt is `Temp/opencode/weft-creation-integration-results/integrated-d62f4962.trx`
+under the application-data directory. Neither selection qualifies the two XML
+filesystem-prefix conservation cases that require Linux.
