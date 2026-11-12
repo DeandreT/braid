@@ -129,6 +129,14 @@ export const routes: Routes = [
     canActivate: [requireSignIn],
     children: [
       {
+        path: "organizations/:organizationId/projects/:projectId/creation",
+        loadComponent: () =>
+          import("./catalog/creation/creation-library.component").then(
+            (m) => m.CreationLibraryComponent,
+          ),
+        title: "Your new mapping proposals · Weft",
+      },
+      {
         path: "organizations/:organizationId/projects/:projectId/creation/:proposalId",
         loadComponent: () =>
           import("./catalog/creation/creation-page.component").then(

@@ -84,7 +84,14 @@
         For corrections or unanswered requirements, return to the conversation
         and request a new proposal. Each proposal has its own approval.
       </p>
-      <a routerLink="/chat">Return to conversation</a>
+      <a routerLink="/chat" [queryParams]="feedbackParams"
+        >Give feedback in chat</a
+      >
+      <p>
+        Only this proposal's identity is carried over. Samples and output stay
+        on this review page.
+      </p>
+      <a [routerLink]="libraryLink">Your new mapping proposals</a>
     </section>
     <section aria-label="Sample execution">
       <h2>Test a sample</h2>
