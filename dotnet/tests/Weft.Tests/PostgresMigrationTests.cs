@@ -31,7 +31,8 @@ public sealed class PostgresMigrationTests(PostgresFixture fixture)
         InterchangeSchemaTestContract.MigrationChecksum, CatalogSearchSchemaAdmission.MigrationChecksum, RegressionSchemaTestContract.AutomationChecksum, RegressionSchemaTestContract.ReleaseOperationsChecksum,
         ChatSchemaContract.WorkspaceMigrationChecksum, PreviewSchemaTestContract.ReadsMigrationChecksum,
         RegressionSchemaTestContract.DocumentPreviewsChecksum, RegressionSchemaTestContract.X12InterchangeBuildsChecksum, RegressionSchemaTestContract.ComparisonSettlementChecksum, MappingDraftSchemaTestContract.DraftChecksum, MappingDraftSchemaTestContract.PreviewChecksum, ChatSchemaContract.MappingWriteMigrationChecksum, ChatSchemaContract.WriteJournalMigrationChecksum, RegressionSchemaTestContract.CsvDocumentsChecksum, XmlPreviewSchemaAdmission.MigrationChecksum,
-        ChatSchemaContract.EditProposalMigrationChecksum, SpecSchemaTestContract.Checksum, CreationSchemaAdmission.MigrationChecksum, DocumentEvidenceSchemaAdmission.MigrationChecksum];
+        ChatSchemaContract.EditProposalMigrationChecksum, SpecSchemaTestContract.Checksum, CreationSchemaAdmission.MigrationChecksum, DocumentEvidenceSchemaAdmission.MigrationChecksum,
+        DocumentJsonSchemaAdmission.MigrationChecksum];
     [PostgresFact]
     public async Task EmptyInstallationAndRepeatedMigrationPreserveOriginalFactsAndJournal()
     {
