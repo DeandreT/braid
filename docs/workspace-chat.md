@@ -154,7 +154,8 @@ organization, actor, report selection and every scope come from trusted context.
 | `get_run` | One of the user's own previews, regression runs or builds: status, attempts, result summary and bounded failure |
 | `get_capabilities` | What the user can do with a mapping on this server |
 | `search_user_guide`, `get_user_guide_section` | The user guide shipped with the server |
-| `save_mapping_edit` | Replays a typed Ferrule edit on an exact base and conditionally appends a new version, or returns a read-only proposal when editing is not permitted or the head changed |
+| `propose_mapping_edit` | Retains an exact-base proposal for separate authenticated review and approval; requires proposal persistence |
+| `save_mapping_edit` | Legacy direct save, offered only with explicit `WEFT_CHAT_LEGACY_DIRECT_SAVE_ENABLED=true` |
 
 Run kinds of a disabled family (previews, regression tests, builds) are not
 offered; `list_runs` and `get_run` are absent when all three are disabled, and the
@@ -223,11 +224,18 @@ literal values are never cropped. A result that cannot fit even empty is
 6. Observes the organization admission again before releasing the result.
 
 Revoked membership, a lost organization admission or a disabled principal takes
-effect on the next call. The sole write port is the exact-base mapping edit service;
+effect on the next call. By default the edit tool only retains proposals; approval is a separate authenticated action.
+The legacy direct-save port requires an explicit server capability;
 there is no activation, derivation, run, build or provider port. Caller cancellation
 propagates instead of becoming a result.
 
-## Mapping saves and recovery
+## Mapping approval, legacy saves and recovery
+
+The default runtime requires exact proposal approval. See
+[the runtime cutover contract](chat-proposal-runtime.md) for proposal listing,
+complete-operation review, approval/recovery routes and the outstanding production
+persistence/UI integration. The direct-save flow below is compatibility behavior
+behind a default-false server capability, not approval of a proposal or a turn.
 
 `save_mapping_edit` accepts a `ferrule.edit.v1` script, never arbitrary native
 bytes. The server replays it against the named immutable base and derives bounded
@@ -259,7 +267,9 @@ version. `pending` makes no saved claim; `notSaved` means no matching save compl
 Fresh creator and project read authority applies even after the turn ends.
 
 Explicit `POST .../mapping-writes/recover` resumes only an already reserved
-ingestion, with the original exact bytes and key and current edit permission.
+ingestion by operation ID and current edit permission, through `ResumeAsync`.
+It never calls append or resupplies source bytes. A `NeedsSource` result stays pending;
+the exact-proposal flow requires explicit repeat approval before supplying source.
 It neither invokes a model nor starts an unreserved save after cancellation or
 expiry. A committed receipt is recognized before checking a later head, so retries
 do not append another revision. Each pending save gets at most one attempt per

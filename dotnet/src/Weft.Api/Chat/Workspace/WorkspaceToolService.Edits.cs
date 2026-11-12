@@ -18,7 +18,8 @@ public sealed partial class WorkspaceToolService
     /// </summary>
     private async Task<ChatReadOnlyToolResult> SaveEditAsync(CallScope scope, WorkspaceToolCall call, CancellationToken token)
     {
-        if (!features.Edits || services.GetService<MappingDirectEditService>() is not { } editor || scope.Turn is null || scope.CallId is null || scope.RoundId is null)
+        if (!features.LegacyDirectSave || services.GetService<ChatMappingEditRuntimeOptions>()?.LegacyDirectSaveEnabled != true ||
+            services.GetService<MappingDirectEditService>() is not { } editor || scope.Turn is null || scope.CallId is null || scope.RoundId is null)
             throw new WorkspaceToolRefusal(WorkspaceToolOutcome.Unavailable);
         var mapping = await LocateMappingAsync(scope, call.Id("mappingId"), token);
         var baseRevision = new RevisionScope(mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, call.Id("baseRevisionId"));

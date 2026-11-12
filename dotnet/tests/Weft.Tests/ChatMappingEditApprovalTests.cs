@@ -353,11 +353,29 @@ public sealed class ChatMappingEditApprovalTests
         }, RevisionIngestionReceipt.FromMetadata(metadata));
     }
 
+    [Fact]
+    public async Task Discovery_validates_scope_and_bounded_unique_listing_without_approval()
+    {
+        var f = new Fake();
+        var service = f.Service();
+        var proposal = f.Proposal;
+        Assert.Single(await service.ListAsync(Actor, Conversation, proposal.TurnId));
+        Assert.Equal(f.State, await service.ReadAsync(Actor, Conversation, proposal.TurnId, proposal.ProposalId));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ListAsync(Actor, Conversation, Guid.NewGuid()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ReadAsync(Actor, Conversation, proposal.TurnId, Guid.NewGuid()));
+        f.Listing = [f.State, f.State];
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ListAsync(Actor, Conversation, proposal.TurnId));
+        f.Listing = Enumerable.Repeat(f.State, 9).ToArray();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ListAsync(Actor, Conversation, proposal.TurnId));
+        Assert.Equal(0, f.Approvals); Assert.Empty(f.Appends); Assert.Equal(0, f.Resumes);
+    }
+
     private sealed class Fake : IChatMappingEditProposalStore, IProjectReader, IRevisionIngestionService
     {
         internal ChatMappingEditProposal Proposal { get; } = ChatMappingEditApprovalTests.Proposal();
         internal ChatMappingEditState State;
         internal ChatMappingEditCreateResult? CreateResult;
+        internal IReadOnlyList<ChatMappingEditState>? Listing;
         internal bool CanEdit = true, Commit, LoseAck, LosePrepareAck, HeadChanged, RevokeAtAppend;
         internal int Approvals, Resumes;
         internal Func<RevisionIngestionResult>? AppendResult, ResumeResult;
@@ -373,7 +391,7 @@ public sealed class ChatMappingEditApprovalTests
             Task.FromResult(CreateResult ?? new ChatMappingEditCreateResult(ChatMappingEditCreateOutcome.Existing, State));
         public Task<ChatMappingEditState?> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, Guid proposalId, CancellationToken ct) => Task.FromResult<ChatMappingEditState?>(State);
         public Task<IReadOnlyList<ChatMappingEditState>> ListAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<ChatMappingEditState>>(actor.PrincipalId == Proposal.Conversation.Creator && conversation == Proposal.Conversation && turnId == Proposal.TurnId ? [State] : []);
+            Task.FromResult<IReadOnlyList<ChatMappingEditState>>(Listing ?? [State]);
         public Task<ChatMappingEditState?> ApproveAndPrepareAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, Guid proposalId, Sha256Digest expectedFingerprint, CancellationToken ct)
         {
             Approvals++;

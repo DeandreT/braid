@@ -49,6 +49,10 @@ internal static class ChatHostConfiguration
         });
         services.AddSingleton<IChatMappingWriteJournal>(provider => new PostgresChatStore(provider.GetRequiredService<ChatHostDatabases>().Writer));
         services.AddSingleton<ChatMappingWriteRecovery>();
+        services.AddSingleton(new ChatMappingEditRuntimeOptions(ServerHostOptions.Flag(read, "WEFT_CHAT_LEGACY_DIRECT_SAVE_ENABLED")));
+        // Persistence is supplied by the proposal deployment slice. Never substitute the old journal for it.
+        services.TryAddSingleton(provider => new ChatMappingEditApprovalService(provider.GetRequiredService<IChatMappingEditProposalStore>(),
+            provider.GetRequiredService<IProjectReader>(), provider.GetRequiredService<IRevisionIngestionService>()));
         // Keyless profiles read the Container Apps managed-identity endpoint, admitted only when a credential uses it, or
         // the fixed Instance Metadata Service address.
         var tokenEndpoint = configuration.ManagedIdentities.Values.Any(identity => identity.Source == ChatIdentitySource.ContainerApps)
@@ -82,7 +86,12 @@ internal static class ChatHostConfiguration
                 provider.GetService<CatalogPreviewOptions>()?.Enabled == true,
                 provider.GetService<CatalogRegressionCaseOptions>()?.Enabled == true,
                 provider.GetService<CatalogBuildOptions>()?.Enabled == true,
-                guide is not null, provider.GetService<MappingDirectEditService>() is not null), guide);
+                guide is not null,
+                provider.GetService<MappingDirectEditService>() is not null &&
+                    provider.GetService<IChatMappingEditProposalStore>() is not null &&
+                    provider.GetService<IProjectReader>() is not null && provider.GetService<IRevisionIngestionService>() is not null,
+                provider.GetRequiredService<ChatMappingEditRuntimeOptions>().LegacyDirectSaveEnabled &&
+                    provider.GetService<MappingDirectEditService>() is not null), guide);
         });
         services.AddWeftChat(configuration.Options);
 

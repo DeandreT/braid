@@ -150,7 +150,7 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         var admitted = false;
         CallScope? scope = null;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(intent.Name == WorkspaceToolRegistry.SaveEdit ? EditDuration : CallDuration);
+        deadline.CancelAfter(intent.Name is WorkspaceToolRegistry.SaveEdit or WorkspaceToolRegistry.ProposeEdit ? EditDuration : CallDuration);
         var token = deadline.Token;
         try
         {
@@ -189,7 +189,9 @@ public sealed partial class WorkspaceToolService : IChatReadOnlyToolPort, IChatW
         "get_capabilities" => GetCapabilitiesAsync(scope, call, token),
         "search_user_guide" => SearchGuideAsync(scope, call, token),
         "get_user_guide_section" => GetGuideSectionAsync(scope, call, token),
-        WorkspaceToolRegistry.SaveEdit => SaveEditAsync(scope, call, token),
+        WorkspaceToolRegistry.ProposeEdit when features.Edits => ProposeEditAsync(scope, call, token),
+        WorkspaceToolRegistry.SaveEdit when features.LegacyDirectSave &&
+            services.GetService<ChatMappingEditRuntimeOptions>()?.LegacyDirectSaveEnabled == true => SaveEditAsync(scope, call, token),
         _ when WorkspaceToolRegistry.IsReportTool(call.Name) => ReportAsync(scope, call, token),
         _ when WorkspaceToolRegistry.IsPayloadTool(call.Name) && scope.Payloads => PayloadAsync(scope, call, token),
         _ => throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall)
