@@ -38,6 +38,7 @@ app.MapWeftHealth();
 app.MapWeftProjectionFixtures();
 app.MapWeftCatalog();
 app.MapWeftSpecs();
+Weft.Api.Creation.CreationEndpoints.MapWeftCreation(app);
 app.MapWeftRegressionCases();
 app.MapWeftRegressionRuns();
 app.MapWeftAutomation();

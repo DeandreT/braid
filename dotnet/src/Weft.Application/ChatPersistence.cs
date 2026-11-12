@@ -34,7 +34,7 @@ public sealed record ChatRoundFacts
     public ChatRoundFacts(ChatRoundIntent intent, int ordinal, ChatRoundOutcome outcome, ChatTerminalMetadata? metadata = null)
     {
         ArgumentNullException.ThrowIfNull(intent);
-        if (ordinal is < 1 or > 4 || !Enum.IsDefined(outcome)) throw ChatBounds.Invalid();
+        if (ordinal is < 1 or > 5 || !Enum.IsDefined(outcome)) throw ChatBounds.Invalid();
         if (metadata is not null && outcome == ChatRoundOutcome.Uncertain) throw ChatBounds.Invalid();
         if (metadata is not null) _ = new ChatRoundCompletion(outcome, metadata);
         if (metadata?.Usage is { } usage && usage.RoundId != intent.RoundId || metadata?.Failure is { } failure && failure.RoundId != intent.RoundId) throw ChatBounds.Invalid();

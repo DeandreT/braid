@@ -55,8 +55,8 @@ public static partial class ChatEndpoints
         var (policy, focus) = await grounding(profile);
         if (policy is null) return Error(ChatErrorCodeV1.ProfileUnavailable, StatusCodes.Status409Conflict);
         var envelope = new ChatOriginalEnvelope(request.TurnId, request.Text, request.Selectors,
-            ChatGrounding.ProviderBudget(chat.Options), policy, focus);
-        var intent = new ChatTurnIntent(request.TurnId, envelope, profile.Pin, ChatGrounding.TurnBudget, deadline);
+            ChatGrounding.ProviderBudget(chat.Options, policy), policy, focus);
+        var intent = new ChatTurnIntent(request.TurnId, envelope, profile.Pin, ChatGrounding.TurnBudgetFor(policy), deadline);
         var execution = chat.Host.Begin(chat.Actor, key, profile, intent, History(turns.Turns));
         if (execution is null)
             return await stores.ReaderTurns.ReadTurnAsync(chat.Actor, key, request.TurnId, context.RequestAborted) is { } live

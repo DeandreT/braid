@@ -75,7 +75,7 @@ public sealed record ChatCitationFact(RevisionScope Revision, ChatReportPin Repo
 
 public enum ChatWorkspaceCitationKind
 {
-    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection
+    Project = 1, Mapping, Revision, Report, PreviewRun, RegressionCase, RegressionRun, BuildRun, BuildApproval, BuildEnvironment, GuideSection, CreationProposal
 }
 
 /// <summary>
@@ -86,13 +86,14 @@ public sealed record ChatWorkspaceCitationFact
 {
     private ChatWorkspaceCitationFact(ChatWorkspaceCitationKind kind, Guid organizationId, Guid? projectId = null, Guid? mappingId = null,
         Guid? revisionId = null, ChatReportPin? report = null, ChatCitationTarget? target = null, Guid? subjectId = null,
-        long? version = null, string? sectionId = null)
+        long? version = null, string? sectionId = null, Sha256Digest? proposalFingerprint = null)
     {
         ChatBounds.Id(organizationId);
         foreach (var id in new[] { projectId, mappingId, revisionId, subjectId }) if (id is { } value) ChatBounds.Id(value);
         if (version is < 1 || sectionId is not null && !SectionPattern(sectionId)) throw ChatBounds.Invalid();
         Kind = kind; OrganizationId = organizationId; ProjectId = projectId; MappingId = mappingId; RevisionId = revisionId;
         Report = report; Target = target; SubjectId = subjectId; Version = version; SectionId = sectionId;
+        ProposalFingerprint = proposalFingerprint;
     }
     public static ChatWorkspaceCitationFact Project(ProjectScope project) =>
         new(ChatWorkspaceCitationKind.Project, project.OrganizationId, project.ProjectId);
@@ -121,6 +122,9 @@ public sealed record ChatWorkspaceCitationFact
     /// <summary>A section of the user guide shipped with this server; it carries the organization it was cited in.</summary>
     public static ChatWorkspaceCitationFact GuideSection(Guid organizationId, string sectionId) =>
         new(ChatWorkspaceCitationKind.GuideSection, organizationId, sectionId: sectionId ?? throw ChatBounds.Invalid());
+    public static ChatWorkspaceCitationFact CreationProposal(ProjectScope project, Guid proposalId, Sha256Digest fingerprint) =>
+        new(ChatWorkspaceCitationKind.CreationProposal, project.OrganizationId, project.ProjectId, subjectId: Required(proposalId),
+            proposalFingerprint: fingerprint ?? throw ChatBounds.Invalid());
 
     public ChatWorkspaceCitationKind Kind { get; }
     public Guid OrganizationId { get; }
@@ -132,6 +136,7 @@ public sealed record ChatWorkspaceCitationFact
     public Guid? SubjectId { get; }
     public long? Version { get; }
     public string? SectionId { get; }
+    public Sha256Digest? ProposalFingerprint { get; }
     public ProjectScope? ProjectScope => ProjectId is { } project ? new(OrganizationId, project) : null;
     public MappingScope? MappingScope => ProjectId is { } project && MappingId is { } mapping ? new(OrganizationId, project, mapping) : null;
     public RevisionScope? RevisionScope => ProjectId is { } project && MappingId is { } mapping && RevisionId is { } revision
@@ -144,7 +149,7 @@ public sealed record ChatWorkspaceCitationFact
     public override string ToString() => nameof(ChatWorkspaceCitationFact);
 }
 
-public enum ChatPayloadSource { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput }
+public enum ChatPayloadSource { PreviewInput = 1, PreviewOutput, RegressionCase, RegressionRunOutput, Specification }
 
 /// <summary>Payload bytes one tool call returned to the model: identities and the byte count, never content.</summary>
 public sealed record ChatPayloadDisclosureFact
@@ -159,7 +164,7 @@ public sealed record ChatPayloadDisclosureFact
     }
     public Guid ProjectId { get; }
     public ChatPayloadSource Source { get; }
-    /// <summary>The preview run, regression case or regression run.</summary>
+    /// <summary>The preview run, regression case, regression run, or immutable specification extraction object.</summary>
     public Guid SubjectId { get; }
     /// <summary>The regression case version; null for runs.</summary>
     public long? Version { get; }
@@ -315,6 +320,7 @@ public static class ChatMetadataCodec
         WriteNumber(w, "targetKind", value.Target is { } target ? (int)target.Kind : null);
         w.WriteString("resource", value.Target?.ResourceId); WriteNumber(w, "ordinal", value.Target?.DiagnosticOrdinal);
         WriteId(w, "subject", value.SubjectId); WriteNumber(w, "version", value.Version); w.WriteString("section", value.SectionId);
+        if (value.Kind == ChatWorkspaceCitationKind.CreationProposal) w.WriteString("proposalFingerprint", value.ProposalFingerprint!.Value);
         w.WriteEndObject();
     });
     public static string Disclosure(ChatPayloadDisclosureFact value) => Json(w =>
@@ -368,6 +374,8 @@ public static class ChatMetadataCodec
             ChatWorkspaceCitationKind.BuildApproval => ChatWorkspaceCitationFact.BuildApproval(new(organization, Id("project"), Id("mapping")), Id("subject")),
             ChatWorkspaceCitationKind.BuildEnvironment => ChatWorkspaceCitationFact.BuildEnvironment(new(organization, Id("project")), Id("subject"), e.GetProperty("version").GetInt64()),
             ChatWorkspaceCitationKind.GuideSection => ChatWorkspaceCitationFact.GuideSection(organization, e.GetProperty("section").GetString()!),
+            ChatWorkspaceCitationKind.CreationProposal => ChatWorkspaceCitationFact.CreationProposal(new(organization, Id("project")), Id("subject"),
+                Sha256Digest.Parse(e.GetProperty("proposalFingerprint").GetString()!)),
             _ => throw ChatBounds.Invalid()
         };
     }, WorkspaceCitation);

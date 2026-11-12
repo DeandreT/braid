@@ -822,6 +822,91 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Discover creator-private retained proposals under current project content access, independent of chat history and source freshness. Exclusive ascending UUID cursor. */
+    get: operations["ListCreationProposals"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Creator-private exact retained proposal. Requires current project content and creation authority. Approval requires the exact fingerprint and every critical assumption ID; critical questions block ingestion. Recovery resumes an existing approved operation. Sample preview returns ephemeral verified output. */
+    get: operations["ReadCreationProposal"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}/approve": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Creator-private exact retained proposal. Requires current project content and creation authority. Approval requires the exact fingerprint and every critical assumption ID; critical questions block ingestion. Recovery resumes an existing approved operation. Sample preview returns ephemeral verified output. */
+    post: operations["ApproveCreationProposal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Creator-private exact retained proposal. Requires current project content and creation authority. Approval requires the exact fingerprint and every critical assumption ID; critical questions block ingestion. Recovery resumes an existing approved operation. Sample preview returns ephemeral verified output. */
+    post: operations["PreviewCreationProposal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals/{proposalId}/recover": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Creator-private exact retained proposal. Requires current project content and creation authority. Approval requires the exact fingerprint and every critical assumption ID; critical questions block ingestion. Recovery resumes an existing approved operation. Sample preview returns ephemeral verified output. */
+    post: operations["RecoverCreationProposal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings": {
     parameters: {
       query?: never;
@@ -3198,7 +3283,8 @@ export interface components {
       | "previewInput"
       | "previewOutput"
       | "regressionCase"
-      | "regressionRunOutput";
+      | "regressionRunOutput"
+      | "specification";
     ChatProfileV1: {
       displayName: string;
       modelId: string;
@@ -3463,12 +3549,14 @@ export interface components {
       | "buildRun"
       | "buildApproval"
       | "buildEnvironment"
-      | "guideSection";
+      | "guideSection"
+      | "creationProposal";
     ChatWorkspaceCitationV1: {
       kind: components["schemas"]["ChatWorkspaceCitationKindV1"];
       mappingId: null | string;
       organizationId: string;
       projectId: null | string;
+      proposalFingerprint?: null | string;
       reportDerivationId: null | string;
       revisionId: null | string;
       sectionId: null | string;
@@ -3613,6 +3701,80 @@ export interface components {
     };
     /** @enum {unknown} */
     CoverageStatus: "complete" | "partial" | "unavailable";
+    CreationApprovalV1: {
+      acceptedCriticalAssumptions: string[];
+      fingerprint: string;
+    };
+    CreationAssumptionV1: {
+      critical: boolean;
+      id: string;
+      text: string;
+    };
+    CreationCitationV1: {
+      bundleId: string;
+      /** Format: int32 */
+      chunkOrdinal: number;
+      sourceId: string;
+      /** Format: int64 */
+      sourceVersion: number;
+    };
+    CreationErrorV1: {
+      code: string;
+    };
+    CreationPreviewRequestV1: {
+      fingerprint: string;
+      sampleBase64: string;
+      sampleDigest: string;
+    };
+    CreationPreviewV1: {
+      fingerprint: string;
+      format: null | string;
+      mediaType: null | string;
+      nativeDigest: string;
+      outcome: string;
+      outputBase64: null | string;
+      outputDigest: null | string;
+      proposalId: string;
+      sampleDigest: string;
+    };
+    CreationProposalLinkV1: {
+      fingerprint: string;
+      proposalId: string;
+      reviewPath: string;
+    };
+    CreationProposalPageV1: {
+      afterProposal: null | string;
+      proposals: components["schemas"]["CreationProposalLinkV1"][];
+    };
+    CreationProposalV1: {
+      approved: boolean;
+      assumptions: components["schemas"]["CreationAssumptionV1"][];
+      description: null | string;
+      evidence: components["schemas"]["CreationCitationV1"][];
+      fingerprint: string;
+      name: string;
+      nativeDigest: string;
+      planDigest: string;
+      planJson: string;
+      projectId: string;
+      proposalId: string;
+      questions: components["schemas"]["CreationQuestionV1"][];
+      receipt: null | components["schemas"]["CreationReceiptV1"];
+      snapshotDigest: string;
+    };
+    CreationQuestionV1: {
+      critical: boolean;
+      text: string;
+    };
+    CreationReceiptV1: {
+      mappingId: null | string;
+      operationId: string;
+      phase: string;
+      revisionId: null | string;
+    };
+    CreationRecoveryV1: {
+      fingerprint: string;
+    };
     CsvDocumentDialectV1: {
       delimiter: string;
       hasHeaderRow: boolean;
@@ -10810,6 +10972,532 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  ListCreationProposals: {
+    parameters: {
+      query?: {
+        afterProposal?: string;
+        limit?: number;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationProposalPageV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+    };
+  };
+  ReadCreationProposal: {
+    parameters: {
+      query: {
+        expectedFingerprint: string;
+      };
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        proposalId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationProposalV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+    };
+  };
+  ApproveCreationProposal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        proposalId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreationApprovalV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationProposalV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+    };
+  };
+  PreviewCreationProposal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        proposalId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreationPreviewRequestV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationPreviewV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+    };
+  };
+  RecoverCreationProposal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+        proposalId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreationRecoveryV1"];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationProposalV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
         };
       };
     };

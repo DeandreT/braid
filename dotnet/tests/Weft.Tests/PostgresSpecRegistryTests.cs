@@ -10,6 +10,26 @@ namespace Weft.Tests;
 public sealed class PostgresSpecRegistryTests(PostgresFixture fixture)
 {
     [PostgresFact]
+    public async Task Inventory_preserves_stored_nondefault_profile_even_when_evidence_matches_default()
+    {
+        await using var f = await Fixture.Create(fixture);
+        await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
+        var source = new SpecCapturedSource(new(f.Scope, Guid.NewGuid(), 1), SpecSourceFormat.Text, "Short evidence"u8);
+        var original = new SpecObjectReference(new(source.Identity, SpecObjectKind.Original, Guid.NewGuid()), source.Digest, source.ByteCount);
+        var reserved = await f.Writer.ReserveAsync(original, source.Format, Guid.NewGuid(), 1, null, default);
+        await f.Writer.ExecutePublicationAsync(reserved.Claim, _ => Task.FromResult(SpecPublishResult.Created), default);
+        var extraction = SpecSourceExtractor.Extract(source, new SpecExtractionLimits(maximumChunks: 100));
+        Assert.Equal(SpecSourceExtractor.Extract(source).CopyEvidenceBytes(), extraction.CopyEvidenceBytes());
+        var reference = new SpecObjectReference(new(source.Identity, SpecObjectKind.Extraction, Guid.NewGuid()), extraction.Identity.EvidenceDigest, extraction.CopyEvidenceBytes().Length);
+        var version = (await f.Reader.InventoryAsync(f.Scope, default)).Bundle.Version;
+        var retained = await f.Writer.ReserveAsync(reference, source.Format, Guid.NewGuid(), version, extraction.Identity, default);
+        await f.Writer.ExecutePublicationAsync(retained.Claim, _ => Task.FromResult(SpecPublishResult.Created), default);
+        var inventory = await f.Reader.InventoryAsync(f.Scope, default);
+        Assert.Equal(extraction.Identity, Assert.Single(inventory.Objects, i => i.Reference.Id.Kind == SpecObjectKind.Extraction).Extraction);
+        Assert.Null(Assert.Single(inventory.Objects, i => i.Reference.Id.Kind == SpecObjectKind.Original).Extraction);
+    }
+
+    [PostgresFact]
     public async Task Inventory_is_bounded_scope_locked_and_requires_current_content_authority()
     {
         await using var f = await Fixture.Create(fixture);

@@ -61,7 +61,7 @@ public sealed class AiTurnLimits
         long maxWireBytes, long maxTextBytes, int maxToolCalls)
     {
         if (duration <= TimeSpan.Zero || duration > TimeSpan.FromSeconds(180)
-            || maxRounds is < 1 or > 4 || maxRequestBytes is < 1 or > 1_048_576
+            || maxRounds is < 1 or > 5 || maxRequestBytes is < 1 or > 1_048_576
             || maxWireBytes is < 1 or > 4_194_304 || maxTextBytes is < 1 or > 131_072
             || maxToolCalls is < 1 or > 8) throw AiGuard.Invalid();
         return new AiTurnLimits(duration, maxRounds, maxRequestBytes, maxWireBytes, maxTextBytes, maxToolCalls);

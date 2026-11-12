@@ -4,7 +4,8 @@ namespace Weft.Application;
 
 public sealed record SpecBundleStatus(SpecBundleScope Scope, long Version, bool Tombstoned);
 public sealed record SpecObjectReservation(SpecPublicationClaim Claim, long BundleVersion);
-public sealed record SpecInventoryItem(SpecObjectReference Reference, SpecSourceFormat Format, string State, SpecExtractionOutcome? Outcome);
+public sealed record SpecInventoryItem(SpecObjectReference Reference, SpecSourceFormat Format, string State, SpecExtractionOutcome? Outcome,
+    SpecExtractionIdentity? Extraction = null);
 public sealed record SpecBundleInventory(SpecBundleStatus Bundle, IReadOnlyList<SpecInventoryItem> Objects);
 public sealed record SpecIntakeResult(Guid OriginalObjectId, Guid ExtractionObjectId, long ReservationVersion, SpecExtractionOutcome Outcome);
 
