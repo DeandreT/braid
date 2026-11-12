@@ -16,13 +16,13 @@ public sealed class SpecOfficeExtractionTests
     private const string Types = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly SpecSourceIdentity SourceId = new(new(new ProjectScope(Guid.NewGuid(), Guid.NewGuid()), Guid.NewGuid()), Guid.NewGuid(), 1);
     private static SpecCapturedSource Source(byte[] bytes, SpecSourceFormat format = SpecSourceFormat.Docx) => new(SourceId, format, bytes);
-    private static Dictionary<string, string> Word(string body = "<w:p><w:r><w:t>café 東京</w:t></w:r></w:p>") => new()
+    internal static Dictionary<string, string> Word(string body = "<w:p><w:r><w:t>café 東京</w:t></w:r></w:p>") => new()
     {
         ["[Content_Types].xml"] = $"<Types xmlns='{Types}'><Default Extension='rels' ContentType='application/vnd.openxmlformats-package.relationships+xml'/><Override PartName='/word/document.xml' ContentType='application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'/></Types>",
         ["_rels/.rels"] = $"<Relationships xmlns='{Rel}'><Relationship Id='main' Type='{R}officeDocument' Target='word/document.xml'/></Relationships>",
         ["word/document.xml"] = $"<w:document xmlns:w='{W}'><w:body>{body}</w:body></w:document>"
     };
-    private static Dictionary<string, string> Excel(string cells = "<c r='A1' t='s'><v>0</v></c>", string shared = "<si><t>東京</t></si>") => new()
+    internal static Dictionary<string, string> Excel(string cells = "<c r='A1' t='s'><v>0</v></c>", string shared = "<si><t>東京</t></si>") => new()
     {
         ["[Content_Types].xml"] = $"<Types xmlns='{Types}'><Default Extension='rels' ContentType='application/vnd.openxmlformats-package.relationships+xml'/><Default Extension='xml' ContentType='application/xml'/><Override PartName='/xl/workbook.xml' ContentType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml'/></Types>",
         ["_rels/.rels"] = $"<Relationships xmlns='{Rel}'><Relationship Id='main' Type='{R}officeDocument' Target='xl/workbook.xml'/></Relationships>",
@@ -31,7 +31,7 @@ public sealed class SpecOfficeExtractionTests
         ["xl/worksheets/sheet1.xml"] = $"<worksheet xmlns='{S}'><sheetData><row r='1'>{cells}</row></sheetData></worksheet>",
         ["xl/sharedStrings.xml"] = $"<sst xmlns='{S}'>{shared}</sst>"
     };
-    private static byte[] Zip(IEnumerable<KeyValuePair<string, string>> parts, CompressionLevel compression = CompressionLevel.NoCompression)
+    internal static byte[] Zip(IEnumerable<KeyValuePair<string, string>> parts, CompressionLevel compression = CompressionLevel.NoCompression)
     {
         using var stream = new MemoryStream();
         using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, true))
