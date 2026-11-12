@@ -2045,6 +2045,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/spec-bundles/{bundleId}/capabilities": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Explicit project content grants are required. No AI-sharing authority is granted. Unavailable until the exact registry schema and private Blob backend are admitted. Development identity bypass is refused. On an uncertain mutation, retry the exact identities and bytes; do not allocate replacements. */
+    get: operations["GetSpecIntakeCapabilities"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/spec-bundles/{bundleId}/extractions/{objectId}": {
     parameters: {
       query?: never;
@@ -5202,6 +5219,21 @@ export interface components {
     };
     SpecErrorV1: {
       code: string;
+    };
+    SpecIntakeCapabilitiesV1: {
+      formats: components["schemas"]["SpecIntakeFormatV1"][];
+      /** Format: int32 */
+      maximumTextRequestBytes: number;
+      /** Format: int32 */
+      version: number;
+    };
+    SpecIntakeFormatV1: {
+      evidenceFormat: string;
+      /** Format: int32 */
+      extractorVersion: number;
+      format: string;
+      /** Format: int32 */
+      maximumSourceBytes: number;
     };
     SpecIntakeV1: {
       /** Format: uuid */
@@ -21245,6 +21277,108 @@ export interface operations {
       };
     };
   };
+  GetSpecIntakeCapabilities: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        bundleId: string;
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecIntakeCapabilitiesV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SpecErrorV1"];
+        };
+      };
+    };
+  };
   ReadSpecExtraction: {
     parameters: {
       query?: never;
@@ -21259,13 +21393,22 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Exact canonical weft.spec-evidence.v1 JSON array: format marker, fixed outcome code, then zero or more chunk tuples [ordinal, text, nullable JSON pointer, byte offset, byte length, start line, end line]. Limit failures contain no chunks. */
+      /** @description Exact canonical evidence JSON array: format marker, fixed outcome code, then chunks. Legacy v1 chunks are [ordinal,text,nullable JSON pointer,byte offset,byte length,start line,end line]. Structural v2 Office chunks are [ordinal,text,locator,formulaOrNull]; PDF chunks add missingText as a fifth field. PDF locators are [pdf-page,oneBasedPage]. Partial retains incomplete structural/page text; needs-OCR and encrypted are Unsupported refusals, with needs-OCR retaining blank page facts. Limit failures contain no chunks. */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          "application/json": (string | (null | number | string)[])[];
+          "application/json": (
+            | string
+            | (
+                | null
+                | boolean
+                | number
+                | string
+                | (null | boolean | number | string)[]
+              )[]
+          )[];
         };
       };
       /** @description Bad Request */
@@ -21574,7 +21717,7 @@ export interface operations {
       header: {
         /** @description One quoted positive bundle version, for example "1". Required; stale CAS answers 409. Original reservation replay retains its original version. */
         "If-Match": string;
-        /** @description Strict JSON SpecUploadV1: sourceId, sourceVersion, originalObjectId, uploadKey, extractionObjectId, extractionKey, extractionExpectedVersion, format. All fields required; IDs nonzero and publication IDs/keys distinct. Format: text, json, openapi-json. Raw body at most 10 MiB. The extraction CAS normally starts at If-Match+1; after a conflict before its reservation, refresh inventory and update only extractionExpectedVersion. Malformed source content is retained with a Malformed extraction outcome. */
+        /** @description Strict JSON SpecUploadV1: sourceId, sourceVersion, originalObjectId, uploadKey, extractionObjectId, extractionKey, extractionExpectedVersion, format. All fields required; IDs nonzero and publication IDs/keys distinct. Format: text, json, openapi-json, docx, xlsx, pdf; use GetSpecIntakeCapabilities for currently admitted formats, extractor versions and byte caps. Structural formats require qualified workers and schema 46; unavailable formats return 503 DocumentWorkerUnavailable before retention. Raw body at most 10 MiB (PDF at most 8 MiB). The extraction CAS normally starts at If-Match+1; after a conflict before its reservation, refresh inventory and update only extractionExpectedVersion. Document refusals retain the original; process failures are 503, not document outcomes. */
         "X-Weft-Spec-Upload": string;
       };
       path: {

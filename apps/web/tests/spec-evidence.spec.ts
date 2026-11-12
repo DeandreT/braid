@@ -194,18 +194,18 @@ test("version and tuple mismatches, extra fields, surrogate text and invented fo
     expect(() => evidence(value)).toThrow();
 });
 
-test("PDF tuple preserves text and blank pages without inventing worker-only flags or OCR states", () => {
+test("PDF tuple preserves canonical missing-text facts and blank pages", () => {
   const parsed = evidence([
     "weft.spec-evidence.v2",
-    "page-text-only",
-    [0, "first", ["pdf-page", 1], null],
-    [1, "", ["pdf-page", 2], null],
+    "pdf-page-text-only",
+    [0, "first", ["pdf-page", 1], null, false],
+    [1, "", ["pdf-page", 2], null, true],
   ]);
   expect(parsed.chunks.map((c) => [c.text, c.locator])).toEqual([
     ["first", { kind: "pdf-page", page: 1 }],
     ["", { kind: "pdf-page", page: 2 }],
   ]);
-  expect(parsed.chunks[1]).not.toHaveProperty("missingText");
+  expect(parsed.chunks[1]!.missingText).toBe(true);
   expect(() =>
     evidence({
       format: "weft.spec-pdf-extraction.v1",
@@ -213,6 +213,49 @@ test("PDF tuple preserves text and blank pages without inventing worker-only fla
       pages: [],
     }),
   ).toThrow();
+});
+
+test("PDF status and missing-text facts must agree with retained evidence", async () => {
+  const decode = (
+    code: string,
+    chunks: unknown[],
+    outcome: SpecObject["outcome"],
+  ) => {
+    const bytes = bytesOf(
+      JSON.stringify(["weft.spec-evidence.v2", code, ...chunks]),
+    );
+    return readEvidence(bytes, objectFor(bytes, { format: "Pdf", outcome }));
+  };
+  const blank = [0, "\u0085\u3000", ["pdf-page", 1], null, true];
+  expect(
+    (await decode("pdf-needs-ocr", [blank], "Unsupported")).chunks[0]!
+      .missingText,
+  ).toBe(true);
+  expect(
+    (await decode("pdf-encrypted", [], "Unsupported")).chunks,
+  ).toHaveLength(0);
+  await expect(
+    decode("pdf-page-text-only", [blank], "Partial"),
+  ).rejects.toThrow();
+  await expect(
+    decode("pdf-encrypted", [blank], "Unsupported"),
+  ).rejects.toThrow();
+  await expect(decode("pdf-needs-ocr", [], "Unsupported")).rejects.toThrow();
+  await expect(
+    decode(
+      "pdf-page-text-only",
+      [[0, "text", ["pdf-page", 1], null, false]],
+      "Complete",
+    ),
+  ).rejects.toThrow();
+  for (const tuple of [
+    [0, "text", ["pdf-page", 1], null, true],
+    [0, "", ["pdf-page", 1], null],
+    [0, "text", ["pdf-page", 2], null, false],
+  ])
+    await expect(
+      decode("pdf-page-text-only", [tuple], "Partial"),
+    ).rejects.toThrow();
 });
 
 test("exact UTF-8 response bytes, escaping and framing bind the inventory digest and count", async () => {
@@ -241,7 +284,7 @@ test("exact UTF-8 response bytes, escaping and framing bind the inventory digest
   await expect(readEvidence(oversized, objectFor(oversized))).rejects.toThrow();
 });
 
-test("source format, outcome and evidence version must agree; PDF intake is not invented", async () => {
+test("source format, outcome and evidence version must agree", async () => {
   const bytes = bytesOf(JSON.stringify(v2()));
   for (const overrides of [
     { format: "Xlsx" },
@@ -265,7 +308,7 @@ test("source format, outcome and evidence version must agree; PDF intake is not 
     inventory({ bundle, objects: [objectFor(bytes)] }, id).objects[0]!.outcome,
   ).toBe("Partial");
   for (const overrides of [
-    { format: "Pdf" },
+    { format: "Unknown" },
     { outcome: "NeedsOcr" },
     { format: ["Docx"] },
     { outcome: ["Partial"] },

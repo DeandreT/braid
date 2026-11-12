@@ -17,6 +17,192 @@ import {
 } from "../src/catalog/specs/spec-model";
 const id = "50000000-0000-4000-8000-000000000001";
 
+for (const failure of ["503", "invalid"]) {
+  test(`capabilities ${failure} preserves authorized inventory and reads; refresh recovers intake`, async ({
+    page,
+  }) => {
+    await setup(page);
+    await create(page);
+    await page
+      .getByLabel("Or paste text (1 MiB request maximum)")
+      .fill("retained source text");
+    await page.getByRole("button", { name: "Save pasted text" }).click();
+    await expect(page.getByText("Original bytes retained.")).toBeVisible();
+    await page.route("**/capabilities", (route) =>
+      route.fulfill(
+        failure === "503"
+          ? { status: 503, json: { code: "Unavailable" } }
+          : { json: { version: 99, formats: [] } },
+      ),
+    );
+    await page
+      .getByRole("button", { name: "Refresh inventory and access" })
+      .click();
+    await expect(
+      page.getByText(
+        /New intake is unavailable because server capabilities could not be confirmed/,
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("Original bytes retained.")).toBeVisible();
+    await expect(page.getByLabel("Specification file")).toBeDisabled();
+    await expect(
+      page.getByLabel("Or paste text (1 MiB request maximum)"),
+    ).toBeDisabled();
+    await page
+      .getByRole("button", { name: "Read extraction", exact: true })
+      .click();
+    await expect(page.locator(".citation pre")).toHaveText(
+      "retained source text",
+    );
+    await page.unroute("**/capabilities");
+    await page
+      .getByRole("button", { name: "Refresh inventory and access" })
+      .click();
+    await expect(page.getByLabel("Specification file")).toBeEnabled();
+    await expect(
+      page.getByLabel("Or paste text (1 MiB request maximum)"),
+    ).toBeEnabled();
+    await expect(
+      page.getByText(
+        /New intake is unavailable because server capabilities could not be confirmed/,
+      ),
+    ).toHaveCount(0);
+  });
+}
+
+for (const status of [401, 403]) {
+  test(`capability authentication refusal ${status} still clears private inventory`, async ({
+    page,
+  }) => {
+    await setup(page);
+    await create(page);
+    await page
+      .getByLabel("Or paste text (1 MiB request maximum)")
+      .fill("private source");
+    await page.getByRole("button", { name: "Save pasted text" }).click();
+    await page
+      .getByRole("button", { name: "Read extraction", exact: true })
+      .click();
+    await expect(page.locator(".citation pre")).toHaveText("private source");
+    await page.route("**/capabilities", (route) =>
+      route.fulfill({ status, json: { code: "IdentityRejected" } }),
+    );
+    await page
+      .getByRole("button", { name: "Refresh inventory and access" })
+      .click();
+    await expect(
+      page.getByText(/Sign-in or content authorization needs attention/),
+    ).toBeVisible();
+    await expect(page.getByText("Original bytes retained.")).toHaveCount(0);
+    await expect(page.locator(".citation")).toHaveCount(0);
+  });
+}
+
+for (const format of ["docx", "xlsx", "pdf"]) {
+  test(`server-admitted ${format} upload preserves explicit format and Partial receipt`, async ({
+    page,
+  }) => {
+    const state = await setup(page);
+    state.formats.push(format);
+    await create(page);
+    await expect(
+      page.locator(`#spec-format option[value="${format}"]`),
+    ).toHaveCount(1);
+    await page.getByLabel("Specification file").setInputFiles({
+      name: `source.${format}`,
+      mimeType: "application/octet-stream",
+      buffer: Buffer.from("captured bytes"),
+    });
+    await expect(page.getByLabel("Extraction format")).toHaveValue(format);
+    await page.getByRole("button", { name: "Upload selected file" }).click();
+    await expect(
+      page.getByText(
+        "Partial structural extraction — document content and layout may be missing",
+      ),
+    ).toBeVisible();
+    expect(state.writes[0]!.format).toBe(format);
+    await page
+      .getByRole("button", { name: "Read extraction", exact: true })
+      .click();
+    await expect(page.locator(".citation pre")).toContainText("fixture text");
+    await expect(
+      page.getByRole("heading", { name: "Retained request" }),
+    ).toHaveCount(0);
+  });
+}
+
+test("explicit admitted format supports a source without a recognized extension", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.formats.push("pdf");
+  await create(page);
+  await page.getByLabel("Extraction format").selectOption("pdf");
+  await page.getByLabel("Specification file").setInputFiles({
+    name: "source.data",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("captured PDF bytes"),
+  });
+  await expect(page.getByLabel("Extraction format")).toHaveValue("pdf");
+  await page.getByRole("button", { name: "Upload selected file" }).click();
+  await expect(page.getByText("Original bytes retained.")).toBeVisible();
+  expect(state.writes[0]!.format).toBe("pdf");
+});
+
+test("revoked format capability prevents a pending document upload", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.formats.push("pdf");
+  await create(page);
+  await page.getByLabel("Specification file").setInputFiles({
+    name: "source.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF"),
+  });
+  state.formats = ["text", "json", "openapi-json"];
+  await page.getByRole("button", { name: "Upload selected file" }).click();
+  await expect(
+    page.getByText(/Specification intake is unavailable/),
+  ).toBeVisible();
+  expect(state.writes).toHaveLength(0);
+  await expect(page.locator('#spec-format option[value="pdf"]')).toHaveCount(0);
+});
+
+for (const status of ["needsOcr", "encrypted"]) {
+  test(`PDF ${status} remains an explicit refusal`, async ({ page }) => {
+    const state = await setup(page);
+    state.formats.push("pdf");
+    state.pdfStatus = status;
+    await create(page);
+    await page.getByLabel("Specification file").setInputFiles({
+      name: "source.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF"),
+    });
+    await page.getByRole("button", { name: "Upload selected file" }).click();
+    await expect(
+      page.getByText("Extraction unsupported — original retained"),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Read extraction", exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        status === "needsOcr"
+          ? "Diagnostic: pdf-needs-ocr"
+          : "Diagnostic: pdf-encrypted",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    if (status === "needsOcr")
+      await expect(
+        page.getByText("Missing text on this page. No OCR was performed."),
+      ).toBeVisible();
+    else await expect(page.locator(".citation")).toHaveCount(0);
+  });
+}
+
 test("source HTML and URLs are rendered as inert text", async ({ page }) => {
   await setup(page);
   await create(page);
@@ -196,6 +382,8 @@ async function setup(page: Page) {
     uncertainDelete: false,
     evidence: new Map<string, unknown[]>(),
     evidenceBodies: new Map<string, string>(),
+    formats: ["text", "json", "openapi-json"],
+    pdfStatus: "partial",
   };
   await page.route("**/api/v1/catalog/context", (r) =>
     r.fulfill({
@@ -217,6 +405,22 @@ async function setup(page: Page) {
     }
     if (!state.data)
       return route.fulfill({ status: 404, json: { code: "NotFound" } });
+    if (url.pathname.endsWith("/capabilities"))
+      return route.fulfill({
+        json: {
+          version: 1,
+          maximumTextRequestBytes: 1048576,
+          formats: state.formats.map((format) => ({
+            format,
+            maximumSourceBytes: format === "pdf" ? 8388608 : 10485760,
+            extractorVersion:
+              format === "pdf" ? 4 : ["docx", "xlsx"].includes(format) ? 3 : 2,
+            evidenceFormat: ["docx", "xlsx", "pdf"].includes(format)
+              ? "weft.spec-evidence.v2"
+              : "weft.spec-evidence.v1",
+          })),
+        },
+      });
     if (request.method() === "DELETE") {
       expect(request.headers()["idempotency-key"]).toBeTruthy();
       if (
@@ -259,7 +463,7 @@ async function setup(page: Page) {
         : request.postDataBuffer()!;
       const text = bytes.toString("utf8");
       let offset = 0;
-      const extraction = [
+      let extraction: unknown[] = [
         "weft.spec-evidence.v1",
         "complete",
         ...text.split("\n").map((line, ordinal) => {
@@ -277,6 +481,53 @@ async function setup(page: Page) {
           return chunk;
         }),
       ];
+      const structural = ["docx", "xlsx", "pdf"].includes(upload.format);
+      if (structural)
+        extraction = [
+          "weft.spec-evidence.v2",
+          upload.format === "docx"
+            ? "office-body-text-only"
+            : upload.format === "xlsx"
+              ? "office-stored-cells-only"
+              : "pdf-page-text-only",
+          upload.format === "docx"
+            ? [
+                0,
+                "Word fixture text",
+                ["docx-paragraph", "word/document.xml", 1, null, null, null],
+                null,
+              ]
+            : upload.format === "xlsx"
+              ? [
+                  0,
+                  "Excel fixture text",
+                  [
+                    "xlsx-cell",
+                    "xl/worksheets/sheet1.xml",
+                    "Sheet",
+                    "A1",
+                    "String",
+                    false,
+                  ],
+                  null,
+                ]
+              : [0, "PDF fixture text", ["pdf-page", 1], null, false],
+        ];
+      if (upload.format === "pdf" && state.pdfStatus !== "partial")
+        extraction =
+          state.pdfStatus === "needsOcr"
+            ? [
+                "weft.spec-evidence.v2",
+                "pdf-needs-ocr",
+                [0, "", ["pdf-page", 1], null, true],
+              ]
+            : ["weft.spec-evidence.v2", "pdf-encrypted"];
+      const resultOutcome =
+        upload.format === "pdf" && state.pdfStatus !== "partial"
+          ? "Unsupported"
+          : structural
+            ? "Partial"
+            : "Complete";
       // Utf8JsonWriter's canonical Unicode escaping for the multibyte fixture.
       const extractionBody =
         text === "café\n東京"
@@ -290,7 +541,14 @@ async function setup(page: Page) {
         sourceId: upload.sourceId,
         sourceVersion: 1,
         kind: "Original",
-        format: "Text",
+        format:
+          upload.format === "docx"
+            ? "Docx"
+            : upload.format === "xlsx"
+              ? "Xlsx"
+              : upload.format === "pdf"
+                ? "Pdf"
+                : "Text",
         digest: createHash("sha256").update(bytes).digest("hex"),
         byteCount: bytes.length,
         state: "published",
@@ -302,7 +560,7 @@ async function setup(page: Page) {
         kind: "Extraction",
         digest: createHash("sha256").update(extractionBytes).digest("hex"),
         byteCount: extractionBytes.length,
-        outcome: "Complete",
+        outcome: resultOutcome,
       });
       state.data.bundle.version += 2;
       if (state.uncertain) {
@@ -314,7 +572,7 @@ async function setup(page: Page) {
           originalObjectId: upload.originalObjectId,
           extractionObjectId: upload.extractionObjectId,
           reservationVersion: state.data.bundle.version,
-          outcome: "Complete",
+          outcome: resultOutcome,
         },
       });
     }
@@ -417,14 +675,12 @@ test("v2 DOCX body and table citations stay inert, accessible and upload admissi
     "JSON",
     "OpenAPI JSON (structural extraction)",
   ]);
-  await page.getByLabel("Text or JSON file (10 MiB maximum)").setInputFiles({
+  await page.getByLabel("Specification file").setInputFiles({
     name: "guide.docx",
     mimeType: "application/octet-stream",
     buffer: Buffer.from("PK"),
   });
-  await expect(
-    page.getByText(/this file was not sent or retained/),
-  ).toBeVisible();
+  await expect(page.getByText(/The file was not sent/)).toBeVisible();
   expect(state.writes).toHaveLength(0);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
@@ -602,7 +858,7 @@ test("project entry, real Chromium upload/paste/citation/delete and reload", asy
   const state = await setup(page);
   await create(page);
   const url = page.url();
-  await page.getByLabel("Text or JSON file (10 MiB maximum)").setInputFiles({
+  await page.getByLabel("Specification file").setInputFiles({
     name: "guide.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("café\n東京", "utf8"),
@@ -707,14 +963,12 @@ test("CAS retry retains IDs; owner change clears private draft; unsupported and 
 }) => {
   const state = await setup(page);
   await create(page);
-  await page.getByLabel("Text or JSON file (10 MiB maximum)").setInputFiles({
+  await page.getByLabel("Specification file").setInputFiles({
     name: "guide.pdf",
     mimeType: "application/pdf",
     buffer: Buffer.from("pdf"),
   });
-  await expect(
-    page.getByText(/this file was not sent or retained/),
-  ).toBeVisible();
+  await expect(page.getByText(/The file was not sent/)).toBeVisible();
   expect(state.writes).toHaveLength(0);
   state.conflict = true;
   await page.getByLabel("Or paste text (1 MiB request maximum)").fill("secret");
@@ -846,7 +1100,7 @@ for (const uncertain of [false, true]) {
     await create(page);
     const url = page.url();
     const draft = page.getByLabel("Or paste text (1 MiB request maximum)");
-    const file = page.getByLabel("Text or JSON file (10 MiB maximum)");
+    const file = page.getByLabel("Specification file");
     await draft.fill("unsent pasted draft");
     await file.setInputFiles({
       name: "guide.txt",

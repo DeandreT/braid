@@ -69,27 +69,36 @@
           Mutation version {{ view.bundle.version }} ·
           {{ view.objects.length }} retained object records
         </p>
-        <fieldset [disabled]="busy() || !!intent()">
+        <fieldset [disabled]="busy() || !!intent() || !intake()">
           <legend>Add a source</legend>
-          <label for="spec-file">Text or JSON file (10 MiB maximum)</label
+          <label for="spec-file">Specification file</label
           ><input
             id="spec-file"
             type="file"
-            accept=".txt,.json,text/plain,application/json"
+            [accept]="fileAccept()"
             (change)="choose($event)"
           />
           <p>
-            PDF and Office files are currently unsupported by this upload API.
-            They will not be sent or retained.
+            Formats and byte limits below are admitted by this server. Word,
+            Excel and PDF extraction is partial; scanned PDFs may require OCR
+            and encrypted PDFs are refused.
           </p>
           <label for="spec-format">Extraction format</label
           ><select id="spec-format" [(ngModel)]="format">
-            <option value="text">Plain text</option>
-            <option value="json">JSON</option>
-            <option value="openapi-json">
-              OpenAPI JSON (structural extraction)
-            </option>
+            @for (entry of intake()?.formats ?? []; track entry.format) {
+              <option [value]="entry.format">
+                {{ formatLabels[entry.format] }}
+              </option>
+            }
           </select>
+          @for (entry of intake()?.formats ?? []; track entry.format) {
+            @if (entry.format === format) {
+              <p>
+                {{ entry.maximumSourceBytes }} source bytes maximum · extractor
+                {{ entry.extractorVersion }} · {{ entry.evidenceFormat }}
+              </p>
+            }
+          }
           <button
             class="catalog-button"
             (click)="upload(false)"
@@ -282,11 +291,8 @@
                     Page text only; reading order and coverage are not
                     established.
                   </p>
-                  @if (!chunk.text.trim()) {
-                    <p>
-                      No non-whitespace text in this evidence chunk. OCR status
-                      is not supplied.
-                    </p>
+                  @if (chunk.missingText) {
+                    <p>Missing text on this page. No OCR was performed.</p>
                   }
                 }
               }

@@ -18,7 +18,7 @@ internal static class SpecOpenApi
                 if (operation.OperationId == "ReadSpecExtraction")
                     operation.Responses!["200"] = new OpenApiResponse
                     {
-                        Description = "Exact canonical weft.spec-evidence.v1 JSON array: format marker, fixed outcome code, then zero or more chunk tuples [ordinal, text, nullable JSON pointer, byte offset, byte length, start line, end line]. Limit failures contain no chunks.",
+                        Description = "Exact canonical evidence JSON array: format marker, fixed outcome code, then chunks. Legacy v1 chunks are [ordinal,text,nullable JSON pointer,byte offset,byte length,start line,end line]. Structural v2 Office chunks are [ordinal,text,locator,formulaOrNull]; PDF chunks add missingText as a fifth field. PDF locators are [pdf-page,oneBasedPage]. Partial retains incomplete structural/page text; needs-OCR and encrypted are Unsupported refusals, with needs-OCR retaining blank page facts. Limit failures contain no chunks.",
                         Content = new Dictionary<string, OpenApiMediaType>
                         {
                             ["application/json"] = new()
@@ -30,8 +30,9 @@ internal static class SpecOpenApi
                                     Items = new OpenApiSchema
                                     {
                                         OneOf = [new OpenApiSchema { Type = JsonSchemaType.String },
-                                    new OpenApiSchema { Type = JsonSchemaType.Array, MinItems = 7, MaxItems = 7,
-                                        Items = new OpenApiSchema { Type = JsonSchemaType.String | JsonSchemaType.Integer | JsonSchemaType.Null } }]
+                                    new OpenApiSchema { Type = JsonSchemaType.Array, MinItems = 4, MaxItems = 7,
+                                        Items = new OpenApiSchema { Type = JsonSchemaType.String | JsonSchemaType.Integer | JsonSchemaType.Null | JsonSchemaType.Boolean | JsonSchemaType.Array,
+                                            Items = new OpenApiSchema { Type = JsonSchemaType.String | JsonSchemaType.Integer | JsonSchemaType.Null | JsonSchemaType.Boolean } } }]
                                     }
                                 }
                             }
@@ -53,7 +54,7 @@ internal static class SpecOpenApi
                     Header(operation, "Idempotency-Key", "Stable nonzero UUID for exact tombstone replay. Logical deletion only; retirement is asynchronous maintenance.", 36);
                 if (path.EndsWith("/uploads", StringComparison.Ordinal))
                 {
-                    Header(operation, SpecEndpoints.UploadHeader, "Strict JSON SpecUploadV1: sourceId, sourceVersion, originalObjectId, uploadKey, extractionObjectId, extractionKey, extractionExpectedVersion, format. All fields required; IDs nonzero and publication IDs/keys distinct. Format: text, json, openapi-json. Raw body at most 10 MiB. The extraction CAS normally starts at If-Match+1; after a conflict before its reservation, refresh inventory and update only extractionExpectedVersion. Malformed source content is retained with a Malformed extraction outcome.", 2048);
+                    Header(operation, SpecEndpoints.UploadHeader, "Strict JSON SpecUploadV1: sourceId, sourceVersion, originalObjectId, uploadKey, extractionObjectId, extractionKey, extractionExpectedVersion, format. All fields required; IDs nonzero and publication IDs/keys distinct. Format: text, json, openapi-json, docx, xlsx, pdf; use GetSpecIntakeCapabilities for currently admitted formats, extractor versions and byte caps. Structural formats require qualified workers and schema 46; unavailable formats return 503 DocumentWorkerUnavailable before retention. Raw body at most 10 MiB (PDF at most 8 MiB). The extraction CAS normally starts at If-Match+1; after a conflict before its reservation, refresh inventory and update only extractionExpectedVersion. Document refusals retain the original; process failures are 503, not document outcomes.", 2048);
                     operation.RequestBody = new OpenApiRequestBody
                     {
                         Required = true,
