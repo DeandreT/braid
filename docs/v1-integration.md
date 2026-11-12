@@ -211,6 +211,30 @@ Its actual PostgreSQL regression and the typed five-round/citation/disclosure
 contracts require the pending real 0046 migration. Production admission remains
 closed until database and qualified-worker composition checks pass.
 
+### Migration 0046 integration verification
+
+Committed document persistence `8c4504a4` was merged at `01b6a4a1`. That exact
+integration passed locked restore, full Release solution build with zero
+warnings/errors, and 123 selected creation/document/discovery/migration tests
+with native PostgreSQL 16.15 enabled, zero failures or skips. The selection
+includes typed creation-citation/disclosure persistence, five rounds, inactive/
+relocated-store discovery, current-content revocation and real Office/PDF
+restoration. Its receipt is
+`Temp/opencode/weft-creation-integration-results/document-runtime-01b6a4a1.trx`.
+The Rust core passed 31 unit and three host-dispatch cases, and the PDF worker
+passed 14 cases; both locked offline Clippy checks passed with warnings denied.
+
+The broader chat browser run exposed two failures outside the focused creation
+journey: a timing-sensitive second-question/receipt test and a stale expectation
+for the exact-approval help text. Their corrective work remains separate from
+the passing focused browser selections recorded above.
+
+Source completion also requires concrete qualified server composition, provider
+instructions for the typed six-format grammar, and a discoverable proposal/
+feedback library. These source units are being completed before considering
+environment activation. Production worker and live-provider qualification remain
+separate gates.
+
 ### Remaining gates
 
 - Corrected populated-prefix PostgreSQL XML/upgrade checks and subsequent
