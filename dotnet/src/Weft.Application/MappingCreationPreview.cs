@@ -12,20 +12,29 @@ public sealed class CreationPreviewEvidence
 {
     private readonly byte[] output;
     // Trusted runner adapter only: validation/projection alone must never construct execution evidence.
-    internal CreationPreviewEvidence(CreationPreviewSubject subject, CreationPreviewOutcome outcome, ReadOnlySpan<byte> output)
+    internal CreationPreviewEvidence(CreationPreviewSubject subject, CreationPreviewOutcome outcome, ReadOnlySpan<byte> output,
+        string? format, string? mediaType)
     {
         ArgumentNullException.ThrowIfNull(subject);
         if (subject.Project is null || subject.AuthoringId == Guid.Empty || subject.Proposal is null || subject.Native is null || subject.Sample is null ||
             !Enum.IsDefined(outcome) || output.Length > 1024 * 1024 || outcome == CreationPreviewOutcome.Failed && output.Length != 0)
             throw new ArgumentException("Invalid bounded execution evidence.");
+        if (outcome == CreationPreviewOutcome.Succeeded ? (format, mediaType) is not
+            (("json", "application/json") or ("xml", "application/xml") or ("csv", "text/csv") or
+            ("tsv", "text/tab-separated-values") or ("x12", "application/edi-x12") or ("edifact", "application/edifact")) : format is not null || mediaType is not null)
+            throw new ArgumentException("Execution format must match the verified output.");
         Subject = subject; Outcome = outcome; this.output = output.ToArray();
+        Format = format; MediaType = mediaType; OutputDigest = Sha256Digest.FromBytes(output);
     }
     public CreationPreviewSubject Subject { get; }
     public CreationPreviewOutcome Outcome { get; }
+    public string? Format { get; }
+    public string? MediaType { get; }
+    public Sha256Digest OutputDigest { get; }
     public byte[] CopyOutput() => (byte[])output.Clone();
 }
 
-/// <summary>Unimplemented sandbox integration. Runs retained compiler output without catalog identity or ingestion.
+/// <summary>Runs retained compiler output without catalog identity or ingestion.
 /// Must use the trusted bounded worker profile, never invent a revision scope to use an existing-revision runner.
 /// Evidence may only be minted after actual sample execution, with exact subject/native/sample identity verified.
 /// Do not turn native validation success into execution success. No queue or catalog reservation is required.</summary>

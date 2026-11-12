@@ -437,7 +437,7 @@ public sealed class WorkerTransportServer : IHostedService, IAsyncDisposable
             return;
         }
 
-        if (!AuthoringFrameAdmission.Allows(profile, frame))
+        if (!AuthoringFrameAdmission.Allows(profile, frame) || !AuthoredPreviewFrameAdmission.Allows(profile, frame))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;

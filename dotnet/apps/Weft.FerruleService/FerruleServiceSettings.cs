@@ -31,6 +31,7 @@ internal sealed class FerruleServiceSettings
     internal const string CompileToolchainSetting = "WEFT_FERRULE_SERVICE_COMPILE_TOOLCHAIN";
     internal const string ExecutionEnabled = "WEFT_FERRULE_SERVICE_EXECUTION_ENABLED";
     internal const string AuthoringEnabled = "WEFT_FERRULE_SERVICE_AUTHORING_ENABLED";
+    internal const string AuthoredPreviewEnabled = "WEFT_FERRULE_SERVICE_AUTHORED_PREVIEW_ENABLED";
     internal const string RuntimeAssemblySetting = "WEFT_FERRULE_SERVICE_RUNTIME_ASSEMBLY";
     internal const string RuntimeLauncherSetting = "WEFT_FERRULE_SERVICE_RUNTIME_LAUNCHER";
     internal const string RuntimeRootSetting = "WEFT_FERRULE_SERVICE_RUNTIME_DOTNET_ROOT";
@@ -41,7 +42,7 @@ internal sealed class FerruleServiceSettings
     private readonly IPEndPoint? health;
 
     private FerruleServiceSettings(IPEndPoint listen, X509Certificate2? certificate, string[] pins, IPEndPoint? health,
-        int concurrency, int queue, TimeSpan admissionWait, string workerExecutable, string temporaryRoot, CompileSettings? compile, RuntimeSettings? runtime, bool authoring)
+        int concurrency, int queue, TimeSpan admissionWait, string workerExecutable, string temporaryRoot, CompileSettings? compile, RuntimeSettings? runtime, bool authoring, bool authoredPreview)
     {
         this.listen = listen;
         this.certificate = certificate;
@@ -55,6 +56,7 @@ internal sealed class FerruleServiceSettings
         Compile = compile;
         Runtime = runtime;
         Authoring = authoring;
+        AuthoredPreview = authoredPreview;
     }
 
     internal bool PlatformSandbox => certificate is null;
@@ -67,6 +69,7 @@ internal sealed class FerruleServiceSettings
     internal CompileSettings? Compile { get; }
     internal RuntimeSettings? Runtime { get; }
     internal bool Authoring { get; }
+    internal bool AuthoredPreview { get; }
 
     internal static FerruleServiceSettings Read(Func<string, string?> environment)
     {
@@ -89,6 +92,12 @@ internal sealed class FerruleServiceSettings
         var executable = Optional(WorkerExecutableSetting) ?? "/ferrule-host";
         var temporary = Optional(TemporaryRootSetting) ?? "/tmp";
         var authoring = Optional(AuthoringEnabled) switch
+        {
+            null or "false" => false,
+            "true" => true,
+            _ => throw Failure()
+        };
+        var authoredPreview = Optional(AuthoredPreviewEnabled) switch
         {
             null or "false" => false,
             "true" => true,
@@ -117,7 +126,7 @@ internal sealed class FerruleServiceSettings
             if (Optional(ClientPins) is not null || Optional(Pem) is not null || Optional(CertificateFile) is not null ||
                 Optional(PrivateKeyFile) is not null || Optional(HealthListen) is not null)
                 throw Failure();
-            return new(listen, null, [], null, concurrency, queue, wait, executable, temporary, compile, runtime, authoring);
+            return new(listen, null, [], null, concurrency, queue, wait, executable, temporary, compile, runtime, authoring, authoredPreview);
         }
 
         var pins = Required(ClientPins).Split(',');
@@ -140,7 +149,7 @@ internal sealed class FerruleServiceSettings
                 ProtectedHostFiles.ReadText(Required(PrivateKeyFile), 65_536));
         }
 
-        return new(listen, admitted, pins, health, concurrency, queue, wait, executable, temporary, compile, runtime, authoring);
+        return new(listen, admitted, pins, health, concurrency, queue, wait, executable, temporary, compile, runtime, authoring, authoredPreview);
     }
 
     /// <summary>The listener options; the certificate stays owned by these settings for the process lifetime.</summary>

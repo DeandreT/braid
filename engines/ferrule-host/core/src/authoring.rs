@@ -243,21 +243,20 @@ fn check_schema(
             "JSON nullability and required members require a JSON boundary.",
         ));
     }
-    if let Some(xml) = &s.xml {
-        if !matches!(options, Options::Xml {})
+    if let Some(xml) = &s.xml
+        && (!matches!(options, Options::Xml {})
             || (xml.attribute && xml.text)
             || ((xml.attribute || xml.text)
                 && (!matches!(s.shape, Shape::Scalar { .. })
                     || s.repeating
                     || xml.nillable
                     || xml.optional))
-            || (depth == 0 && (xml.attribute || xml.text))
-        {
-            return Err(refusal(
-                "unsupportedSemantics",
-                "Invalid XML attribute, text, repetition or namespace metadata.",
-            ));
-        }
+            || (depth == 0 && (xml.attribute || xml.text)))
+    {
+        return Err(refusal(
+            "unsupportedSemantics",
+            "Invalid XML attribute, text, repetition or namespace metadata.",
+        ));
     }
     match &s.shape {
         Shape::Scalar { .. } if !s.required.is_empty() => {
