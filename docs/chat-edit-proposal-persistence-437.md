@@ -43,7 +43,7 @@ The commit audit identifies organization/actor/request key before validating bin
 
 ## Integration and held qualification gates
 
-No API/UI/model executor or production dependency-injection cutover is included. The runtime branch owns those changes and the approval service discovery overloads. Integrate its identical `ListAsync` interface addition once.
+The original persistence slice did not include API/UI/model executor or production dependency-injection cutover. This branch now merges the runtime slice and adds [server approval composition](chat-edit-approval-composition.md); its identical `ListAsync` addition is reconciled once. UI integration and actual deployment qualification remain separate.
 
 Before deployment:
 

@@ -22,6 +22,7 @@ public sealed class SessionFeatureHostConfigurationTests
     private const string PreviewReader = "WEFT_POSTGRES_PREVIEW_READER_CONNECTION_STRING";
     private const string ChatReader = "WEFT_CHAT_READER_CONNECTION_STRING";
     private const string ChatWriter = "WEFT_CHAT_WRITER_CONNECTION_STRING";
+    private const string ChatApprover = "WEFT_CHAT_APPROVER_CONNECTION_STRING";
 
     [Theory]
     [InlineData("WEFT_PREVIEWS_ENABLED", "True")]
@@ -123,6 +124,7 @@ public sealed class SessionFeatureHostConfigurationTests
             true, true, new CatalogRevisionReportOptions(true), session: true);
         Assert.Contains(ChatReader + "_FILE", requested);
         Assert.Contains(ChatWriter + "_FILE", requested);
+        Assert.Contains(ChatApprover + "_FILE", requested);
         Assert.True(Assert.IsType<ChatApiOptions>(Assert.Single(services, item => item.ServiceType == typeof(ChatApiOptions))
             .ImplementationInstance).Enabled);
         foreach (var type in new[] { typeof(ChatHostDatabases), typeof(ChatPersistencePorts), typeof(IAiCredentialResolver) })
@@ -205,7 +207,7 @@ public sealed class SessionFeatureHostConfigurationTests
         }
     }
 
-    private static string Connection(string role) => "Host=127.0.0.1;Database=weft;Username=" + role + ";Password=" + Secret;
+    private static string Connection(string role) => "Host=127.0.0.1;Database=weft;Username=" + role + ";Password=" + Secret + "-" + role;
 
     private static Dictionary<string, string> PreviewDeliveries(ServerHostFiles files) => new()
     {
@@ -225,7 +227,8 @@ public sealed class SessionFeatureHostConfigurationTests
                 "\"capabilities\":[\"text\",\"functionTools\"],\"metadataPolicy\":{\"id\":\"mapping-metadata\",\"version\":1,\"mappingMetadataAllowed\":true}}]," +
                 "\"credentials\":[{\"reference\":\"hosted-key\",\"file\":\"" + credential + "\"}]}"),
             [ChatReader + "_FILE"] = files.Text("chat-reader.txt", Connection("weft_chat_reader") + "\n"),
-            [ChatWriter + "_FILE"] = files.Text("chat-writer.txt", Connection("weft_chat_writer") + "\n")
+            [ChatWriter + "_FILE"] = files.Text("chat-writer.txt", Connection("weft_chat_writer") + "\n"),
+            [ChatApprover + "_FILE"] = files.Text("chat-approver.txt", Connection("weft_chat_approver") + "\n")
         };
     }
 

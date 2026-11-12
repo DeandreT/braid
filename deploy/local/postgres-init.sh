@@ -4,9 +4,13 @@ set -euo pipefail
 : "${WEFT_LOCAL_CHAT_READER_PASSWORD:?Set a separate chat reader password}"
 : "${WEFT_LOCAL_CHAT_WRITER_PASSWORD:?Set a separate chat writer password}"
 : "${WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD:?Set a separate chat lifecycle password}"
+: "${WEFT_LOCAL_CHAT_APPROVER_PASSWORD:?Set a separate chat approver password}"
 [[ "$WEFT_LOCAL_CHAT_READER_PASSWORD" != "$WEFT_LOCAL_CHAT_WRITER_PASSWORD" &&
    "$WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD" != "$WEFT_LOCAL_CHAT_READER_PASSWORD" &&
-   "$WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD" != "$WEFT_LOCAL_CHAT_WRITER_PASSWORD" ]] || {
+   "$WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD" != "$WEFT_LOCAL_CHAT_WRITER_PASSWORD" &&
+   "$WEFT_LOCAL_CHAT_APPROVER_PASSWORD" != "$WEFT_LOCAL_CHAT_READER_PASSWORD" &&
+   "$WEFT_LOCAL_CHAT_APPROVER_PASSWORD" != "$WEFT_LOCAL_CHAT_WRITER_PASSWORD" &&
+   "$WEFT_LOCAL_CHAT_APPROVER_PASSWORD" != "$WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD" ]] || {
   echo 'All chat profile passwords must be independent.' >&2; exit 1;
 }
 
@@ -48,6 +52,7 @@ psql --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <
 \getenv chat_reader_password WEFT_LOCAL_CHAT_READER_PASSWORD
 \getenv chat_writer_password WEFT_LOCAL_CHAT_WRITER_PASSWORD
 \getenv chat_lifecycle_password WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD
+\getenv chat_approver_password WEFT_LOCAL_CHAT_APPROVER_PASSWORD
 \getenv preview_reader_password WEFT_LOCAL_PREVIEW_READER_PASSWORD
 \getenv preview_writer_password WEFT_LOCAL_PREVIEW_WRITER_PASSWORD
 \getenv case_reader_password WEFT_LOCAL_CASE_READER_PASSWORD
@@ -103,6 +108,8 @@ CREATE ROLE weft_chat_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
   PASSWORD :'chat_writer_password';
 CREATE ROLE weft_chat_lifecycle LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'chat_lifecycle_password';
+CREATE ROLE weft_chat_approver LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
+  PASSWORD :'chat_approver_password';
 CREATE ROLE weft_preview_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
   PASSWORD :'preview_reader_password';
 CREATE ROLE weft_preview_writer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS
@@ -155,7 +162,7 @@ REVOKE ALL ON ALL FUNCTIONS IN SCHEMA weft_search_extensions FROM PUBLIC;
 -- Chat routines pin these scope settings in function SET clauses.
 GRANT SET ON PARAMETER weft.organization_id, weft.chat_principal_id TO weft_migrator;
 REVOKE ALL ON DATABASE weft FROM PUBLIC;
-GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_preview_reader, weft_preview_writer, weft_case_reader, weft_case_writer, weft_run_reader, weft_run_writer, weft_build_reader, weft_build_writer, weft_build_run_reader, weft_build_run_writer, weft_build_dispatcher, weft_build_metadata_reader;
+GRANT CONNECT ON DATABASE weft TO weft_runtime, weft_ingest, weft_catalog_reader, weft_catalog_editor, weft_project_creator, weft_report_reader, weft_deriver, weft_maintenance, weft_identity_reader, weft_payload_permission_reader, weft_session_reader, weft_session_writer, weft_chat_reader, weft_chat_writer, weft_chat_lifecycle, weft_chat_approver, weft_preview_reader, weft_preview_writer, weft_case_reader, weft_case_writer, weft_run_reader, weft_run_writer, weft_build_reader, weft_build_writer, weft_build_run_reader, weft_build_run_writer, weft_build_dispatcher, weft_build_metadata_reader;
 GRANT CONNECT ON DATABASE weft TO weft_qualification_reader,weft_qualification_writer,weft_comparison_settler;
 GRANT CONNECT ON DATABASE weft TO weft_release_reader,weft_release_writer;
 GRANT CONNECT ON DATABASE weft TO weft_invocation_grant_writer,weft_invocation_writer;

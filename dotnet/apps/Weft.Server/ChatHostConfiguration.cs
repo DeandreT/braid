@@ -36,23 +36,8 @@ internal static class ChatHostConfiguration
         // Conversations pin verified reports; chat without catalog and report reads is an invalid profile.
         if (!catalogEnabled || !reports.Enabled) throw ServerHostOptions.Failure();
         var configuration = Parse(HostPrivateFiles.ReadText(ServerHostOptions.Required(read, "WEFT_CHAT_PROFILES_FILE"), ProfileFileBytes));
-        var readerConnection = Connection("WEFT_CHAT_READER_CONNECTION_STRING");
-        var writerConnection = Connection("WEFT_CHAT_WRITER_CONNECTION_STRING");
-        if (readerConnection == writerConnection) throw ServerHostOptions.Failure();
-        services.AddSingleton(_ => new ChatHostDatabases(readerConnection, writerConnection));
-        services.AddSingleton(provider =>
-        {
-            var databases = provider.GetRequiredService<ChatHostDatabases>();
-            var reader = new PostgresChatStore(databases.Reader);
-            var writer = new PostgresChatStore(databases.Writer);
-            return new ChatPersistencePorts(reader, reader, writer, writer);
-        });
-        services.AddSingleton<IChatMappingWriteJournal>(provider => new PostgresChatStore(provider.GetRequiredService<ChatHostDatabases>().Writer));
-        services.AddSingleton<ChatMappingWriteRecovery>();
+        var connections = ChatProposalHostConfiguration.Configure(services, read, session);
         services.AddSingleton(new ChatMappingEditRuntimeOptions(ServerHostOptions.Flag(read, "WEFT_CHAT_LEGACY_DIRECT_SAVE_ENABLED")));
-        // Persistence is supplied by the proposal deployment slice. Never substitute the old journal for it.
-        services.TryAddSingleton(provider => new ChatMappingEditApprovalService(provider.GetRequiredService<IChatMappingEditProposalStore>(),
-            provider.GetRequiredService<IProjectReader>(), provider.GetRequiredService<IRevisionIngestionService>()));
         // Keyless profiles read the Container Apps managed-identity endpoint, admitted only when a credential uses it, or
         // the fixed Instance Metadata Service address.
         var tokenEndpoint = configuration.ManagedIdentities.Values.Any(identity => identity.Source == ChatIdentitySource.ContainerApps)
@@ -72,7 +57,7 @@ internal static class ChatHostConfiguration
         // Payload data reaches a model only through the restricted grant reader; without its connection no payload tool exists.
         if (OptionalConnection("WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING") is { } payloadConnection)
         {
-            if (payloadConnection == readerConnection || payloadConnection == writerConnection) throw ServerHostOptions.Failure();
+            if (payloadConnection == connections.Reader || payloadConnection == connections.Writer || payloadConnection == connections.Approver) throw ServerHostOptions.Failure();
             services.AddSingleton(_ => new PostgresPayloadPermissionDatabase(payloadConnection));
             services.AddSingleton(provider => new PostgresProjectPayloadPermissionReader(provider.GetRequiredService<PostgresPayloadPermissionDatabase>()));
             services.AddSingleton<IProjectPayloadPermissionReader>(provider => provider.GetRequiredService<PostgresProjectPayloadPermissionReader>());
@@ -95,8 +80,6 @@ internal static class ChatHostConfiguration
         });
         services.AddWeftChat(configuration.Options);
 
-        string Connection(string name) => session
-            ? SessionHostResources.ReadProtectedConnection(read, name) : ServerHostOptions.Required(read, name);
         string? OptionalConnection(string name) => session
             ? read(name) is null && read(name + "_FILE") is null ? null : SessionHostResources.ReadProtectedConnection(read, name)
             : read(name) is null ? null : ServerHostOptions.Required(read, name);
@@ -248,16 +231,21 @@ internal sealed record ChatHostProfiles(ChatApiOptions Options, IReadOnlyDiction
     public override string ToString() => nameof(ChatHostProfiles);
 }
 
-/// <summary>Owns the two separately credentialed lazy chat pools; stores only borrow them.</summary>
-internal sealed class ChatHostDatabases(string readerConnection, string writerConnection) : IAsyncDisposable
+/// <summary>Owns three separately credentialed lazy chat pools; stores only borrow them.</summary>
+internal sealed class ChatHostDatabases(string readerConnection, string writerConnection, string approverConnection) : IAsyncDisposable
 {
     internal PostgresChatDatabase Reader { get; } = new(readerConnection, ChatDatabaseProfile.Reader);
     internal PostgresChatDatabase Writer { get; } = new(writerConnection, ChatDatabaseProfile.Writer);
+    internal PostgresChatDatabase Approver { get; } = new(approverConnection, ChatDatabaseProfile.Approver);
 
     public async ValueTask DisposeAsync()
     {
         try { await Reader.DisposeAsync(); }
-        finally { await Writer.DisposeAsync(); }
+        finally
+        {
+            try { await Writer.DisposeAsync(); }
+            finally { await Approver.DisposeAsync(); }
+        }
     }
 
     public override string ToString() => nameof(ChatHostDatabases);

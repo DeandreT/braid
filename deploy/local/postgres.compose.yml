@@ -23,6 +23,7 @@ services:
       WEFT_LOCAL_SESSION_WRITER_PASSWORD: ${WEFT_LOCAL_SESSION_WRITER_PASSWORD:?Set a separate session writer password}
       WEFT_LOCAL_CHAT_READER_PASSWORD: ${WEFT_LOCAL_CHAT_READER_PASSWORD:?Set a separate chat reader password}
       WEFT_LOCAL_CHAT_WRITER_PASSWORD: ${WEFT_LOCAL_CHAT_WRITER_PASSWORD:?Set a separate chat writer password}
+      WEFT_LOCAL_CHAT_APPROVER_PASSWORD: ${WEFT_LOCAL_CHAT_APPROVER_PASSWORD:?Set a separate chat approver password}
       WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD: ${WEFT_LOCAL_CHAT_LIFECYCLE_PASSWORD:?Set a separate chat lifecycle password}
       WEFT_LOCAL_PREVIEW_READER_PASSWORD: ${WEFT_LOCAL_PREVIEW_READER_PASSWORD:?Set a separate preview reader password}
       WEFT_LOCAL_PREVIEW_WRITER_PASSWORD: ${WEFT_LOCAL_PREVIEW_WRITER_PASSWORD:?Set a separate preview writer password}

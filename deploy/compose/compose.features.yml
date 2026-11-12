@@ -16,6 +16,8 @@ services:
       WEFT_DELIVER_FILE_CHAT_READER: Host=postgres;Database=weft;Username=weft_chat_reader;Password=${WEFT_LOCAL_CHAT_READER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_CHAT_WRITER_CONNECTION_STRING_FILE: /run/weft/secrets/chat-writer
       WEFT_DELIVER_FILE_CHAT_WRITER: Host=postgres;Database=weft;Username=weft_chat_writer;Password=${WEFT_LOCAL_CHAT_WRITER_PASSWORD:?};GSS Encryption Mode=Disable
+      WEFT_CHAT_APPROVER_CONNECTION_STRING_FILE: /run/weft/secrets/chat-approver
+      WEFT_DELIVER_FILE_CHAT_APPROVER: Host=postgres;Database=weft;Username=weft_chat_approver;Password=${WEFT_LOCAL_CHAT_APPROVER_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_CHAT_PAYLOAD_PERMISSION_CONNECTION_STRING_FILE: /run/weft/secrets/chat-payload-permission
       WEFT_DELIVER_FILE_CHAT_PAYLOAD_PERMISSION: Host=postgres;Database=weft;Username=weft_payload_permission_reader;Password=${WEFT_LOCAL_PAYLOAD_PERMISSION_PASSWORD:?};GSS Encryption Mode=Disable
       WEFT_PREVIEWS_ENABLED: "true"
