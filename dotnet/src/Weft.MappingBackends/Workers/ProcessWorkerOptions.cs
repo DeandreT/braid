@@ -21,7 +21,7 @@ public sealed class ProcessWorkerOptions
         ArgumentNullException.ThrowIfNull(profile);
         // The build profile runs the native generation stage of a compile operation; compilation itself runs in
         // the separate compile sandbox (ProcessCompileRunner).
-        if (profile != DockerWorkerProfile.Inspection && profile != DockerWorkerProfile.Edit && profile != DockerWorkerProfile.Authoring && profile != DockerWorkerProfile.AuthoredPreview && profile != DockerWorkerProfile.Preview && profile != DockerWorkerProfile.Build && profile != DockerWorkerProfile.Interchange)
+        if (profile != DockerWorkerProfile.Inspection && profile != DockerWorkerProfile.Edit && profile != DockerWorkerProfile.Authoring && profile != DockerWorkerProfile.AuthoredPreview && profile != DockerWorkerProfile.Preview && profile != DockerWorkerProfile.Build && profile != DockerWorkerProfile.Interchange && profile != DockerWorkerProfile.Pdf)
             throw new ArgumentException("Service child processes require a supported fixed worker profile.", nameof(profile));
         WorkerExecutable = AbsolutePath(workerExecutable, nameof(workerExecutable));
         TemporaryRoot = AbsolutePath(temporaryRoot, nameof(temporaryRoot));
