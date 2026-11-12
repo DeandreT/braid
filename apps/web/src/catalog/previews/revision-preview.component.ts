@@ -10,7 +10,7 @@ import {
   signal,
   untracked,
 } from "@angular/core";
-import { map, switchMap, type Subscription } from "rxjs";
+import { forkJoin, map, switchMap, type Subscription } from "rxjs";
 import { CatalogContextStore } from "../catalog-context";
 import type {
   CatalogContext,
@@ -45,6 +45,7 @@ import { RegressionViewRecovery } from "../regression/regression-view-recovery";
 import { canonicalDefinition } from "../regression/regression-definition";
 import { previewCaseDefinition, type PreviewCasePending } from "./preview-case";
 import { csvPreviewProfile } from "./csv-contract";
+import { xmlPreviewProfile } from "./xml-contract";
 
 @Component({
   selector: "weft-revision-preview",
@@ -73,15 +74,22 @@ export class RevisionPreviewComponent {
   readonly caseNotice = signal<string | null>(null);
   readonly canSaveCase = computed(() => {
     const run = this.preview.run();
+    const xml = run?.provenance?.profile === xmlPreviewProfile;
+    const runtime = xml
+      ? this.capabilities()?.xmlRuntime
+      : this.capabilities()?.csvRuntime;
     return (
       this.preview.busy() === null &&
       !this.preview.active() &&
       !!this.capabilities()?.publishCases &&
-      !!this.capabilities()?.csvRuntime &&
+      !!runtime &&
       run?.outcome === "succeeded" &&
-      run.provenance?.profile === csvPreviewProfile &&
-      run.outputs.length === 1 &&
-      !!run.outputs[0]?.csvDialect &&
+      (xml
+        ? run.outputs.length > 0 &&
+          run.outputs.every((output) => !!output.xmlMetadata)
+        : run.provenance?.profile === csvPreviewProfile &&
+          run.outputs.length === 1 &&
+          !!run.outputs[0]?.csvDialect) &&
       this.preview.submitted()?.runId === run.runId
     );
   });
@@ -119,6 +127,7 @@ export class RevisionPreviewComponent {
           targetName: this.preview.targetName(),
           documentProfile: this.preview.documentProfile(),
           csvProfile: this.preview.csvProfile(),
+          xmlProfile: this.preview.xmlProfile(),
           busy: this.preview.busy(),
           pendingKey: this.preview.pendingKey(),
         }),
@@ -144,6 +153,7 @@ export class RevisionPreviewComponent {
               .pipe(map((context) => context.requestToken)),
           ready: () => this.contexts.canSend(this.context()),
           csvAvailable: () => this.context().features.csvPreview === true,
+          xmlAvailable: () => this.context().features.xmlPreview === true,
         });
         this.capabilityRequest?.unsubscribe();
         this.capabilities.set(null);
@@ -211,6 +221,8 @@ export class RevisionPreviewComponent {
   }
 
   setProfile(value: string): void {
+    if (value === "xml" && this.context().features.xmlPreview !== true) return;
+    this.preview.xmlProfile.set(value === "xml");
     if (value === "csv" && this.context().features.csvPreview !== true) return;
     this.preview.csvProfile.set(value === "csv");
     this.preview.documentProfile.set(value === "document");
@@ -233,8 +245,9 @@ export class RevisionPreviewComponent {
     this.caseBusy.set(true);
     this.caseNotice.set(null);
     const name = this.caseName();
-    this.caseRequest = this.preview
-      .output(run.outputs[0]!)
+    this.caseRequest = forkJoin(
+      run.outputs.map((output) => this.preview.output(output)),
+    )
       .pipe(
         map((bytes) =>
           previewCaseDefinition(run, submitted.body, capabilities, bytes, name),
@@ -266,7 +279,7 @@ export class RevisionPreviewComponent {
           this.caseNotice.set(
             this.casePending()
               ? "The save was not confirmed. Check the original version or retry its unchanged request."
-              : "The CSV baseline could not be verified. Check the name, runtime and access before saving.",
+              : `The ${run.provenance?.profile === xmlPreviewProfile ? "XML" : "CSV"} baseline could not be verified. Check the name, runtime and access before saving.`,
           );
         },
       });
@@ -429,6 +442,7 @@ export class RevisionPreviewComponent {
               output.targetName,
               output.mediaType,
               output.csvDialect,
+              output.xmlMetadata,
             ),
           });
           this.outputSelected.emit();
@@ -521,14 +535,16 @@ function outputFilename(output: PreviewOutput): string {
       .replace(/[^A-Za-z0-9._-]+/g, "_")
       .slice(0, 80) || "output";
   const extension =
-    output.mediaType === "application/edi-x12"
-      ? "x12"
-      : output.mediaType === "application/edifact"
-        ? "edi"
-        : output.mediaType === "text/csv"
-          ? "csv"
-          : output.mediaType === "text/tab-separated-values"
-            ? "tsv"
-            : "json";
+    output.mediaType === "application/xml"
+      ? "xml"
+      : output.mediaType === "application/edi-x12"
+        ? "x12"
+        : output.mediaType === "application/edifact"
+          ? "edi"
+          : output.mediaType === "text/csv"
+            ? "csv"
+            : output.mediaType === "text/tab-separated-values"
+              ? "tsv"
+              : "json";
   return `preview-${output.ordinal}-${base}.${extension}`;
 }

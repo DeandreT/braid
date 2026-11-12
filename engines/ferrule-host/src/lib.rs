@@ -16,12 +16,14 @@ pub mod interchange;
 pub mod preview;
 pub mod sandbox;
 mod x12_syntax;
+pub mod xml_document;
 pub use weft_ferrule_core::{
     canonical_nonzero_guid, decode, inspect, projection, protocol, valid_context_parts, validation,
 };
 
 use preview::protocol::{
     CSV_PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION, PREVIEW_PROTOCOL_VERSION,
+    XML_PREVIEW_PROTOCOL_VERSION,
 };
 use protocol::{
     Failure, MAX_DIAGNOSTICS, MAX_HEADER_BYTES, MAX_ITEMS, MAX_NATIVE_BYTES, MAX_TEXT_BYTES,
@@ -67,6 +69,7 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
                 PREVIEW_PROTOCOL_VERSION
                     | DOCUMENT_PREVIEW_PROTOCOL_VERSION
                     | CSV_PREVIEW_PROTOCOL_VERSION
+                    | XML_PREVIEW_PROTOCOL_VERSION
             )
         )
     }) {

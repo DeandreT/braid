@@ -97,5 +97,18 @@ internal sealed class CliInvocation(CliGlobals globals, ParseResult parse, Cance
         return request.Path("organizationId", await OrganizationAsync());
     }
 
+    /// <summary>Fresh XML admission before opening sample inputs, including with an explicit organization.</summary>
+    public async Task<ApiRequest> XmlPreviewRequestAsync()
+    {
+        var context = await Api.ReadAsync<CatalogContextV1>(new ApiRequest(ApiOperations.GetCatalogContext), Cancellation);
+        if (context.Features.XmlPreview != true)
+            throw new CliException(CliExitCode.Unavailable, "This server does not advertise XML previews. No sample input was read or submitted.", "unavailable");
+        var admitted = Id(context.AllowedOrganizationId, "The admitted organization");
+        if (parse.GetValue(globals.Organization) is { } explicitId && Id(explicitId, "--organization") != admitted)
+            throw CliException.Usage("--organization must match the organization admitted by the XML preview context.");
+        _organization = admitted;
+        return new ApiRequest(ApiOperations.SubmitCatalogPreview).Path("organizationId", admitted);
+    }
+
     public void Dispose() => _api?.Dispose();
 }

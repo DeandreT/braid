@@ -18,7 +18,7 @@ public sealed class RegressionComparisonException : Exception
 
 public enum RegressionComparisonOutcome { Passed, Failed, NotEvaluated }
 public enum RegressionNotEvaluatedReason { None, UnsupportedPolicy, ExecutionUnsuccessful, MissingBaseline, InvalidDocument }
-public enum RegressionDifferenceKind { MissingOutput, UnexpectedOutput, BytesDiffer, MediaTypeDiffer, SeparatorsDiffer, SegmentsDiffer, CsvDialectDiffer, CsvRowsDiffer }
+public enum RegressionDifferenceKind { MissingOutput, UnexpectedOutput, BytesDiffer, MediaTypeDiffer, SeparatorsDiffer, SegmentsDiffer, CsvDialectDiffer, CsvRowsDiffer, XmlMetadataDiffer }
 
 /// <summary>Explicit EDI comparison choices. Segment, repetition and component order is always significant.</summary>
 public sealed record EdiComparisonOptions(bool CompareSeparators, bool IgnoreControlNumbers, bool IgnoreDates);

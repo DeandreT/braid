@@ -53,6 +53,9 @@ internal static class RegressionSchemaTestContract
         Assert.Equal(ChatSchemaContract.MappingWriteMigrationChecksum, MigrationRunner.EmbeddedMigrations[38].Checksum);
         Assert.Equal(ChatSchemaContract.WriteJournalMigrationChecksum, MigrationRunner.EmbeddedMigrations[39].Checksum);
         Assert.Equal(CsvDocumentsChecksum, MigrationRunner.EmbeddedMigrations[40].Checksum);
+        Assert.Equal(XmlPreviewSchemaAdmission.MigrationChecksum, MigrationRunner.EmbeddedMigrations[41].Checksum);
+        await using (var preview = new PostgresPreviewDatabase(test.PreviewReaderConnectionString, PreviewDatabaseProfile.Reader))
+            Assert.Null(await new PostgresPreviewRunReader(preview).ReadAsync(new(new(Guid.NewGuid())), Guid.NewGuid(), Guid.NewGuid(), token));
         await using (var administration = new PostgresAdministrationStore(test.RegressionConnectionString("weft_administration")))
             Assert.Null(await administration.ReadOrganizationAsync(new(new(Guid.NewGuid())), Guid.NewGuid(), token));
         var actor = new ActorContext(new(Guid.NewGuid()));

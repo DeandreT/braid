@@ -6,6 +6,8 @@ import type { ProjectionView } from "./projection-view";
 import { ObservedJson } from "./observed-json";
 import { ediSegments } from "../catalog/previews/edi-segments";
 import { parseCsvDocument, type CsvDocumentResult } from "./csv-document";
+import { xmlOutline, type XmlOutlineLine } from "./xml-outline";
+import { xmlMetadata } from "../catalog/previews/xml-contract";
 
 /** Dialect metadata belongs to this exact artifact, never its filename or a sibling output. */
 export type WorkbenchDocument = RegressionDocument & {
@@ -21,6 +23,8 @@ export interface DocumentRepresentation {
   mediaType: string | null;
   segments: readonly string[] | null;
   csvDocument?: CsvDocumentResult | null;
+  xmlOutline?: readonly XmlOutlineLine[] | null;
+  xmlMetadataText?: string | null;
 }
 export interface DocumentDisplay extends DocumentRepresentation {
   document: WorkbenchDocument;
@@ -57,6 +61,7 @@ export function displayBytes(
   name: string | null,
   mediaType?: string | null,
   authoritativeCsvDocumentDialect?: unknown,
+  authoritativeXmlMetadata?: unknown,
 ): DocumentRepresentation {
   const bounded = bytes.subarray(0, 65536);
   let text: string,
@@ -90,6 +95,17 @@ export function displayBytes(
     segments:
       format === "utf8" && mediaType ? ediSegments(text, mediaType) : null,
     csvDocument,
+    xmlOutline:
+      mediaType === "application/xml" &&
+      bytes.length <= 65536 &&
+      format === "utf8" &&
+      xmlMetadata(authoritativeXmlMetadata)
+        ? xmlOutline(text)
+        : null,
+    xmlMetadataText:
+      mediaType === "application/xml" && xmlMetadata(authoritativeXmlMetadata)
+        ? JSON.stringify(authoritativeXmlMetadata, null, 2)
+        : null,
   };
 }
 

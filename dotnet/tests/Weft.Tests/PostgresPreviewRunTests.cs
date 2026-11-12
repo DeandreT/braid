@@ -50,20 +50,22 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
         var submission = new PreviewRunSubmission(scope, Guid.NewGuid(), PreviewTargetSelection.Primary, new(null, "{}"u8), [], []);
         var record = new PreviewRunRecord(submission, PreviewRequestDocument.Encode(submission, PreviewLimits.Default),
             "2026-10-31T00:00:00Z", 3, TimeSpan.FromHours(24));
-        var run = (await store.SubmitAsync(actor, record)).RunId!.Value;
-        Assert.Equal(PreviewRunState.Queued, (await reads.ReadAsync(actor, scope.OrganizationId, run))!.State);
-        var claim = (await store.ClaimAsync(scope.OrganizationId, run, Guid.NewGuid(), TimeSpan.FromSeconds(90))).Claim!;
-        Assert.True(await store.CompleteAsync(claim, new(PreviewRunOutcome.Succeeded, null,
-            new(true, "engine", "image", "adapter", PreviewPolicy.Profile), 1,
-            [new("primary-output", "result", false, PreviewPolicy.MediaType, 1, "{}"u8)])));
-        var before = (await reads.ReadAsync(actor, scope.OrganizationId, run))!;
-        Assert.Equal("{}"u8.ToArray(), (await reads.ReadOutputAsync(actor, scope.OrganizationId, run, 0))!.Content);
-        if (prefix >= 33) Assert.Equal("{}"u8.ToArray(), (await reads.ReadInputAsync(actor, scope.OrganizationId, run, 0))!.Content);
-        Assert.Equal(PreviewSubmitOutcome.Replayed, (await store.SubmitAsync(actor, record)).Outcome);
+        var run = (await HistoricalPreviewAccess.SubmitAsync(test, prefix, actor, record)).RunId!.Value;
+        Assert.Equal(1, (await HistoricalPreviewAccess.ReadAsync(test, prefix, actor, scope.OrganizationId, run)).State);
+        var claim = await HistoricalPreviewAccess.ClaimAsync(test, prefix, scope.OrganizationId, run);
+        Assert.True(await HistoricalPreviewAccess.CompleteAsync(test, prefix, scope.OrganizationId, run, claim, PreviewPolicy.Profile, PreviewPolicy.MediaType, "{}"u8.ToArray()));
+        var before = await HistoricalPreviewAccess.ReadAsync(test, prefix, actor, scope.OrganizationId, run);
+        Assert.Equal("{}"u8.ToArray(), await HistoricalPreviewAccess.ReadContentAsync(test, prefix, actor, scope.OrganizationId, run, false));
+        if (prefix >= 33) Assert.Equal("{}"u8.ToArray(), await HistoricalPreviewAccess.ReadContentAsync(test, prefix, actor, scope.OrganizationId, run, true));
+        var outputRows = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY ordinal)::text FROM weft.preview_documents d WHERE direction=2");
+        Assert.Equal(PreviewSubmitOutcome.Replayed, (await HistoricalPreviewAccess.SubmitAsync(test, prefix, actor, record)).Outcome);
         await test.MigrateAsync();
         var after = (await reads.ReadAsync(actor, scope.OrganizationId, run))!;
         Assert.Equal(before.RequestFingerprint, after.RequestFingerprint);
-        Assert.Equal(before.Outputs, after.Outputs);
+        Assert.Equal(outputRows, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d)-'csv_input'-'csv_dialect' ORDER BY ordinal)::text FROM weft.preview_documents d WHERE direction=2"));
+        var output = Assert.Single(after.Outputs);
+        Assert.Equal(PreviewPolicy.MediaType, output.MediaType);
+        Assert.Equal(Sha256Digest.FromBytes("{}"u8), output.Digest);
         Assert.Equal("{}"u8.ToArray(), (await reads.ReadOutputAsync(actor, scope.OrganizationId, run, 0))!.Content);
         Assert.Equal("{}"u8.ToArray(), (await reads.ReadInputAsync(actor, scope.OrganizationId, run, 0))!.Content);
     }
@@ -86,20 +88,28 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
         var store = new PostgresPreviewRunStore(writer);
         var reads = new PostgresPreviewRunReader(reader);
         var submission = new PreviewRunSubmission(revision, Guid.NewGuid(), PreviewTargetSelection.Primary, new(null, "{}"u8), [], []);
+        var historical = true;
         async Task<Guid> Submit(PreviewRunSubmission value)
         {
-            var result = await store.SubmitAsync(actor, new(value, PreviewRequestDocument.Encode(value, PreviewLimits.Default),
-                "2026-10-24T12:00:00Z", 3, TimeSpan.FromHours(24)));
+            var record = new PreviewRunRecord(value, PreviewRequestDocument.Encode(value, PreviewLimits.Default), "2026-10-24T12:00:00Z", 3, TimeSpan.FromHours(24));
+            var result = historical ? await HistoricalPreviewAccess.SubmitAsync(test, 24, actor, record) : await store.SubmitAsync(actor, record);
             return result.RunId!.Value;
         }
         async Task Complete(Guid run, string profile, string media, byte[] content)
         {
+            if (historical)
+            {
+                var token = await HistoricalPreviewAccess.ClaimAsync(test, 24, revision.OrganizationId, run);
+                Assert.True(await HistoricalPreviewAccess.CompleteAsync(test, 24, revision.OrganizationId, run, token, profile, media, content, "Interchange"));
+                return;
+            }
             var claimed = await store.ClaimAsync(revision.OrganizationId, run, Guid.NewGuid(), TimeSpan.FromSeconds(90));
             Assert.True(await store.CompleteAsync(claimed.Claim!, new(PreviewRunOutcome.Succeeded, null,
                 new(true, "engine", "image", "adapter", profile), 1, [new("primary-output", "Interchange", false, media, 1, content)])));
         }
         var legacyRun = await Submit(submission);
         await Complete(legacyRun, PreviewPolicy.Profile, PreviewPolicy.MediaType, "{}"u8.ToArray());
+        historical = false;
         var before = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id)::text FROM weft.preview_runs r");
         var documents = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY direction,ordinal)::text FROM weft.preview_documents d");
         await test.MigrateAsync();

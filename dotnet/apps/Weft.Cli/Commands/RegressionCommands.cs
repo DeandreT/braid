@@ -36,6 +36,8 @@ internal static class RegressionCommands
                     output.Fields(("Document backend", runtime.BackendId), ("Document engine", runtime.EngineRevision), ("Document profile", runtime.Profile));
                 if (value.CsvRuntime is { } csv)
                     output.Fields(("CSV backend", csv.BackendId), ("CSV engine", csv.EngineRevision), ("CSV profile", csv.Profile));
+                if (value.XmlRuntime is { } xml)
+                    output.Fields(("XML profile", xml.Profile), ("XML execution", "Native preview and exact-byte regression only; generated C# XML builds unavailable"));
                 if (value.ComparisonPolicies is { } policies)
                     output.Fields(("Comparison policies", string.Join(", ", policies)));
             });

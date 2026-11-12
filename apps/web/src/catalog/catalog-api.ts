@@ -308,6 +308,10 @@ function isContext(value: unknown): value is CatalogContext {
         (!value["features"]["csvPreview"] ||
           value["features"]["preview"] === true))) &&
     value["features"]["readCatalog"] === true &&
+    (value["features"]["xmlPreview"] === undefined ||
+      (typeof value["features"]["xmlPreview"] === "boolean" &&
+        (!value["features"]["xmlPreview"] ||
+          value["features"]["preview"] === true))) &&
     (!value["features"]["deriveReports"] ||
       value["features"]["readReports"] === true) &&
     booleanFields(value["organizationActions"], ["createProjects"]) &&

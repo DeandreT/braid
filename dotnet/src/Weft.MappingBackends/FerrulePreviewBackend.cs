@@ -20,6 +20,8 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     public const string DocumentAdapterBuild = "weft.ferrule-document-preview-adapter.v1";
     public const string CsvProtocolVersion = CsvDocumentPolicy.Profile;
     public const string CsvAdapterBuild = "weft.ferrule-csv-preview-adapter.v1";
+    public const string XmlAdapterBuild = "weft.ferrule-xml-preview-adapter.v1";
+    private readonly bool _xmlEnabled;
     private const string PrimaryOutput = "primary-output";
     private const string NamedOutputPrefix = "named-output:";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -30,18 +32,21 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     private string SelectedProfile => _profile switch
     {
         PreviewExecutionProfile.CsvDocument => CsvDocumentPolicy.Profile,
+        PreviewExecutionProfile.XmlDocument => XmlPreviewAdmission.Profile,
         PreviewExecutionProfile.Document => DocumentPreviewPolicy.Profile,
         _ => PreviewPolicy.Profile
     };
     private string SelectedProtocol => _profile switch
     {
         PreviewExecutionProfile.CsvDocument => CsvProtocolVersion,
+        PreviewExecutionProfile.XmlDocument => XmlPreviewAdmission.Profile,
         PreviewExecutionProfile.Document => DocumentProtocolVersion,
         _ => ProtocolVersion
     };
     private string SelectedAdapter => _profile switch
     {
         PreviewExecutionProfile.CsvDocument => CsvAdapterBuild,
+        PreviewExecutionProfile.XmlDocument => XmlAdapterBuild,
         PreviewExecutionProfile.Document => DocumentAdapterBuild,
         _ => AdapterBuild
     };
@@ -53,12 +58,13 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     {
     }
 
-    public FerrulePreviewBackend(IInspectionWorkerRunner runner, PreviewExecutionProfile profile)
+    public FerrulePreviewBackend(IInspectionWorkerRunner runner, PreviewExecutionProfile profile, bool xmlEnabled = false)
     {
         ArgumentNullException.ThrowIfNull(runner);
         if (!Enum.IsDefined(profile))
             throw new ArgumentOutOfRangeException(nameof(profile));
         _profile = profile;
+        _xmlEnabled = xmlEnabled;
         if (runner is DockerInspectionWorkerRunner docker && docker.Profile != DockerWorkerProfile.Preview)
             throw new ArgumentException("Preview requires a runner configured with the preview worker profile.", nameof(runner));
         var identity = runner.BuildIdentity;
@@ -73,7 +79,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Profile is { } requested && requested != _profile)
-            return await new FerrulePreviewBackend(_runner, requested).PreviewAsync(request, cancellationToken).ConfigureAwait(false);
+            return await new FerrulePreviewBackend(_runner, requested, _xmlEnabled).PreviewAsync(request, cancellationToken).ConfigureAwait(false);
         ArgumentNullException.ThrowIfNull(request.Artifact);
         ArgumentNullException.ThrowIfNull(request.Target);
         ArgumentNullException.ThrowIfNull(request.Primary);
@@ -109,7 +115,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
         {
             return Decode(process.Output, request, requestId);
         }
-        catch (Exception error) when (error is JsonException or DecoderFallbackException or ProtocolException or NotSupportedException or ArgumentException)
+        catch (Exception error) when (error is JsonException or DecoderFallbackException or ProtocolException or NotSupportedException or ArgumentException or PreviewRunException or XmlDocumentException)
         {
             return LocalFailure(request.Artifact, MappingPreviewStatus.ProtocolFailure);
         }
@@ -123,6 +129,10 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
 
         if (artifact.ByteCount > InspectionPolicy.MaximumNativeBytes)
             return LocalFailure(artifact, MappingPreviewStatus.ResourceLimit);
+        if (_profile == PreviewExecutionProfile.XmlDocument && !_xmlEnabled)
+            return LocalFailure(artifact, MappingPreviewStatus.UnsupportedCapability, "preview.xmlDisabled", "XML previews are not enabled.");
+        if (_profile != PreviewExecutionProfile.XmlDocument && request.NamedInputs.Prepend(request.Primary).Any(input => input?.XmlMetadata is not null))
+            return Invalid("XML metadata requires its own admission profile.");
         var limits = request.Limits;
         if (limits.MaximumInputBytes is < 1 or > PreviewPolicy.MaximumInputBytes
             || limits.MaximumOutputBytes is < 1 or > PreviewPolicy.MaximumOutputBytes
@@ -164,6 +174,25 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
         }
         if (request.CurrentDateTime.Length is 0 or > PreviewPolicy.MaximumClockBytes || !request.CurrentDateTime.All(char.IsAscii))
             return Invalid("The execution clock is not an admitted dateTime.");
+        if (_profile == PreviewExecutionProfile.XmlDocument)
+        {
+            try
+            {
+                var inputs = request.NamedInputs.Prepend(request.Primary).ToArray();
+                if (inputs.Any(input => input.XmlMetadata is null)) return Invalid("XML inputs require saved metadata.");
+                XmlPreviewAdmission.BindInputs(artifact, inputs);
+                XmlPreviewAdmission.Outputs(artifact, request.Target);
+            }
+            catch (XmlDocumentException error)
+            {
+                return LocalFailure(artifact, error.IsResourceLimit ? MappingPreviewStatus.ResourceLimit : error.Reason == XmlDocumentFailure.InvalidNativeMetadata ? MappingPreviewStatus.UnsupportedCapability : MappingPreviewStatus.InvalidInput,
+                    "preview.xml." + JsonNamingPolicy.CamelCase.ConvertName(error.Reason.ToString()), error.Message);
+            }
+            catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException)
+            {
+                return Invalid("The saved XML boundaries are invalid.");
+            }
+        }
         return null;
     }
 
@@ -319,6 +348,8 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
             Require((_profile switch
             {
                 PreviewExecutionProfile.CsvDocument => CsvDocumentPolicy.Admits(item.CsvDialect, item.MediaType),
+                PreviewExecutionProfile.XmlDocument => item.CsvDialect is null && item.XmlMetadata is { } xml &&
+                    XmlDocumentPolicy.Admits(XmlDocumentMetadataJson.Read(xml, XmlDocumentRole.Output), XmlDocumentRole.Output, item.MediaType),
                 PreviewExecutionProfile.Document => item.CsvDialect is null && DocumentPreviewPolicy.AdmitsMediaType(item.MediaType),
                 _ => item.CsvDialect is null && item.MediaType == PreviewPolicy.MediaType
             })
@@ -332,11 +363,14 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
             Require(frameLength == item.ByteLength && output.Length - offset - 4 >= frameLength);
             var bytes = output.AsSpan(offset + 4, (int)frameLength).ToArray();
             offset += 4 + (int)frameLength;
-            var verified = new PreviewOutputArtifact(item.BoundaryId, item.TargetName, item.TargetNameTruncated, item.MediaType, (long)item.RecordsWritten, bytes, item.CsvDialect);
+            if (_profile != PreviewExecutionProfile.XmlDocument && item.XmlMetadata is not null) throw new ProtocolException();
+            var verified = new PreviewOutputArtifact(item.BoundaryId, item.TargetName, item.TargetNameTruncated, item.MediaType, (long)item.RecordsWritten, bytes, item.CsvDialect,
+                item.XmlMetadata is { } value ? XmlDocumentMetadataJson.Read(value, XmlDocumentRole.Output) : null);
             Require(verified.Digest == digest);
             artifacts.Add(verified);
         }
         Require(offset == output.Length);
+        if (_profile == PreviewExecutionProfile.XmlDocument) XmlPreviewAdmission.VerifyOutputs(request, artifacts);
         if (request.Target.Kind == PreviewTargetKind.Named)
             Require(artifacts[0].TargetNameTruncated || artifacts[0].TargetName == request.Target.Name);
         return new MappingPreviewResult(MappingPreviewStatus.Succeeded, Provenance(artifact, true), SelectedProfile,

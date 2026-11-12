@@ -8,12 +8,13 @@ using Weft.Persistence.Postgres;
 
 namespace Weft.Jobs;
 
-internal sealed record RegressionWorkerRuntimes(RegressionRuntimeIdentity Legacy, RegressionRuntimeIdentity? Document, RegressionRuntimeIdentity? Csv);
+internal sealed record RegressionWorkerRuntimes(RegressionRuntimeIdentity Legacy, RegressionRuntimeIdentity? Document, RegressionRuntimeIdentity? Csv, RegressionRuntimeIdentity? Xml);
 
 /// <summary>Explicit worker-only composition. Disabled means no extra credentials, pools or background service.</summary>
 public static class RegressionWorkerRegistration
 {
     private const string Key = "regression-worker";
+    public const string PreviewBackendKey = "regression-preview-backend";
 
     public static IServiceCollection AddWeftRegressionWorker(this IServiceCollection services,
         Func<string, string?> environment, Func<RegressionRuntimeIdentity> runtime, Func<RegressionRuntimeIdentity>? documentRuntime = null,
@@ -28,6 +29,7 @@ public static class RegressionWorkerRegistration
             "true" => true,
             _ => throw new ArgumentException("Regression worker enablement must be true or false.")
         };
+        var xmlEnabled = XmlPreviewAdmission.Enabled(environment, XmlPreviewAdmission.RegressionEnabledSetting, enabled);
         if (!enabled) return services;
         var csvEnabled = environment(CsvDocumentPolicy.RegressionEnabledSetting) switch
         {
@@ -57,7 +59,9 @@ public static class RegressionWorkerRegistration
             _ = InspectionTransport.RequireImage(identity.BackendBuild);
             csvIdentity = new(identity.BackendId, identity.EngineRevision, identity.BackendBuild, FerrulePreviewBackend.CsvAdapterBuild, CsvDocumentPolicy.Profile);
         }
-        services.AddSingleton(new RegressionWorkerRuntimes(identity, documentIdentity, csvIdentity));
+        var xmlIdentity = xmlEnabled ? new RegressionRuntimeIdentity(identity.BackendId, identity.EngineRevision, identity.BackendBuild,
+            FerrulePreviewBackend.XmlAdapterBuild, XmlPreviewAdmission.Profile) : null;
+        services.AddSingleton(new RegressionWorkerRuntimes(identity, documentIdentity, csvIdentity, xmlIdentity));
 
         services.AddKeyedSingleton<PostgresDatabase>(Key, (_, _) => new(access));
         services.AddKeyedSingleton<PostgresRevisionReportDatabase>(Key, (_, _) => new(reports));
@@ -68,7 +72,9 @@ public static class RegressionWorkerRegistration
             provider.GetRequiredService<IRegressionCaseReader>(),
             new PostgresProjectReader(provider.GetRequiredKeyedService<PostgresDatabase>(Key)),
             new PostgresRevisionReportMetadataReader(provider.GetRequiredKeyedService<PostgresRevisionReportDatabase>(Key)),
-            provider.GetRequiredService<IPrivateObjectStore>(), provider.GetRequiredService<IMappingPreviewBackend>(), identity, documentIdentity, csvIdentity));
+            provider.GetRequiredService<IPrivateObjectStore>(),
+            provider.GetKeyedService<IMappingPreviewBackend>(PreviewBackendKey) ?? provider.GetRequiredService<IMappingPreviewBackend>(),
+            identity, documentIdentity, csvIdentity, xmlIdentity));
         services.AddSingleton<IRegressionCaseExecutor>(provider => provider.GetRequiredService<RegressionCaseExecutionService>());
         services.AddSingleton<IRegressionEvaluationExecutor>(provider => provider.GetRequiredService<RegressionCaseExecutionService>());
         services.AddSingleton<IAutomationQueue>(_ => new PostgresAutomationStore(run, writer: true));

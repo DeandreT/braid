@@ -78,7 +78,7 @@ internal static class CommandSupport
         try
         {
             stream = path == "-" ? invocation.Environment.OpenStandardInput()
-                : new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous);
+                : invocation.Environment.OpenInputFile(path);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {

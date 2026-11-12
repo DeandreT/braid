@@ -8,6 +8,7 @@ pub const DOCUMENT_PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-document-previ
 pub const DOCUMENT_PREVIEW_PROFILE: &str = "weft.ferrule-document-preview.v1";
 pub const CSV_PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-csv-preview.v1";
 pub const CSV_PREVIEW_PROFILE: &str = "weft.ferrule-csv-preview.v1";
+pub const XML_PREVIEW_PROTOCOL_VERSION: &str = "weft.ferrule-xml-preview.v1";
 pub const MAX_PREVIEW_INPUTS: usize = 16;
 pub const MAX_PREVIEW_INPUT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_PREVIEW_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
@@ -39,12 +40,17 @@ impl PreviewRequestHeader {
     pub fn is_document_preview(&self) -> bool {
         matches!(
             self.protocol_version.as_str(),
-            DOCUMENT_PREVIEW_PROTOCOL_VERSION | CSV_PREVIEW_PROTOCOL_VERSION
+            DOCUMENT_PREVIEW_PROTOCOL_VERSION
+                | CSV_PREVIEW_PROTOCOL_VERSION
+                | XML_PREVIEW_PROTOCOL_VERSION
         )
     }
 
     pub fn is_csv_preview(&self) -> bool {
         self.protocol_version == CSV_PREVIEW_PROTOCOL_VERSION
+    }
+    pub fn is_xml_preview(&self) -> bool {
+        self.protocol_version == XML_PREVIEW_PROTOCOL_VERSION
     }
 }
 
@@ -154,6 +160,8 @@ pub struct PreviewArtifact {
     pub sha256: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub csv_dialect: Option<crate::csv_document::CsvDialect>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xml_metadata: Option<crate::xml_document::Metadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,7 +191,9 @@ impl PreviewResponse {
         Self {
             protocol_version: header
                 .map_or(PREVIEW_PROTOCOL_VERSION, |header| {
-                    if header.is_csv_preview() {
+                    if header.is_xml_preview() {
+                        XML_PREVIEW_PROTOCOL_VERSION
+                    } else if header.is_csv_preview() {
                         CSV_PREVIEW_PROTOCOL_VERSION
                     } else if header.is_document_preview() {
                         DOCUMENT_PREVIEW_PROTOCOL_VERSION
@@ -199,7 +209,9 @@ impl PreviewResponse {
             engine_revision: ENGINE_REVISION.into(),
             profile: header
                 .map_or(PREVIEW_PROFILE, |header| {
-                    if header.is_csv_preview() {
+                    if header.is_xml_preview() {
+                        XML_PREVIEW_PROTOCOL_VERSION
+                    } else if header.is_csv_preview() {
                         CSV_PREVIEW_PROFILE
                     } else if header.is_document_preview() {
                         DOCUMENT_PREVIEW_PROFILE

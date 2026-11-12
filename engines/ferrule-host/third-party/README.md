@@ -16,3 +16,10 @@ license for the Weft repository.
 The worker image also retains the runtime library copyright files supplied by
 its Ubuntu build environment. Compiler, Rust package, and source identities are
 recorded in the locked worker build and its qualification evidence.
+
+The inactive XML safety core's BMP name-character ranges are derived from the
+.NET runtime v10.0.12 `XmlCharType.CharProperties` table. The source identity and
+derivation are recorded beside the ranges in `src/xml_name_chars.rs`.
+`dotnet-xml-name-tables-MIT.txt` retains the upstream attribution and license;
+the worker image includes this directory unchanged. This is not a license
+declaration for the rest of Weft.

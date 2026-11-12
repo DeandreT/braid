@@ -294,6 +294,12 @@ export class RevisionRegressionComponent {
   }
   editNext(): void {
     const value = this.selected();
+    if (value?.definition.runtime.profile === "weft.ferrule-xml-preview.v1") {
+      this.notice.set(
+        "XML baselines and their saved metadata are read only. Run a new sample and explicitly save its outputs to create another baseline.",
+      );
+      return;
+    }
     if (
       !value ||
       !this.isCurrentRevision(value.revision) ||

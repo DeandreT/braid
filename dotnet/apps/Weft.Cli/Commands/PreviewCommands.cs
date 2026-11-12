@@ -12,6 +12,7 @@ internal static class PreviewCommands
 {
     internal const string DocumentProfile = "weft.ferrule-document-preview.v1";
     internal const string CsvProfile = "weft.ferrule-csv-preview.v1";
+    internal const string XmlProfile = "weft.ferrule-xml-preview.v1";
     private const int MaximumInputBytes = 8 * 1024 * 1024;
     // PreviewPolicy caps the complete run's outputs at 8 MiB, so each stdout staging buffer is bounded too.
     private const int MaximumOutputBytes = 8 * 1024 * 1024;
@@ -46,17 +47,22 @@ internal static class PreviewCommands
         };
         var timeout = Timeout("How long to wait for the run", TimeSpan.FromMinutes(10));
         var csv = new Option<bool>("--csv") { Description = "Use the saved primary CSV/TSV boundary dialect; an explicitly empty input is allowed" };
+        var xml = new Option<bool>("--xml") { Description = "Use explicit saved XML boundaries and safe XML input. Compiled XML builds are unavailable." };
         var operation = draft ? ApiOperations.PreviewMappingDraft : ApiOperations.SubmitCatalogPreview;
         var create = new Command(draft ? "preview" : "create", draft ? "Preview the current draft checkpoint" : "Run a bounded sample preview of a revision")
             .With(project, mapping, revision, input, named, parameters, target, requestId, wait, timeout, document);
         if (!draft) create.Add(csv);
+        if (!draft) create.Add(xml);
         create.Handle(globals, async invocation =>
         {
             var key = invocation.OptionalId(requestId) ?? CatalogCommands.NewId();
             var csvSelected = !draft && invocation.Value(csv);
-            if (invocation.Value(document) && csvSelected) throw CliException.Usage("Choose --document or --csv, not both.");
-            var submission = await SubmissionAsync(invocation, input, named, parameters, target, invocation.Value(document), csvSelected);
-            var request = (await invocation.RequestAsync(operation)).Path("projectId", invocation.Id(project))
+            var xmlSelected = !draft && invocation.Value(xml);
+            if (new[] { invocation.Value(document), csvSelected, xmlSelected }.Count(value => value) > 1)
+                throw CliException.Usage("Choose only one of --document, --csv or --xml.");
+            var admitted = xmlSelected ? await invocation.XmlPreviewRequestAsync() : null;
+            var submission = await SubmissionAsync(invocation, input, named, parameters, target, invocation.Value(document), csvSelected, xmlSelected);
+            var request = (admitted ?? await invocation.RequestAsync(operation)).Path("projectId", invocation.Id(project))
                 .Path("mappingId", invocation.Id(mapping)).Path(draft ? "draftId" : "revisionId", invocation.Id(revision))
                 .Header("Idempotency-Key", key).Body(CatalogCommands.JsonBody(submission, operation));
             var submitted = await invocation.Api.ReadAsync<CatalogPreviewSubmitResultV1>(request, invocation.Cancellation);
@@ -130,7 +136,7 @@ internal static class PreviewCommands
     }
 
     private static async Task<CatalogPreviewSubmissionV1> SubmissionAsync(CliInvocation invocation, Option<string> input,
-        Option<string[]> named, Option<string[]> parameters, Option<string> target, bool document, bool csv)
+        Option<string[]> named, Option<string[]> parameters, Option<string> target, bool document, bool csv, bool xml)
     {
         var budget = MaximumInputBytes;
         async Task<string> Read(string path, string what)
@@ -165,7 +171,7 @@ internal static class PreviewCommands
             _ => throw CliException.Usage("--target must be all, primary or a target name.")
         };
         if (csv && (inputs.Count != 1 || selection.Kind == "named")) throw CliException.Usage("CSV preview supports primary boundaries only.");
-        return new CatalogPreviewSubmissionV1(selection, values, inputs, csv ? CsvProfile : document ? DocumentProfile : null);
+        return new CatalogPreviewSubmissionV1(selection, values, inputs, xml ? XmlProfile : csv ? CsvProfile : document ? DocumentProfile : null);
     }
 
     internal static CatalogPreviewParameterV1 Parameter(string text)
@@ -186,7 +192,7 @@ internal static class PreviewCommands
     private static async Task<long> DownloadAsync(CliInvocation invocation, ApiResponse response, string destination,
         CatalogPreviewOutputV1 expected)
     {
-        if (expected.MediaType is not ("application/json" or "application/edi-x12" or "application/edifact" or "text/csv" or "text/tab-separated-values") ||
+        if (expected.MediaType is not ("application/json" or "application/edi-x12" or "application/edifact" or "text/csv" or "text/tab-separated-values" or "application/xml") ||
             !string.Equals(response.Message.Content.Headers.ContentType?.MediaType, expected.MediaType, StringComparison.OrdinalIgnoreCase) ||
             response.Message.Content.Headers.ContentEncoding.Count != 0)
             throw Mismatch();

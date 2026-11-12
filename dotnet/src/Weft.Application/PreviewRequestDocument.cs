@@ -8,6 +8,7 @@ namespace Weft.Application;
 public sealed record PreviewDeclaredInput(string? Name, long ByteLength, Sha256Digest Digest)
 {
     public CsvDocumentDialect? CsvDialect { get; init; }
+    public XmlDocumentMetadata? XmlMetadata { get; init; }
 }
 
 /// <summary>The decoded canonical request a run was admitted with.</summary>
@@ -28,17 +29,24 @@ public sealed record PreviewRequestDescription(
 /// </summary>
 public static class PreviewRequestDocument
 {
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     public const string Schema = "weft.preview-request.v1";
     public const string DraftSchema = "weft.draft-preview-request.v1";
     public const string DocumentSchema = "weft.document-preview-request.v1";
     public const string DraftDocumentSchema = "weft.draft-document-preview-request.v1";
     public const string CsvSchema = "weft.csv-preview-request.v1";
+    public const string XmlSchema = "weft.xml-preview-request.v1";
     public const int MaximumBytes = 64 * 1024;
 
     public static string Encode(PreviewRunSubmission submission, PreviewLimits limits)
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(limits);
+        if (submission.NamedInputs.Prepend(submission.Primary).Any(input => submission.Profile == PreviewExecutionProfile.XmlDocument
+            ? input.XmlMetadata is null || input.CsvDialect is not null
+            : input.XmlMetadata is not null)) throw new PreviewRunException("XML metadata must belong to its own profile.");
+        if (submission.Profile == PreviewExecutionProfile.XmlDocument && submission.Subject is not RevisionPreviewSubject)
+            throw new PreviewRunException("XML previews require a saved revision.");
         if (submission.Profile == PreviewExecutionProfile.CsvDocument && (submission.Subject is not RevisionPreviewSubject || submission.Target.Kind == PreviewTargetKind.Named ||
             submission.NamedInputs.Count != 0 || submission.Primary.Name is not null || submission.Primary.CsvDialect is null))
             throw new PreviewRunException("CSV requests require a present primary input and its saved native dialect.");
@@ -51,7 +59,8 @@ public static class PreviewRequestDocument
             var document = submission.Profile == PreviewExecutionProfile.Document;
             json.WriteString("schema", submission.Subject is DraftPreviewSubject
                 ? document ? DraftDocumentSchema : DraftSchema
-                : document ? DocumentSchema : submission.Profile == PreviewExecutionProfile.CsvDocument ? CsvSchema : Schema);
+                : document ? DocumentSchema : submission.Profile == PreviewExecutionProfile.CsvDocument ? CsvSchema
+                : submission.Profile == PreviewExecutionProfile.XmlDocument ? XmlSchema : Schema);
             json.WriteString("organizationId", revision.OrganizationId.ToString("D"));
             json.WriteString("projectId", revision.ProjectId.ToString("D"));
             json.WriteString("mappingId", revision.MappingId.ToString("D"));
@@ -100,6 +109,11 @@ public static class PreviewRequestDocument
                     json.WritePropertyName("csvDialect");
                     CsvDialectJson.Write(json, input.CsvDialect ?? throw new PreviewRunException("CSV input requires its saved native dialect."));
                 }
+                if (submission.Profile == PreviewExecutionProfile.XmlDocument)
+                {
+                    json.WritePropertyName("xmlMetadata");
+                    XmlDocumentMetadataJson.Write(json, input.XmlMetadata!, XmlDocumentRole.Input);
+                }
                 json.WriteEndObject();
             }
             json.WriteEndArray();
@@ -113,7 +127,9 @@ public static class PreviewRequestDocument
         }
         if (buffer.Length > MaximumBytes)
             throw new PreviewRunException("The preview request exceeds its canonical size limit.");
-        return Encoding.UTF8.GetString(buffer.ToArray());
+        var encoded = Encoding.UTF8.GetString(buffer.ToArray());
+        if (submission.Profile == PreviewExecutionProfile.XmlDocument) Decode(encoded);
+        return encoded;
     }
 
     public static string Fingerprint(string document) =>
@@ -122,12 +138,13 @@ public static class PreviewRequestDocument
     public static PreviewRequestDescription Decode(string document)
     {
         ArgumentNullException.ThrowIfNull(document);
+        if (Encoding.UTF8.GetByteCount(document) > MaximumBytes) throw new PreviewRunException("The stored preview request exceeds its bound.");
         try
         {
             using var parsed = JsonDocument.Parse(document, new JsonDocumentOptions { MaxDepth = 8 });
             var root = parsed.RootElement;
             var schema = Text(root, "schema");
-            Require(schema is Schema or DraftSchema or DocumentSchema or DraftDocumentSchema or CsvSchema);
+            Require(schema is Schema or DraftSchema or DocumentSchema or DraftDocumentSchema or CsvSchema or XmlSchema);
             var isDraft = schema is DraftSchema or DraftDocumentSchema;
             var revision = new RevisionScope(Guid.ParseExact(Text(root, "organizationId"), "D"), Guid.ParseExact(Text(root, "projectId"), "D"),
                 Guid.ParseExact(Text(root, "mappingId"), "D"), Guid.ParseExact(Text(root, isDraft ? "baseRevisionId" : "revisionId"), "D"));
@@ -154,7 +171,10 @@ public static class PreviewRequestDocument
             var inputs = root.GetProperty("inputs").EnumerateArray().Select(item => new PreviewDeclaredInput(
                 item.GetProperty("name").ValueKind == JsonValueKind.Null ? null : Text(item, "name"),
                 item.GetProperty("byteLength").GetInt64(), Sha256Digest.Parse(Text(item, "sha256")))
-            { CsvDialect = schema == CsvSchema ? CsvDialectJson.Read(item.GetProperty("csvDialect")) : null }).ToArray();
+            {
+                CsvDialect = schema == CsvSchema ? CsvDialectJson.Read(item.GetProperty("csvDialect")) : null,
+                XmlMetadata = schema == XmlSchema ? XmlDocumentMetadataJson.Read(item.GetProperty("xmlMetadata"), XmlDocumentRole.Input) : null
+            }).ToArray();
             if (schema == CsvSchema)
             {
                 Require(root.EnumerateObject().Select(property => property.Name).SequenceEqual(new[]
@@ -180,6 +200,33 @@ public static class PreviewRequestDocument
                 Require(Encoding.UTF8.GetString(canonical.ToArray()) == document);
             }
             var limits = root.GetProperty("limits");
+            if (schema == XmlSchema)
+            {
+                Require(root.EnumerateObject().Select(p => p.Name).SequenceEqual(new[] { "schema", "organizationId", "projectId", "mappingId", "revisionId", "target", "parameters", "inputs", "limits" }));
+                Require(target.EnumerateObject().Select(p => p.Name).SequenceEqual(selection.Kind == PreviewTargetKind.Named ? new[] { "kind", "name" } : new[] { "kind" }));
+                Require(inputs.Length is >= 1 and <= XmlDocumentPolicy.MaximumInputs && parameters.Length <= PreviewPolicy.MaximumParameters);
+                Require(root.GetProperty("inputs").EnumerateArray().All(item => item.EnumerateObject().Select(p => p.Name).SequenceEqual(new[] { "name", "byteLength", "sha256", "xmlMetadata" })
+                    && item.GetProperty("xmlMetadata").GetRawText() == XmlDocumentMetadataJson.Encode(XmlDocumentMetadataJson.Read(item.GetProperty("xmlMetadata"), XmlDocumentRole.Input), XmlDocumentRole.Input)
+                    && Text(item, "sha256") == Sha256Digest.Parse(Text(item, "sha256")).Value
+                    && item.GetProperty("byteLength").GetRawText() == item.GetProperty("byteLength").GetInt64().ToString(CultureInfo.InvariantCulture)));
+                Require(root.GetProperty("parameters").EnumerateArray().All(item => item.EnumerateObject().Select(p => p.Name).SequenceEqual(new[] { "name", "kind", "value" }))
+                    && limits.EnumerateObject().Select(p => p.Name).SequenceEqual(new[] { "maximumInputBytes", "maximumOutputBytes", "maximumArtifacts", "maximumTextBytes" }));
+                Require(inputs.Sum(input => input.ByteLength) <= limits.GetProperty("maximumInputBytes").GetInt32()
+                    && limits.GetProperty("maximumInputBytes").GetInt32() is >= 1 and <= PreviewPolicy.MaximumInputBytes
+                    && limits.GetProperty("maximumOutputBytes").GetInt32() is >= 1 and <= PreviewPolicy.MaximumOutputBytes
+                    && limits.GetProperty("maximumArtifacts").GetInt32() is >= 1 and <= PreviewPolicy.MaximumArtifacts
+                    && limits.GetProperty("maximumTextBytes").GetInt32() is >= PreviewPolicy.MinimumTextBytes and <= PreviewPolicy.MaximumTextBytes);
+                Require(inputs.Skip(1).All(input => ValidName(input.Name)) && inputs.Skip(1).Select(input => input.Name).Distinct(StringComparer.Ordinal).Count() == inputs.Length - 1
+                    && (selection.Kind != PreviewTargetKind.Named || ValidName(selection.Name))
+                    && parameters.All(p => ValidName(p.Name) && StrictUtf8.GetByteCount(p.Value) <= PreviewPolicy.MaximumParameterTextBytes
+                        && (p.Kind != PreviewParameterKind.Boolean || p.Value is "true" or "false"))
+                    && parameters.Select(p => p.Name).Distinct(StringComparer.Ordinal).Count() == parameters.Length);
+                Require(Text(root, "organizationId") == revision.OrganizationId.ToString("D") && Text(root, "projectId") == revision.ProjectId.ToString("D")
+                    && Text(root, "mappingId") == revision.MappingId.ToString("D") && Text(root, "revisionId") == revision.RevisionId.ToString("D"));
+                using var canonical = new MemoryStream();
+                using (var writer = new Utf8JsonWriter(canonical)) root.WriteTo(writer);
+                Require(Encoding.UTF8.GetString(canonical.ToArray()) == document);
+            }
             var description = new PreviewRequestDescription(subject, selection, parameters, inputs, new PreviewLimits(
                 limits.GetProperty("maximumInputBytes").GetInt32(), limits.GetProperty("maximumOutputBytes").GetInt32(),
                 limits.GetProperty("maximumArtifacts").GetInt32(), limits.GetProperty("maximumTextBytes").GetInt32()))
@@ -188,6 +235,7 @@ public static class PreviewRequestDocument
                 {
                     DocumentSchema or DraftDocumentSchema => PreviewExecutionProfile.Document,
                     CsvSchema => PreviewExecutionProfile.CsvDocument,
+                    XmlSchema => PreviewExecutionProfile.XmlDocument,
                     _ => PreviewExecutionProfile.LegacyJson
                 }
             };
@@ -196,7 +244,7 @@ public static class PreviewRequestDocument
             return description;
         }
         catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException
-            or FormatException or ArgumentException)
+            or FormatException or ArgumentException or XmlDocumentException or OverflowException)
         {
             throw new PreviewRunException("The stored preview request is not a valid canonical document.");
         }
@@ -217,6 +265,8 @@ public static class PreviewRequestDocument
 
     private static string Text(JsonElement element, string name) =>
         element.GetProperty(name).GetString() ?? throw new PreviewRunException("A stored preview text value is missing.");
+
+    private static bool ValidName(string? value) => !string.IsNullOrEmpty(value) && !value.Contains('\0') && StrictUtf8.GetByteCount(value) <= PreviewPolicy.MaximumNameBytes;
 
     private static void Require(bool condition)
     {

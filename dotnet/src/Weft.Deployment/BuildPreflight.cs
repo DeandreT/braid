@@ -15,7 +15,7 @@ public sealed class BuildCapabilitySnapshot
         ArgumentNullException.ThrowIfNull(backend);
         ArgumentNullException.ThrowIfNull(profile);
         if (!Enum.IsDefined(status)) throw new BuildContractException(BuildContractFailure.InvalidInput);
-        if (refusalReason != BuildPreflightReason.None && (status != CapabilityStatus.Unsupported || refusalReason != BuildPreflightReason.UnsupportedCsvPlan))
+        if (refusalReason != BuildPreflightReason.None && (status != CapabilityStatus.Unsupported || refusalReason is not (BuildPreflightReason.UnsupportedCsvPlan or BuildPreflightReason.UnsupportedXmlBuild)))
             throw new BuildContractException(BuildContractFailure.InvalidInput);
         var count = conditions?.Count ?? 0;
         if (count is < 0 or > 32 || (status == CapabilityStatus.Conditional) != (count > 0))
@@ -44,7 +44,7 @@ public sealed class BuildCapabilitySnapshot
 }
 
 public enum BuildPreflightOutcome { Supported, Unsupported, NotQualified, ConditionsRequired, MismatchedEvidence }
-public enum BuildPreflightReason { None, RevisionMismatch, NativeDigestMismatch, BackendMismatch, ProfileMismatch, BoundaryMismatch, UnsupportedCsvPlan }
+public enum BuildPreflightReason { None, RevisionMismatch, NativeDigestMismatch, BackendMismatch, ProfileMismatch, BoundaryMismatch, UnsupportedCsvPlan, UnsupportedXmlBuild }
 
 public sealed record BuildPreflightResult(BuildPreflightOutcome Outcome, BuildPreflightReason Reason)
 {
@@ -60,6 +60,8 @@ public sealed class BuildPreflightService
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(intent);
         ArgumentNullException.ThrowIfNull(capability);
+        if (intent.Boundaries.Any(boundary => boundary.Format == "xml"))
+            return new(BuildPreflightOutcome.Unsupported, BuildPreflightReason.UnsupportedXmlBuild);
         if (intent.Revision != capability.Revision) return Mismatch(BuildPreflightReason.RevisionMismatch);
         if (intent.NativeDigest != capability.NativeDigest) return Mismatch(BuildPreflightReason.NativeDigestMismatch);
         if (intent.Backend != capability.Backend) return Mismatch(BuildPreflightReason.BackendMismatch);

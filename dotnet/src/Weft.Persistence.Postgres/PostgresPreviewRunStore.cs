@@ -10,6 +10,11 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
 {
     private readonly PostgresPreviewDatabase _database = Writer(database);
 
+    public Task RequireSubmissionAdmissionAsync(CancellationToken cancellationToken = default) =>
+        // RunAsync proves the restricted identity, XML schema 43 and lifecycle contract
+        // in a short read-only transaction. No input/run function or outbox hook runs.
+        _database.RunAsync(false, (_, _) => Task.FromResult(0), cancellationToken);
+
     public Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunRecord record, CancellationToken cancellationToken = default) =>
         SubmitAsync(actor, record, null, cancellationToken);
 
@@ -28,7 +33,9 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
         {
             var draft = submission.Subject as DraftPreviewSubject;
             await using var command = new NpgsqlCommand(draft is null
-                ? "SELECT outcome, run_id FROM weft.preview_submit($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+                ? submission.Profile == PreviewExecutionProfile.XmlDocument
+                    ? "SELECT outcome, run_id FROM weft.preview_submit_xml($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+                    : "SELECT outcome, run_id FROM weft.preview_submit($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
                 : "SELECT outcome, run_id FROM weft.preview_submit_draft($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)", connection, transaction);
             var revision = submission.Subject.ExecutionScope;
             command.Parameters.AddWithValue(revision.OrganizationId);
@@ -121,7 +128,8 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
         ArgumentNullException.ThrowIfNull(claim);
         return _database.RunAsync(false, async (connection, transaction) =>
         {
-            await using var command = new NpgsqlCommand("SELECT ordinal, name, digest, content FROM weft.preview_inputs($1,$2,$3)",
+            var function = PreviewRequestDocument.Decode(claim.RequestDocument).Profile == PreviewExecutionProfile.XmlDocument ? "preview_xml_inputs" : "preview_inputs";
+            await using var command = new NpgsqlCommand($"SELECT ordinal, name, digest, content FROM weft.{function}($1,$2,$3)",
                 connection, transaction);
             command.Parameters.AddWithValue(claim.OrganizationId);
             command.Parameters.AddWithValue(claim.RunId);
@@ -129,8 +137,11 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             var inputs = new List<PreviewStoredInput>();
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
+            {
+                if (reader.IsDBNull(2) || reader.IsDBNull(3)) throw new PreviewRunException("The stored preview inputs do not match their declarations.");
                 inputs.Add(new(reader.GetInt32(0), reader.IsDBNull(1) ? null : reader.GetString(1), Sha256Digest.Parse(reader.GetString(2)),
                     reader.GetFieldValue<byte[]>(3)));
+            }
             return (IReadOnlyList<PreviewStoredInput>)inputs;
         }, cancellationToken);
     }
@@ -158,10 +169,19 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
         if ((completion.Outcome == PreviewRunOutcome.Succeeded) != (completion.Artifacts.Count > 0)
             || (completion.Outcome == PreviewRunOutcome.Succeeded && completion.Provenance is null))
             throw new ArgumentException("Only a succeeded completion publishes outputs, and it requires provenance.", nameof(completion));
+        if (completion.Outcome == PreviewRunOutcome.Succeeded && completion.Provenance?.Profile == XmlPreviewAdmission.Profile &&
+            PreviewRequestDocument.Decode(claim.RequestDocument).Profile != PreviewExecutionProfile.XmlDocument)
+            throw new ArgumentException("An XML result requires its original valid request.", nameof(completion));
         return _database.RunAsync(true, async (connection, transaction) =>
         {
             var csv = completion.Provenance?.Profile == CsvDocumentPolicy.Profile;
-            await using var command = new NpgsqlCommand(csv
+            // Completion must still record a terminal failure when the stored request cannot
+            // be decoded. A verified successful result owns its profile; the legacy terminal
+            // function publishes no documents on a failure and therefore cannot widen admission.
+            var xml = completion.Provenance?.Profile == XmlPreviewAdmission.Profile;
+            await using var command = new NpgsqlCommand(xml
+                ? "SELECT weft.preview_complete_xml($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)"
+                : csv
                 ? "SELECT weft.preview_complete_csv($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)"
                 : "SELECT weft.preview_complete($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)", connection, transaction);
             var failure = completion.Failure;
@@ -190,6 +210,8 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             Array(command, NpgsqlDbType.Bytea, artifacts.Select(artifact => artifact.CopyBytes()).ToArray());
             if (csv) Array(command, NpgsqlDbType.Text, artifacts.Select(artifact => CsvDialectJson.Encode(artifact.CsvDialect
                 ?? throw new ArgumentException("CSV output has no dialect.", nameof(completion)))).ToArray());
+            if (xml) Array(command, NpgsqlDbType.Text, artifacts.Select(artifact => XmlDocumentMetadataJson.Encode(artifact.XmlMetadata
+                ?? throw new ArgumentException("XML output has no metadata.", nameof(completion)), XmlDocumentRole.Output)).ToArray());
             return await command.ExecuteScalarAsync(cancellationToken) switch
             {
                 "completed" => true,

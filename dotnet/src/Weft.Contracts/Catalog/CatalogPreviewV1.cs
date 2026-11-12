@@ -71,7 +71,13 @@ public sealed record CatalogPreviewOutputV1(
     string RecordsWritten,
     string Sha256,
     int ByteCount,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialectV1? CsvDialect = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialectV1? CsvDialect = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] XmlDocumentMetadataV1? XmlMetadata = null);
+
+public sealed record XmlDocumentMetadataV1(string Schema, string SafetyProfile, XmlSchemaHintsV1? SchemaHints);
+public sealed record XmlSchemaHintsV1(string? NoNamespaceLocation, IReadOnlyList<XmlSchemaLocationV1> Locations);
+public sealed record XmlSchemaLocationV1(string Namespace, string Location);
+
 
 public sealed record CsvDocumentDialectV1(string Schema, string Delimiter, string? Quote, bool QuoteDisabled,
     bool HasHeaderRow, bool Utf8Bom, bool PreserveEmptyStrings);

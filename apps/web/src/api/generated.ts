@@ -2463,6 +2463,8 @@ export interface components {
       readCatalog: boolean;
       readReports: boolean;
       uploadRevisions: boolean;
+      /** @default false */
+      xmlPreview: boolean;
     };
     CatalogHeadV1: {
       admission: components["schemas"]["CatalogAdmissionV1"];
@@ -2573,6 +2575,7 @@ export interface components {
       sha256: string;
       targetName: string;
       targetNameTruncated: boolean;
+      xmlMetadata?: null | components["schemas"]["XmlDocumentMetadataV1"];
     };
     CatalogPreviewProvenanceV1: {
       adapterBuild: string;
@@ -2619,13 +2622,14 @@ export interface components {
         value: string;
       }[];
       /**
-       * @description Omitted or null preserves legacy JSON admission. CSV/TSV is a separately enabled primary-only profile requiring native-source ports; an explicit empty content string is present input. Formats and dialects come from saved native boundaries, never filenames or caller overrides.
+       * @description Omitted or null preserves legacy JSON admission. XML is a separately enabled safe native-preview profile with saved metadata and named targets. CSV/TSV is a separately enabled primary-only profile; an explicit empty content string is present input. Formats and settings come from saved native boundaries, never filenames or caller overrides. XML regression compares exact bytes; compiled XML execution is unavailable.
        * @enum {null|string}
        */
       profile?:
         | "weft.ferrule-json-preview.v1"
         | "weft.ferrule-document-preview.v1"
         | "weft.ferrule-csv-preview.v1"
+        | "weft.ferrule-xml-preview.v1"
         | null;
       target: {
         kind: string;
@@ -2895,6 +2899,50 @@ export interface components {
       readonly schemaVersion: "weft.catalog-revision-report.v1";
       state: components["schemas"]["CatalogRevisionReportStateV1"];
       status: null | components["schemas"]["OperationStatusV1"];
+    };
+    CatalogXmlLocationV1: {
+      /** Format: int32 */
+      column: number;
+      /** Format: int32 */
+      line: number;
+    };
+    CatalogXmlPreviewProblemV1: {
+      /** @enum {string} */
+      code: "xmlPreflight";
+      /** @enum {string} */
+      kind: "invalidInput" | "resourceLimit" | "unsupportedCapability";
+      /** @description Nonnegative Int64 as exact decimal text, or null when unavailable. */
+      limit: null | string;
+      location: null | components["schemas"]["CatalogXmlLocationV1"];
+      /** @description Nonnegative Int64 as exact decimal text, or null when unavailable. */
+      observed: null | string;
+      /** @enum {string} */
+      reason:
+        | "invalidUtf8"
+        | "invalidXml"
+        | "invalidDeclaration"
+        | "documentRequired"
+        | "unsupportedName"
+        | "byteLimit"
+        | "depthLimit"
+        | "nodeLimit"
+        | "attributeLimit"
+        | "documentCountLimit"
+        | "invalidMetadata"
+        | "metadataTooLarge"
+        | "invalidNativeMetadata"
+        | "nativeByteLimit";
+      statistics: null | components["schemas"]["CatalogXmlStatisticsV1"];
+    };
+    CatalogXmlStatisticsV1: {
+      /** Format: int32 */
+      maximumAttributes: number;
+      /** Format: int32 */
+      maximumDepth: number;
+      /** Format: int32 */
+      originalBytes: number;
+      /** Format: int32 */
+      physicalNodes: number;
     };
     ChatAvailabilityV1: {
       limits: components["schemas"]["ChatLimitsV1"];
@@ -4549,6 +4597,7 @@ export interface components {
       publishCases: boolean;
       readSamples: boolean;
       runtime: components["schemas"]["RegressionRuntimeV1"];
+      xmlRuntime?: null | components["schemas"]["RegressionRuntimeV1"];
     };
     RegressionCaseDetailV1: {
       caseId: string;
@@ -4652,6 +4701,7 @@ export interface components {
       csvDialect?: null | components["schemas"]["CsvDocumentDialectV1"];
       mediaType?: null | string;
       name: null | string;
+      xmlMetadata?: null | components["schemas"]["XmlDocumentMetadataV1"];
     };
     RegressionEdiComparisonOptionsV1: {
       compareSeparators: boolean;
@@ -5087,6 +5137,19 @@ export interface components {
       /** Format: int32 */
       totalIssueCount: number;
       truncated: boolean;
+    };
+    XmlDocumentMetadataV1: {
+      safetyProfile: string;
+      schema: string;
+      schemaHints: null | components["schemas"]["XmlSchemaHintsV1"];
+    };
+    XmlSchemaHintsV1: {
+      locations: components["schemas"]["XmlSchemaLocationV1"][];
+      noNamespaceLocation: null | string;
+    };
+    XmlSchemaLocationV1: {
+      location: string;
+      namespace: string;
     };
   };
   responses: never;
@@ -8964,6 +9027,7 @@ export interface operations {
           "application/edi-x12": string;
           "application/edifact": string;
           "application/json": string;
+          "application/xml": string;
           "text/csv": string;
           "text/tab-separated-values": string;
         };
@@ -17498,6 +17562,15 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CatalogXmlPreviewProblemV1"];
         };
       };
       /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */

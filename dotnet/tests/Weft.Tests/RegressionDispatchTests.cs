@@ -45,7 +45,7 @@ public sealed class RegressionDispatchTests
     public void Disabled_worker_reads_no_credentials_and_registers_no_services()
     {
         var services = new ServiceCollection();
-        services.AddWeftRegressionWorker(name => name == "WEFT_REGRESSION_WORKER_ENABLED" ? null : throw new InvalidOperationException(),
+        services.AddWeftRegressionWorker(name => name is "WEFT_REGRESSION_WORKER_ENABLED" or XmlPreviewAdmission.RegressionEnabledSetting ? null : throw new InvalidOperationException(),
             () => throw new InvalidOperationException());
         Assert.Empty(services);
     }
@@ -73,6 +73,7 @@ public sealed class RegressionDispatchTests
         {
             "WEFT_REGRESSION_WORKER_ENABLED" => "true",
             CsvDocumentPolicy.RegressionEnabledSetting => flag,
+            XmlPreviewAdmission.RegressionEnabledSetting => null,
             _ => throw new InvalidOperationException("Unexpected private configuration.")
         }, () => throw new InvalidOperationException("Unexpected runtime creation.")));
     }
@@ -86,7 +87,7 @@ public sealed class RegressionDispatchTests
             Assert.Throws<ArgumentException>(() => services.AddWeftRegressionWorker(name => name switch
             {
                 "WEFT_REGRESSION_WORKER_ENABLED" => "true",
-                CsvDocumentPolicy.RegressionEnabledSetting => null,
+                CsvDocumentPolicy.RegressionEnabledSetting or XmlPreviewAdmission.RegressionEnabledSetting => null,
                 _ when name == missing => null,
                 _ => "private-synthetic"
             }, () => throw new InvalidOperationException()));

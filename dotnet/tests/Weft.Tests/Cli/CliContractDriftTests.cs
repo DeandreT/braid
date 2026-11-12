@@ -97,7 +97,13 @@ public sealed class CliContractDriftTests
                 $"{operationId} is not declared as a public probe");
 
         var errorSchema = "#/components/schemas/" + operation.ErrorBody.Name;
-        var errors = documented.Statuses.Where(status => status >= 400).Select(status => documented.Response(status)!)
+        foreach (var (status, type) in operation.AlternateErrorBodies ?? new Dictionary<int, Type>())
+        {
+            var schema = documented.Response(status)?["content"]?["application/json"]?["schema"];
+            Assert.Equal("#/components/schemas/" + type.Name, schema?["$ref"]?.GetValue<string>());
+            CompareShape(type, Spec.Schema("#/components/schemas/" + type.Name), $"{operationId} {status} error");
+        }
+        var errors = documented.Statuses.Where(status => status >= 400 && operation.AlternateErrorBodies?.ContainsKey(status) != true).Select(status => documented.Response(status)!)
             .Select(response => response["content"]?["application/json"]?["schema"]).Where(schema => schema is not null).ToArray();
         if (operation.RequiresAuthentication) Assert.NotEmpty(errors);
         Assert.All(errors, schema => Assert.True(schema!.ToJsonString().Contains(errorSchema, StringComparison.Ordinal) ||

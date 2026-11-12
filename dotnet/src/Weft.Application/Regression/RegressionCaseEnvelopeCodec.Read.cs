@@ -11,10 +11,11 @@ public sealed partial class RegressionCaseEnvelopeCodec
     {
         var documents = Text(root, "schema") == DocumentSchema;
         var csv = Text(root, "schema") == CsvSchema;
+        var xml = Text(root, "schema") == XmlSchema;
         string[] properties = ["schema", "caseId", "version", "owner", "name", "revision", "nativeDigest", "runtime", "target",
             "currentDateTime", "comparisonPolicy", "limits", "parameters", "inputs", "expected"];
         Shape(root, documents ? [.. properties, "comparisonOptions"] : properties);
-        if (Text(root, "schema") is not (Schema or DocumentSchema or CsvSchema)) throw Integrity();
+        if (Text(root, "schema") is not (Schema or DocumentSchema or CsvSchema or XmlSchema)) throw Integrity();
         var caseId = Id(root, "caseId");
         var version = Integer(root, "version");
         var owner = new PrincipalId(Id(root, "owner"));
@@ -30,6 +31,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
             Text(runtime, "backendBuild"), Text(runtime, "adapterBuild"), Text(runtime, "profile"));
         if (documents != (identity.Profile == DocumentPreviewPolicy.Profile)) throw Integrity();
         if (csv != (identity.Profile == CsvDocumentPolicy.Profile)) throw Integrity();
+        if (xml != (identity.Profile == XmlPreviewAdmission.Profile)) throw Integrity();
         EdiComparisonOptions? comparisonOptions = null;
         if (documents && root.GetProperty("comparisonOptions").ValueKind != JsonValueKind.Null)
         {
@@ -76,9 +78,9 @@ public sealed partial class RegressionCaseEnvelopeCodec
         foreach (var input in inputs.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
-            var frame = ReadFrame(input, bytes, ref offset, ref remaining, token, csv: csv, present: csv);
+            var frame = ReadFrame(input, bytes, ref offset, ref remaining, token, csv: csv, present: csv, xml: xml ? XmlDocumentRole.Input : null);
             if (index == 0 != (frame.Name is null) || !csv && frame.Bytes.Length == 0) throw Integrity();
-            inputList[index++] = new(frame.Name, frame.Bytes, frame.CsvDialect);
+            inputList[index++] = new(frame.Name, frame.Bytes, frame.CsvDialect, frame.XmlMetadata);
         }
         var outputs = BoundedArray(root, "expected", 0, PreviewPolicy.MaximumArtifacts);
         var outputList = new RegressionOutput[outputs.GetArrayLength()];
@@ -87,23 +89,26 @@ public sealed partial class RegressionCaseEnvelopeCodec
         foreach (var output in outputs.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
-            var frame = ReadFrame(output, bytes, ref offset, ref remaining, token, documents || csv, csv);
+            var frame = ReadFrame(output, bytes, ref offset, ref remaining, token, documents || csv || xml, csv, xml: xml ? XmlDocumentRole.Output : null);
             outputList[index++] = RegressionOutput.Capture(frame.Name is null ? RegressionOutputKey.Primary :
-                RegressionOutputKey.Named(frame.Name), frame.Bytes, token, frame.MediaType, frame.CsvDialect);
+                RegressionOutputKey.Named(frame.Name), frame.Bytes, token, frame.MediaType, frame.CsvDialect, frame.XmlMetadata);
         }
         var replay = new RegressionReplay(target, Text(root, "currentDateTime"), selectedLimits,
-            inputList[0], inputList.Skip(1).ToArray(), parameterList, token, csv ? PreviewExecutionProfile.CsvDocument : PreviewExecutionProfile.LegacyJson);
+            inputList[0], inputList.Skip(1).ToArray(), parameterList, token, xml ? PreviewExecutionProfile.XmlDocument :
+            csv ? PreviewExecutionProfile.CsvDocument : PreviewExecutionProfile.LegacyJson);
         return new(caseId, version, owner, name, revision, nativeDigest, identity, replay,
             Text(root, "comparisonPolicy"), RegressionOutputSet.Capture(outputList, token), comparisonOptions);
     }
 
-    private static (string? Name, byte[] Bytes, string MediaType, CsvDocumentDialect? CsvDialect) ReadFrame(JsonElement descriptor, byte[] envelope,
-        ref int offset, ref int remaining, CancellationToken token, bool documents = false, bool csv = false, bool present = false)
+    private static (string? Name, byte[] Bytes, string MediaType, CsvDocumentDialect? CsvDialect, XmlDocumentMetadata? XmlMetadata) ReadFrame(
+        JsonElement descriptor, byte[] envelope, ref int offset, ref int remaining, CancellationToken token, bool documents = false, bool csv = false, bool present = false,
+        XmlDocumentRole? xml = null)
     {
         List<string> fields = ["name", "byteCount", "sha256"];
         if (documents) fields.Add("mediaType");
         if (csv) fields.Add("csvDialect");
         if (present) fields.Add("present");
+        if (xml is not null) fields.Add("xmlMetadata");
         Shape(descriptor, fields.ToArray());
         if (present && !descriptor.GetProperty("present").GetBoolean()) throw Integrity();
         var name = NullableText(descriptor, "name");
@@ -119,7 +124,8 @@ public sealed partial class RegressionCaseEnvelopeCodec
         offset += length;
         remaining -= length;
         return (name, bytes.ToArray(), documents ? Text(descriptor, "mediaType") : PreviewPolicy.MediaType,
-            csv ? CsvDialectJson.Read(descriptor.GetProperty("csvDialect")) : null);
+            csv ? CsvDialectJson.Read(descriptor.GetProperty("csvDialect")) : null,
+            xml is { } role ? XmlDocumentMetadataJson.Read(descriptor.GetProperty("xmlMetadata"), role) : null);
     }
 
     private static void Shape(JsonElement value, params string[] names)

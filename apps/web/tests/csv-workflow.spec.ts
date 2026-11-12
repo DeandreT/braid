@@ -9,6 +9,7 @@ import { previewCaseDefinition } from "../src/catalog/previews/preview-case";
 import { canonicalDefinition } from "../src/catalog/regression/regression-definition";
 import { PreviewState } from "../src/catalog/previews/preview-state";
 import type { PreviewApi } from "../src/catalog/previews/preview-api";
+import { xmlPreviewProfile } from "../src/catalog/previews/xml-contract";
 import {
   csvBytes,
   csvCapabilities,
@@ -17,6 +18,89 @@ import {
   csvScope,
   CsvWorkflowFixture,
 } from "./csv-workflow.fixture";
+
+for (const xmlRegressionEnabled of [true, false]) {
+  test(`XML baseline controls follow XML runtime when CSV runtime is ${xmlRegressionEnabled ? "disabled" : "enabled"}`, async ({
+    page,
+  }) => {
+    const fixture = new CsvWorkflowFixture();
+    fixture.xmlPreviewEnabled = true;
+    fixture.csvPreviewEnabled = !xmlRegressionEnabled;
+    if (xmlRegressionEnabled) {
+      delete fixture.capabilities.csvRuntime;
+      delete fixture.capabilities.comparisonPolicies;
+      fixture.capabilities.xmlRuntime = {
+        ...fixture.capabilities.runtime,
+        profile: xmlPreviewProfile,
+        adapterBuild: "xml-adapter",
+      };
+    }
+    fixture.result.provenance = {
+      ...fixture.result.provenance!,
+      profile: xmlPreviewProfile,
+      adapterBuild: "xml-adapter",
+    };
+    fixture.result.outputs = fixture.result.outputs.map(
+      ({ csvDialect: _dialect, ...output }) => ({
+        ...output,
+        mediaType: "application/xml",
+        xmlMetadata: {
+          schema: "weft.xml-boundary.v1",
+          safetyProfile: "weft.xml-safe.v1",
+          schemaHints: null,
+        },
+      }),
+    );
+    await fixture.install(page);
+    const format = page.locator("#preview-admission");
+    await expect(format).toHaveValue("json");
+    if (!xmlRegressionEnabled) {
+      await format.selectOption("csv");
+      await expect(format).toHaveValue("csv");
+    }
+    await format.selectOption("xml");
+    await page
+      .locator('weft-revision-preview input[type="file"]')
+      .first()
+      .setInputFiles({
+        name: "sample.xml",
+        mimeType: "application/xml",
+        buffer: Buffer.from("<Order/>"),
+      });
+    await page
+      .getByRole("button", { name: "Run preview", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Show Primary output", exact: true }),
+    ).toBeVisible();
+    expect(fixture.submissions).toHaveLength(1);
+    expect(fixture.submissions[0]!.body.profile).toBe(xmlPreviewProfile);
+    await expect(format).toHaveValue("xml");
+    const name = page.getByLabel("Test name", { exact: true });
+    const approval = page.getByRole("checkbox", {
+      name: "I reviewed this output",
+      exact: false,
+    });
+    const save = page.getByRole("button", {
+      name: "Save preview as test case",
+      exact: true,
+    });
+    if (xmlRegressionEnabled) {
+      await expect(name).toBeVisible();
+      await expect(approval).toBeVisible();
+      await expect(save).toBeVisible();
+      await expect(save).toBeDisabled();
+      await name.fill("XML baseline");
+      await approval.check();
+      await expect(save).toBeEnabled();
+    } else {
+      await expect(name).toHaveCount(0);
+      await expect(approval).toHaveCount(0);
+      await expect(save).toHaveCount(0);
+    }
+    expect(fixture.publications).toHaveLength(0);
+  });
+}
 
 test("CSV metadata requires an exact versioned dialect consistent with media", () => {
   expect(csvMetadata("text/tab-separated-values", csvDialect)).toBe(true);
@@ -85,7 +169,7 @@ test("saved preview baseline uses verified output metadata and exact bytes", () 
     csvRun(),
     { ...submission, inputs: [...submission.inputs], parameters: [] },
     csvCapabilities,
-    Buffer.from(csvBytes),
+    [Buffer.from(csvBytes)],
     "CSV baseline",
   );
   expect(body.runtime.profile).toBe(csvPreviewProfile);
@@ -104,7 +188,7 @@ test("saved preview baseline uses verified output metadata and exact bytes", () 
       unconfirmed,
       { ...submission, inputs: [...submission.inputs], parameters: [] },
       csvCapabilities,
-      Buffer.from(csvBytes),
+      [Buffer.from(csvBytes)],
       "CSV baseline",
     ),
   ).toThrow();
@@ -126,7 +210,7 @@ test("saved CSV parameters use server ordering without changing draft values or 
       inputs: [{ name: null, content: "" }],
     },
     csvCapabilities,
-    Buffer.from(csvBytes),
+    [Buffer.from(csvBytes)],
     "Ordered baseline",
   );
   expect(body.parameters.map((parameter) => parameter.name)).toEqual([

@@ -7,12 +7,38 @@ import { csvDocumentLimits } from "./csv-document";
   selector: "weft-document-view",
   template: `
     <section aria-label="Document bytes">
+      @if (data().xmlMetadataText; as metadata) {
+        <details>
+          <summary>Saved XML metadata (read only)</summary>
+          <p>
+            Schema locations are lexical hints only. No schema or network
+            resource is fetched. XML regression compares exact bytes; compiled
+            execution is unavailable.
+          </p>
+          <pre tabindex="0">{{ metadata }}</pre>
+        </details>
+      }
       <div class="document-controls">
         <span
           >{{ data().byteCount }} bytes ·
           {{ data().mediaType ?? "No declared media type" }}</span
         >
-        @if (csvTable()) {
+        @if (data().xmlOutline) {
+          <button
+            type="button"
+            [attr.aria-pressed]="mode() === 'formatted'"
+            (click)="mode.set('formatted')"
+          >
+            XML outline
+          </button>
+          <button
+            type="button"
+            [attr.aria-pressed]="mode() === 'raw'"
+            (click)="mode.set('raw')"
+          >
+            Raw text
+          </button>
+        } @else if (csvTable()) {
           <button
             type="button"
             [attr.aria-pressed]="tableView()"
@@ -46,7 +72,19 @@ import { csvDocumentLimits } from "./csv-document";
           <span>{{ data().format === "hex" ? "Hex bytes" : "Raw text" }}</span>
         }
       </div>
-      @if (tableView()) {
+      @if (mode() === "formatted" && data().xmlOutline) {
+        <ol aria-label="Read-only XML lexical outline">
+          @for (line of data().xmlOutline; track $index) {
+            <li [style.margin-inline-start.em]="line.depth">
+              <code>{{ line.text }}</code>
+            </li>
+          }
+        </ol>
+        <p>
+          Bounded lexical outline only, not schema validation. Download retains
+          the original bytes.
+        </p>
+      } @else if (tableView()) {
         @if (csvTable(); as table) {
           <div
             class="csv-table-scroll"
@@ -125,6 +163,12 @@ import { csvDocumentLimits } from "./csv-document";
           the original bytes.
         </p>
       } @else {
+        @if (data().mediaType === "application/xml" && !data().xmlOutline) {
+          <p>
+            XML outline unavailable within display limits. Escaped raw text and
+            the exact-byte download remain available.
+          </p>
+        }
         @if (csvUnavailableMessage(); as message) {
           <p>{{ message }}</p>
         }

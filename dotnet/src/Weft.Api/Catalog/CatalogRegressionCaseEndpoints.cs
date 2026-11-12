@@ -156,7 +156,7 @@ public static partial class CatalogEndpoints
         try
         {
             var replay = incoming.Replay;
-            if (selectedRuntime.Profile == CsvDocumentPolicy.Profile)
+            if (selectedRuntime.Profile is CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile)
             {
                 var source = await context.RequestServices.GetRequiredService<IRevisionReportMetadataReader>()
                     .GetSourceAsync(admission.Actor!, revisionScope, context.RequestAborted);
@@ -174,14 +174,29 @@ public static partial class CatalogEndpoints
                     var artifact = NativeArtifact.Admit(revisionScope, native, PreviewPolicy.MaximumNativeBytes);
                     if (artifact.Digest != source.Source.NativeObject.Digest || artifact.ByteCount != source.Source.NativeObject.ByteCount)
                         throw new InvalidOperationException("CSV source integrity mismatch.");
-                    var dialect = CsvNativeDialect.Read(artifact);
-                    if (incoming.Expected.Outputs.Count != 1 || dialect.Output != incoming.Expected.Outputs[0].CsvDialect)
-                        return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
-                    replay = new(replay.Target, replay.CurrentDateTime, replay.Limits,
-                        new PreviewInputDocument(null, replay.Primary.CopyBytes(), dialect.Input), replay.NamedInputs, replay.Parameters,
-                        context.RequestAborted, PreviewExecutionProfile.CsvDocument);
+                    if (selectedRuntime.Profile == XmlPreviewAdmission.Profile)
+                    {
+                        if (!XmlPreviewAdmission.MatchesCase(artifact, replay, incoming.Expected))
+                            return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                    }
+                    else
+                    {
+                        if (incoming.Expected.Outputs.Count != 1)
+                            return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                        var primary = new PreviewInputDocument(null, replay.Primary.CopyBytes(), CsvNativeDialect.Read(artifact).Input);
+                        if (CsvNativeDialect.Read(artifact).Output != incoming.Expected.Outputs[0].CsvDialect)
+                            return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                        replay = new(replay.Target, replay.CurrentDateTime, replay.Limits,
+                            primary, replay.NamedInputs, replay.Parameters, context.RequestAborted,
+                            PreviewExecutionProfile.CsvDocument);
+                    }
                 }
                 catch (PreviewRunException) { return Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest); }
+                catch (XmlDocumentException error)
+                {
+                    return error.IsResourceLimit ? Error(CatalogErrorCodeV1.BodyLimit, StatusCodes.Status413PayloadTooLarge)
+                        : Error(CatalogErrorCodeV1.InvalidRequest, StatusCodes.Status400BadRequest);
+                }
             }
             value = new(id, number, owner, incoming.Name, revisionScope, revision.Summary.NativeDigest, selectedRuntime,
                 replay, incoming.Policy, incoming.Expected, incoming.EdiOptions);
@@ -274,7 +289,7 @@ public static partial class CatalogEndpoints
             _ => "boolean"
         }, parameter.Value)).ToArray(), value.ComparisonPolicy,
         value.Expected.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name, WebEncoders.Base64UrlEncode(output.CopyBytes()),
-            value.Runtime.Profile is DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile ? output.MediaType : null,
-            CsvDialect(output.CsvDialect))).ToArray(),
+            value.Runtime.Profile is DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile ? output.MediaType : null,
+            CsvDialect(output.CsvDialect), XmlMetadata(output.XmlMetadata))).ToArray(),
         value.EdiOptions is { } options ? new(options.CompareSeparators, options.IgnoreControlNumbers, options.IgnoreDates) : null);
 }

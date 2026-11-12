@@ -66,6 +66,8 @@ export function csvRun(): PreviewRun {
   return {
     runId: csvRunId,
     revision: csvScope,
+    subjectKind: "revision",
+    draft: null,
     requestFingerprint: "b".repeat(64),
     currentDateTime: "2026-10-20T08:30:00Z",
     state: "completed",
@@ -85,7 +87,7 @@ export function csvRun(): PreviewRun {
     outputs: [
       {
         ordinal: 0,
-        boundaryId: "output",
+        boundaryId: "primary-output",
         targetName: "",
         targetNameTruncated: false,
         mediaType: "text/tab-separated-values",
@@ -109,6 +111,7 @@ export class CsvWorkflowFixture {
   publications: { id: string; version: string; body: CaseDefinition }[] = [];
   failPublication = false;
   csvPreviewEnabled = true;
+  xmlPreviewEnabled = false;
 
   async install(page: Page) {
     await syntheticCatalog(page, {
@@ -117,6 +120,7 @@ export class CsvWorkflowFixture {
         features: {
           ...synthetic.context.features,
           preview: true,
+          xmlPreview: this.xmlPreviewEnabled,
           ...(this.csvPreviewEnabled ? { csvPreview: true } : {}),
         },
       },

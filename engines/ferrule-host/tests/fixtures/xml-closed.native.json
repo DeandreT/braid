@@ -1,0 +1,19 @@
+{
+  "source": {"name":"Order","kind":{"kind":"group","children":[
+    {"name":"code","kind":{"kind":"scalar","ty":"string"}},
+    {"name":"quantity","kind":{"kind":"scalar","ty":"int"}}
+  ]}},
+  "target": {"name":"Order","kind":{"kind":"group","children":[
+    {"name":"code","kind":{"kind":"scalar","ty":"string"}},
+    {"name":"quantity","kind":{"kind":"scalar","ty":"int"}}
+  ]}},
+  "source_path":"design-only.csv",
+  "target_path":"design-only.json",
+  "source_options":{"xml_document":true},
+  "target_options":{"xml_document":true},
+  "graph":{"nodes":{
+    "1":{"kind":"source_field","path":["code"]},
+    "2":{"kind":"source_field","path":["quantity"]}
+  }},
+  "root":{"target_field":"","source":null,"bindings":[{"target_field":"code","node":1},{"target_field":"quantity","node":2}],"children":[]}
+}

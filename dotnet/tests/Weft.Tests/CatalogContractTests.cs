@@ -93,7 +93,7 @@ public sealed class CatalogContractTests
         var disabled = new CatalogFeaturesV1(true, false, false, false, false, false, false, true, false, false, csvPreview: false);
         var missing = new CatalogFeaturesV1(true, false, false, false, false, false, false, true, false, false, csvPreview: null);
         var text = JsonSerializer.Serialize(legacy, Options);
-        Assert.Equal("{\"readCatalog\":true,\"createProjects\":false,\"createMappings\":false,\"editMetadata\":false,\"uploadRevisions\":false,\"readReports\":false,\"chat\":false,\"preview\":true,\"manageMembership\":false,\"deriveReports\":false,\"edit\":false}", text);
+        Assert.Equal("{\"readCatalog\":true,\"createProjects\":false,\"createMappings\":false,\"editMetadata\":false,\"uploadRevisions\":false,\"readReports\":false,\"chat\":false,\"preview\":true,\"manageMembership\":false,\"deriveReports\":false,\"edit\":false,\"xmlPreview\":false}", text);
         Assert.Equal(text, JsonSerializer.Serialize(disabled, Options));
         Assert.Equal(text, JsonSerializer.Serialize(missing, Options));
         Assert.DoesNotContain("csvPreview", text, StringComparison.Ordinal);

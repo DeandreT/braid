@@ -49,12 +49,13 @@ public sealed record CatalogFeaturesV1
     [JsonConstructor]
     public CatalogFeaturesV1(bool readCatalog, bool createProjects, bool createMappings, bool editMetadata,
         bool uploadRevisions, bool readReports, bool chat, bool preview, bool manageMembership, bool deriveReports, bool edit = false,
-        bool? csvPreview = null)
+        bool? csvPreview = null, bool xmlPreview = false)
     {
         if (deriveReports && !readReports)
             throw new ArgumentException("Report derivation requires report reads.", nameof(deriveReports));
         if (csvPreview == true && !preview)
             throw new ArgumentException("CSV previews require preview routes.", nameof(csvPreview));
+        if (xmlPreview == true && !preview) throw new ArgumentException("XML requires preview routes.", nameof(xmlPreview));
         ReadCatalog = readCatalog;
         CreateProjects = createProjects;
         CreateMappings = createMappings;
@@ -67,6 +68,7 @@ public sealed record CatalogFeaturesV1
         DeriveReports = deriveReports;
         Edit = edit;
         CsvPreview = csvPreview == true ? true : null;
+        XmlPreview = xmlPreview == true;
     }
 
     public bool ReadCatalog { get; }
@@ -82,6 +84,7 @@ public sealed record CatalogFeaturesV1
     public bool Edit { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? CsvPreview { get; }
+    public bool XmlPreview { get; }
 
     public static CatalogFeaturesV1 ReadOnly { get; } = new(true, false, false, false, false, false, false, false, false);
 }

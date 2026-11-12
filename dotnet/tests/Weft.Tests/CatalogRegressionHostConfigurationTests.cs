@@ -14,7 +14,7 @@ public sealed class CatalogRegressionHostConfigurationTests
     public void Disabled_configuration_reads_no_runtime_or_credential_inputs()
     {
         var services = new ServiceCollection();
-        CatalogRegressionHostConfiguration.Configure(services, name => name is "WEFT_REGRESSIONS_ENABLED" or "WEFT_NOTIFICATIONS_ENABLED" ? null : throw new InvalidOperationException(), false);
+        CatalogRegressionHostConfiguration.Configure(services, name => name is "WEFT_REGRESSIONS_ENABLED" or "WEFT_NOTIFICATIONS_ENABLED" or XmlPreviewAdmission.RegressionEnabledSetting ? null : throw new InvalidOperationException(), false);
         Assert.Empty(services);
     }
 
@@ -39,6 +39,7 @@ public sealed class CatalogRegressionHostConfigurationTests
             "WEFT_REGRESSIONS_ENABLED" => "true",
             "WEFT_NOTIFICATIONS_ENABLED" => null,
             CsvDocumentPolicy.RegressionEnabledSetting => value,
+            XmlPreviewAdmission.RegressionEnabledSetting => null,
             _ => throw new InvalidOperationException("CSV admission opened private configuration.")
         }, true));
     }
@@ -61,7 +62,7 @@ public sealed class CatalogRegressionHostConfigurationTests
             "WEFT_CATALOG_AUTH_MODE" => "development",
             "WEFT_NOTIFICATIONS_ENABLED" or "WEFT_NOTIFICATION_CONFIG_FILE" => null,
             "WEFT_FERRULE_RUNNER" or "WEFT_FERRULE_COMPILE_TOOLCHAIN" => null,
-            CsvDocumentPolicy.RegressionEnabledSetting => null,
+            CsvDocumentPolicy.RegressionEnabledSetting or XmlPreviewAdmission.RegressionEnabledSetting => null,
             _ => "private-synthetic"
         }, true);
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRegressionRunReader));
@@ -85,6 +86,7 @@ public sealed class CatalogRegressionHostConfigurationTests
         {
             "WEFT_REGRESSIONS_ENABLED" => "true",
             CsvDocumentPolicy.RegressionEnabledSetting => flag,
+            XmlPreviewAdmission.RegressionEnabledSetting => null,
             "WEFT_FERRULE_WORKER_IMAGE" => image,
             "WEFT_CATALOG_AUTH_MODE" => "development",
             "WEFT_NOTIFICATIONS_ENABLED" or "WEFT_NOTIFICATION_CONFIG_FILE" or "WEFT_FERRULE_RUNNER" or "WEFT_FERRULE_COMPILE_TOOLCHAIN" => null,
