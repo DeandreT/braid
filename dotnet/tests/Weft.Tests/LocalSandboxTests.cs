@@ -375,7 +375,8 @@ public sealed class LocalSandboxTests : IDisposable
         {
             Invocation = new(targetId: (intent, runtime) => SandboxIdentity.TargetId(
                 new(intent.Revision.OrganizationId, intent.Revision.ProjectId, intent.Revision.MappingId), intent.Environment, intent.Profile.Id,
-                intent.Profile.Version, runtime), format: format) { PublisherOnlyReleaseReads = true };
+                intent.Profile.Version, runtime), format: format)
+            { PublisherOnlyReleaseReads = true };
             Invocation.Activate().GetAwaiter().GetResult();
             Builds = new(this);
             Sender = Invocation.Actor;
