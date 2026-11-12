@@ -90,17 +90,17 @@ described only as `unavailable`.
 
 ## Grounding policy
 
-Every workspace turn pins the `weft.workspace-assistant` policy, version 4,
+Every workspace turn pins the `weft.workspace-assistant` policy, version 8,
 together with the exact manifest the host offers:
 
 | Bound | Value |
 | --- | --- |
-| Tool iterations per turn | 3 |
+| Tool iterations per turn | 3; creation-enabled payload manifest: 4 |
 | Tool calls per turn | 8 (provider budget) |
 | Retrieved nodes per turn | 512 |
 | Tool-result bytes per turn | 32,768 |
 | Result bytes per call | 12,288 |
-| Argument bytes per call | 4,096, two container levels |
+| Argument bytes per call | Metadata: 4,096, two container levels; edit/creation: 16,384 (provider JSON depth 16) |
 | Items per list call | 20 |
 | Concurrent calls per host | 4 (further calls are `busy`) |
 | Duration per call | 20 seconds (then `timedOut`) |

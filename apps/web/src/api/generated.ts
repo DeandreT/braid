@@ -822,6 +822,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-capabilities": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Report current server creation-runtime availability under authenticated current project metadata access. Returns available=false when runtime ports are absent or disabled. */
+    get: operations["GetCreationCapabilities"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/organizations/{organizationId}/projects/{projectId}/creation-proposals": {
     parameters: {
       query?: never;
@@ -3709,6 +3726,9 @@ export interface components {
       critical: boolean;
       id: string;
       text: string;
+    };
+    CreationCapabilitiesV1: {
+      available: boolean;
     };
     CreationCitationV1: {
       bundleId: string;
@@ -10972,6 +10992,107 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CatalogErrorV1"];
+        };
+      };
+    };
+  };
+  GetCreationCapabilities: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        organizationId: string;
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationCapabilitiesV1"];
+        };
+      };
+      /** @description Bad Request */
+      400: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          /** @description Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge. */
+          "WWW-Authenticate"?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Payload Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description This principal's bearer request rate is exceeded; retry after Retry-After seconds. */
+      429: {
+        headers: {
+          /** @description Sent with the rateLimited code: whole seconds until this principal may send another bearer request. */
+          "Retry-After"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
+        };
+      };
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreationErrorV1"];
         };
       };
     };

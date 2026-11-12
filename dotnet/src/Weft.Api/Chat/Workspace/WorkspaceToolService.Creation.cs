@@ -28,6 +28,8 @@ public sealed partial class WorkspaceToolService
         if (!await CreationRuntime.AvailableAsync(services, ct)) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.Unavailable);
         var project = new ProjectScope(scope.Organization, call.Id("projectId"));
         await CreationGrantAsync(scope, project, ct);
+        if (call.Name == WorkspaceToolRegistry.ReadSpecification && call.OptionalText("mode", 20) == "proposal")
+            return await ReadCreationFeedbackAsync(scope, call, project, ct);
         if (call.Name == WorkspaceToolRegistry.ReadSpecification && call.OptionalText("mode", 20) is "selections" or "proposals")
             return await DiscoverCreationAsync(scope, call, project, ct);
         var bundle = new SpecBundleScope(project, call.Id("bundleId"));
