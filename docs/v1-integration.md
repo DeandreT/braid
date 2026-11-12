@@ -91,14 +91,47 @@ OpenAPI validation; the unchanged frontend suites were not repeated.
 
 Authored preview remains disabled by default pending Linux worker/sandbox and
 hosted/provider qualification. Portable process interoperability does not qualify
-those environments. Generation still admits only Complete specification
-extractions. Office uploads await backend/schema/worker activation, and PDF
-inventory awaits its durable source/status/envelope contract.
+those environments. Office uploads await backend/schema/worker activation, and
+PDF inventory awaits its durable source/status/envelope contract.
+
+### Creation review and document worker follow-up
+
+- XML text compiler correction `11970307`, merged as `c2166709`: explicit `#text`
+  roles preserve namespace semantics. The Rust selection passed 34 tests; locked
+  build and Clippy passed.
+- Exact creation review UI `d0f5b107`, merged as `fa0039cb`: immutable review facts,
+  sample preview, exact approval and deliberate recovery/retry. Its 28 tests passed,
+  including 11 Chromium cases; full frontend checks and production build passed.
+  The initial bundle warning is 672.15 kB against the existing 500 kB budget.
+- PostgreSQL specification fixtures `021fd93f` and `c4c90198`, merged as `bcf0575e`:
+  owned databases and concurrent connections now exercise the actual fencing.
+- Office document worker `1427e825` and dependency lock `c9024fdd`, merged as
+  `5169f667`: real child executable, bounded protocol and strict parent validation.
+  The owner selection passed 171 tests with zero skips.
+- Mixed creation evidence `87646380`, merged as `62eb6aa9`: typed legacy/Office
+  evidence retains its canonical bytes. Every selected Office Partial contributes
+  an exact critical coverage acknowledgement. The owner selection passed 154
+  tests with zero skips; durable Partial restoration awaits migration 0046.
+
+Exact integration `5169f667` passed locked solution restore and the full Release
+build with zero warnings/errors. Its combined Office/creation/preview/service
+selection passed 237 tests, zero failed or skipped. After merging mixed evidence,
+exact `62eb6aa9` passed 59 creation/evidence/preview tests, zero failed or skipped.
+These overlapping selections are recorded separately, not added together.
+
+Native Windows PostgreSQL 16.15 passed provisioning (4 cases), exact approval
+(6 cases) and specification storage (8 cases, after the fixture corrections).
+The original XML/upgrade selection exposed nine database failures: the missing
+JSON duplicate-key helper, historical function-body parsing and historical chat
+fixture admission. Two additional cases require Unix filesystem behavior.
+Fixture corrections are under qualification. The helper restoration is reserved
+for additive 0047 after the real creation 0045 and document 0046 dependencies.
+Migrations 0001–0044 retain their original bytes.
 
 ## Runtime qualification still required
 
-- Real PostgreSQL installation, restricted-role admission and populated-prefix
-  upgrades through 44, including the changed conservation assertions.
+- Corrected populated-prefix PostgreSQL XML/upgrade checks and subsequent
+  migration admission, including the changed conservation assertions.
 - Linux private-file/session configuration, native workers and sandbox execution.
 - Real PostgreSQL/Blob-backed specification intake and publication recovery.
 - Full hosted approval/receipt flows and provider-backed end-to-end execution.
@@ -106,4 +139,6 @@ inventory awaits its durable source/status/envelope contract.
 
 Specification intake remains opt-in, and filesystem specification publication
 remains unavailable. Browser fixture success does not qualify these backends.
-No remote operations were performed, and `C:/example/checkout` was not modified.
+Published integration `0d9f8705` is assigned to the remote Linux qualification
+lane. The newer local checkpoints above await publication. `C:/example/checkout` main
+remains preserved.
