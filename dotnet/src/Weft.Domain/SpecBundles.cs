@@ -34,8 +34,8 @@ public sealed record SpecSourceIdentity
     public long Version { get; }
 }
 
-public enum SpecSourceFormat { Unsupported = 0, Text = 1, Json = 2, OpenApiJson = 3 }
-public enum SpecExtractionOutcome { Complete = 1, Unsupported = 2, Malformed = 3, LimitExceeded = 4 }
+public enum SpecSourceFormat { Unsupported = 0, Text = 1, Json = 2, OpenApiJson = 3, Docx = 4, Xlsx = 5 }
+public enum SpecExtractionOutcome { Complete = 1, Unsupported = 2, Malformed = 3, LimitExceeded = 4, Partial = 5 }
 
 /// <summary>Owns a defensive copy of exact captured bytes, including any BOM and original line endings.</summary>
 public sealed class SpecCapturedSource

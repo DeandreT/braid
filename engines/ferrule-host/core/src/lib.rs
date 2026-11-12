@@ -4,6 +4,7 @@
 //! This crate has no host, filesystem, transport or browser API.
 
 pub mod authored_document;
+pub mod authoring;
 pub mod decode;
 pub mod edit;
 pub mod framing_limit;
