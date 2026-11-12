@@ -79,9 +79,10 @@ or advertise mixed-format preview support**. Runtime admission remains separate.
 
 ## Integration overlap
 
-New files are `core/src/authoring.rs` and `core/src/authoring/tests.rs`; the sole
-shared edit is `pub mod authoring;` in `core/src/lib.rs`. No Cargo dependencies,
-lockfiles, CSV/runtime modules, C#, API, UI or preview profiles are changed.
+The compiler commit adds `core/src/authoring.rs` and `core/src/authoring/tests.rs`;
+its sole shared edit is `pub mod authoring;` in `core/src/lib.rs`. The transport
+increment below additionally touches worker dispatch and C# service composition.
+No Cargo dependencies, lockfiles, CSV/runtime codecs, UI or preview profiles change.
 
 Focused check: `cargo +1.98.1 test --locked --offline -p weft-ferrule-core authoring`.
 Tests cover native fidelity/determinism, all six explicit boundary identities,
@@ -93,3 +94,50 @@ Qualification on Windows with Rust 1.98.1: `cargo +1.98.1 check --locked -p
 weft-ferrule-core` passed; `cargo +1.98.1 test --locked -p weft-ferrule-core
 authoring` passed all six tests. Cargo fetched the exact pinned dependencies;
 manifests and lockfile were unchanged. This qualifies the native core only.
+
+## Project/session-scoped compiler transport
+
+`weft.ferrule-authoring.v1` takes two big-endian u32-length-prefixed frames:
+a closed JSON header (at most 16384 bytes), then the exact plan (at most 1 MiB),
+followed by EOF. The header has `protocolVersion`, `operation: "author"`,
+`requestId`, `organizationId`, `projectId`, `authoringId`, and `planDigest`.
+Identities are canonical nonzero UUIDs; the digest is lowercase SHA-256 of the
+exact submitted plan bytes. There is deliberately no mapping/base revision.
+
+The reply has one bounded JSON frame (16 MiB) with the exact echoed request,
+engine revision, and either `failure` or `result`. Success adds one native frame
+(at most 4 MiB); result includes native digest/count, validation and projection.
+A failure has no native frame. Header echo is correlation, not authorization.
+
+The portable implementation is `core/src/authoring/transport.rs`; the production
+host dispatches it from `src/lib.rs`. `FerruleInspectionBackend.AuthorAsync`
+copies the input, computes its digest, verifies exact reply identity, engine,
+frame lengths, native digest and report contracts, and returns a project-scoped
+`MappingAuthoringCheckpoint`. It neither decodes native JSON in C# nor manufactures
+a revision for report provenance. No public API, proposal store or save route is
+introduced here; a caller must authorize project access and retain/approve exact
+bytes before invoking ingestion.
+
+The Ferrule service reserves the `authoring` profile. It serves it only with
+`WEFT_FERRULE_SERVICE_AUTHORING_ENABLED=true` (default false). This uses a fresh
+sandbox child with inspection-class 256 MiB/10-second resource bounds. Service
+frame admission rejects authoring headers on every other profile, preventing
+the disabled capability from being reached through inspection/edit routes.
+Linux sandbox admission and whole-host platform requirements remain unchanged.
+
+`core/examples/authoring_protocol.rs` is a **qualification-only**, unisolated
+portable harness. Build with `cargo +1.98.1 build --locked -p weft-ferrule-core
+--example authoring_protocol`; point `WEFT_AUTHORING_TEST_EXECUTABLE` at that
+example when running `MappingAuthoringBackendTests`. It exercises actual Rust/C#
+wire interoperability without pretending to qualify production isolation.
+The core transport tests verify framing, exact identities, digest mismatch,
+operation refusal and trailing-frame refusal. Whole-host/service sandbox tests
+still require their normal Linux environment before enabling production authoring.
+
+Transport qualification on Windows: all eight Rust core authoring tests passed;
+the portable example built against the unchanged Ferrule pin. With the installed
+exact .NET SDK 10.0.112, locked restore and the test-project build succeeded.
+The focused authoring backend, service settings, OpenAPI and service transport
+selection passed 31 tests with zero skips, including actual C#→Rust compilation,
+native digest verification, report admission and deterministic output. No Linux
+whole-host or sandbox qualification is claimed by these portable checks.

@@ -24,6 +24,10 @@ public sealed class DockerWorkerProfile
     public static DockerWorkerProfile Edit { get; } = new("edit", 268_435_456, 10,
         TimeSpan.FromSeconds(10), MappingEditPolicy.MaximumRequestBytes, MappingEditPolicy.MaximumResponseBytes);
 
+    /// <summary>Fresh native construction from a bounded authored plan; no revision or preview.</summary>
+    public static DockerWorkerProfile Authoring { get; } = new("authoring", 268_435_456, 10,
+        TimeSpan.FromSeconds(10), MappingAuthoringPolicy.MaximumRequestBytes, MappingAuthoringPolicy.MaximumResponseBytes);
+
     /// <summary>Bounded sample preview with explicit input and output documents.</summary>
     public static DockerWorkerProfile Preview { get; } = new("preview", 536_870_912, 30,
         TimeSpan.FromSeconds(30), PreviewPolicy.MaximumRequestBytes, PreviewPolicy.MaximumResponseBytes);

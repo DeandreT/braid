@@ -42,6 +42,11 @@ pub fn handle_stream(reader: &mut impl Read, writer: &mut impl Write) -> io::Res
         #[serde(rename = "protocolVersion")]
         protocol_version: Option<String>,
     }
+    if serde_json::from_slice::<ProtocolProbe>(&header_bytes).is_ok_and(|probe| {
+        probe.protocol_version.as_deref() == Some(weft_ferrule_core::authoring::transport::PROTOCOL)
+    }) {
+        return weft_ferrule_core::authoring::transport::handle(&header_bytes, reader, writer);
+    }
     if serde_json::from_slice::<ProtocolProbe>(&header_bytes)
         .is_ok_and(|probe| probe.protocol_version.as_deref() == Some(edit::PROTOCOL))
     {

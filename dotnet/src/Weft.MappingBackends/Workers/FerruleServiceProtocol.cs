@@ -29,6 +29,7 @@ public static class FerruleServiceProtocol
 
     /// <summary>Exact-base typed edit replay (<c>weft.ferrule-edit.v1</c>).</summary>
     public const string EditProfile = "edit";
+    public const string AuthoringProfile = "authoring";
 
     /// <summary>
     /// Compilation of deployable mapping libraries (<c>weft.ferrule-build.v1</c>). A service serves it only when
@@ -43,6 +44,7 @@ public static class FerruleServiceProtocol
         InspectionProfile => DockerWorkerProfile.Inspection,
         PreviewProfile => DockerWorkerProfile.Preview,
         EditProfile => DockerWorkerProfile.Edit,
+        AuthoringProfile => DockerWorkerProfile.Authoring,
         InterchangeProfile => DockerWorkerProfile.Interchange,
         CompileProfile => DockerWorkerProfile.Build,
         CompiledProfile => DockerWorkerProfile.Compiled,

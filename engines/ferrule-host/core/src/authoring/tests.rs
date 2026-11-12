@@ -9,7 +9,7 @@ fn group(name: &str, children: Vec<Value>) -> Value {
     json!({"name":name,"shape":{"kind":"group","children":children}})
 }
 
-fn plan() -> Value {
+pub(super) fn plan() -> Value {
     json!({
         "format":"weft.authoring.v1",
         "source":{"schema":group("Source",vec![scalar("code")]),"options":{"kind":"json"}},

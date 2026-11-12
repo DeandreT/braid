@@ -1,4 +1,6 @@
 //! Fresh native construction. This is an authoring contract, not runtime admission.
+pub mod transport;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use ferrule_edit_ops::EditScript;
