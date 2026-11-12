@@ -21,6 +21,7 @@ import { NotFoundComponent } from "./not-found.component";
 import type { ChatPageComponent } from "./chat/chat-page.component";
 import type { RevisionPageComponent } from "./catalog/revision-page.component";
 import type { SpecPageComponent } from "./catalog/specs/spec-page.component";
+import type { CreationPageComponent } from "./catalog/creation/creation-page.component";
 
 const leaveChat: CanDeactivateFn<ChatPageComponent> = (component) =>
   component.requestLeave();
@@ -127,6 +128,20 @@ export const routes: Routes = [
     component: CatalogShellComponent,
     canActivate: [requireSignIn],
     children: [
+      {
+        path: "organizations/:organizationId/projects/:projectId/creation/:proposalId",
+        loadComponent: () =>
+          import("./catalog/creation/creation-page.component").then(
+            (m) => m.CreationPageComponent,
+          ),
+        canDeactivate: [
+          (component: CreationPageComponent) =>
+            requestWorkspaceLeave(component),
+        ],
+        canActivate: [leaveWorkspaceEntry],
+        runGuardsAndResolvers: "paramsOrQueryParamsChange",
+        title: "Review new mapping · Weft",
+      },
       ...[
         "organizations/:organizationId/projects/:projectId/specs",
         "organizations/:organizationId/projects/:projectId/specs/:bundleId",
