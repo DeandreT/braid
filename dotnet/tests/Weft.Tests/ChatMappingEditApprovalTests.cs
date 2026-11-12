@@ -64,6 +64,43 @@ public sealed class ChatMappingEditApprovalTests
         Assert.Single(f.Appends);
     }
 
+    [Theory]
+    [InlineData(ChatMappingEditCreateOutcome.Created)]
+    [InlineData(ChatMappingEditCreateOutcome.Existing)]
+    [InlineData(ChatMappingEditCreateOutcome.Conflict)]
+    [InlineData(ChatMappingEditCreateOutcome.Refused)]
+    public async Task Creation_preserves_explicit_outcome_without_authorizing_a_save(ChatMappingEditCreateOutcome outcome)
+    {
+        var f = new Fake();
+        f.CreateResult = new(outcome, outcome is ChatMappingEditCreateOutcome.Created or ChatMappingEditCreateOutcome.Existing ? f.State : null);
+        Assert.Equal(f.CreateResult, await f.Service().CreateAsync(Actor, f.Proposal));
+        Assert.Equal(0, f.Approvals); Assert.Empty(f.Appends);
+    }
+
+    [Fact]
+    public async Task Creation_refuses_invalid_result_shapes_and_changed_summaries()
+    {
+        var f = new Fake();
+        foreach (var invalid in new[]
+        {
+            new ChatMappingEditCreateResult(ChatMappingEditCreateOutcome.Created),
+            new ChatMappingEditCreateResult(ChatMappingEditCreateOutcome.Existing),
+            new ChatMappingEditCreateResult(ChatMappingEditCreateOutcome.Conflict, f.State),
+            new ChatMappingEditCreateResult(ChatMappingEditCreateOutcome.Refused, f.State),
+            new ChatMappingEditCreateResult((ChatMappingEditCreateOutcome)99),
+            new ChatMappingEditCreateResult(ChatMappingEditCreateOutcome.Created, f.Prepared())
+        })
+        {
+            f.CreateResult = invalid;
+            await Assert.ThrowsAsync<InvalidOperationException>(() => f.Service().CreateAsync(Actor, f.Proposal));
+        }
+        var p = f.Proposal;
+        var changed = new ChatMappingEditProposal(p.Conversation, p.TurnId, p.RoundId, p.CallId, p.BaseSequence,
+            new(p.Content.Checkpoint, p.Content.Operations, [new("field", "before", "after")]));
+        f.CreateResult = new(ChatMappingEditCreateOutcome.Existing, new(changed, ChatMappingEditStatus.AwaitingApproval));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Service().CreateAsync(Actor, p));
+    }
+
     [Fact]
     public async Task Exact_stored_bytes_and_key_survive_lost_commit_ack_and_later_permission_loss()
     {
@@ -320,6 +357,7 @@ public sealed class ChatMappingEditApprovalTests
     {
         internal ChatMappingEditProposal Proposal { get; } = ChatMappingEditApprovalTests.Proposal();
         internal ChatMappingEditState State;
+        internal ChatMappingEditCreateResult? CreateResult;
         internal bool CanEdit = true, Commit, LoseAck, LosePrepareAck, HeadChanged, RevokeAtAppend;
         internal int Approvals, Resumes;
         internal Func<RevisionIngestionResult>? AppendResult, ResumeResult;
@@ -331,7 +369,8 @@ public sealed class ChatMappingEditApprovalTests
                 Proposal.Content.Operations.Count, Proposal.Content.Operations.Digest, [], false), null, null, null, Proposal.Content.Checkpoint));
         internal ChatMappingEditState Pending() => Prepared() with { Status = ChatMappingEditStatus.Pending, Receipt = Prepared().Receipt! with { OperationId = Id(10) } };
         internal ChatMappingEditState Saved() => Prepared() with { Status = ChatMappingEditStatus.Saved, Receipt = Prepared().Receipt! with { Status = "saved", OperationId = Id(10), RevisionId = Id(11), Sequence = 3 } };
-        public Task<ChatMappingEditState?> CreateAsync(ActorContext actor, ChatMappingEditProposal proposal, CancellationToken ct) => Task.FromResult<ChatMappingEditState?>(State);
+        public Task<ChatMappingEditCreateResult> CreateAsync(ActorContext actor, ChatMappingEditProposal proposal, CancellationToken ct) =>
+            Task.FromResult(CreateResult ?? new ChatMappingEditCreateResult(ChatMappingEditCreateOutcome.Existing, State));
         public Task<ChatMappingEditState?> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, Guid proposalId, CancellationToken ct) => Task.FromResult<ChatMappingEditState?>(State);
         public Task<ChatMappingEditState?> ApproveAndPrepareAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, Guid proposalId, Sha256Digest expectedFingerprint, CancellationToken ct)
         {

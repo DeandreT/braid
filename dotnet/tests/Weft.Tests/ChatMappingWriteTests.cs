@@ -403,6 +403,13 @@ public sealed class ChatMappingWriteTests
         Assert.Equal(script.Digest, proposal.Operations.Digest);
         Assert.Equal(script.Count, proposal.Operations.Count);
         Assert.Contains(proposal.Changes, change => change.After.Contains("Changed rule", StringComparison.Ordinal));
+        Assert.False(proposal.ChangesTruncated);
+        var chat = new ChatMappingEditProposal(ChatConversationKey.ForWorkspace(Base.OrganizationId, WorkspaceToolFixture.Actor.PrincipalId, Guid.NewGuid()),
+            Guid.NewGuid(), Guid.NewGuid(), "generated-call", 2, proposal);
+        var restored = ChatMappingEditProposalStorage.RestoreFromTrustedStorage(ChatMappingEditProposalStorage.Encode(chat),
+            ChatMappingEditStorageIdentity.FromProposal(chat));
+        Assert.Equal(proposal.CopyChangesUtf8(), restored.Content.CopyChangesUtf8());
+        Assert.Equal(proposal.Checkpoint.CopyBytes(), restored.Content.Checkpoint.CopyBytes());
         // Copies cannot mutate retained content or identity.
         Array.Fill(proposal.Checkpoint.CopyBytes(), (byte)0);
         Array.Fill(proposal.Operations.CopyUtf8(), (byte)0);
@@ -415,6 +422,55 @@ public sealed class ChatMappingWriteTests
             prepare: (_, _, _) => throw new InvalidOperationException("Save preparation is forbidden."));
         Assert.Equal(proposal.Changes, applied.Changes);
         Assert.Empty(fakes.Appends);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Apply_preserves_all_summaries_in_result_and_prepare_while_Propose_reports_byte_truncation(bool write)
+    {
+        const int count = 32; // Below the count bound: only escaped UTF-8 size causes truncation.
+        var before = ChangeProjection(Enumerable.Range(0, count).Select(i =>
+            ($"field{i}", "out", new PathSegment[] { new FieldPathSegment($"field{i}") }, new string('é', 256))).ToArray());
+        var after = ChangeProjection(Enumerable.Range(0, count).Select(i =>
+            ($"field{i}", "out", new PathSegment[] { new FieldPathSegment($"field{i}") }, new string('ö', 256))).ToArray());
+        var expected = MappingDirectEditService.Changes(before, after);
+        Assert.Equal(count, expected.Count);
+        Assert.True(count < MappingEditProposal.MaximumChanges);
+        var fakes = new EditFakes();
+        fakes.Select = (_, _) => fakes.BaseRow();
+        var checkpoint = MappingDraftPersistenceTests.Checkpoint(Base);
+        fakes.Replay = (_, operations) => new(checkpoint with { Projection = operations.Count == 0 ? before : after }, null);
+        using var service = fakes.Service();
+        var proposal = Assert.IsType<MappingEditProposal>((await service.ProposeAsync(WorkspaceToolFixture.Actor, Base, Script)).Proposal);
+        Assert.True(proposal.ChangesTruncated);
+        Assert.InRange(proposal.Changes.Length, 1, count - 1);
+        Assert.Equal(expected.Take(proposal.Changes.Length), proposal.Changes);
+        Assert.InRange(proposal.CopyChangesUtf8().Length, 1, MappingEditProposal.MaximumChangesBytes);
+        Assert.Equal(Script.CopyUtf8(), proposal.Operations.CopyUtf8());
+        Assert.Empty(fakes.Selections);
+        Assert.Empty(fakes.Appends);
+
+        IReadOnlyList<MappingEditChange>? prepared = null;
+        var result = await service.ApplyAsync(WorkspaceToolFixture.Actor, Base, Script, Guid.NewGuid(), write,
+            prepare: (changes, native, _) =>
+            {
+                prepared = changes.ToArray();
+                Assert.Equal(checkpoint.Artifact.CopyBytes(), native.CopyBytes());
+                return Task.FromResult(true);
+            });
+        if (write)
+        {
+            Assert.NotNull(prepared);
+            Assert.Equal(expected, prepared);
+            Assert.Single(fakes.Appends);
+        }
+        else
+        {
+            Assert.Null(prepared);
+            Assert.Empty(fakes.Appends);
+        }
+        Assert.Equal(expected, result.Changes);
     }
 
     [Theory]

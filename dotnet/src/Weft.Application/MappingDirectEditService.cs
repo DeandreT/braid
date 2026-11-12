@@ -24,7 +24,7 @@ public sealed record MappingDirectEditResult(MappingDirectEditOutcome Outcome, I
 public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisionReportMetadataReader metadata,
     IPrivateObjectStore objects, IMappingEditBackend backend, IRevisionIngestionService ingestion) : IDisposable
 {
-    private const int MaximumText = 256;
+    private const int MaximumText = MappingEditProposal.MaximumChangeTextLength;
     private readonly SemaphoreSlim _gate = new(2, 2);
 
     /// <summary>Produces immutable review content without selecting a writable base, preparing a save or invoking ingestion.</summary>
@@ -36,7 +36,13 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
         var source = await metadata.GetSourceAsync(actor, baseRevision, cancellationToken).ConfigureAwait(false);
         if (source is null || source.Source.Scope != baseRevision) return new(MappingDirectEditOutcome.NotAuthorizedOrNotFound);
         if (!await _gate.WaitAsync(0, cancellationToken).ConfigureAwait(false)) return new(MappingDirectEditOutcome.Busy);
-        try { return await ReadProposalAsync(baseRevision, source.Source.NativeObject, operations, cancellationToken).ConfigureAwait(false); }
+        try
+        {
+            var generated = await ReadEditAsync(baseRevision, source.Source.NativeObject, operations, cancellationToken).ConfigureAwait(false);
+            return generated.Checkpoint is { } checkpoint
+                ? new(generated.Outcome, new(checkpoint, operations, generated.Changes!))
+                : new(generated.Outcome, Failure: generated.Failure);
+        }
         finally { _gate.Release(); }
     }
 
@@ -51,9 +57,11 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
         if (!await _gate.WaitAsync(0, cancellationToken).ConfigureAwait(false)) return new(MappingDirectEditOutcome.Busy, []);
         try
         {
-            var generated = await ReadProposalAsync(baseRevision, source.Source.NativeObject, operations, cancellationToken).ConfigureAwait(false);
-            if (generated.Proposal is not { } proposal) return new(generated.Outcome, [], generated.Failure);
-            var changes = proposal.Changes;
+            var generated = await ReadEditAsync(baseRevision, source.Source.NativeObject, operations, cancellationToken).ConfigureAwait(false);
+            if (generated.Checkpoint is not { } checkpoint) return new(generated.Outcome, [], generated.Failure);
+            // Legacy Apply and its preparation callback have no truncation flag: preserve every summary.
+            // Only Propose constructs the bounded, explicitly truncated persistence content.
+            var changes = generated.Changes!;
             if (!write) return new(MappingDirectEditOutcome.Proposed, changes);
             var mapping = new MappingScope(baseRevision.OrganizationId, baseRevision.ProjectId, baseRevision.MappingId);
             // The database rechecks the actor's current edit authority, then whether this exact base is still the head.
@@ -62,9 +70,9 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
                     ? MappingDirectEditOutcome.NotPermitted : MappingDirectEditOutcome.OutOfDate, changes);
             // Chat persists the exact result and its audit identity BEFORE ingestion can reserve or commit anything.
             // A missing/ambiguous journal acknowledgement grants no permission to append.
-            if (prepare is not null && !await prepare(changes, proposal.Checkpoint, cancellationToken).ConfigureAwait(false))
+            if (prepare is not null && !await prepare(changes, checkpoint, cancellationToken).ConfigureAwait(false))
                 return new(MappingDirectEditOutcome.Unavailable, changes);
-            using var stream = new MemoryStream(proposal.Checkpoint.CopyBytes(), false);
+            using var stream = new MemoryStream(checkpoint.CopyBytes(), false);
             var result = await ingestion.AppendAsync(actor, mapping, key, new AppendRevisionRequest(new EqualHead(baseRevision.RevisionId)),
                 stream, cancellationToken).ConfigureAwait(false);
             return new(result.Outcome switch
@@ -158,7 +166,10 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
         return kept.Append('…').ToString();
     }
 
-    private async Task<MappingEditProposalResult> ReadProposalAsync(RevisionScope baseRevision, PrivateObjectReference reference,
+    private sealed record GeneratedEdit(MappingDirectEditOutcome Outcome, NativeArtifact? Checkpoint = null,
+        IReadOnlyList<MappingEditChange>? Changes = null, MappingEditFailure? Failure = null);
+
+    private async Task<GeneratedEdit> ReadEditAsync(RevisionScope baseRevision, PrivateObjectReference reference,
         MappingEditScript operations, CancellationToken token)
     {
         var bytes = await objects.ReadVerifiedAsync(baseRevision, reference, token).ConfigureAwait(false);
@@ -167,7 +178,7 @@ public sealed class MappingDirectEditService(IMappingDraftStore drafts, IRevisio
         if (before.Checkpoint is not { } original) return new(MappingDirectEditOutcome.Unavailable, Failure: before.Failure);
         var after = await ReplayAsync(native, operations, token).ConfigureAwait(false);
         if (after.Checkpoint is not { } edited) return new(MappingDirectEditOutcome.Rejected, Failure: after.Failure);
-        return new(MappingDirectEditOutcome.Proposed, new(edited.Artifact, operations, Changes(original.Projection, edited.Projection)));
+        return new(MappingDirectEditOutcome.Proposed, edited.Artifact, Changes(original.Projection, edited.Projection));
     }
 
     private async Task<MappingEditResult> ReplayAsync(NativeArtifact native, MappingEditScript operations, CancellationToken token)

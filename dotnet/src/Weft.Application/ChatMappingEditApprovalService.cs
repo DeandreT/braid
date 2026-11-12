@@ -10,11 +10,16 @@ public sealed class ChatMappingEditApprovalService(IChatMappingEditProposalStore
     IRevisionIngestionService ingestion)
 {
     /// <summary>Retains review content only. Neither this operation nor the proposal itself grants save authority.</summary>
-    public async Task<ChatMappingEditState?> CreateAsync(ActorContext actor, ChatMappingEditProposal proposal, CancellationToken ct = default)
+    public async Task<ChatMappingEditCreateResult> CreateAsync(ActorContext actor, ChatMappingEditProposal proposal, CancellationToken ct = default)
     {
         RequireOwner(actor, proposal.Conversation);
-        return Validate(await store.CreateAsync(actor, proposal, ct).ConfigureAwait(false), proposal.Conversation,
-            proposal.TurnId, proposal.ProposalId, proposal.Fingerprint);
+        var result = await store.CreateAsync(actor, proposal, ct).ConfigureAwait(false);
+        if (result is null || !Enum.IsDefined(result.Outcome) ||
+            (result.Outcome is ChatMappingEditCreateOutcome.Created or ChatMappingEditCreateOutcome.Existing) != (result.State is not null) ||
+            result.Outcome == ChatMappingEditCreateOutcome.Created && result.State?.Status != ChatMappingEditStatus.AwaitingApproval)
+            throw new InvalidOperationException("Proposal store returned an inconsistent creation result.");
+        Validate(result.State, proposal.Conversation, proposal.TurnId, proposal.ProposalId, proposal.Fingerprint);
+        return result;
     }
 
     public async Task<ChatMappingEditState?> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId,
