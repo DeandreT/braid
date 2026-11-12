@@ -11,8 +11,10 @@ public sealed class XmlPreviewDatabaseTests(PostgresFixture fixture)
     [PostgresFact]
     public async Task Schema_42_conserves_prefix_41_rows_functions_and_grants_then_repeats_with_populated_xml()
     {
-        await using var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture, migrationCount: 41);
+        await using var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture, installCatalog: false);
         var receipt = await catalog.CommitCreateAsync(body: XmlPreviewWorkflowTests.Native);
+        await using (var prefix = new MigrationRunner(catalog.Case.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(41).ToArray()))
+            await prefix.MigrateAsync();
         var revision = receipt.Facts.FutureRevision;
         await using var writer = new PostgresPreviewDatabase(catalog.Case.PreviewWriterConnectionString, PreviewDatabaseProfile.Writer);
         await using var readerDatabase = new PostgresPreviewDatabase(catalog.Case.PreviewReaderConnectionString, PreviewDatabaseProfile.Reader);
