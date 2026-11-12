@@ -44,7 +44,8 @@ public sealed class PostgresCreationDiscovery : ICreationDiscovery
         Bounds(limit);
         return database.RunAsync<IReadOnlyList<CreationProposalReference>>(false, async (connection, transaction) =>
         {
-            await Store(connection, transaction, ct).ConfigureAwait(false);
+            // Retained review survives source-store retirement or relocation. The owner function
+            // still authorizes current actor/project content access and filters by creator.
             using var command = new NpgsqlCommand("SELECT proposal_id,fingerprint FROM weft.creation_proposals_discover_v1($1,$2,$3,$4,$5)", connection, transaction);
             Actor(command, actor, project); Id(command, afterProposal); command.Parameters.AddWithValue(limit);
             await using var rows = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);

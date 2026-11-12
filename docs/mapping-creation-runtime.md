@@ -50,7 +50,7 @@ The result includes `projectId`, `proposalId`, `fingerprint`, `snapshotDigest`, 
 
 ## 0046 SQL owner handoff
 
-The implemented PostgreSQL adapter uses the restricted `PostgresSpecBundleDatabase` Reader profile and validates store admission. It requires these owner functions:
+The implemented PostgreSQL adapter uses the restricted `PostgresSpecBundleDatabase` Reader profile and exact schema admission. Selection discovery validates physical store admission. Proposal discovery relies on current actor/project content authorization and creator filtering in the owner function, so retained review remains discoverable after source-store deactivation or relocation. It requires these owner functions:
 
 ```sql
 weft.spec_selection_discover_v1(actor uuid, org uuid, project uuid, store uuid,
@@ -80,6 +80,8 @@ DTOs: `dotnet/src/Weft.Contracts/Creation/MappingCreationV1.cs`. Base:
 Session/bearer admission uses the existing `CatalogRequestBoundary`, including session CSRF protection. Development identity is refused. Creator, project, fingerprint and current content authority are checked before and after operations. Reads and terminal receipt discovery survive selected-source staleness when content access remains authorized; preview and nonterminal approval/recovery still require a current exact snapshot. Responses are no-store, categorical failures contain no private exception text, and native bytes are never exposed by these DTOs.
 
 ## Verification
+
+`PostgresCreationDiscoveryTests` adds two actual-adapter cases (inactive and relocated source store): retained proposals remain discoverable/readable, selections refuse, and subsequent content-grant revocation blocks discovery/readback. The theory explicitly skips until reviewed 0046 is embedded, then requires the real PostgreSQL fixture. It uses real restricted connections and owner functions, with synthetic source/native fixtures and registry publication callbacks. The focused follow-up run passed two portable discovery tests and skipped this pending-0046 theory; it does not qualify the new database cases.
 
 Portable tests cover tool manifests, profile/grant boundaries, revocation between reads/rounds, exact retained evidence, multi-source selection, duplicate selection refusal, stable proposal replay, actual Rust compiler adapter invocation, substituted compiler/snapshot input, no ingestion during proposal creation, trusted citation encoding and revalidation, and HTTP OpenAPI/development-identity refusal.
 
