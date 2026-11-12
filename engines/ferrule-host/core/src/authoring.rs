@@ -4,7 +4,7 @@ pub mod transport;
 use std::collections::{BTreeMap, BTreeSet};
 
 use ferrule_edit_ops::EditScript;
-use ferrule_ir::{ScalarType, SchemaKind, SchemaNode, XmlNamespace};
+use ferrule_ir::{ScalarType, SchemaKind, SchemaNode, XML_TEXT_FIELD, XmlNamespace};
 use ferrule_mapping::{EdiBoundaryKind, FormatOptions, Graph, Project, Scope, TabularBoundaryKind};
 use serde::Deserialize;
 
@@ -93,8 +93,9 @@ enum Scalar {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Xml {
-    /// Empty means explicitly unqualified; omission of xml means inherited namespace.
-    namespace: String,
+    /// Text requires absent/null namespace; other explicit XML roles require a
+    /// string (empty means unqualified). Omission of xml keeps inherited semantics.
+    namespace: Option<String>,
     #[serde(default)]
     attribute: bool,
     #[serde(default)]
@@ -225,10 +226,16 @@ fn check_schema(
             "Schema names must be nonempty and contain no control characters.",
         ));
     }
-    if matches!(options, Options::Xml {}) && !xml_name(&s.name) {
+    if matches!(options, Options::Xml {})
+        && if s.xml.as_ref().is_some_and(|xml| xml.text) {
+            s.name != XML_TEXT_FIELD
+        } else {
+            !xml_name(&s.name)
+        }
+    {
         return Err(refusal(
             "unsupportedSemantics",
-            "V1 XML local names use ASCII letters, digits, underscore, dot and hyphen; namespace prefixes are not names.",
+            "XML text requires #text; other XML local names use ASCII letters, digits, underscore, dot and hyphen.",
         ));
     }
     if s.repeating && s.nullable {
@@ -245,6 +252,7 @@ fn check_schema(
     }
     if let Some(xml) = &s.xml
         && (!matches!(options, Options::Xml {})
+            || (xml.text != xml.namespace.is_none())
             || (xml.attribute && xml.text)
             || ((xml.attribute || xml.text)
                 && (!matches!(s.shape, Shape::Scalar { .. })
@@ -384,12 +392,17 @@ fn assemble_schema(s: Schema) -> Result<SchemaNode, EditFailure> {
         *required = s.required;
     }
     if let Some(xml) = s.xml {
-        node.xml_namespace = Some(if xml.namespace.is_empty() {
-            XmlNamespace::Unqualified
-        } else {
-            XmlNamespace::qualified(xml.namespace)
-                .ok_or_else(|| refusal("invalidSchema", "Invalid XML namespace."))?
-        });
+        node.xml_namespace = xml
+            .namespace
+            .map(|namespace| {
+                if namespace.is_empty() {
+                    Ok(XmlNamespace::Unqualified)
+                } else {
+                    XmlNamespace::qualified(namespace)
+                        .ok_or_else(|| refusal("invalidSchema", "Invalid XML namespace."))
+                }
+            })
+            .transpose()?;
         node.attribute = xml.attribute;
         node.text = xml.text;
         node.xml_optional = xml.optional;
