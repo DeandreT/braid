@@ -175,6 +175,17 @@ including the ordered 45-migration browser fixture, generated contracts, 14 chat
 parser cases, browser TypeScript and browser-session probe build. The production
 initial bundle is 672.95 kB against the existing 500 kB warning budget.
 
+Trusted structural restoration `0d318905`, merged as `8a1d7102`, preserves stored
+extractor/profile identities and exact Office/PDF evidence, verifies mandatory
+coverage on restoration, and retains legacy storage bytes. Its review corrected
+the distinction between the legacy 2 MiB decoded-content budget and 10 MiB
+serialized ceiling. Genuine escape-heavy extraction regressions cover both.
+The integrated storage/evidence/native-PostgreSQL selection passed 55 tests with
+zero failures or skips. Receipt:
+`Temp/opencode/weft-creation-integration-results/creation-codec-8a1d7102.trx`.
+Structural database admission and runtime loading still depend on the coordinated
+0046 integration.
+
 ## Runtime qualification still required
 
 - Corrected populated-prefix PostgreSQL XML/upgrade checks and subsequent
