@@ -93,7 +93,7 @@ internal static partial class ChatSchemaContract
          Check("chat_turns_profile_fingerprint_check", DigestCheck("profile_fingerprint")),
          Check("chat_turns_max_events_check", "((max_events >= 2) AND (max_events <= 4096))"),
          Check("chat_turns_max_event_bytes_check", "((max_event_bytes >= 1) AND (max_event_bytes <= 4194304))"),
-          Check("chat_turns_max_rounds_check", "((max_rounds >= 1) AND (max_rounds <= 4))"),
+           Check("chat_turns_max_rounds_check", "((max_rounds >= 1) AND (max_rounds <= 5))"),
          Check("chat_turns_phase_check", "((phase >= 1) AND (phase <= 5))"), Check("chat_turns_version_check", "(version > 0)"),
          Check("chat_turns_check", "(((event_count >= 1) AND (event_count <= max_events)) AND ((event_bytes >= 0) AND (event_bytes <= max_event_bytes)) AND ((round_count >= 0) AND (round_count <= max_rounds)))"),
          Check("chat_turns_check1", "(isfinite(created_at) AND isfinite(deadline) AND (created_at > '0001-01-01 00:00:00+00'::timestamp with time zone) AND (created_at < deadline) AND (deadline <= '9999-12-31 23:59:59.999999+00'::timestamp with time zone))"),
@@ -107,7 +107,7 @@ internal static partial class ChatSchemaContract
           Unique("chat_rounds_identity_key", "organization_id", "creator_id", "round_id"),
          Unique("chat_rounds_ordinal_key", "organization_id", "creator_id", "conversation_id", "turn_id", "ordinal"),
          Foreign("chat_rounds_turn_fkey", ["organization_id", "creator_id", "conversation_id", "turn_id"], "chat_turns", ["organization_id", "creator_id", "conversation_id", "turn_id"], "c"),
-          Check("chat_rounds_round_id_check", IdCheck("round_id")), Check("chat_rounds_ordinal_check", "((ordinal >= 1) AND (ordinal <= 4))"),
+           Check("chat_rounds_round_id_check", IdCheck("round_id")), Check("chat_rounds_ordinal_check", "((ordinal >= 1) AND (ordinal <= 5))"),
          Check("chat_rounds_fence_check", IdCheck("fence")), Check("chat_rounds_instance_id_check", IdCheck("instance_id")),
           Check("chat_rounds_exact_request_check", TextCheck("exact_request", 2097152)), Check("chat_rounds_outcome_check", "((outcome >= 1) AND (outcome <= 4))"),
           Check("chat_rounds_result_metadata_check", "((result_metadata IS NULL) OR ((octet_length(result_metadata) >= 1) AND (octet_length(result_metadata) <= 2048)))"),
@@ -133,7 +133,7 @@ internal static partial class ChatSchemaContract
          new("profile_id", "text"), new("profile_version", "integer"), new("provider_id", "text"), new("model_id", "text"),
          new("metadata_policy_id", "text"), new("metadata_policy_version", "integer"), new("recorded_at", "timestamp with time zone")],
         [Key("chat_payload_audit_pkey", "organization_id", "creator_id", "event_id"),
-         Check("chat_payload_audit_source_kind_check", "((source_kind >= 1) AND (source_kind <= 4))"),
+         Check("chat_payload_audit_source_kind_check", "((source_kind >= 1) AND (source_kind <= 5))"),
          Check("chat_payload_audit_byte_count_check", "((byte_count >= 1) AND (byte_count <= 1048576))"),
          Check("chat_payload_audit_subject_check", "(((source_kind = 3) = (subject_version IS NOT NULL)) AND ((subject_version IS NULL) OR (subject_version > 0)))")]);
 
@@ -193,8 +193,18 @@ internal static partial class ChatSchemaContract
         return new UTF8Encoding(false, true).GetString(bytes);
     }
     // A routine a later migration replaces or adds has exactly its latest body; any other keeps 0011's.
-    private static string Body(string name) =>
-        Body(EditProposalSource.Value, name) ?? Body(WriteJournalSource.Value, name) ?? Body(MappingWriteSource.Value, name) ?? Body(WorkspaceSource.Value, name) ?? Body(Source.Value, name) ?? throw Refusal();
+    private static string Body(string name)
+    {
+        var body = Body(EditProposalSource.Value, name) ?? Body(WriteJournalSource.Value, name) ?? Body(MappingWriteSource.Value, name) ?? Body(WorkspaceSource.Value, name) ?? Body(Source.Value, name) ?? throw Refusal();
+        if (name != "chat_metadata_valid") return body;
+        const string marker = "$creation_citation$";
+        var sql = DocumentEvidenceSchemaAdmission.MigrationSql;
+        var start = sql.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        var end = sql.IndexOf(marker, start, StringComparison.Ordinal);
+        if (start < marker.Length || end < start) throw Refusal();
+        return body.Replace("j->>'source' !~ '^[1-4]$'", "j->>'source' !~ '^[1-5]$'", StringComparison.Ordinal)
+            .Replace("ELSIF kind=13 THEN", sql[start..end], StringComparison.Ordinal);
+    }
     private static string? Body(string source, string name)
     {
         var marker = "$" + name + "$";

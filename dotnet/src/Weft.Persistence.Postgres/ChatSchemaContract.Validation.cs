@@ -76,6 +76,9 @@ internal static partial class ChatSchemaContract
         if (expected.Count < writes || expected[10].Checksum != MigrationChecksum || expected[workspace - 1].Checksum != WorkspaceMigrationChecksum ||
             expected[writes - 1].Checksum != MappingWriteMigrationChecksum || expected.Count < writeJournal || expected[writeJournal - 1].Checksum != WriteJournalMigrationChecksum ||
             expected.SingleOrDefault(script => script.Version == 43)?.Checksum != EditProposalMigrationChecksum ||
+            expected.SingleOrDefault(script => script.Version == 44)?.Checksum != DocumentEvidenceSchemaAdmission.SpecChecksum ||
+            expected.SingleOrDefault(script => script.Version == 45)?.Checksum != DocumentEvidenceSchemaAdmission.CreationChecksum ||
+            expected.SingleOrDefault(script => script.Version == 46)?.Checksum != DocumentEvidenceSchemaAdmission.MigrationChecksum ||
             !expected.Take(10).Select(script => script.Checksum).SequenceEqual(PrefixChecksums, StringComparer.Ordinal)) throw Refusal();
         await using var command = new NpgsqlCommand("SELECT version,checksum FROM ONLY weft.schema_migrations ORDER BY version", connection, transaction);
         await using var reader = await command.ExecuteReaderAsync(ct);
