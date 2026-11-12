@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Weft.Api;
 using Weft.Api.Catalog;
@@ -9,6 +10,7 @@ using Weft.Application;
 using Weft.Deployment;
 using Weft.Deployment.Sandbox;
 using Weft.Domain;
+using Weft.MappingBackends.Workers;
 using Weft.Server;
 
 namespace Weft.Tests;
@@ -218,6 +220,37 @@ public sealed class LocalSandboxTests : IDisposable
         LocalSandboxHostConfiguration.Configure(services, Host("Development"), DevelopmentSettings().GetValueOrDefault, true);
         Assert.Contains(services, service => service.ServiceType == typeof(LocalSandboxService));
         Assert.Contains(services, service => service.ServiceType == typeof(Weft.Api.Catalog.LocalSandboxOptions));
+    }
+
+    [LinuxFact]
+    public async Task The_sandbox_runner_uses_the_host_docker_budgets_and_is_drained_on_host_stop()
+    {
+        var values = DevelopmentSettings();
+        values[DockerRunnerBudgets.CreateSetting] = "30";
+        values[DockerRunnerBudgets.CleanupSetting] = "20";
+        var services = new ServiceCollection();
+        LocalSandboxHostConfiguration.Configure(services, Host("Development"), values.GetValueOrDefault, true);
+        await using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredKeyedService<DockerInspectionWorkerOptions>(LocalSandboxHostConfiguration.Key);
+        Assert.Equal(TimeSpan.FromSeconds(30), options.CreateTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(20), options.CleanupTimeout);
+        Assert.Equal(DockerWorkerProfile.Compiled, options.Profile);
+        var runner = provider.GetRequiredKeyedService<DockerInspectionWorkerRunner>(LocalSandboxHostConfiguration.Key);
+        Assert.True(runner.Available);
+        var lifetime = Assert.Single(provider.GetServices<IHostedService>().OfType<InspectionWorkerHostLifetime>());
+        await lifetime.StopAsync(CancellationToken.None);
+        Assert.False(runner.Available);
+
+        // Unset budgets keep the runner defaults; an invalid budget refuses the configuration.
+        var defaults = new ServiceCollection();
+        LocalSandboxHostConfiguration.Configure(defaults, Host("Development"), DevelopmentSettings().GetValueOrDefault, true);
+        await using var defaultProvider = defaults.BuildServiceProvider();
+        var defaultOptions = defaultProvider.GetRequiredKeyedService<DockerInspectionWorkerOptions>(LocalSandboxHostConfiguration.Key);
+        Assert.Null(defaultOptions.CreateTimeout);
+        Assert.Equal(DockerInspectionWorkerOptions.DefaultCleanupTimeout, defaultOptions.CleanupTimeout);
+        values[DockerRunnerBudgets.CleanupSetting] = "121";
+        Assert.Throws<InvalidOperationException>(() =>
+            LocalSandboxHostConfiguration.Configure(new ServiceCollection(), Host("Development"), values.GetValueOrDefault, true));
     }
 
     private static Microsoft.AspNetCore.Hosting.IWebHostEnvironment Host(string environment) =>

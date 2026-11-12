@@ -21,7 +21,7 @@ namespace Weft.Server;
 /// </summary>
 internal static class LocalSandboxHostConfiguration
 {
-    private const string Key = "local-sandbox";
+    internal const string Key = "local-sandbox";
     internal const string Enabled = "WEFT_LOCAL_SANDBOX_ENABLED";
     internal const string History = "WEFT_LOCAL_SANDBOX_HISTORY_DIRECTORY";
     internal const string RuntimeImage = "WEFT_LOCAL_SANDBOX_RUNTIME_IMAGE";
@@ -54,7 +54,13 @@ internal static class LocalSandboxHostConfiguration
         var builds = CatalogBuildHostConfiguration.ReadRuntime(read, true);
         if (!builds.Enabled || !ReleaseOperationsHostConfiguration.ReadEnabled(read, true)) throw Invalid();
         services.AddSingleton(new LocalSandboxOptions(true));
-        services.AddKeyedSingleton<DockerInspectionWorkerRunner>(Key, (_, _) => new(new(docker, image, profile: DockerWorkerProfile.Compiled)));
+        // The host's Docker CLI budgets apply here too, and the host drains this runner and its reaper on stop.
+        var runnerOptions = new DockerInspectionWorkerOptions(docker, image, profile: DockerWorkerProfile.Compiled, budgets: DockerRunnerBudgets.Read(read));
+        services.AddKeyedSingleton(Key, runnerOptions);
+        services.AddKeyedSingleton<DockerInspectionWorkerRunner>(Key, (provider, _) =>
+            new(provider.GetRequiredKeyedService<DockerInspectionWorkerOptions>(Key)));
+        services.AddSingleton<IHostedService>(provider =>
+            new InspectionWorkerHostLifetime(provider.GetRequiredKeyedService<DockerInspectionWorkerRunner>(Key)));
         services.AddKeyedSingleton<PostgresBuildQualificationStore>(Key, (_, _) => new(logins["weft_qualification_writer"], writer: true));
         services.AddKeyedSingleton<PostgresBuildStore>(Key, (_, _) => new(logins["weft_build_reader"], writer: false));
         services.AddKeyedSingleton<PostgresInvocationLedger>(Key, (_, _) => new(logins["weft_invocation_writer"]));

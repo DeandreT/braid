@@ -89,6 +89,8 @@ History directories belong to one running instance and must not be shared by ser
 Each login must name exactly its role with an explicit password. The sandbox also uses
 the build, regression and release operations logins those features already configure.
 Setting any of these without `WEFT_LOCAL_SANDBOX_ENABLED=true` refuses startup.
+The sandbox's Docker runner also uses the server's
+[Docker CLI budgets](development.md#busy-docker-hosts), and the server drains it on stop.
 
 ## HTTP API
 
