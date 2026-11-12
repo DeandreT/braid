@@ -2238,6 +2238,10 @@ version = "0.1.0"
 dependencies = [
  "edit-ops",
  "engine",
+ "format-csv",
+ "format-edi",
+ "format-json",
+ "format-xml",
  "getrandom 0.4.2",
  "ir",
  "mapping",

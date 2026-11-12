@@ -24,6 +24,9 @@ public static class SpecSourceExtractor
         SpecExtractionResult Failure(SpecExtractionOutcome outcome, string code) => new(source, limits, outcome, code, []);
         if (source.ByteCount > limits.MaximumSourceBytes) return Failure(SpecExtractionOutcome.LimitExceeded, "source-bytes");
         if (source.Format == SpecSourceFormat.Unsupported) return Failure(SpecExtractionOutcome.Unsupported, "unsupported-format");
+        // Office requires a separately qualified child worker; never parse ZIP/XML in the API's synchronous path.
+        if (source.Format is SpecSourceFormat.Docx or SpecSourceFormat.Xlsx)
+            return Failure(SpecExtractionOutcome.Unsupported, "office-worker-required");
         var bytes = source.CopyBytes();
         var offset = bytes.AsSpan().StartsWith(new byte[] { 0xef, 0xbb, 0xbf }) ? 3 : 0;
         try
