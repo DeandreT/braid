@@ -61,7 +61,7 @@ internal sealed class PostgresCatalogTestSupport : IAsyncDisposable
     {
         if (historicalSeed)
             return await HistoricalIngestionSeed.CommitCreateAsync(Case, actor ?? Actor, project ?? Project,
-                name, description, valid, filename);
+                name, description, valid, filename, body: body);
         var intent = PostgresIngestionTestSupport.CreateIntent(name, description, filename, body);
         return await CommitAsync(actor ?? Actor, project ?? Project, intent, valid);
     }
