@@ -170,6 +170,11 @@ and migration 0046 are being integrated next. The approved 0047 helper correctio
 depends on that real 0046 migration. Production worker activation still requires
 Linux containment qualification.
 
+Exact `080184e7` passed the full `npm run check` and production `npm run build`,
+including the ordered 45-migration browser fixture, generated contracts, 14 chat
+parser cases, browser TypeScript and browser-session probe build. The production
+initial bundle is 672.95 kB against the existing 500 kB warning budget.
+
 ## Runtime qualification still required
 
 - Corrected populated-prefix PostgreSQL XML/upgrade checks and subsequent
