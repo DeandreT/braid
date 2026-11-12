@@ -188,6 +188,31 @@ Structural database admission and runtime loading still depend on the coordinate
 
 ## Runtime qualification still required
 
+### Authenticated runtime and structural intake checkpoint
+
+Reviewed intake `1b764380` and runtime `c2ba6f56` were combined at `45e1c57b`.
+The full Release build passed with zero warnings/errors; 196 selected tests
+passed, with ten Linux-only authenticated session cases skipped. The runtime
+includes the four-dependent-tool-batch provider-wire fixture, exact retained
+evidence restoration, bounded discovery and idempotent Partial coverage notes.
+The intake API/UI uses server capabilities and keeps authorized inventory
+readable when capability discovery is unavailable.
+
+The same head passed generated-contract checks, full `npm run check` and the
+production build. The existing initial-bundle warning remains 672.95 kB against
+500 kB. After discovery follow-up `c761ed44` was merged at `421e3a51`, the browser
+fixture selections passed separately: 60 intake/evidence cases, 28 creation-review
+cases and one chat-to-exact-review journey, all with zero skips. These selections
+include parser tests as well as actual Chromium cases.
+
+The discovery follow-up permits retained proposal lookup when the physical source
+store is inactive or relocated, while preserving current content authorization.
+Its actual PostgreSQL regression and the typed five-round/citation/disclosure
+contracts require the pending real 0046 migration. Production admission remains
+closed until database and qualified-worker composition checks pass.
+
+### Remaining gates
+
 - Corrected populated-prefix PostgreSQL XML/upgrade checks and subsequent
   migration admission, including the changed conservation assertions.
 - Linux private-file/session configuration, native workers and sandbox execution.
