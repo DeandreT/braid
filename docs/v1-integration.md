@@ -1,5 +1,9 @@
 # Combined v1 integration — 2026-11-12
 
+Local implementation and portable qualification are complete. Actual Linux/Blob
+acceptance and the deferred live-provider/Azure work remain gated. The latest
+results are recorded in the final verification sections below.
+
 Original local integration in `C:/example/checkout`, from clean `5cd3a631`:
 
 - Reviewed XML source committed as `7bc40882`, merged as `0559c8b6`.
@@ -321,9 +325,31 @@ proposal-library tests. The production initial bundle warning is 674.36 kB
 against the existing 500 kB warning budget. Subsequent production changes are
 server/CLI-only; frontend production source remains identical.
 
+### Final browser verification
+
+Reviewed test corrections `8c41a730` and `442539c4` were combined with the full
+production baseline, then integrated at `16c6ec8b`. The final chat selection
+passed **96 tests, zero failures, one optional screenshot skipped (97 total)**.
+Five focused fresh-authority repeats also passed. The combined library selection
+passed 15 cases, intake/evidence passed 60, and creation review passed 28, all
+with zero failures or skips. These selections include parser checks and actual
+headless Chromium fixtures; they are not live-provider acceptance.
+
+The first combined chat run exposed a test waiter consuming another turn's
+receipt before the intended turn settled. The correction waits for the exact
+returned turn, its terminal answer and its completed receipt/proposal reads.
+Security assertions and timeouts remain intact; no confirmed UI defect is
+claimed. See `chat-browser-qualification.md` for the retained trace sequence and
+individual results.
+
+On merged `16c6ec8b`, formatting and maintained browser TypeScript checks passed.
+The production `dotnet`, `engines`, `migrations`, `contracts` and `apps/web/src`
+trees remain identical to qualified `85c483e0`; only browser tests and
+qualification documentation changed afterward. The Release/native and frontend
+production qualifications therefore retain their exact source correspondence.
+
 ### Remaining gates
 
-- Final combined corrected chat/intake/review browser selection.
 - XML filesystem-prefix conservation on Linux.
 - Linux private-file/session configuration, native workers and sandbox execution.
 - Hosted Blob-backed specification intake and publication recovery.
