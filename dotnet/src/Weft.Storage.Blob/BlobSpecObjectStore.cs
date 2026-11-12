@@ -11,7 +11,7 @@ namespace Weft.Storage.Blob;
 /// <summary>
 /// Separate bundle namespace in an explicitly private container. Conditional single-object publication avoids named
 /// temporary objects: caller bytes are bounded and verified before upload. The required registry owns final admission,
-/// crash recovery and cross-process serialization. This adapter is not registered in production composition.
+/// crash recovery and cross-process serialization. The optional spec intake host opens this adapter only after registry admission.
 /// </summary>
 public sealed class BlobSpecObjectStore : SpecObjectStore
 {

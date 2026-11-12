@@ -6,7 +6,7 @@ using Weft.Domain;
 namespace Weft.Persistence.Postgres;
 
 /// <summary>Constructed only by the validated database profile; physical callbacks execute inside its database transaction.</summary>
-public sealed class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjectRegistry, ISpecTemporaryRegistry
+public sealed class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjectRegistry, ISpecTemporaryRegistry, ISpecBundleInventory
 {
     private readonly PostgresSpecBundleDatabase database;
     private readonly ActorContext? actor;
@@ -23,6 +23,8 @@ public sealed class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjec
         CancellationToken token = default)
     {
         ArgumentNullException.ThrowIfNull(openStore);
+        if (!MigrationRunner.EmbeddedMigrations.Any(migration => migration.Version == 44))
+            throw new SpecStorageException(SpecStorageError.Unavailable);
         await database.RunAsync(false, async (c, t) => { await ValidateBinding(c, t, token).ConfigureAwait(false); return true; }, token).ConfigureAwait(false);
         return new(this, await openStore(this, token).ConfigureAwait(false));
     }
@@ -72,6 +74,33 @@ public sealed class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjec
 
     public Task<SpecObjectReference> FindAsync(SpecBundleScope scope, Guid objectId, CancellationToken token) =>
         database.RunAsync(false, async (c, t) => (await Gate(c, t, scope, objectId, null, "read", token).ConfigureAwait(false)).Reference, token);
+
+    public Task<SpecBundleInventory> InventoryAsync(SpecBundleScope scope, CancellationToken token) =>
+        database.RunAsync(false, async (c, t) =>
+        {
+            await ValidateBinding(c, t, token).ConfigureAwait(false);
+            SpecBundleStatus status;
+            using (var command = Command("spec_bundle_authorize", scope, c, t))
+            {
+                command.Parameters.AddWithValue(false); Finish(command);
+                await using var row = await command.ExecuteReaderAsync(token).ConfigureAwait(false);
+                if (!await row.ReadAsync(token).ConfigureAwait(false)) throw Denied();
+                status = new(scope, row.GetInt64(row.GetOrdinal("version")), false);
+            }
+            using var list = Command("spec_inventory", scope, c, t);
+            Id(list, StoreId); Finish(list);
+            await using var rows = await list.ExecuteReaderAsync(token).ConfigureAwait(false);
+            var items = new List<SpecInventoryItem>();
+            while (await rows.ReadAsync(token).ConfigureAwait(false))
+            {
+                if (items.Count >= 128) throw Denied();
+                var reference = new SpecObjectReference(new(new(scope, rows.GetGuid(1), rows.GetInt64(2)),
+                    (SpecObjectKind)rows.GetInt32(3), rows.GetGuid(0)), Sha256Digest.Parse(rows.GetString(4)), rows.GetInt32(5));
+                items.Add(new(reference, (SpecSourceFormat)rows.GetInt32(6), rows.GetString(7),
+                    rows.IsDBNull(8) ? null : (SpecExtractionOutcome)rows.GetInt32(8)));
+            }
+            return new SpecBundleInventory(status, items.AsReadOnly());
+        }, token);
 
     public Task<SpecBundleStatus> TombstoneAsync(SpecBundleScope scope, SpecSourceIdentity? source, long expectedVersion, Guid key, CancellationToken token)
     {

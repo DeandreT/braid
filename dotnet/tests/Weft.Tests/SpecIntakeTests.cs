@@ -220,7 +220,7 @@ public sealed class SpecIntakeTests
         var second = SpecSourceExtractor.Extract(secondSource).Identity;
         var snapshot = new SpecBundleSnapshot(Bundle, [first, second]);
         Assert.Equal(snapshot.Digest, new SpecBundleSnapshot(Bundle, [second, first]).Digest);
-        Assert.Equal(1, first.ExtractorVersion);
+        Assert.Equal(2, first.ExtractorVersion);
         var changes = new[]
         {
             SpecSourceExtractor.Extract(new(Identity(2), SpecSourceFormat.Json, "{}"u8)).Identity,
@@ -243,7 +243,7 @@ public sealed class SpecIntakeTests
     {
         var extraction = Extract("{}").Identity;
         var canonical = "[\"weft.spec-snapshot.v1\",\"11111111111111111111111111111111\",\"22222222222222222222222222222222\",\"33333333333333333333333333333333\",[\"44444444444444444444444444444444\",1,\"" +
-            extraction.SourceDigest.Value + "\",2,\"weft.spec-extraction\",1,\"" + extraction.ProfileDigest.Value + "\",1,\"" + extraction.EvidenceDigest.Value + "\"]]";
+            extraction.SourceDigest.Value + "\",2,\"weft.spec-extraction\",2,\"" + extraction.ProfileDigest.Value + "\",1,\"" + extraction.EvidenceDigest.Value + "\"]]";
         Assert.Equal(Sha256Digest.FromBytes(Encoding.UTF8.GetBytes(canonical)), new SpecBundleSnapshot(Bundle, [extraction]).Digest);
     }
 

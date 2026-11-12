@@ -130,6 +130,7 @@ internal sealed class SessionHostResources
         CatalogMappingEditingHostConfiguration.Configure(services, read, true, options.Ingestion.Enabled, options.Reports.Enabled,
             options.Reports.DerivationEnabled, session: true);
         SessionHostDataProtectionPolicy.Apply(services);
+        SpecHostConfiguration.Configure(services, read, session: true);
     }
 
     /// <summary>

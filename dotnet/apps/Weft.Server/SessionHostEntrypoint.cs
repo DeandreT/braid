@@ -2,6 +2,7 @@ using Weft.Api;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
+using Weft.Api.Specs;
 
 namespace Weft.Server;
 
@@ -64,6 +65,7 @@ internal static class SessionHostEntrypoint
                             endpoints.MapWeftHealth();
                             endpoints.MapWeftAuthentication();
                             endpoints.MapWeftCatalog();
+                            endpoints.MapWeftSpecs();
                             endpoints.MapWeftRegressionCases();
                             endpoints.MapWeftRegressionRuns();
                             endpoints.MapWeftAutomation();

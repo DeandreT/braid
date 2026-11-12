@@ -1,5 +1,7 @@
 # Durable specification bundle registry
 
+**Intake follow-up:** [Specification intake API](spec-intake-api.md) now wires the real service/registry/Blob path, adds bounded restricted inventory reads, and supersedes the prior 0044 review/checksum. The foundation notes below describe the original registry unit. Runtime activation still requires the real ordered schema and backend admission.
+
 ## Implemented code, activation status
 
 This unit adds `0044_spec_bundles.sql`, `PostgresSpecBundleDatabase`, actor-bound `PostgresSpecBundleSession`, and `SpecBundleService`. The existing Blob adapter's real `ISpecObjectRegistry` callbacks can now execute against PostgreSQL. No HTTP/UI/host registration is added. Filesystem publication remains unavailable.

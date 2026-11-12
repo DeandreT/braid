@@ -57,6 +57,7 @@ public static class ApiConfiguration
             AuthenticationOpenApi.Transform(document);
             // Last: every operation, including the authentication routes added above, declares its admitted schemes.
             ApiSecurity.Transform(document, context.DescriptionGroups);
+            Weft.Api.Specs.SpecOpenApi.Transform(document);
             return Task.CompletedTask;
         }));
         return services;

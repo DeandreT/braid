@@ -30,7 +30,7 @@ internal static class SpecSchemaAdmission
     {
         var allowed = profile switch
         {
-            SpecDatabaseProfile.Reader => new[] { "spec_schema_version", "spec_store_admit", "spec_bundle_authorize", "spec_object_gate" },
+            SpecDatabaseProfile.Reader => new[] { "spec_schema_version", "spec_store_admit", "spec_bundle_authorize", "spec_object_gate", "spec_inventory" },
             SpecDatabaseProfile.Maintenance => ["spec_schema_version", "spec_store_admit", "spec_object_gate", "spec_object_complete", "spec_retirements", "spec_temp_read", "spec_temp_complete"],
             _ => Bodies.Keys.Where(n => n != "spec_authorize").ToArray()
         };

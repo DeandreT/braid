@@ -6,6 +6,26 @@ namespace Weft.Tests;
 
 public sealed class SpecBundleLifecycleTests
 {
+    [Fact]
+    public void Intake_inventory_migration_checksum_supersedes_the_reviewed_registry()
+    {
+        Assert.Equal("4d0d549c31cd208ea672c11273928f2b5d6dd3d977f427c6e3772911ec18db9b",
+            Sha256Digest.FromBytes(System.Text.Encoding.UTF8.GetBytes(SpecSchemaAdmission.MigrationSql)).Value);
+    }
+
+    [Fact]
+    public async Task Pending_schema_refuses_service_composition_before_opening_backend()
+    {
+        if (MigrationRunner.EmbeddedMigrations.Any(m => m.Version == 44)) return;
+        await using var database = new PostgresSpecBundleDatabase("Host=127.0.0.1;Port=1;Database=unavailable;Username=weft_spec_writer;Password=unused", SpecDatabaseProfile.Writer);
+        var session = database.ForActor(new(new(Guid.NewGuid())), new(Guid.NewGuid(), SpecStoreKind.Blob, Sha256Digest.FromBytes([1])));
+        var opened = false;
+        var error = await Assert.ThrowsAsync<SpecStorageException>(() => session.CreateServiceAsync((_, _) =>
+        { opened = true; throw new InvalidOperationException(); }));
+        Assert.Equal(SpecStorageError.Unavailable, error.Error);
+        Assert.False(opened);
+    }
+
     internal static SpecTemporaryEvidence Evidence(bool bound = false) => new(
         Guid.Parse("11111111-1111-1111-1111-111111111111"), Guid.Parse("22222222-2222-2222-2222-222222222222"), 7, 8, 1000,
         new(1, 2, 3), new(1, 2, 4), new(1, 2, 5), new(1, 2, 6), bound ? new(1, 2, 9) : null);

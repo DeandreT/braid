@@ -9,6 +9,24 @@ namespace Weft.Tests;
 public sealed class PostgresSpecRegistryTests
 {
     [SpecPostgresFact]
+    public async Task Inventory_is_bounded_scope_locked_and_requires_current_content_authority()
+    {
+        await using var f = await Fixture.Create();
+        await f.Writer.CreateAsync(f.Scope, Guid.NewGuid(), default);
+        Assert.Empty((await f.Reader.InventoryAsync(f.Scope, default)).Objects);
+        var reservation = await f.Writer.ReserveAsync(f.Reference(), SpecSourceFormat.Text, Guid.NewGuid(), 1, null, default);
+        var pending = await f.Reader.InventoryAsync(f.Scope, default);
+        Assert.Equal(2, pending.Bundle.Version);
+        Assert.Equal("pending", Assert.Single(pending.Objects).State);
+        await f.Writer.ExecutePublicationAsync(reservation.Claim, _ => Task.FromResult(SpecPublishResult.Created), default);
+        Assert.Equal("published", Assert.Single((await f.Reader.InventoryAsync(f.Scope, default)).Objects).State);
+        await Error(SpecStorageError.NotAdmitted, () => f.Reader.InventoryAsync(new(f.Scope.Project, Guid.NewGuid()), default));
+        await f.Owner("UPDATE weft.project_payload_read_grants SET active=false,version=version+1 WHERE organization_id=$1 AND project_id=$2 AND principal_id=$3",
+            f.Scope.Project.OrganizationId, f.Scope.Project.ProjectId, f.Actor);
+        await Error(SpecStorageError.NotAdmitted, () => f.Reader.InventoryAsync(f.Scope, default));
+    }
+
+    [SpecPostgresFact]
     public async Task Create_and_reserve_are_exact_idempotent_and_metadata_membership_is_not_content_access()
     {
         await using var f = await Fixture.Create();

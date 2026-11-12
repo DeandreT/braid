@@ -4,6 +4,20 @@ namespace Weft.Application;
 
 public sealed record SpecBundleStatus(SpecBundleScope Scope, long Version, bool Tombstoned);
 public sealed record SpecObjectReservation(SpecPublicationClaim Claim, long BundleVersion);
+public sealed record SpecInventoryItem(SpecObjectReference Reference, SpecSourceFormat Format, string State, SpecExtractionOutcome? Outcome);
+public sealed record SpecBundleInventory(SpecBundleStatus Bundle, IReadOnlyList<SpecInventoryItem> Objects);
+public sealed record SpecIntakeResult(Guid OriginalObjectId, Guid ExtractionObjectId, long ReservationVersion, SpecExtractionOutcome Outcome);
+
+public interface ISpecBundleInventory
+{
+    Task<SpecBundleInventory> InventoryAsync(SpecBundleScope scope, CancellationToken token);
+}
+
+/// <summary>Trusted actor-bound composition; implementations must admit the real schema and physical backend.</summary>
+public interface ISpecBundleServiceFactory
+{
+    Task<SpecBundleService> OpenAsync(ActorContext actor, bool write, CancellationToken token);
+}
 
 /// <summary>Actor-bound durable authority. Metadata visibility alone never admits document content or AI sharing.</summary>
 public interface ISpecBundleLifecycle
@@ -28,6 +42,33 @@ public sealed class SpecBundleService(ISpecBundleLifecycle lifecycle, ISpecObjec
 
     public Task<SpecBundleStatus> CreateAsync(SpecBundleScope scope, Guid key, CancellationToken token = default) =>
         lifecycle.CreateAsync(scope, key, token);
+
+    public Task<SpecBundleStatus> AuthorizeAsync(SpecBundleScope scope, bool write, CancellationToken token = default) =>
+        lifecycle.AuthorizeAsync(scope, write, token);
+
+    public Task<SpecBundleInventory> InventoryAsync(SpecBundleScope scope, CancellationToken token = default) =>
+        lifecycle is ISpecBundleInventory inventory ? inventory.InventoryAsync(scope, token)
+            : throw new SpecStorageException(SpecStorageError.Unavailable);
+
+    public async Task<byte[]> ReadExtractionAsync(SpecBundleScope scope, Guid objectId, CancellationToken token = default)
+    {
+        var reference = await lifecycle.FindAsync(scope, objectId, token).ConfigureAwait(false);
+        if (reference.Id.Kind != SpecObjectKind.Extraction) throw new SpecStorageException(SpecStorageError.NotAdmitted);
+        return await objects.ReadAsync(scope, reference, token).ConfigureAwait(false);
+    }
+
+    /// <summary>Replay both immutable publications with the same identities and original CAS version after an uncertain result.</summary>
+    public async Task<SpecIntakeResult> IntakeAsync(SpecSourceIdentity source, SpecSourceFormat format, Guid originalId,
+        Guid uploadKey, Guid extractionId, Guid extractionKey, long expectedVersion, long extractionExpectedVersion, Stream input, CancellationToken token = default)
+    {
+        if (originalId == extractionId || uploadKey == extractionKey || extractionId == Guid.Empty || extractionKey == Guid.Empty || extractionExpectedVersion < 1)
+            throw new ArgumentException("Distinct publication identities are required.");
+        await UploadAsync(source, format, originalId, uploadKey, expectedVersion, input, token).ConfigureAwait(false);
+        var bytes = await ReadAsync(source.Bundle, originalId, token).ConfigureAwait(false);
+        var extraction = SpecSourceExtractor.Extract(new(source, format, bytes));
+        var published = await PublishExtractionAsync(extraction, extractionId, extractionKey, extractionExpectedVersion, token).ConfigureAwait(false);
+        return new(originalId, extractionId, published.BundleVersion, extraction.Identity.Outcome);
+    }
 
     public async Task<SpecObjectReservation> UploadAsync(SpecSourceIdentity source, SpecSourceFormat format, Guid objectId,
         Guid attemptId, long expectedBundleVersion, Stream input, CancellationToken token = default)

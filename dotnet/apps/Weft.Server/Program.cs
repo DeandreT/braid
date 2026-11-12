@@ -2,6 +2,7 @@ using Weft.Api;
 using Weft.Api.Auth;
 using Weft.Api.Catalog;
 using Weft.Api.Chat;
+using Weft.Api.Specs;
 using Weft.Server;
 
 ServerHostOptions hostOptions;
@@ -25,6 +26,7 @@ builder.WebHost.ConfigureKestrel(server => DevelopmentListenAddress.ConfigureKes
 builder.Services.AddWeftApi();
 builder.Services.SuppressRequestDiagnostics();
 CatalogHostConfiguration.Configure(builder, address);
+SpecHostConfiguration.Configure(builder.Services, Environment.GetEnvironmentVariable, session: false);
 builder.Services.AddWeftAuthenticationHttp(new(hostOptions.Mode, hostOptions.Origin), builder.Environment);
 if (builder.Environment.IsDevelopment())
     DevelopmentFerruleRunner.Configure(builder.Services, Environment.GetEnvironmentVariable);
@@ -35,6 +37,7 @@ app.UseStaticFiles();
 app.MapWeftHealth();
 app.MapWeftProjectionFixtures();
 app.MapWeftCatalog();
+app.MapWeftSpecs();
 app.MapWeftRegressionCases();
 app.MapWeftRegressionRuns();
 app.MapWeftAutomation();

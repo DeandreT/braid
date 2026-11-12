@@ -324,6 +324,20 @@ BEGIN
 END;
 $body$;
 
+-- Intake API follow-up: this bounded content inventory supersedes the prior registry review/checksum.
+CREATE FUNCTION weft.spec_inventory(p_actor uuid,p_org uuid,p_project uuid,p_bundle uuid,p_store uuid)
+RETURNS TABLE(object_id uuid,source_id uuid,source_version bigint,kind integer,digest text,byte_count integer,format integer,state text,extraction_outcome integer)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,weft,pg_temp AS $body$
+BEGIN
+    PERFORM weft.spec_bundle_authorize(p_actor,p_org,p_project,p_bundle,false);
+    RETURN QUERY SELECT o.id,o.source_id,o.source_version,o.kind,o.digest,o.byte_count,s.format,o.state,o.extraction_outcome
+        FROM ONLY weft.spec_objects o JOIN ONLY weft.spec_sources s ON s.organization_id=o.organization_id AND s.project_id=o.project_id
+            AND s.bundle_id=o.bundle_id AND s.id=o.source_id AND s.version=o.source_version
+        WHERE o.organization_id=p_org AND o.project_id=p_project AND o.bundle_id=p_bundle AND o.store_id=p_store
+        ORDER BY o.source_id,o.source_version,o.kind,o.id LIMIT 128;
+END;
+$body$;
+
 CREATE FUNCTION weft.spec_schema_version() RETURNS text
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,weft,pg_temp AS $body$
 SELECT checksum FROM ONLY weft.schema_migrations WHERE version=44
@@ -337,7 +351,7 @@ BEGIN
         IF f.proname<>'spec_authorize' THEN
             EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO weft_spec_writer',f.oid::regprocedure);
         END IF;
-        IF f.proname IN ('spec_bundle_authorize','spec_object_gate','spec_schema_version','spec_store_admit') THEN
+        IF f.proname IN ('spec_bundle_authorize','spec_object_gate','spec_schema_version','spec_store_admit','spec_inventory') THEN
             EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO weft_spec_reader',f.oid::regprocedure);
         END IF;
         IF f.proname IN ('spec_object_gate','spec_object_complete','spec_retirements','spec_temp_read','spec_temp_complete','spec_schema_version','spec_store_admit') THEN
