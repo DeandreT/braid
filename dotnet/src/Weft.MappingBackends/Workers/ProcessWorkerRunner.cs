@@ -246,7 +246,7 @@ public sealed class ProcessWorkerRunner : IInspectionWorkerRunner, IAsyncDisposa
         ("Max file locks", 0),
         ("Max msgqueue size", 0),
         ("Max realtime priority", 0)
-    ]);
+    ], requireUnprivilegedIdentity: options.Profile == DockerWorkerProfile.Pdf);
 
     /// <summary>Kills a child that is still running and waits, within a bound, until it is reaped.</summary>
     private static async Task<bool> SettleAsync(Process process)
