@@ -160,7 +160,7 @@ public sealed class MappingAuthoringBackendTests
         public Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> frame, CancellationToken ct) => Task.FromResult(reply(frame.ToArray()));
     }
 
-    private sealed class NativeRunner : IInspectionWorkerRunner
+    internal sealed class NativeRunner : IInspectionWorkerRunner
     {
         public string BuildIdentity => "portable-authoring-test-not-isolation";
         public async Task<WorkerProcessResult> RunAsync(ReadOnlyMemory<byte> frame, CancellationToken ct)
