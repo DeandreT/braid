@@ -42,6 +42,17 @@ public sealed class CreationEvidenceDocument
     private const string WordCoverage = "This Word extraction contains only supported body paragraphs and table-cell text. It does not establish complete document coverage, rendered layout, headers, footers, drawings or page locations.";
     private const string WorkbookCoverage = "This workbook extraction contains only stored cells. Formulas are literal source text and are not evaluated; cached values may be missing or stale. It does not establish complete workbook coverage or calculated results.";
 
+    public static CreationEvidenceDocument From(SpecPdfExtractionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var coverage = result.Outcome == SpecExtractionOutcome.Partial &&
+            result.Identity.Format == SpecSourceFormat.Pdf && result.Code == "pdf-page-text-only"
+            ? PdfCoverage : null;
+        return new(result.Identity, result.Code, result.CopyEvidenceBytes(), result.Chunks.Select(CreationEvidenceChunk.From), coverage is not null, coverage);
+    }
+
+    private const string PdfCoverage = "This PDF extraction contains only page text. Text or page content may be missing, including pages without usable text. OCR was not performed. It does not establish complete document coverage or rendered layout.";
+
     public SpecExtractionIdentity Identity { get; }
     public SpecExtractionOutcome Outcome => Identity.Outcome;
     public string Code { get; }
@@ -60,6 +71,7 @@ public sealed class CreationEvidenceChunk
     { Ordinal = ordinal; Text = text; Locator = locator; Formula = formula; MissingText = missingText; }
     internal static CreationEvidenceChunk From(SpecEvidenceChunk chunk) => new(chunk.Ordinal, chunk.Text, chunk.Locator, null, false);
     internal static CreationEvidenceChunk From(SpecOfficeEvidenceChunk chunk) => new(chunk.Ordinal, chunk.Text, chunk.Locator, chunk.Formula, false);
+    internal static CreationEvidenceChunk From(SpecPdfEvidenceChunk chunk) => new(chunk.Ordinal, chunk.Text, chunk.Locator, chunk.Formula, chunk.MissingText);
     public int Ordinal { get; }
     public string Text { get; }
     public SpecEvidenceLocator Locator { get; }

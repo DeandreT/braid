@@ -2,7 +2,7 @@
 
 `CreationSpecification` now selects evidence through a closed application-layer
 `CreationEvidenceDocument`. It can be created only from a genuine
-`SpecExtractionResult` or `SpecOfficeExtractionResult` using the corresponding
+`SpecExtractionResult`, `SpecOfficeExtractionResult` or `SpecPdfExtractionResult` using the corresponding
 `CreationEvidenceDocument.From(...)` overload. Its constructor is private, the
 class is sealed, and it has no JSON, identity/chunk, or arbitrary-byte factory.
 The wrapper conveys provenance from a trusted extractor API, not document authority
@@ -44,6 +44,7 @@ Generation admits only:
 - `Complete` typed byte evidence for Text, JSON or OpenAPI JSON.
 - `Partial` typed Office evidence for DOCX (`office-body-text-only`) or XLSX
   (`office-stored-cells-only`).
+- `Partial` typed PDF page evidence (`pdf-page-text-only`).
 
 Refusal results remain selectable in a snapshot but prevent generation before
 compiler dispatch. Office is never relabeled `Complete`. All selected partials,
@@ -93,31 +94,29 @@ snapshot identity and generated notes. Existing legacy runtime loading remains
 insufficient for mixed durable evidence. Production mixed-evidence activation is
 still gated on that integration after 0045.
 
-PDF admission awaits the owner's reviewed commit. The actual pending
-`SpecPdfExtraction.cs` and `docs/spec-pdf-native-runner.md` were inspected in
-`C:/example/checkout`. The proposed third overload is
+PDF adaptation uses the reviewed owner commit `142095c4`, integrated through
+`fb0f2ae5`. The third overload is
 `From(SpecPdfExtractionResult)`, admitting only PDF `Partial` with code
-`pdf-page-text-only`. It must copy every page chunk, including empty text pages,
+`pdf-page-text-only`. It copies every page chunk, including empty text pages,
 with its exact ordinal, PdfPage locator, null formula and MissingText flag. Its
-original five-field canonical-v2 chunk bytes must be retained unchanged.
+original five-field canonical-v2 chunk bytes are retained unchanged.
 
-The planned fixed critical coverage statement is: "This PDF extraction contains
+The fixed critical coverage statement is: "This PDF extraction contains
 only page text. Text or page content may be missing, including pages without
 usable text. OCR was not performed. It does not establish complete document
 coverage or rendered layout." The existing exact-identity coverage synthesis
-will apply to every selected PDF Partial. `pdf-needs-ocr` and `pdf-encrypted`
+applies to every selected PDF Partial. `pdf-needs-ocr` and `pdf-encrypted`
 remain Unsupported refusals requiring readable evidence; malformed and limit
 outcomes also prevent generation.
 
-Trust dependency found in the actual pending source: public
-`SpecPdfExtractionResult.Decode(stdout, exitCode, source, profile)` accepts
-caller-supplied worker JSON. Strict source binding alone does not prove trusted
-extraction. Before adding the overload, the reviewed PDF contract must close this
-minting path (or provide a distinct closed trusted result). A typed overload alone
-would otherwise violate this unit's public-caller provenance requirement.
-Integration tests must use genuine worker extraction, including mixed readable
-and empty pages, exact-byte retention and both unreadable refusal statuses.
-PDF generation remains unadmitted while these dependencies are pending.
+The reviewed PDF result has a private constructor and internal Decode method;
+public callers cannot mint it from worker JSON. The legacy synchronous extractor
+refuses PDF before JSON parsing. Integration tests execute the actual native
+worker on readable/blank pages and an encrypted PDF fixture, then adapt its
+source-bound output through the internal decoder. This portable test harness
+does not qualify Linux containment. The public production PDF worker remains
+gated by its owner's Linux qualification requirements. Durable PDF Partial
+retention/loading still depends on the separate 0046 integration.
 
 ## Focused qualification
 
@@ -128,8 +127,10 @@ exact-identity changes, collisions, uncited empty partials, approval acknowledge
 critical questions, refused outcomes, source/digest/citation substitutions and
 source/evidence/assumption budgets. No Office extraction is fabricated as Complete.
 
-Run with the pinned .NET SDK 10.0.112, locked local-cache restore, then:
+Build the native worker with `cargo build --locked --offline --manifest-path
+engines/spec-pdf-worker/Cargo.toml` and set `WEFT_TEST_PDF_EXECUTABLE` to its absolute
+executable path. Run with the pinned .NET SDK 10.0.112 and locked local-cache restore:
 
 ```text
-dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --no-restore --filter "FullyQualifiedName~CreationEvidenceGenerationTests|FullyQualifiedName~MappingCreationWorkflowTests|FullyQualifiedName~SpecOfficeExtractionTests|FullyQualifiedName~SpecIntakeTests"
+dotnet test dotnet/tests/Weft.Tests/Weft.Tests.csproj --no-restore -p:OpenApiGenerateDocuments=false --filter "FullyQualifiedName~CreationEvidenceGenerationTests|FullyQualifiedName~MappingCreationWorkflowTests|FullyQualifiedName~SpecOfficeExtractionTests|FullyQualifiedName~SpecIntakeTests|FullyQualifiedName~SpecPdfProcessTests"
 ```
