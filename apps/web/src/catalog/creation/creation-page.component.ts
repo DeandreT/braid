@@ -96,6 +96,16 @@ export class CreationPageComponent {
   evidenceLink(bundle: string) {
     return [...this.projectLink, "specs", bundle];
   }
+  get feedbackParams() {
+    return {
+      creationProjectId: this.selection.project,
+      creationProposalId: this.selection.proposal,
+      creationFingerprint: this.selection.fingerprint,
+    };
+  }
+  get libraryLink() {
+    return [...this.projectLink, "creation"];
+  }
   revisionLink(mapping: string | null, revision: string | null) {
     return [...this.projectLink, "mappings", mapping, "revisions", revision];
   }
