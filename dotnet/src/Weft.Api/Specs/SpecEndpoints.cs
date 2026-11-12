@@ -29,13 +29,27 @@ public static class SpecEndpoints
         PropertyNameCaseInsensitive = false
     };
 
-    public static IEndpointRouteBuilder MapWeftSpecs(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapWeftSpecs(this IEndpointRouteBuilder endpoints) => MapWeftSpecs(endpoints, null);
+
+    // Trusted in-assembly fixture seam; the public production route composition always uses CatalogRequestBoundary.
+    internal static IEndpointRouteBuilder MapWeftSpecs(IEndpointRouteBuilder endpoints,
+        Func<HttpContext, bool, Task<CatalogRequestAdmission>>? authenticate)
     {
+        Task<IResult> Run(HttpContext c, string organization, string project, string bundle, bool write,
+            Func<SpecBundleService, SpecBundleScope, Task<IResult>> operation) =>
+            RunAdmitted(c, organization, project, bundle, write, operation, authenticate);
         var group = endpoints.BusinessRoutes();
         foreach (var status in new[] { 400, 401, 403, 404, 409, 413, 503 })
             group.WithMetadata(new Microsoft.AspNetCore.Mvc.ProducesResponseTypeAttribute(typeof(SpecErrorV1), status, "application/json"));
         endpoints = group;
         const string root = "/api/v1/organizations/{organizationId}/projects/{projectId}/spec-bundles/{bundleId}";
+        endpoints.MapGet(root + "/capabilities", (HttpContext c, string organizationId, string projectId, string bundleId) =>
+            Run(c, organizationId, projectId, bundleId, false, async (service, scope) =>
+            {
+                var formats = await service.IntakeFormatsAsync(scope, c.RequestAborted);
+                return Results.Ok(new SpecIntakeCapabilitiesV1(1, 1024 * 1024, formats.Select(f =>
+                    new SpecIntakeFormatV1(f.Format, f.MaximumSourceBytes, f.ExtractorVersion, f.EvidenceFormat)).ToArray()));
+            })).WithName("GetSpecIntakeCapabilities").WithTags("Specifications").Produces<SpecIntakeCapabilitiesV1>();
         endpoints.MapPut(root, (HttpContext c, string organizationId, string projectId, string bundleId) =>
             Run(c, organizationId, projectId, bundleId, true, async (service, scope) =>
             {
@@ -101,6 +115,9 @@ public static class SpecEndpoints
             "text" => SpecSourceFormat.Text,
             "json" => SpecSourceFormat.Json,
             "openapi-json" => SpecSourceFormat.OpenApiJson,
+            "docx" => SpecSourceFormat.Docx,
+            "xlsx" => SpecSourceFormat.Xlsx,
+            "pdf" => SpecSourceFormat.Pdf,
             _ => throw new ArgumentException()
         };
         var result = await service.IntakeAsync(new(scope, request.SourceId, request.SourceVersion), format, request.OriginalObjectId,
@@ -109,16 +126,16 @@ public static class SpecEndpoints
         return Results.Ok(new SpecIntakeV1(result.OriginalObjectId, result.ExtractionObjectId, result.ReservationVersion, result.Outcome.ToString()));
     }
 
-    private static async Task<IResult> Run(HttpContext c, string organization, string project, string bundle, bool write,
-        Func<SpecBundleService, SpecBundleScope, Task<IResult>> operation)
+    private static async Task<IResult> RunAdmitted(HttpContext c, string organization, string project, string bundle, bool write,
+        Func<SpecBundleService, SpecBundleScope, Task<IResult>> operation, Func<HttpContext, bool, Task<CatalogRequestAdmission>>? authenticate)
     {
         c.Response.Headers.CacheControl = "no-store";
         c.Response.Headers.XContentTypeOptions = "nosniff";
         try
         {
             var boundary = c.RequestServices.GetService<CatalogRequestBoundary>();
-            if (boundary is null) return Error(503, "Unavailable");
-            var admission = await boundary.AuthenticateAsync(c, write, c.RequestAborted);
+            if (boundary is null && authenticate is null) return Error(503, "Unavailable");
+            var admission = authenticate is not null ? await authenticate(c, write) : await boundary!.AuthenticateAsync(c, write, c.RequestAborted);
             if (!admission.IsAdmitted) return Error(admission.StatusCode, "IdentityRejected");
             if (admission.ContextMode is not ("session" or "bearer")) return Error(403, "IdentityRejected");
             if (c.RequestServices.GetService<SpecApiOptions>()?.Enabled != true) return Error(503, "Unavailable");
@@ -130,6 +147,8 @@ public static class SpecEndpoints
             return await operation(service, scope);
         }
         catch (OperationCanceledException) when (c.RequestAborted.IsCancellationRequested) { throw; }
+        catch (Exception e) when (e is SpecDocumentIntakeUnavailableException or SpecOfficeWorkerUnavailableException or SpecPdfWorkerUnavailableException)
+        { return Error(503, "DocumentWorkerUnavailable"); }
         catch (SpecStorageException e)
         {
             return e.Error switch

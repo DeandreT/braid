@@ -32,7 +32,7 @@ public sealed class SpecHttpTests
         var paths = document.RootElement.GetProperty("paths");
         var operations = paths.EnumerateObject().Where(path => path.Name.Contains("/spec-bundles/", StringComparison.Ordinal)).SelectMany(path => path.Value.EnumerateObject())
             .Where(property => property.Name is "get" or "post" or "put" or "delete").ToArray();
-        Assert.Equal(7, operations.Length);
+        Assert.Equal(8, operations.Length);
         foreach (var operation in operations)
         {
             Assert.Equal(2, operation.Value.GetProperty("security").GetArrayLength());
@@ -354,7 +354,7 @@ public sealed class SpecHttpTests
         public async ValueTask DisposeAsync() { Client?.Dispose(); if (app is not null) await app.DisposeAsync(); profile?.Dispose(); files.Dispose(); }
     }
 
-    private sealed class Ports(SpecBundleScope scope) : ISpecBundleServiceFactory, ISpecBundleLifecycle, ISpecBundleInventory,
+    internal sealed class Ports(SpecBundleScope scope) : ISpecBundleServiceFactory, ISpecBundleLifecycle, ISpecBundleInventory,
         ISpecObjectStore, IUserTokenValidator, IExternalIdentityReader, IApiRequestAuditWriter
     {
         private readonly Guid store = Guid.NewGuid();
@@ -367,9 +367,10 @@ public sealed class SpecHttpTests
         private long version = 1; private bool tombstoned;
         internal bool Denied, FailAfterWrite;
         internal int Opens;
+        internal SpecDocumentIntakeAdmission Documents = SpecDocumentIntakeAdmission.Unavailable;
         private void Admit(SpecBundleScope requested) { if (Denied || tombstoned || requested != scope) throw new SpecStorageException(SpecStorageError.NotAdmitted); }
         public Task<SpecBundleService> OpenAsync(ActorContext current, bool write, CancellationToken token)
-        { Assert.Equal(actor, current.PrincipalId); Opens++; return Task.FromResult(new SpecBundleService(this, this)); }
+        { Assert.Equal(actor, current.PrincipalId); Opens++; return Task.FromResult(new SpecBundleService(this, this).WithDocumentIntake(Documents)); }
         public Task<SpecBundleStatus> CreateAsync(SpecBundleScope s, Guid key, CancellationToken t) { Admit(s); return Task.FromResult(new SpecBundleStatus(s, version, false)); }
         public Task<SpecBundleStatus> AuthorizeAsync(SpecBundleScope s, bool write, CancellationToken t) => CreateAsync(s, Guid.NewGuid(), t);
         public Task<SpecObjectReservation> ReserveAsync(SpecObjectReference r, SpecSourceFormat format, Guid key, long expected, SpecExtractionIdentity? extraction, CancellationToken t)

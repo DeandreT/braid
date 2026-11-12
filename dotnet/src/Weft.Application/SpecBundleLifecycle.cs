@@ -35,7 +35,7 @@ public interface ISpecBundleLifecycle
 /// Upload/read/delete orchestration over an actor-bound lifecycle and its physical store. No HTTP, AI, or native
 /// filesystem capability is enabled here. Registry callbacks recheck authority and tombstones at physical boundaries.
 /// </summary>
-public sealed class SpecBundleService(ISpecBundleLifecycle lifecycle, ISpecObjectStore objects)
+public sealed partial class SpecBundleService(ISpecBundleLifecycle lifecycle, ISpecObjectStore objects)
 {
     private readonly ISpecBundleLifecycle lifecycle = lifecycle ?? throw new ArgumentNullException(nameof(lifecycle));
     private readonly ISpecObjectStore objects = objects ?? throw new ArgumentNullException(nameof(objects));
@@ -61,8 +61,11 @@ public sealed class SpecBundleService(ISpecBundleLifecycle lifecycle, ISpecObjec
     public async Task<SpecIntakeResult> IntakeAsync(SpecSourceIdentity source, SpecSourceFormat format, Guid originalId,
         Guid uploadKey, Guid extractionId, Guid extractionKey, long expectedVersion, long extractionExpectedVersion, Stream input, CancellationToken token = default)
     {
-        if (originalId == extractionId || uploadKey == extractionKey || extractionId == Guid.Empty || extractionKey == Guid.Empty || extractionExpectedVersion < 1)
+        if (originalId == Guid.Empty || uploadKey == Guid.Empty || expectedVersion < 1 || originalId == extractionId || uploadKey == extractionKey || extractionId == Guid.Empty || extractionKey == Guid.Empty || extractionExpectedVersion < 1)
             throw new ArgumentException("Distinct publication identities are required.");
+        if (format is SpecSourceFormat.Docx or SpecSourceFormat.Xlsx or SpecSourceFormat.Pdf)
+            return await IntakeDocumentAsync(source, format, originalId, uploadKey, extractionId, extractionKey,
+                expectedVersion, extractionExpectedVersion, input, token).ConfigureAwait(false);
         await UploadAsync(source, format, originalId, uploadKey, expectedVersion, input, token).ConfigureAwait(false);
         var bytes = await ReadAsync(source.Bundle, originalId, token).ConfigureAwait(false);
         var extraction = SpecSourceExtractor.Extract(new(source, format, bytes));

@@ -14227,6 +14227,170 @@
         ]
       }
     },
+    "/api/v1/organizations/{organizationId}/projects/{projectId}/spec-bundles/{bundleId}/capabilities": {
+      "get": {
+        "tags": [
+          "Specifications"
+        ],
+        "description": "Explicit project content grants are required. No AI-sharing authority is granted. Unavailable until the exact registry schema and private Blob backend are admitted. Development identity bypass is refused. On an uncertain mutation, retry the exact identities and bytes; do not allocate replacements.",
+        "operationId": "GetSpecIntakeCapabilities",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bundleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecIntakeCapabilitiesV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_request\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecErrorV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Sent only for a bearer credential refusal; session refusals and disabled bearer access send no challenge.",
+                "schema": {
+                  "pattern": "^Bearer error=\"invalid_token\"$",
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "This principal's bearer request rate is exceeded; retry after Retry-After seconds.",
+            "headers": {
+              "Retry-After": {
+                "description": "Sent with the rateLimited code: whole seconds until this principal may send another bearer request.",
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpecErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "weftSession": [ ]
+          },
+          {
+            "entraBearer": [
+              "api://{sessionClientId}/{scope}"
+            ]
+          }
+        ]
+      }
+    },
     "/api/v1/organizations/{organizationId}/projects/{projectId}/spec-bundles/{bundleId}": {
       "put": {
         "tags": [
@@ -14819,7 +14983,7 @@
           {
             "name": "X-Weft-Spec-Upload",
             "in": "header",
-            "description": "Strict JSON SpecUploadV1: sourceId, sourceVersion, originalObjectId, uploadKey, extractionObjectId, extractionKey, extractionExpectedVersion, format. All fields required; IDs nonzero and publication IDs/keys distinct. Format: text, json, openapi-json. Raw body at most 10 MiB. The extraction CAS normally starts at If-Match+1; after a conflict before its reservation, refresh inventory and update only extractionExpectedVersion. Malformed source content is retained with a Malformed extraction outcome.",
+            "description": "Strict JSON SpecUploadV1: sourceId, sourceVersion, originalObjectId, uploadKey, extractionObjectId, extractionKey, extractionExpectedVersion, format. All fields required; IDs nonzero and publication IDs/keys distinct. Format: text, json, openapi-json, docx, xlsx, pdf; use GetSpecIntakeCapabilities for currently admitted formats, extractor versions and byte caps. Structural formats require qualified workers and schema 46; unavailable formats return 503 DocumentWorkerUnavailable before retention. Raw body at most 10 MiB (PDF at most 8 MiB). The extraction CAS normally starts at If-Match+1; after a conflict before its reservation, refresh inventory and update only extractionExpectedVersion. Document refusals retain the original; process failures are 503, not document outcomes.",
             "required": true,
             "schema": {
               "maxLength": 2048,
@@ -15199,7 +15363,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Exact canonical weft.spec-evidence.v1 JSON array: format marker, fixed outcome code, then zero or more chunk tuples [ordinal, text, nullable JSON pointer, byte offset, byte length, start line, end line]. Limit failures contain no chunks.",
+            "description": "Exact canonical evidence JSON array: format marker, fixed outcome code, then chunks. Legacy v1 chunks are [ordinal,text,nullable JSON pointer,byte offset,byte length,start line,end line]. Structural v2 Office chunks are [ordinal,text,locator,formulaOrNull]; PDF chunks add missingText as a fifth field. PDF locators are [pdf-page,oneBasedPage]. Partial retains incomplete structural/page text; needs-OCR and encrypted are Unsupported refusals, with needs-OCR retaining blank page facts. Limit failures contain no chunks.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15212,14 +15376,24 @@
                       },
                       {
                         "maxItems": 7,
-                        "minItems": 7,
+                        "minItems": 4,
                         "type": "array",
                         "items": {
                           "type": [
                             "null",
+                            "boolean",
                             "integer",
-                            "string"
-                          ]
+                            "string",
+                            "array"
+                          ],
+                          "items": {
+                            "type": [
+                              "null",
+                              "boolean",
+                              "integer",
+                              "string"
+                            ]
+                          }
                         }
                       }
                     ]
@@ -42500,6 +42674,57 @@
         "type": "object",
         "properties": {
           "code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpecIntakeCapabilitiesV1": {
+        "required": [
+          "version",
+          "maximumTextRequestBytes",
+          "formats"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maximumTextRequestBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpecIntakeFormatV1"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SpecIntakeFormatV1": {
+        "required": [
+          "format",
+          "maximumSourceBytes",
+          "extractorVersion",
+          "evidenceFormat"
+        ],
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "maximumSourceBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "extractorVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "evidenceFormat": {
             "type": "string"
           }
         },

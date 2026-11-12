@@ -14,6 +14,11 @@ import {
 } from "../catalog-types";
 import { UnsentWork } from "../../workbench/unsent-work";
 import {
+  capabilities,
+  formatLabels,
+  type IntakeCapabilities,
+} from "./spec-capabilities";
+import {
   readEvidence,
   inventory,
   outcome,
@@ -53,6 +58,19 @@ export class SpecPageComponent {
   readonly intent = signal<Intent | null>(null);
   readonly draft = signal("");
   readonly file = signal<File | null>(null);
+  readonly intake = signal<IntakeCapabilities | null>(null);
+  readonly formatLabels = formatLabels;
+  readonly fileAccept = computed(() =>
+    (this.intake()?.formats ?? [])
+      .map((f) =>
+        f.format === "text"
+          ? ".txt"
+          : f.format === "openapi-json"
+            ? ".json"
+            : `.${f.format}`,
+      )
+      .join(","),
+  );
   readonly outcome = outcome;
   readonly visible = computed(
     () =>
@@ -88,6 +106,7 @@ export class SpecPageComponent {
       this.reading.set(false);
       this.busy.set(false);
       this.data.set(null);
+      this.intake.set(null);
       this.chunks.set(null);
       this.selected.set(null);
       this.message.set(
@@ -112,6 +131,7 @@ export class SpecPageComponent {
       this.project = params.get("projectId") ?? "";
       this.bundle = params.get("bundleId") ?? "";
       this.data.set(null);
+      this.intake.set(null);
       this.chunks.set(null);
       this.selected.set(null);
       void this.refresh();
@@ -181,6 +201,7 @@ export class SpecPageComponent {
       this.chunks.set(null);
       this.selected.set(null);
       this.owner = owner;
+      this.intake.set(null);
       this.context.set(context);
       throw new Error("Owner changed");
     }
@@ -215,6 +236,7 @@ export class SpecPageComponent {
               : null
           : null;
     if (status === 401 || status === 403 || status === 404) {
+      this.intake.set(null);
       ++this.generation;
       this.busy.set(false);
       this.reading.set(false);
@@ -223,6 +245,7 @@ export class SpecPageComponent {
       this.selected.set(null);
     }
     // A late refusal from an old lineage must not invalidate a replacement owner's session.
+    if (status === 503) this.intake.set(null);
     if (this.contexts.isCurrent(this.context())) this.contexts.reject(status);
     this.message.set(
       status === 503
@@ -250,6 +273,7 @@ export class SpecPageComponent {
     if (this.busy()) return;
     this.busy.set(true);
     const generation = this.generation;
+    this.intake.set(null);
     try {
       const context = await this.admit();
       const project = await firstValueFrom(
@@ -274,6 +298,31 @@ export class SpecPageComponent {
       );
       if (!this.current(generation, context)) return;
       this.data.set(result);
+      let intakeUnavailable = false;
+      try {
+        const admitted = capabilities(
+          await firstValueFrom(
+            this.http
+              .get<unknown>(this.path + "/capabilities")
+              .pipe(timeout(30000)),
+          ),
+        );
+        if (!this.current(generation, context)) return;
+        this.intake.set(admitted);
+        if (!admitted.formats.some((f) => f.format === this.format))
+          this.format = admitted.formats[0]?.format ?? "";
+      } catch (error) {
+        if (!this.current(generation, context)) return;
+        // Capability availability is independent of the just-authorized inventory.
+        // Authentication/content denials still clear private state through the outer boundary.
+        if (
+          error instanceof HttpErrorResponse &&
+          [401, 403, 404].includes(error.status)
+        )
+          throw error;
+        this.intake.set(null);
+        intakeUnavailable = true;
+      }
       this.chunks.set(null);
       this.selected.set(null);
       const intent = this.intent();
@@ -313,6 +362,12 @@ export class SpecPageComponent {
         this.message.set(
           "Inventory refreshed. No mapping has been generated and no AI-sharing approval is implied.",
         );
+      if (intakeUnavailable)
+        this.message.update(
+          (message) =>
+            message +
+            " New intake is unavailable because server capabilities could not be confirmed. Existing inventory and extraction reads remain available. Refresh to retry capabilities.",
+        );
     } catch (error) {
       if (generation === this.generation) {
         this.data.set(null);
@@ -324,15 +379,23 @@ export class SpecPageComponent {
   }
   choose(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0] ?? null;
-    if (file && (!/\.(txt|json)$/i.test(file.name) || file.size > 10485760)) {
+    const suffix = file?.name.split(".").at(-1)?.toLowerCase();
+    const suggested =
+      suffix === "txt"
+        ? "text"
+        : suffix && ["json", "docx", "xlsx", "pdf"].includes(suffix)
+          ? suffix
+          : this.format;
+    const selected = this.intake()?.formats.find((f) => f.format === suggested);
+    if (file && (!selected || file.size > selected.maximumSourceBytes)) {
       this.file.set(null);
       this.message.set(
-        "Only .txt and .json files up to 10 MiB are accepted. PDF/Office extraction and upload retention are unsupported by this endpoint; this file was not sent or retained.",
+        "This file format is unavailable or exceeds its admitted byte limit. Refresh server capabilities before choosing a supported format. The file was not sent.",
       );
       return;
     }
     this.file.set(file);
-    if (file) this.format = /\.json$/i.test(file.name) ? "json" : "text";
+    if (selected) this.format = selected.format;
   }
   create() {
     if (!this.bundle || this.intent() || this.busy()) return;
@@ -343,6 +406,18 @@ export class SpecPageComponent {
     const data = this.data();
     const body = paste ? this.draft() : this.file();
     if (!data || !body || this.busy() || this.intent()) return;
+    const admitted = this.intake()?.formats.find(
+      (f) => f.format === (paste ? "text" : this.format),
+    );
+    if (
+      !admitted ||
+      (body instanceof File && body.size > admitted.maximumSourceBytes)
+    ) {
+      this.message.set(
+        "Selected format is unavailable or exceeds its admitted byte limit. Refresh server capabilities.",
+      );
+      return;
+    }
     if (
       paste &&
       new TextEncoder().encode(JSON.stringify({ text: body })).length > 1047000
@@ -462,6 +537,24 @@ export class SpecPageComponent {
         const state = recovery(intent.upload, latest);
         if (state === "conflict") throw new Error("Conflicting intent");
         if (state !== "complete") {
+          const admitted = capabilities(
+            await firstValueFrom(
+              this.http
+                .get<unknown>(this.path + "/capabilities")
+                .pipe(timeout(30000)),
+            ),
+          );
+          if (!this.current(generation, context)) return;
+          this.intake.set(admitted);
+          const format = admitted.formats.find(
+            (f) => f.format === intent.upload.format,
+          );
+          if (
+            !format ||
+            (intent.body instanceof File &&
+              intent.body.size > format.maximumSourceBytes)
+          )
+            throw new HttpErrorResponse({ status: 503 });
           const original = latest.objects.find(
             (o) => o.objectId === intent.upload.originalObjectId,
           );
@@ -500,9 +593,16 @@ export class SpecPageComponent {
             !Number.isSafeInteger(response.reservationVersion) ||
             response.reservationVersion !==
               intent.upload.extractionExpectedVersion + 1 ||
-            !["Complete", "Malformed", "Unsupported", "LimitExceeded"].includes(
-              response.outcome,
-            )
+            ![
+              "Complete",
+              "Partial",
+              "Malformed",
+              "Unsupported",
+              "LimitExceeded",
+            ].includes(response.outcome) ||
+            (["docx", "xlsx", "pdf"].includes(intent.upload.format)
+              ? response.outcome === "Complete"
+              : response.outcome === "Partial")
           )
             throw new Error("Invalid receipt");
         }

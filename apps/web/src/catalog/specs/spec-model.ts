@@ -9,6 +9,7 @@ const formats = [
   "OpenApiJson",
   "Docx",
   "Xlsx",
+  "Pdf",
 ] as const;
 const outcomes = [
   "Complete",
@@ -75,6 +76,7 @@ export type Chunk = {
   text: string;
   locator: Locator;
   formula: string | null;
+  missingText?: boolean;
 };
 export type Evidence = { version: 1 | 2; code: string; chunks: Chunk[] };
 export const maximumEvidenceBytes = 10 * 1024 * 1024;
@@ -84,6 +86,11 @@ const positive = (v: unknown): v is number =>
   Number.isSafeInteger(v) && (v as number) > 0;
 const nonnegative = (v: unknown): v is number =>
   Number.isSafeInteger(v) && (v as number) >= 0;
+// Match the trusted decoder's Unicode whitespace definition, not JavaScript trim (which treats BOM differently).
+const pdfMissingText = (text: string) =>
+  /^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/u.test(
+    text,
+  );
 const member = <T extends string>(
   values: readonly T[],
   value: unknown,
@@ -237,7 +244,12 @@ export function evidence(value: unknown): Evidence {
   for (const c of value.slice(2)) {
     if (
       !Array.isArray(c) ||
-      c.length !== (version === 1 ? 7 : 4) ||
+      c.length !==
+        (version === 1
+          ? 7
+          : Array.isArray(c[2]) && c[2][0] === "pdf-page"
+            ? 5
+            : 4) ||
       c[0] !== chunks.length ||
       !textValue(c[1], version === 1 ? 2097152 : maximumEvidenceBytes)
     )
@@ -259,7 +271,22 @@ export function evidence(value: unknown): Evidence {
         (location.valueKind === "InlineString" && formula !== null))
     )
       invalid();
-    chunks.push({ ordinal: c[0], text: c[1], locator: location, formula });
+    if (location.kind === "pdf-page") {
+      if (
+        typeof c[4] !== "boolean" ||
+        c[4] !== pdfMissingText(c[1]) ||
+        location.page !== chunks.length + 1
+      )
+        invalid();
+      chunks.push({
+        ordinal: c[0],
+        text: c[1],
+        locator: location,
+        formula,
+        missingText: c[4],
+      });
+    } else
+      chunks.push({ ordinal: c[0], text: c[1], locator: location, formula });
   }
   return { version, code: value[1], chunks };
 }
@@ -289,6 +316,41 @@ export async function readEvidence(
     ),
   );
   const office = object.format === "Docx" || object.format === "Xlsx";
+  const pdf = object.format === "Pdf";
+  if (pdf) {
+    if (
+      result.version !== 2 ||
+      bytes.byteLength > 8388608 ||
+      result.chunks.length > 256 ||
+      result.chunks.some((c) => c.locator.kind !== "pdf-page") ||
+      result.chunks.reduce(
+        (bytes, c) => bytes + new TextEncoder().encode(c.text).length,
+        0,
+      ) > 1048576
+    )
+      invalid();
+    const anyText = result.chunks.some((c) => c.missingText === false);
+    if (object.outcome === "Partial") {
+      if (result.code !== "pdf-page-text-only" || !anyText) invalid();
+    } else if (
+      object.outcome === "Unsupported" &&
+      result.code === "pdf-needs-ocr"
+    ) {
+      if (result.chunks.length === 0 || anyText) invalid();
+    } else if (
+      result.chunks.length !== 0 ||
+      !(
+        (object.outcome === "Unsupported" && result.code === "pdf-encrypted") ||
+        (object.outcome === "Malformed" && result.code === "pdf-malformed") ||
+        (object.outcome === "LimitExceeded" &&
+          ["pdf-limit-exceeded", "serialized-evidence-bytes"].includes(
+            result.code,
+          ))
+      )
+    )
+      invalid();
+    return result;
+  }
   const expected =
     object.format === "Docx"
       ? "docx-paragraph"
