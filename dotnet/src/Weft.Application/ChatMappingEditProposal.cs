@@ -83,7 +83,7 @@ public sealed record ChatMappingEditState(ChatMappingEditProposal Proposal, Chat
 /// Restricted persistence boundary; implementations must enforce creator/organization/project authority and retention.
 /// Creation is immutable and idempotent by call identity, conflicting on changed fingerprint. It never prepares ingestion.
 /// Only verified generation may populate new content; trusted storage restoration verifies integrity, not worker authenticity.
-/// Reads never approve, prepare or reserve. No implementation is supplied by this application slice.
+/// Reads never approve, prepare or reserve.
 /// </summary>
 public interface IChatMappingEditProposalStore
 {
@@ -91,6 +91,9 @@ public interface IChatMappingEditProposalStore
     /// Conflict means the call identity already owns different content. Conflict and Refused return no state.</summary>
     Task<ChatMappingEditCreateResult> CreateAsync(ActorContext actor, ChatMappingEditProposal proposal, CancellationToken ct);
     Task<ChatMappingEditState?> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, Guid proposalId, CancellationToken ct);
+    /// <summary>Durable discovery after lost delivery. At most eight authorized proposals, in creation order.
+    /// Applies current creator/project read authority and retention; never approves or prepares.</summary>
+    Task<IReadOnlyList<ChatMappingEditState>> ListAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, CancellationToken ct);
     /// <summary>
     /// Only the dedicated authenticated approval action may call this. Lock and check the stored fingerprint,
     /// creator, retention, fresh edit permission and exact head; atomically persist approval plus journal preparation

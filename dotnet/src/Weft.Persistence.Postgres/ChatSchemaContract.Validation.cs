@@ -7,7 +7,7 @@ internal static partial class ChatSchemaContract
     internal static async Task ValidateAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         ChatDatabaseProfile profile, CancellationToken ct)
     {
-        _ = Source.Value; _ = WorkspaceSource.Value; _ = MappingWriteSource.Value; _ = WriteJournalSource.Value;
+        _ = Source.Value; _ = WorkspaceSource.Value; _ = MappingWriteSource.Value; _ = WriteJournalSource.Value; _ = EditProposalSource.Value;
         // Reader also needs the tombstone relation protected without a tombstone
         // SELECT/listing grant. All profiles receive only this bounded lock capability.
         {
@@ -31,7 +31,7 @@ internal static partial class ChatSchemaContract
             locks.Add(("revision_derivations", "cache_entry_id"));
             locks.Add(("revision_derivation_attempts", "derivation_id"));
         }
-        foreach (var (table, column) in profile == ChatDatabaseProfile.Lifecycle ? new List<(string Table, string Column)>() : locks)
+        foreach (var (table, column) in profile is ChatDatabaseProfile.Lifecycle or ChatDatabaseProfile.Approver ? new List<(string Table, string Column)>() : locks)
         {
             await using var protect = new NpgsqlCommand($"SELECT {column} FROM ONLY weft.{table} WHERE false", connection, transaction);
             await protect.ExecuteNonQueryAsync(ct);
@@ -75,6 +75,7 @@ internal static partial class ChatSchemaContract
         var writeJournal = WriteJournalMigrationVersion;
         if (expected.Count < writes || expected[10].Checksum != MigrationChecksum || expected[workspace - 1].Checksum != WorkspaceMigrationChecksum ||
             expected[writes - 1].Checksum != MappingWriteMigrationChecksum || expected.Count < writeJournal || expected[writeJournal - 1].Checksum != WriteJournalMigrationChecksum ||
+            expected.SingleOrDefault(script => script.Version == 43)?.Checksum != EditProposalMigrationChecksum ||
             !expected.Take(10).Select(script => script.Checksum).SequenceEqual(PrefixChecksums, StringComparer.Ordinal)) throw Refusal();
         await using var command = new NpgsqlCommand("SELECT version,checksum FROM ONLY weft.schema_migrations ORDER BY version", connection, transaction);
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -209,11 +210,11 @@ internal static partial class ChatSchemaContract
                 [audit ? table + "_guard" : identity ? "chat_identity_guard" : conversation ? "chat_conversation_guard" : "chat_child_guard"] = new(function, (short)(audit ? 27 : 31)),
                 [audit ? table + "_truncate" : identity ? "chat_identity_truncate" : conversation ? "chat_conversation_truncate" : "chat_child_truncate"] = new(function, 34)
             };
-            if (table is "chat_mapping_write_intents" or "chat_mapping_write_content" or "chat_mapping_write_commits")
+            if (table is "chat_mapping_write_intents" or "chat_mapping_write_content" or "chat_mapping_write_commits" or "chat_edit_proposals" or "chat_edit_content" or "chat_edit_approvals")
             {
                 expected.Clear();
-                expected.Add(table + "_guard", new(table == "chat_mapping_write_content" ? "guard_chat_mapping_write_content" : "guard_chat_mapping_write_audit", 27));
-                expected.Add(table + "_truncate", new(table == "chat_mapping_write_content" ? "guard_chat_mapping_write_content" : "guard_chat_mapping_write_audit", 34));
+                expected.Add(table + "_guard", new(table is "chat_mapping_write_content" or "chat_edit_content" ? "guard_chat_mapping_write_content" : "guard_chat_mapping_write_audit", 27));
+                expected.Add(table + "_truncate", new(table is "chat_mapping_write_content" or "chat_edit_content" ? "guard_chat_mapping_write_content" : "guard_chat_mapping_write_audit", 34));
                 audit = true;
             }
             if (identity) expected.Add("chat_identity_erasure", new("check_chat_identity_erasure", 17, true));

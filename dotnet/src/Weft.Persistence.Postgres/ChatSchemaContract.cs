@@ -23,7 +23,7 @@ internal static partial class ChatSchemaContract
     internal const string WriteJournalMigrationName = "0040_chat_mapping_write_journal";
     internal const string WriteJournalMigrationChecksum = "64dbd178aa7a9d5cd902b4b165cddbf095df13af9178b6d38e5963729e3399ef";
     internal static int WriteJournalMigrationVersion => int.Parse(WriteJournalMigrationName[..4], System.Globalization.CultureInfo.InvariantCulture);
-    internal static readonly string[] ChatTables = ["chat_conversations", "chat_turns", "chat_rounds", "chat_events", "chat_identities", "chat_payload_audit", "chat_mapping_write_audit", "chat_mapping_write_intents", "chat_mapping_write_content", "chat_mapping_write_commits"];
+    internal static readonly string[] ChatTables = ["chat_conversations", "chat_turns", "chat_rounds", "chat_events", "chat_identities", "chat_payload_audit", "chat_mapping_write_audit", "chat_mapping_write_intents", "chat_mapping_write_content", "chat_mapping_write_commits", "chat_edit_proposals", "chat_edit_content", "chat_edit_approvals"];
     private static readonly string[] Dependencies =
         ["principals", "organization_memberships", "project_memberships", "mappings", "mapping_revisions", "revision_ingestions", "revision_derivations", "revision_derivation_attempts"];
     private const string SearchPath = "search_path=pg_catalog, weft, pg_temp";
@@ -152,7 +152,7 @@ internal static partial class ChatSchemaContract
          new("profile_id", "text"), new("profile_version", "integer"), new("provider_id", "text"), new("model_id", "text"),
          new("metadata_policy_id", "text"), new("metadata_policy_version", "integer"), new("recorded_at", "timestamp with time zone")],
         [Key("chat_mapping_write_intents_pkey", "organization_id", "creator_id", "request_key"),
-         Unique("chat_mapping_write_intents_call_key", "organization_id", "creator_id", "turn_id", "call_id")]);
+          Unique("chat_mapping_write_intents_call_key", "organization_id", "creator_id", "conversation_id", "turn_id", "round_id", "call_id")]);
     private static readonly Table WriteContent = new("chat_mapping_write_content",
         [.. Uuids("organization_id", "creator_id", "request_key", "conversation_id"), new("proposal", "text", C: true), new("native", "bytea")],
         [Key("chat_mapping_write_content_pkey", "organization_id", "creator_id", "request_key"),
@@ -161,7 +161,7 @@ internal static partial class ChatSchemaContract
         [.. Uuids("organization_id", "creator_id", "request_key", "operation_id", "project_id", "mapping_id", "revision_id"),
          new("revision_sequence", "bigint"), new("committed_at", "timestamp with time zone")],
         [Key("chat_mapping_write_commits_pkey", "organization_id", "creator_id", "request_key")]);
-    private static readonly Table[] NewTables = [Conversations, Turns, Rounds, Events, Identities, PayloadAudit, MappingWriteAudit, WriteIntents, WriteContent, WriteCommits];
+    private static readonly Table[] NewTables = [Conversations, Turns, Rounds, Events, Identities, PayloadAudit, MappingWriteAudit, WriteIntents, WriteContent, WriteCommits, EditProposals, EditContent, EditApprovals];
     private static readonly Table History = new("schema_migrations",
         [new("version", "integer"), new("checksum", "text"), new("applied_at", "timestamp with time zone", Default: "CURRENT_TIMESTAMP")],
         [Key("schema_migrations_pkey", "version"), Check("schema_migrations_version_check", "(version > 0)"),
@@ -194,7 +194,7 @@ internal static partial class ChatSchemaContract
     }
     // A routine a later migration replaces or adds has exactly its latest body; any other keeps 0011's.
     private static string Body(string name) =>
-        Body(WriteJournalSource.Value, name) ?? Body(MappingWriteSource.Value, name) ?? Body(WorkspaceSource.Value, name) ?? Body(Source.Value, name) ?? throw Refusal();
+        Body(EditProposalSource.Value, name) ?? Body(WriteJournalSource.Value, name) ?? Body(MappingWriteSource.Value, name) ?? Body(WorkspaceSource.Value, name) ?? Body(Source.Value, name) ?? throw Refusal();
     private static string? Body(string source, string name)
     {
         var marker = "$" + name + "$";
@@ -207,6 +207,7 @@ internal static partial class ChatSchemaContract
     }
     internal static string[] ColumnGrants(ChatDatabaseProfile profile)
     {
+        if (profile == ChatDatabaseProfile.Approver) return ["schema_migrations|version|SELECT", "schema_migrations|checksum|SELECT"];
         var role = ChatRoleGuard.RoleName(profile);
         var result = new List<string>();
         foreach (Match grant in Regex.Matches(Source.Value + "\n" + WorkspaceSource.Value + "\n" + MappingWriteSource.Value,

@@ -372,6 +372,8 @@ public sealed class ChatMappingEditApprovalTests
         public Task<ChatMappingEditCreateResult> CreateAsync(ActorContext actor, ChatMappingEditProposal proposal, CancellationToken ct) =>
             Task.FromResult(CreateResult ?? new ChatMappingEditCreateResult(ChatMappingEditCreateOutcome.Existing, State));
         public Task<ChatMappingEditState?> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, Guid proposalId, CancellationToken ct) => Task.FromResult<ChatMappingEditState?>(State);
+        public Task<IReadOnlyList<ChatMappingEditState>> ListAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ChatMappingEditState>>(actor.PrincipalId == Proposal.Conversation.Creator && conversation == Proposal.Conversation && turnId == Proposal.TurnId ? [State] : []);
         public Task<ChatMappingEditState?> ApproveAndPrepareAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, Guid proposalId, Sha256Digest expectedFingerprint, CancellationToken ct)
         {
             Approvals++;

@@ -9,8 +9,8 @@ internal static partial class ChatSchemaContract
     /// No chat data, new grants, generic trigger exception or target-captured fingerprint is accepted.</summary>
     internal static async Task ValidateMappingCommitAuditAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
     {
-        _ = WriteJournalSource.Value;
-        foreach (var table in new[] { WriteIntents, WriteCommits })
+        _ = WriteJournalSource.Value; _ = EditProposalSource.Value;
+        foreach (var table in new[] { WriteIntents, WriteCommits, EditProposals, EditApprovals })
         {
             await ValidateRelationAsync(connection, transaction, table, ct);
             await ValidateColumnsAsync(connection, transaction, table, ct);
@@ -18,7 +18,7 @@ internal static partial class ChatSchemaContract
             await ValidateIndexesAsync(connection, transaction, table, ct);
             await ValidatePolicyAsync(connection, transaction, table, ct);
         }
-        string[] tables = [WriteIntents.Name, WriteCommits.Name];
+        string[] tables = [WriteIntents.Name, WriteCommits.Name, EditProposals.Name, EditApprovals.Name];
         await ValidateFunctionsAsync(connection, transaction, ct, Functions.Where(f => f.Name is "audit_chat_mapping_write_commit" or "guard_chat_mapping_write_audit"));
         await ValidateTriggersAsync(connection, transaction, ct, tables);
         await ValidateGrantsAsync(connection, transaction, ct, tables);
