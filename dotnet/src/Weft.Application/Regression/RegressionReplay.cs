@@ -18,7 +18,11 @@ public sealed class RegressionReplay
         ArgumentNullException.ThrowIfNull(primary);
         ArgumentNullException.ThrowIfNull(namedInputs);
         ArgumentNullException.ThrowIfNull(parameters);
-        var selectedProfile = profile ?? (primary.CsvDialect is null ? PreviewExecutionProfile.LegacyJson : PreviewExecutionProfile.CsvDocument);
+        var selectedProfile = profile ?? (primary.XmlMetadata is not null ? PreviewExecutionProfile.XmlDocument :
+            primary.CsvDialect is null ? PreviewExecutionProfile.LegacyJson : PreviewExecutionProfile.CsvDocument);
+        // XML inputs are all explicit and role-valid; no other profile may carry XML metadata.
+        if (namedInputs.Prepend(primary).Any(input => input is not null && (input.XmlMetadata is null) == (selectedProfile == PreviewExecutionProfile.XmlDocument)))
+            throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (!Enum.IsDefined(selectedProfile) || primary.Name is not null || selectedProfile != PreviewExecutionProfile.CsvDocument && primary.ByteCount == 0 ||
             !Enum.IsDefined(target.Kind)) throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (selectedProfile == PreviewExecutionProfile.CsvDocument && (namedInputs.Count != 0 || target.Kind == PreviewTargetKind.Named))

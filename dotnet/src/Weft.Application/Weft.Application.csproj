@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="[10.0.14]" />
     <ProjectReference Include="../Weft.Contracts/Weft.Contracts.csproj" />
     <ProjectReference Include="../Weft.Domain/Weft.Domain.csproj" />
     <ProjectReference Include="../Weft.Ai/Weft.Ai.csproj" />

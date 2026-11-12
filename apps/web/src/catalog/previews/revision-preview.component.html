@@ -48,15 +48,22 @@
             id="preview-admission"
             class="preview-text"
             [value]="
-              preview.csvProfile()
-                ? 'csv'
-                : preview.documentProfile()
-                  ? 'document'
-                  : 'json'
+              preview.xmlProfile()
+                ? 'xml'
+                : preview.csvProfile()
+                  ? 'csv'
+                  : preview.documentProfile()
+                    ? 'document'
+                    : 'json'
             "
             (change)="setProfile($any($event.target).value)"
           >
             <option value="json">Legacy JSON</option>
+            @if (context().features.xmlPreview === true) {
+              <option value="xml">
+                XML (saved boundaries, native preview only)
+              </option>
+            }
             <option value="document">
               Explicit document boundaries (JSON, X12, EDIFACT)
             </option>
@@ -89,6 +96,13 @@
             }}
           </button>
         </div>
+        @if (preview.xmlProfile()) {
+          <p class="preview-hint">
+            Safe XML uses the saved native boundaries, never filenames. Schema
+            hints are read only and never fetched. Saved XML baselines compare
+            exact bytes. Compiled builds are unavailable.
+          </p>
+        }
         @if (preview.csvProfile()) {
           <p class="preview-hint">
             CSV/TSV uses one primary input and the saved native dialect. An
@@ -118,11 +132,13 @@
               @if (first) {
                 <label [for]="'preview-input-' + item.id"
                   >Primary input ({{
-                    preview.csvProfile()
-                      ? "CSV/TSV"
-                      : preview.documentProfile()
-                        ? "document"
-                        : "JSON"
+                    preview.xmlProfile()
+                      ? "XML"
+                      : preview.csvProfile()
+                        ? "CSV/TSV"
+                        : preview.documentProfile()
+                          ? "document"
+                          : "JSON"
                   }})</label
                 >
               } @else {
@@ -143,11 +159,13 @@
                 />
                 <label [for]="'preview-input-' + item.id"
                   >Named input {{ index }} ({{
-                    preview.csvProfile()
-                      ? "CSV/TSV"
-                      : preview.documentProfile()
-                        ? "document"
-                        : "JSON"
+                    preview.xmlProfile()
+                      ? "XML"
+                      : preview.csvProfile()
+                        ? "CSV/TSV"
+                        : preview.documentProfile()
+                          ? "document"
+                          : "JSON"
                   }})</label
                 >
               }
@@ -176,11 +194,13 @@
                     #fileInput
                     type="file"
                     [attr.accept]="
-                      preview.csvProfile()
-                        ? '.csv,.tsv,text/csv,text/tab-separated-values'
-                        : preview.documentProfile()
-                          ? null
-                          : 'application/json,.json'
+                      preview.xmlProfile()
+                        ? null
+                        : preview.csvProfile()
+                          ? '.csv,.tsv,text/csv,text/tab-separated-values'
+                          : preview.documentProfile()
+                            ? null
+                            : 'application/json,.json'
                     "
                     (change)="chooseFile(item.id, $event)"
                   />
@@ -476,8 +496,9 @@
                 <legend>Save this CSV preview as a test case</legend>
                 <p class="preview-hint">
                   Review the exact output before accepting it as the baseline.
-                  The saved test uses the returned native dialect and exact-byte
-                  comparison. It does not approve a build.
+                  The saved test uses the returned native dialect or XML
+                  metadata and exact-byte comparison of every output. It does
+                  not approve a build.
                 </p>
                 <label
                   >Test name<input

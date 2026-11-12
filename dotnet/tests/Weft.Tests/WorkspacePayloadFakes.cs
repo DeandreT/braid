@@ -100,6 +100,7 @@ internal sealed class WorkspacePayloadFakes(WorkspaceToolFixture catalog) : IPro
         Task.FromResult(Own(actor, organizationId, runId) && ordinal is 0 or 1
             ? new PreviewOutputContent(Sha256Digest.FromBytes(ordinal == 0 ? Primary : Rates), ordinal == 0 ? Primary : Rates) : null);
 
+    public Task RequireSubmissionAdmissionAsync(CancellationToken cancellationToken = default) => Refuse<bool>();
     public Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunRecord record, CancellationToken cancellationToken = default) => Refuse<PreviewSubmitResult>();
     public Task<PreviewClaimResult> ClaimAsync(Guid organizationId, Guid runId, Guid owner, TimeSpan lease, CancellationToken cancellationToken = default) => Refuse<PreviewClaimResult>();
     public Task<IReadOnlyList<PreviewStoredInput>> ReadInputsAsync(PreviewRunClaim claim, CancellationToken cancellationToken = default) => Refuse<IReadOnlyList<PreviewStoredInput>>();

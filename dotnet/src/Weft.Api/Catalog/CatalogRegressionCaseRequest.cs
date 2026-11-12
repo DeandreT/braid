@@ -74,6 +74,10 @@ internal static class CatalogRegressionCaseRequest
         {
             throw Invalid();
         }
+        catch (XmlDocumentException error)
+        {
+            throw error.IsResourceLimit ? TooLarge() : Invalid();
+        }
         catch (RegressionCaseException error)
         {
             throw error.Failure == RegressionCaseFailure.ResourceLimit ? TooLarge() : Invalid();
@@ -91,6 +95,8 @@ internal static class CatalogRegressionCaseRequest
             Text(runtime, "adapterBuild"), Text(runtime, "profile"));
         var documents = identity.Profile == DocumentPreviewPolicy.Profile;
         var csv = identity.Profile == CsvDocumentPolicy.Profile;
+        // Input metadata never carries hints; the endpoint still proves it against the saved revision.
+        var xmlInput = identity.Profile == XmlPreviewAdmission.Profile ? XmlDocumentMetadata.WithoutHints : null;
         if (hasOptions && !documents) throw Invalid();
         EdiComparisonOptions? options = null;
         if (hasOptions && optionsElement.ValueKind != JsonValueKind.Null)
@@ -112,7 +118,7 @@ internal static class CatalogRegressionCaseRequest
         Shape(limitsValue, "maximumInputBytes", "maximumOutputBytes", "maximumArtifacts", "maximumTextBytes");
         var limits = new PreviewLimits(Integer(limitsValue, "maximumInputBytes"), Integer(limitsValue, "maximumOutputBytes"),
             Integer(limitsValue, "maximumArtifacts"), Integer(limitsValue, "maximumTextBytes"));
-        var primary = new PreviewInputDocument(null, Bytes(Text(root, "primaryBase64Url"), PreviewPolicy.MaximumInputBytes));
+        var primary = new PreviewInputDocument(null, Bytes(Text(root, "primaryBase64Url"), PreviewPolicy.MaximumInputBytes), xmlMetadata: xmlInput);
         var named = Array(root, "namedInputs", PreviewPolicy.MaximumInputDocuments - 1);
         var inputs = new List<PreviewInputDocument>();
         var inputRemaining = PreviewPolicy.MaximumInputBytes - primary.ByteCount;
@@ -122,7 +128,7 @@ internal static class CatalogRegressionCaseRequest
             Shape(input, "name", "bytesBase64Url");
             var bytes = Bytes(Text(input, "bytesBase64Url"), inputRemaining);
             inputRemaining -= bytes.Length;
-            inputs.Add(new(Text(input, "name"), bytes));
+            inputs.Add(new(Text(input, "name"), bytes, xmlMetadata: xmlInput));
         }
         var parameters = Array(root, "parameters", PreviewPolicy.MaximumParameters);
         var values = new List<PreviewParameter>();
@@ -146,17 +152,20 @@ internal static class CatalogRegressionCaseRequest
         foreach (var output in expected.EnumerateArray())
         {
             token.ThrowIfCancellationRequested();
-            Shape(output, csv ? ["name", "bytesBase64Url", "mediaType", "csvDialect"] :
+            Shape(output, xmlInput is not null ? ["name", "bytesBase64Url", "mediaType", "xmlMetadata"] :
+                csv ? ["name", "bytesBase64Url", "mediaType", "csvDialect"] :
                 documents ? ["name", "bytesBase64Url", "mediaType"] : ["name", "bytesBase64Url"]);
             var name = NullableText(output, "name");
             var bytes = Bytes(Text(output, "bytesBase64Url"), outputRemaining);
             outputRemaining -= bytes.Length;
             outputs.Add(RegressionOutput.Capture(name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(name), bytes, token,
-                documents || csv ? Text(output, "mediaType") : PreviewPolicy.MediaType,
-                csv ? CsvDialectJson.Read(output.GetProperty("csvDialect")) : null));
+                documents || csv || xmlInput is not null ? Text(output, "mediaType") : PreviewPolicy.MediaType,
+                csv ? CsvDialectJson.Read(output.GetProperty("csvDialect")) : null,
+                xmlInput is not null ? XmlDocumentMetadataJson.Read(output.GetProperty("xmlMetadata"), XmlDocumentRole.Output) : null));
         }
         return new(Text(root, "name"), Id(Text(root, "revisionId")), identity,
             new(target, Text(root, "currentDateTime"), limits, primary, inputs, values, token,
+                xmlInput is not null ? PreviewExecutionProfile.XmlDocument :
                 csv ? PreviewExecutionProfile.CsvDocument : PreviewExecutionProfile.LegacyJson),
             Text(root, "comparisonPolicy"), RegressionOutputSet.Capture(outputs, token), options);
     }

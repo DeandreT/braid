@@ -10,6 +10,8 @@ using Weft.Deployment;
 
 if (!OperatingSystem.IsLinux()) return 1;
 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+if (args is [XmlComparisonProtocol.ModeArgument]) return await XmlComparisonInvocation.RunAsync(timeout.Token);
+if (args.Length != 0) return 1;
 var stage = "request";
 try
 {

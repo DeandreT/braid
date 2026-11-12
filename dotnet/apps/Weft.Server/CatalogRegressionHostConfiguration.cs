@@ -30,6 +30,8 @@ public static class CatalogRegressionHostConfiguration
             "true" => true,
             _ => throw new ArgumentException("Notification enablement must be true or false.")
         };
+        var xmlEnabled = XmlPreviewAdmission.Enabled(environment, XmlPreviewAdmission.RegressionEnabledSetting, enabled);
+        if (xmlEnabled) CatalogPreviewSourceAdmission.RequireNativeSources(services);
         if (!enabled && !notifications) return;
         if (!catalogEnabled) throw new ArgumentException("Regression and notification APIs require an enabled catalog.");
         var csvEnabled = enabled && (environment(CsvDocumentPolicy.RegressionEnabledSetting) switch
@@ -72,7 +74,9 @@ public static class CatalogRegressionHostConfiguration
             FerrulePreviewBackend.DocumentAdapterBuild, DocumentPreviewPolicy.Profile);
         var csvRuntime = csvEnabled ? new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
             FerrulePreviewBackend.CsvAdapterBuild, CsvDocumentPolicy.Profile) : null;
-        services.AddWeftRegressionCases(new(true, runtime, documentRuntime, csvRuntime));
+        var xmlRuntime = xmlEnabled ? new RegressionRuntimeIdentity("ferrule", FerruleInspectionBackend.EngineRevision, image,
+            FerrulePreviewBackend.XmlAdapterBuild, XmlPreviewAdmission.Profile) : null;
+        services.AddWeftRegressionCases(new(true, runtime, documentRuntime, csvRuntime, xmlRuntime));
         services.AddWeftRegressionRuns(new(true));
         Automation(runWriter);
         services.AddSingleton<IRegressionCaseReader>(_ => new PostgresRegressionCaseStore(caseReader, RegressionCaseDatabaseProfile.Reader));

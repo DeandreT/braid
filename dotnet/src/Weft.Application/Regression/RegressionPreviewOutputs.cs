@@ -37,6 +37,8 @@ internal static class RegressionPreviewOutputs
             if (output is null || !boundaries.Add(output.BoundaryId) ||
                 (value.Runtime.Profile switch
                 {
+                    XmlPreviewAdmission.Profile => output.CsvDialect is not null ||
+                        !XmlDocumentPolicy.Admits(output.XmlMetadata, XmlDocumentRole.Output, output.MediaType),
                     CsvDocumentPolicy.Profile => !CsvDocumentPolicy.Admits(output.CsvDialect, output.MediaType),
                     PreviewPolicy.Profile => output.CsvDialect is not null || output.MediaType != PreviewPolicy.MediaType,
                     _ => output.CsvDialect is not null || !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType)
@@ -62,7 +64,7 @@ internal static class RegressionPreviewOutputs
             }
             if (value.Runtime.Profile == CsvDocumentPolicy.Profile &&
                 (key != RegressionOutputKey.Primary || value.Expected.Outputs.Single().CsvDialect != output.CsvDialect)) throw Invalid();
-            outputs.Add(RegressionOutput.Capture(key, output.Bytes, token, output.MediaType, output.CsvDialect));
+            outputs.Add(RegressionOutput.Capture(key, output.Bytes, token, output.MediaType, output.CsvDialect, output.XmlMetadata));
         }
         if (value.Replay.Target.Kind == PreviewTargetKind.Named ? outputs.Count != 1 : primary != 1) throw Invalid();
         return RegressionOutputSet.Capture(outputs, token);

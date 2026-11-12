@@ -9,18 +9,21 @@ public sealed record CatalogPreviewOptions
     public const int MaximumBodyBytes = 12 * 1024 * 1024;
     public const string CsvEnabledSetting = "WEFT_PREVIEWS_CSV_ENABLED";
 
-    public CatalogPreviewOptions(bool enabled = false, int bodyByteLimit = MaximumBodyBytes, bool csvEnabled = false)
+    public CatalogPreviewOptions(bool enabled = false, int bodyByteLimit = MaximumBodyBytes, bool csvEnabled = false, bool xmlEnabled = false)
     {
         if (bodyByteLimit is < 1024 or > MaximumBodyBytes)
             throw new ArgumentOutOfRangeException(nameof(bodyByteLimit), "The preview body limit is outside its admitted range.");
         if (csvEnabled && !enabled) throw new ArgumentException("CSV previews require enabled preview routes.", nameof(csvEnabled));
+        if (xmlEnabled && !enabled) throw new ArgumentException("XML previews require enabled preview routes.", nameof(xmlEnabled));
         Enabled = enabled;
         CsvEnabled = csvEnabled;
+        XmlEnabled = xmlEnabled;
         BodyByteLimit = bodyByteLimit;
     }
 
     public bool Enabled { get; }
     public bool CsvEnabled { get; }
+    public bool XmlEnabled { get; }
     public int BodyByteLimit { get; }
 }
 
@@ -38,7 +41,7 @@ public static partial class CatalogEndpoints
             throw new InvalidOperationException("Preview routes require a registered catalog.");
         if (services.Any(service => service.ServiceType == typeof(CatalogPreviewOptions)))
             throw new InvalidOperationException("Preview routes are already registered.");
-        if (options.CsvEnabled) CatalogPreviewSourceAdmission.RequireCsvSources(services);
+        if (options.CsvEnabled || options.XmlEnabled) CatalogPreviewSourceAdmission.RequireNativeSources(services);
         services.AddSingleton(options);
         return services;
     }

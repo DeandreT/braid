@@ -7558,6 +7558,16 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogXmlPreviewProblemV1"
+                }
+              }
+            }
+          },
           "415": {
             "description": "Unsupported Media Type",
             "content": {
@@ -7845,6 +7855,12 @@
                 }
               },
               "text/tab-separated-values": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/xml": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -29561,6 +29577,10 @@
               "null",
               "boolean"
             ]
+          },
+          "xmlPreview": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -29983,6 +30003,16 @@
                 "$ref": "#/components/schemas/CsvDocumentDialectV1"
               }
             ]
+          },
+          "xmlMetadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/XmlDocumentMetadataV1"
+              }
+            ]
           }
         }
       },
@@ -30221,13 +30251,14 @@
               "weft.ferrule-json-preview.v1",
               "weft.ferrule-document-preview.v1",
               "weft.ferrule-csv-preview.v1",
+              "weft.ferrule-xml-preview.v1",
               null
             ],
             "type": [
               "null",
               "string"
             ],
-            "description": "Omitted or null preserves legacy JSON admission. CSV/TSV is a separately enabled primary-only profile requiring native-source ports; an explicit empty content string is present input. Formats and dialects come from saved native boundaries, never filenames or caller overrides."
+            "description": "Omitted or null preserves legacy JSON admission. XML is a separately enabled safe native-preview profile with saved metadata and named targets. CSV/TSV is a separately enabled primary-only profile; an explicit empty content string is present input. Formats and settings come from saved native boundaries, never filenames or caller overrides. XML regression compares exact bytes; compiled XML execution is unavailable."
           }
         },
         "additionalProperties": false
@@ -31117,6 +31148,142 @@
               "string"
             ],
             "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogXmlLocationV1": {
+        "required": [
+          "line",
+          "column"
+        ],
+        "type": "object",
+        "properties": {
+          "line": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          },
+          "column": {
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogXmlPreviewProblemV1": {
+        "required": [
+          "code",
+          "kind",
+          "reason",
+          "location",
+          "statistics",
+          "observed",
+          "limit"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "enum": [
+              "xmlPreflight"
+            ],
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "invalidInput",
+              "resourceLimit",
+              "unsupportedCapability"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "invalidUtf8",
+              "invalidXml",
+              "invalidDeclaration",
+              "documentRequired",
+              "unsupportedName",
+              "byteLimit",
+              "depthLimit",
+              "nodeLimit",
+              "attributeLimit",
+              "documentCountLimit",
+              "invalidMetadata",
+              "metadataTooLarge",
+              "invalidNativeMetadata",
+              "nativeByteLimit"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogXmlLocationV1"
+              }
+            ]
+          },
+          "statistics": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogXmlStatisticsV1"
+              }
+            ]
+          },
+          "observed": {
+            "pattern": "^(0|[1-9][0-9]{0,18})$",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Nonnegative Int64 as exact decimal text, or null when unavailable."
+          },
+          "limit": {
+            "pattern": "^(0|[1-9][0-9]{0,18})$",
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Nonnegative Int64 as exact decimal text, or null when unavailable."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogXmlStatisticsV1": {
+        "required": [
+          "originalBytes",
+          "physicalNodes",
+          "maximumDepth",
+          "maximumAttributes"
+        ],
+        "type": "object",
+        "properties": {
+          "originalBytes": {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "physicalNodes": {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "maximumDepth": {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "maximumAttributes": {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
           }
         },
         "additionalProperties": false
@@ -37361,6 +37528,16 @@
                 "$ref": "#/components/schemas/RegressionRuntimeV1"
               }
             ]
+          },
+          "xmlRuntime": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RegressionRuntimeV1"
+              }
+            ]
           }
         }
       },
@@ -37795,6 +37972,16 @@
               },
               {
                 "$ref": "#/components/schemas/CsvDocumentDialectV1"
+              }
+            ]
+          },
+          "xmlMetadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/XmlDocumentMetadataV1"
               }
             ]
           }
@@ -39398,6 +39585,68 @@
             "items": {
               "$ref": "#/components/schemas/ValidationDiagnosticV1"
             }
+          }
+        }
+      },
+      "XmlDocumentMetadataV1": {
+        "required": [
+          "schema",
+          "safetyProfile",
+          "schemaHints"
+        ],
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "string"
+          },
+          "safetyProfile": {
+            "type": "string"
+          },
+          "schemaHints": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/XmlSchemaHintsV1"
+              }
+            ]
+          }
+        }
+      },
+      "XmlSchemaHintsV1": {
+        "required": [
+          "noNamespaceLocation",
+          "locations"
+        ],
+        "type": "object",
+        "properties": {
+          "noNamespaceLocation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XmlSchemaLocationV1"
+            }
+          }
+        }
+      },
+      "XmlSchemaLocationV1": {
+        "required": [
+          "namespace",
+          "location"
+        ],
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
           }
         }
       }

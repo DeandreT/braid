@@ -23,6 +23,7 @@ import {
   csvMaximumRecords,
   csvMaximumColumns,
 } from "../previews/csv-contract";
+import { xmlMetadata, xmlPreviewProfile } from "../previews/xml-contract";
 import {
   isCatalogId,
   type CatalogContext,
@@ -100,9 +101,20 @@ export class RegressionApi {
               "readSamples",
               "publishCases",
             ],
-            ["documentRuntime", "comparisonPolicies", "csvRuntime"],
+            [
+              "documentRuntime",
+              "comparisonPolicies",
+              "csvRuntime",
+              "xmlRuntime",
+            ],
           ) ||
           !runtime(v.runtime) ||
+          (v.xmlRuntime !== undefined &&
+            (!runtime(v.xmlRuntime) ||
+              (v.xmlRuntime as Obj).profile !== xmlPreviewProfile ||
+              !["backendId", "engineRevision", "backendBuild"].every(
+                (key) => (v.xmlRuntime as Obj)[key] === (v.runtime as Obj)[key],
+              ))) ||
           !limits(v.limits) ||
           v.comparisonPolicy !== exactPolicy ||
           typeof v.readSamples !== "boolean" ||
@@ -562,12 +574,14 @@ function documents(
         ? optionalShape(
             item,
             ["name", "bytesBase64Url", "mediaType"],
-            ["csvDialect"],
+            ["csvDialect", "xmlMetadata"],
           )
         : optionalShape(
             item,
             ["name", "bytesBase64Url"],
-            media === "optional" ? ["mediaType", "csvDialect"] : [],
+            media === "optional"
+              ? ["mediaType", "csvDialect", "xmlMetadata"]
+              : [],
           )) ||
       (item.mediaType !== undefined &&
         !oneOf(item.mediaType, [
@@ -576,8 +590,12 @@ function documents(
           "application/edifact",
           "text/csv",
           "text/tab-separated-values",
+          "application/xml",
         ])) ||
-      !csvMetadata(item.mediaType, item.csvDialect) ||
+      (item.mediaType === "application/xml"
+        ? item.csvDialect !== undefined || !xmlMetadata(item.xmlMetadata)
+        : item.xmlMetadata !== undefined ||
+          !csvMetadata(item.mediaType, item.csvDialect)) ||
       !(item.name === null || (text(item.name, 256) && item.name.length > 0)) ||
       typeof item.bytesBase64Url !== "string" ||
       names.has(item.name)
@@ -631,12 +649,17 @@ function definition(v: unknown): v is CaseDefinition {
     documents(
       v.expected,
       64,
-      [documentProfile, csvPreviewProfile].includes(
+      [documentProfile, csvPreviewProfile, xmlPreviewProfile].includes(
         (v.runtime as Obj).profile as string,
       )
         ? "required"
         : "none",
     ) &&
+    ((v.runtime as Obj).profile === xmlPreviewProfile
+      ? v.comparisonPolicy === exactPolicy &&
+        v.expected.length > 0 &&
+        v.expected.every((item) => item.mediaType === "application/xml")
+      : v.expected.every((item) => item.xmlMetadata === undefined)) &&
     ((v.runtime as Obj).profile === csvPreviewProfile
       ? v.target.kind !== "named" &&
         v.namedInputs.length === 0 &&
@@ -759,6 +782,7 @@ function comparison(v: unknown): v is RegressionComparison {
           "segmentsDiffer",
           "csvRowsDiffer",
           "csvDialectDiffer",
+          "xmlMetadataDiffer",
         ]) &&
         [x.expectedBytes, x.actualBytes, x.firstDifferentByte].every(
           (n) => n === null || integer(n, maxBytes),

@@ -15,22 +15,22 @@ public static class CatalogPublicMapper
         bool metadataEditsEnabled = false, bool revisionIngestionEnabled = false,
         bool projectCreationEnabled = false, bool canCreateProjects = false,
         bool readReportsEnabled = false, bool deriveReportsEnabled = false,
-        bool previewEnabled = false, bool csvPreviewEnabled = false) =>
+        bool previewEnabled = false, bool csvPreviewEnabled = false, bool xmlPreviewEnabled = false) =>
         Context(admission, requestToken, "development", metadataEditsEnabled, revisionIngestionEnabled,
             projectCreationEnabled, canCreateProjects, readReportsEnabled, deriveReportsEnabled,
-            previewEnabled: previewEnabled, csvPreviewEnabled: csvPreviewEnabled);
+            previewEnabled: previewEnabled, csvPreviewEnabled: csvPreviewEnabled, xmlPreviewEnabled: xmlPreviewEnabled);
 
     internal static CatalogContextV1 Context(CatalogOrganizationAdmission admission, string? requestToken,
         string mode, bool metadataEditsEnabled, bool revisionIngestionEnabled, bool projectCreationEnabled,
         bool canCreateProjects, bool readReportsEnabled, bool deriveReportsEnabled, string? identityContext = null,
         bool chatEnabled = false, bool previewEnabled = false, bool manageMembershipEnabled = false, bool editEnabled = false,
-        bool csvPreviewEnabled = false) =>
+        bool csvPreviewEnabled = false, bool xmlPreviewEnabled = false) =>
         new(mode, Id(admission.PrincipalId.Value), Id(admission.OrganizationId), admission.Name,
             metadataEditsEnabled || revisionIngestionEnabled || projectCreationEnabled || readReportsEnabled || deriveReportsEnabled || chatEnabled
                  || previewEnabled || manageMembershipEnabled || editEnabled
                 ? new(true, projectCreationEnabled, revisionIngestionEnabled, metadataEditsEnabled, revisionIngestionEnabled,
                     readReportsEnabled, chatEnabled, previewEnabled, manageMembershipEnabled, deriveReportsEnabled, editEnabled,
-                    previewEnabled && csvPreviewEnabled ? true : null)
+                    previewEnabled && csvPreviewEnabled ? true : null, previewEnabled && xmlPreviewEnabled)
                 : Features, new CatalogOrganizationActionsV1(projectCreationEnabled && canCreateProjects), requestToken, identityContext);
 
     public static CatalogProjectV1 Project(CatalogProject project, bool revisionIngestionEnabled = false,

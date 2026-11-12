@@ -30,7 +30,8 @@ internal sealed record ApiOperation(
     string ResponseMediaType = "application/json",
     IReadOnlyList<string>? AlternateResponseMediaTypes = null,
     bool RequiresAuthentication = true,
-    bool RetryOnFailure = true);
+    bool RetryOnFailure = true,
+    IReadOnlyDictionary<int, Type>? AlternateErrorBodies = null);
 
 internal static partial class ApiOperations
 {
@@ -144,11 +145,12 @@ internal static partial class ApiOperations
         typeof(RevisionComparisonV1), ["leftRevision", "leftProjection", "leftValidation", "rightRevision", "rightProjection", "rightValidation"]);
 
     public static readonly ApiOperation SubmitCatalogPreview = Send("SubmitCatalogPreview", "POST", Revision + "/previews",
-        "application/json", typeof(CatalogPreviewSubmissionV1), Created(typeof(CatalogPreviewSubmitResultV1)), headers: Key);
+        "application/json", typeof(CatalogPreviewSubmissionV1), Created(typeof(CatalogPreviewSubmitResultV1)), headers: Key) with
+    { AlternateErrorBodies = new Dictionary<int, Type> { [422] = typeof(CatalogXmlPreviewProblemV1) } };
     public static readonly ApiOperation GetCatalogPreview = Get("GetCatalogPreview", Organization + "/previews/{runId}", typeof(CatalogPreviewRunV1));
     public static readonly ApiOperation GetCatalogPreviewOutput = new("GetCatalogPreviewOutput", "GET",
         Organization + "/previews/{runId}/outputs/{ordinal}", None, None, null, null, Ok(null), typeof(CatalogErrorV1),
-        AlternateResponseMediaTypes: ["application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values"]);
+        AlternateResponseMediaTypes: ["application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values", "application/xml"]);
     public static readonly ApiOperation CancelCatalogPreview = Send("CancelCatalogPreview", "POST", Organization + "/previews/{runId}/cancel",
         null, null, Ok(typeof(CatalogPreviewCancelResultV1)));
 

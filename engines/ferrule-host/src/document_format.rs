@@ -10,6 +10,7 @@ pub enum DocumentFormat {
     Edifact,
     Csv,
     Tsv,
+    Xml,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,6 +29,7 @@ impl DocumentFormat {
             Self::Edifact => "edifact",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
+            Self::Xml => "xml",
         }
     }
 
@@ -38,6 +40,7 @@ impl DocumentFormat {
             Self::Edifact => "edi",
             Self::Csv => "csv",
             Self::Tsv => "tsv",
+            Self::Xml => "xml",
         }
     }
 
@@ -48,6 +51,7 @@ impl DocumentFormat {
             Self::Edifact => "application/edifact",
             Self::Csv => "text/csv",
             Self::Tsv => "text/tab-separated-values",
+            Self::Xml => "application/xml",
         }
     }
 
@@ -109,6 +113,7 @@ impl DocumentFormat {
                 }
             }
             Self::Csv | Self::Tsv => unreachable!("CSV returned after its closed option admission"),
+            Self::Xml => unreachable!("XML requires its separate preview admission"),
         }
         if *options != admitted {
             return Err(FormatRefusal::ConflictingOptions);

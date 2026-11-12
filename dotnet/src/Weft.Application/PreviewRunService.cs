@@ -38,6 +38,10 @@ public sealed class PreviewRunService
         _options = PreviewRunExecutor.Validate(options ?? new());
     }
 
+    /// <summary>Trusted persistence admission only, not a replacement for revision or actor authorization.</summary>
+    public Task RequireSubmissionAdmissionAsync(CancellationToken cancellationToken = default) =>
+        _store.RequireSubmissionAdmissionAsync(cancellationToken);
+
     public async Task<PreviewSubmitResult> SubmitAsync(ActorContext actor, PreviewRunSubmission submission,
         CancellationToken cancellationToken = default)
     {
@@ -81,6 +85,14 @@ public sealed class PreviewRunService
         ArgumentNullException.ThrowIfNull(submission.Parameters);
         if (!Enum.IsDefined(submission.Profile))
             return "This preview profile is not admitted by the persisted catalog contract.";
+        if (submission.Profile == PreviewExecutionProfile.XmlDocument && !_options.XmlEnabled) return "XML previews are not enabled.";
+        if (submission.NamedInputs.Prepend(submission.Primary).Any(input => submission.Profile == PreviewExecutionProfile.XmlDocument
+            ? input?.XmlMetadata is null : input?.XmlMetadata is not null)) return "XML metadata must belong to its own profile.";
+        if (submission.Profile == PreviewExecutionProfile.XmlDocument)
+        {
+            try { foreach (var input in submission.NamedInputs.Prepend(submission.Primary)) XmlDocumentSafety.Validate(input.Bytes); }
+            catch (XmlDocumentException error) { return error.Message; }
+        }
         var csv = submission.Profile == PreviewExecutionProfile.CsvDocument;
         if (csv && (submission.NamedInputs.Count != 0 || submission.Target.Kind == PreviewTargetKind.Named))
             return "CSV preview requires a primary-only CSV plan.";
@@ -201,17 +213,22 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
                 var expectedProfile = request.Profile switch
                 {
                     PreviewExecutionProfile.Document => DocumentPreviewPolicy.Profile,
+                    PreviewExecutionProfile.XmlDocument => XmlPreviewAdmission.Profile,
                     PreviewExecutionProfile.CsvDocument => CsvDocumentPolicy.Profile,
                     _ => PreviewPolicy.Profile
                 };
                 if (result.Profile != expectedProfile || result.Artifacts.Any(output =>
-                    request.Profile switch
+                    request.Profile != PreviewExecutionProfile.XmlDocument && output.XmlMetadata is not null ||
+                    (request.Profile switch
                     {
+                        PreviewExecutionProfile.XmlDocument => output.CsvDialect is not null || !XmlDocumentPolicy.Admits(output.XmlMetadata, XmlDocumentRole.Output, output.MediaType),
                         PreviewExecutionProfile.CsvDocument => !CsvDocumentPolicy.Admits(output.CsvDialect, output.MediaType),
                         PreviewExecutionProfile.Document => output.CsvDialect is not null || !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType),
                         _ => output.CsvDialect is not null || output.MediaType != PreviewPolicy.MediaType
-                    }))
+                    })))
                     throw new PreviewRunException("The preview backend did not preserve the requested admission profile.");
+                if (request.Profile == PreviewExecutionProfile.XmlDocument && result.Status == MappingPreviewStatus.Succeeded)
+                    XmlPreviewAdmission.VerifyResult(request, result);
                 if (request.Profile == PreviewExecutionProfile.CsvDocument)
                 {
                     var dialect = CsvNativeDialect.Read(request.Artifact).Output;
@@ -245,6 +262,10 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
             completion = new(PreviewRunOutcome.ProtocolFailure,
                 new("preview.storedRequest", error.Message, false, null, false), null, 0, []);
         }
+        catch (XmlDocumentException error)
+        {
+            completion = new(PreviewRunOutcome.ProtocolFailure, new("preview.xmlAdmission", error.Message, false, null, false), null, 0, []);
+        }
         return await _store.CompleteAsync(claim, completion, CancellationToken.None).ConfigureAwait(false)
             ? PreviewExecutionOutcome.Completed : PreviewExecutionOutcome.ClaimLost;
     }
@@ -253,6 +274,8 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
     private async Task<MappingPreviewRequest?> PrepareAsync(PreviewRunClaim claim, CancellationToken cancellationToken)
     {
         var description = PreviewRequestDocument.Decode(claim.RequestDocument);
+        if (description.Profile == PreviewExecutionProfile.XmlDocument && !_options.XmlEnabled)
+            throw new PreviewRunException("XML previews are not enabled.");
         if (description.Subject != claim.Subject)
             throw new PreviewRunException("The stored preview request does not match its run.");
         var inputs = await _store.ReadInputsAsync(claim, cancellationToken).ConfigureAwait(false);
@@ -286,8 +309,10 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
         else throw new PreviewRunException("The native source does not match the run's subject kind.");
         if (description.Profile == PreviewExecutionProfile.CsvDocument && CsvNativeDialect.Read(artifact).Input != description.Inputs[0].CsvDialect)
             throw new PreviewRunException("The input dialect does not match the saved native revision.");
-        return new MappingPreviewRequest(artifact, description.Target, new PreviewInputDocument(null, inputs[0].Content, description.Inputs[0].CsvDialect),
-            inputs.Skip(1).Select(input => new PreviewInputDocument(input.Name, input.Content)).ToArray(),
+        var documents = inputs.Select((input, index) => new PreviewInputDocument(input.Name, input.Content, description.Inputs[index].CsvDialect,
+            description.Inputs[index].XmlMetadata)).ToArray();
+        if (description.Profile == PreviewExecutionProfile.XmlDocument) XmlPreviewAdmission.BindInputs(artifact, documents);
+        return new MappingPreviewRequest(artifact, description.Target, documents[0], documents.Skip(1).ToArray(),
             description.Parameters, claim.CurrentDateTime, description.Limits)
         { Profile = description.Profile };
     }

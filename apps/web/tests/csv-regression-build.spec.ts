@@ -36,7 +36,7 @@ test("saved CSV regression retains its native dialect and offers row comparison 
       inputs: [{ name: null, content: "" }],
     },
     csvCapabilities,
-    Buffer.from(csvBytes),
+    [Buffer.from(csvBytes)],
     "Native CSV case",
   );
   definition.comparisonPolicy = csvRowsPolicy;

@@ -56,6 +56,8 @@ public sealed class RegressionComparisonService
                     Add(new(left.Key, RegressionDifferenceKind.MediaTypeDiffer, left.ByteCount, right.ByteCount, left.Digest, right.Digest, null));
                 else if (left.CsvDialect != right.CsvDialect)
                     Add(new(left.Key, RegressionDifferenceKind.CsvDialectDiffer, left.ByteCount, right.ByteCount, left.Digest, right.Digest, null));
+                else if (left.XmlMetadata != right.XmlMetadata)
+                    Add(new(left.Key, RegressionDifferenceKind.XmlMetadataDiffer, left.ByteCount, right.ByteCount, left.Digest, right.Digest, null));
                 else if (policy == CsvRowsPolicy)
                 {
                     if (left.CsvDialect is null) return NotEvaluated(RegressionNotEvaluatedReason.InvalidDocument);

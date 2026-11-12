@@ -24,6 +24,15 @@ public sealed class PostgresFactAttribute : FactAttribute
     }
 }
 
+public sealed class PostgresTheoryAttribute : TheoryAttribute
+{
+    public PostgresTheoryAttribute()
+    {
+        if (!PostgresFixture.IsConfigured)
+            Skip = "Set WEFT_POSTGRES_IMAGE or WEFT_POSTGRES_BIN to execute actual database gates.";
+    }
+}
+
 /// <summary>A uniquely owned cluster; the optional isolated client is only attached and detached.</summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {

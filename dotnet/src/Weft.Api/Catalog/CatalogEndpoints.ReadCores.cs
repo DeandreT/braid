@@ -53,7 +53,8 @@ public static partial class CatalogEndpoints
                     .Concat(options.DocumentRuntime is null ? [] : new[] { RegressionComparisonService.EdiSegmentsPolicy })
                     .Concat(options.CsvRuntime is null ? [] : new[] { RegressionComparisonService.CsvRowsPolicy }).ToArray()
                 : null,
-            options.CsvRuntime is { } csvRuntime ? Runtime(csvRuntime) : null);
+            options.CsvRuntime is { } csvRuntime ? Runtime(csvRuntime) : null,
+            options.XmlRuntime is { } xmlRuntime ? Runtime(xmlRuntime) : null);
     }
 
     internal static async Task<RegressionCasePage?> RegressionCasePageAsync(IServiceProvider services, ActorContext actor, MappingScope mapping,

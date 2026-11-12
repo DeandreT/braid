@@ -14,6 +14,8 @@ internal sealed class CliEnvironment
     public required TextWriter Error { get; init; }
     public required Func<Stream> OpenStandardInput { get; init; }
     public required Func<Stream> OpenStandardOutput { get; init; }
+    public Func<string, Stream> OpenInputFile { get; init; } = path =>
+        new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous);
     public required string ConfigurationDirectory { get; init; }
     public required ITokenCacheStore TokenCaches { get; init; }
 

@@ -285,6 +285,13 @@ fn boundary_format(
     stored_path: Option<&str>,
     schema: &ferrule_ir::SchemaNode,
 ) -> Option<DocumentFormat> {
+    if header.is_xml_preview() {
+        // Complete raw-option, role, declaration and emission-plan admission is
+        // required by process_preview before this selected-boundary projection.
+        return (options.xml_document
+            && crate::xml_document::bounded_closed_schema(schema).is_ok())
+        .then_some(DocumentFormat::Xml);
+    }
     if header.is_document_preview() {
         DocumentFormat::from_options(options)
             .ok()
@@ -299,7 +306,9 @@ fn boundary_format(
 }
 
 fn format_message(header: &PreviewRequestHeader, legacy: &'static str) -> &'static str {
-    if header.is_csv_preview() {
+    if header.is_xml_preview() {
+        "XML requires explicit saved XML options and a closed static structured document schema."
+    } else if header.is_csv_preview() {
         "The flat CSV capability requires explicit saved CSV settings on both primary boundaries."
     } else if header.is_document_preview() {
         "The boundary requires an explicit JSON, X12 or EDIFACT family, a bounded embedded schema, admitted options and no unresolved EDI configuration."

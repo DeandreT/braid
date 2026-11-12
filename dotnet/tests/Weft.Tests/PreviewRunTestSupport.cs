@@ -44,9 +44,9 @@ internal sealed class PreviewRunTestSupport : IAsyncDisposable
     internal IPrivateObjectStore Objects => objects;
     internal static byte[] NativeBytes => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "preview-orders.json"));
 
-    internal static async Task<PreviewRunTestSupport> CreateAsync(PostgresFixture fixture, byte[]? nativeBytes = null)
+    internal static async Task<PreviewRunTestSupport> CreateAsync(PostgresFixture fixture, byte[]? nativeBytes = null, int? migrationCount = null)
     {
-        var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture);
+        var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture, migrationCount: migrationCount);
         try
         {
             var native = nativeBytes ?? NativeBytes;

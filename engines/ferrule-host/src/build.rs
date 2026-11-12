@@ -266,6 +266,7 @@ pub fn generate(
                     .map(DocumentBoundaryOptions::Edifact)
                     .map_err(|_| "unsupported"),
                 DocumentFormat::Csv | DocumentFormat::Tsv => Err("unsupportedCsvPlan"),
+                DocumentFormat::Xml => Err("unsupportedXmlBuild"),
             }
         };
         let policy = ferrule_codegen::StaticDocumentBoundaryPolicy {

@@ -60,6 +60,7 @@ public sealed class DraftPreviewExecutorTests
 
     private sealed class Ports : IPreviewRunStore, IPrivateObjectStore, IMappingPreviewBackend
     {
+        public Task RequireSubmissionAdmissionAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         internal readonly NativeArtifact Artifact;
         internal PreviewRunClaim Claim;
         internal MappingPreviewRequest? Executed;

@@ -23,7 +23,8 @@ public static class CatalogHostConfiguration
         var creationOptions = new CatalogProjectCreationOptions(Flag("WEFT_PROJECT_CREATION_ENABLED"));
         var reportOptions = new CatalogRevisionReportOptions(Flag("WEFT_REVISION_REPORTS_ENABLED"),
             Flag("WEFT_REVISION_REPORT_DERIVATION_ENABLED"));
-        var previewOptions = new CatalogPreviewOptions(Flag("WEFT_PREVIEWS_ENABLED"), csvEnabled: Flag(CatalogPreviewOptions.CsvEnabledSetting));
+        var previewOptions = new CatalogPreviewOptions(Flag("WEFT_PREVIEWS_ENABLED"), csvEnabled: Flag(CatalogPreviewOptions.CsvEnabledSetting),
+            xmlEnabled: Flag(Weft.Application.XmlPreviewAdmission.EnabledSetting));
         CatalogMappingEditingHostConfiguration.Configure(builder.Services, readEnvironment, options.Enabled, ingestionOptions.Enabled,
             reportOptions.Enabled, reportOptions.DerivationEnabled);
         builder.Services.AddWeftCatalog(options, builder.Environment, metadataOptions, ingestionOptions, creationOptions, reportOptions);

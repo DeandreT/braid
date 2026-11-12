@@ -28,6 +28,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
     public const string Schema = "weft.regression-case.v1";
     public const string DocumentSchema = "weft.document-regression-case.v1";
     public const string CsvSchema = "weft.csv-regression-case.v1";
+    public const string XmlSchema = "weft.xml-regression-case.v1";
     public const int MaximumHeaderBytes = 256 * 1024;
     public const int MaximumEnvelopeBytes = 4 + MaximumHeaderBytes +
         4 * (PreviewPolicy.MaximumInputDocuments + PreviewPolicy.MaximumArtifacts) +
@@ -74,13 +75,14 @@ public sealed partial class RegressionCaseEnvelopeCodec
             if (offset != owned.Length || result.CaseId != expected.CaseId || result.Version != expected.Version ||
                 result.Owner != expected.Owner || result.Revision != expected.Revision || result.NativeDigest != expected.NativeDigest)
                 throw Integrity();
-            if (result.Runtime.Profile == CsvDocumentPolicy.Profile && !Encode(result, cancellationToken).CopyBytes().AsSpan().SequenceEqual(owned))
+            if (result.Runtime.Profile is CsvDocumentPolicy.Profile or XmlPreviewAdmission.Profile &&
+                !Encode(result, cancellationToken).CopyBytes().AsSpan().SequenceEqual(owned))
                 throw Integrity();
             cancellationToken.ThrowIfCancellationRequested();
             return result;
         }
         catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException or OverflowException or
-            RegressionComparisonException || error is RegressionCaseException { Failure: not RegressionCaseFailure.StorageIntegrity })
+            RegressionComparisonException or PreviewRunException or XmlDocumentException || error is RegressionCaseException { Failure: not RegressionCaseFailure.StorageIntegrity })
         {
             // Never attach parser exceptions: they can contain private names, parameter values or payload text.
             throw Integrity();
@@ -93,7 +95,8 @@ public sealed partial class RegressionCaseEnvelopeCodec
         json.WriteStartObject();
         var documents = value.Runtime.Profile == DocumentPreviewPolicy.Profile;
         var csv = value.Runtime.Profile == CsvDocumentPolicy.Profile;
-        json.WriteString("schema", csv ? CsvSchema : documents ? DocumentSchema : Schema);
+        var xml = value.Runtime.Profile == XmlPreviewAdmission.Profile;
+        json.WriteString("schema", xml ? XmlSchema : csv ? CsvSchema : documents ? DocumentSchema : Schema);
         json.WriteString("caseId", value.CaseId.ToString("D"));
         json.WriteNumber("version", value.Version);
         json.WriteString("owner", value.Owner.Value.ToString("D"));
@@ -162,25 +165,28 @@ public sealed partial class RegressionCaseEnvelopeCodec
         }
         json.WriteEndArray();
         json.WriteStartArray("inputs");
-        WriteFrameHeader(json, null, replay.Primary.ByteCount, replay.Primary.Digest, csvDialect: csv ? replay.Primary.CsvDialect : null, present: csv);
+        WriteFrameHeader(json, null, replay.Primary.ByteCount, replay.Primary.Digest, csvDialect: csv ? replay.Primary.CsvDialect : null, present: csv,
+            xmlMetadata: replay.Primary.XmlMetadata, xmlRole: XmlDocumentRole.Input);
         foreach (var input in replay.NamedInputs)
         {
             token.ThrowIfCancellationRequested();
-            WriteFrameHeader(json, input.Name, input.ByteCount, input.Digest);
+            WriteFrameHeader(json, input.Name, input.ByteCount, input.Digest, xmlMetadata: input.XmlMetadata, xmlRole: XmlDocumentRole.Input);
         }
         json.WriteEndArray();
         json.WriteStartArray("expected");
         foreach (var output in value.Expected.Outputs)
         {
             token.ThrowIfCancellationRequested();
-            WriteFrameHeader(json, output.Key.Name, output.ByteCount, output.Digest, documents || csv ? output.MediaType : null, output.CsvDialect);
+            WriteFrameHeader(json, output.Key.Name, output.ByteCount, output.Digest, documents || csv || xml ? output.MediaType : null, output.CsvDialect,
+                xmlMetadata: output.XmlMetadata, xmlRole: XmlDocumentRole.Output);
         }
         json.WriteEndArray();
         json.WriteEndObject();
     }
 
     private static void WriteFrameHeader(Utf8JsonWriter json, string? name, int length, Sha256Digest digest, string? mediaType = null,
-        CsvDocumentDialect? csvDialect = null, bool present = false)
+        CsvDocumentDialect? csvDialect = null, bool present = false,
+        XmlDocumentMetadata? xmlMetadata = null, XmlDocumentRole xmlRole = XmlDocumentRole.Input)
     {
         json.WriteStartObject();
         json.WriteString("name", name);
@@ -189,6 +195,7 @@ public sealed partial class RegressionCaseEnvelopeCodec
         json.WriteString("sha256", digest.Value);
         if (mediaType is not null) json.WriteString("mediaType", mediaType);
         if (csvDialect is not null) { json.WritePropertyName("csvDialect"); CsvDialectJson.Write(json, csvDialect); }
+        if (xmlMetadata is not null) { json.WritePropertyName("xmlMetadata"); XmlDocumentMetadataJson.Write(json, xmlMetadata, xmlRole); }
         json.WriteEndObject();
     }
 

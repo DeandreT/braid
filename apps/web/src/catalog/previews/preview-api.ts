@@ -17,6 +17,7 @@ import {
   type Observable,
 } from "rxjs";
 import { BrowserSessionState } from "../../auth/browser-session-state";
+import { xmlPreflightProblem } from "./xml-problem";
 import { isCatalogId, type CatalogRevisionScope } from "../catalog-types";
 import {
   csvMaximumRecords,
@@ -24,6 +25,12 @@ import {
   csvMetadata,
   csvPreviewProfile,
 } from "./csv-contract";
+import {
+  xmlMetadata,
+  xmlMetadataBytes,
+  xmlPreviewProfile,
+  type XmlMetadata,
+} from "./xml-contract";
 import {
   PreviewError,
   previewLimits,
@@ -278,6 +285,12 @@ function failure(error: unknown): PreviewError {
     return new PreviewError("unavailable");
   const code = object(error.error)?.["code"];
   switch (error.status) {
+    case 422:
+      return new PreviewError(
+        "invalidRequest",
+        422,
+        xmlPreflightProblem(error.error),
+      );
     case 400:
       return new PreviewError("invalidRequest", 400);
     case 401:
@@ -336,6 +349,21 @@ function run(value: unknown, scope: CatalogRevisionScope): boolean {
     (body["recordsWritten"] === null || decimal(body["recordsWritten"])) &&
     Array.isArray(outputs) &&
     outputs.length <= previewLimits.outputs &&
+    (!outputs.some(
+      (output) => object(output)?.["mediaType"] === "application/xml",
+    ) ||
+      (object(body["provenance"])?.["profile"] === xmlPreviewProfile &&
+        outputs.every(
+          (output) => object(output)?.["mediaType"] === "application/xml",
+        ) &&
+        outputs.reduce(
+          (sum, output) =>
+            sum +
+            (xmlMetadata(object(output)?.["xmlMetadata"])
+              ? xmlMetadataBytes(object(output)!["xmlMetadata"] as XmlMetadata)
+              : 32769),
+          0,
+        ) <= 32768)) &&
     (outcome === "succeeded" || outputs.length === 0) &&
     (!outputs.some((output) => csvMedia(object(output)?.["mediaType"])) ||
       (outputs.length === 1 &&
@@ -357,6 +385,9 @@ function outputDescriptor(value: unknown): value is PreviewOutput {
     exactKeys(output, [
       ...outputKeys,
       ...(output && Object.hasOwn(output, "csvDialect") ? ["csvDialect"] : []),
+      ...(output && Object.hasOwn(output, "xmlMetadata")
+        ? ["xmlMetadata"]
+        : []),
     ]) &&
     integer(output["ordinal"], 0, previewLimits.outputs - 1) &&
     text(output["boundaryId"], 2048, true) &&
@@ -369,8 +400,12 @@ function outputDescriptor(value: unknown): value is PreviewOutput {
       "application/edifact",
       "text/csv",
       "text/tab-separated-values",
+      "application/xml",
     ].includes(output["mediaType"] as string) &&
-    csvMetadata(output["mediaType"], output["csvDialect"]) &&
+    (output["mediaType"] === "application/xml"
+      ? output["csvDialect"] === undefined && xmlMetadata(output["xmlMetadata"])
+      : output["xmlMetadata"] === undefined &&
+        csvMetadata(output["mediaType"], output["csvDialect"])) &&
     decimal(output["recordsWritten"]) &&
     (!csvMedia(output["mediaType"]) ||
       BigInt(output["recordsWritten"] as string) <=

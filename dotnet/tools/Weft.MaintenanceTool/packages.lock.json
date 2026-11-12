@@ -168,10 +168,23 @@
         "resolved": "10.0.9",
         "contentHash": "YweovHiLUoEdbr2Xv8eRqCSkTu1vMms4a6xBHaQiMSFVy32PL+hXv6Vhol2NWOmLHjaVgTyhJ3R52U6JxS6w3Q=="
       },
+      "System.Security.Cryptography.Pkcs": {
+        "type": "Transitive",
+        "resolved": "10.0.14",
+        "contentHash": "Wz+IgL2xpg8KJ4i2VWj6uz1PmZNu4Q0Ljlwd73P9Vze5NcOBtctLii3itV0PB2MpOqwqDEGfB6RCdv94A4E5yQ=="
+      },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
         "resolved": "4.5.0",
         "contentHash": "wLBKzFnDCxP12VL9ANydSYhk59fC4cvOr9ypYQLPnAj48NQIhqnjdD2yhP8yEKyBJEjERWS9DisKL7rX5eU25Q=="
+      },
+      "System.Security.Cryptography.Xml": {
+        "type": "Transitive",
+        "resolved": "10.0.14",
+        "contentHash": "qpDILpfJvj65+Pvpf5drWq2+mRNSrPffJsRYVQjBmEky+V34W+w2LXDZShq0miitf5qAPKuMAQ3CUaifaS2rrw==",
+        "dependencies": {
+          "System.Security.Cryptography.Pkcs": "10.0.14"
+        }
       },
       "weft.ai": {
         "type": "Project"
@@ -179,6 +192,7 @@
       "weft.application": {
         "type": "Project",
         "dependencies": {
+          "System.Security.Cryptography.Xml": "[10.0.14, 10.0.14]",
           "Weft.Ai": "[1.0.0, )",
           "Weft.Contracts": "[1.0.0, )",
           "Weft.Domain": "[1.0.0, )"

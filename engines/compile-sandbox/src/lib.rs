@@ -44,8 +44,18 @@ pub const RUNTIME_VERSION: &str = "10.0.12";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManagedProfile {
     Compile,
-    Runtime(CString),
+    Runtime(CString, RuntimeOperation),
 }
+
+/// The runtime assembly's fixed entry operations; the trusted service selects one, never a request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeOperation {
+    Mapping,
+    XmlCanonicalComparison,
+}
+
+/// The only argument the launcher forwards to a managed program.
+pub const XML_COMPARISON_ARGUMENT: &str = "--xml-c14n10-comments";
 
 /// One launch, selected by the trusted service, never by a request.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,9 +173,39 @@ mod argument_tests {
             parse(&["--profile=runtime", "--runtime-assembly=/runtime/fixed.dll"])
                 .unwrap()
                 .profile,
-            ManagedProfile::Runtime(_)
+            ManagedProfile::Runtime(_, RuntimeOperation::Mapping)
         ));
+        let xml = parse(&[
+            "--profile=runtime",
+            "--runtime-assembly=/runtime/fixed.dll",
+            "--read=/runtime",
+            XML_COMPARISON_ARGUMENT,
+        ])
+        .unwrap();
+        assert!(matches!(
+            xml.profile,
+            ManagedProfile::Runtime(_, RuntimeOperation::XmlCanonicalComparison)
+        ));
+        assert_eq!(xml.read, [CString::new("/runtime").unwrap()]);
         for tail in [
+            vec!["--profile=compile", XML_COMPARISON_ARGUMENT],
+            vec![
+                "--profile=runtime",
+                "--runtime-assembly=/runtime/fixed.dll",
+                XML_COMPARISON_ARGUMENT,
+                "--read=/runtime",
+            ],
+            vec![
+                "--profile=runtime",
+                "--runtime-assembly=/runtime/fixed.dll",
+                XML_COMPARISON_ARGUMENT,
+                XML_COMPARISON_ARGUMENT,
+            ],
+            vec![
+                "--profile=runtime",
+                "--runtime-assembly=/runtime/fixed.dll",
+                "--xml-c14n10",
+            ],
             vec![],
             vec!["--profile=runtime"],
             vec!["--profile=runtime", "--runtime-assembly=relative.dll"],
@@ -189,7 +229,8 @@ mod argument_tests {
 
 /// Reads the exact argument shape:
 /// `--cpu-seconds=N --memory-bytes=N --open-files=N --file-bytes=N [--output=NAME]
-/// --dotnet-root=PATH --profile=compile|runtime [--runtime-assembly=PATH] [--read=PATH]...`
+/// --dotnet-root=PATH --profile=compile|runtime [--runtime-assembly=PATH] [--read=PATH]...
+/// [--xml-c14n10-comments]` (the last only with the runtime profile)
 pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
     let invalid = SandboxError::Arguments;
     let [cpu, memory, files, file_bytes, rest @ ..] = arguments else {
@@ -260,7 +301,17 @@ pub fn parse_arguments(arguments: &[OsString]) -> Result<Launch, SandboxError> {
                 .filter(|value| value.ends_with(".dll"))
                 .and_then(absolute)
                 .ok_or(SandboxError::Arguments)?;
-            (ManagedProfile::Runtime(path), rest)
+            // Only the final argument can select the fixed XML operation.
+            match rest {
+                [rest @ .., last] if last.to_str() == Some(XML_COMPARISON_ARGUMENT) => (
+                    ManagedProfile::Runtime(path, RuntimeOperation::XmlCanonicalComparison),
+                    rest,
+                ),
+                _ => (
+                    ManagedProfile::Runtime(path, RuntimeOperation::Mapping),
+                    rest,
+                ),
+            }
         }
         _ => return Err(invalid),
     };

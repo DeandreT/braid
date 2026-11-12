@@ -20,6 +20,8 @@ import {
   type PreviewTargetKind,
 } from "./preview-types";
 import { csvPreviewProfile } from "./csv-contract";
+import { xmlPreviewProfile } from "./xml-contract";
+import { xmlPreflightText } from "./xml-problem";
 
 export interface PreviewInputDraft {
   readonly id: number;
@@ -46,6 +48,7 @@ export interface PreviewBinding {
   /** No access check is pending, so a request can be sent at once. */
   readonly ready: () => boolean;
   readonly csvAvailable?: () => boolean;
+  readonly xmlAvailable?: () => boolean;
 }
 
 /** A submission whose key outlives a reload until its run is known and finished with. */
@@ -86,6 +89,7 @@ export class PreviewState {
   readonly targetKind = signal<PreviewTargetKind>("all");
   readonly documentProfile = signal(false);
   readonly csvProfile = signal(false);
+  readonly xmlProfile = signal(false);
   readonly submitted = signal<{
     runId: string;
     body: PreviewSubmission;
@@ -234,7 +238,10 @@ export class PreviewState {
             kind === "unsupportedMediaType"
           )
             this.save(record && record.runId === null ? record : null);
-          this.currentError.set(kind);
+          if (error instanceof PreviewError && error.xmlProblem) {
+            this.currentFormError.set(xmlPreflightText(error.xmlProblem));
+            this.currentNotice.set(null);
+          } else this.currentError.set(kind);
         },
       });
   }
@@ -370,6 +377,14 @@ export class PreviewState {
   }
 
   private body(): PreviewSubmission {
+    if (this.xmlProfile() && !this.binding?.xmlAvailable?.())
+      throw new Error("The server has not offered XML previews.");
+    if (
+      [this.xmlProfile(), this.csvProfile(), this.documentProfile()].filter(
+        Boolean,
+      ).length > 1
+    )
+      throw new Error("Choose one preview admission profile.");
     if (this.csvProfile() && !this.binding?.csvAvailable?.())
       throw new Error(
         "The server has not offered the CSV/TSV preview runtime.",
@@ -429,11 +444,13 @@ export class PreviewState {
         kind === "named" ? { kind, name: targetName } : { kind, name: null },
       parameters,
       inputs: encoded,
-      ...(this.csvProfile()
-        ? { profile: csvPreviewProfile }
-        : this.documentProfile()
-          ? { profile: "weft.ferrule-document-preview.v1" as const }
-          : {}),
+      ...(this.xmlProfile()
+        ? { profile: xmlPreviewProfile }
+        : this.csvProfile()
+          ? { profile: csvPreviewProfile }
+          : this.documentProfile()
+            ? { profile: "weft.ferrule-document-preview.v1" as const }
+            : {}),
     };
   }
 

@@ -23,6 +23,7 @@ internal sealed record PreviewHostArtifact(
     ulong RecordsWritten,
     uint ByteLength,
     string Sha256,
-    CsvDocumentDialect? CsvDialect = null);
+    CsvDocumentDialect? CsvDialect = null,
+    System.Text.Json.JsonElement? XmlMetadata = null);
 
 internal sealed record PreviewHostFailure(string Code, string Message, bool MessageTruncated, string? Subject, bool SubjectTruncated);

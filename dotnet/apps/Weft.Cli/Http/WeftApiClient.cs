@@ -278,12 +278,54 @@ internal sealed class ApiResponse(HttpResponseMessage response, ApiOperation ope
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime?.Token ?? CancellationToken.None);
         try
         {
+            if (operation.OperationId == "SubmitCatalogPreview" && Status == 422 && await XmlFailureAsync(linked.Token) is { } xml)
+                return xml;
             var code = await ErrorCodeAsync(response, operation, linked.Token);
             return Failure(Status, code, RetryAfterSeconds(response));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw BodyTimeout();
+        }
+    }
+
+    private async Task<CliException?> XmlFailureAsync(CancellationToken token)
+    {
+        if (response.Content.Headers.ContentType?.MediaType != "application/json" || response.Content.Headers.ContentLength is > 4096) return null;
+        try
+        {
+            await response.Content.LoadIntoBufferAsync(4096, token);
+            var bytes = await response.Content.ReadAsByteArrayAsync(token);
+            var value = JsonSerializer.Deserialize<CatalogXmlPreviewProblemV1>(bytes, WeftApiClient.Json);
+            if (value?.IsSafe() != true) return null;
+            var reason = value.Reason switch
+            {
+                "invalidUtf8" => "XML must use strict UTF-8",
+                "invalidXml" => "XML does not meet the safe syntax policy (including DTD prohibition)",
+                "invalidDeclaration" => "XML requires an XML 1.0 declaration with UTF-8 or no declared encoding",
+                "documentRequired" => "XML requires one document with one root element",
+                "unsupportedName" => "XML names use unsupported characters",
+                "byteLimit" => "XML exceeds the original byte limit",
+                "depthLimit" => "XML exceeds the physical depth limit",
+                "nodeLimit" => "XML exceeds the physical node limit",
+                "attributeLimit" => "XML exceeds the physical attribute limit",
+                "documentCountLimit" => "XML exceeds the document count limit",
+                "invalidMetadata" => "XML boundary metadata is invalid",
+                "metadataTooLarge" => "XML boundary metadata exceeds the encoded budget",
+                "invalidNativeMetadata" => "The saved revision does not offer admitted XML boundaries",
+                "nativeByteLimit" => "The saved native artifact exceeds the byte limit",
+                _ => "XML preflight refused the input"
+            };
+            var facts = value.Location is { } location ? $" Line {location.Line}, column {location.Column}." : "";
+            if (value.Observed is not null) facts += $" Observed {value.Observed}.";
+            if (value.Limit is not null) facts += $" Limit {value.Limit}.";
+            if (value.Statistics is { } stats) facts += $" Bytes {stats.OriginalBytes}, nodes {stats.PhysicalNodes}, depth {stats.MaximumDepth}, attributes {stats.MaximumAttributes}.";
+            return new(CliExitCode.InvalidRequest, $"{reason}.{facts} No preview run was created.", "xmlPreflight");
+        }
+        catch (Exception error) when (error is JsonException or ArgumentException or HttpRequestException or IOException)
+        {
+            token.ThrowIfCancellationRequested();
+            return null;
         }
     }
 
