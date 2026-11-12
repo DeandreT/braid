@@ -44,23 +44,21 @@ public sealed class ChatMappingWriteRecovery(IChatMappingWriteJournal journal, I
         recovery.CancelAfter(TimeSpan.FromSeconds(25));
         try
         {
-            await Parallel.ForEachAsync(receipts.Where(r => r.Status == "pending" && r.OperationId is not null && r.Native is not null),
+            await Parallel.ForEachAsync(receipts.Where(r => r.Status == "pending" && r.OperationId is not null),
                 new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = recovery.Token }, async (receipt, caller) =>
         {
             caller.ThrowIfCancellationRequested();
             using var attempt = CancellationTokenSource.CreateLinkedTokenSource(caller);
             attempt.CancelAfter(attemptDuration ?? TimeSpan.FromSeconds(3));
-            // Append recovers the original key, supplies bytes if cancellation preceded staging, and rechecks upload
-            // authority and exact head at commit. Never select the head first: a prior success must survive later edits.
+            // Resume cannot first-reserve or resupply bytes. NeedsSource remains pending until the creator
+            // explicitly approves that exact proposal again. A refresh never grants fresh save authority.
             try
             {
                 var revision = receipt.Proposal.Base;
                 var project = new ProjectScope(revision.OrganizationId, revision.ProjectId);
                 var access = await projects.GetAccessAsync(actor, project, attempt.Token).ConfigureAwait(false);
                 if (access is null || access.Scope != project || access.PrincipalId != actor.PrincipalId || !access.Can(ProjectAction.EditMapping)) return;
-                using var source = new MemoryStream(receipt.Native!.CopyBytes(), false);
-                await ingestion.AppendAsync(actor, new(revision.OrganizationId, revision.ProjectId, revision.MappingId), receipt.Key,
-                    new AppendRevisionRequest(new EqualHead(revision.RevisionId)), source, attempt.Token).ConfigureAwait(false);
+                await ingestion.ResumeAsync(actor, project, receipt.OperationId!.Value, attempt.Token).ConfigureAwait(false);
             }
             catch (Exception error) when (error is not (OutOfMemoryException or StackOverflowException) && !ct.IsCancellationRequested)
             {

@@ -68,7 +68,7 @@ public sealed class ChatMappingWriteTests
     public void The_save_tool_exists_only_where_editing_is_served_and_takes_a_typed_edit_object()
     {
         Assert.DoesNotContain(WorkspaceToolRegistry.Definitions(new(true, true, true, true)), tool => tool.Name == WorkspaceToolRegistry.SaveEdit);
-        var manifest = WorkspaceToolRegistry.Definitions(new(false, false, false, false, Edits: true));
+        var manifest = WorkspaceToolRegistry.Definitions(new(false, false, false, false, LegacyDirectSave: true));
         Assert.Contains(manifest, tool => tool.Name == WorkspaceToolRegistry.SaveEdit);
         Assert.NotNull(WorkspaceToolRegistry.Parse(WorkspaceToolRegistry.SaveEdit, Arguments(), manifest));
         // Free-form bytes or text are not an edit.
@@ -317,7 +317,7 @@ public sealed class ChatMappingWriteTests
     public async Task A_write_is_recorded_with_the_turn_before_the_result_and_even_when_authority_is_lost_afterwards()
     {
         var tools = new WorkspaceToolFixture();
-        var definition = WorkspaceToolRegistry.Definitions(new(false, false, false, false, Edits: true)).Single(tool => tool.Name == WorkspaceToolRegistry.SaveEdit);
+        var definition = WorkspaceToolRegistry.Definitions(new(false, false, false, false, LegacyDirectSave: true)).Single(tool => tool.Name == WorkspaceToolRegistry.SaveEdit);
         var written = Saved(new ChatMappingChange("code", "Not mapped", "Constant"));
         var revoked = false;
         await using var f = new ChatOrchestrationFixture((exchange, ct) => exchange.RespondAsync("text/event-stream", AiHttpFixture.Utf8(exchange.Ordinal == 1
@@ -340,6 +340,54 @@ public sealed class ChatMappingWriteTests
         Assert.Equal(1, f.Server.RequestCount);
     }
 
+    [Fact]
+    public async Task Default_edit_tool_retains_exact_proposal_without_preparing_selecting_or_appending()
+    {
+        var tools = new WorkspaceToolFixture { BackendId = "ferrule", Role = ProjectRole.Publisher };
+        var fakes = new EditFakes();
+        using var editor = fakes.Service();
+        var store = new ChatProposalRuntimeStore();
+        var provider = new Extra(tools.Services, new Dictionary<Type, object>
+        {
+            [typeof(MappingDirectEditService)] = editor,
+            [typeof(IChatMappingEditProposalStore)] = store,
+            [typeof(IProjectReader)] = store,
+            [typeof(IRevisionIngestionService)] = fakes,
+            [typeof(ChatMappingEditApprovalService)] = store.Service(),
+            [typeof(CatalogMappingEditOptions)] = new CatalogMappingEditOptions(true)
+        });
+        var service = new WorkspaceToolService(provider, new ChatApiOptions(), new(false, false, false, false, Edits: true));
+        Assert.Contains(service.Manifest, tool => tool.Name == WorkspaceToolRegistry.ProposeEdit);
+        Assert.DoesNotContain(service.Manifest, tool => tool.Name == WorkspaceToolRegistry.SaveEdit);
+        var reply = await tools.CallAsync(service, WorkspaceToolRegistry.ProposeEdit, Arguments());
+        Assert.Equal("available", reply.Outcome);
+        Assert.Equal(ChatMappingEditStatus.AwaitingApproval, store.State!.Status);
+        Assert.Equal(Script.Digest, store.Proposal.Content.Operations.Digest);
+        Assert.Equal(tools.Conversation().Key, store.Proposal.Conversation);
+        Assert.Equal("call-1", store.Proposal.CallId);
+        Assert.Null(reply.Result.MappingWrite);
+        Assert.Equal(0, store.Approvals); Assert.Equal(0, store.Appends);
+        Assert.Empty(fakes.Appends); Assert.Empty(fakes.Selections);
+        var denied = await tools.CallAsync(service, WorkspaceToolRegistry.SaveEdit, Arguments());
+        Assert.Equal("invalidCall", denied.Outcome);
+        var extra = Arguments()[..^1] + ",\"approved\":true}";
+        Assert.Equal("invalidCall", (await tools.CallAsync(service, WorkspaceToolRegistry.ProposeEdit, extra)).Outcome);
+        Assert.Equal(1, store.Creates);
+    }
+
+    [Fact]
+    public async Task Legacy_manifest_without_server_capability_cannot_dispatch_a_save_and_missing_proposal_store_cannot_fallback()
+    {
+        var tools = new WorkspaceToolFixture { BackendId = "ferrule", Role = ProjectRole.Publisher };
+        var fakes = new EditFakes();
+        using var editor = fakes.Service();
+        var provider = new Extra(tools.Services, new Dictionary<Type, object> { [typeof(MappingDirectEditService)] = editor });
+        var service = new WorkspaceToolService(provider, new ChatApiOptions(), new(false, false, false, false, Edits: true, LegacyDirectSave: true));
+        Assert.Equal("invalidCall", (await tools.CallAsync(service, WorkspaceToolRegistry.SaveEdit, Arguments())).Outcome);
+        Assert.Equal("unavailable", (await tools.CallAsync(service, WorkspaceToolRegistry.ProposeEdit, Arguments())).Outcome);
+        Assert.Empty(fakes.Appends); Assert.Empty(fakes.Selections);
+    }
+
     private static WorkspaceToolService Service(WorkspaceToolFixture tools, EditFakes fakes)
     {
         var editor = fakes.Service();
@@ -347,9 +395,10 @@ public sealed class ChatMappingWriteTests
         {
             [typeof(MappingDirectEditService)] = editor,
             [typeof(IChatMappingWriteJournal)] = new Journal(),
+            [typeof(Weft.Api.Chat.ChatMappingEditRuntimeOptions)] = new Weft.Api.Chat.ChatMappingEditRuntimeOptions(true),
             [typeof(CatalogMappingEditOptions)] = new CatalogMappingEditOptions(true)
         });
-        return new(provider, new ChatApiOptions(), new WorkspaceToolFeatures(false, false, false, false, Edits: true));
+        return new(provider, new ChatApiOptions(), new WorkspaceToolFeatures(false, false, false, false, LegacyDirectSave: true));
     }
 
     private sealed class Extra(IServiceProvider inner, IReadOnlyDictionary<Type, object> extra) : IServiceProvider

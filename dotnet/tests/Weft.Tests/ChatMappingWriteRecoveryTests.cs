@@ -6,18 +6,18 @@ namespace Weft.Tests;
 public sealed class ChatMappingWriteRecoveryTests
 {
     [Fact]
-    public async Task Recovery_uses_only_the_reserved_original_bytes_and_key_once_per_request()
+    public async Task Recovery_resumes_only_the_existing_operation_without_resupplying_bytes()
     {
         var f = new Fake();
         var service = new ChatMappingWriteRecovery(f, f, f);
         Assert.Null((await service.ReadAsync(f.Actor, f.Conversation, f.Turn, false, default)).Single().Saved);
-        Assert.Equal(0, f.Appends);
+        Assert.Equal(0, f.Resumes);
         var result = await service.ReadAsync(f.Actor, f.Conversation, f.Turn, true, default);
         Assert.NotNull(result.Single().Saved);
         // Recreated service, retried acknowledgement, no further version is appended.
         var restarted = new ChatMappingWriteRecovery(f, f, f);
         Assert.NotNull((await restarted.ReadAsync(f.Actor, f.Conversation, f.Turn, true, default)).Single().Saved);
-        Assert.Equal(1, f.Appends);
+        Assert.Equal(1, f.Resumes);
     }
 
     [Theory]
@@ -30,7 +30,7 @@ public sealed class ChatMappingWriteRecoveryTests
         Assert.NotNull((await service.ReadAsync(f.Actor, f.Conversation, f.Turn, true, default)).Single().Saved);
         var restarted = new ChatMappingWriteRecovery(f, f, f);
         Assert.NotNull((await restarted.ReadAsync(f.Actor, f.Conversation, f.Turn, true, default)).Single().Saved);
-        Assert.Equal(1, f.Appends);
+        Assert.Equal(1, f.Resumes);
         Assert.Equal(0, f.Prepares);
     }
 
@@ -41,7 +41,7 @@ public sealed class ChatMappingWriteRecoveryTests
     {
         var f = new Fake { Status = status, Reserved = reserved };
         var result = await new ChatMappingWriteRecovery(f, f, f).ReadAsync(f.Actor, f.Conversation, f.Turn, true, default);
-        Assert.Null(result.Single().Saved); Assert.Equal(0, f.Appends);
+        Assert.Null(result.Single().Saved); Assert.Equal(0, f.Resumes);
     }
 
     [Theory]
@@ -51,11 +51,11 @@ public sealed class ChatMappingWriteRecoveryTests
     {
         var f = new Fake { Role = role };
         await new ChatMappingWriteRecovery(f, f, f).ReadAsync(f.Actor, f.Conversation, f.Turn, true, default);
-        Assert.Equal(0, f.Appends);
+        Assert.Equal(0, f.Resumes);
         // If permission is restored, exactly the same original save can be continued, never a new call.
         f.Role = ProjectRole.Publisher;
         Assert.NotNull((await new ChatMappingWriteRecovery(f, f, f).ReadAsync(f.Actor, f.Conversation, f.Turn, true, default)).Single().Saved);
-        Assert.Equal(1, f.Appends);
+        Assert.Equal(1, f.Resumes);
     }
 
     [Fact]
@@ -63,7 +63,17 @@ public sealed class ChatMappingWriteRecoveryTests
     {
         var f = new Fake { RemainPending = true };
         var result = await new ChatMappingWriteRecovery(f, f, f).ReadAsync(f.Actor, f.Conversation, f.Turn, true, default);
-        Assert.Equal("pending", result.Single().Status); Assert.Null(result.Single().Saved); Assert.Equal(1, f.Appends);
+        Assert.Equal("pending", result.Single().Status); Assert.Null(result.Single().Saved); Assert.Equal(1, f.Resumes);
+    }
+
+    [Fact]
+    public async Task Needs_source_stays_pending_and_recovery_does_not_require_native_bytes_from_the_journal()
+    {
+        var f = new Fake { RemainPending = true, IncludeNative = false, Result = RevisionIngestionOutcome.NeedsSource };
+        var result = await new ChatMappingWriteRecovery(f, f, f).ReadAsync(f.Actor, f.Conversation, f.Turn, true, default);
+        Assert.Equal("pending", result.Single().Status);
+        Assert.Equal(1, f.Resumes);
+        Assert.Equal(0, f.Prepares);
     }
 
     [Fact]
@@ -74,7 +84,7 @@ public sealed class ChatMappingWriteRecoveryTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new ChatMappingWriteRecovery(f, f, f)
             .ReadAsync(f.Actor, f.Conversation, f.Turn, true, cancel.Token));
         Assert.NotNull((await new ChatMappingWriteRecovery(f, f, f).ReadAsync(f.Actor, f.Conversation, f.Turn, false, default)).Single().Saved);
-        Assert.Equal(1, f.Appends);
+        Assert.Equal(1, f.Resumes);
     }
 
     [Fact]
@@ -84,7 +94,7 @@ public sealed class ChatMappingWriteRecoveryTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => new ChatMappingWriteRecovery(f, f, f)
             .ReadAsync(f.Actor, f.Conversation, f.Turn, true, default));
         Assert.NotNull((await new ChatMappingWriteRecovery(f, f, f).ReadAsync(f.Actor, f.Conversation, f.Turn, true, default)).Single().Saved);
-        Assert.Equal(1, f.Appends);
+        Assert.Equal(1, f.Resumes);
     }
 
     [Fact]
@@ -95,7 +105,7 @@ public sealed class ChatMappingWriteRecoveryTests
         var batch = new Batch(failed, succeeds);
         var receipts = await new ChatMappingWriteRecovery(batch, batch, batch).ReadAsync(batch.Actor, batch.Conversation, batch.Turn, true, default);
         Assert.Equal("pending", receipts[0].Status); Assert.Null(receipts[0].Saved);
-        Assert.NotNull(receipts[1].Saved); Assert.Equal(1, failed.Appends); Assert.Equal(1, succeeds.Appends);
+        Assert.NotNull(receipts[1].Saved); Assert.Equal(1, failed.Resumes); Assert.Equal(1, succeeds.Resumes);
     }
 
     [Fact]
@@ -111,7 +121,7 @@ public sealed class ChatMappingWriteRecoveryTests
             var receipts = await recovery.ReadAsync(batch.Actor, batch.Conversation, batch.Turn, true, bounded.Token);
             Assert.Equal("pending", receipts[0].Status); Assert.NotNull(receipts[1].Saved);
         }
-        Assert.Equal(2, stalled.Appends); Assert.Equal(1, succeeds.Appends);
+        Assert.Equal(2, stalled.Resumes); Assert.Equal(1, succeeds.Resumes);
         Assert.False(bounded.IsCancellationRequested);
     }
 
@@ -119,9 +129,9 @@ public sealed class ChatMappingWriteRecoveryTests
     {
         public override async Task<IReadOnlyList<ChatMappingWriteReceipt>> ReadAsync(ActorContext actor, ChatConversationKey conversation, Guid turnId, CancellationToken ct) =>
             [.. await first.ReadAsync(actor, conversation, turnId, ct), .. await second.ReadAsync(actor, conversation, turnId, ct)];
-        public override Task<RevisionIngestionResult> AppendAsync(ActorContext actor, MappingScope target, Guid idempotencyKey,
-            AppendRevisionRequest request, Stream nativeSource, CancellationToken cancellationToken = default) =>
-            (idempotencyKey == first.Key ? first : second).AppendAsync(actor, target, idempotencyKey, request, nativeSource, cancellationToken);
+        public override Task<RevisionIngestionResult> ResumeAsync(ActorContext actor, ProjectScope project, Guid operationId,
+            CancellationToken cancellationToken = default) =>
+            (operationId == first.Operation ? first : second).ResumeAsync(actor, project, operationId, cancellationToken);
     }
 
     private class Fake : IChatMappingWriteJournal, IRevisionIngestionService, IProjectReader
@@ -131,8 +141,10 @@ public sealed class ChatMappingWriteRecoveryTests
         internal readonly Guid Turn = Guid.NewGuid(), Key = Guid.NewGuid(), Round = Guid.NewGuid(), Operation = Guid.NewGuid(), Revision = Guid.NewGuid();
         internal string Status = "pending";
         internal bool Reserved = true, RemainPending, Stall;
+        internal bool IncludeNative = true;
+        internal RevisionIngestionOutcome Result = RevisionIngestionOutcome.ClaimLost;
         internal ProjectRole Role = ProjectRole.Publisher;
-        internal int Appends, Prepares;
+        internal int Resumes, Prepares;
         internal int Reads, FailReadAt;
         internal Func<Exception>? AfterCommit;
         private static NativeArtifact Native => MappingDraftPersistenceTests.Checkpoint(WorkspaceToolFixture.Head).Artifact;
@@ -144,26 +156,26 @@ public sealed class ChatMappingWriteRecoveryTests
         {
             if (++Reads == FailReadAt) throw new InvalidOperationException("Journal unavailable after commit");
             return Task.FromResult<IReadOnlyList<ChatMappingWriteReceipt>>([new(Key, Round, Status, Proposal, Reserved ? Operation : null,
-                Status == "saved" ? Revision : null, Status == "saved" ? 3 : null, Status == "pending" && Reserved ? Native : null)]);
+                Status == "saved" ? Revision : null, Status == "saved" ? 3 : null, Status == "pending" && Reserved && IncludeNative ? Native : null)]);
         }
-        public virtual async Task<RevisionIngestionResult> AppendAsync(ActorContext actor, MappingScope target, Guid idempotencyKey,
-            AppendRevisionRequest request, Stream nativeSource, CancellationToken cancellationToken = default)
+        public virtual async Task<RevisionIngestionResult> ResumeAsync(ActorContext actor, ProjectScope project, Guid operationId,
+            CancellationToken cancellationToken = default)
         {
-            Assert.Equal(Actor, actor); Assert.Equal(WorkspaceToolFixture.Mapping, target); Assert.Equal(Key, idempotencyKey);
-            Assert.Equal(new EqualHead(WorkspaceToolFixture.Head.RevisionId), request.HeadCondition);
-            using var bytes = new MemoryStream(); await nativeSource.CopyToAsync(bytes, cancellationToken);
-            Assert.Equal(Native.CopyBytes(), bytes.ToArray());
-            Appends++;
+            Assert.Equal(Actor, actor); Assert.Equal(WorkspaceToolFixture.Head.ProjectId, project.ProjectId);
+            Assert.Equal(WorkspaceToolFixture.Organization, project.OrganizationId); Assert.Equal(Operation, operationId);
+            Resumes++;
             if (Stall) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             if (!RemainPending) Status = "saved";
             if (AfterCommit?.Invoke() is { } error) throw error;
-            return RevisionIngestionResult.WithoutReceipt(RevisionIngestionOutcome.ClaimLost);
+            return RevisionIngestionResult.WithoutReceipt(Result);
         }
         public Task<ProjectAccess?> GetAccessAsync(ActorContext actor, ProjectScope scope, CancellationToken cancellationToken = default) => Task.FromResult<ProjectAccess?>(new(scope, actor.PrincipalId, Role));
         public Task<ProjectPage> ListVisibleProjectsAsync(ActorContext actor, Guid organizationId, int limit, Guid? afterProjectId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ProjectSummary?> GetVisibleProjectAsync(ActorContext actor, ProjectScope scope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<RevisionIngestionResult> CreateAsync(ActorContext actor, ProjectScope project, Guid idempotencyKey, CreateRevisionRequest request, Stream nativeSource, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<RevisionIngestionResult> ResumeAsync(ActorContext actor, ProjectScope project, Guid operationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<RevisionIngestionResult> AppendAsync(ActorContext actor, MappingScope target, Guid idempotencyKey,
+            AppendRevisionRequest request, Stream nativeSource, CancellationToken cancellationToken = default) =>
+            throw new Xunit.Sdk.XunitException("Recovery must never append or resupply source.");
         public Task<RevisionIngestionReceipt?> GetOwnReceiptAsync(ActorContext actor, ProjectScope project, Guid operationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

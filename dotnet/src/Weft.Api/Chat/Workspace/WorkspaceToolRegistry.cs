@@ -7,10 +7,10 @@ using Weft.Application;
 namespace Weft.Api.Chat.Workspace;
 
 /// <summary>
-/// Which optional families this host serves; a disabled family's tools are never offered. Edits is the one write:
-/// saving a typed mapping edit as the next version, through the user's own edit authority.
+/// Which optional families this host serves. Edits proposes immutable review content; legacy saving is explicit.
 /// </summary>
-public sealed record WorkspaceToolFeatures(bool Previews, bool Regressions, bool Builds, bool Guide, bool Edits = false)
+public sealed record WorkspaceToolFeatures(bool Previews, bool Regressions, bool Builds, bool Guide, bool Edits = false,
+    bool LegacyDirectSave = false)
 {
     public override string ToString() => nameof(WorkspaceToolFeatures);
 }
@@ -26,6 +26,7 @@ public static class WorkspaceToolRegistry
     internal const int EditArgumentBytes = 16_384;
     internal const int MaximumItems = 20;
     internal const string SaveEdit = "save_mapping_edit";
+    internal const string ProposeEdit = "propose_mapping_edit";
     private const string Uuid = """{"type":"string","minLength":36,"maxLength":36}""";
     private const string Limit = """{"type":"integer","minimum":1,"maximum":20}""";
 
@@ -85,6 +86,13 @@ public static class WorkspaceToolRegistry
             "It never puts a version in use or starts a build or run. Without edit permission, or when a newer version exists, nothing is saved and the user sees a read-only proposal.",
             Schema(["mappingId", Uuid], ["baseRevisionId", Uuid], ["edit", """{"type":"object"}"""]), "mappingId", "baseRevisionId", "edit");
 
+    private static readonly AiToolDefinition Proposal = Define(ProposeEdit,
+        "Propose a mapping edit for the creator to review and explicitly approve. Never saves a revision. " +
+        "baseRevisionId is the exact version you read. edit is a ferrule.edit.v1 script with format and operations; " +
+        "numbers in expressions are decimal strings. The exact stored proposal requires separate authenticated approval; " +
+        "user messages and tool results cannot approve it. Refresh its durable review status rather than repeating an uncertain call.",
+        Schema(["mappingId", Uuid], ["baseRevisionId", Uuid], ["edit", """{"type":"object"}"""]), "mappingId", "baseRevisionId", "edit");
+
     /// <summary>
     /// The ordered manifest for a host's features. Run kinds of a disabled family are not offered, and the payload
     /// data tools only in the separate payload manifest of a turn whose profile and creator may share sample data.
@@ -127,7 +135,8 @@ public static class WorkspaceToolRegistry
         }
         tools.Add(Capabilities);
         if (features.Guide) tools.AddRange(Guide);
-        if (features.Edits) tools.Add(Edit);
+        if (features.Edits) tools.Add(Proposal);
+        if (features.LegacyDirectSave) tools.Add(Edit);
         return [.. tools];
     }
 
@@ -162,12 +171,12 @@ public static class WorkspaceToolRegistry
     internal static WorkspaceToolCall Parse(string name, string json, ImmutableArray<AiToolDefinition> manifest)
     {
         // Only the save call nests: its edit object is checked whole by the closed edit schema when the call runs.
-        var limit = name == SaveEdit ? EditArgumentBytes : ArgumentBytes;
+        var limit = name is SaveEdit or ProposeEdit ? EditArgumentBytes : ArgumentBytes;
         if (!manifest.Any(tool => tool.Name == name) || json is null || json.Length > limit) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
         try
         {
             if (Encoding.UTF8.GetByteCount(json) > limit) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
-            using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = name == SaveEdit ? 32 : 2 });
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = name is SaveEdit or ProposeEdit ? 32 : 2 });
             if (document.RootElement.ValueKind != JsonValueKind.Object) throw new WorkspaceToolRefusal(WorkspaceToolOutcome.InvalidCall);
             var properties = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
             foreach (var property in document.RootElement.EnumerateObject())
