@@ -85,14 +85,12 @@ and compare both constructor paths.
 ## Integration dependencies
 
 This unit changes only generation and its typed application evidence contract.
-The persistence owner's pending codec can continue consuming `.Identity` and
-`.CopyEvidenceBytes()` for encoding. Its legacy `DecodeList<SpecExtractionResult>`
-path can still call the preserved legacy constructor, but cannot restore Office
-selections. The separately owned 0046 follow-up must restore genuine typed Office
-results and adapt them through the new wrapper, retaining exact canonical bytes,
-snapshot identity and generated notes. Existing legacy runtime loading remains
-insufficient for mixed durable evidence. Production mixed-evidence activation is
-still gated on that integration after 0045.
+The mixed [retained evidence codec](creation-evidence-storage.md) consumes
+`.Identity` and `.CopyEvidenceBytes()` and restores through the internal
+`CreationEvidenceDocument.RestoreRetained` boundary. It retains exact canonical
+bytes, snapshot identity, original profile pins and generated notes. Production
+mixed-evidence activation still depends on the separately owned 0046 registry
+integration and runtime loader wiring after 0045.
 
 PDF adaptation uses the reviewed owner commit `142095c4`, integrated through
 `fb0f2ae5`. The third overload is

@@ -29,8 +29,9 @@ internal static class MappingCreationStorageCodec
     internal static byte[] Encode(MappingCreationProposal p)
     {
         if (p.Compilation.Project != p.Project || p.Compilation.AuthoringId != p.Id || p.Compilation.Plan != p.Plan.CompilerDigest ||
-            p.Compilation.Snapshot != p.Specification.Snapshot.Digest || p.Specification.Extractions.Any(e => e.Outcome != SpecExtractionOutcome.Complete))
+            p.Compilation.Snapshot != p.Specification.Snapshot.Digest || p.Specification.Extractions.Any(e => !e.SupportsGeneration))
             throw new ArgumentException("Substituted compiler or snapshot identity.");
+        RequireCoverage(p.Specification, p.Notes);
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream, new UTF8Encoding(false, true), true);
         void Block(byte[] bytes)
@@ -72,14 +73,20 @@ internal static class MappingCreationStorageCodec
         if (!JsonSerializer.SerializeToUtf8Bytes(h, Options).AsSpan().SequenceEqual(header) || h.Version != 1 ||
             h.Sources.Length is < 1 or > 20 || h.Backend != "ferrule") throw new ArgumentException("Invalid creation header.");
         var plan = MappingCreationPlan.Parse(Block(MappingCreationPlan.MaximumBytes));
-        var sources = new List<SpecCapturedSource>(); var extractions = new List<SpecExtractionResult>();
+        var sources = new List<SpecCapturedSource>(); var extractions = new List<CreationEvidenceDocument>();
+        long sourceBytes = 0, evidenceBytes = 0;
         foreach (var source in h.Sources)
         {
             sources.Add(new(source.Identity.Source, source.Identity.Format, Block(SpecCapturedSource.MaximumBytes)));
-            extractions.Add(new(source.Identity, Block(SpecCapturedSource.MaximumBytes)));
+            var evidence = Block(SpecCapturedSource.MaximumBytes);
+            sourceBytes += sources[^1].ByteCount; evidenceBytes += evidence.Length;
+            if (sourceBytes > 20 * 1024 * 1024 || evidenceBytes > 20 * 1024 * 1024)
+                throw new ArgumentException("Retained evidence aggregate budget exceeded.");
+            extractions.Add(CreationEvidenceDocument.RestoreRetained(sources[^1], source.Identity, evidence));
         }
         var specification = new CreationSpecification(h.Bundle, sources, extractions);
         var notes = new CreationGenerationNotes(h.Evidence, h.Assumptions, h.Questions);
+        RequireCoverage(specification, notes);
         foreach (var citation in notes.Evidence)
             if (!extractions.Any(e => e.Identity.Source == citation.Source && e.Chunks.Any(c => c.Ordinal == citation.ChunkOrdinal)))
                 throw new ArgumentException("Invalid retained citation.");
@@ -89,5 +96,12 @@ internal static class MappingCreationStorageCodec
         if (stream.Position != stream.Length || proposal.Fingerprint.Value != h.Fingerprint || !Encode(proposal).AsSpan().SequenceEqual(bytes))
             throw new ArgumentException("Substituted creation storage content.");
         return proposal;
+    }
+
+    private static void RequireCoverage(CreationSpecification specification, CreationGenerationNotes notes)
+    {
+        var included = CreationEvidenceCoverage.Include(specification, notes);
+        if (!included.Assumptions.SequenceEqual(notes.Assumptions))
+            throw new ArgumentException("Retained critical coverage must exactly match the selected evidence.");
     }
 }
