@@ -44,6 +44,34 @@ A deployment or message keeps its original ID until its result arrives. If the r
 uncertain, **Retry original request** repeats it with the same ID, so the server replays
 the recorded result instead of acting twice.
 
+### Sending and retrying
+
+Every send, including a repeated message ID, goes through the invocation ledger's
+admission, exactly as an endpoint call does:
+
+- A repeated ID with the same inputs and parameters returns the ledger's recorded result
+  without running again. Different bytes, names or parameters under the same ID are a
+  `conflict`, never the original result.
+- A repeat after the target is disabled or the sandbox grant is revoked is `refused`.
+- Outputs are returned only for a recorded `completed` result. `refused`, `conflict` and
+  `expired` (the ledger's 24-hour retained response has ended) carry no outputs. The kept
+  history still shows the original message through the message read route; reading
+  history and sending again are separate operations.
+- For a document-profile release, the input media types come from the active release's
+  declared boundaries. They are read from that release's build approval under its
+  pinned publisher, as the invocation itself runs, so any authorized Publisher can send.
+  Media is part of the request digest, so a retried ID keeps the declaration it was first
+  sent with, even if the active release has changed since.
+- When the release's boundaries cannot be verified, the send answers `unavailable`
+  without claiming the ID or keeping a record. An input the release does not declare is
+  refused with `400` before any claim.
+
+A retry must resend the original source. The server does not keep a request before it
+runs, so it cannot recover a message whose source is gone: a deleted or changed case
+version, or a replayed message no longer in the history, answers `404`. The sandbox never
+substitutes stored bytes because a message ID matches. A tab that still holds its pending
+request can retry it; otherwise send the sample again under a new ID.
+
 ## Identities
 
 The sandbox derives its identities deterministically, so a restart or retry reuses them:
@@ -63,8 +91,10 @@ disabling the target stops sends as it stops endpoint calls.
 Each message's inputs, parameters, outputs, status, stable error outcome and timing are written to
 `WEFT_LOCAL_SANDBOX_HISTORY_DIRECTORY`, one JSON file per message under its target, in a
 directory only the server user can read. At most 100 messages are kept per target; the
-oldest are removed first. A message that ended as `unavailable`, `inProgress`, `refused`,
-`noRelease` or `conflict` recorded nothing final and is replaced when retried. The
+oldest are removed first. A message that ended as `unavailable` recorded nothing final and
+is replaced when retried; a final message (`completed`, `failed` or `expired`) is never
+replaced. Results the ledger did not admit (`inProgress`, `refused`, `noRelease` or
+`conflict`) are returned to the sender but not kept, so they never replace a message. The
 invocation ledger keeps its own audit and 24-hour retained responses as for any endpoint
 call; the sandbox purges expired responses after each send. `dev-down.sh --purge` removes
 the history with the rest of the instance state.

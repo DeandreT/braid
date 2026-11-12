@@ -172,6 +172,95 @@ public sealed class LocalSandboxTests : IDisposable
         Assert.Equal(0, test.Invocation.RuntimeCalls);
     }
 
+    [Fact]
+    public async Task Another_authorized_publisher_sends_to_a_document_release_under_the_pinned_publishers_boundaries()
+    {
+        var test = new SendFixture(root, "x12");
+        var publisher = test.Invocation.Data.Actor;
+        test.Sender = new(new PrincipalId(Guid.NewGuid()));
+        var sent = (await test.SendAsync(Guid.NewGuid()))!;
+        Assert.Equal("completed", sent.Status);
+        Assert.Equal("application/json", Assert.Single(sent.Inputs).MediaType);
+        Assert.Equal("application/edi-x12", Assert.Single(sent.Outputs).MediaType);
+        Assert.Equal(test.Invocation.Data.Build.Intent.BuildId, sent.BuildId);
+        // Boundaries come from the release's own approval, read as its publisher, never as the sender.
+        Assert.Equal([publisher], test.Builds.Readers);
+        Assert.Equal(1, test.Invocation.RuntimeCalls);
+    }
+
+    [Fact]
+    public async Task Unverifiable_boundaries_or_an_undeclared_input_leave_no_claim_and_no_receipt()
+    {
+        var test = new SendFixture(root, "x12");
+        test.Builds.Unreadable = true;
+        var id = Guid.NewGuid();
+        var unavailable = (await test.SendAsync(id))!;
+        Assert.Equal("unavailable", unavailable.Status);
+        Assert.False(unavailable.Final);
+        Assert.Null(await test.Service.ReadAsync(test.Actor, test.Mapping, test.TargetId, id));
+        var extra = new SandboxSample(test.Invocation.Data.Case.Replay.Primary, [new("undeclared", "{}"u8)], [], "inline");
+        test.Builds.Unreadable = false;
+        await Assert.ThrowsAsync<ArgumentException>(() => test.Service.SendAsync(test.Actor, test.Mapping, test.TargetId, id, extra));
+        Assert.Equal(0, test.Invocation.Claims);
+        Assert.Empty((await test.Service.ListAsync(test.Actor, test.Mapping, test.TargetId, 10))!);
+        // The same ID then runs normally once its declaration resolves.
+        Assert.Equal("completed", (await test.SendAsync(id))!.Status);
+        Assert.Equal(1, test.Invocation.Claims);
+    }
+
+    [Fact]
+    public async Task A_repeated_id_with_other_bytes_is_a_conflict_without_outputs_and_keeps_the_original()
+    {
+        var test = new SendFixture(root);
+        var first = (await test.SendAsync(Guid.NewGuid()))!;
+        var other = new SandboxSample(new(null, "{\"other\":true}"u8), [], [], "inline");
+        var conflict = (await test.Service.SendAsync(test.Actor, test.Mapping, test.TargetId, first.MessageId, other))!;
+        Assert.Equal("conflict", conflict.Status);
+        Assert.Empty(conflict.Outputs);
+        Assert.Equal(1, test.Invocation.RuntimeCalls);
+        var kept = (await test.Service.ReadAsync(test.Actor, test.Mapping, test.TargetId, first.MessageId))!;
+        Assert.Equal("completed", kept.Status);
+        Assert.Equal(first.Inputs.Single().Content, kept.Inputs.Single().Content);
+    }
+
+    [Fact]
+    public async Task A_repeat_after_disable_or_revocation_is_refused_and_an_expired_result_returns_no_outputs()
+    {
+        var test = new SendFixture(root);
+        var first = (await test.SendAsync(Guid.NewGuid()))!;
+        // The ledger refuses a disabled target or revoked grant before it returns any recorded outcome.
+        test.Invocation.ForcedClaim = MachineInvocationClaimStatus.Refused;
+        var refused = (await test.SendAsync(first.MessageId))!;
+        Assert.Equal("refused", refused.Status);
+        Assert.Empty(refused.Outputs);
+        test.Invocation.ForcedClaim = null;
+        test.Invocation.ExpireResponses();
+        var expired = (await test.SendAsync(first.MessageId))!;
+        Assert.Equal("expired", expired.Status);
+        Assert.True(expired.Replayed);
+        Assert.Empty(expired.Outputs);
+        Assert.Equal(1, test.Invocation.RuntimeCalls);
+        // Reading history is a separate operation and still shows the retained original.
+        var kept = (await test.Service.ReadAsync(test.Actor, test.Mapping, test.TargetId, first.MessageId))!;
+        Assert.Equal("completed", kept.Status);
+        Assert.Single(kept.Outputs);
+    }
+
+    [Fact]
+    public async Task A_retry_keeps_its_original_media_declaration_when_the_release_boundaries_cannot_be_read_again()
+    {
+        var test = new SendFixture(root, "x12");
+        var first = (await test.SendAsync(Guid.NewGuid()))!;
+        Assert.Equal("completed", first.Status);
+        test.Builds.Unreadable = true;
+        var again = (await test.SendAsync(first.MessageId))!;
+        Assert.Equal("completed", again.Status);
+        Assert.True(again.Replayed);
+        Assert.Equal(first.Outputs.Single().Sha256, again.Outputs.Single().Sha256);
+        Assert.Equal(1, test.Builds.Reads);
+        Assert.Equal(1, test.Invocation.RuntimeCalls);
+    }
+
     [LinuxFact]
     public void Session_hosts_refuse_every_sandbox_setting()
     {
@@ -282,24 +371,29 @@ public sealed class LocalSandboxTests : IDisposable
     /// <summary>The send path over the machine invocation fixture: its ledger, release pointer and scripted compiled runtime.</summary>
     private sealed class SendFixture : IReleaseOperationsStore
     {
-        internal SendFixture(string root)
+        internal SendFixture(string root, string? format = null)
         {
             Invocation = new(targetId: (intent, runtime) => SandboxIdentity.TargetId(
                 new(intent.Revision.OrganizationId, intent.Revision.ProjectId, intent.Revision.MappingId), intent.Environment, intent.Profile.Id,
-                intent.Profile.Version, runtime));
+                intent.Profile.Version, runtime), format: format) { PublisherOnlyReleaseReads = true };
             Invocation.Activate().GetAwaiter().GetResult();
+            Builds = new(this);
+            Sender = Invocation.Actor;
             Mapping = Invocation.Target.Reference.Mapping;
             RuntimeImage = Invocation.Data.Runtime;
             Target = new(TargetId, Invocation.Target.Reference.Environment.EnvironmentId, Invocation.Target.Reference.Environment.Version, true,
                 Invocation.Release!.ReleaseId, 1, RuntimeImage);
-            Service = new(this, new ReleaseOperationsService(this, Invocation, new NoQualifications()), Invocation, Invocation, new NoGrants(), new NoBuilds(),
+            Service = new(this, new ReleaseOperationsService(this, Invocation, new NoQualifications()), Invocation, new NoGrants(), Builds,
                 _ => throw new NotSupportedException(), Invocation.Service, Invocation, new FileSandboxHistory(root), [], [], Invocation.Data.Runtime, TimeProvider.System);
         }
 
         internal MachineInvocationServiceTests.Fixture Invocation { get; }
         internal LocalSandboxService Service { get; }
         internal MappingScope Mapping { get; }
-        internal ActorContext Actor => Invocation.Actor;
+        internal ActorContext Actor => Sender;
+        /// <summary>The sending actor; the release's publisher unless a test selects another authorized publisher.</summary>
+        internal ActorContext Sender { get; set; }
+        internal ApprovalReader Builds { get; }
         internal Guid TargetId => Invocation.Target.Reference.TargetId;
         internal SandboxTarget Target { get; set; }
         internal string RuntimeImage { get; set; }
@@ -318,7 +412,15 @@ public sealed class LocalSandboxTests : IDisposable
                     {
                         target_id = Target.TargetId, environment_id = Target.EnvironmentId, environment_version = Target.EnvironmentVersion.ToString(),
                         enabled = Target.Enabled, active_release_id = Target.ActiveReleaseId, version = Target.Version.ToString(),
-                        runtime_image = RuntimeImage, profile = new { id = profile.Id, version = profile.Version }
+                        runtime_image = RuntimeImage, profile = new { id = profile.Id, version = profile.Version },
+                        active = Target.ActiveReleaseId is { } release && Invocation.Release is { } intent && intent.ReleaseId == release
+                            ? new
+                            {
+                                releaseId = release, actorId = intent.Actor.Value, qualificationId = intent.Qualification.Id,
+                                buildId = intent.Qualification.Artifact.Intent.BuildId, approvalId = intent.Qualification.Artifact.Intent.ApprovalId,
+                                approval = new { approvalId = intent.Qualification.Artifact.Intent.ApprovalId, revoked = false }
+                            }
+                            : null
                     }
                 }
                 : [];
@@ -356,14 +458,24 @@ public sealed class LocalSandboxTests : IDisposable
             throw new NotSupportedException();
     }
 
-    private sealed class NoBuilds : IBuildMetadataReader
+    /// <summary>Approval metadata as the store returns it: only to the approving publisher itself.</summary>
+    private sealed class ApprovalReader(SendFixture fixture) : IBuildMetadataReader
     {
+        internal int Reads;
+        internal bool Unreadable;
+        internal List<PrincipalId> Readers { get; } = [];
+        public Task<RetainedBuildApproval?> ReadApprovalAsync(ActorContext actor, MappingScope mapping, Guid approvalId, CancellationToken token = default)
+        {
+            Reads++;
+            Readers.Add(actor.PrincipalId);
+            var intent = fixture.Invocation.Data.Build.Intent;
+            return Task.FromResult(!Unreadable && actor.PrincipalId == fixture.Invocation.Data.Actor && mapping == fixture.Mapping && approvalId == intent.ApprovalId
+                ? new RetainedBuildApproval(actor.PrincipalId, intent, false, true, DateTimeOffset.UtcNow) : null);
+        }
         public Task<RetainedBuildEnvironment?> ReadEnvironmentAsync(ActorContext actor, BuildEnvironmentReference environment, CancellationToken token = default) =>
             throw new NotSupportedException();
         public Task<BuildEnvironmentPage?> ListEnvironmentsAsync(ActorContext actor, ProjectScope project, int maximum, BuildEnvironmentCursor? after = null,
             CancellationToken token = default) => throw new NotSupportedException();
-        public Task<RetainedBuildApproval?> ReadApprovalAsync(ActorContext actor, MappingScope mapping, Guid approvalId, CancellationToken token = default) =>
-            throw new NotSupportedException();
         public Task<BuildApprovalPage?> ListApprovalsAsync(ActorContext actor, MappingScope mapping, int maximum, Guid? afterApprovalId = null,
             CancellationToken token = default) => throw new NotSupportedException();
         public Task<BuildRunPage?> ListRunsAsync(ActorContext actor, MappingScope mapping, int maximum, Guid? afterBuildId = null, CancellationToken token = default) =>

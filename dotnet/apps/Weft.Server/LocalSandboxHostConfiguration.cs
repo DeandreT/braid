@@ -82,7 +82,7 @@ internal static class LocalSandboxHostConfiguration
             var ledger = provider.GetRequiredKeyedService<PostgresInvocationLedger>(Key);
             var time = TimeProvider.System;
             return new LocalSandboxService(releaseReader, provider.GetRequiredService<ReleaseOperationsService>(),
-                provider.GetRequiredKeyedService<PostgresLocalReleaseStore>("operations-writer"), releaseReader,
+                provider.GetRequiredKeyedService<PostgresLocalReleaseStore>("operations-writer"),
                 provider.GetRequiredKeyedService<PostgresInvocationGrantStore>(Key), provider.GetRequiredService<IBuildMetadataReader>(),
                 actor => new BuildQualificationService(provider.GetRequiredKeyedService<PostgresBuildQualificationStore>(Key), runs, regressionRuns, cases,
                     Execution(actor), projects),

@@ -59,7 +59,10 @@ public interface ISandboxHistory : ISandboxSink
 }
 
 public sealed record SandboxTarget(Guid TargetId, Guid EnvironmentId, long EnvironmentVersion, bool Enabled, Guid? ActiveReleaseId,
-    long Version, string RuntimeImage);
+    long Version, string RuntimeImage, SandboxActiveRelease? Active = null, string? ProfileId = null, long ProfileVersion = 0);
+
+/// <summary>The active release's pinned publisher, build and approval, from sender-authorized target metadata.</summary>
+public sealed record SandboxActiveRelease(Guid ReleaseId, PrincipalId Publisher, Guid BuildId, Guid ApprovalId);
 public sealed record SandboxBuild(Guid BuildId, Guid RevisionId, Guid EnvironmentId, long EnvironmentVersion, DateTimeOffset CreatedAt);
 public sealed record SandboxState(IReadOnlyList<SandboxTarget> Targets, IReadOnlyList<SandboxBuild> Builds, IReadOnlyList<SandboxSampleDescriptor> Samples);
 public sealed record SandboxDeployResult(string Outcome, SandboxTarget? Target = null, Guid? ReleaseId = null, Guid? QualificationId = null);
@@ -97,7 +100,7 @@ public static class SandboxIdentity
 /// check applies. Messages run through the machine invocation ledger and the active-release invocation path.
 /// </summary>
 public sealed class LocalSandboxService(
-    IReleaseOperationsStore operationsReader, ReleaseOperationsService operations, ILocalReleaseStore releaseWriter, ILocalReleaseStore releaseReader,
+    IReleaseOperationsStore operationsReader, ReleaseOperationsService operations, ILocalReleaseStore releaseWriter,
     IInvocationGrantStore grants, IBuildMetadataReader buildMetadata, Func<ActorContext, BuildQualificationService> qualification,
     MachineInvocationService invocations, IMachineInvocationLedger ledger, ISandboxHistory history, IReadOnlyList<ISandboxSampleSource> sources,
     IReadOnlyList<ISandboxSink> sinks, string runtimeImage, TimeProvider time)
@@ -173,7 +176,13 @@ public sealed class LocalSandboxService(
             original.Parameters, "replay of " + messageId.ToString("D"));
     }
 
-    /// <summary>Null when the target is not this mapping's sandbox target or the actor cannot read it.</summary>
+    /// <summary>
+    /// Null when the target is not this mapping's sandbox target or the actor cannot read it. Every send, including a
+    /// repeated message ID, goes through the machine invocation ledger's admission: a repeat with other bytes or media is a
+    /// conflict, a repeat after the target is disabled or the caller's grant is revoked is refused, and only a ledger-recorded
+    /// outcome returns outputs. Results the ledger did not admit are returned without being kept, so they never replace or
+    /// shadow the retained message.
+    /// </summary>
     public async Task<SandboxMessage?> SendAsync(ActorContext actor, MappingScope mapping, Guid targetId, Guid messageId, SandboxSample sample,
         Guid? replayOf = null, CancellationToken token = default)
     {
@@ -181,42 +190,48 @@ public sealed class LocalSandboxService(
         if (messageId == Guid.Empty) throw new ArgumentException("A message identifier is required.");
         if (await ResolveAsync(actor, mapping, targetId, token) is not { } resolved) return null;
         var (reference, target) = resolved;
-        var previous = await history.ReadAsync(targetId, messageId, token);
-        if (previous is { Final: true }) return previous;
-        // The current release's declared boundaries supply document media; the sandbox never guesses from content.
-        var release = target.ActiveReleaseId is { } active ? await releaseReader.ReadAsync(actor, reference, active, token) : null;
-        var boundaries = release?.Intent.Qualification.Artifact.Intent;
-        var documents = boundaries is not null && BuildWorkerProtocol.IsDocumentProfile(boundaries.Profile.Id);
-        string? Media(string? name) => documents ? boundaries!.Boundaries.Where(value => value.Kind is BuildBoundaryKind.PrimaryInput or BuildBoundaryKind.NamedInput && value.Name == name)
-            .Select(value => BuildWorkerProtocol.MediaType(value.Format)).FirstOrDefault() : null;
-        var inputs = sample.NamedInputs.Prepend(sample.Primary).Select(input => new SandboxDocument(input.Name, Media(input.Name), input.CopyBytes())).ToArray();
         var started = time.GetUtcNow();
+        var previous = await history.ReadAsync(targetId, messageId, token);
+        var names = sample.NamedInputs.Select(input => input.Name).Prepend(null).ToArray();
+        // Document media participates in the request digest. A retried ID keeps its original declaration even if the
+        // active release changed since; a new ID takes the active release's declared boundaries.
+        var declaration = Declared(previous, names) ?? await DeclareAsync(mapping, target, names, token);
+        if (declaration is not { } declared)
+            return Transient(MachineInvocationStatus.Unavailable, MachineInvocationOutcome.Unavailable);
+        var media = declared.Media;
+        string? Media(string? name) => media?.Single(value => value.Name == name).MediaType;
+        // An input without a declared boundary is refused before any claim, so it leaves no receipt.
+        var request = new MachineInvocationRequest(sample.Primary, sample.NamedInputs, sample.Parameters, media);
+        var inputs = sample.NamedInputs.Prepend(sample.Primary).Select(input => new SandboxDocument(input.Name, Media(input.Name), input.CopyBytes())).ToArray();
         var clock = Stopwatch.StartNew();
         MachineInvocationResult result;
-        if (documents && inputs.Any(input => input.MediaType is null)) result = new(MachineInvocationStatus.Failed, Outcome: MachineInvocationOutcome.InvalidInput);
-        else
+        using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(token))
         {
-            var request = new MachineInvocationRequest(sample.Primary, sample.NamedInputs, sample.Parameters,
-                documents ? inputs.Select(input => new MachineInputMedia(input.Name, input.MediaType!)).ToArray() : null);
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
             deadline.CancelAfter(Deadline);
             try { result = await invocations.InvokeAsync(reference, SandboxIdentity.Caller(mapping.OrganizationId, started), messageId, request, deadline.Token); }
             catch (OperationCanceledException) when (!token.IsCancellationRequested)
             { result = new(MachineInvocationStatus.Unavailable, Outcome: MachineInvocationOutcome.Unavailable); }
         }
         clock.Stop();
+        // The ledger admitted nothing for this request: not this caller's to record, so history is left untouched.
+        if (result.Status is MachineInvocationStatus.Conflict or MachineInvocationStatus.InProgress or MachineInvocationStatus.Refused or MachineInvocationStatus.NoRelease)
+            return Transient(result.Status, result.Outcome);
+        var status = Name(result.Status.ToString());
+        if (result.Replayed && previous is { Final: true } original && original.Status == status && original.ReleaseId == result.ReleaseId &&
+            (result.Status != MachineInvocationStatus.Completed || result.Response is not null))
+            return original with { Replayed = true };
         var outputs = new List<SandboxDocument>();
-        Guid? buildId = result.ReleaseId == release?.Intent.ReleaseId ? release?.Intent.Qualification.Artifact.Intent.BuildId : null;
-        if (result.Response is { } response)
+        Guid? buildId = result.ReleaseId is { } ran && ran == target.Active?.ReleaseId ? target.Active.BuildId : null;
+        if (result.Status == MachineInvocationStatus.Completed && result.Response is { } response)
         {
             using var json = JsonDocument.Parse(response);
             buildId = Guid.Parse(json.RootElement.GetProperty("buildId").GetString()!);
             foreach (var output in json.RootElement.GetProperty("outputs").EnumerateArray())
-                outputs.Add(new(output.GetProperty("name").GetString(), output.TryGetProperty("mediaType", out var media) ? media.GetString() : null,
+                outputs.Add(new(output.GetProperty("name").GetString(), output.TryGetProperty("mediaType", out var value) ? value.GetString() : null,
                     output.GetProperty("content").GetBytesFromBase64()));
         }
         var message = new SandboxMessage(messageId, mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, targetId, started, clock.ElapsedMilliseconds,
-            Name(result.Status.ToString()), result.Outcome is { } outcome ? Name(outcome.ToString()) : null, result.Replayed, result.ReleaseId, buildId,
+            status, result.Outcome is { } outcome ? Name(outcome.ToString()) : null, result.Replayed, result.ReleaseId, buildId,
             sample.Source, replayOf, inputs, sample.Parameters, outputs);
         await history.DeliverAsync(message, token);
         foreach (var sink in sinks) await sink.DeliverAsync(message, token);
@@ -224,6 +239,56 @@ public sealed class LocalSandboxService(
         try { await ledger.PurgeExpiredAsync(reference, 100, token); }
         catch (Exception error) when (error is not (OperationCanceledException or OutOfMemoryException)) { }
         return message;
+
+        SandboxMessage Transient(MachineInvocationStatus value, MachineInvocationOutcome? outcome) =>
+            new(messageId, mapping.OrganizationId, mapping.ProjectId, mapping.MappingId, targetId, started, 0, Name(value.ToString()),
+                outcome is { } named ? Name(named.ToString()) : null, false, null, null, sample.Source, replayOf,
+                sample.NamedInputs.Prepend(sample.Primary).Select(input => new SandboxDocument(input.Name, null, input.CopyBytes())).ToArray(),
+                sample.Parameters, []);
+    }
+
+    /// <summary>A media declaration: null media sends a mapping request, otherwise a document request.</summary>
+    private readonly record struct Declaration(IReadOnlyList<MachineInputMedia>? Media);
+
+    /// <summary>The declaration a retained message for this ID was sent with, when it names the same inputs.</summary>
+    private static Declaration? Declared(SandboxMessage? previous, IReadOnlyList<string?> names)
+    {
+        if (previous is null || previous.Inputs.Count != names.Count ||
+            !previous.Inputs.Select(input => input.Name).ToHashSet(StringComparer.Ordinal).SetEquals(names)) return null;
+        if (previous.Inputs.All(input => input.MediaType is null)) return new(null);
+        if (previous.Inputs.All(input => input.MediaType is not null))
+            return new(previous.Inputs.Select(input => new MachineInputMedia(input.Name, input.MediaType!)).ToArray());
+        return null;
+    }
+
+    /// <summary>
+    /// The active release's declared input media. The boundaries are resolved under the release's pinned publisher, as
+    /// the invocation itself runs, from the approval the sender-authorized target metadata associates with that release;
+    /// null when that association cannot be verified now, so the send is retryable and nothing is recorded.
+    /// </summary>
+    private async Task<Declaration?> DeclareAsync(MappingScope mapping, SandboxTarget target, IReadOnlyList<string?> names, CancellationToken token)
+    {
+        // Without an active release the ledger answers noRelease; the media cannot matter.
+        if (target.ActiveReleaseId is null) return new(null);
+        if (target.Active is not { } active || active.ReleaseId != target.ActiveReleaseId) return null;
+        RetainedBuildApproval? approval;
+        // The metadata reader refuses a contract it cannot verify, such as a publisher without current authority.
+        try { approval = await buildMetadata.ReadApprovalAsync(new ActorContext(active.Publisher), mapping, active.ApprovalId, token); }
+        catch (InvalidOperationException) { return null; }
+        var intent = approval?.Intent;
+        if (approval is null || approval.Actor != active.Publisher || intent is null || intent.ApprovalId != active.ApprovalId || intent.BuildId != active.BuildId ||
+            intent.Revision.OrganizationId != mapping.OrganizationId || intent.Revision.ProjectId != mapping.ProjectId || intent.Revision.MappingId != mapping.MappingId ||
+            intent.Environment.EnvironmentId != target.EnvironmentId || intent.Environment.Version != target.EnvironmentVersion ||
+            intent.Profile.Id != target.ProfileId || intent.Profile.Version != target.ProfileVersion) return null;
+        if (!BuildWorkerProtocol.IsDocumentProfile(intent.Profile.Id)) return new(null);
+        var media = new List<MachineInputMedia>();
+        foreach (var name in names)
+        {
+            var boundary = intent.Boundaries.FirstOrDefault(value => value.Kind is BuildBoundaryKind.PrimaryInput or BuildBoundaryKind.NamedInput && value.Name == name)
+                ?? throw new ArgumentException("A sample input has no declared document boundary in the active release.");
+            media.Add(new(name, BuildWorkerProtocol.MediaType(boundary.Format)));
+        }
+        return new(media);
     }
 
     public async Task<IReadOnlyList<SandboxMessage>?> ListAsync(ActorContext actor, MappingScope mapping, Guid targetId, int limit, CancellationToken token = default)
@@ -261,9 +326,21 @@ public sealed class LocalSandboxService(
                 profile.GetProperty("version").GetInt64(), image)) continue;
             result.Add(new(id, environment.EnvironmentId, environment.Version, row.GetProperty("enabled").GetBoolean(),
                 row.GetProperty("active_release_id").ValueKind == JsonValueKind.Null ? null : row.GetProperty("active_release_id").GetGuid(),
-                long.Parse(row.GetProperty("version").GetString()!, CultureInfo.InvariantCulture), image));
+                long.Parse(row.GetProperty("version").GetString()!, CultureInfo.InvariantCulture), image, Active(row),
+                profile.GetProperty("id").GetString()!, profile.GetProperty("version").GetInt64()));
         }
         return result;
+    }
+
+    /// <summary>The active release's association; null when absent or incomplete, never guessed.</summary>
+    private static SandboxActiveRelease? Active(JsonElement row)
+    {
+        if (!row.TryGetProperty("active", out var active) || active.ValueKind != JsonValueKind.Object) return null;
+        static Guid? Id(JsonElement value, string name) =>
+            value.TryGetProperty(name, out var item) && item.ValueKind == JsonValueKind.String && Guid.TryParseExact(item.GetString(), "D", out var id) && id != Guid.Empty ? id : null;
+        var approval = active.TryGetProperty("approval", out var value) && value.ValueKind == JsonValueKind.Object ? Id(value, "approvalId") : null;
+        return Id(active, "releaseId") is { } release && Id(active, "actorId") is { } publisher && Id(active, "buildId") is { } build &&
+            Id(active, "approvalId") is { } approvalId && approval == approvalId ? new(release, new(publisher), build, approvalId) : null;
     }
 
     private async Task<long?> OriginalVersionAsync(ActorContext actor, MappingScope mapping, Guid targetId, Guid operationId, CancellationToken token)

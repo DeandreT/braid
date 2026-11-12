@@ -138,9 +138,10 @@ public sealed class MachineInvocationServiceTests
         ICompiledBuildRuntime, IMachineInvocationLedger
     {
         private readonly Dictionary<MachineInvocationKey, Finish> recorded = [];
+        private readonly Dictionary<MachineInvocationKey, Sha256Digest> digests = [];
         private Guid? active;
         private LocalReleaseSnapshot? saved;
-        internal BuildQualificationTests.Fixture Data { get; } = new();
+        internal BuildQualificationTests.Fixture Data { get; }
         internal ActorContext Actor => new(Data.Actor);
         internal LocalReleaseTarget Target { get; }
         internal ReleaseIntent? Release => saved?.Intent;
@@ -150,6 +151,8 @@ public sealed class MachineInvocationServiceTests
         internal MachineInvocationService Service { get; }
         internal int RuntimeCalls, Claims;
         internal bool Enabled = true, Unauthorized, CancelAtRuntime, BlockAtRuntime, StallRelease;
+        /// <summary>Release reads admit only the release's publisher, as the actual store does.</summary>
+        internal bool PublisherOnlyReleaseReads;
         internal MachineInvocationFinishStatus? ForcedFinish;
         internal string? ChangePointerAt;
         internal MachineInvocationClaimStatus? ForcedClaim;
@@ -158,8 +161,9 @@ public sealed class MachineInvocationServiceTests
         internal Func<CancellationToken, Task<CompiledBuildResult>>? Execute;
         public string RuntimeImage => Data.Runtime;
 
-        internal Fixture(TimeSpan? releaseBound = null, Func<BuildIntent, string, Guid>? targetId = null)
+        internal Fixture(TimeSpan? releaseBound = null, Func<BuildIntent, string, Guid>? targetId = null, string? format = null)
         {
+            Data = new(format);
             var revision = Data.Build.Intent.Revision;
             Target = new(new(new(revision.OrganizationId, revision.ProjectId, revision.MappingId), Data.Build.Intent.Environment,
                 targetId?.Invoke(Data.Build.Intent, Data.Runtime) ?? Guid.NewGuid()), Data.Build.Intent.Profile, Data.Runtime);
@@ -185,6 +189,9 @@ public sealed class MachineInvocationServiceTests
         {
             Claims++;
             if (ForcedClaim is { } forced) return Task.FromResult(new MachineInvocationClaim(forced));
+            // As the ledger does, a request ID is bound to its first request digest.
+            if (digests.TryGetValue(key, out var digest) && digest != requestDigest) return Task.FromResult(new MachineInvocationClaim(MachineInvocationClaimStatus.Conflict));
+            digests[key] = requestDigest;
             if (recorded.TryGetValue(key, out var finish))
                 return Task.FromResult(new MachineInvocationClaim(MachineInvocationClaimStatus.Recorded, 1, Outcome: finish.Outcome,
                     ReleaseId: finish.Provenance?.ReleaseId, RetainedResponse: finish.Response));
@@ -202,12 +209,18 @@ public sealed class MachineInvocationServiceTests
             return MachineInvocationFinishStatus.Recorded;
         }
 
+        /// <summary>Ends the retention of every recorded response, as the ledger does after a day.</summary>
+        internal void ExpireResponses()
+        {
+            foreach (var key in recorded.Keys.ToArray()) recorded[key] = recorded[key] with { Response = null };
+        }
+
         public Task<int> PurgeExpiredAsync(ReleaseTargetReference target, int maximum, CancellationToken token) => Task.FromResult(0);
 
         public Task<LocalReleaseTargetSnapshot?> ReadTargetAsync(ActorContext actor, ReleaseTargetReference target, CancellationToken token) =>
             Task.FromResult<LocalReleaseTargetSnapshot?>(Unauthorized ? null : new(Target, Enabled, active));
         public Task<LocalReleaseSnapshot?> ReadAsync(ActorContext actor, ReleaseTargetReference target, Guid id, CancellationToken token) =>
-            Task.FromResult(!Unauthorized && saved?.Intent.ReleaseId == id ? saved : null);
+            Task.FromResult(!Unauthorized && saved?.Intent.ReleaseId == id && (!PublisherOnlyReleaseReads || actor.PrincipalId == saved.Intent.Actor) ? saved : null);
         public Task<ReleaseWriteOutcome> RegisterAsync(ActorContext actor, LocalReleaseTarget target, CancellationToken token) => throw new NotSupportedException();
         public Task<bool> DisableAsync(ActorContext actor, ReleaseTargetReference target, CancellationToken token) => throw new NotSupportedException();
         public Task<ReleaseWriteOutcome> RequestAsync(ActorContext actor, ReleaseIntent intent, CancellationToken token) => throw new NotSupportedException();
