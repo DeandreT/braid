@@ -30,6 +30,10 @@ public sealed class FileSandboxHistory : ISandboxHistory
             var directory = Path.Combine(root, message.TargetId.ToString("D"));
             if (OperatingSystem.IsWindows()) Directory.CreateDirectory(directory);
             else Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            // A duplicate invocation may settle after the original. Preserve the first terminal receipt,
+            // including its executed inputs and outputs, under the same gate that publishes replacements.
+            var previous = Directory.EnumerateFiles(directory, "*-" + message.MessageId.ToString("D") + ".json").SingleOrDefault();
+            if (previous is not null && await ReadFileAsync(previous, token) is { Final: true }) return;
             var path = Path.Combine(directory, message.SentAt.UtcTicks.ToString("D19", CultureInfo.InvariantCulture) + "-" + message.MessageId.ToString("D") + ".json");
             var partial = path + ".partial";
             var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };

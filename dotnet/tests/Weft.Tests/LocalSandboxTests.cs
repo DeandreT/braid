@@ -75,7 +75,7 @@ public sealed class LocalSandboxTests : IDisposable
         var start = DateTimeOffset.UnixEpoch.AddYears(56);
         var ids = Enumerable.Range(0, FileSandboxHistory.MaximumPerTarget + 2).Select(_ => Guid.NewGuid()).ToArray();
         for (var index = 0; index < ids.Length; index++)
-            await history.DeliverAsync(Message(ids[index], target, start.AddSeconds(index), index == 0 ? "unavailable" : "completed"));
+            await history.DeliverAsync(Message(ids[index], target, start.AddSeconds(index), index == 0 || index == ids.Length - 1 ? "unavailable" : "completed"));
         Assert.Equal(FileSandboxHistory.MaximumPerTarget, Directory.GetFiles(Path.Combine(root, target.ToString("D"))).Length);
         Assert.Null(await history.ReadAsync(target, ids[0]));
         Assert.Null(await history.ReadAsync(target, ids[1]));
@@ -84,7 +84,7 @@ public sealed class LocalSandboxTests : IDisposable
         var stored = Assert.IsType<SandboxMessage>(await history.ReadAsync(target, ids[^1]));
         Assert.Equal("{\"in\":1}"u8.ToArray(), stored.Inputs.Single().Content);
         Assert.Equal(PreviewParameterKind.Integer, stored.Parameters.Single().Kind);
-        Assert.True(stored.Final);
+        Assert.False(stored.Final);
         await history.DeliverAsync(Message(ids[^1], target, start.AddDays(1), "failed"));
         Assert.Equal("failed", (await history.ReadAsync(target, ids[^1]))!.Status);
         Assert.Equal(FileSandboxHistory.MaximumPerTarget, Directory.GetFiles(Path.Combine(root, target.ToString("D"))).Length);
