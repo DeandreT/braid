@@ -134,7 +134,11 @@ Existing saved-profile admission and its same-format restrictions are unchanged.
 `authored_document::transport::serve(reader, writer)` implements the standalone
 stream; `handle(header, reader, writer)` accepts an already-framed header for later
 host dispatch. `core/examples/authored_preview_protocol.rs` provides the portable
-stdin/stdout qualification process. No production host dispatch is registered.
+stdin/stdout qualification process. The integrated host now selects this protocol
+through `src/authored_preview.rs` before the saved-profile parsers. Its handler
+owns the native/sample frame limits and EOF requirement. The header dispatch cap
+is the maximum of the independent caps, with the original cap enforced again
+before any legacy parser; both caps are currently 16 KiB.
 
 Build it with:
 
@@ -207,3 +211,12 @@ the 36-pair matrix) and seven wire tests. Wire coverage includes every truncated
 prefix of a valid request, surplus bytes/frames, oversized declarations before
 allocation, strict headers, both digest checks, echoed project context, categorical
 failure framing, a bounded fallback header and a zero-byte successful CSV output.
+
+After integrating primary `3e45ebfb`, all 28 core tests (including eight authoring
+tests) and three host-route integration tests pass with locked offline dependencies.
+`core/tests/authored_preview_dispatch.rs` compiles the actual host
+route in a portable harness and exercises compiler-generated native JSON→CSV,
+untouched legacy protocol streams, duplicate-protocol refusal, and independent
+header/native/EOF bounds. This does not compile or qualify the complete Linux host
+or its resource sandbox. The coordinator separately reported 26 passing C# checks,
+including actual interoperability; those C# checks were not rerun in this worktree.
