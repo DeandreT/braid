@@ -20,6 +20,7 @@ import type { AutomationPageComponent } from "./catalog/automation/automation-pa
 import { NotFoundComponent } from "./not-found.component";
 import type { ChatPageComponent } from "./chat/chat-page.component";
 import type { RevisionPageComponent } from "./catalog/revision-page.component";
+import type { SpecPageComponent } from "./catalog/specs/spec-page.component";
 
 const leaveChat: CanDeactivateFn<ChatPageComponent> = (component) =>
   component.requestLeave();
@@ -126,6 +127,22 @@ export const routes: Routes = [
     component: CatalogShellComponent,
     canActivate: [requireSignIn],
     children: [
+      ...[
+        "organizations/:organizationId/projects/:projectId/specs",
+        "organizations/:organizationId/projects/:projectId/specs/:bundleId",
+      ].map((path) => ({
+        path,
+        loadComponent: () =>
+          import("./catalog/specs/spec-page.component").then(
+            (m) => m.SpecPageComponent,
+          ),
+        canDeactivate: [
+          (component: SpecPageComponent) => requestWorkspaceLeave(component),
+        ],
+        canActivate: [leaveWorkspaceEntry],
+        runGuardsAndResolvers: "paramsOrQueryParamsChange" as const,
+        title: "Specification intake · Weft",
+      })),
       {
         path: "organizations/:organizationId/projects/:projectId/mappings/:mappingId/operations",
         loadComponent: () =>

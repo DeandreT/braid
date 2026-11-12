@@ -1,0 +1,227 @@
+<section
+  class="catalog-page"
+  aria-labelledby="spec-title"
+  [attr.aria-busy]="busy()"
+>
+  <nav class="catalog-breadcrumb" aria-label="Breadcrumb">
+    <a [routerLink]="projectLink">Project</a>
+  </nav>
+  <header class="catalog-heading">
+    <div>
+      <p class="catalog-eyebrow">Specification intake</p>
+      <h1 id="spec-title">
+        {{ visible() ? projectName() : "Specifications" }}
+      </h1>
+    </div>
+    <button
+      class="catalog-button"
+      (click)="refresh()"
+      [disabled]="busy() && !reading()"
+    >
+      Refresh inventory and access
+    </button>
+  </header>
+  <p role="status" aria-live="polite">{{ message() }}</p>
+  @if (visible()) {
+    <p>
+      Capture reference documents and inspect local extraction evidence. This
+      does not generate a mapping or approve sharing with an AI provider. URLs
+      remain text and are never fetched.
+    </p>
+    @if (!bundle) {
+      <button
+        class="catalog-button catalog-button-primary"
+        (click)="start()"
+        [disabled]="busy()"
+      >
+        Start new bundle
+      </button>
+    } @else {
+      <p class="bundle-id">
+        Bundle <code>{{ bundle }}</code
+        >. Bookmark this URL to reopen its inventory.
+      </p>
+      <button class="catalog-button" (click)="start()" [disabled]="busy()">
+        Start another bundle
+      </button>
+      @if (intent()) {
+        <section class="notice" aria-label="Request recovery">
+          <h2>Retained request</h2>
+          <p>
+            Exact IDs, versions and content are kept in this tab. Refresh
+            inventory first. Retrying sends the same intent; leaving or
+            reloading loses the local bytes and retry information.
+          </p>
+          <button class="catalog-button" (click)="send()" [disabled]="busy()">
+            Retry retained request
+          </button>
+          <button
+            class="catalog-button"
+            (click)="discard()"
+            [disabled]="busy()"
+          >
+            Discard local request
+          </button>
+        </section>
+      }
+      @if (data(); as view) {
+        <p>
+          Mutation version {{ view.bundle.version }} ·
+          {{ view.objects.length }} retained object records
+        </p>
+        <fieldset [disabled]="busy() || !!intent()">
+          <legend>Add a source</legend>
+          <label for="spec-file">Text or JSON file (10 MiB maximum)</label
+          ><input
+            id="spec-file"
+            type="file"
+            accept=".txt,.json,text/plain,application/json"
+            (change)="choose($event)"
+          />
+          <p>
+            PDF and Office files are currently unsupported by this upload API.
+            They will not be sent or retained.
+          </p>
+          <label for="spec-format">Extraction format</label
+          ><select id="spec-format" [(ngModel)]="format">
+            <option value="text">Plain text</option>
+            <option value="json">JSON</option>
+            <option value="openapi-json">
+              OpenAPI JSON (structural extraction)
+            </option>
+          </select>
+          <button
+            class="catalog-button"
+            (click)="upload(false)"
+            [disabled]="!file()"
+          >
+            Upload selected file
+          </button>
+          <label for="spec-text">Or paste text (1 MiB request maximum)</label
+          ><textarea
+            id="spec-text"
+            rows="7"
+            [ngModel]="draft()"
+            (ngModelChange)="draft.set($event)"
+          ></textarea>
+          <button
+            class="catalog-button"
+            (click)="upload(true)"
+            [disabled]="!draft()"
+          >
+            Save pasted text
+          </button>
+        </fieldset>
+        <h2>Source inventory</h2>
+        @if (!view.objects.length) {
+          <p>No source objects have been reserved yet.</p>
+        }
+        <ul class="objects">
+          @for (object of view.objects; track object.objectId) {
+            <li>
+              <h3>{{ object.kind }} · {{ object.format }}</h3>
+              <p class="bundle-id">
+                Source <code>{{ object.sourceId }}</code
+                >, version {{ object.sourceVersion }}
+              </p>
+              <p>{{ object.byteCount }} bytes · {{ object.state }}</p>
+              @if (object.kind === "Original") {
+                <p>
+                  {{
+                    object.state === "published"
+                      ? "Original bytes retained."
+                      : object.state === "pending"
+                        ? "Original reserved; physical publication not yet acknowledged."
+                        : "Logically deleted; physical retirement may be pending."
+                  }}
+                </p>
+              } @else {
+                <p>
+                  {{
+                    object.state === "retiring" || object.state === "retired"
+                      ? "Extraction logically deleted; physical retirement may be pending."
+                      : outcome(object.outcome)
+                  }}
+                </p>
+              }
+              @if (
+                object.kind === "Extraction" && object.state === "published"
+              ) {
+                <button
+                  class="catalog-button"
+                  (click)="read(object)"
+                  [disabled]="busy()"
+                >
+                  Read extraction
+                </button>
+              }
+              @if (
+                object.kind === "Original" &&
+                (object.state === "published" || object.state === "pending")
+              ) {
+                <button
+                  class="catalog-button"
+                  (click)="remove(object)"
+                  [disabled]="busy() || !!intent()"
+                >
+                  Delete source version
+                </button>
+              }
+            </li>
+          }
+        </ul>
+        <button
+          class="catalog-button"
+          (click)="remove()"
+          [disabled]="busy() || !!intent()"
+        >
+          Delete bundle
+        </button>
+      } @else if (!intent()) {
+        <p>
+          A new bundle must be created before uploading. A missing response may
+          also mean access was denied; it does not prove a previous request
+          failed.
+        </p>
+        <button class="catalog-button" (click)="create()" [disabled]="busy()">
+          Create this bundle
+        </button>
+      }
+      @if (chunks(); as evidence) {
+        <section aria-label="Extraction evidence">
+          <h2>Extraction evidence</h2>
+          <p>{{ outcome(selected()?.outcome ?? null) }}</p>
+          <p>Diagnostic: {{ evidence.code }}</p>
+          <p class="bundle-id">
+            Extraction <code>{{ selected()?.objectId }}</code> · digest
+            <code>{{ selected()?.digest }}</code>
+          </p>
+          @if (!evidence.chunks.length) {
+            <p>
+              No evidence chunks are available. Nothing has been silently
+              truncated.
+            </p>
+          }
+          @for (chunk of evidence.chunks; track chunk.ordinal) {
+            <article class="citation">
+              <h3>Chunk {{ chunk.ordinal }}</h3>
+              <p>
+                Source {{ selected()?.sourceId }} · version
+                {{ selected()?.sourceVersion }} · lines {{ chunk.start }}–{{
+                  chunk.end
+                }}
+                · byte offset {{ chunk.offset }}, length {{ chunk.length }}
+              </p>
+              @if (chunk.pointer !== null) {
+                <p>
+                  JSON pointer: <code>{{ chunk.pointer || "(root)" }}</code>
+                </p>
+              }
+              <pre>{{ chunk.text }}</pre>
+            </article>
+          }
+        </section>
+      }
+    }
+  }
+</section>
