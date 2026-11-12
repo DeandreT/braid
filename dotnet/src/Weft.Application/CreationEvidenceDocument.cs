@@ -4,7 +4,7 @@ namespace Weft.Application;
 
 /// <summary>Closed adaptation of trusted extractor results, never a model/JSON evidence constructor.
 /// Retains the extractor's exact canonical bytes and identity without changing its outcome.</summary>
-public sealed class CreationEvidenceDocument
+public sealed partial class CreationEvidenceDocument
 {
     private readonly byte[] evidence;
     private readonly bool admitted;

@@ -48,7 +48,7 @@ public sealed class CreationEvidenceGenerationTests
         return Source(id, workbook ? SpecSourceFormat.Xlsx : SpecSourceFormat.Docx, bytes.ToArray());
     }
 
-    private static (CreationSpecification Spec, SpecOfficeExtractionResult Word, SpecOfficeExtractionResult Sheet) Mixed()
+    internal static (CreationSpecification Spec, SpecOfficeExtractionResult Word, SpecOfficeExtractionResult Sheet) Mixed()
     {
         var text = Text(); var word = Office(5); var sheet = Office(6, true);
         var a = SpecOfficeParser.Extract(word); var b = SpecOfficeParser.Extract(sheet);
@@ -214,7 +214,7 @@ public sealed class CreationEvidenceGenerationTests
         Assert.Throws<ArgumentException>(() => new CreationSpecification(Bundle, escaped, results));
     }
 
-    private static async Task<SpecPdfExtractionResult> ExtractPdf(SpecCapturedSource source, int cap = 8 * 1024 * 1024)
+    internal static async Task<SpecPdfExtractionResult> ExtractPdf(SpecCapturedSource source, int cap = 8 * 1024 * 1024)
     {
         var child = new SpecPdfProcessTests.Child();
         var wire = await child.Run(source.CopyBytes());
