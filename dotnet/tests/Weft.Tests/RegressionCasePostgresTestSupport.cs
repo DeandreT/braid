@@ -10,12 +10,15 @@ namespace Weft.Tests;
 internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
 {
     private readonly IngestionReceipt receipt;
+    private readonly PostgresCatalogTestSupport? catalogOwner;
 
-    private RegressionCasePostgresTestSupport(PostgresFixture fixture, PostgresCase test, PostgresSeedData seed, IngestionReceipt receipt, int? historicalPrefix)
+    private RegressionCasePostgresTestSupport(PostgresFixture fixture, PostgresCase test, PostgresSeedData seed, IngestionReceipt receipt, int? historicalPrefix,
+        PostgresCatalogTestSupport? catalogOwner = null)
     {
         Case = test;
         Seed = seed;
         this.receipt = receipt;
+        this.catalogOwner = catalogOwner;
         HistoricalPrefix = historicalPrefix;
         Actor = new(new(seed.Alice));
         Mapping = new(seed.OrganizationA, seed.ProjectA, receipt.Facts.FutureRevision.MappingId);
@@ -27,8 +30,19 @@ internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
     }
 
     /// <param name="migrations">Optional ordered migration prefix for upgrade tests; the default is the current schema.</param>
-    internal static async Task<RegressionCasePostgresTestSupport> CreateAsync(PostgresFixture fixture, int? migrations = null)
+    internal static async Task<RegressionCasePostgresTestSupport> CreateAsync(PostgresFixture fixture, int? migrations = null, byte[]? nativeBytes = null)
     {
+        if (nativeBytes is not null)
+        {
+            if (migrations is not null) throw new ArgumentException("Custom native fixtures require the current schema.");
+            var catalog = await PostgresCatalogTestSupport.CreateAsync(fixture);
+            try
+            {
+                var saved = await catalog.CommitCreateAsync("CSV regression", "Self-authored native boundary fixture", body: nativeBytes);
+                return new(fixture, catalog.Case, catalog.Seed, saved, null, catalog);
+            }
+            catch { await catalog.DisposeAsync(); throw; }
+        }
         var test = await fixture.CreateCaseAsync(migrate: false);
         try
         {
@@ -51,6 +65,7 @@ internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
     internal ActorContext Actor { get; }
     internal MappingScope Mapping { get; }
     internal RegressionRuntimeIdentity Runtime { get; }
+    internal PrivateObjectReference Native => receipt.Facts.NativeObject;
     internal string ReaderConnection { get; }
     internal string WriterConnection { get; }
     internal PostgresRegressionCaseStore Reader { get; }
@@ -72,6 +87,7 @@ internal sealed class RegressionCasePostgresTestSupport : IAsyncDisposable
     {
         await Reader.DisposeAsync();
         await Writer.DisposeAsync();
-        await Case.DisposeAsync();
+        if (catalogOwner is not null) await catalogOwner.DisposeAsync();
+        else await Case.DisposeAsync();
     }
 }

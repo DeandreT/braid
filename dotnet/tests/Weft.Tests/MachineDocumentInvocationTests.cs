@@ -24,7 +24,7 @@ public sealed class MachineDocumentInvocationTests
         Assert.True(operation.GetProperty("requestBody").GetProperty("content").TryGetProperty("application/json", out _));
         var schemas = root.GetProperty("components").GetProperty("schemas");
         var mediaValues = schemas.GetProperty("MappingDocumentInvocationInputV1").GetProperty("properties").GetProperty("mediaType").GetProperty("enum");
-        Assert.Equal(new[] { "application/json", "application/edi-x12", "application/edifact" },
+        Assert.Equal(new[] { "application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values" },
             mediaValues.EnumerateArray().Select(value => value.GetString()));
         var body = Body();
         Assert.Equal(body["schema"]!.GetValue<string>(), schemas.GetProperty("MappingDocumentInvocationRequestV1").GetProperty("properties").GetProperty("schema").GetProperty("enum")[0].GetString());
@@ -40,8 +40,47 @@ public sealed class MachineDocumentInvocationTests
         foreach (var media in mediaValues.EnumerateArray())
         {
             var sample = Body(); sample["inputs"]![0]!["mediaType"] = media.GetString();
+            if (CsvDocumentPolicy.AdmitsMediaType(media.GetString()!))
+                sample["inputs"]![0]!["csvDialect"] = JsonSerializer.SerializeToNode(BuildCsvContractTests.Dialect(
+                    media.GetString() == "text/csv" ? "," : "\t"), new JsonSerializerOptions(JsonSerializerDefaults.Web));
             Assert.Equal(media.GetString(), Assert.Single(MappingEndpointRoutes.Parse(Encoding.UTF8.GetBytes(sample.ToJsonString())).InputMedia!).MediaType);
         }
+    }
+
+    [Theory]
+    [InlineData(",", "text/csv")]
+    [InlineData("\t", "text/tab-separated-values")]
+    public void Explicit_empty_csv_request_requires_matching_dialect_and_keeps_its_request_identity(string delimiter, string mediaType)
+    {
+        var dialect = BuildCsvContractTests.Dialect(delimiter);
+        var body = Body();
+        body["inputs"]![0]!["content"] = "";
+        body["inputs"]![0]!["mediaType"] = mediaType;
+        body["inputs"]![0]!["csvDialect"] = JsonSerializer.SerializeToNode(dialect, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var request = MappingEndpointRoutes.Parse(Encoding.UTF8.GetBytes(body.ToJsonString()));
+        Assert.Empty(request.Primary.CopyBytes());
+        Assert.Equal(dialect, request.Primary.CsvDialect);
+        var changed = new MachineInvocationRequest(new(null, [], dialect with { Utf8Bom = true }), [], [],
+            [new(null, mediaType, dialect with { Utf8Bom = true })]);
+        Assert.NotEqual(request.Digest, changed.Digest);
+        body["inputs"]![0]!.AsObject().Remove("csvDialect");
+        Assert.Throws<FormatException>(() => MappingEndpointRoutes.Parse(Encoding.UTF8.GetBytes(body.ToJsonString())));
+        body["inputs"]![0]!.AsObject().Remove("content");
+        Assert.Throws<FormatException>(() => MappingEndpointRoutes.Parse(Encoding.UTF8.GetBytes(body.ToJsonString())));
+    }
+
+    [Fact]
+    public void Csv_response_keeps_dialect_and_empty_output_and_round_trips_without_relabelling()
+    {
+        var dialect = BuildCsvContractTests.Dialect();
+        var outputs = RegressionOutputSet.Capture([RegressionOutput.Capture(RegressionOutputKey.Primary, [], mediaType: "text/csv", csvDialect: dialect)]);
+        var provenance = new MachineInvocationProvenance(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Sha256Digest.FromBytes([1]),
+            Sha256Digest.FromBytes([2]), Guid.NewGuid(), "sha256:" + new string('a', 64));
+        var bytes = MachineInvocationService.Encode(Guid.NewGuid(), provenance, "2026-10-30T12:00:00Z", outputs, documents: true);
+        var wire = JsonSerializer.Deserialize<MappingDocumentInvocationResponseV1>(bytes, MappingEndpointContract.Json)!;
+        Assert.Equal(dialect, Assert.Single(wire.Outputs).CsvDialect);
+        Assert.Empty(Assert.Single(wire.Outputs).Content);
+        Assert.Equal(bytes, JsonSerializer.SerializeToUtf8Bytes(wire, MappingEndpointContract.Json));
     }
 
     private static JsonObject Body() => new()

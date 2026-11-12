@@ -32,6 +32,31 @@ test("the browser fixture admits exactly the current ordered migration inventory
   );
 });
 
+test("CSV is an additive migration after the retained draft and chat write contracts", () => {
+  assert.deepEqual(browserFixtureMigrations.slice(-5), [
+    "0037_mapping_drafts.sql",
+    "0038_mapping_draft_previews.sql",
+    "0039_chat_mapping_writes.sql",
+    "0040_chat_mapping_write_journal.sql",
+    "0041_csv_documents.sql",
+  ]);
+  const sql = readFileSync(
+    new URL("0041_csv_documents.sql", migrations),
+    "utf8",
+  );
+  assert.match(sql, /weft\.csv-preview-request\.v1/);
+  assert.match(sql, /weft\.csv-regression-case\.v1/);
+  assert.match(sql, /weft\.csv-regression-run-result\.v1/);
+  assert.match(
+    sql,
+    /comparisonPolicy' IS DISTINCT FROM 'weft\.regression\.exact-bytes\.v1'/,
+  );
+  assert.doesNotMatch(
+    sql,
+    /DROP TABLE|TRUNCATE|DELETE FROM|DISABLE ROW LEVEL SECURITY/,
+  );
+});
+
 test("qualification and release state stays inside fixture conservation snapshots", () => {
   const sql = browserFixtureMigrations
     .map((name) => readFileSync(new URL(name, migrations), "utf8"))

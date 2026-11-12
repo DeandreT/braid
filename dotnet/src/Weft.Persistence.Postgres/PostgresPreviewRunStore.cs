@@ -160,9 +160,10 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             throw new ArgumentException("Only a succeeded completion publishes outputs, and it requires provenance.", nameof(completion));
         return _database.RunAsync(true, async (connection, transaction) =>
         {
-            await using var command = new NpgsqlCommand("""
-                SELECT weft.preview_complete($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-                """, connection, transaction);
+            var csv = completion.Provenance?.Profile == CsvDocumentPolicy.Profile;
+            await using var command = new NpgsqlCommand(csv
+                ? "SELECT weft.preview_complete_csv($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)"
+                : "SELECT weft.preview_complete($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)", connection, transaction);
             var failure = completion.Failure;
             var provenance = completion.Provenance;
             var artifacts = completion.Artifacts;
@@ -187,6 +188,8 @@ public sealed class PostgresPreviewRunStore(PostgresPreviewDatabase database) : 
             Array(command, NpgsqlDbType.Text, artifacts.Select(artifact => artifact.MediaType).ToArray());
             Array(command, NpgsqlDbType.Bigint, artifacts.Select(artifact => artifact.RecordsWritten).ToArray());
             Array(command, NpgsqlDbType.Bytea, artifacts.Select(artifact => artifact.CopyBytes()).ToArray());
+            if (csv) Array(command, NpgsqlDbType.Text, artifacts.Select(artifact => CsvDialectJson.Encode(artifact.CsvDialect
+                ?? throw new ArgumentException("CSV output has no dialect.", nameof(completion)))).ToArray());
             return await command.ExecuteScalarAsync(cancellationToken) switch
             {
                 "completed" => true,

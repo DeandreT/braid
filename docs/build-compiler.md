@@ -18,6 +18,18 @@ with explicit portable paths, lengths and SHA-256 values. No design-time path is
 opened. The generator's source response is a private compiler transport, not an
 API/browser source download.
 
+The separate `weft.ferrule-csharp-csv.v1` profile admits only primary flat
+CSV-to-CSV plans. TSV is explicit CSV with a saved tab delimiter. Both boundary
+records contain `csvDialect` in the `weft.csv-dialect.v1` shape, and the build
+intent must match that metadata exactly. JSON/EDI boundary records omit this
+member, preserving their existing canonical representation.
+
+CSV generation uses `CsvDocumentBoundaryPolicy::from_project` and
+`emit_with_csv_document_adapters`. Its exact companions are
+`GeneratedMapping.Csv.cs` and `GeneratedMapping.CsvDocument.cs`; arbitrary companion
+names are not admitted. Mixed formats, named endpoints and other unsupported
+CSV plans produce `unsupportedCsvPlan`, exposed as a typed preflight refusal.
+
 ## Offline .NET compilation
 
 `Weft.BuildWorker` invokes the fixed native generator, checks every source frame,

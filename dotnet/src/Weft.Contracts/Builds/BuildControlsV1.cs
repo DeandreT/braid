@@ -5,7 +5,10 @@ namespace Weft.Contracts.Builds;
 
 public sealed record BuildBackendV1(string BackendId, string EngineRevision, string EngineBuild, string AdapterVersion);
 public sealed record BuildRuntimeV1(string Id, string Version, string Runtime, string RuntimeVersion, string ArtifactFormat, long MaximumArtifactBytes);
-public sealed record BuildBoundaryV1(string Kind, string? Name, string Format);
+public sealed record BuildCsvDialectV1(string Schema, string Delimiter, [property: JsonRequired] string? Quote, bool QuoteDisabled,
+    bool HasHeaderRow, bool Utf8Bom, bool PreserveEmptyStrings);
+public sealed record BuildBoundaryV1(string Kind, string? Name, string Format,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildCsvDialectV1? CsvDialect = null);
 public sealed record BuildEnvironmentReferenceV1(string OrganizationId, string ProjectId, string EnvironmentId, string Version);
 public sealed record BuildEnvironmentV1(BuildEnvironmentReferenceV1 Reference, BuildRuntimeV1 Profile, bool Active,
     string CreatorPrincipalId, string CreatedAtUtc);
@@ -14,7 +17,8 @@ public sealed record BuildEnvironmentPutV1(string ProfileId, string ProfileVersi
 public sealed record BuildEnvironmentReceiptV1(string Outcome, BuildEnvironmentV1 Environment);
 public sealed record BuildEnvironmentCapabilitiesV1(BuildRuntimeV1 Profile, bool CanCreateVersions,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? DocumentProfile = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? InterchangeProfile = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? InterchangeProfile = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? CsvProfile = null);
 public sealed record BuildApprovalPutV1(string BuildId, string RevisionId, string EnvironmentId, string EnvironmentVersion, string RegressionEvidenceId);
 public sealed record BuildApprovalV1(string ApprovalId, string BuildId, CatalogRevisionScopeV1 Revision, string NativeDigest,
     BuildBackendV1 Backend, BuildRuntimeV1 Profile, IReadOnlyList<BuildBoundaryV1> Boundaries, BuildEnvironmentReferenceV1 Environment,
@@ -30,4 +34,6 @@ public sealed record BuildRunPageV1(IReadOnlyList<BuildRunV1> Runs, string? Next
 public sealed record BuildCapabilitiesV1(BuildBackendV1 Backend, BuildRuntimeV1 Profile, bool ReadOwnMetadata, bool ApproveBuilds, bool SubmitBuilds,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildBackendV1? DocumentBackend = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? DocumentProfile = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? InterchangeProfile = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? InterchangeProfile = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildBackendV1? CsvBackend = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BuildRuntimeV1? CsvProfile = null);

@@ -17,6 +17,58 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
     private static readonly byte[] Rates = PreviewRunTestSupport.Rates;
 
     [PostgresFact]
+    public async Task Missing_csv_reader_on_a_csv_schema_is_not_treated_as_a_legacy_prefix()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, CsvPreviewTestData.Native);
+        var submission = new PreviewRunSubmission(test.Revision, Guid.NewGuid(), PreviewTargetSelection.All,
+            new(null, [], CsvPreviewTestData.Dialect), [], [])
+        { Profile = PreviewExecutionProfile.CsvDocument };
+        var run = (await test.Service().SubmitAsync(test.Alice, submission)).RunId!.Value;
+        await test.Case.ExecuteAsync("DROP FUNCTION weft.preview_csv_input(uuid,uuid,uuid,integer)");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => test.Reader.ReadInputAsync(test.Alice, test.Revision.OrganizationId, run, 0));
+    }
+
+    [RegressionPostgresTheory]
+    [InlineData(13)]
+    [InlineData(33)]
+    public async Task Legacy_json_reads_work_before_csv_migration_and_conserve_bytes_after_upgrade(int prefix)
+    {
+        await using var test = await fixture.CreateCaseAsync(migrate: false);
+        await using (var initial = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(2).ToArray()))
+            await initial.MigrateAsync();
+        var seed = await PostgresSeedData.CreateAsync(test);
+        await test.ExecuteAsync("UPDATE weft.project_memberships SET role='publisher',version=version+1 WHERE principal_id=$1", seed.Alice);
+        var actor = new ActorContext(new(seed.Alice));
+        var receipt = await HistoricalIngestionSeed.CommitCreateAsync(test, actor, new(seed.OrganizationA, seed.ProjectA));
+        await using (var previous = new MigrationRunner(test.MigrationConnectionString, MigrationRunner.EmbeddedMigrations.Take(prefix).ToArray()))
+            await previous.MigrateAsync();
+        await using var writer = new PostgresPreviewDatabase(test.PreviewWriterConnectionString, PreviewDatabaseProfile.Writer);
+        await using var reader = new PostgresPreviewDatabase(test.PreviewReaderConnectionString, PreviewDatabaseProfile.Reader);
+        var store = new PostgresPreviewRunStore(writer);
+        var reads = new PostgresPreviewRunReader(reader);
+        var scope = receipt.Facts.FutureRevision;
+        var submission = new PreviewRunSubmission(scope, Guid.NewGuid(), PreviewTargetSelection.Primary, new(null, "{}"u8), [], []);
+        var record = new PreviewRunRecord(submission, PreviewRequestDocument.Encode(submission, PreviewLimits.Default),
+            "2026-10-31T00:00:00Z", 3, TimeSpan.FromHours(24));
+        var run = (await store.SubmitAsync(actor, record)).RunId!.Value;
+        Assert.Equal(PreviewRunState.Queued, (await reads.ReadAsync(actor, scope.OrganizationId, run))!.State);
+        var claim = (await store.ClaimAsync(scope.OrganizationId, run, Guid.NewGuid(), TimeSpan.FromSeconds(90))).Claim!;
+        Assert.True(await store.CompleteAsync(claim, new(PreviewRunOutcome.Succeeded, null,
+            new(true, "engine", "image", "adapter", PreviewPolicy.Profile), 1,
+            [new("primary-output", "result", false, PreviewPolicy.MediaType, 1, "{}"u8)])));
+        var before = (await reads.ReadAsync(actor, scope.OrganizationId, run))!;
+        Assert.Equal("{}"u8.ToArray(), (await reads.ReadOutputAsync(actor, scope.OrganizationId, run, 0))!.Content);
+        if (prefix >= 33) Assert.Equal("{}"u8.ToArray(), (await reads.ReadInputAsync(actor, scope.OrganizationId, run, 0))!.Content);
+        Assert.Equal(PreviewSubmitOutcome.Replayed, (await store.SubmitAsync(actor, record)).Outcome);
+        await test.MigrateAsync();
+        var after = (await reads.ReadAsync(actor, scope.OrganizationId, run))!;
+        Assert.Equal(before.RequestFingerprint, after.RequestFingerprint);
+        Assert.Equal(before.Outputs, after.Outputs);
+        Assert.Equal("{}"u8.ToArray(), (await reads.ReadOutputAsync(actor, scope.OrganizationId, run, 0))!.Content);
+        Assert.Equal("{}"u8.ToArray(), (await reads.ReadInputAsync(actor, scope.OrganizationId, run, 0))!.Content);
+    }
+
+    [PostgresFact]
     public async Task DocumentPreviewUpgradePreservesSavedJsonRunsAndOnlyAddsAdmittedOutputMedia()
     {
         await using var test = await fixture.CreateCaseAsync(migrate: false);
@@ -51,8 +103,8 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
         var before = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id)::text FROM weft.preview_runs r");
         var documents = await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY direction,ordinal)::text FROM weft.preview_documents d");
         await test.MigrateAsync();
-        Assert.Equal(before, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r) ORDER BY run_id)::text FROM weft.preview_runs r"));
-        Assert.Equal(documents, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d) ORDER BY direction,ordinal)::text FROM weft.preview_documents d"));
+        Assert.Equal(before, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(r)-'csv_profile' ORDER BY run_id)::text FROM weft.preview_runs r"));
+        Assert.Equal(documents, await test.ScalarAsync<string>("SELECT jsonb_agg(to_jsonb(d)-'csv_input'-'csv_dialect' ORDER BY direction,ordinal)::text FROM weft.preview_documents d"));
         Assert.Equal(PreviewPolicy.MediaType, (await reads.ReadOutputAsync(actor, revision.OrganizationId, legacyRun, 0))!.MediaType);
         Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, legacyRun), await store.SubmitAsync(actor,
             new(submission, PreviewRequestDocument.Encode(submission, PreviewLimits.Default), "2026-10-24T12:00:00Z", 3, TimeSpan.FromHours(24))));
@@ -66,6 +118,53 @@ public sealed class PostgresPreviewRunTests(PostgresFixture fixture)
             Assert.Equal(media, output.MediaType);
             Assert.Equal(content, output.Content);
         }
+    }
+
+    [PostgresFact]
+    public async Task Csv_empty_input_and_output_retain_dialect_bytes_and_idempotency()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, CsvPreviewTestData.Native);
+        var submission = new PreviewRunSubmission(test.Revision, Guid.NewGuid(), PreviewTargetSelection.All,
+            new(null, [], CsvPreviewTestData.Dialect), [], [])
+        { Profile = PreviewExecutionProfile.CsvDocument };
+        var created = await test.Service().SubmitAsync(test.Alice, submission);
+        Assert.Equal(PreviewSubmitOutcome.Created, created.Outcome);
+        Assert.Equal(new PreviewSubmitResult(PreviewSubmitOutcome.Replayed, created.RunId), await test.Service().SubmitAsync(test.Alice, submission));
+        var backend = new CsvPreviewTestData.Backend();
+        Assert.Equal(PreviewExecutionOutcome.Completed, await test.Executor(backend).ExecuteAsync(test.Revision.OrganizationId, created.RunId!.Value, Guid.NewGuid()));
+        var saved = (await test.Reader.ReadAsync(test.Alice, test.Revision.OrganizationId, created.RunId.Value))!;
+        var descriptor = Assert.Single(saved.Outputs);
+        Assert.Equal(CsvDocumentPolicy.Profile, saved.Provenance!.Profile);
+        Assert.Equal(CsvPreviewTestData.Dialect, descriptor.CsvDialect);
+        Assert.Equal(0, descriptor.ByteCount);
+        Assert.Equal(Sha256Digest.FromBytes([]), descriptor.Digest);
+        var output = (await test.Reader.ReadOutputAsync(test.Alice, test.Revision.OrganizationId, created.RunId.Value, 0))!;
+        Assert.Empty(output.Content);
+        Assert.Equal("text/tab-separated-values", output.MediaType);
+        Assert.Equal(CsvPreviewTestData.Dialect, output.CsvDialect);
+        var input = (await test.Reader.ReadInputAsync(test.Alice, test.Revision.OrganizationId, created.RunId.Value, 0))!;
+        Assert.Equal("text/tab-separated-values", input.MediaType);
+        Assert.Equal(CsvPreviewTestData.Dialect, input.CsvDialect);
+        Assert.Equal(PreviewExecutionOutcome.Finished, await test.Executor(backend).ExecuteAsync(test.Revision.OrganizationId, created.RunId.Value, Guid.NewGuid()));
+        Assert.Equal(1, backend.Calls);
+        Assert.Equal(PreviewSubmitOutcome.Conflict, (await test.Service().SubmitAsync(test.Alice,
+            submission with { Primary = new(null, "changed"u8, CsvPreviewTestData.Dialect) })).Outcome);
+        Assert.Null(await test.Reader.ReadAsync(new ActorContext(new PrincipalId(test.Catalog.Seed.Bob)), test.Revision.OrganizationId, created.RunId.Value));
+    }
+
+    [PostgresFact]
+    public async Task Csv_worker_cannot_change_the_pinned_native_output_dialect()
+    {
+        await using var test = await PreviewRunTestSupport.CreateAsync(fixture, CsvPreviewTestData.Native);
+        var submission = new PreviewRunSubmission(test.Revision, Guid.NewGuid(), PreviewTargetSelection.All,
+            new(null, [], CsvPreviewTestData.Dialect), [], [])
+        { Profile = PreviewExecutionProfile.CsvDocument };
+        var run = (await test.Service().SubmitAsync(test.Alice, submission)).RunId!.Value;
+        await test.Executor(new CsvPreviewTestData.Backend(CsvPreviewTestData.Dialect with { HasHeaderRow = true }))
+            .ExecuteAsync(test.Revision.OrganizationId, run, Guid.NewGuid());
+        var saved = (await test.Reader.ReadAsync(test.Alice, test.Revision.OrganizationId, run))!;
+        Assert.Equal(PreviewRunOutcome.ProtocolFailure, saved.Outcome);
+        Assert.Empty(saved.Outputs);
     }
 
     [PostgresFact]

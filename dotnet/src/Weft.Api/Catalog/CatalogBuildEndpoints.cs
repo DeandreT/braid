@@ -91,6 +91,12 @@ public static partial class CatalogEndpoints
             var mapping = BuildMapping(organizationId, projectId, mappingId, admission);
             if (mapping is null) return NotFound();
             var response = await BuildCapabilitiesAsync(context.RequestServices, admission.Actor!, mapping, options, context.RequestAborted);
+            if (response is not null && context.RequestServices.GetService<ICsvBuildBoundaryReader>() is not null)
+                response = response with
+                {
+                    CsvBackend = options.CsvBackend is { } backend ? CatalogBuildMapping.Backend(backend) : null,
+                    CsvProfile = options.CsvProfile is { } profile ? CatalogBuildMapping.Profile(profile) : null
+                };
             return response is null ? NotFound() : CaseResponse(PrepareBuild(response, context.RequestAborted));
         });
     private static Task<IResult> GetBuildEnvironment(string organizationId, string projectId, string environmentId, string version, HttpContext context, CatalogBuildOptions options) =>

@@ -5,15 +5,34 @@ namespace Weft.Tests;
 
 public sealed class DraftPreviewExecutorTests
 {
-    [Fact]
-    public async Task ExecutionUsesTheRetainedCheckpointWithoutReadingTheBaseObject()
+    [Theory]
+    [InlineData(PreviewExecutionProfile.LegacyJson)]
+    [InlineData(PreviewExecutionProfile.Document)]
+    public async Task ExecutionUsesTheRetainedCheckpointWithoutReadingTheBaseObject(PreviewExecutionProfile profile)
     {
-        var test = new Ports();
+        var test = new Ports(profile);
         var executor = new PreviewRunExecutor(test, test, test, TimeProvider.System);
         Assert.Equal(PreviewExecutionOutcome.Completed, await executor.ExecuteAsync(test.Claim.OrganizationId, test.Claim.RunId, Guid.NewGuid()));
         Assert.Equal(test.Artifact.CopyBytes(), test.Executed!.Artifact.CopyBytes());
         Assert.Equal(PreviewRunOutcome.InvalidInput, test.Completed!.Outcome);
         Assert.Equal(0, test.ObjectReads);
+        Assert.Equal(profile, test.Executed.Profile);
+    }
+
+    [Fact]
+    public void CsvRevisionRequestsCannotRelabelAnUncommittedDraftSubject()
+    {
+        var test = new Ports();
+        var submission = new PreviewRunSubmission(test.Claim.Subject, Guid.NewGuid(), PreviewTargetSelection.All,
+            new(null, [], CsvPreviewTestData.Dialect), [], [])
+        { Profile = PreviewExecutionProfile.CsvDocument };
+        Assert.Throws<PreviewRunException>(() => PreviewRequestDocument.Encode(submission, PreviewLimits.Default));
+        var revision = submission with { Subject = new RevisionPreviewSubject(test.Claim.Subject.ExecutionScope) };
+        var restored = PreviewRequestDocument.Decode(PreviewRequestDocument.Encode(revision, PreviewLimits.Default));
+        Assert.Equal(revision.Subject, restored.Subject);
+        Assert.Equal(PreviewExecutionProfile.CsvDocument, restored.Profile);
+        Assert.Equal(0, Assert.Single(restored.Inputs).ByteLength);
+        Assert.Equal(CsvPreviewTestData.Dialect, restored.Inputs[0].CsvDialect);
     }
 
     [Theory]
@@ -47,12 +66,12 @@ public sealed class DraftPreviewExecutorTests
         internal PreviewRunCompletion? Completed;
         internal int ObjectReads;
         private readonly PreviewRunSubmission _submission;
-        internal Ports()
+        internal Ports(PreviewExecutionProfile profile = PreviewExecutionProfile.LegacyJson)
         {
             var scope = new RevisionScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
             Artifact = NativeArtifact.Admit(scope, "opaque-checkpoint-not-the-base"u8, MappingEditPolicy.MaximumNativeBytes);
             var subject = new DraftPreviewSubject(scope, Guid.NewGuid(), 9007199254740993, Artifact.Digest, Artifact.ByteCount);
-            _submission = new(subject, Guid.NewGuid(), PreviewTargetSelection.All, new(null, "input"u8), [], []);
+            _submission = new(subject, Guid.NewGuid(), PreviewTargetSelection.All, new(null, "input"u8), [], []) { Profile = profile };
             Claim = new(scope.OrganizationId, Guid.NewGuid(), 1, Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(1), subject,
                 new(Guid.NewGuid()), PreviewRequestDocument.Encode(_submission, PreviewLimits.Default), PreviewRequestDocument.Clock(DateTimeOffset.UtcNow), new CheckpointPreviewNative(Artifact));
         }
@@ -65,7 +84,8 @@ public sealed class DraftPreviewExecutorTests
             Executed = request;
             return Task.FromResult(new MappingPreviewResult(MappingPreviewStatus.InvalidInput,
                 new(request.Artifact.Scope, request.Artifact.Digest, "ferrule", "engine", "worker", "adapter", true),
-                PreviewPolicy.Profile, 0, [], new("fixture", "Fixture refusal.", false, null, false)));
+                request.Profile == PreviewExecutionProfile.Document ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile,
+                0, [], new("fixture", "Fixture refusal.", false, null, false)));
         }
         public Task<byte[]> ReadVerifiedAsync(RevisionScope scope, PrivateObjectReference reference, CancellationToken cancellationToken = default) { ObjectReads++; throw new InvalidOperationException("A draft preview must never read base native bytes."); }
         public Task<PrivateObjectPublishResult> PublishCreateOnlyAsync(RevisionScope scope, PrivateObjectReference reference, Stream source, CancellationToken cancellationToken = default) => throw new NotSupportedException();

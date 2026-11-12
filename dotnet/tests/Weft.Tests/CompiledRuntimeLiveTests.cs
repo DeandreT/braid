@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Weft.Application;
@@ -33,6 +34,109 @@ public sealed class CompiledRuntimeDispatchFactAttribute : FactAttribute
 /// <summary>Actual compiler, interpreter and sandbox runtime; source-admission metadata here is explicitly synthetic.</summary>
 public sealed class CompiledRuntimeLiveTests(ITestOutputHelper output)
 {
+    [ServiceCompileFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    public async Task Service_child_csv_compilation_and_execution_match_the_bounded_native_fixture()
+    {
+        var root = FerruleServiceTestSupport.TemporaryRoot();
+        try
+        {
+            await using var compilerRunner = new ProcessCompileRunner(FerruleServiceTestSupport.CompileOptions(root));
+            await using var previewRunner = new ProcessWorkerRunner(FerruleServiceTestSupport.Options(root, DockerWorkerProfile.Preview));
+            await using var runtimeRunner = new ProcessCompiledRuntimeRunner(FerruleCompiledServiceTests.Options(root));
+            var source = JsonNode.Parse(await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "csv-flat.native.json")))!;
+            foreach (var side in new[] { "source_options", "target_options" })
+            {
+                source[side]!["has_header_row"] = false;
+                source[side]!["csv_preserve_empty_strings"] = true;
+            }
+            var native = NativeArtifact.Admit(FerruleServiceTestSupport.Scope, JsonSerializer.SerializeToUtf8Bytes(source), PreviewPolicy.MaximumNativeBytes);
+            var actor = new ActorContext(new(Guid.NewGuid()));
+            var port = new Source(actor, native);
+            var compiler = new FerruleBuildCompiler(compilerRunner, new(actor, port, port));
+            var dialect = BuildCsvContractTests.Dialect();
+            var intent = new BuildIntent(Guid.NewGuid(), native.Scope, native.Digest, compiler.CsvBackend, FerruleBuildCompiler.CsvProfile,
+                [new(BuildBoundaryKind.PrimaryInput, null, "csv", dialect), new(BuildBoundaryKind.PrimaryOutput, null, "csv", dialect)],
+                new(new(native.Scope.OrganizationId, native.Scope.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), Guid.NewGuid());
+            var capability = await compiler.InspectAsync(intent);
+            Assert.Equal(BuildPreflightOutcome.Supported, new BuildPreflightService().Evaluate(intent, capability).Outcome);
+            var bytes = await compiler.BuildAsync(intent, new(native.CopyBytes(), native.ByteCount));
+            var artifact = BuildArtifactReference.Create(intent, capability, bytes.Digest, bytes.Length);
+            var runtime = new FerruleCompiledBuildRuntime(runtimeRunner, compiler.CsvBackend);
+            var preview = new FerrulePreviewBackend(previewRunner, PreviewExecutionProfile.CsvDocument);
+            foreach (var input in new[] { Array.Empty<byte>(), "A,\"two, cells\"\n"u8.ToArray() })
+            {
+                var replay = new RegressionReplay(PreviewTargetSelection.All, "2026-10-30T12:00:00Z", PreviewLimits.Default, new(null, input, dialect), [], []);
+                var interpreted = await preview.PreviewAsync(new(native, replay.Target, replay.Primary, [], [], replay.CurrentDateTime, replay.Limits));
+                var actual = await runtime.ExecuteAsync(artifact, bytes, replay);
+                Assert.Equal(MappingPreviewStatus.Succeeded, interpreted.Status);
+                Assert.Equal(CompiledBuildOutcome.Completed, actual.Outcome);
+                Assert.Equal(Assert.Single(interpreted.Artifacts).CopyBytes(), Assert.Single(actual.Outputs!.Outputs).CopyBytes());
+                Assert.Equal(dialect, Assert.Single(actual.Outputs.Outputs).CsvDialect);
+            }
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [CompiledRuntimeLiveFact]
+    public async Task Compiled_csv_and_tsv_use_real_byte_entrypoints_and_match_bounded_interpreter_outputs()
+    {
+        var compilerImage = Environment.GetEnvironmentVariable("WEFT_BUILD_WORKER_IMAGE")!;
+        var runtimeImage = Environment.GetEnvironmentVariable("WEFT_COMPILED_RUNTIME_IMAGE")!;
+        await using var compilerRunner = new DockerInspectionWorkerRunner(new("/usr/bin/docker", compilerImage, profile: DockerWorkerProfile.Build));
+        await using var runtimeRunner = new DockerInspectionWorkerRunner(new("/usr/bin/docker", runtimeImage, profile: DockerWorkerProfile.Compiled));
+        await using var previewRunner = new DockerInspectionWorkerRunner(new("/usr/bin/docker", compilerImage, profile: DockerWorkerProfile.Preview));
+        foreach (var delimiter in new[] { ",", "\t" })
+        {
+            var source = JsonNode.Parse(await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "csv-flat.native.json")))!;
+            foreach (var side in new[] { "source_options", "target_options" })
+            {
+                source[side]!["delimiter"] = delimiter;
+                source[side]!["has_header_row"] = false;
+                source[side]!["csv_preserve_empty_strings"] = true;
+            }
+            var scope = new RevisionScope(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+            var native = NativeArtifact.Admit(scope, JsonSerializer.SerializeToUtf8Bytes(source), PreviewPolicy.MaximumNativeBytes);
+            var actor = new ActorContext(new(Guid.NewGuid()));
+            var port = new Source(actor, native);
+            var compiler = new FerruleBuildCompiler(compilerRunner, new(actor, port, port));
+            var dialect = BuildCsvContractTests.Dialect(delimiter);
+            var format = delimiter == "\t" ? "tsv" : "csv";
+            var intent = new BuildIntent(Guid.NewGuid(), scope, native.Digest, compiler.CsvBackend, FerruleBuildCompiler.CsvProfile,
+                [new(BuildBoundaryKind.PrimaryInput, null, format, dialect), new(BuildBoundaryKind.PrimaryOutput, null, format, dialect)],
+                new(new(scope.OrganizationId, scope.ProjectId), Guid.NewGuid(), 1), Guid.NewGuid(), Guid.NewGuid());
+            var capability = await compiler.InspectAsync(intent);
+            Assert.Equal(BuildPreflightOutcome.Supported, new BuildPreflightService().Evaluate(intent, capability).Outcome);
+            var artifact = await compiler.BuildAsync(intent, new(native.CopyBytes(), native.ByteCount));
+            var reference = BuildArtifactReference.Create(intent, capability, artifact.Digest, artifact.Length);
+            var runtime = new FerruleCompiledBuildRuntime(runtimeRunner, compiler.CsvBackend);
+            var preview = new FerrulePreviewBackend(previewRunner, PreviewExecutionProfile.CsvDocument);
+            foreach (var bytes in new[] { Array.Empty<byte>(), Encoding.UTF8.GetBytes($"A{delimiter}\"first\r\nsecond\"\n"), new byte[] { 0xff }, Encoding.UTF8.GetBytes($"B{delimiter}last\n") })
+            {
+                var input = new PreviewInputDocument(null, bytes, dialect);
+                var replay = new RegressionReplay(PreviewTargetSelection.All, "2026-10-30T12:00:00Z", PreviewLimits.Default, input, [], []);
+                var interpreted = await preview.PreviewAsync(new(native, replay.Target, input, [], [], replay.CurrentDateTime, replay.Limits));
+                var actual = await runtime.ExecuteAsync(reference, artifact, replay);
+                if (bytes.Length == 1)
+                {
+                    Assert.Equal(MappingPreviewStatus.InvalidInput, interpreted.Status);
+                    Assert.Equal(CompiledBuildOutcome.InvalidInput, actual.Outcome);
+                    Assert.Null(actual.Outputs);
+                }
+                else
+                {
+                    Assert.Equal(MappingPreviewStatus.Succeeded, interpreted.Status);
+                    Assert.Equal(CompiledBuildOutcome.Completed, actual.Outcome);
+                    var expected = Assert.Single(interpreted.Artifacts);
+                    var observed = Assert.Single(actual.Outputs!.Outputs);
+                    Assert.Equal(expected.CopyBytes(), observed.CopyBytes());
+                    Assert.Equal(expected.CsvDialect, observed.CsvDialect);
+                    Assert.Equal(expected.MediaType, observed.MediaType);
+                }
+            }
+        }
+    }
+
     [CompiledRuntimeLiveFact]
     public async Task Compiled_json_targets_match_interpreted_bytes_and_failures_do_not_poison_later_invocations()
     {

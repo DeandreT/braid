@@ -63,6 +63,8 @@ public sealed class CliDocumentCommandTests : IAsyncLifetime
     [InlineData("application/json")]
     [InlineData("application/edi-x12")]
     [InlineData("application/edifact")]
+    [InlineData("text/csv")]
+    [InlineData("text/tab-separated-values")]
     public async Task Document_downloads_advertise_exact_media_and_verify_bytes_before_stdout(string media)
     {
         var content = Encoding.UTF8.GetBytes("owned exact output\r\n");
@@ -73,7 +75,7 @@ public sealed class CliDocumentCommandTests : IAsyncLifetime
         var result = await cli.RunAsync("previews", "download", run, "--output", "-");
         Assert.True(result.Exit == 0, result.ToString());
         Assert.Equal(content, result.Binary);
-        Assert.Equal(new[] { "application/json", "application/edi-x12", "application/edifact" },
+        Assert.Equal(new[] { "application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values" },
             Assert.Single(stub.Calls("GetCatalogPreviewOutput")).Headers["Accept"].Split(',').Select(value => value.Trim()));
     }
 
@@ -192,7 +194,10 @@ public sealed class CliDocumentCommandTests : IAsyncLifetime
     }
 
     private static CatalogPreviewOutputV1 Output(string media, byte[] content) => new(0, "primary", "Result", false,
-        media, "1", Convert.ToHexStringLower(SHA256.HashData(content)), content.Length);
+        media, "1", Convert.ToHexStringLower(SHA256.HashData(content)), content.Length,
+        media is "text/csv" or "text/tab-separated-values"
+            ? new("weft.csv-dialect.v1", media == "text/csv" ? "," : "\t", "\"", false, false, false, true)
+            : null);
 
     private static CliStubReply Reply(byte[] content, string media) => new()
     {

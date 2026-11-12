@@ -1,7 +1,7 @@
 # Ferrule service
 
 The Ferrule service answers questions about mapping revisions for hosted Weft:
-inspection, validation, projection, typed edit checkpoints and JSON sample preview. When compilation is
+inspection, validation, projection, typed edit checkpoints and bounded document sample preview. When compilation is
 enabled it also compiles deployable mapping libraries. Weft users never see it;
 Weft hosts call it on their behalf. It is one stateless, long-running HTTP service
 image that any container platform can run and scale by adding replicas. The
@@ -9,7 +9,8 @@ per-operation Docker runners remain the local development and test runners.
 
 The service keeps the restricted workers' semantics: the same `ferrule-host`
 binary, the same framed protocols (`weft.ferrule-host.v1`,
-`weft.ferrule-preview.v1`, `weft.ferrule-edit.v1`, `weft.ferrule-build.v1`) and the same fixed limits. Its
+`weft.ferrule-preview.v1`, `weft.ferrule-document-preview.v1`,
+`weft.ferrule-csv-preview.v1`, `weft.ferrule-edit.v1`, `weft.ferrule-build.v1`) and the same fixed limits. Its
 answers are byte for byte what the Docker runner, or for compilation the Docker
 compiler worker, returns for the same frame.
 
@@ -76,6 +77,13 @@ launcher and the assemblies implementing compilation and its runner (each file's
 label, length and SHA-256 in ordinal order). The client checks the configured pin
 before sending bytes, the service checks it before admission, and the client
 checks it again on the response. An unknown or changed toolchain is not adopted.
+
+A served compile profile also advertises `weft.ferrule-csharp-csv.v1` in
+`supportedProfiles`. A served execution profile advertises
+`weft.ferrule-compiled-csv.v1` in `supportedProtocols`. These entries are present
+only with their configured runner and required toolchain/runtime identity; a
+reserved compile or execution profile does not advertise CSV support. They do
+not enable CSV build controls in the Server or qualify a particular mapping.
 
 Configure `WEFT_FERRULE_COMPILE_TOOLCHAIN` with the admitted toolchain digest on
 the Server and ordinary Worker when using service-backed builds. It is required

@@ -1,5 +1,4 @@
 import type { components } from "../../api/generated";
-
 export type PreviewRun = components["schemas"]["CatalogPreviewRunV1"];
 export type PreviewOutput = components["schemas"]["CatalogPreviewOutputV1"];
 export type PreviewFailure = components["schemas"]["CatalogPreviewFailureV1"];

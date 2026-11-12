@@ -247,16 +247,40 @@ also cancels in-flight polling requests and their body reads, rather than only s
 
 `weft previews create --document` selects the separately admitted document profile.
 The revision's explicit boundary settings determine JSON, X12 or EDIFACT input and
-output formats; filenames never select them. Without `--document`, the legacy
-JSON profile is unchanged. Output downloads accept only those admitted media types
-and preserve the exact bytes.
+output formats; filenames never select them.
 
-Regression case definition files carry the document runtime, expected-output media
-types and explicit EDI comparison options. `weft regression capabilities` lists
-the offered runtimes and comparison policies. Run results show EDI locations for
-differences or invalid documents without printing payload fragments. Build and
-environment capabilities similarly show the separate document profile when it is
-available; use that profile's ID and version when creating its build environment.
+`weft previews create --csv` selects `weft.ferrule-csv-preview.v1`, the separately
+enabled flat CSV/TSV profile. It uses the revision's saved native dialect, not a
+filename or caller-selected delimiter. Supply exactly one primary `--input`
+(a file or `-` for standard input); an explicitly zero-byte input is allowed.
+Do not supply `--named-input`. `--target` may be `all` (the default) or `primary`,
+not a named target. `--csv` and `--document` are mutually exclusive. With neither
+flag, the legacy JSON profile and its nonempty-input requirement are unchanged.
+
+```sh
+weft previews create --project PROJECT_ID --mapping MAPPING_ID --revision REVISION_ID --input sample.tsv --csv --target all --wait
+weft previews download RUN_ID --ordinal 0 --output result.tsv
+```
+
+Output downloads accept the admitted JSON, EDI, CSV and TSV media types and
+preserve the exact bytes. CSV uses `text/csv`; TSV uses
+`text/tab-separated-values`, as determined by the recorded dialect.
+
+Regression case definition files carry the selected runtime, expected-output
+media types and the comparison policy. CSV cases also retain the native dialect;
+use `weft.regression.exact-bytes.v1` or `weft.regression.csv-rows.v1`. The latter
+compares ordered cell strings, including headers and whitespace, rather than
+quoting or record-terminator syntax. EDI comparison options apply only to the EDI
+policy. `weft regression capabilities` lists the offered runtimes and policies.
+Run results show EDI locations or one-based CSV row/column locations for
+differences and invalid documents without printing payload fragments.
+
+Build and environment capabilities similarly show the separate document and CSV
+profiles when available; use the offered profile's ID and version when creating
+its build environment. CSV builds use `weft.ferrule-csharp-csv.v1`. Build evidence
+and compiled qualification require exact-byte comparison with all declared
+outputs selected and present in the baseline. A CSV row-comparison pass is not
+build proof.
 
 ## Exit codes
 

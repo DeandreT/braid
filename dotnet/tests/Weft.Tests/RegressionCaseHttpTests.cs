@@ -15,15 +15,69 @@ using Weft.Api.Catalog;
 using Weft.Application;
 using Weft.Application.Automation;
 using Weft.Application.Regression;
+using Weft.Contracts.Catalog;
 using Weft.Contracts.Regression;
 using Weft.Domain;
 using Weft.Persistence.Postgres;
+using Weft.Storage.FileSystem;
 
 namespace Weft.Tests;
 
 [Collection(PostgresCollection.Name)]
 public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
 {
+    [PostgresFact]
+    public async Task Csv_case_uses_real_native_ports_and_reopens_the_pinned_empty_input_dialect()
+    {
+        await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture, nativeBytes: CsvPreviewTestData.Native);
+        var csv = new RegressionRuntimeIdentity(data.Runtime.BackendId, data.Runtime.EngineRevision, data.Runtime.BackendBuild, "csv-adapter", CsvDocumentPolicy.Profile);
+        await using var http = await CaseHttp.StartAsync(data, csvRuntime: csv);
+        using (var capabilities = await http.Client.GetAsync(http.BasePath + "/capabilities"))
+        {
+            Assert.Equal(HttpStatusCode.OK, capabilities.StatusCode);
+            Assert.Equal(CsvDocumentPolicy.Profile, (await Json(capabilities)).GetProperty("csvRuntime").GetProperty("profile").GetString());
+            Assert.False(http.NativeResolved);
+        }
+        using (var native = new MemoryStream(CsvPreviewTestData.Native))
+            await http.NativeObjects.PublishCreateOnlyAsync(data.Native.Id.Scope, data.Native, native);
+        var value = new RegressionCaseVersion(data.CaseId, 1, data.Actor.PrincipalId, "CSV", data.Native.Id.Scope, data.Native.Digest, csv,
+            new(PreviewTargetSelection.All, "2026-10-31T00:00:00Z", PreviewLimits.Default, new(null, [], CsvPreviewTestData.Dialect), [], []),
+            RegressionComparisonService.CsvRowsPolicy, RegressionOutputSet.Capture([
+                RegressionOutput.Capture(RegressionOutputKey.Primary, [], mediaType: "text/tab-separated-values", csvDialect: CsvPreviewTestData.Dialect)]));
+        using var saved = await http.PutAsync(Body(value), await http.TokenAsync());
+        Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
+        var reopened = (await data.Reader.ReadAsync(data.Actor, data.Mapping, data.CaseId, 1))!;
+        Assert.Empty(reopened.Replay.Primary.CopyBytes());
+        Assert.Equal(CsvPreviewTestData.Dialect, reopened.Replay.Primary.CsvDialect);
+        using var response = await http.Client.GetAsync(http.VersionPath);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/tab-separated-values", (await Json(response)).GetProperty("definition").GetProperty("expected")[0].GetProperty("mediaType").GetString());
+        var changed = Body(value);
+        changed["expected"]![0]!["csvDialect"]!["hasHeaderRow"] = true;
+        using var refused = await http.PutAsync(changed, await http.TokenAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(1, http.Writes);
+    }
+
+    [PostgresFact]
+    public async Task Csv_revocation_after_native_metadata_read_prevents_private_store_resolution()
+    {
+        await using var data = await RegressionCasePostgresTestSupport.CreateAsync(fixture, nativeBytes: CsvPreviewTestData.Native);
+        var csv = new RegressionRuntimeIdentity(data.Runtime.BackendId, data.Runtime.EngineRevision, data.Runtime.BackendBuild, "csv-adapter", CsvDocumentPolicy.Profile);
+        await using var http = await CaseHttp.StartAsync(data, csvRuntime: csv);
+        http.AfterNativeSource = () => data.RoleAsync("viewer");
+        var body = Body(data.Version(1));
+        body["runtime"]!["profile"] = csv.Profile;
+        body["runtime"]!["adapterBuild"] = csv.AdapterBuild;
+        body["primaryBase64Url"] = "";
+        body["comparisonPolicy"] = RegressionComparisonService.CsvRowsPolicy;
+        body["expected"]![0]!["mediaType"] = "text/tab-separated-values";
+        body["expected"]![0]!["csvDialect"] = JsonNode.Parse(CsvDialectJson.Encode(CsvPreviewTestData.Dialect));
+        using var response = await http.PutAsync(body, await http.TokenAsync());
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.False(http.NativeResolved);
+        Assert.Equal(0, http.Writes);
+    }
     [PostgresFact]
     public async Task Publish_reopen_append_and_retry_keep_exact_private_bytes_and_versions()
     {
@@ -331,7 +385,9 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
             value.Replay.CurrentDateTime, new("all", null), new(value.Replay.Limits.MaximumInputBytes, value.Replay.Limits.MaximumOutputBytes,
                 value.Replay.Limits.MaximumArtifacts, value.Replay.Limits.MaximumTextBytes), WebEncoders.Base64UrlEncode(value.Replay.Primary.CopyBytes()),
             [], [], value.ComparisonPolicy, value.Expected.Outputs.Select(output => new RegressionDocumentV1(output.Key.Name,
-                WebEncoders.Base64UrlEncode(output.CopyBytes()))).ToArray());
+                WebEncoders.Base64UrlEncode(output.CopyBytes()), value.Runtime.Profile == PreviewPolicy.Profile ? null : output.MediaType,
+                output.CsvDialect is { } dialect ? new CsvDocumentDialectV1(dialect.Schema, dialect.Delimiter, dialect.Quote,
+                    dialect.QuoteDisabled, dialect.HasHeaderRow, dialect.Utf8Bom, dialect.PreserveEmptyStrings) : null)).ToArray());
         return JsonSerializer.SerializeToNode(dto, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.AsObject();
     }
     private static async Task<JsonElement> Json(HttpResponseMessage response)
@@ -350,6 +406,9 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
         private readonly Lazy<PostgresRegressionRunStore>? runWriter;
         private int bodyReads;
         private int writes;
+        private PrivateStorageTestRoot? nativeRoot;
+        private FileSystemPrivateObjectStore? nativeStore;
+        private readonly object nativeLock = new();
         internal HttpClient Client { get; }
         internal string BasePath { get; }
         internal string RunsPath => BasePath.Replace("regression-cases", "regression-runs", StringComparison.Ordinal);
@@ -362,6 +421,20 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
         internal TaskCompletionSource PutEnded { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal Func<Task>? AfterRead { get; set; }
         internal Func<Task>? AfterWrite { get; set; }
+        internal Func<Task>? AfterNativeSource { get; set; }
+        internal bool NativeResolved => nativeStore is not null;
+        internal IPrivateObjectStore NativeObjects
+        {
+            get
+            {
+                if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException();
+                lock (nativeLock)
+                {
+                    nativeRoot ??= new PrivateStorageTestRoot();
+                    return nativeStore ??= nativeRoot.Initialize();
+                }
+            }
+        }
         internal int BodyReads => Volatile.Read(ref bodyReads);
         internal int Writes => Volatile.Read(ref writes);
 
@@ -382,7 +455,7 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
         }
 
         internal static async Task<CaseHttp> StartAsync(RegressionCasePostgresTestSupport? data,
-            RegressionRuntimeIdentity? documentRuntime = null)
+            RegressionRuntimeIdentity? documentRuntime = null, RegressionRuntimeIdentity? csvRuntime = null)
         {
             var reservation = new TcpListener(IPAddress.Loopback, 0);
             reservation.Start();
@@ -399,8 +472,6 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
                 var options = data is null ? new CatalogApiOptions() : new CatalogApiOptions(true, true, data.Actor.PrincipalId.Value,
                     data.Mapping.OrganizationId, origin.GetLeftPart(UriPartial.Authority));
                 builder.Services.AddWeftCatalog(options, builder.Environment);
-                builder.Services.AddWeftRegressionCases(data is null ? new() : new(true, data.Runtime, documentRuntime));
-                builder.Services.AddWeftRegressionRuns(new(data is not null));
                 CaseHttp? support = null;
                 if (data is not null)
                 {
@@ -409,12 +480,19 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
                     builder.Services.AddSingleton<IAutomationStore>(_ => new PostgresAutomationStore(data.Case.RegressionConnectionString("weft_run_writer"), true));
                     catalog = new(data.Case.CatalogConnectionString);
                     builder.Services.AddSingleton<ICatalogReader>(new PostgresCatalogReader(catalog));
+                    builder.Services.AddSingleton(_ => new PostgresRevisionReportDatabase(data.Case.ReportConnectionString));
+                    builder.Services.AddSingleton(provider => new PostgresRevisionReportMetadataReader(provider.GetRequiredService<PostgresRevisionReportDatabase>()));
+                    builder.Services.AddSingleton<IRevisionReportMetadataReader>(provider => new NativeMetadataPort(
+                        provider.GetRequiredService<PostgresRevisionReportMetadataReader>(), support!));
+                    builder.Services.AddSingleton<IPrivateObjectStore>(_ => new NativeObjectPort(support!));
                     builder.Services.AddSingleton<IRegressionCaseReader>(_ => new CasePort(support!));
                     builder.Services.AddSingleton<IRegressionCaseWriter>(_ => new CasePort(support!));
                     builder.Services.AddSingleton<IRegressionRunReader>(_ => new RunPort(support!, false));
                     builder.Services.AddSingleton<IRegressionRunStore>(_ => new RunPort(support!, true));
                     builder.Services.AddSingleton(provider => new RegressionRunReadService(provider.GetRequiredService<IRegressionRunReader>(), provider.GetRequiredService<IRegressionCaseReader>()));
                 }
+                builder.Services.AddWeftRegressionCases(data is null ? new() : new(true, data.Runtime, documentRuntime, csvRuntime));
+                builder.Services.AddWeftRegressionRuns(new(data is not null));
                 app = builder.Build();
                 support = new(app, catalog, data, origin);
                 app.Use(async (context, next) =>
@@ -490,6 +568,31 @@ public sealed partial class RegressionCaseHttpTests(PostgresFixture fixture)
             if (runReader?.IsValueCreated == true) await runReader.Value.DisposeAsync();
             if (runWriter?.IsValueCreated == true) await runWriter.Value.DisposeAsync();
             if (catalog is not null) await catalog.DisposeAsync();
+            if (OperatingSystem.IsLinux())
+            {
+                if (nativeStore is not null) await nativeStore.DisposeAsync();
+                nativeRoot?.Dispose();
+            }
+        }
+        private sealed class NativeMetadataPort(IRevisionReportMetadataReader reader, CaseHttp owner) : IRevisionReportMetadataReader
+        {
+            public async Task<AuthorizedRevisionReportSource?> GetSourceAsync(ActorContext actor, RevisionScope scope, CancellationToken cancellationToken = default)
+            {
+                var value = await reader.GetSourceAsync(actor, scope, cancellationToken);
+                if (owner.AfterNativeSource is { } callback) await callback();
+                return value;
+            }
+            public Task<RevisionReportReadSnapshot?> GetCurrentAsync(ActorContext actor, RevisionReportKey key, CancellationToken cancellationToken = default) =>
+                reader.GetCurrentAsync(actor, key, cancellationToken);
+            public Task<AuthorizedRevisionReportAttempt?> GetRetainedAsync(ActorContext actor, RevisionScope scope, RevisionReportOperation operation,
+                Guid derivationId, CancellationToken cancellationToken = default) => reader.GetRetainedAsync(actor, scope, operation, derivationId, cancellationToken);
+        }
+        private sealed class NativeObjectPort(CaseHttp owner) : IPrivateObjectStore
+        {
+            public Task<byte[]> ReadVerifiedAsync(RevisionScope expectedScope, PrivateObjectReference reference, CancellationToken cancellationToken = default) =>
+                owner.NativeObjects.ReadVerifiedAsync(expectedScope, reference, cancellationToken);
+            public Task<PrivateObjectPublishResult> PublishCreateOnlyAsync(RevisionScope expectedScope, PrivateObjectReference reference,
+                Stream source, CancellationToken cancellationToken = default) => owner.NativeObjects.PublishCreateOnlyAsync(expectedScope, reference, source, cancellationToken);
         }
         private sealed class RunPort(CaseHttp owner, bool writer) : IRegressionRunStore
         {

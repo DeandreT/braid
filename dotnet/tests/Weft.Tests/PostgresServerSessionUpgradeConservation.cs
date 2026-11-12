@@ -161,6 +161,9 @@ internal sealed class PostgresServerSessionUpgradeConservation
             command.Parameters.AddWithValue(RegressionSchemaTestContract.ComparisonSettlementChecksum);
             command.Parameters.AddWithValue(MappingDraftSchemaTestContract.DraftChecksum);
             command.Parameters.AddWithValue(MappingDraftSchemaTestContract.PreviewChecksum);
+            command.Parameters.AddWithValue(ChatSchemaContract.MappingWriteMigrationChecksum);
+            command.Parameters.AddWithValue(ChatSchemaContract.WriteJournalMigrationChecksum);
+            command.Parameters.AddWithValue(RegressionSchemaTestContract.CsvDocumentsChecksum);
             var value = await command.ExecuteScalarAsync(cancellationToken);
             Assert.True(value is string, "The private session upgrade conservation observation is unavailable.");
             using var document = JsonDocument.Parse((string)value!);
@@ -362,7 +365,7 @@ internal sealed class PostgresServerSessionUpgradeConservation
                     ARRAY(SELECT name FROM unnest($2::text[] || CASE WHEN $1 THEN ARRAY['server_sessions']::text[]
                         ELSE ARRAY[]::text[] END) name ORDER BY name)
                 AND (SELECT array_agg(version ORDER BY version) FROM weft.schema_migrations)=
-                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 29 ELSE 0 END))
+                    ARRAY(SELECT generate_series(1,9 + CASE WHEN $1 THEN 32 ELSE 0 END))
                 AND (SELECT array_agg(checksum ORDER BY version) FROM weft.schema_migrations WHERE version<=9)=$5::text[]
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=9+1)=$6::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=11)=$12::text)
@@ -393,6 +396,9 @@ internal sealed class PostgresServerSessionUpgradeConservation
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=36)=$44::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=37)=$45::text)
                 AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=38)=$46::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=39)=$47::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=40)=$48::text)
+                AND (NOT $1 OR (SELECT checksum FROM weft.schema_migrations WHERE version=41)=$49::text)
                 AND (SELECT count(*) FROM session_fks)=CASE WHEN $1 THEN 2 ELSE 0 END
                 AND (SELECT count(*) FROM intended_parent_triggers)=CASE WHEN $1 THEN 4 ELSE 0 END
                 AND (SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace

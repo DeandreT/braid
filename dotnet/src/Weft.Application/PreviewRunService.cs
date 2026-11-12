@@ -79,11 +79,19 @@ public sealed class PreviewRunService
         ArgumentNullException.ThrowIfNull(submission.Primary);
         ArgumentNullException.ThrowIfNull(submission.NamedInputs);
         ArgumentNullException.ThrowIfNull(submission.Parameters);
+        if (!Enum.IsDefined(submission.Profile))
+            return "This preview profile is not admitted by the persisted catalog contract.";
+        var csv = submission.Profile == PreviewExecutionProfile.CsvDocument;
+        if (csv && (submission.NamedInputs.Count != 0 || submission.Target.Kind == PreviewTargetKind.Named))
+            return "CSV preview requires a primary-only CSV plan.";
+        if (csv && submission.Primary.CsvDialect is null || !csv &&
+            (submission.Primary.CsvDialect is not null || submission.NamedInputs.Any(input => input?.CsvDialect is not null)))
+            return "The CSV dialect must belong to the selected admission profile.";
         if (submission.RequestKey == Guid.Empty)
             return "A preview request key is required.";
         if (submission.Target.Kind == PreviewTargetKind.Named && !BoundedName(submission.Target.Name))
             return "The selected target name is outside its bounds.";
-        if (submission.Primary.Name is not null || submission.Primary.ByteCount == 0)
+        if (submission.Primary.Name is not null || !csv && submission.Primary.ByteCount == 0)
             return "The primary input must be a nonempty unnamed document.";
         if (submission.NamedInputs.Count + 1 > PreviewPolicy.MaximumInputDocuments)
             return "The request exceeds the input document count limit.";
@@ -190,12 +198,27 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
             try
             {
                 result = await _backend.PreviewAsync(request, execution.Token).ConfigureAwait(false);
-                var expectedProfile = request.Profile == PreviewExecutionProfile.Document ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
+                var expectedProfile = request.Profile switch
+                {
+                    PreviewExecutionProfile.Document => DocumentPreviewPolicy.Profile,
+                    PreviewExecutionProfile.CsvDocument => CsvDocumentPolicy.Profile,
+                    _ => PreviewPolicy.Profile
+                };
                 if (result.Profile != expectedProfile || result.Artifacts.Any(output =>
-                    request.Profile == PreviewExecutionProfile.Document
-                        ? !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType)
-                        : output.MediaType != PreviewPolicy.MediaType))
+                    request.Profile switch
+                    {
+                        PreviewExecutionProfile.CsvDocument => !CsvDocumentPolicy.Admits(output.CsvDialect, output.MediaType),
+                        PreviewExecutionProfile.Document => output.CsvDialect is not null || !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType),
+                        _ => output.CsvDialect is not null || output.MediaType != PreviewPolicy.MediaType
+                    }))
                     throw new PreviewRunException("The preview backend did not preserve the requested admission profile.");
+                if (request.Profile == PreviewExecutionProfile.CsvDocument)
+                {
+                    var dialect = CsvNativeDialect.Read(request.Artifact).Output;
+                    if (result.Status == MappingPreviewStatus.Succeeded && (result.Artifacts.Count != 1 ||
+                        result.Artifacts[0].BoundaryId != "primary-output" || result.Artifacts[0].CsvDialect != dialect))
+                        throw new PreviewRunException("The CSV output does not match the saved native boundary.");
+                }
             }
             finally
             {
@@ -261,7 +284,9 @@ public sealed class PreviewRunExecutor : IExecutionAdmission
                 throw new PreviewRunException("The native object does not match the run's revision.");
         }
         else throw new PreviewRunException("The native source does not match the run's subject kind.");
-        return new MappingPreviewRequest(artifact, description.Target, new PreviewInputDocument(null, inputs[0].Content),
+        if (description.Profile == PreviewExecutionProfile.CsvDocument && CsvNativeDialect.Read(artifact).Input != description.Inputs[0].CsvDialect)
+            throw new PreviewRunException("The input dialect does not match the saved native revision.");
+        return new MappingPreviewRequest(artifact, description.Target, new PreviewInputDocument(null, inputs[0].Content, description.Inputs[0].CsvDialect),
             inputs.Skip(1).Select(input => new PreviewInputDocument(input.Name, input.Content)).ToArray(),
             description.Parameters, claim.CurrentDateTime, description.Limits)
         { Profile = description.Profile };

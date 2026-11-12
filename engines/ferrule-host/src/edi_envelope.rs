@@ -140,7 +140,7 @@ impl State {
 }
 
 pub fn validate(format: DocumentFormat, bytes: &[u8]) -> Result<(), EnvelopeError> {
-    if format == DocumentFormat::Json {
+    if !matches!(format, DocumentFormat::X12 | DocumentFormat::Edifact) {
         return Ok(());
     }
     let x12 = format == DocumentFormat::X12;

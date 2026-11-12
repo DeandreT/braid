@@ -8,6 +8,7 @@ namespace Weft.Application.Regression;
 /// <summary>Canonical private completion document; reopening recomputes comparison from the pinned case.</summary>
 public sealed class RegressionRunResultCodec
 {
+    public const string CsvSchema = "weft.csv-regression-run-result.v1";
     public const int MaximumBytes = 12 * 1024 * 1024;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -29,7 +30,7 @@ public sealed class RegressionRunResultCodec
         var comparison = new RegressionComparisonService().Compare(value.Expected,
             new(status == MappingPreviewStatus.Succeeded ? OperationStatusV1.Succeeded : OperationStatusV1.BackendFailure, outputs),
             value.ComparisonPolicy, cancellationToken: token, ediOptions: value.EdiOptions);
-        var bytes = Encode(runId, reference, RegressionCaseExecution.Complete(status, outputs, comparison), token);
+        var bytes = Encode(runId, reference, RegressionCaseExecution.Complete(status, outputs, comparison, value.Runtime.Profile), token);
         _ = Decode(runId, value, bytes, token);
         return bytes;
     }
@@ -40,10 +41,11 @@ public sealed class RegressionRunResultCodec
         ArgumentNullException.ThrowIfNull(reference);
         ArgumentNullException.ThrowIfNull(execution);
         if (runId == Guid.Empty) throw Invalid();
-        var document = new Document("weft.regression-run-result.v1", runId.ToString("D"), reference.ContentDigest.Value,
+        var csv = execution.Profile == CsvDocumentPolicy.Profile || execution.Outputs?.Outputs.Any(output => output.CsvDialect is not null) == true;
+        var document = new Document(csv ? CsvSchema : "weft.regression-run-result.v1", runId.ToString("D"), reference.ContentDigest.Value,
             execution.Outcome, execution.PreviewStatus, execution.Outputs?.Outputs.Select(output => new Output(output.Key.Name,
                 Convert.ToBase64String(output.CopyBytes()).TrimEnd('=').Replace('+', '-').Replace('/', '_'),
-                output.MediaType == PreviewPolicy.MediaType ? null : output.MediaType)).ToArray());
+                output.MediaType == PreviewPolicy.MediaType ? null : output.MediaType, output.CsvDialect)).ToArray());
         var bytes = JsonSerializer.SerializeToUtf8Bytes(document, Json);
         if (bytes.Length > MaximumBytes) throw Invalid();
         token.ThrowIfCancellationRequested();
@@ -61,7 +63,9 @@ public sealed class RegressionRunResultCodec
             _ = new UTF8Encoding(false, true).GetCharCount(bytes);
             var doc = JsonSerializer.Deserialize<Document>(bytes, Json) ?? throw Invalid();
             var reference = new RegressionCaseEnvelopeCodec().Encode(value, token).Reference;
-            if (doc.Schema != "weft.regression-run-result.v1" || doc.RunId != runId.ToString("D") || doc.CaseDigest != reference.ContentDigest.Value ||
+            if (doc.Schema is not ("weft.regression-run-result.v1" or CsvSchema) ||
+                doc.Schema == CsvSchema && value.Runtime.Profile != CsvDocumentPolicy.Profile ||
+                doc.RunId != runId.ToString("D") || doc.CaseDigest != reference.ContentDigest.Value ||
                 !Enum.IsDefined(doc.Outcome)) throw Invalid();
             RegressionCaseExecution result;
             if (doc.Outcome != RegressionCaseExecutionOutcome.Completed)
@@ -71,6 +75,7 @@ public sealed class RegressionRunResultCodec
             }
             else
             {
+                if ((doc.Schema == CsvSchema) != (value.Runtime.Profile == CsvDocumentPolicy.Profile)) throw Invalid();
                 if (doc.PreviewStatus is not { } status || !Enum.IsDefined(status) || doc.Outputs is null ||
                     doc.Outputs.Length > value.Replay.Limits.MaximumArtifacts) throw Invalid();
                 var outputs = new List<RegressionOutput>();
@@ -81,13 +86,15 @@ public sealed class RegressionRunResultCodec
                     if (output is null || output.Content.Length > (remaining + 2L) / 3 * 4 ||
                         output.Content.Any(c => c is not (>= 'a' and <= 'z') and not (>= 'A' and <= 'Z') and not (>= '0' and <= '9') and not '-' and not '_')) throw Invalid();
                     if (value.Runtime.Profile == PreviewPolicy.Profile && output.MediaType is not (null or PreviewPolicy.MediaType)) throw Invalid();
+                    if (value.Runtime.Profile == CsvDocumentPolicy.Profile &&
+                        (doc.Schema != CsvSchema || output.CsvDialect != value.Expected.Outputs.Single().CsvDialect)) throw Invalid();
                     var text = output.Content.Replace('-', '+').Replace('_', '/');
                     var raw = Convert.FromBase64String(text.PadRight((text.Length + 3) / 4 * 4, '='));
                     if (raw.Length > remaining) throw Invalid();
                     remaining -= raw.Length;
                     var key = output.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(output.Name);
                     if (output.Name is not null) RegressionCaseValues.Name(output.Name);
-                    outputs.Add(RegressionOutput.Capture(key, raw, token, output.MediaType ?? PreviewPolicy.MediaType));
+                    outputs.Add(RegressionOutput.Capture(key, raw, token, output.MediaType ?? PreviewPolicy.MediaType, output.CsvDialect));
                 }
                 var set = RegressionOutputSet.Capture(outputs, token);
                 if (status != MappingPreviewStatus.Succeeded && set.Outputs.Count != 0 || status == MappingPreviewStatus.Succeeded && set.Outputs.Count == 0)
@@ -99,7 +106,7 @@ public sealed class RegressionRunResultCodec
                 var comparison = new RegressionComparisonService().Compare(value.Expected,
                     new(status == MappingPreviewStatus.Succeeded ? OperationStatusV1.Succeeded : OperationStatusV1.BackendFailure, set),
                     value.ComparisonPolicy, cancellationToken: token, ediOptions: value.EdiOptions);
-                result = RegressionCaseExecution.Complete(status, set, comparison);
+                result = RegressionCaseExecution.Complete(status, set, comparison, value.Runtime.Profile);
             }
             if (!Encode(runId, reference, result, token).AsSpan().SequenceEqual(bytes)) throw Invalid();
             token.ThrowIfCancellationRequested();
@@ -113,7 +120,8 @@ public sealed class RegressionRunResultCodec
     }
 
     private sealed record Output(string? Name, string Content,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null);
     private sealed record Document(string Schema, string RunId, string CaseDigest, RegressionCaseExecutionOutcome Outcome,
         MappingPreviewStatus? PreviewStatus, Output[]? Outputs);
     private static InvalidOperationException Invalid() => new("Regression run completion is invalid.");

@@ -41,6 +41,7 @@ internal sealed class PreviewRunTestSupport : IAsyncDisposable
     internal PostgresPreviewRunReader Reader { get; }
     internal PostgresPreviewDatabase ReaderDatabase => reader;
     internal PostgresPreviewDatabase WriterDatabase => writer;
+    internal IPrivateObjectStore Objects => objects;
     internal static byte[] NativeBytes => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "FerruleFixtures", "preview-orders.json"));
 
     internal static async Task<PreviewRunTestSupport> CreateAsync(PostgresFixture fixture, byte[]? nativeBytes = null)

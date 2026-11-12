@@ -30,7 +30,7 @@ public static partial class CatalogEndpoints
     private static void MapPreviews(IEndpointRouteBuilder endpoints, string organization, string revisionRoute)
     {
         DescribePreview<CatalogPreviewSubmitResultV1>(endpoints.MapPost(revisionRoute + "/previews", SubmitCatalogPreview),
-                "SubmitCatalogPreview", "Submit an idempotent bounded sample preview of this exact revision with explicit legacy JSON or document admission.")
+                "SubmitCatalogPreview", "Submit an idempotent bounded sample preview of this exact revision with explicit JSON, document or primary CSV/TSV admission.")
             .AddOpenApiOperationTransformer(async (operation, context, cancellationToken) =>
             {
                 // OpenAPI only: runtime Accepts metadata would refuse media before the handler's
@@ -63,6 +63,8 @@ public static partial class CatalogEndpoints
             .Produces(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status200OK, contentType: "application/edi-x12")
             .Produces(StatusCodes.Status200OK, contentType: "application/edifact")
+            .Produces(StatusCodes.Status200OK, contentType: "text/csv")
+            .Produces(StatusCodes.Status200OK, contentType: "text/tab-separated-values")
             .Produces<CatalogErrorV1>(StatusCodes.Status400BadRequest)
             .Produces<CatalogErrorV1>(StatusCodes.Status401Unauthorized)
             .Produces<CatalogErrorV1>(StatusCodes.Status404NotFound)
@@ -78,8 +80,8 @@ public static partial class CatalogEndpoints
             properties["profile"] = new OpenApiSchema
             {
                 Type = JsonSchemaType.String | JsonSchemaType.Null,
-                Description = "Omitted or null preserves legacy JSON admission. Document admission requires explicit native boundary formats; filenames never select them.",
-                Enum = [JsonValue.Create(PreviewPolicy.Profile)!, JsonValue.Create(DocumentPreviewPolicy.Profile)!, null!]
+                Description = "Omitted or null preserves legacy JSON admission. CSV/TSV is a separately enabled primary-only profile requiring native-source ports; an explicit empty content string is present input. Formats and dialects come from saved native boundaries, never filenames or caller overrides.",
+                Enum = [JsonValue.Create(PreviewPolicy.Profile)!, JsonValue.Create(DocumentPreviewPolicy.Profile)!, JsonValue.Create(CsvDocumentPolicy.Profile)!, null!]
             };
         foreach (var path in document.Paths.Values)
             foreach (var operation in path.Operations?.Values.AsEnumerable() ?? Enumerable.Empty<OpenApiOperation>())
@@ -87,7 +89,7 @@ public static partial class CatalogEndpoints
                     && response is OpenApiResponse output)
                 {
                     output.Content = new Dictionary<string, OpenApiMediaType>();
-                    foreach (var media in new[] { "application/json", "application/edi-x12", "application/edifact" })
+                    foreach (var media in new[] { "application/json", "application/edi-x12", "application/edifact", "text/csv", "text/tab-separated-values" })
                         output.Content[media] = new OpenApiMediaType { Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" } };
                     output.Headers = new Dictionary<string, IOpenApiHeader>
                     {
@@ -131,7 +133,32 @@ public static partial class CatalogEndpoints
             if (!revision.Access.Can(ProjectAction.SubmitPreview))
                 return NotFound();
             var body = await ReadPreviewBodyAsync(context.Request, options.BodyByteLimit, context.RequestAborted);
-            var submission = PreviewSubmission(scope, key, body);
+            var submission = PreviewSubmission(new RevisionPreviewSubject(scope), key, body);
+            if (submission.Profile == PreviewExecutionProfile.CsvDocument)
+            {
+                if (!options.CsvEnabled) throw new CatalogInvalidRequestException();
+                if (submission.NamedInputs.Count != 0 || submission.Target.Kind == PreviewTargetKind.Named) throw new CatalogInvalidRequestException();
+                var source = await PreviewPersistence(context, () => context.RequestServices.GetRequiredService<IRevisionReportMetadataReader>()
+                    .GetSourceAsync(admission.Actor!, scope, context.RequestAborted));
+                if (source is null) return NotFound();
+                if (source.Actor != admission.Actor!.PrincipalId || source.Source.Scope != scope || source.Source.NativeObject.Digest != revision.Summary.NativeDigest ||
+                    source.Source.SourceBackendId != revision.Summary.BackendId || source.Source.LogicalDocument != IngestionIntent.EntryDocument ||
+                    source.Source.DependencyIdentity != IngestionIntent.EmptyDependencyIdentity)
+                    throw new InvalidOperationException("CSV source identity mismatch.");
+                if (!await CsvNativeAuthorityAsync(context, admission.Actor!, revision, ProjectAction.SubmitPreview)) return NotFound();
+                var bytes = await PreviewPersistence(context, () => context.RequestServices.GetRequiredService<IPrivateObjectStore>()
+                    .ReadVerifiedAsync(scope, source.Source.NativeObject, context.RequestAborted));
+                if (!await CsvNativeAuthorityAsync(context, admission.Actor!, revision, ProjectAction.SubmitPreview)) return NotFound();
+                try
+                {
+                    var artifact = NativeArtifact.Admit(scope, bytes, PreviewPolicy.MaximumNativeBytes);
+                    if (artifact.Digest != source.Source.NativeObject.Digest || artifact.ByteCount != source.Source.NativeObject.ByteCount)
+                        throw new InvalidOperationException("CSV source integrity mismatch.");
+                    var dialect = CsvNativeDialect.Read(artifact);
+                    submission = submission with { Primary = new PreviewInputDocument(null, submission.Primary.CopyBytes(), dialect.Input) };
+                }
+                catch (PreviewRunException) { throw new CatalogInvalidRequestException(); }
+            }
             var service = context.RequestServices.GetRequiredService<PreviewRunService>();
             PreviewSubmitResult submitted;
             try
@@ -195,7 +222,8 @@ public static partial class CatalogEndpoints
             context.Response.Headers["Content-Digest"] = "sha-256=:" + Convert.ToBase64String(Convert.FromHexString(output.Digest.Value)) + ":";
             context.Response.Headers.ContentDisposition = "attachment";
             context.Response.Headers.XContentTypeOptions = "nosniff";
-            if (!DocumentPreviewPolicy.AdmitsMediaType(output.MediaType))
+            if (CsvDocumentPolicy.AdmitsMediaType(output.MediaType) ? !CsvDocumentPolicy.Admits(output.CsvDialect, output.MediaType)
+                : !DocumentPreviewPolicy.AdmitsMediaType(output.MediaType) || output.CsvDialect is not null)
                 throw new InvalidOperationException("Stored preview media type is not admitted.");
             return Results.Stream(new MemoryStream(output.Content, writable: false), output.MediaType);
         });
@@ -290,6 +318,13 @@ public static partial class CatalogEndpoints
 
     private static PreviewRunSubmission PreviewSubmission(PreviewSubject subject, Guid key, CatalogPreviewSubmissionV1 body)
     {
+        var profile = body.Profile switch
+        {
+            null or PreviewPolicy.Profile => PreviewExecutionProfile.LegacyJson,
+            DocumentPreviewPolicy.Profile => PreviewExecutionProfile.Document,
+            CsvDocumentPolicy.Profile => PreviewExecutionProfile.CsvDocument,
+            _ => throw new CatalogInvalidRequestException()
+        };
         if (body.Target is null || body.Parameters is null || body.Inputs is null || body.Inputs.Count == 0
             || body.Inputs.Count > PreviewPolicy.MaximumInputDocuments || body.Parameters.Count > PreviewPolicy.MaximumParameters)
             throw new CatalogInvalidRequestException();
@@ -314,16 +349,12 @@ public static partial class CatalogEndpoints
             if (input is null || (index == 0) != (input.Name is null) || input.Content is null)
                 throw new CatalogInvalidRequestException();
             var bytes = new byte[(input.Content.Length / 4 * 3) + 3];
-            if (!Convert.TryFromBase64String(input.Content, bytes, out var length) || length == 0)
+            if (!Convert.TryFromBase64String(input.Content, bytes, out var length) || length == 0 && profile != PreviewExecutionProfile.CsvDocument)
                 throw new CatalogInvalidRequestException();
             return new PreviewInputDocument(input.Name, bytes.AsSpan(0, length));
         }).ToArray();
-        var profile = body.Profile switch
-        {
-            null or PreviewPolicy.Profile => PreviewExecutionProfile.LegacyJson,
-            DocumentPreviewPolicy.Profile => PreviewExecutionProfile.Document,
-            _ => throw new CatalogInvalidRequestException()
-        };
+        if (subject is DraftPreviewSubject && profile == PreviewExecutionProfile.CsvDocument)
+            throw new CatalogInvalidRequestException();
         return new PreviewRunSubmission(subject, key, target, inputs[0], inputs[1..], parameters) { Profile = profile };
     }
 
@@ -353,7 +384,7 @@ public static partial class CatalogEndpoints
         run.RecordsWritten?.ToString(CultureInfo.InvariantCulture),
         run.Outputs.Select(output => new CatalogPreviewOutputV1(output.Ordinal, output.BoundaryId, output.TargetName,
             output.TargetNameTruncated, output.MediaType, output.RecordsWritten.ToString(CultureInfo.InvariantCulture),
-            output.Digest.Value, output.ByteCount)).ToArray(),
+            output.Digest.Value, output.ByteCount, CsvDialect(output.CsvDialect))).ToArray(),
         run.CreatedAtUtc,
         run.StartedAtUtc,
         run.FinishedAtUtc,
@@ -362,4 +393,17 @@ public static partial class CatalogEndpoints
             CatalogPublicMapper.MappingScope(new(draft.ExecutionScope.OrganizationId, draft.ExecutionScope.ProjectId, draft.ExecutionScope.MappingId)),
             draft.DraftId.ToString("D"), draft.Version.ToString(CultureInfo.InvariantCulture), CatalogPublicMapper.RevisionScope(draft.ExecutionScope),
             draft.NativeDigest.Value, draft.NativeByteCount) : null);
+
+    private static CsvDocumentDialectV1? CsvDialect(CsvDocumentDialect? value) => value is null ? null :
+        new(value.Schema, value.Delimiter, value.Quote, value.QuoteDisabled, value.HasHeaderRow, value.Utf8Bom, value.PreserveEmptyStrings);
+
+    // Metadata visibility alone does not grant native execution/publication. Refresh the
+    // requested role around private I/O, without resolving a worker or a payload source.
+    private static async Task<bool> CsvNativeAuthorityAsync(HttpContext context, ActorContext actor, CatalogRevision original, ProjectAction action)
+    {
+        var fresh = await ReadableRevisionAsync(context.RequestServices, actor, original.Summary.Scope, context.RequestAborted);
+        if (fresh is null || !fresh.Access.Can(action)) return false;
+        RequireScope(fresh.Summary == original.Summary);
+        return true;
+    }
 }

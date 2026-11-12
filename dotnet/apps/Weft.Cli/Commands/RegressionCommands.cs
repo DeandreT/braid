@@ -34,6 +34,8 @@ internal static class RegressionCommands
                     ("Output bytes", value.Limits.MaximumOutputBytes));
                 if (value.DocumentRuntime is { } runtime)
                     output.Fields(("Document backend", runtime.BackendId), ("Document engine", runtime.EngineRevision), ("Document profile", runtime.Profile));
+                if (value.CsvRuntime is { } csv)
+                    output.Fields(("CSV backend", csv.BackendId), ("CSV engine", csv.EngineRevision), ("CSV profile", csv.Profile));
                 if (value.ComparisonPolicies is { } policies)
                     output.Fields(("Comparison policies", string.Join(", ", policies)));
             });
@@ -208,6 +210,8 @@ internal static class RegressionCommands
                  ? comparison.NotEvaluatedReason : null), ("Differences", run.Comparison?.TotalDifferences));
         if (run.Comparison?.DocumentDiagnostic is { } diagnostic)
             output.Fields(("Invalid document", diagnostic.Side), ("Output", diagnostic.Name ?? "(primary)"), ("Location", Location(diagnostic.Location)));
+        if (run.Comparison?.CsvDiagnostic is { } csv)
+            output.Fields(("Invalid CSV", csv.Side), ("Output", csv.Name ?? "(primary)"), ("Row", csv.Location.Row), ("Column", csv.Location.Column));
         if (run.Comparison is not { Differences.Count: > 0 } compared)
             return;
         output.Line();
@@ -216,6 +220,8 @@ internal static class RegressionCommands
                 difference.FirstDifferentByte]));
         foreach (var difference in compared.Differences.Where(value => value.Location is not null))
             output.Fields(("Output", difference.Name ?? "(primary)"), ("Location", Location(difference.Location!)));
+        foreach (var difference in compared.Differences.Where(value => value.CsvLocation is not null))
+            output.Fields(("Output", difference.Name ?? "(primary)"), ("Row", difference.CsvLocation!.Row), ("Column", difference.CsvLocation.Column));
     }
 
     private static string Location(RegressionDocumentLocationV1 value) => string.Create(CultureInfo.InvariantCulture,

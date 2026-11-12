@@ -89,9 +89,9 @@ import { UnsentWork } from "../../workbench/unsent-work";
   styleUrl: "./revision-builds.component.css",
 })
 export class RevisionBuildsComponent {
-  readonly documentEnvironment = signal<"json" | "document" | "interchanges">(
-    "json",
-  );
+  readonly documentEnvironment = signal<
+    "json" | "document" | "interchanges" | "csv"
+  >("json");
   readonly copy = buildLabels;
   readonly requestLabels = buildRequestLabels;
   readonly buildStatus = buildStatus;
@@ -230,6 +230,11 @@ export class RevisionBuildsComponent {
                     sameProfile(
                       item.profile,
                       this.capabilities()!.documentProfile!,
+                    )) ||
+                  (!!this.capabilities()!.csvProfile &&
+                    sameProfile(
+                      item.profile,
+                      this.capabilities()!.csvProfile!,
                     ))),
             ) || null,
           );
@@ -248,15 +253,22 @@ export class RevisionBuildsComponent {
     const offered = this.environmentCapabilities()?.documentProfile;
     this.documentEnvironment.set(
       selected &&
-        this.environmentCapabilities()?.interchangeProfile &&
+        this.environmentCapabilities()?.csvProfile &&
         sameProfile(
           selected.profile,
-          this.environmentCapabilities()!.interchangeProfile!,
+          this.environmentCapabilities()!.csvProfile!,
         )
-        ? "interchanges"
-        : selected && offered && sameProfile(selected.profile, offered)
-          ? "document"
-          : "json",
+        ? "csv"
+        : selected &&
+            this.environmentCapabilities()?.interchangeProfile &&
+            sameProfile(
+              selected.profile,
+              this.environmentCapabilities()!.interchangeProfile!,
+            )
+          ? "interchanges"
+          : selected && offered && sameProfile(selected.profile, offered)
+            ? "document"
+            : "json",
     );
   }
   environmentKey(value: BuildEnvironment): string {
@@ -270,14 +282,18 @@ export class RevisionBuildsComponent {
         const selected = this.selectedEnvironment();
         this.documentEnvironment.set(
           selected &&
-            cap.interchangeProfile &&
-            sameProfile(selected.profile, cap.interchangeProfile)
-            ? "interchanges"
+            cap.csvProfile &&
+            sameProfile(selected.profile, cap.csvProfile)
+            ? "csv"
             : selected &&
-                cap.documentProfile &&
-                sameProfile(selected.profile, cap.documentProfile)
-              ? "document"
-              : "json",
+                cap.interchangeProfile &&
+                sameProfile(selected.profile, cap.interchangeProfile)
+              ? "interchanges"
+              : selected &&
+                  cap.documentProfile &&
+                  sameProfile(selected.profile, cap.documentProfile)
+                ? "document"
+                : "json",
         );
       },
     );
@@ -287,11 +303,13 @@ export class RevisionBuildsComponent {
       return;
     if (nextVersion && !this.selectedEnvironment()) return;
     const offered =
-      this.documentEnvironment() === "interchanges"
-        ? this.environmentCapabilities()?.interchangeProfile
-        : this.documentEnvironment() === "document"
-          ? this.environmentCapabilities()?.documentProfile
-          : this.environmentCapabilities()?.profile;
+      this.documentEnvironment() === "csv"
+        ? this.environmentCapabilities()?.csvProfile
+        : this.documentEnvironment() === "interchanges"
+          ? this.environmentCapabilities()?.interchangeProfile
+          : this.documentEnvironment() === "document"
+            ? this.environmentCapabilities()?.documentProfile
+            : this.environmentCapabilities()?.profile;
     if (!offered) {
       this.error.set("Choose an available server-offered compiler profile.");
       return;
@@ -359,7 +377,8 @@ export class RevisionBuildsComponent {
       !(
         cap.documentProfile &&
         sameProfile(environment.profile, cap.documentProfile)
-      )
+      ) &&
+      !(cap.csvProfile && sameProfile(environment.profile, cap.csvProfile))
     ) {
       this.error.set(
         "Select an active environment matching the offered runtime profile.",

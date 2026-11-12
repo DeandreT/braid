@@ -17,12 +17,12 @@ use admission::Refusal;
 use crate::protocol::{MAX_NATIVE_BYTES, MAX_TEXT_BYTES, bounded_text};
 use crate::{decode, framing, valid_context_parts};
 use protocol::{
-    DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_ARTIFACTS, MAX_PREVIEW_DISCARD_BYTES,
-    MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_INPUTS, MAX_PREVIEW_OUTPUT_BYTES,
-    MAX_PREVIEW_PARAMETER_NAME_BYTES, MAX_PREVIEW_PARAMETER_TEXT_BYTES, MAX_PREVIEW_PARAMETERS,
-    MAX_PREVIEW_RESPONSE_BYTES, MAX_PREVIEW_TARGET_NAME_BYTES, PREVIEW_PROTOCOL_VERSION,
-    PreviewArtifact, PreviewFailure, PreviewInput, PreviewRequestHeader, PreviewResponse,
-    PreviewResult, PreviewTarget, PreviewValue,
+    CSV_PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION, MAX_PREVIEW_ARTIFACTS,
+    MAX_PREVIEW_DISCARD_BYTES, MAX_PREVIEW_INPUT_BYTES, MAX_PREVIEW_INPUTS,
+    MAX_PREVIEW_OUTPUT_BYTES, MAX_PREVIEW_PARAMETER_NAME_BYTES, MAX_PREVIEW_PARAMETER_TEXT_BYTES,
+    MAX_PREVIEW_PARAMETERS, MAX_PREVIEW_RESPONSE_BYTES, MAX_PREVIEW_TARGET_NAME_BYTES,
+    PREVIEW_PROTOCOL_VERSION, PreviewArtifact, PreviewFailure, PreviewInput, PreviewRequestHeader,
+    PreviewResponse, PreviewResult, PreviewTarget, PreviewValue,
 };
 
 const PROJECT_ROOT: &str = "/weft";
@@ -192,6 +192,23 @@ pub fn process_preview(
         Ok(admission) => admission,
         Err(refusal) => return refused(header, &refusal),
     };
+    if header.is_csv_preview()
+        && let Err(error) = ferrule_format_csv::from_bytes_with_options_bounded(
+            &inputs[0],
+            &project.source,
+            &(&project.source_options).into(),
+        )
+    {
+        return failure(
+            if matches!(error, ferrule_format_csv::CsvReadError::Limit { .. }) {
+                "inputLimitExceeded"
+            } else {
+                "invalidInput"
+            },
+            "The CSV input violates its saved dialect, scalar schema or bounded document limits.",
+            Some("primary"),
+        );
+    }
     if header.is_document_preview() {
         for ((input, bytes), format) in header
             .inputs
@@ -322,6 +339,12 @@ pub fn process_preview(
         .with_extra_sources(&named)
         .with_output_path(&output_path)
         .with_runtime_parameters(&parameters);
+    if header.is_csv_preview() {
+        // Keep legacy JSON/EDI on their established compatibility route. In
+        // particular, that route accepts JSON schema provenance the bounded
+        // selector refuses. Only explicitly admitted CSV uses this opt-in.
+        options = options.with_bounded_documents();
+    }
     if let Some(selection) = admission.selection {
         options = options.with_target(selection);
     }
@@ -339,8 +362,7 @@ pub fn process_preview(
     let outcome = match ferrule_cli::run_project_value_payloads(&project, &project_path, &options) {
         Ok(outcome) => outcome,
         Err(error) => {
-            let (code, subject) = classify(&error, header);
-            return failure(code, &format!("{error:#}"), subject.as_deref());
+            return execution_failure(&error, header, &output_path);
         }
     };
 
@@ -376,6 +398,20 @@ pub fn process_preview(
     let mut artifacts = Vec::with_capacity(outcome.artifacts.len());
     let mut outputs = Vec::with_capacity(outcome.artifacts.len());
     for (artifact, target) in outcome.artifacts.into_iter().zip(admission.targets) {
+        if header.is_csv_preview()
+            && ferrule_format_csv::from_bytes_with_options_bounded(
+                &artifact.bytes,
+                &project.target,
+                &(&project.target_options).into(),
+            )
+            .is_err()
+        {
+            return failure(
+                "resultLimitExceeded",
+                "The CSV output violates its bounded document limits or scalar schema.",
+                Some(&target.boundary_id),
+            );
+        }
         if header.is_document_preview()
             && !crate::document_limits::within_limits(
                 target.format,
@@ -398,6 +434,11 @@ pub fn process_preview(
             records_written: artifact.records_written as u64,
             byte_length: artifact.bytes.len() as u32,
             sha256: hex_digest(&artifact.bytes),
+            csv_dialect: if header.is_csv_preview() {
+                crate::csv_document::CsvDialect::from_options(&project.target_options).ok()
+            } else {
+                None
+            },
         });
         outputs.push(artifact.bytes);
     }
@@ -467,7 +508,7 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
     };
     if !matches!(
         header.protocol_version.as_str(),
-        PREVIEW_PROTOCOL_VERSION | DOCUMENT_PREVIEW_PROTOCOL_VERSION
+        PREVIEW_PROTOCOL_VERSION | DOCUMENT_PREVIEW_PROTOCOL_VERSION | CSV_PREVIEW_PROTOCOL_VERSION
     ) {
         return failure(
             "unsupportedProtocolVersion",
@@ -515,7 +556,7 @@ fn check_header(header: &PreviewRequestHeader) -> Result<(), Refusal> {
     let mut names = std::collections::BTreeSet::new();
     let mut total = 0u64;
     for input in &header.inputs {
-        if input.byte_length() == 0
+        if (input.byte_length() == 0 && !header.is_csv_preview())
             || input.sha256().len() != 64
             || !input
                 .sha256()
@@ -649,10 +690,39 @@ fn json_number(text: &str) -> bool {
     index == bytes.len()
 }
 
+fn execution_failure(
+    error: &anyhow::Error,
+    header: &PreviewRequestHeader,
+    output_path: &Path,
+) -> PreviewOutcome {
+    let (code, subject) = classify(error, header, output_path);
+    let message = if header.is_csv_preview() && code == "resultLimitExceeded" {
+        "The CSV output exceeds the bounded serializer's document byte limit.".into()
+    } else {
+        format!("{error:#}")
+    };
+    PreviewOutcome::failure(Some(header), code, &message, subject.as_deref())
+}
+
 fn classify(
     error: &anyhow::Error,
     header: &PreviewRequestHeader,
+    output_path: &Path,
 ) -> (&'static str, Option<String>) {
+    // The pinned CLI consumes CsvBoundedError::OutputTooLarge and replaces it
+    // with this untyped finalization error. Match only its exact root message
+    // and our admitted synthetic destination, never arbitrary size-error text.
+    // Legacy JSON/EDI retain their established classification.
+    if header.is_csv_preview()
+        && error.root_cause().to_string()
+            == format!(
+                "output artifact `{}` exceeds the {} MiB per-document limit",
+                output_path.display(),
+                ferrule_cli::MAX_PAYLOAD_DOCUMENT_BYTES / (1024 * 1024)
+            )
+    {
+        return ("resultLimitExceeded", None);
+    }
     for cause in error.chain() {
         if let Some(engine) = cause.downcast_ref::<EngineError>() {
             return match engine {
@@ -718,4 +788,82 @@ fn discard(reader: &mut impl Read) {
         &mut reader.take(MAX_PREVIEW_DISCARD_BYTES as u64),
         &mut io::sink(),
     );
+}
+
+#[cfg(test)]
+mod classification_tests {
+    use super::*;
+
+    fn header(protocol: &str) -> PreviewRequestHeader {
+        serde_json::from_value(serde_json::json!({
+            "protocolVersion": protocol,
+            "requestId": "11111111-1111-4111-8111-111111111111",
+            "revision": {
+                "organizationId": "11111111-1111-4111-8111-111111111111",
+                "projectId": "22222222-2222-4222-8222-222222222222",
+                "mappingId": "33333333-3333-4333-8333-333333333333",
+                "revisionId": "44444444-4444-4444-8444-444444444444"
+            },
+            "nativeDigest": "a".repeat(64),
+            "documentId": "entry.native.json",
+            "target": { "kind": "all" },
+            "currentDateTime": "2026-10-30T12:00:00Z",
+            "parameters": [],
+            "inputs": [],
+            "limits": {
+                "maximumInputBytes": MAX_PREVIEW_INPUT_BYTES,
+                "maximumOutputBytes": MAX_PREVIEW_OUTPUT_BYTES,
+                "maximumArtifacts": MAX_PREVIEW_ARTIFACTS,
+                "maximumTextBytes": MAX_TEXT_BYTES
+            }
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn csv_serializer_ceiling_is_a_sanitized_resource_refusal_without_large_allocation() {
+        for extension in ["csv", "tsv"] {
+            let path = PathBuf::from(format!("/weft/output/primary.{extension}"));
+            let message = format!(
+                "output artifact `{}` exceeds the {} MiB per-document limit",
+                path.display(),
+                ferrule_cli::MAX_PAYLOAD_DOCUMENT_BYTES / (1024 * 1024)
+            );
+            let error =
+                anyhow::Error::msg(message).context("private upstream context must not escape");
+            let result = execution_failure(&error, &header(CSV_PREVIEW_PROTOCOL_VERSION), &path);
+            let failure = result.response.failure.unwrap();
+            assert_eq!(failure.code, "resultLimitExceeded");
+            assert_eq!(
+                failure.message,
+                "The CSV output exceeds the bounded serializer's document byte limit."
+            );
+            assert!(failure.subject.is_none());
+            assert!(result.outputs.is_empty());
+
+            for protocol in [PREVIEW_PROTOCOL_VERSION, DOCUMENT_PREVIEW_PROTOCOL_VERSION] {
+                assert_eq!(
+                    classify(&error, &header(protocol), &path).0,
+                    "executionFailed"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn csv_size_classification_requires_the_exact_pinned_error_and_destination() {
+        let request = header(CSV_PREVIEW_PROTOCOL_VERSION);
+        let path = Path::new("/weft/output/primary.csv");
+        for message in [
+            "output artifact `/private/other.csv` exceeds the 64 MiB per-document limit",
+            "output artifact `/weft/output/primary.csv` exceeds the 63 MiB per-document limit",
+            "output artifact `/weft/output/primary.csv` exceeds the 64 MiB per-document limit (other error)",
+            "CSV output exceeds the 67108864-byte maximum",
+        ] {
+            assert_eq!(
+                classify(&anyhow::Error::msg(message), &request, path).0,
+                "executionFailed"
+            );
+        }
+    }
 }

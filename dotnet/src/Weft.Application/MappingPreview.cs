@@ -12,7 +12,9 @@ public interface IMappingPreviewBackend
 public enum PreviewExecutionProfile
 {
     LegacyJson,
-    Document
+    Document,
+    /// <summary>Separate primary-only CSV contract, including explicit empty input presence.</summary>
+    CsvDocument
 }
 
 public static class DocumentPreviewPolicy
@@ -68,15 +70,19 @@ public sealed class PreviewInputDocument
 {
     private readonly byte[] _bytes;
 
-    public PreviewInputDocument(string? name, ReadOnlySpan<byte> bytes)
+    public PreviewInputDocument(string? name, ReadOnlySpan<byte> bytes, CsvDocumentDialect? csvDialect = null)
     {
+        if (csvDialect is not null && !CsvDocumentPolicy.Admits(csvDialect, CsvDialectJson.MediaType(csvDialect)))
+            throw new ArgumentException("Invalid CSV input dialect.", nameof(csvDialect));
         Name = name;
+        CsvDialect = csvDialect;
         _bytes = bytes.ToArray();
         Digest = Sha256Digest.FromBytes(_bytes);
     }
 
     /// <summary>Null for the primary input; otherwise the declared named source.</summary>
     public string? Name { get; }
+    public CsvDocumentDialect? CsvDialect { get; }
     public Sha256Digest Digest { get; }
     public int ByteCount => _bytes.Length;
     public ReadOnlySpan<byte> Bytes => _bytes;
@@ -126,17 +132,21 @@ public sealed class PreviewOutputArtifact
 {
     private readonly byte[] _bytes;
 
-    public PreviewOutputArtifact(string boundaryId, string targetName, bool targetNameTruncated, string mediaType, long recordsWritten, ReadOnlySpan<byte> bytes)
+    public PreviewOutputArtifact(string boundaryId, string targetName, bool targetNameTruncated, string mediaType, long recordsWritten, ReadOnlySpan<byte> bytes,
+        CsvDocumentDialect? csvDialect = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(boundaryId);
         ArgumentNullException.ThrowIfNull(targetName);
         ArgumentException.ThrowIfNullOrEmpty(mediaType);
         ArgumentOutOfRangeException.ThrowIfNegative(recordsWritten);
+        if (CsvDocumentPolicy.AdmitsMediaType(mediaType) ? !CsvDocumentPolicy.Admits(csvDialect, mediaType) : csvDialect is not null)
+            throw new ArgumentException("CSV output requires a matching versioned dialect.", nameof(csvDialect));
         BoundaryId = boundaryId;
         TargetName = targetName;
         TargetNameTruncated = targetNameTruncated;
         MediaType = mediaType;
         RecordsWritten = recordsWritten;
+        CsvDialect = csvDialect;
         _bytes = bytes.ToArray();
         Digest = Sha256Digest.FromBytes(_bytes);
     }
@@ -146,6 +156,7 @@ public sealed class PreviewOutputArtifact
     public bool TargetNameTruncated { get; }
     public string MediaType { get; }
     public long RecordsWritten { get; }
+    public CsvDocumentDialect? CsvDialect { get; }
     public Sha256Digest Digest { get; }
     public int ByteCount => _bytes.Length;
     public ReadOnlySpan<byte> Bytes => _bytes;

@@ -49,9 +49,14 @@ public sealed class RegressionCaseVersion
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(replay);
         ArgumentNullException.ThrowIfNull(expected);
-        if (runtime.Profile is not (PreviewPolicy.Profile or DocumentPreviewPolicy.Profile) ||
-            comparisonPolicy is not (RegressionComparisonService.ExactBytesPolicy or RegressionComparisonService.EdiSegmentsPolicy) ||
+        if (runtime.Profile is not (PreviewPolicy.Profile or DocumentPreviewPolicy.Profile or CsvDocumentPolicy.Profile) ||
+            comparisonPolicy is not (RegressionComparisonService.ExactBytesPolicy or RegressionComparisonService.EdiSegmentsPolicy or RegressionComparisonService.CsvRowsPolicy) ||
             (comparisonPolicy == RegressionComparisonService.EdiSegmentsPolicy) != (ediOptions is not null) ||
+            comparisonPolicy == RegressionComparisonService.CsvRowsPolicy && runtime.Profile != CsvDocumentPolicy.Profile ||
+            runtime.Profile == CsvDocumentPolicy.Profile && (ediOptions is not null || replay.Profile != PreviewExecutionProfile.CsvDocument ||
+                replay.Primary.CsvDialect is null || replay.NamedInputs.Count != 0 || replay.Target.Kind == PreviewTargetKind.Named || expected.Outputs.Count != 1 ||
+                !expected.Outputs[0].Key.IsPrimary || expected.Outputs[0].CsvDialect is null) ||
+            runtime.Profile != CsvDocumentPolicy.Profile && (replay.Profile == PreviewExecutionProfile.CsvDocument || expected.Outputs.Any(output => output.CsvDialect is not null)) ||
             runtime.Profile == PreviewPolicy.Profile && (comparisonPolicy != RegressionComparisonService.ExactBytesPolicy || expected.Outputs.Any(output => output.MediaType != PreviewPolicy.MediaType)))
             throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (expected.Outputs.Count > replay.Limits.MaximumArtifacts || expected.ByteCount > replay.Limits.MaximumOutputBytes)
@@ -99,9 +104,22 @@ public sealed class RegressionCaseVersion
             throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
         if (artifact.ByteCount > PreviewPolicy.MaximumNativeBytes)
             throw new RegressionCaseException(RegressionCaseFailure.ResourceLimit);
+        if (Runtime.Profile == CsvDocumentPolicy.Profile)
+        {
+            var dialect = CsvNativeDialect.Read(artifact);
+            if (dialect.Output != Expected.Outputs.Single().CsvDialect || dialect.Input != Replay.Primary.CsvDialect)
+                throw new RegressionCaseException(RegressionCaseFailure.InvalidInput);
+        }
         return new(artifact, Replay.Target, Replay.Primary, Replay.NamedInputs, Replay.Parameters,
             Replay.CurrentDateTime, Replay.Limits)
-        { Profile = Runtime.Profile == DocumentPreviewPolicy.Profile ? PreviewExecutionProfile.Document : PreviewExecutionProfile.LegacyJson };
+        {
+            Profile = Runtime.Profile switch
+            {
+                CsvDocumentPolicy.Profile => PreviewExecutionProfile.CsvDocument,
+                DocumentPreviewPolicy.Profile => PreviewExecutionProfile.Document,
+                _ => PreviewExecutionProfile.LegacyJson
+            }
+        };
     }
 
     public override string ToString() => nameof(RegressionCaseVersion);

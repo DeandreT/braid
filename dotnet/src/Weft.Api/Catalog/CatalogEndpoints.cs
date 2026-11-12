@@ -86,7 +86,8 @@ public static partial class CatalogEndpoints
                 ingestionOptions.Enabled, creationOptions.Enabled, canCreateProjects,
                 revisionReportOptions.Enabled, revisionReportOptions.DerivationEnabled, admission.IdentityContext,
                 context.RequestServices.GetService<Chat.ChatApiOptions>()?.Enabled == true, PreviewEnabled(context),
-                context.RequestServices.GetService<IAdministrationStore>() is not null, MappingEditingEnabled(context)));
+                context.RequestServices.GetService<IAdministrationStore>() is not null, MappingEditingEnabled(context),
+                csvPreviewEnabled: context.RequestServices.GetService<CatalogPreviewOptions>() is { Enabled: true, CsvEnabled: true }));
         });
 
     private static Task<IResult> GetProjects(string organizationId, HttpContext context,

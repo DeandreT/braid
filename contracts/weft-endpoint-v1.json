@@ -28,7 +28,7 @@
           }
         ],
         "requestBody": {
-          "description": "At most 2097152 bytes as `application/json` (optionally `; charset=utf-8`) without a content encoding. Inputs total at most 1 MiB, outputs at most 1 MiB, and the preview bounds on counts, names and parameters apply. Legacy bodies omit schema and media. Document bodies require weft.document-invocation-request.v1 and a mediaType per input matching the qualified boundary; no filename inference.",
+          "description": "At most 2097152 bytes as `application/json` (optionally `; charset=utf-8`) without a content encoding. Inputs total at most 1 MiB, outputs at most 1 MiB, and the preview bounds on counts, names and parameters apply. Legacy bodies omit schema and media. Document bodies require weft.document-invocation-request.v1 and a mediaType per input matching the qualified boundary; no filename inference. CSV/TSV requires matching csvDialect metadata and a primary-only CSV build. An explicit empty base64 string is a valid empty CSV document; missing content is not. JSON/EDI inputs remain nonempty.",
           "content": {
             "application/json": {
               "schema": {
@@ -774,7 +774,9 @@
             "enum": [
               "application/json",
               "application/edi-x12",
-              "application/edifact"
+              "application/edifact",
+              "text/csv",
+              "text/tab-separated-values"
             ],
             "type": "string"
           },
@@ -783,6 +785,48 @@
               "null",
               "string"
             ]
+          },
+          "csvDialect": {
+            "required": [
+              "schema",
+              "delimiter",
+              "quote",
+              "quoteDisabled",
+              "hasHeaderRow",
+              "utf8Bom",
+              "preserveEmptyStrings"
+            ],
+            "type": "object",
+            "properties": {
+              "schema": {
+                "enum": [
+                  "weft.csv-dialect.v1"
+                ],
+                "type": "string"
+              },
+              "delimiter": {
+                "type": "string"
+              },
+              "quote": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "quoteDisabled": {
+                "type": "boolean"
+              },
+              "hasHeaderRow": {
+                "type": "boolean"
+              },
+              "utf8Bom": {
+                "type": "boolean"
+              },
+              "preserveEmptyStrings": {
+                "type": "boolean"
+              }
+            },
+            "description": "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required."
           }
         },
         "additionalProperties": false
@@ -810,9 +854,53 @@
             "enum": [
               "application/json",
               "application/edi-x12",
-              "application/edifact"
+              "application/edifact",
+              "text/csv",
+              "text/tab-separated-values"
             ],
             "type": "string"
+          },
+          "csvDialect": {
+            "required": [
+              "schema",
+              "delimiter",
+              "quote",
+              "quoteDisabled",
+              "hasHeaderRow",
+              "utf8Bom",
+              "preserveEmptyStrings"
+            ],
+            "type": "object",
+            "properties": {
+              "schema": {
+                "enum": [
+                  "weft.csv-dialect.v1"
+                ],
+                "type": "string"
+              },
+              "delimiter": {
+                "type": "string"
+              },
+              "quote": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "quoteDisabled": {
+                "type": "boolean"
+              },
+              "hasHeaderRow": {
+                "type": "boolean"
+              },
+              "utf8Bom": {
+                "type": "boolean"
+              },
+              "preserveEmptyStrings": {
+                "type": "boolean"
+              }
+            },
+            "description": "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required."
           },
           "content": {
             "type": "string",
@@ -852,7 +940,9 @@
                   "enum": [
                     "application/json",
                     "application/edi-x12",
-                    "application/edifact"
+                    "application/edifact",
+                    "text/csv",
+                    "text/tab-separated-values"
                   ],
                   "type": "string"
                 },
@@ -861,6 +951,48 @@
                     "null",
                     "string"
                   ]
+                },
+                "csvDialect": {
+                  "required": [
+                    "schema",
+                    "delimiter",
+                    "quote",
+                    "quoteDisabled",
+                    "hasHeaderRow",
+                    "utf8Bom",
+                    "preserveEmptyStrings"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "schema": {
+                      "enum": [
+                        "weft.csv-dialect.v1"
+                      ],
+                      "type": "string"
+                    },
+                    "delimiter": {
+                      "type": "string"
+                    },
+                    "quote": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "quoteDisabled": {
+                      "type": "boolean"
+                    },
+                    "hasHeaderRow": {
+                      "type": "boolean"
+                    },
+                    "utf8Bom": {
+                      "type": "boolean"
+                    },
+                    "preserveEmptyStrings": {
+                      "type": "boolean"
+                    }
+                  },
+                  "description": "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required."
                 }
               },
               "additionalProperties": false
@@ -965,9 +1097,53 @@
                   "enum": [
                     "application/json",
                     "application/edi-x12",
-                    "application/edifact"
+                    "application/edifact",
+                    "text/csv",
+                    "text/tab-separated-values"
                   ],
                   "type": "string"
+                },
+                "csvDialect": {
+                  "required": [
+                    "schema",
+                    "delimiter",
+                    "quote",
+                    "quoteDisabled",
+                    "hasHeaderRow",
+                    "utf8Bom",
+                    "preserveEmptyStrings"
+                  ],
+                  "type": "object",
+                  "properties": {
+                    "schema": {
+                      "enum": [
+                        "weft.csv-dialect.v1"
+                      ],
+                      "type": "string"
+                    },
+                    "delimiter": {
+                      "type": "string"
+                    },
+                    "quote": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "quoteDisabled": {
+                      "type": "boolean"
+                    },
+                    "hasHeaderRow": {
+                      "type": "boolean"
+                    },
+                    "utf8Bom": {
+                      "type": "boolean"
+                    },
+                    "preserveEmptyStrings": {
+                      "type": "boolean"
+                    }
+                  },
+                  "description": "Resolved saved CSV settings. Delimiter and quote are single ASCII characters; disabled quoting requires null quote. A tab delimiter identifies TSV. All fields are required."
                 },
                 "content": {
                   "type": "string",

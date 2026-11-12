@@ -149,6 +149,7 @@ See [Local development](docs/development.md) to run and verify the application.
 - [Workbench presentation](docs/workbench-presentation.md): semantic colors, exact-value details, safe layout preferences and action confirmations.
 - [Chat UI](docs/chat-ui.md): shared workspace conversations, legacy revision pins and evidence-backed navigation.
 - [Preview runs](docs/preview-runs.md): bounded execution of explicit sample inputs.
+- [CSV and TSV documents](docs/csv-documents.md): explicit native dialects, bounded table display, regression comparison and compiled execution.
 - [Regression cases](docs/regression-cases.md): saved inputs, expected output and immutable case versions.
 - [Automation and notifications](docs/automation-notifications.md): exact-revision checks, project build gates and metadata-only activity delivery.
 - [Build workflow](docs/build-workflow.md) and [compiled runtime](docs/compiled-runtime.md): capability admission, immutable artifacts and restricted execution.

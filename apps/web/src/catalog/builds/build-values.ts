@@ -1,4 +1,5 @@
 import type { components } from "../../api/generated";
+import { csvBuildProfile, csvMetadata } from "../previews/csv-contract";
 import {
   isCatalogId,
   type CatalogMappingScope,
@@ -104,6 +105,15 @@ export function profile(value: unknown): value is BuildProfile {
     integer(value.maximumArtifactBytes, 1, 33554432)
   );
 }
+export function csvProfile(value: unknown): value is BuildProfile {
+  return (
+    profile(value) &&
+    value.id === csvBuildProfile &&
+    value.version === "1" &&
+    value.runtime === "dotnet" &&
+    value.artifactFormat === "weft.dotnet-assembly.v1"
+  );
+}
 export function project(
   value: unknown,
   scope: CatalogProjectScope,
@@ -199,7 +209,7 @@ export function approval(
     outputs = 0;
   for (const item of value.boundaries) {
     if (
-      !shape(item, ["kind", "name", "format"]) ||
+      !shape(item, ["kind", "name", "format"], ["csvDialect"]) ||
       !oneOf(item.kind, [
         "primaryInput",
         "namedInput",
@@ -209,6 +219,16 @@ export function approval(
       !text(item.format, 128)
     )
       invalid();
+    if (item.format === "csv" || item.format === "tsv") {
+      if (
+        value.profile.id !== csvBuildProfile ||
+        !csvMetadata(
+          item.format === "csv" ? "text/csv" : "text/tab-separated-values",
+          item.csvDialect,
+        )
+      )
+        invalid();
+    } else if (item.csvDialect !== undefined) invalid();
     const primary =
       item.kind === "primaryInput" || item.kind === "primaryOutput";
     if (primary ? item.name !== null : !text(item.name, 256)) invalid();
@@ -219,6 +239,14 @@ export function approval(
     if (item.kind === "primaryOutput") outputs++;
   }
   if (inputs !== 1 || outputs !== 1) invalid();
+  if (
+    value.profile.id === csvBuildProfile &&
+    (value.boundaries.length !== 2 ||
+      value.boundaries.some(
+        (item) => !["csv", "tsv"].includes(item.format as string),
+      ))
+  )
+    invalid();
   return value as unknown as BuildApproval;
 }
 export function run(value: unknown, scope: CatalogMappingScope): BuildRun {

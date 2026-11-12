@@ -13,6 +13,43 @@ namespace Weft.Tests;
 /// <summary>Authored worker transcripts qualify adapter checks; they do not execute a mapping.</summary>
 public sealed class FerrulePreviewBackendTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Csv_direct_profile_preserves_empty_bytes_and_requires_matching_dialect(bool forged)
+    {
+        var runner = new TranscriptRunner(header => Reply(header, response =>
+        {
+            response["protocolVersion"] = CsvDocumentPolicy.Profile;
+            response["profile"] = CsvDocumentPolicy.Profile;
+            var artifact = Artifact("primary-output", "Row", []);
+            artifact["mediaType"] = "text/tab-separated-values";
+            artifact["csvDialect"] = JsonSerializer.SerializeToNode(new CsvDocumentDialect(CsvDocumentPolicy.DialectSchema,
+                forged ? "," : "\t", "\"", false, false, false, true), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            response["result"]!["artifacts"] = new JsonArray(artifact);
+        }, [[]]));
+        var request = Request() with { Primary = new(null, []), NamedInputs = [], Profile = PreviewExecutionProfile.CsvDocument };
+        var result = await new FerrulePreviewBackend(runner).PreviewAsync(request);
+        Assert.Equal(forged ? MappingPreviewStatus.ProtocolFailure : MappingPreviewStatus.Succeeded, result.Status);
+        Assert.Empty(Frames(runner.LastRequest!)[2]);
+        if (!forged)
+        {
+            var output = Assert.Single(result.Artifacts);
+            Assert.Empty(output.CopyBytes());
+            Assert.Equal("\t", output.CsvDialect!.Delimiter);
+            Assert.Equal(FerrulePreviewBackend.CsvAdapterBuild, result.Provenance.AdapterBuild);
+        }
+    }
+
+    [Fact]
+    public async Task Csv_direct_profile_refuses_named_inputs_without_dispatch()
+    {
+        var runner = new TranscriptRunner(header => Reply(header));
+        var result = await new FerrulePreviewBackend(runner).PreviewAsync(Request() with { Profile = PreviewExecutionProfile.CsvDocument });
+        Assert.Equal(MappingPreviewStatus.UnsupportedCapability, result.Status);
+        Assert.Equal(0, runner.Calls);
+    }
+
     private const string Image = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
     private static readonly RevisionScope Scope = new(
         Guid.Parse("11111111-1111-4111-8111-111111111111"), Guid.Parse("22222222-2222-4222-8222-222222222222"),

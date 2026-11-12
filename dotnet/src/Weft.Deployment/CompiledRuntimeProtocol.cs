@@ -12,6 +12,7 @@ public static class CompiledRuntimeProtocol
 {
     public const string Protocol = "weft.ferrule-compiled-json.v1";
     public const string DocumentProtocol = "weft.ferrule-compiled-document.v1";
+    public const string CsvProtocol = "weft.ferrule-compiled-csv.v1";
     // 32 parameter values of 4096 UTF-8 bytes can expand sixfold under JSON escaping.
     public const int MaximumHeaderBytes = 1024 * 1024;
     public const int MaximumIntentBytes = 1024 * 1024;
@@ -26,7 +27,8 @@ public static class CompiledRuntimeProtocol
     };
 
     public sealed record Document(string? Name, int ByteCount, string Sha256,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MediaType = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CsvDocumentDialect? CsvDialect = null);
     public sealed record Parameter(string Name, string Kind, string Value);
     public sealed record Replay(string Target, string? TargetName, string CurrentDateTime, PreviewLimits Limits,
         Document[] Inputs, Parameter[] Parameters)
@@ -67,7 +69,7 @@ public static class CompiledRuntimeProtocol
         Write(output, JsonSerializer.SerializeToUtf8Bytes(request, Json), MaximumHeaderBytes);
         Write(output, intent.CopyCanonicalBytes(), MaximumIntentBytes);
         Write(output, artifact.Copy(), checked((int)intent.Profile.MaximumArtifactBytes));
-        Write(output, replay.Primary.CopyBytes(), replay.Limits.MaximumInputBytes);
+        Write(output, replay.Primary.CopyBytes(), replay.Limits.MaximumInputBytes, request.ProtocolVersion == CsvProtocol);
         foreach (var input in replay.NamedInputs) Write(output, input.CopyBytes(), replay.Limits.MaximumInputBytes);
         if (output.Length > MaximumRequestBytes) throw Invalid();
         return output.ToArray();
@@ -80,6 +82,11 @@ public static class CompiledRuntimeProtocol
         var offset = 0;
         var rawHeader = Read(bytes, ref offset, MaximumHeaderBytes);
         var header = ReadJson<Request>(rawHeader);
+        if (header.ProtocolVersion != CsvProtocol)
+        {
+            using var previous = JsonDocument.Parse(rawHeader);
+            if (previous.RootElement.GetProperty("replay").GetProperty("inputs").EnumerateArray().Any(value => value.TryGetProperty("csvDialect", out _))) throw Invalid();
+        }
         if (header.ProtocolVersion == Protocol)
         {
             using var legacy = JsonDocument.Parse(rawHeader);
@@ -94,9 +101,9 @@ public static class CompiledRuntimeProtocol
         foreach (var input in header.Replay.Inputs)
         {
             if (input.ByteCount > remaining) throw Invalid();
-            var value = Read(bytes, ref offset, input.ByteCount);
+            var value = Read(bytes, ref offset, input.ByteCount, header.ProtocolVersion == CsvProtocol);
             if (value.Length != input.ByteCount || Sha256Digest.FromBytes(value).Value != input.Sha256) throw Invalid();
-            inputs.Add(new(input.Name, value));
+            inputs.Add(new(input.Name, value, input.CsvDialect));
             remaining -= value.Length;
         }
         if (offset != bytes.Length) throw Invalid();
@@ -111,7 +118,8 @@ public static class CompiledRuntimeProtocol
     {
         ArgumentNullException.ThrowIfNull(invocation);
         var documents = outputs?.Outputs.Select(value => new Document(value.Key.Name, value.ByteCount, value.Digest.Value,
-            invocation.Header.ProtocolVersion == DocumentProtocol ? value.MediaType : null)).ToArray() ?? [];
+            invocation.Header.ProtocolVersion is DocumentProtocol or CsvProtocol ? value.MediaType : null,
+            value.CsvDialect)).ToArray() ?? [];
         if (invocation.Header.ProtocolVersion == Protocol && outputs?.Outputs.Any(value => value.MediaType != PreviewPolicy.MediaType) == true) throw Invalid();
         var request = invocation.Header;
         var header = new Response(request.ProtocolVersion, request.RequestId, request.BuildId, request.IntentDigest, request.ArtifactDigest,
@@ -119,7 +127,8 @@ public static class CompiledRuntimeProtocol
         ValidateResponse(header, request, invocation.Intent);
         using var buffer = new MemoryStream();
         Write(buffer, JsonSerializer.SerializeToUtf8Bytes(header, Json), MaximumHeaderBytes);
-        if (outputs is not null) foreach (var output in outputs.Outputs) Write(buffer, output.CopyBytes(), invocation.Replay.Limits.MaximumOutputBytes);
+        if (outputs is not null) foreach (var output in outputs.Outputs) Write(buffer, output.CopyBytes(), invocation.Replay.Limits.MaximumOutputBytes,
+            invocation.Header.ProtocolVersion == CsvProtocol);
         if (buffer.Length > MaximumResponseBytes) throw Invalid();
         return buffer.ToArray();
     }
@@ -132,6 +141,11 @@ public static class CompiledRuntimeProtocol
         var offset = 0;
         var rawHeader = Read(bytes, ref offset, MaximumHeaderBytes);
         var header = ReadJson<Response>(rawHeader);
+        if (request.ProtocolVersion != CsvProtocol)
+        {
+            using var previous = JsonDocument.Parse(rawHeader);
+            if (previous.RootElement.GetProperty("outputs").EnumerateArray().Any(value => value.TryGetProperty("csvDialect", out _))) throw Invalid();
+        }
         if (request.ProtocolVersion == Protocol)
         {
             using var legacy = JsonDocument.Parse(rawHeader);
@@ -143,11 +157,11 @@ public static class CompiledRuntimeProtocol
         foreach (var document in header.Outputs)
         {
             if (document.ByteCount > remaining) throw Invalid();
-            var value = Read(bytes, ref offset, document.ByteCount);
+            var value = Read(bytes, ref offset, document.ByteCount, request.ProtocolVersion == CsvProtocol);
             if (value.Length != document.ByteCount || Sha256Digest.FromBytes(value).Value != document.Sha256) throw Invalid();
             remaining -= value.Length;
             values.Add(RegressionOutput.Capture(document.Name is null ? RegressionOutputKey.Primary : RegressionOutputKey.Named(document.Name), value,
-                mediaType: document.MediaType ?? PreviewPolicy.MediaType));
+                mediaType: document.MediaType ?? PreviewPolicy.MediaType, csvDialect: document.CsvDialect));
         }
         if (offset != bytes.Length) throw Invalid();
         return new(header, header.Status == "succeeded" ? RegressionOutputSet.Capture(values) : null);
@@ -164,6 +178,8 @@ public static class CompiledRuntimeProtocol
             request.Replay.Parameters is null || request.Replay.Parameters.Length > PreviewPolicy.MaximumParameters ||
             Digest(request.Replay) != request.ReplayDigest) throw Invalid();
         var limits = request.Replay.Limits;
+        if (request.ProtocolVersion == CsvProtocol && (!BuildWorkerProtocol.AdmitsCsvPlan(intent.Boundaries) ||
+            request.Replay.Inputs.Length != 1 || request.Replay.Target is not ("all" or "primary") || request.Replay.TargetName is not null)) throw Invalid();
         if (limits.MaximumInputBytes is < 1 or > PreviewPolicy.MaximumInputBytes || limits.MaximumOutputBytes is < 1 or > PreviewPolicy.MaximumOutputBytes ||
             limits.MaximumArtifacts is < 1 or > PreviewPolicy.MaximumArtifacts || limits.MaximumTextBytes is < PreviewPolicy.MinimumTextBytes or > PreviewPolicy.MaximumTextBytes)
             throw Invalid();
@@ -172,10 +188,10 @@ public static class CompiledRuntimeProtocol
         for (var i = 0; i < request.Replay.Inputs.Length; i++)
         {
             var input = request.Replay.Inputs[i];
-            if (input is null || input.ByteCount is < 1 || input.ByteCount > remaining || !Hash(input.Sha256) ||
+            if (input is null || input.ByteCount < 0 || input.ByteCount == 0 && request.ProtocolVersion != CsvProtocol || input.ByteCount > remaining || !Hash(input.Sha256) ||
                 (i == 0 ? input.Name is not null : !Name(input.Name) || !names.Add(input.Name!))) throw Invalid();
             remaining -= input.ByteCount;
-            if (input.MediaType != DeclaredMedia(intent, input.Name, input: true)) throw Invalid();
+            if (input.MediaType != DeclaredMedia(intent, input.Name, input: true) || input.CsvDialect != DeclaredDialect(intent, input.Name, input: true)) throw Invalid();
         }
         _ = Target(request.Replay.Target, request.Replay.TargetName);
         names.Clear();
@@ -201,8 +217,9 @@ public static class CompiledRuntimeProtocol
         var remaining = request.Replay.Limits.MaximumOutputBytes;
         foreach (var document in response.Outputs)
         {
-            if (document is null || document.ByteCount < 1 || document.ByteCount > remaining ||
-                !Hash(document.Sha256) || !expected.Remove(document.Name) || document.MediaType != DeclaredMedia(intent, document.Name, input: false)) throw Invalid();
+            if (document is null || document.ByteCount < 0 || document.ByteCount == 0 && request.ProtocolVersion != CsvProtocol || document.ByteCount > remaining ||
+                !Hash(document.Sha256) || !expected.Remove(document.Name) || document.MediaType != DeclaredMedia(intent, document.Name, input: false) ||
+                document.CsvDialect != DeclaredDialect(intent, document.Name, input: false)) throw Invalid();
             remaining -= document.ByteCount;
         }
         if (expected.Count != 0) throw Invalid();
@@ -210,14 +227,16 @@ public static class CompiledRuntimeProtocol
 
     public static string ProtocolFor(BuildIntent intent) => intent.Profile.Id switch
     {
+        BuildWorkerProtocol.CsvProfile => CsvProtocol,
         BuildWorkerProtocol.DocumentProfile or BuildWorkerProtocol.X12InterchangesProfile => DocumentProtocol,
         // Legacy qualification also uses this grammar to bind replay digests for
         // other backends. Execution admission independently checks runtime support.
         _ => Protocol
     };
-    private static string? DeclaredMedia(BuildIntent intent, string? name, bool input)
+    private static CsvDocumentDialect? DeclaredDialect(BuildIntent intent, string? name, bool input) =>
+        intent.Profile.Id == BuildWorkerProtocol.CsvProfile ? DeclaredBoundary(intent, name, input).CsvDialect : null;
+    private static BuildBoundary DeclaredBoundary(BuildIntent intent, string? name, bool input)
     {
-        if (ProtocolFor(intent) == Protocol) return null;
         var kind = (input, name is null) switch
         {
             (true, true) => BuildBoundaryKind.PrimaryInput,
@@ -225,26 +244,36 @@ public static class CompiledRuntimeProtocol
             (false, true) => BuildBoundaryKind.PrimaryOutput,
             _ => BuildBoundaryKind.NamedOutput
         };
-        var boundary = intent.Boundaries.SingleOrDefault(value => value.Kind == kind && value.Name == name) ?? throw Invalid();
+        return intent.Boundaries.SingleOrDefault(value => value.Kind == kind && value.Name == name) ?? throw Invalid();
+    }
+    private static string? DeclaredMedia(BuildIntent intent, string? name, bool input)
+    {
+        if (ProtocolFor(intent) == Protocol) return null;
+        var boundary = DeclaredBoundary(intent, name, input);
         return BuildWorkerProtocol.MediaType(boundary.Format);
     }
-    private static Replay Describe(RegressionReplay replay, BuildIntent intent) => new(replay.Target.Kind switch
+    private static Replay Describe(RegressionReplay replay, BuildIntent intent)
     {
-        PreviewTargetKind.All => "all",
-        PreviewTargetKind.Primary => "primary",
-        PreviewTargetKind.Named => "named",
-        _ => throw Invalid()
-    }, replay.Target.Name, replay.CurrentDateTime, replay.Limits,
-        new[] { replay.Primary }.Concat(replay.NamedInputs).Select(value => new Document(value.Name, value.ByteCount, value.Digest.Value,
-            DeclaredMedia(intent, value.Name, input: true))).ToArray(),
-        replay.Parameters.Select(value => new Parameter(value.Name, value.Kind switch
+        foreach (var input in replay.NamedInputs.Prepend(replay.Primary))
+            if (input.CsvDialect != DeclaredDialect(intent, input.Name, input: true)) throw Invalid();
+        return new(replay.Target.Kind switch
         {
-            PreviewParameterKind.String => "string",
-            PreviewParameterKind.Integer => "integer",
-            PreviewParameterKind.Float => "float",
-            PreviewParameterKind.Boolean => "boolean",
+            PreviewTargetKind.All => "all",
+            PreviewTargetKind.Primary => "primary",
+            PreviewTargetKind.Named => "named",
             _ => throw Invalid()
-        }, value.Value)).ToArray());
+        }, replay.Target.Name, replay.CurrentDateTime, replay.Limits,
+            new[] { replay.Primary }.Concat(replay.NamedInputs).Select(value => new Document(value.Name, value.ByteCount, value.Digest.Value,
+                DeclaredMedia(intent, value.Name, input: true), value.CsvDialect)).ToArray(),
+            replay.Parameters.Select(value => new Parameter(value.Name, value.Kind switch
+            {
+                PreviewParameterKind.String => "string",
+                PreviewParameterKind.Integer => "integer",
+                PreviewParameterKind.Float => "float",
+                PreviewParameterKind.Boolean => "boolean",
+                _ => throw Invalid()
+            }, value.Value)).ToArray());
+    }
     private static PreviewTargetSelection Target(string kind, string? name) => kind switch
     {
         "all" when name is null => PreviewTargetSelection.All,
@@ -278,16 +307,16 @@ public static class CompiledRuntimeProtocol
         }
         else if (element.ValueKind == JsonValueKind.Array) foreach (var item in element.EnumerateArray()) Keys(item);
     }
-    private static byte[] Read(byte[] bytes, ref int offset, int maximum)
+    private static byte[] Read(byte[] bytes, ref int offset, int maximum, bool allowEmpty = false)
     {
         if (offset > bytes.Length - 4) throw Invalid();
         var length = BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(offset, 4)); offset += 4;
-        if (length < 1 || length > maximum || length > bytes.Length - offset) throw Invalid();
+        if (length < 0 || length == 0 && !allowEmpty || length > maximum || length > bytes.Length - offset) throw Invalid();
         var result = bytes.AsSpan(offset, length).ToArray(); offset += length; return result;
     }
-    private static void Write(Stream stream, ReadOnlySpan<byte> value, int maximum)
+    private static void Write(Stream stream, ReadOnlySpan<byte> value, int maximum, bool allowEmpty = false)
     {
-        if (value.Length < 1 || value.Length > maximum) throw Invalid();
+        if (value.Length == 0 && !allowEmpty || value.Length > maximum) throw Invalid();
         Span<byte> prefix = stackalloc byte[4]; BinaryPrimitives.WriteInt32BigEndian(prefix, value.Length); stream.Write(prefix); stream.Write(value);
     }
     private static InvalidOperationException Invalid() => new("Compiled runtime protocol refused.");

@@ -18,6 +18,8 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     public const string AdapterBuild = "weft.ferrule-preview-adapter.v1";
     public const string DocumentProtocolVersion = "weft.ferrule-document-preview.v1";
     public const string DocumentAdapterBuild = "weft.ferrule-document-preview-adapter.v1";
+    public const string CsvProtocolVersion = CsvDocumentPolicy.Profile;
+    public const string CsvAdapterBuild = "weft.ferrule-csv-preview-adapter.v1";
     private const string PrimaryOutput = "primary-output";
     private const string NamedOutputPrefix = "named-output:";
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -25,9 +27,24 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
     private readonly IInspectionWorkerRunner _runner;
     private readonly string _backendBuild;
     private readonly PreviewExecutionProfile _profile;
-    private string SelectedProfile => _profile == PreviewExecutionProfile.Document ? DocumentPreviewPolicy.Profile : PreviewPolicy.Profile;
-    private string SelectedProtocol => _profile == PreviewExecutionProfile.Document ? DocumentProtocolVersion : ProtocolVersion;
-    private string SelectedAdapter => _profile == PreviewExecutionProfile.Document ? DocumentAdapterBuild : AdapterBuild;
+    private string SelectedProfile => _profile switch
+    {
+        PreviewExecutionProfile.CsvDocument => CsvDocumentPolicy.Profile,
+        PreviewExecutionProfile.Document => DocumentPreviewPolicy.Profile,
+        _ => PreviewPolicy.Profile
+    };
+    private string SelectedProtocol => _profile switch
+    {
+        PreviewExecutionProfile.CsvDocument => CsvProtocolVersion,
+        PreviewExecutionProfile.Document => DocumentProtocolVersion,
+        _ => ProtocolVersion
+    };
+    private string SelectedAdapter => _profile switch
+    {
+        PreviewExecutionProfile.CsvDocument => CsvAdapterBuild,
+        PreviewExecutionProfile.Document => DocumentAdapterBuild,
+        _ => AdapterBuild
+    };
 
     public bool CanExecute => _runner is not IExecutionAdmission { CanExecute: false };
 
@@ -116,6 +133,10 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
             return Invalid("The selected target name is outside its bounds.");
         if (request.Primary.Name is not null)
             return Invalid("The primary input cannot carry a named-source identity.");
+        if (_profile == PreviewExecutionProfile.CsvDocument &&
+            (request.NamedInputs.Count != 0 || request.Target.Kind == PreviewTargetKind.Named))
+            return LocalFailure(artifact, MappingPreviewStatus.UnsupportedCapability, "preview.csvPlan",
+                "CSV preview supports only primary flat CSV-to-CSV plans, without named endpoints.");
         if (request.NamedInputs.Count + 1 > PreviewPolicy.MaximumInputDocuments)
             return Invalid("The request exceeds the input document count limit.");
         var names = new HashSet<string>(StringComparer.Ordinal);
@@ -126,7 +147,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
                 return Invalid("Named inputs must have distinct bounded names.", input?.Name);
             total += input.ByteCount;
         }
-        if (request.Primary.ByteCount == 0 || request.NamedInputs.Any(input => input.ByteCount == 0))
+        if (_profile != PreviewExecutionProfile.CsvDocument && (request.Primary.ByteCount == 0 || request.NamedInputs.Any(input => input.ByteCount == 0)))
             return Invalid("Input documents cannot be empty.");
         if (total > limits.MaximumInputBytes)
             return LocalFailure(artifact, MappingPreviewStatus.ResourceLimit, "preview.inputLimit", "The input documents exceed the preview input limit.");
@@ -289,11 +310,18 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
         Require(result.RecordsWritten <= long.MaxValue);
         var boundaries = result.Artifacts.Select(item => item?.BoundaryId).ToArray();
         Require(ExpectedBoundaries(request.Target, boundaries));
+        if (_profile == PreviewExecutionProfile.CsvDocument)
+            Require(boundaries.Length == 1 && boundaries[0] == PrimaryOutput);
         var artifacts = new List<PreviewOutputArtifact>(result.Artifacts.Count);
         long total = 0;
         foreach (var item in result.Artifacts)
         {
-            Require((_profile == PreviewExecutionProfile.Document ? DocumentPreviewPolicy.AdmitsMediaType(item.MediaType) : item.MediaType == PreviewPolicy.MediaType)
+            Require((_profile switch
+            {
+                PreviewExecutionProfile.CsvDocument => CsvDocumentPolicy.Admits(item.CsvDialect, item.MediaType),
+                PreviewExecutionProfile.Document => item.CsvDialect is null && DocumentPreviewPolicy.AdmitsMediaType(item.MediaType),
+                _ => item.CsvDialect is null && item.MediaType == PreviewPolicy.MediaType
+            })
                 && item.RecordsWritten <= long.MaxValue);
             Text(item.TargetName, maximumText);
             var digest = Sha256Digest.Parse(item.Sha256);
@@ -304,7 +332,7 @@ public sealed class FerrulePreviewBackend : IMappingPreviewBackend, IExecutionAd
             Require(frameLength == item.ByteLength && output.Length - offset - 4 >= frameLength);
             var bytes = output.AsSpan(offset + 4, (int)frameLength).ToArray();
             offset += 4 + (int)frameLength;
-            var verified = new PreviewOutputArtifact(item.BoundaryId, item.TargetName, item.TargetNameTruncated, item.MediaType, (long)item.RecordsWritten, bytes);
+            var verified = new PreviewOutputArtifact(item.BoundaryId, item.TargetName, item.TargetNameTruncated, item.MediaType, (long)item.RecordsWritten, bytes, item.CsvDialect);
             Require(verified.Digest == digest);
             artifacts.Add(verified);
         }

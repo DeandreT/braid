@@ -13,6 +13,22 @@ namespace Weft.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class BuildQualificationPersistenceTests(PostgresFixture fixture)
 {
+    [RegressionPostgresTheory]
+    [InlineData("\t")]
+    [InlineData(" ")]
+    public async Task Csv_approval_and_qualification_persist_actual_sql_for_whitespace_dialects(string delimiter)
+    {
+        var dialect = new CsvDocumentDialect(CsvDocumentPolicy.DialectSchema, delimiter, "\"", false, false, false, true);
+        await using var test = await Context.CreateAsync(fixture, csvDialect: dialect);
+        Assert.Equal(BuildControlOutcome.Replayed, await test.Control.Approve());
+        Assert.Equal(BuildQualificationWriteOutcome.Created, await test.Store.SaveAsync(test.Actor, test.Qualification));
+        Assert.Equal(BuildQualificationWriteOutcome.Replayed, await test.Store.SaveAsync(test.Actor, test.Qualification));
+        var restored = (await test.Store.ReadAsync(test.Actor, test.Mapping, test.Qualification.Id))!;
+        Assert.Equal(test.Qualification.CopyCanonicalBytes(), restored.CopyCanonicalBytes());
+        Assert.Equal(test.Qualification.CopyResultBytes(), restored.CopyResultBytes());
+        Assert.Equal(dialect, new RegressionRunResultCodec().Decode(restored.Id, test.Control.Runs.Value,
+            restored.CopyResultBytes()).Outputs!.Outputs.Single().CsvDialect);
+    }
     [PostgresFact]
     public Task Document_migration_preserves_legacy_qualification_and_result_bytes() => DocumentUpgradeAsync(24);
 
@@ -302,9 +318,10 @@ public sealed class BuildQualificationPersistenceTests(PostgresFixture fixture)
         internal BuildQualification Make(Guid id) => BuildQualification.Create(id, Actor.PrincipalId, Build, evidence!, Control.Runs.Value,
             "sha256:" + new string('f', 64), new(CompiledBuildOutcome.Completed, Control.Runs.Value.Expected));
         private RegressionRunSnapshot? evidence;
-        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool documents = false, int? migrations = null, bool interchanges = false)
+        internal static async Task<Context> CreateAsync(PostgresFixture fixture, bool documents = false, int? migrations = null, bool interchanges = false,
+            CsvDocumentDialect? csvDialect = null)
         {
-            var control = await BuildPersistenceTests.Context.CreateAsync(fixture, migrations: migrations, documents: documents, interchanges: interchanges);
+            var control = await BuildPersistenceTests.Context.CreateAsync(fixture, migrations: migrations, documents: documents, interchanges: interchanges, csvDialect: csvDialect);
             PostgresBuildQualificationStore? store = null;
             try
             {

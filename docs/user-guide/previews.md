@@ -15,16 +15,17 @@ limited time, shown under **Kept until**, and only you can read them.
 ## Run a preview
 
 1. In the workbench, open the **Try sample** view.
-2. Under **Input documents**, paste the **Primary input (JSON)** or choose a
+2. Choose the **Preview admission** for the mapping, as described below.
+3. Under **Input documents**, paste the **Primary input** or choose a
    file. A chosen file is sent exactly as it is.
-3. If the mapping reads more than one document, choose **Add named input** for
+4. If the mapping reads more than one document, choose **Add named input** for
    each extra document and enter its **Source name**, the name the mapping uses
    for it.
-4. Under **Parameters**, add any parameters the mapping needs, with their type
+5. Under **Parameters**, add any parameters the mapping needs, with their type
    and value. Without parameters, the mapping's defaults apply.
-5. Under **Outputs**, choose **All outputs**, **Primary output only** or
+6. Under **Outputs**, choose **All outputs**, **Primary output only** or
    **One named output**.
-6. Choose **Run preview**.
+7. Choose **Run preview**.
 
 **Legacy JSON** is the default admission policy and preserves existing previews.
 For mappings with explicit JSON, X12 or EDIFACT boundaries, choose **Explicit
@@ -32,6 +33,15 @@ document boundaries** under **Preview admission**. Paste or choose the document
 bytes; the mapping's embedded boundary settings select the format, not the file
 extension. Missing or unresolved EDI configuration is refused rather than loaded
 from another file.
+
+For a flat CSV or TSV mapping, choose **Explicit CSV / TSV (saved native
+dialect)**. This option appears only when your workspace offers CSV previews.
+The mapping's saved delimiter, quoting and header settings determine the format;
+neither the filename nor the pasted text selects it. CSV/TSV accepts exactly one
+primary input and one primary output, with **All outputs** or **Primary output
+only** as the target. Named inputs and named-output targets are not supported.
+An empty text box or a zero-byte file submits an explicitly present empty input,
+not a missing document. Other preview profiles still require nonempty input.
 
 The preview waits in a queue, then runs. The page checks its progress for you.
 Choose **Cancel preview** to stop it.
@@ -59,6 +69,14 @@ segments from the first 256 KiB); headerless X12 opens as raw text. Downloads ke
 the exact bytes and use the recorded format's media type and `.x12` or `.edi`
 extension.
 
+CSV/TSV outputs open as a **Table** when their recorded native dialect is valid
+and the document fits the browser's display limits. Choose **Raw text** to see
+the original text instead. If the dialect is unavailable, the bytes are invalid
+or a display limit is exceeded, Weft explains why the table is unavailable and
+keeps a bounded raw text or hex view. Downloads always keep the full original
+bytes, recorded media type and `.csv` or `.tsv` extension. See
+[document display limits](workbench.md#csv-and-tsv-document-display).
+
 If the preview failed, Weft shows the reason, a message from the mapping
 engine and, where known, the input or field it concerns.
 
@@ -71,6 +89,27 @@ compiled builds or mapping endpoints. Those workflows have separate admission
 and qualification requirements.
 
 Choose **Start a new preview** to clear the form for another run.
+
+## Save a CSV or TSV preview as a test case
+
+Publishers and administrators can save a successful CSV/TSV preview when the
+workspace also offers the CSV regression runtime. The save controls require the
+current preview's original submission and its single output with a recorded
+native dialect.
+
+1. Review the output, using **Show** or **Download** as needed.
+2. Under **Save this CSV preview as a test case**, enter a **Test name**.
+3. Select **I reviewed this output and accept its exact bytes as the expected
+   baseline.**
+4. Choose **Save preview as test case**.
+5. Open **Tests**, choose **Load regression cases**, and run the saved version.
+
+Saving verifies the output bytes and retains the preview's inputs, parameters,
+evaluation time, runtime and returned output dialect. It creates an explicit
+expected baseline using exact-byte comparison; a successful preview never becomes
+a baseline automatically. To use ordered row/cell comparison instead, edit the
+case as a new version in [Regression tests](regression-tests.md#csv-and-tsv-comparison).
+Neither saving a case nor a preview success approves or qualifies a build.
 
 ## If you reload the page
 

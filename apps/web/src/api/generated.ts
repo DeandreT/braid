@@ -1509,7 +1509,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Submit an idempotent bounded sample preview of this exact revision with explicit legacy JSON or document admission. */
+    /** Submit an idempotent bounded sample preview of this exact revision with explicit JSON, document or primary CSV/TSV admission. */
     post: operations["SubmitCatalogPreview"];
     delete?: never;
     options?: never;
@@ -2181,6 +2181,7 @@ export interface components {
       engineRevision: string;
     };
     BuildBoundaryV1: {
+      csvDialect?: null | components["schemas"]["BuildCsvDialectV1"];
       format: string;
       kind: string;
       name: null | string;
@@ -2188,6 +2189,8 @@ export interface components {
     BuildCapabilitiesV1: {
       approveBuilds: boolean;
       backend: components["schemas"]["BuildBackendV1"];
+      csvBackend?: null | components["schemas"]["BuildBackendV1"];
+      csvProfile?: null | components["schemas"]["BuildRuntimeV1"];
       documentBackend?: null | components["schemas"]["BuildBackendV1"];
       documentProfile?: null | components["schemas"]["BuildRuntimeV1"];
       interchangeProfile?: null | components["schemas"]["BuildRuntimeV1"];
@@ -2195,8 +2198,18 @@ export interface components {
       readOwnMetadata: boolean;
       submitBuilds: boolean;
     };
+    BuildCsvDialectV1: {
+      delimiter: string;
+      hasHeaderRow: boolean;
+      preserveEmptyStrings: boolean;
+      quote: null | string;
+      quoteDisabled: boolean;
+      schema: string;
+      utf8Bom: boolean;
+    };
     BuildEnvironmentCapabilitiesV1: {
       canCreateVersions: boolean;
+      csvProfile?: null | components["schemas"]["BuildRuntimeV1"];
       documentProfile?: null | components["schemas"]["BuildRuntimeV1"];
       interchangeProfile?: null | components["schemas"]["BuildRuntimeV1"];
       profile: components["schemas"]["BuildRuntimeV1"];
@@ -2355,6 +2368,7 @@ export interface components {
       chat: boolean;
       createMappings: boolean;
       createProjects: boolean;
+      csvPreview?: null | boolean;
       deriveReports: boolean;
       /** @default false */
       edit: boolean;
@@ -2466,6 +2480,7 @@ export interface components {
       boundaryId: string;
       /** Format: int32 */
       byteCount: number;
+      csvDialect?: null | components["schemas"]["CsvDocumentDialectV1"];
       mediaType: string;
       /** Format: int32 */
       ordinal: number;
@@ -2519,12 +2534,13 @@ export interface components {
         value: string;
       }[];
       /**
-       * @description Omitted or null preserves legacy JSON admission. Document admission requires explicit native boundary formats; filenames never select them.
+       * @description Omitted or null preserves legacy JSON admission. CSV/TSV is a separately enabled primary-only profile requiring native-source ports; an explicit empty content string is present input. Formats and dialects come from saved native boundaries, never filenames or caller overrides.
        * @enum {null|string}
        */
       profile?:
         | "weft.ferrule-json-preview.v1"
         | "weft.ferrule-document-preview.v1"
+        | "weft.ferrule-csv-preview.v1"
         | null;
       target: {
         kind: string;
@@ -3322,6 +3338,15 @@ export interface components {
     };
     /** @enum {unknown} */
     CoverageStatus: "complete" | "partial" | "unavailable";
+    CsvDocumentDialectV1: {
+      delimiter: string;
+      hasHeaderRow: boolean;
+      preserveEmptyStrings: boolean;
+      quote: null | string;
+      quoteDisabled: boolean;
+      schema: string;
+      utf8Bom: boolean;
+    };
     /**
      * @default value
      * @enum {unknown}
@@ -4395,6 +4420,7 @@ export interface components {
     RegressionCaseCapabilitiesV1: {
       comparisonPolicies?: null | string[];
       comparisonPolicy: string;
+      csvRuntime?: null | components["schemas"]["RegressionRuntimeV1"];
       documentRuntime?: null | components["schemas"]["RegressionRuntimeV1"];
       limits: components["schemas"]["RegressionLimitsV1"];
       publishCases: boolean;
@@ -4442,6 +4468,7 @@ export interface components {
     RegressionComparisonV1: {
       /** Format: int32 */
       actualOutputs: number;
+      csvDiagnostic?: null | components["schemas"]["RegressionCsvDiagnosticV1"];
       differences: components["schemas"]["RegressionDifferenceV1"][];
       documentDiagnostic?:
         null | components["schemas"]["RegressionDocumentDiagnosticV1"];
@@ -4454,10 +4481,22 @@ export interface components {
       totalDifferences: number;
       truncated: boolean;
     };
+    RegressionCsvDiagnosticV1: {
+      location: components["schemas"]["RegressionCsvLocationV1"];
+      name: null | string;
+      side: string;
+    };
+    RegressionCsvLocationV1: {
+      /** Format: int32 */
+      column: number;
+      /** Format: int32 */
+      row: number;
+    };
     RegressionDifferenceV1: {
       /** Format: int32 */
       actualBytes: null | number;
       actualDigest: null | string;
+      csvLocation?: null | components["schemas"]["RegressionCsvLocationV1"];
       /** Format: int32 */
       expectedBytes: null | number;
       expectedDigest: null | string;
@@ -4487,6 +4526,7 @@ export interface components {
     };
     RegressionDocumentV1: {
       bytesBase64Url: string;
+      csvDialect?: null | components["schemas"]["CsvDocumentDialectV1"];
       mediaType?: null | string;
       name: null | string;
     };
@@ -8121,6 +8161,8 @@ export interface operations {
           "application/edi-x12": string;
           "application/edifact": string;
           "application/json": string;
+          "text/csv": string;
+          "text/tab-separated-values": string;
         };
       };
       /** @description Bad Request */
