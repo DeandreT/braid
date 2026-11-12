@@ -32,13 +32,16 @@ host-enforced memory/time/process/network boundary, with bounded input/output an
 private temporary storage. In-process catches are not resource containment.
 The host must verify the complete source identity, closed response shape and
 extractor version, translate page locators into the intake evidence format, and
-discard stderr rather than publishing parser diagnostics. Process failures,
-timeouts and encrypted/scanned fixtures must be qualified before advertising PDF
-extraction. This does not enable the currently unavailable filesystem object store.
+discard stderr rather than publishing parser diagnostics. Host process failures,
+timeouts and representative customer files must be qualified before advertising
+PDF extraction. This does not enable the currently unavailable filesystem object store.
 
 ## Checks
 
 Use the pinned Rust toolchain and `cargo test --locked` from the worker directory.
 Tests construct actual PDF page objects/streams/xref offsets and verify blank-page
 conservation, exact source identity, malformed/oversized refusals and serialized
-expansion. These tests do not establish sandbox or live intake qualification.
+expansion. Actual encrypted and image-only PDF fixtures exercise refusal and
+missing-text outcomes. Eleven tests and all-target Clippy with warnings denied
+pass on the pinned Windows Rust toolchain. These checks do not establish sandbox
+or live intake qualification.
