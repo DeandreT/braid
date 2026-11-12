@@ -38,6 +38,12 @@ internal static class ChatRoleGuard
             environment.Parameters.AddWithValue(readOnly ? "on" : "off");
             if (await environment.ExecuteScalarAsync(ct) is not true) throw Refusal();
         }
+        await ValidateInstallationAsync(connection, transaction, profile, ct);
+    }
+
+    internal static async Task ValidateInstallationAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+        ChatDatabaseProfile profile, CancellationToken ct)
+    {
         // Cooperative migration fence uses the existing runner's database-local key.
         // Read-only transactions can hold this shared transaction advisory lock.
         await using (var migration = new NpgsqlCommand(

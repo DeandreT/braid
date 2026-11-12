@@ -73,6 +73,7 @@ public static class InspectionWorkerHostConfiguration
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(connector);
+        services.AddSingleton(new CreationFerruleBinding(buildIdentity));
         services.AddSingleton(_ => new InspectionWorkerAdmission());
         services.AddKeyedSingleton(nameof(IFerruleServiceConnector), (provider, _) => connector(provider));
         services.AddSingleton(provider =>

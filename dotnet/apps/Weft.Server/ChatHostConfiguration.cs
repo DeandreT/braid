@@ -33,7 +33,6 @@ internal static class ChatHostConfiguration
             services.AddWeftChat(new ChatApiOptions());
             return;
         }
-        services.TryAddSingleton(new Weft.Api.Creation.CreationRuntimeOptions(ServerHostOptions.Flag(read, "WEFT_CREATION_ENABLED")));
         // Conversations pin verified reports; chat without catalog and report reads is an invalid profile.
         if (!catalogEnabled || !reports.Enabled) throw ServerHostOptions.Failure();
         var configuration = Parse(HostPrivateFiles.ReadText(ServerHostOptions.Required(read, "WEFT_CHAT_PROFILES_FILE"), ProfileFileBytes));

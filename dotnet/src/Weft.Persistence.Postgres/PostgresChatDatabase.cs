@@ -92,4 +92,27 @@ public sealed class PostgresChatDatabase : IAsyncDisposable
         lock (_lifetime) { if (_disposed) return; _disposed = true; source = _source.IsValueCreated ? _source.Value : null; }
         if (source is not null) await source.DisposeAsync();
     }
+
+    /// <summary>Admits the actual login and complete installed role/schema contracts without an invented actor context.</summary>
+    public async Task VerifyContractsAsync(CancellationToken ct)
+    {
+        await using var connection = await Source.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+        await using (var settings = new NpgsqlCommand("SET LOCAL search_path=pg_catalog; SET LOCAL statement_timeout='15s'; SET LOCAL lock_timeout='5s'; SET LOCAL TimeZone='UTC'; SET LOCAL DateStyle='ISO, YMD'; SET LOCAL IntervalStyle='postgres'", connection, transaction))
+            await settings.ExecuteNonQueryAsync(ct);
+        await using (var identity = new NpgsqlCommand("""
+            SELECT current_user=session_user AND current_user=$1
+                AND current_setting('transaction_isolation')='read committed'
+                AND current_setting('session_replication_role')='origin' AND current_setting('row_security')='on'
+                AND current_setting('server_encoding')='UTF8' AND current_setting('client_encoding')='UTF8'
+                AND current_setting('standard_conforming_strings')='on'
+                AND coalesce(nullif(current_setting('weft.organization_id',true),''),'')=''
+                AND coalesce(nullif(current_setting('weft.chat_principal_id',true),''),'')=''
+            """, connection, transaction))
+        {
+            identity.Parameters.AddWithValue(ChatRoleGuard.RoleName(Profile));
+            if (await identity.ExecuteScalarAsync(ct) is not true) throw new InvalidOperationException("Chat database profile is invalid.");
+        }
+        await ChatRoleGuard.ValidateInstallationAsync(connection, transaction, Profile, ct);
+    }
 }
