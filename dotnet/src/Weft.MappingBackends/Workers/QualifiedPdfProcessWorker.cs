@@ -22,9 +22,10 @@ public sealed class QualifiedPdfProcessWorker : ISpecPdfExtractionWorker, IAsync
         return new(profile, null, OperatingSystem.IsLinux() ? "pdf-worker-linux-qualification-pending" : "pdf-worker-platform-unsupported");
     }
 
-    // Internal qualification entrypoint only. No API/config switch can open production admission.
+    // Internal native admission entrypoint. Trusted host startup additionally verifies the immutable installation;
+    // the public convenience factory stays closed and no request/configuration boolean asserts qualification.
     internal static async Task<QualifiedPdfProcessWorker> CreateForQualificationAsync(string executable, string temporaryRoot,
-        SpecPdfExtractionProfile profile, Sha256Digest expectedProfileDigest, CancellationToken token)
+        SpecPdfExtractionProfile profile, Sha256Digest expectedProfileDigest, CancellationToken token, Action<IAsyncDisposable>? own = null)
     {
         token.ThrowIfCancellationRequested();
         if (!OperatingSystem.IsLinux()) return Create(profile);
@@ -35,8 +36,9 @@ public sealed class QualifiedPdfProcessWorker : ISpecPdfExtractionWorker, IAsync
             var options = new ProcessWorkerOptions(executable, DockerWorkerProfile.Pdf, temporaryRoot);
             if (!MatchesBuild(executable, profile)) return new(profile, null, "pdf-worker-build-mismatch");
             candidate = new(options);
+            own?.Invoke(candidate);
             if (candidate.BuildIdentity != "sha256:" + profile.ExecutableDigest.Value)
-            { await candidate.DisposeAsync().ConfigureAwait(false); return new(profile, null, "pdf-worker-build-mismatch"); }
+            { if (own is null) await candidate.DisposeAsync().ConfigureAwait(false); return new(profile, null, "pdf-worker-build-mismatch"); }
             // Exercise the actual parser under pre-input sandbox admission with a nonprivate malformed document.
             var probe = await candidate.RunAsync(ReadOnlyMemory<byte>.Empty, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
@@ -48,12 +50,12 @@ public sealed class QualifiedPdfProcessWorker : ISpecPdfExtractionWorker, IAsync
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or SpecPdfWorkerUnavailableException or SpecPdfWorkerProtocolException)
         {
-            if (candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
+            if (own is null && candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
             return new(profile, null, "pdf-worker-sandbox-unqualified");
         }
         catch
         {
-            if (candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
+            if (own is null && candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
             throw;
         }
     }

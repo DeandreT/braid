@@ -14,20 +14,20 @@ Unavailable document admission returns **503 `DocumentWorkerUnavailable`**. Work
 
 The OpenAPI document and generated TypeScript now include capabilities, structural upload descriptions and v2 evidence shapes. The receipt remains the existing `SpecIntakeV1` contract, with Partial admitted alongside its existing refusal outcomes.
 
-## Production composition remains closed
+## Production composition
 
-`SpecDocumentIntakeAdmission` has no public enabling constructor or factory. The production `SpecHostConfiguration` supplies its closed singleton to each actor-bound service. There is no environment switch that grants structural intake based on a portable test or a caller-supplied path, executable, profile, URL or password.
+`SpecDocumentIntakeAdmission` has no public enabling constructor or factory. Production `SpecHostConfiguration` now binds each actor-bound service to host-owned Office/PDF workers. The default remains disabled. See [document host configuration](spec-document-host.md) for independently pinned installation settings and the real startup gates.
 
-The internal admission constructor is for trusted assembly composition and controlled route fixtures. Its schema-46 callback must ultimately be backed by the persistence owner's real schema admission; its availability callbacks must reflect the actual qualified immutable worker installation. A returned boolean from a request/configuration flag is not that qualification. The current production composition never supplies such an enabling object.
+The internal admission constructor is for trusted assembly composition and controlled route fixtures. Production uses the same actor-bound PostgreSQL session for fresh schema-46 and active-store validation; availability reflects the owned worker pair after installation validation and real worker probes. A request/configuration boolean cannot assert qualification.
 
-Coordinated activation requires:
+Deployment activation requires:
 
 1. The persistence owner's actual ordered migration 46 and schema-admission result, tied to the same actor-bound database service.
 2. A reviewed Linux installation composition for Office and PDF, independently approved executable/profile pins, immutable runtime/native installation and successful live CPU/memory/network/process/cleanup qualification.
-3. A trusted enabling factory that joins those verified facts and owns worker lifetime. PDF's current public factory is explicitly closed; the internal qualification entrypoint is not a production toggle.
+3. Successful trusted host startup joining those verified facts and owning worker lifetime. PDF's public convenience factory stays closed; the internal qualification entrypoint is called by the host after installation validation.
 4. The separately owned canonical restoration and exact inventory/extraction identities for creation consumers.
 
-Until those dependencies are complete, production capabilities list only the legacy formats and structural upload attempts fail closed. The API/UI path for admitted workers is exercised through trusted fixture ports in this unit.
+Disabled or unavailable workers advertise only legacy formats and structural upload attempts fail closed. Portable fixture results establish source behavior, not deployment qualification.
 
 ## UI behavior
 

@@ -6,7 +6,7 @@ using Weft.Domain;
 namespace Weft.Persistence.Postgres;
 
 /// <summary>Constructed only by the validated database profile; physical callbacks execute inside its database transaction.</summary>
-public sealed class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjectRegistry, ISpecTemporaryRegistry, ISpecBundleInventory
+public sealed partial class PostgresSpecBundleSession : ISpecBundleLifecycle, ISpecObjectRegistry, ISpecTemporaryRegistry, ISpecBundleInventory
 {
     private readonly PostgresSpecBundleDatabase database;
     private readonly ActorContext? actor;

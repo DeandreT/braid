@@ -19,9 +19,10 @@ internal static class SpecHostConfiguration
             _ => throw ServerHostOptions.Failure()
         };
         services.AddSingleton(new SpecApiOptions(enabled));
-        // Public native admission is still closed pending Linux installation qualification and schema 46.
-        // No environment flag or portable test result may mint an admitted worker composition.
         services.AddSingleton(SpecDocumentIntakeAdmission.Unavailable);
+        var documentSettings = enabled ? SpecDocumentHostSettings.Read(read) : null;
+        services.AddSingleton(new SpecDocumentHostResources(documentSettings));
+        services.AddHostedService(provider => provider.GetRequiredService<SpecDocumentHostResources>());
         if (!enabled) return;
         if (!session) throw ServerHostOptions.Failure();
         var reader = SessionHostResources.ReadProtectedConnection(read, "WEFT_POSTGRES_SPEC_READER_CONNECTION_STRING");
@@ -42,20 +43,24 @@ internal static class SpecHostConfiguration
         var digest = Sha256Digest.FromBytes(Encoding.UTF8.GetBytes("weft.spec-blob-location.v1\n" +
             options.ServiceUri.AbsoluteUri.TrimEnd('/') + "/" + options.ContainerName));
         var binding = new SpecStoreBinding(storeId, SpecStoreKind.Blob, digest);
+        services.AddSingleton(binding);
         services.AddKeyedSingleton(SpecDatabaseProfile.Reader, (_, _) => new PostgresSpecBundleDatabase(reader, SpecDatabaseProfile.Reader));
         services.AddKeyedSingleton(SpecDatabaseProfile.Writer, (_, _) => new PostgresSpecBundleDatabase(writer, SpecDatabaseProfile.Writer));
         services.AddSingleton<ISpecBundleServiceFactory>(provider => new Factory(
             provider.GetRequiredKeyedService<PostgresSpecBundleDatabase>(SpecDatabaseProfile.Reader),
             provider.GetRequiredKeyedService<PostgresSpecBundleDatabase>(SpecDatabaseProfile.Writer), options, binding,
-            provider.GetRequiredService<SpecDocumentIntakeAdmission>()));
+            provider.GetRequiredService<SpecDocumentHostResources>()));
     }
 
     private sealed class Factory(PostgresSpecBundleDatabase reader, PostgresSpecBundleDatabase writer,
-        BlobStorageOptions options, SpecStoreBinding binding, SpecDocumentIntakeAdmission documents) : ISpecBundleServiceFactory
+        BlobStorageOptions options, SpecStoreBinding binding, SpecDocumentHostResources documents) : ISpecBundleServiceFactory
     {
-        public async Task<SpecBundleService> OpenAsync(ActorContext actor, bool write, CancellationToken token) =>
-            (await (write ? writer : reader).ForActor(actor, binding).CreateServiceAsync(async (registry, ct) =>
+        public async Task<SpecBundleService> OpenAsync(ActorContext actor, bool write, CancellationToken token)
+        {
+            var session = (write ? writer : reader).ForActor(actor, binding);
+            return (await session.CreateServiceAsync(async (registry, ct) =>
                 await BlobSpecObjectStore.OpenAsync(options, binding.StoreId, registry, ct).ConfigureAwait(false), token).ConfigureAwait(false))
-                .WithDocumentIntake(documents);
+                .WithDocumentIntake(documents.Bind(session));
+        }
     }
 }
