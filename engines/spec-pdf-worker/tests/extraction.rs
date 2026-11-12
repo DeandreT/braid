@@ -217,3 +217,59 @@ fn page_reference_alias_cannot_duplicate_a_page_under_a_second_identity() {
     assert_eq!(result.status, Status::Malformed);
     assert!(result.pages.is_empty());
 }
+
+#[test]
+fn password_protected_documents_are_explicitly_refused() {
+    let mut doc = lopdf::Document::load_mem(&pdf(&["hidden fixture content"])).unwrap();
+    doc.trailer.set(
+        "ID",
+        vec![
+            lopdf::Object::string_literal("test-document-id"),
+            lopdf::Object::string_literal("test-document-id"),
+        ],
+    );
+    let state = lopdf::EncryptionState::try_from(lopdf::EncryptionVersion::V2 {
+        document: &doc,
+        owner_password: "fixture-owner",
+        user_password: "fixture-reader",
+        key_length: 128,
+        permissions: lopdf::Permissions::PRINTABLE,
+    })
+    .unwrap();
+    doc.encrypt(&state).unwrap();
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    let result = extract(&bytes);
+    assert_eq!(result.status, Status::Encrypted);
+    assert!(result.pages.is_empty());
+}
+
+#[test]
+fn image_only_page_preserves_page_number_and_requests_accessible_text() {
+    use lopdf::{Stream, dictionary};
+    let mut doc = lopdf::Document::load_mem(&pdf(&[""])).unwrap();
+    let image = doc.add_object(Stream::new(
+        dictionary! {
+            "Type" => "XObject", "Subtype" => "Image", "Width" => 1, "Height" => 1,
+            "ColorSpace" => "DeviceRGB", "BitsPerComponent" => 8,
+        },
+        vec![0, 0, 0],
+    ));
+    doc.get_dictionary_mut((4, 0)).unwrap().set(
+        "Resources",
+        dictionary! {
+            "XObject" => dictionary! { "Im1" => image }
+        },
+    );
+    doc.objects.insert(
+        (5, 0),
+        Stream::new(dictionary! {}, b"q 10 0 0 10 30 700 cm /Im1 Do Q".to_vec()).into(),
+    );
+    let mut bytes = Vec::new();
+    doc.save_to(&mut bytes).unwrap();
+    let result = extract(&bytes);
+    assert_eq!(result.status, Status::NeedsOcr);
+    assert_eq!(result.pages.len(), 1);
+    assert_eq!(result.pages[0].page, 1);
+    assert!(result.pages[0].missing_text);
+}
