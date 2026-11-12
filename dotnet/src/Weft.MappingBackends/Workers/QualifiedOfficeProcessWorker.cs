@@ -18,6 +18,13 @@ public sealed class QualifiedOfficeProcessWorker : ISpecOfficeExtractionWorker, 
 
     public static async Task<QualifiedOfficeProcessWorker> CreateAsync(string runtimeAssembly, string expectedAssemblyDigest,
         string expectedRuntimeIdentity, string launcherExecutable, string temporaryRoot, string dotnetRoot, CancellationToken token = default)
+        => await CreateOwnedAsync(runtimeAssembly, expectedAssemblyDigest, expectedRuntimeIdentity, launcherExecutable,
+            temporaryRoot, dotnetRoot, null, token).ConfigureAwait(false);
+
+    // Register the runner before probing so the host retains ownership even if startup/cleanup fails.
+    internal static async Task<QualifiedOfficeProcessWorker> CreateOwnedAsync(string runtimeAssembly, string expectedAssemblyDigest,
+        string expectedRuntimeIdentity, string launcherExecutable, string temporaryRoot, string dotnetRoot,
+        Action<IAsyncDisposable>? own, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (!OperatingSystem.IsLinux()) return new(null, "document-worker-platform-unsupported");
@@ -30,21 +37,22 @@ public sealed class QualifiedOfficeProcessWorker : ISpecOfficeExtractionWorker, 
                     return new(null, "document-worker-build-mismatch");
             candidate = new(new ProcessCompiledRuntimeOptions(expectedAssemblyDigest, runtimeAssembly, launcherExecutable, temporaryRoot, dotnetRoot)
             { Operation = CompiledRuntimeOperation.OfficeExtraction });
+            own?.Invoke(candidate);
             if (candidate.RuntimeIdentity != expectedRuntimeIdentity || !await candidate.ProbeAsync(token).ConfigureAwait(false))
             {
-                await candidate.DisposeAsync().ConfigureAwait(false);
+                if (own is null) await candidate.DisposeAsync().ConfigureAwait(false);
                 return new(null, "document-worker-sandbox-unqualified");
             }
             return new(candidate, null);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or PlatformNotSupportedException)
         {
-            if (candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
+            if (own is null && candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
             return new(null, "document-worker-installation-unavailable");
         }
         catch
         {
-            if (candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
+            if (own is null && candidate is not null) await candidate.DisposeAsync().ConfigureAwait(false);
             throw;
         }
     }
