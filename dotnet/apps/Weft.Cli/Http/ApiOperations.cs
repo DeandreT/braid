@@ -242,6 +242,7 @@ internal static partial class ApiOperations
     public static IReadOnlyDictionary<string, string> NotUsed { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["GetProjectionFixture"] = "a Development-only fixture route that the Session host does not map",
+        ["GetSpecIntakeCapabilities"] = "the browser specification-intake form uses current server capabilities",
         ["CreateSpecBundle"] = "specification intake is currently exposed through the browser, not a CLI command",
         ["GetSpecBundleInventory"] = "specification intake is currently exposed through the browser, not a CLI command",
         ["TombstoneSpecBundle"] = "specification intake is currently exposed through the browser, not a CLI command",
@@ -249,6 +250,12 @@ internal static partial class ApiOperations
         ["PasteSpecText"] = "specification intake is currently exposed through the browser, not a CLI command",
         ["ReadSpecExtraction"] = "specification intake is currently exposed through the browser, not a CLI command",
         ["TombstoneSpecSource"] = "specification intake is currently exposed through the browser, not a CLI command",
+        ["GetCreationCapabilities"] = "the browser project page uses current creation capabilities",
+        ["ListCreationProposals"] = "the browser proposal library discovers retained new mappings",
+        ["ReadCreationProposal"] = "the browser reviews the exact retained new-mapping proposal",
+        ["ApproveCreationProposal"] = "the browser approves the exact reviewed new-mapping proposal",
+        ["RecoverCreationProposal"] = "the browser recovers the durable new-mapping receipt",
+        ["PreviewCreationProposal"] = "the browser tests a private sample against the exact new-mapping proposal",
         ["GetMappingDraftBase"] = "the browser edit module consumes opaque native base bytes; the CLI submits typed operation files and has no local core",
         ["GetMappingDraftValidation"] = "the browser issues view consumes the detailed checkpoint report; the CLI checkpoint command reports its validity and issue count",
         ["GetMappingDraftProjection"] = "the browser workbench consumes the detailed checkpoint projection; the CLI submits typed intent rather than rendering mappings",
