@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { createRequire } from "node:module";
+import { runInNewContext } from "node:vm";
 
 const require = createRequire(import.meta.url);
 const {
@@ -12,6 +19,221 @@ const {
 } = require("../../apps/web/tools/dev-server/editor-assets.cjs");
 const shell =
   "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
+test("builder resolves project editor assets and pins its configured transport", async () => {
+  const root = mkdtempSync(join(tmpdir(), "braid-editor-builder-"));
+  const source = readFileSync(
+    new URL("../../apps/web/tools/dev-server/index.cjs", import.meta.url),
+    "utf8",
+  );
+  try {
+    for (const projectRoot of ["", "nested-project"]) {
+      const assets = join(root, projectRoot, "public/edit");
+      mkdirSync(assets, { recursive: true });
+      writeFileSync(join(assets, "worker.js"), "export {}; ");
+      for (const ssl of [false, true]) {
+        const exported = { exports: {} };
+        let called = false;
+        const mockRequire = (name) => {
+          if (name === "node:module")
+            return {
+              createRequire: () => () => ({
+                createBuilder: (handler) => handler,
+              }),
+            };
+          if (name === "node:path") return { join };
+          if (name === "./editor-assets.cjs") return { editorAssets };
+          if (name === "@angular/build")
+            return {
+              async *executeDevServerBuilder(options, context, extensions) {
+                called = true;
+                assert.equal(options.ssl, ssl);
+                assert.equal(context.workspaceRoot, root);
+                assert.equal(
+                  await extensions.indexHtmlTransformer(
+                    '<script src="main.js"></script>',
+                  ),
+                  '<script src="/main.js"></script>',
+                );
+                const headers = new Map();
+                const response = {
+                  setHeader: (name, value) => headers.set(name, value),
+                  end() {},
+                };
+                extensions.middleware[0](
+                  {
+                    url: "/edit/worker.js",
+                    method: "GET",
+                    headers: {
+                      host: "127.0.0.1:5254",
+                      origin: `${ssl ? "https" : "http"}://127.0.0.1:5254`,
+                    },
+                    socket: { localPort: 5254 },
+                  },
+                  response,
+                  () => assert.fail("Builder asset lookup fell through"),
+                );
+                assert.equal(response.statusCode, 200);
+                assert.ok(
+                  headers
+                    .get("Content-Security-Policy")
+                    .includes(
+                      `script-src ${ssl ? "https" : "http"}://127.0.0.1:5254/edit/`,
+                    ),
+                );
+                yield { success: true };
+              },
+            };
+          throw new Error(`Unexpected module: ${name}`);
+        };
+        mockRequire.resolve = () => "angular-build-package.json";
+        runInNewContext(source, { require: mockRequire, module: exported });
+        const context = {
+          workspaceRoot: root,
+          target: { project: "weft" },
+          async getProjectMetadata(name) {
+            assert.equal(name, "weft");
+            return { root: projectRoot };
+          },
+        };
+        const options = {
+          buildTarget: "weft:build:devServer",
+          host: "127.0.0.1",
+          // Angular can override the requested port; trust only the listener.
+          port: 4200,
+          ssl,
+        };
+        for await (const result of exported.exports(options, context))
+          assert.equal(result.success, true);
+        assert.equal(called, true);
+        for (const buildTarget of [
+          "weft:build:production",
+          "weft:build:development",
+          "weft:build:devServer,production",
+          undefined,
+        ]) {
+          await assert.rejects(async () => {
+            for await (const result of exported.exports(
+              { ...options, buildTarget },
+              context,
+            ))
+              void result;
+          }, /dedicated policy boundary/);
+        }
+      }
+    }
+  } finally {
+    rmSync(root, { recursive: true });
+  }
+});
+
+test("default listener ports use the browser's canonical Host and Origin", () => {
+  const root = mkdtempSync(join(tmpdir(), "braid-default-port-"));
+  writeFileSync(join(root, "worker.js"), "export {}; ");
+  try {
+    for (const [protocol, port] of [
+      ["http", 80],
+      ["https", 443],
+    ]) {
+      const headers = new Map();
+      const response = {
+        setHeader: (name, value) => headers.set(name, value),
+        end() {},
+      };
+      editorAssets(root, "localhost", protocol)(
+        {
+          url: "/edit/worker.js",
+          method: "GET",
+          headers: { host: "localhost", origin: `${protocol}://localhost` },
+          socket: { localPort: port },
+        },
+        response,
+        () =>
+          assert.fail("A canonical default-port request must not fall through"),
+      );
+      assert.equal(response.statusCode, 200);
+      assert.ok(
+        headers
+          .get("Content-Security-Policy")
+          .includes(`script-src ${protocol}://localhost/edit/`),
+      );
+    }
+  } finally {
+    rmSync(root, { recursive: true });
+  }
+});
+
+test("HTTPS editor policy uses the configured transport, never forwarding headers", () => {
+  const root = mkdtempSync(join(tmpdir(), "braid-https-editor-"));
+  writeFileSync(join(root, "worker.js"), "export {}; ");
+  const headers = new Map();
+  const response = {
+    setHeader: (name, value) => headers.set(name, value),
+    end() {},
+  };
+  try {
+    const middleware = editorAssets(root, "localhost", "https");
+    middleware(
+      {
+        url: "/edit/worker.js",
+        method: "GET",
+        headers: {
+          host: "localhost:5254",
+          origin: "https://localhost:5254",
+          "x-forwarded-proto": "http",
+          "x-forwarded-port": "443",
+        },
+        socket: { localPort: 5254 },
+      },
+      response,
+      () => assert.fail("A shipped editor asset must not fall through"),
+    );
+    assert.equal(response.statusCode, 200);
+    assert.match(
+      headers.get("Content-Security-Policy"),
+      /script-src https:\/\/localhost:5254\/edit\//,
+    );
+    middleware(
+      {
+        url: "/edit/worker.js",
+        method: "GET",
+        headers: { host: "localhost:5254", origin: "http://localhost:5254" },
+        socket: { localPort: 5254 },
+      },
+      response,
+      () => assert.fail("An incorrect transport must not fall through"),
+    );
+    assert.equal(response.statusCode, 403);
+    middleware(
+      {
+        url: "/edit/worker.js",
+        method: "GET",
+        headers: { host: "localhost:4200" },
+        socket: { localPort: 5254 },
+      },
+      response,
+      () =>
+        assert.fail(
+          "A host for the requested rather than bound port must be refused",
+        ),
+    );
+    assert.equal(response.statusCode, 403);
+    middleware(
+      {
+        url: "/edit/worker.js",
+        method: "GET",
+        headers: { host: "localhost:5254" },
+        socket: {},
+      },
+      response,
+      () => assert.fail("A missing local listener port must be refused"),
+    );
+    assert.equal(response.statusCode, 403);
+    assert.throws(() => editorAssets(root, "localhost", "ftp"));
+  } finally {
+    rmSync(root, { recursive: true });
+  }
+});
 
 test("development editor assets retain their confined worker boundary", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "braid-dev-editor-"));
@@ -23,7 +245,7 @@ test("development editor assets retain their confined worker boundary", async (t
     Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]),
   );
   writeFileSync(join(root, "unshipped.js"), "must not be served");
-  const middleware = editorAssets(root, "127.0.0.1", 0);
+  const middleware = editorAssets(root, "127.0.0.1");
   const server = createServer((req, res) =>
     middleware(req, res, () => {
       res.setHeader("Content-Security-Policy", shell);

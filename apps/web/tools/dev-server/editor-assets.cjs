@@ -17,7 +17,10 @@ const files = new Map([
 ]);
 
 /** Only the excluded, shipped editor package gets the dedicated-worker policy. */
-function editorAssets(root, host, port) {
+function editorAssets(root, host, protocol = "http") {
+  if (!["http", "https"].includes(protocol)) {
+    throw new Error("The editor requires an explicit HTTP or HTTPS transport.");
+  }
   return (request, response, next) => {
     const raw = request.url ?? "";
     let path;
@@ -47,9 +50,16 @@ function editorAssets(root, host, port) {
       response.statusCode = status;
       response.end();
     };
-    const boundPort = port || request.socket.localPort;
-    const authority = `${host.includes(":") ? `[${host}]` : host}:${boundPort}`;
-    const origin = `http://${authority}`;
+    const boundPort = request.socket.localPort;
+    if (!Number.isInteger(boundPort) || boundPort < 1 || boundPort > 65535) {
+      deny(403);
+      return;
+    }
+    const listener = new URL(
+      `${protocol}://${host.includes(":") ? `[${host}]` : host}:${boundPort}`,
+    );
+    const authority = listener.host;
+    const origin = listener.origin;
     if (
       !["127.0.0.1", "localhost", "::1"].includes(host) ||
       request.headers.host !== authority ||

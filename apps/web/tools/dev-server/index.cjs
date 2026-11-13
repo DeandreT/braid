@@ -16,16 +16,27 @@ const rootAbsoluteEntryAssets = (html) =>
     "$1/",
   );
 
-module.exports = createBuilder((options, context) =>
-  executeDevServerBuilder(options, context, {
+async function* run(options, context) {
+  const projectName = context.target?.project;
+  if (
+    !projectName ||
+    options.buildTarget !== `${projectName}:build:devServer`
+  ) {
+    throw new Error(
+      "Use the devServer build configuration so editor assets stay inside their dedicated policy boundary.",
+    );
+  }
+  const project = await context.getProjectMetadata(projectName);
+  yield* executeDevServerBuilder(options, context, {
     indexHtmlTransformer: async (html) => rootAbsoluteEntryAssets(html),
     middleware: [
       editorAssets(
-        join(context.workspaceRoot, "apps/web/public/edit"),
+        join(context.workspaceRoot, project.root ?? "", "public/edit"),
         options.host ?? "localhost",
-        options.port ?? 4200,
+        options.ssl ? "https" : "http",
       ),
     ],
-  }),
-);
+  });
+}
+module.exports = createBuilder(run);
 module.exports.rootAbsoluteEntryAssets = rootAbsoluteEntryAssets;
