@@ -26,7 +26,7 @@ _Compare revisions: semantic differences between two saved explanations._
 
 ![Workspace chat panel answering a question with citations](docs/images/chat.png)
 
-*Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits when requested.*
+_Workspace chat: questions answered with links to their sources, with permission-controlled mapping edits when requested._
 
 Screenshots use demo data; see [docs/images](docs/images/README.md) for how they are produced.
 
