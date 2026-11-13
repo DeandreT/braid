@@ -71,6 +71,16 @@ jobs:
           install -m 0555 "$CARGO_TARGET_DIR/release/weft-compile-sandbox" "$RUNNER_TEMP/weft-compile-sandbox"
           printf 'WEFT_COMPILE_SANDBOX_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-compile-sandbox" >> "$GITHUB_ENV"
           rm -rf "$CARGO_TARGET_DIR"
+      - name: Build the portable authoring protocol fixtures
+        if: matrix.partition != 'browser'
+        run: |
+          cargo +1.98.1 build --manifest-path engines/ferrule-host/Cargo.toml --locked -p weft-ferrule-core --example authoring_protocol --example authored_preview_protocol
+          # The creation and authored preview tests compile and preview through these exact unisolated fixtures.
+          install -m 0555 "$CARGO_TARGET_DIR/debug/examples/authoring_protocol" "$RUNNER_TEMP/weft-authoring-protocol"
+          install -m 0555 "$CARGO_TARGET_DIR/debug/examples/authored_preview_protocol" "$RUNNER_TEMP/weft-authored-preview-protocol"
+          printf 'WEFT_AUTHORING_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-authoring-protocol" >> "$GITHUB_ENV"
+          printf 'WEFT_AUTHORED_PREVIEW_TEST_EXECUTABLE=%s\n' "$RUNNER_TEMP/weft-authored-preview-protocol" >> "$GITHUB_ENV"
+          rm -rf "$CARGO_TARGET_DIR"
       - name: Build the specification PDF worker
         if: matrix.partition != 'browser'
         env:
