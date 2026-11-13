@@ -28,7 +28,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
         CancellationToken cancellationToken)
     {
         await AutomationSchemaAdmission.ValidateTriggersAsync(connection, transaction, cancellationToken);
-        await ChatSchemaContract.ValidateMappingCommitAuditAsync(connection, transaction, cancellationToken);
+        var chatWrites = await ChatSchemaContract.ValidateMappingCommitAuditAsync(connection, transaction, cancellationToken);
         // Loading these descriptors verifies the embedded source digest and all
         // required pristine PostgreSQL captures before inspecting a live schema.
         var tables = RevisionDerivationSchemaContract.Tables.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
@@ -41,7 +41,7 @@ internal static class SupplementalMaintenanceSchemaAdmission
         await ValidateConstraintTriggersAsync(connection, transaction, tables.Keys.ToArray(), cancellationToken);
         await ValidatePoliciesAsync(connection, transaction, tables.Keys.ToArray(), cancellationToken);
         await ValidateFunctionsAsync(connection, transaction, cancellationToken);
-        await ValidateTriggersAsync(connection, transaction, tables, cancellationToken);
+        await ValidateTriggersAsync(connection, transaction, tables, chatWrites, cancellationToken);
         if (await CreationSchemaAdmission.ShapeAsync(connection, transaction, cancellationToken) != CreationSchemaAdmission.ShapeDigest)
             throw Refusal("Creation publication guards and their authority dependencies must match the admitted schema.");
         await ValidateIndexesAsync(connection, transaction, cancellationToken);
@@ -142,13 +142,15 @@ internal static class SupplementalMaintenanceSchemaAdmission
         bool SecurityDefiner, string Body, string SearchPath);
 
     private static async Task ValidateTriggersAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        IReadOnlyDictionary<string, CatalogSchemaContract.Table> tables, CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, CatalogSchemaContract.Table> tables, bool chatWrites, CancellationToken cancellationToken)
     {
         var expected = MaintenanceSchemaContract.Triggers.Select(trigger => new ExpectedTrigger(
             trigger.Name, trigger.Table, trigger.Function, trigger.Events, true,
             MaintenanceSchemaContract.Functions[trigger.Function].Body, "pg_catalog, weft, pg_temp")).ToList();
-        expected.Add(new("chat_mapping_write_commit", "revision_ingestions", "audit_chat_mapping_write_commit", 17,
-            true, ChatSchemaContract.MappingCommitTriggerBody, "pg_catalog, weft, pg_temp"));
+        // An installed chat write supplement requires its exact commit trigger; before 0039 no such trigger may exist.
+        if (chatWrites)
+            expected.Add(new("chat_mapping_write_commit", "revision_ingestions", "audit_chat_mapping_write_commit", 17,
+                true, ChatSchemaContract.MappingCommitTriggerBody, "pg_catalog, weft, pg_temp"));
         expected.Add(new("revision_ingestions_creation_guard", "revision_ingestions", "creation_ingestion_guard", 23,
             true, CreationSchemaAdmission.IngestionGuardBody, "pg_catalog, weft, pg_temp"));
         // Validate the retained older guard as well: this admits the complete set,
