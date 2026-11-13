@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { readFile, lstat, open, realpath } from "node:fs/promises";
 import { resolve, isAbsolute, relative, join } from "node:path";
+import { browserSecurityHeaders } from "../browser-fixture/security-headers.mjs";
 
 const demand = (value) => {
   if (!value)
@@ -221,9 +222,9 @@ export class BrowserSessionStaticOwner {
         return;
       }
       response.writeHead(200, {
+        ...browserSecurityHeaders,
         "Content-Type": file.type,
         "Cache-Control": "no-store",
-        "X-Content-Type-Options": "nosniff",
       });
       response.end(file.bytes);
     });

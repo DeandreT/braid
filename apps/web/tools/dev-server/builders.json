@@ -1,0 +1,9 @@
+{
+  "builders": {
+    "dev-server": {
+      "implementation": "./index.cjs",
+      "schema": "./schema.json",
+      "description": "Angular dev server with root-absolute entry assets."
+    }
+  }
+}
