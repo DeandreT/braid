@@ -73,6 +73,9 @@ rollback and their audit are unchanged.
 
 ## Operator commands
 
+On a local Development instance, the [local sandbox](local-sandbox.md) runs the same
+qualification, registration and activation in one step from the web app.
+
 `Weft.ReleaseTool` qualifies builds and changes the target pointer for a
 [mapping endpoint](mapping-endpoint.md). It ships in the endpoint image and runs as the
 entrypoint's `release` command. Each command acts as one named principal (`ACTOR`), and

@@ -271,8 +271,14 @@ internal static partial class ApiOperations
         ["BeginBrowserLogin"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["LogoutBrowserSession"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
         ["ForgetDeniedLocalSession"] = "browser cookie-session sign-in; the CLI signs in with MSAL",
-        ["CompleteEntraLogin"] = "the browser sign-in callback; the CLI signs in with MSAL"
+        ["CompleteEntraLogin"] = "the browser sign-in callback; the CLI signs in with MSAL",
+        ["GetLocalSandbox"] = LocalSandbox,
+        ["DeployLocalSandbox"] = LocalSandbox,
+        ["GetLocalSandboxMessages"] = LocalSandbox,
+        ["GetLocalSandboxMessage"] = LocalSandbox,
+        ["SendLocalSandboxMessage"] = LocalSandbox
     };
+    private const string LocalSandbox = "the local sandbox runs only on Development hosts, which never accept the CLI's bearer sign-in";
 
     /// <summary>Headers that only authenticate a browser cookie session; a bearer request never sends them.</summary>
     public static IReadOnlySet<string> CookieSessionHeaders { get; } = new HashSet<string>(["Origin", "X-XSRF-TOKEN"], StringComparer.OrdinalIgnoreCase);
