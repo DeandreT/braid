@@ -157,8 +157,11 @@ internal static class CreationPlanV2Codec
 
     private static string Type(CreationValueType type) => type switch
     {
-        CreationValueType.String => "string", CreationValueType.Integer => "int", CreationValueType.Float => "float",
-        CreationValueType.Boolean => "bool", _ => throw new ArgumentException("Unsupported scalar type.")
+        CreationValueType.String => "string",
+        CreationValueType.Integer => "int",
+        CreationValueType.Float => "float",
+        CreationValueType.Boolean => "bool",
+        _ => throw new ArgumentException("Unsupported scalar type.")
     };
 
     internal static CreationPlanV2 Parse(JsonElement root)
@@ -197,7 +200,8 @@ internal static class CreationPlanV2Codec
             case "xml": Properties(options, "kind"); selected = new CreationXmlOptions(); break;
             case "edifact": Properties(options, "kind"); selected = new CreationEdifactOptions(); break;
             case "x12": Properties(options, "kind", "interchange_version"); selected = new CreationX12Options(String(options.GetProperty("interchange_version"))); break;
-            case "csv": case "tsv":
+            case "csv":
+            case "tsv":
                 Properties(options, "kind", "header", "quote", "bom", "preserve_empty_strings");
                 var header = options.GetProperty("header").GetBoolean(); var quote = options.GetProperty("quote").GetBoolean();
                 var bom = options.GetProperty("bom").GetBoolean(); var empty = options.GetProperty("preserve_empty_strings").GetBoolean();
@@ -262,8 +266,11 @@ internal static class CreationPlanV2Codec
 
     private static CreationValueType ReadType(JsonElement value) => String(value) switch
     {
-        "string" => CreationValueType.String, "int" => CreationValueType.Integer, "float" => CreationValueType.Float,
-        "bool" => CreationValueType.Boolean, _ => throw new ArgumentException("Unsupported scalar type.")
+        "string" => CreationValueType.String,
+        "int" => CreationValueType.Integer,
+        "float" => CreationValueType.Float,
+        "bool" => CreationValueType.Boolean,
+        _ => throw new ArgumentException("Unsupported scalar type.")
     };
 
     private static string String(JsonElement value) => value.ValueKind == JsonValueKind.String ? value.GetString()! : throw new ArgumentException("Expected an authoring string.");

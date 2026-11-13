@@ -102,12 +102,24 @@ public sealed class CreationEvidenceGenerationTests
         // nor synthesized-note machinery may change the legacy canonical payload.
         var old = Sha256Digest.FromBytes(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            schema = "weft.mapping-creation-proposal.v1", author = a.Author, id = a.Id, key = a.RequestKey,
-            a.Project, snapshot = new SpecBundleSnapshot(Bundle, [extraction.Identity]).Digest.Value,
-            plan = a.Plan.Digest.Value, compilerPlan = a.Plan.CompilerDigest.Value, notes = notes.Digest.Value,
-            native = a.Compilation.NativeDigest.Value, a.Compilation.EngineRevision, a.Compilation.WorkerBuild,
-            validation = a.Compilation.ValidationDigest.Value, projection = a.Compilation.ProjectionDigest.Value,
-            a.Request.BackendId, a.Request.OriginalFilename, a.Request.Metadata.Name, a.Request.Metadata.Description
+            schema = "weft.mapping-creation-proposal.v1",
+            author = a.Author,
+            id = a.Id,
+            key = a.RequestKey,
+            a.Project,
+            snapshot = new SpecBundleSnapshot(Bundle, [extraction.Identity]).Digest.Value,
+            plan = a.Plan.Digest.Value,
+            compilerPlan = a.Plan.CompilerDigest.Value,
+            notes = notes.Digest.Value,
+            native = a.Compilation.NativeDigest.Value,
+            a.Compilation.EngineRevision,
+            a.Compilation.WorkerBuild,
+            validation = a.Compilation.ValidationDigest.Value,
+            projection = a.Compilation.ProjectionDigest.Value,
+            a.Request.BackendId,
+            a.Request.OriginalFilename,
+            a.Request.Metadata.Name,
+            a.Request.Metadata.Description
         }));
         Assert.Equal(old, a.Fingerprint);
     }

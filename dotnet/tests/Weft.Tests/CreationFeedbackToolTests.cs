@@ -241,7 +241,10 @@ public sealed class CreationFeedbackToolTests
     private static AiToolIntent Intent(MappingCreationProposal p, string? fingerprint = null, Guid? project = null) =>
         AiToolIntent.Create("feedback", "read_specification", AiJsonObject.CopyFrom(JsonSerializer.Serialize(new
         {
-            mode = "proposal", projectId = project ?? p.Project.ProjectId, proposalId = p.Id, fingerprint = fingerprint ?? p.Fingerprint.Value
+            mode = "proposal",
+            projectId = project ?? p.Project.ProjectId,
+            proposalId = p.Id,
+            fingerprint = fingerprint ?? p.Fingerprint.Value
         })));
 
     private static ServiceProvider Provider(CreationRuntimeFixture f, bool sourceUnavailable = false, RecordingStore? store = null)

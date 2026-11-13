@@ -69,14 +69,21 @@ public sealed partial class WorkspaceToolService
             questions = proposal.Notes.Questions,
             evidence = proposal.Notes.Evidence.Select(e => new
             {
-                sourceId = Id(e.Source.SourceId), sourceVersion = e.Source.Version, chunkOrdinal = e.ChunkOrdinal
+                sourceId = Id(e.Source.SourceId),
+                sourceVersion = e.Source.Version,
+                chunkOrdinal = e.ChunkOrdinal
             }).ToArray(),
             bundleId = Id(snapshot.Bundle.BundleId),
             sources = snapshot.Extractions.Select(e => new
             {
-                sourceId = Id(e.Source.SourceId), sourceVersion = e.Source.Version, sourceDigest = e.SourceDigest.Value,
-                format = e.Format.ToString(), extractorVersion = e.ExtractorVersion, profileDigest = e.ProfileDigest.Value,
-                outcome = e.Outcome.ToString(), evidenceDigest = e.EvidenceDigest.Value
+                sourceId = Id(e.Source.SourceId),
+                sourceVersion = e.Source.Version,
+                sourceDigest = e.SourceDigest.Value,
+                format = e.Format.ToString(),
+                extractorVersion = e.ExtractorVersion,
+                profileDigest = e.ProfileDigest.Value,
+                outcome = e.Outcome.ToString(),
+                evidenceDigest = e.EvidenceDigest.Value
             }).ToArray(),
             requiresNewApproval = true
         };

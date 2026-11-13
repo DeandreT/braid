@@ -3,8 +3,8 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
-using Weft.Deployment;
 using Weft.Application;
+using Weft.Deployment;
 
 namespace Weft.MappingBackends.Workers;
 

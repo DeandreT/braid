@@ -14,7 +14,10 @@ internal static class CreationProviderContractFixture
         ["name"] = name,
         ["shape"] = children.Length == 0 ? new JsonObject { ["kind"] = "scalar", ["scalar"] = "string" }
             : new JsonObject { ["kind"] = "group", ["children"] = new JsonArray(children) },
-        ["repeating"] = false, ["nullable"] = false, ["required"] = new JsonArray(), ["xml"] = null
+        ["repeating"] = false,
+        ["nullable"] = false,
+        ["required"] = new JsonArray(),
+        ["xml"] = null
     };
 
     internal static JsonObject Source(params string[] path) => new() { ["kind"] = "source", ["path"] = Strings(path) };
@@ -77,19 +80,28 @@ internal static class CreationProviderContractFixture
             }
             return Scope(path.Length == 0 ? null : path[^1], bindings, scopes);
         }
-        return new() { ["schema"] = "weft.creation-plan.v2", ["source"] = source.Wire, ["target"] = target.Wire,
-            ["scope"] = Construct(target.Wire["schema"]!, []) };
+        return new()
+        {
+            ["schema"] = "weft.creation-plan.v2",
+            ["source"] = source.Wire,
+            ["target"] = target.Wire,
+            ["scope"] = Construct(target.Wire["schema"]!, [])
+        };
     }
 
     internal static string Arguments(CreationRuntimeFixture f, JsonObject plan) => new JsonObject
     {
-        ["projectId"] = f.Bundle.Project.ProjectId.ToString("D"), ["bundleId"] = f.Bundle.BundleId.ToString("D"),
-        ["extractionIds"] = Strings(f.ExtractionId.ToString("D")), ["snapshotDigest"] = f.Specification.Snapshot.Digest.Value,
-        ["name"] = "Synthetic mapping", ["plan"] = plan.DeepClone(),
+        ["projectId"] = f.Bundle.Project.ProjectId.ToString("D"),
+        ["bundleId"] = f.Bundle.BundleId.ToString("D"),
+        ["extractionIds"] = Strings(f.ExtractionId.ToString("D")),
+        ["snapshotDigest"] = f.Specification.Snapshot.Digest.Value,
+        ["name"] = "Synthetic mapping",
+        ["plan"] = plan.DeepClone(),
         ["notes"] = new JsonObject
         {
             ["evidence"] = new JsonArray(new JsonObject { ["sourceId"] = f.Source.Identity.SourceId.ToString("D"), ["sourceVersion"] = 1, ["chunkOrdinal"] = 0 }),
-            ["assumptions"] = new JsonArray(), ["questions"] = new JsonArray()
+            ["assumptions"] = new JsonArray(),
+            ["questions"] = new JsonArray()
         }
     }.ToJsonString();
 }

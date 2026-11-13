@@ -1,7 +1,7 @@
 using Weft.Application;
 using Weft.Domain;
-using Weft.Server;
 using Weft.MappingBackends.Workers;
+using Weft.Server;
 
 namespace Weft.Tests;
 
