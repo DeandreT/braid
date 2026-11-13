@@ -81,9 +81,20 @@ public sealed partial class BearerSecurityContractTests
             Assert.True(declared.TryGetValue(operation, out var expected), $"{operation} is mapped but absent from the contract.");
             Assert.True(expected == schemes, $"{operation.Item2} {operation.Item1} admits {schemes} but declares {expected}.");
         }
-        // The Session host maps every declared operation except the Development-only examples and fixtures.
-        Assert.Equal(["/api/v1/fixtures/projections/{fixtureId}"],
-            declared.Keys.Where(key => !observed.ContainsKey(key)).Select(key => key.Item1).Order(StringComparer.Ordinal));
+        // Sandbox execution is Development-only, and hosted startup refuses its enabled switch.
+        // Keep the exact excluded operations rather than exempting a route prefix.
+        const string sandbox = "/api/v1/organizations/{organizationId}/projects/{projectId}/mappings/{mappingId}/sandbox";
+        string[] developmentOnly =
+        [
+            "GET /api/v1/fixtures/projections/{fixtureId}",
+            "GET " + sandbox,
+            "POST " + sandbox + "/deployments/{deploymentId}",
+            "GET " + sandbox + "/{targetId}/messages",
+            "GET " + sandbox + "/{targetId}/messages/{messageId}",
+            "POST " + sandbox + "/{targetId}/messages/{messageId}"
+        ];
+        Assert.Equal(developmentOnly.Order(StringComparer.Ordinal),
+            declared.Keys.Where(key => !observed.ContainsKey(key)).Select(key => key.Item2 + " " + key.Item1).Order(StringComparer.Ordinal));
     }
 
     private static string Schemes(JsonElement operation)
