@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createServer, request } from "node:http";
+import { createServer as createHttp2Server, connect } from "node:http2";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -123,6 +124,60 @@ test("builder resolves project editor assets and pins its configured transport",
       }
     }
   } finally {
+    rmSync(root, { recursive: true });
+  }
+});
+
+test("HTTP/2 binds its authority to the actual listener and rejects conflicting Host", async () => {
+  const root = mkdtempSync(join(tmpdir(), "braid-http2-editor-"));
+  writeFileSync(join(root, "worker.js"), "export {}; ");
+  const middleware = editorAssets(root, "127.0.0.1");
+  const server = createHttp2Server((req, res) =>
+    middleware(req, res, () => {
+      res.statusCode = 404;
+      res.end();
+    }),
+  );
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  const origin = `http://127.0.0.1:${port}`;
+  const client = connect(origin);
+  const get = (headers = {}) =>
+    new Promise((resolve, reject) => {
+      const stream = client.request({ ":path": "/edit/worker.js", ...headers });
+      let response;
+      const chunks = [];
+      stream.on("response", (headers) => {
+        response = headers;
+      });
+      stream.on("data", (chunk) => chunks.push(chunk));
+      stream.on("end", () =>
+        resolve({ headers: response, body: Buffer.concat(chunks) }),
+      );
+      stream.on("error", reject);
+      stream.end();
+    });
+  try {
+    const allowed = await get({ origin });
+    assert.equal(allowed.headers[":status"], 200);
+    assert.match(
+      allowed.headers["content-security-policy"],
+      new RegExp(`script-src http://127\\.0\\.0\\.1:${port}/edit/`),
+    );
+    assert.equal(allowed.body.toString(), "export {}; ");
+    for (const headers of [
+      { ":authority": "other.invalid" },
+      { host: "other.invalid" },
+      { origin: "https://other.invalid" },
+    ]) {
+      const refused = await get(headers);
+      assert.equal(refused.headers[":status"], 403);
+      assert.equal(refused.headers["content-security-policy"], shell);
+      assert.equal(refused.body.length, 0);
+    }
+  } finally {
+    client.destroy();
+    await new Promise((resolve) => server.close(resolve));
     rmSync(root, { recursive: true });
   }
 });

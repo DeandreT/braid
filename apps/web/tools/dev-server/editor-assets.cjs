@@ -60,9 +60,17 @@ function editorAssets(root, host, protocol = "http") {
     );
     const authority = listener.host;
     const origin = listener.origin;
+    // HTTP/2 uses :authority instead of Host. Both still have to identify the
+    // configured loopback host and actual listener, never a forwarded host.
+    const requestAuthority =
+      request.httpVersionMajor === 2
+        ? request.headers[":authority"]
+        : request.headers.host;
     if (
       !["127.0.0.1", "localhost", "::1"].includes(host) ||
-      request.headers.host !== authority ||
+      requestAuthority !== authority ||
+      (request.headers.host !== undefined &&
+        request.headers.host !== authority) ||
       (request.headers.origin && request.headers.origin !== origin)
     ) {
       deny(403);
