@@ -167,6 +167,7 @@ internal sealed class BrowserQualificationHost
             });
             web.Configure(app =>
             {
+                app.UseWeftBrowserSecurityHeaders();
                 app.Use(admission.NetworkLifetimeAsync);
                 app.Use(admission.InvokeAsync);
                 app.Use(GuardAsync);

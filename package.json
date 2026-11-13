@@ -18,7 +18,7 @@
     "check:dependency-security": "node --test tools/dependency-security.test.mjs",
     "test:dependency-security-browser": "node node_modules/@playwright/test/cli.js test --config apps/web/playwright.dependency-security.config.ts",
     "check:mfd-interchange": "node --experimental-strip-types --test tools/mfd-interchange-tests.mjs",
-    "check:browser-fixture": "node --test tools/browser-fixture/preview-unsent.test.mjs tools/browser-fixture/edi-segments.test.mjs tools/browser-fixture/schema.test.mjs tools/browser-fixture/failure-site.test.mjs tools/browser-fixture/safe-diagnostics.test.mjs tools/browser-fixture/test-subnets.test.mjs tools/hosted-acceptance/model.test.mjs tools/hosted-acceptance/endpoint-settlement.test.mjs tools/hosted-acceptance/acceptance-lifecycle.test.mjs tools/hosted-acceptance/test-subnets.test.mjs tools/hosted-acceptance/public-client.test.mjs",
+    "check:browser-fixture": "node --test tools/browser-fixture/security-headers.test.mjs tools/browser-fixture/preview-unsent.test.mjs tools/browser-fixture/edi-segments.test.mjs tools/browser-fixture/schema.test.mjs tools/browser-fixture/failure-site.test.mjs tools/browser-fixture/safe-diagnostics.test.mjs tools/browser-fixture/test-subnets.test.mjs tools/hosted-acceptance/model.test.mjs tools/hosted-acceptance/endpoint-settlement.test.mjs tools/hosted-acceptance/acceptance-lifecycle.test.mjs tools/hosted-acceptance/test-subnets.test.mjs tools/hosted-acceptance/public-client.test.mjs",
     "check:browser-session-probe": "npm --workspace @weft/web run check:browser-session-probe",
     "check:docs-images": "node --test tools/docs-images/check.test.mjs && node tools/docs-images/check.mjs",
     "docs:screenshots": "npm --workspace @weft/web run docs:screenshots",
